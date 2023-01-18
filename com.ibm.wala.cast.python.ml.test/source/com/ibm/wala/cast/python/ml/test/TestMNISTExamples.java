@@ -185,4 +185,9 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
 			assert goodFeeds.size() > 0;
 		});
 	}
+
+	@Test
+	public void testRaffi() {
+		makeEngine(null, null)
+	}
 }
