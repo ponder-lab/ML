@@ -28,8 +28,11 @@ import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.CancelException;
 import com.ibm.wala.util.NullProgressMonitor;
+import com.ibm.wala.util.WalaException;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.viz.DotUtil;
 import com.ibm.wala.core.util.strings.Atom;
+import com.ibm.wala.examples.drivers.PDFTypeHierarchy;
 
 public abstract class TestPythonCallGraphShape extends TestCallGraphShape {
 	
@@ -111,7 +114,7 @@ public abstract class TestPythonCallGraphShape extends TestCallGraphShape {
 		return sb;
 	}
 
-	public static void main(String[] args) throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+	public static void main(String[] args) throws IllegalArgumentException, CancelException, IOException, WalaException {
 		TestPythonCallGraphShape driver = new TestPythonCallGraphShape() {
 			
 		};
@@ -123,5 +126,6 @@ public abstract class TestPythonCallGraphShape extends TestCallGraphShape {
 		
 		CAstCallGraphUtil.AVOID_DUMP = false;
 		CAstCallGraphUtil.dumpCG(((SSAPropagationCallGraphBuilder)builder).getCFAContextInterpreter(), builder.getPointerAnalysis(), CG);
+		DotUtil.dotify(CG, null, PDFTypeHierarchy.DOT_FILE, "callgraph.pdf", "dot");
 	}
 }
