@@ -73,20 +73,20 @@
                   ref="x"
                   value="pass_through"/>
 	
-        <new def="estimator" class="Lobject"/>
+    <new def="estimator" class="Lobject"/>
 	<putfield class="LRoot"
                   field="estimator"
                   fieldType="LRoot"
                   ref="x"
                   value="estimator"/>
 
-        <new def="nn" class="Lobject"/>
+    <new def="nn" class="Lobject"/>
 	<putfield class="LRoot"
                   field="nn"
                   fieldType="LRoot"
                   ref="x"
                   value="nn"/>
-        <new def="layers" class="Lobject"/>
+    <new def="layers" class="Lobject"/>
 	<putfield class="LRoot"
                   field="layers"
                   fieldType="LRoot"
