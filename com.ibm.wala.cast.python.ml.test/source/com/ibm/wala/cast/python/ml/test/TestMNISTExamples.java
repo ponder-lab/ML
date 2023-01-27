@@ -6,6 +6,8 @@ import java.util.Set;
 import org.junit.Test;
 
 import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
+import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
 import com.ibm.wala.cast.python.ml.types.TensorType;
@@ -14,6 +16,7 @@ import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
+import com.ibm.wala.examples.drivers.PDFTypeHierarchy;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
@@ -29,7 +32,9 @@ import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.CancelException;
+import com.ibm.wala.util.WalaException;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.viz.DotUtil;
 
 public class TestMNISTExamples extends TestPythonMLCallGraphShape {
 
@@ -187,7 +192,74 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
 	}
 
 	@Test
-	public void testRaffi() {
-		// makeEngine(null, null);
+	public void testRaffi() throws IllegalArgumentException, CancelException, IOException, WalaException {
+		PythonAnalysisEngine<TensorTypeAnalysis> engine = makeEngine(
+				"raffi.py");
+		PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+		CallGraph callGraph = builder.makeCallGraph(builder.getOptions());
+		CAstCallGraphUtil.AVOID_DUMP = false;
+		CAstCallGraphUtil.dumpCG(builder.getCFAContextInterpreter(), builder.getPointerAnalysis(), callGraph);
+		DotUtil.dotify(callGraph, null, PDFTypeHierarchy.DOT_FILE, "callgraph.pdf", "dot");
+		
+		TensorTypeAnalysis analysis = engine.performAnalysis(builder);
+		System.out.println(analysis);
+		
+		analysis.forEach(t -> {
+			System.out.println(t);
+		});
+		
+
+//		callGraph.forEach(node -> {
+//			System.out.println("Processing: " + node);
+//			IR ir = node.getIR();
+//
+//			if (ir != null) {
+//				IMethod method = ir.getMethod();
+//
+//				System.out.println("Processing instructions for method: " + method);
+//
+////				if (method.getDeclaringClass().getReference().getName().toString().contains("raffi.py")) {
+////				MethodReference reference = method.getReference();
+////				Atom name = reference.getName();
+////				System.out.println("Method name: " + name);
+//
+//				if (method.toString().contains("raffi.py/SequentialModel/__init__")) {
+//
+//					SSAInstruction[] instructions = ir.getInstructions();
+//
+//					Arrays.stream(instructions).filter(Objects::nonNull).forEach(instruction -> {
+//						if (instruction.iIndex() == 13) {
+//							System.out.println(instruction);
+//							System.out.println(instruction.getNumberOfDefs());
+//							System.out.println(instruction.getDef());
+//							System.out.println(instruction.getNumberOfUses());
+//
+//							for (int i = 0; i < instruction.getNumberOfUses(); i++) {
+//								int use = instruction.getUse(i);
+//								System.out.println(use);
+//								
+////								TypeInference inference = TypeInference.make(ir, false);
+////								AstTypeInference;
+////								System.out.println(inference);
+//							}
+//						}
+//
+////					if (!(method.getDeclaringClass() instanceof SyntheticClass)) {
+////						System.out.println("Non-synthetic.");
+////
+////						if (instruction.getClass().toString().contains("SSAReturnInstruction")) {
+////							SSAReturnInstruction retInstruction = (SSAReturnInstruction) instruction;
+////							int def = retInstruction.getUse(0);
+////
+////							TypeInference inference = TypeInference.make(ir, false);
+////							TypeAbstraction type = inference.getType(def);
+////							System.out.println(type);
+////						}
+////					}
+//					});
+////				}
+//				}
+//			}
+//		});
 	}
 }

@@ -106,14 +106,21 @@
 				<new def="mnist" class="Lobject" />
 				<putfield class="LRoot" field="mnist" fieldType="LRoot"
 					ref="tutorials" value="mnist" />
-				<new def="id"
-					class="Ltensorflow/examples/tutorials/mnist/input_data" />
-				<putfield class="LRoot" field="input_data"
-					fieldType="LRoot" ref="mnist" value="id" />
-				<new def="rds"
-					class="Ltensorflow/examples/tutorials/mnist/read_data_sets" />
-				<putfield class="LRoot" field="read_data_sets"
-					fieldType="LRoot" ref="id" value="rds" />
+				<new def="random"
+					class="Ltensorflow/random" />
+				<putfield class="LRoot" field="random"
+					fieldType="LRoot" ref="mnist" value="random" />
+				<new def="uniform"
+					class="Ltensorflow/random/uniform" />
+				<putfield class="LRoot" field="uniform"
+					fieldType="LRoot" ref="random" value="uniform" />
+
+				<!-- <new def="random" class="Ltensorflow/random" /> -->
+				<!-- <putfield class="LRoot" field="random" fieldType="LRoot" -->
+				<!-- 	ref="x" value="random" /> -->
+				<!-- <new def="uniform" class="Ltensorflow/random/uniform" /> -->
+				<!-- <putfield class="LRoot" field="uniform" fieldType="LRoot" -->
+				<!-- 	ref="random" value="uniform" /> -->
 
 				<return value="x" />
 			</method>
@@ -326,7 +333,7 @@
 					<return value="data" />
 				</method>
 			</class>
-			<class name="input_data" allocatable="true">
+			<class name="random" allocatable="true">
 			</class>
 			<class name="dataset" allocatable="true">
 			</class>
@@ -344,17 +351,37 @@
 				</method>
 				<method name="__init__" descriptor="()V">
 					<new def="x"
-						class="Ltensorflow/examples/tutorials/mnist/input_data" />
+						class="Ltensorflow/random" />
 					<new def="y"
-						class="Ltensorflow/examples/tutorials/mnist/read_data_sets" />
-					<putfield class="Ltensorflow/examples/tutorials/mnist"
-						field="input_data" fieldType="LRoot" ref="arg0" value="x" />
+						class="Ltensorflow/random/uniform" />
+					<putfield class="Ltensorflow"
+						field="random" fieldType="LRoot" ref="arg0" value="x" />
 					<putfield
-						class="Ltensorflow/examples/tutorials/mnist/input_data"
-						field="read_data_sets" fieldType="LRoot" ref="x" value="y" />
+						class="Ltensorflow/random"
+						field="uniform" fieldType="LRoot" ref="x" value="y" />
 				</method>
 			</class>
 		</package>
+
+    <!-- <package name="tensorflow/random"> -->
+    <!--   <class name="random" allocatable="true"> -->
+    <!--     <method name="do" descriptor="()LRoot;" numArgs="1"> -->
+    <!--       <new def="x" class="Ltensorflow/random/uniform" /> -->
+    <!--       <putfield class="LRoot" field="uniform" fieldType="LRoot" ref="arg0" value="x" /> -->
+    <!--       <return value="arg0" /> -->
+    <!--     </method> -->
+    <!--   </class> -->
+    <!-- </package> -->
+
+    <!-- <package name="tensorflow/random/uniform"> -->
+    <!--   <class name="uniform" allocatable="true"> -->
+    <!--     <method name="do" descriptor="()LRoot;" numArgs="1"> -->
+    <!--       <getfield class="LRoot" field="uniform" fieldType="LRoot" ref="arg0" def="x" /> -->
+    <!--       <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="v"/> -->
+    <!--       <return value="v" /> -->
+    <!--     </method> -->
+    <!--   </class> -->
+    <!-- </package> -->
 
 	</classloader>
 </summary-spec>

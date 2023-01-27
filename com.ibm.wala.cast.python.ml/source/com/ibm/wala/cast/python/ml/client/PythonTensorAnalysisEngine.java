@@ -11,6 +11,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
+import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
@@ -46,6 +47,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 	private final Map<PointerKey, AnalysisError> errorLog = HashMapFactory.make();
 	
 	private static Set<PointsToSetVariable> getDataflowSources(Graph<PointsToSetVariable> dataflow) {
+		System.out.println("Dataflow: " + dataflow);
 		Set<PointsToSetVariable> sources = HashSetFactory.make();
 		for(PointsToSetVariable src : dataflow) {
 			PointerKey k = src.getPointerKey();
@@ -54,10 +56,22 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 				int vn = kk.getValueNumber();
 				DefUse du = kk.getNode().getDU();
 				SSAInstruction inst = du.getDef(vn);
-				if (inst instanceof SSAInvokeInstruction) {
-					SSAInvokeInstruction ni = (SSAInvokeInstruction) inst;
-					if (ni.getCallSite().getDeclaredTarget().getName().toString().equals("read_data") && ni.getException() != vn) {
+				System.out.println("Inst: " + inst);
+				if (inst instanceof SSAAbstractInvokeInstruction) {
+					SSAAbstractInvokeInstruction ni = (SSAAbstractInvokeInstruction) inst;
+					System.out.println("Instruction: " + inst);
+					Atom name = ni.getCallSite().getDeclaredTarget().getName();
+					System.out.println("Name: " + name);
+					if (name.toString().equals("read_data") && ni.getException() != vn) {
 						sources.add(src);
+					} else {
+						int uses = inst.getNumberOfUses();
+						if (uses > 0) {
+							int callee = inst.getUse(0);
+							
+							if (callee == 252)
+								sources.add(src);
+						}
 					}
 				}
 			}
