@@ -4,9 +4,9 @@ language: java
 jdk: openjdk11
 before_install:
  - git clone --depth=50 https://github.com/wala/IDE /tmp/IDE
- - git clone https://github.com/maldil/RulePharser.git /tmp/RulePharser
+ - git clone https://github.com/maldil/RulePharser.git /tmp/jython3
 install:
- - pushd /tmp/RulePharser
+ - pushd /tmp/jython3
  - ant
  - mvn install:install-file -Dfile=dist/jython-dev.jar -DgroupId=org.python -DartifactId=jython3 -Dversion=0.0.9-SNAPSHOT -Dpackaging=jar
  - popd
