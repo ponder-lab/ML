@@ -96,6 +96,8 @@ import org.python.antlr.ast.keyword;
 import org.python.antlr.ast.operatorType;
 import org.python.antlr.ast.unaryopType;
 import org.python.antlr.ast.withitem;
+import org.python.antlr.ast.Hole;
+import org.python.antlr.ast.AlphHole;
 import org.python.antlr.base.expr;
 import org.python.antlr.base.slice;
 import org.python.antlr.base.stmt;
@@ -2046,6 +2048,34 @@ abstract public class PythonParser<T> extends AbstractParser<T> implements Trans
 		@Override
 		public CAstNode visitYieldFrom(YieldFrom arg0) throws Exception {
 			return arg0.getInternalValue().accept(this);
+		}
+
+		@Override
+		public void postVisit(PyObject node) {
+		}
+
+		@Override
+		public boolean preVisit2(PyObject node) {
+		    return true;
+		}
+
+		@Override
+		public void preVisit(PyObject node) {
+		}
+
+		@Override
+		public CAstNode visitcomprehension(comprehension node) throws Exception {
+		    return null;
+		}
+
+		@Override
+		public CAstNode visitHole(Hole node) throws Exception {
+		    return null;
+		}
+
+		@Override
+		public CAstNode visitAlphHole(AlphHole node) throws Exception {
+		    return null;
 		}
 	}
 	
