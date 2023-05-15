@@ -6,6 +6,7 @@ import java.util.Iterator;
 
 import org.junit.Test;
 
+import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
@@ -42,4 +43,21 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
 		}
 	}
 
+	@Test
+	public void testTf2() throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+		PythonAnalysisEngine<TensorTypeAnalysis> E = makeEngine("tf2.py");
+		PythonSSAPropagationCallGraphBuilder builder = E.defaultCallGraphBuilder();
+
+		CallGraph CG = builder.makeCallGraph(builder.getOptions());
+
+		CAstCallGraphUtil.AVOID_DUMP = false;
+		CAstCallGraphUtil.dumpCG(builder.getCFAContextInterpreter(), builder.getPointerAnalysis(), CG);
+
+		TensorTypeAnalysis analysis = E.performAnalysis(builder);
+		System.out.println(analysis);
+
+		analysis.forEach(t -> {
+			System.out.println(t);
+		});
+	}
 }

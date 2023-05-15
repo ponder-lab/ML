@@ -8,20 +8,27 @@ import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.shrike.shrikeBT.IInvokeInstruction;
+import com.ibm.wala.ssa.ConstantValue;
 import com.ibm.wala.ssa.DefUse;
+import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSAInvokeInstruction;
+import com.ibm.wala.ssa.Value;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
@@ -52,10 +59,63 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 			if (k instanceof LocalPointerKey) {
 				LocalPointerKey kk = (LocalPointerKey)k;
 				int vn = kk.getValueNumber();
-				DefUse du = kk.getNode().getDU();
+				CGNode node = kk.getNode();
+				System.out.println(node.getIR());
+				DefUse du = node.getDU();
 				SSAInstruction inst = du.getDef(vn);
-				if (inst instanceof SSAInvokeInstruction) {
-					SSAInvokeInstruction ni = (SSAInvokeInstruction) inst;
+				if (inst instanceof SSAAbstractInvokeInstruction) {
+					SSAAbstractInvokeInstruction ni = (SSAAbstractInvokeInstruction) inst;
+					
+					if (!ni.isStatic()) {
+						int receiver = ni.getReceiver();
+						System.out.println(receiver);
+						SSAInstruction receiverDefinition = du.getDef(receiver);
+						
+						if (receiverDefinition instanceof PythonPropertyRead) {
+							PythonPropertyRead propertyRead = (PythonPropertyRead) receiverDefinition;
+
+							int objectRef = propertyRead.getObjectRef();
+							SSAInstruction objectRefDefinition = du.getDef(objectRef);
+							System.out.println(objectRefDefinition);
+							
+							// TODO: Is this import tensorflow? It's not always. It can be, but it can also be an "import tree."
+							int memberRef = propertyRead.getMemberRef();
+							SSAInstruction memberRefDefinition = du.getDef(memberRef);
+							System.out.println(memberRefDefinition);
+							
+							if (memberRefDefinition == null) {
+								IR ir = node.getIR();
+								Value value = ir.getSymbolTable().getValue(memberRef);
+								System.out.println(value);
+								
+								if (value.isStringConstant()) {
+									String stringConstantValue = value.toString().substring(1); // remove '#'.
+									System.out.println(stringConstantValue);
+									
+									String stringValue = ir.getSymbolTable().getStringValue(memberRef);
+									System.out.println(stringValue);
+								}
+							}
+						}
+					}
+					
+					
+					int numberOfUses = du.getNumberOfUses(vn);
+					System.out.println(numberOfUses);
+					
+					for (Iterator<SSAInstruction> uses = du.getUses(vn); uses.hasNext();) {
+						SSAInstruction next = uses.next();
+						System.out.println(next);
+					}
+					
+					
+					MethodReference declaredTarget = ni.getDeclaredTarget();
+					System.out.println(declaredTarget);
+					
+					TypeReference declaredResultType = ni.getDeclaredResultType();
+					System.out.println(declaredResultType);
+					
+
 					if (ni.getCallSite().getDeclaredTarget().getName().toString().equals("read_data") && ni.getException() != vn) {
 						sources.add(src);
 					}
