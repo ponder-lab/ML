@@ -89,11 +89,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 								System.out.println(value);
 								
 								if (value.isStringConstant()) {
-									String stringConstantValue = value.toString().substring(1); // remove '#'.
-									System.out.println(stringConstantValue);
-									
 									String stringValue = ir.getSymbolTable().getStringValue(memberRef);
 									System.out.println(stringValue);
+									
+									if (stringValue.equals("ones"))
+										sources.add(src);
 								}
 							}
 						}
