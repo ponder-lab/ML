@@ -75,8 +75,6 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 						if (receiverDefinition instanceof PythonPropertyRead) {
 							PythonPropertyRead propertyRead = (PythonPropertyRead) receiverDefinition;
 
-							// TODO: Is this import tensorflow? It's not always. It can be, but it can also
-							// be an "import tree."
 							int objectRef = propertyRead.getObjectRef();
 							SSAInstruction objectRefDefinition = du.getDef(objectRef);
 

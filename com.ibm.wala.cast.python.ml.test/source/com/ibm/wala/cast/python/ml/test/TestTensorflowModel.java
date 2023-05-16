@@ -58,7 +58,14 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
 
 	@Test
 	public void testTf2() throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-		PythonAnalysisEngine<TensorTypeAnalysis> E = makeEngine("tf2.py");
+		final String[] filesToTest = {"tf2.py", "tf2b.py"};
+		
+		for (String filename: filesToTest)
+			testTf2(filename);
+	}
+
+	private void testTf2(String filename) throws ClassHierarchyException, CancelException, IOException {
+		PythonAnalysisEngine<TensorTypeAnalysis> E = makeEngine(filename);
 		PythonSSAPropagationCallGraphBuilder builder = E.defaultCallGraphBuilder();
 
 		CallGraph CG = builder.makeCallGraph(builder.getOptions());
@@ -110,8 +117,10 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
 		assertEquals(2, methodSignatureToPointerKeys.size());
 		assertEquals(2, methodSignatureToTensorVariables.size());
 
+		final String addFunctionSignature = "script " + filename + ".add.do()LRoot;";
+
 		// get the pointer keys for the add() function.
-		Set<LocalPointerKey> addFunctionPointerKeys = methodSignatureToPointerKeys.get("script tf2.py.add.do()LRoot;");
+		Set<LocalPointerKey> addFunctionPointerKeys = methodSignatureToPointerKeys.get(addFunctionSignature);
 
 		// two tensor parameters, a and b.
 		assertEquals(2, addFunctionPointerKeys.size());
@@ -124,7 +133,7 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
 		assertTrue(valueNumberSet.contains(3));
 
 		// get the tensor variables for the add() function.
-		Set<TensorVariable> addFunctionTensors = methodSignatureToTensorVariables.get("script tf2.py.add.do()LRoot;");
+		Set<TensorVariable> addFunctionTensors = methodSignatureToTensorVariables.get(addFunctionSignature);
 
 		// two tensor parameters, a and b.
 		assertEquals(2, addFunctionTensors.size());
