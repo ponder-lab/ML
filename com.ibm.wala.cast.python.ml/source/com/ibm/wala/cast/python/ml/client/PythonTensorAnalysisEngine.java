@@ -4,6 +4,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
+import com.google.common.base.Objects;
 import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
@@ -60,63 +61,40 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 				LocalPointerKey kk = (LocalPointerKey)k;
 				int vn = kk.getValueNumber();
 				CGNode node = kk.getNode();
-				System.out.println(node.getIR());
 				DefUse du = node.getDU();
 				SSAInstruction inst = du.getDef(vn);
 				if (inst instanceof SSAAbstractInvokeInstruction) {
 					SSAAbstractInvokeInstruction ni = (SSAAbstractInvokeInstruction) inst;
-					
+					String memberRefStringValue = null;
+
 					if (!ni.isStatic()) {
 						int receiver = ni.getReceiver();
-						System.out.println(receiver);
 						SSAInstruction receiverDefinition = du.getDef(receiver);
-						
+
 						if (receiverDefinition instanceof PythonPropertyRead) {
 							PythonPropertyRead propertyRead = (PythonPropertyRead) receiverDefinition;
 
 							int objectRef = propertyRead.getObjectRef();
 							SSAInstruction objectRefDefinition = du.getDef(objectRef);
-							System.out.println(objectRefDefinition);
-							
-							// TODO: Is this import tensorflow? It's not always. It can be, but it can also be an "import tree."
+
+							// TODO: Is this import tensorflow? It's not always. It can be, but it can also
+							// be an "import tree."
 							int memberRef = propertyRead.getMemberRef();
 							SSAInstruction memberRefDefinition = du.getDef(memberRef);
-							System.out.println(memberRefDefinition);
-							
+
 							if (memberRefDefinition == null) {
 								IR ir = node.getIR();
-								Value value = ir.getSymbolTable().getValue(memberRef);
-								System.out.println(value);
-								
-								if (value.isStringConstant()) {
-									String stringValue = ir.getSymbolTable().getStringValue(memberRef);
-									System.out.println(stringValue);
-									
-									if (stringValue.equals("ones"))
-										sources.add(src);
+								Value memberRefValue = ir.getSymbolTable().getValue(memberRef);
+
+								if (memberRefValue.isStringConstant()) {
+									memberRefStringValue = ir.getSymbolTable().getStringValue(memberRef);
 								}
 							}
 						}
 					}
-					
-					
-					int numberOfUses = du.getNumberOfUses(vn);
-					System.out.println(numberOfUses);
-					
-					for (Iterator<SSAInstruction> uses = du.getUses(vn); uses.hasNext();) {
-						SSAInstruction next = uses.next();
-						System.out.println(next);
-					}
-					
-					
-					MethodReference declaredTarget = ni.getDeclaredTarget();
-					System.out.println(declaredTarget);
-					
-					TypeReference declaredResultType = ni.getDeclaredResultType();
-					System.out.println(declaredResultType);
-					
 
-					if (ni.getCallSite().getDeclaredTarget().getName().toString().equals("read_data") && ni.getException() != vn) {
+					if ((ni.getCallSite().getDeclaredTarget().getName().toString().equals("read_data")
+							|| Objects.equal(memberRefStringValue, "ones")) && ni.getException() != vn) {
 						sources.add(src);
 					}
 				}
