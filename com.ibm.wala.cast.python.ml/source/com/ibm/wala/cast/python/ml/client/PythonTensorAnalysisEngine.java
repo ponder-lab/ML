@@ -65,8 +65,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 				SSAInstruction inst = du.getDef(vn);
 				if (inst instanceof SSAAbstractInvokeInstruction) {
 					SSAAbstractInvokeInstruction ni = (SSAAbstractInvokeInstruction) inst;
-					boolean fromTensorFlow = false;
-					String memberRefStringValue = null;
+					String tensorFlowAPI = null;
 
 					if (!ni.isStatic()) {
 						int receiver = ni.getReceiver();
@@ -75,41 +74,56 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 						if (receiverDefinition instanceof PythonPropertyRead) {
 							PythonPropertyRead propertyRead = (PythonPropertyRead) receiverDefinition;
 
-							int objectRef = propertyRead.getObjectRef();
-							SSAInstruction objectRefDefinition = du.getDef(objectRef);
+							// are we calling a TensorFlow API?
+							if (isFromTensorFlow(propertyRead, du)) {
+								int memberRef = propertyRead.getMemberRef();
+								SSAInstruction memberRefDefinition = du.getDef(memberRef);
 
-							if (objectRefDefinition instanceof SSAInvokeInstruction) {
-								SSAInvokeInstruction objectRefInvocInstruction = (SSAInvokeInstruction) objectRefDefinition;
-								MethodReference objectRefInvocationDeclaredTarget = objectRefInvocInstruction
-										.getDeclaredTarget();
-								fromTensorFlow = objectRefInvocationDeclaredTarget.equals(import_tensorflow);
-							}
+								// if the member reference can't be found.
+								if (memberRefDefinition == null) {
+									// look it up in the IR.
+									IR ir = node.getIR();
+									Value memberRefValue = ir.getSymbolTable().getValue(memberRef);
 
-							int memberRef = propertyRead.getMemberRef();
-							SSAInstruction memberRefDefinition = du.getDef(memberRef);
-
-							// if the member reference can't be found.
-							if (memberRefDefinition == null) {
-								// look it up in the IR.
-								IR ir = node.getIR();
-								Value memberRefValue = ir.getSymbolTable().getValue(memberRef);
-
-								if (memberRefValue.isStringConstant()) {
-									memberRefStringValue = ir.getSymbolTable().getStringValue(memberRef);
+									if (memberRefValue.isStringConstant()) {
+										tensorFlowAPI = ir.getSymbolTable().getStringValue(memberRef);
+									}
 								}
 							}
 						}
 					}
 
 					if ((ni.getCallSite().getDeclaredTarget().getName().toString().equals("read_data")
-							|| (fromTensorFlow && Objects.equal(memberRefStringValue, "ones")))
-							&& ni.getException() != vn) {
+							|| Objects.equal(tensorFlowAPI, "ones")) && ni.getException() != vn) {
 						sources.add(src);
 					}
 				}
 			}
 		}
 		return sources;
+	}
+
+	/**
+	 * True iff the given {@link PythonPropertyRead} corresponds to a TensorFlow API
+	 * invocation.
+	 *
+	 * @param propertyRead The {@link PythonPropertyRead} to check.
+	 * @param du           The {@link DefUse} from the corresponding {@link CGNode}.
+	 * @return True iff the given {@link PythonPropertyRead} corresponds to a
+	 *         TensorFlow API invocation.
+	 */
+	private static boolean isFromTensorFlow(PythonPropertyRead propertyRead, DefUse du) {
+		int objectRef = propertyRead.getObjectRef();
+		SSAInstruction objectRefDefinition = du.getDef(objectRef);
+
+		if (objectRefDefinition instanceof SSAInvokeInstruction) {
+			SSAInvokeInstruction objectRefInvocInstruction = (SSAInvokeInstruction) objectRefDefinition;
+			MethodReference objectRefInvocationDeclaredTarget = objectRefInvocInstruction.getDeclaredTarget();
+			return objectRefInvocationDeclaredTarget.equals(import_tensorflow);
+		} else if (objectRefDefinition instanceof PythonPropertyRead)
+			// it's an import tree. Dig deeper to find the root.
+			return isFromTensorFlow((PythonPropertyRead) objectRefDefinition, du);
+		return false;
 	}
 
 	@FunctionalInterface
