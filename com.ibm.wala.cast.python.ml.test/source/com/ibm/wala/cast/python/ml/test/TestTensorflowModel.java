@@ -58,9 +58,9 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
 
 	@Test
 	public void testTf2() throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-		final String[] filesToTest = {"tf2.py", "tf2b.py", "tf2c.py"};
-		
-		for (String filename: filesToTest)
+		final String[] filesToTest = { "tf2.py", "tf2b.py", "tf2c.py" };
+
+		for (String filename : filesToTest)
 			testTf2(filename);
 	}
 
