@@ -22,10 +22,10 @@ jobs:
         repository: wala/IDE
         # fetch-depth: 50
         path: ./IDE
-    - name: Checkout juliandolby/jython3 sources.
+    - name: Checkout ponder-lab/jython3 sources.
       uses: actions/checkout@v3.5.2
       with:
-        repository: juliandolby/jython3
+        repository: ponder-lab/jython3
         path: ./jython3
     - name: Install Jython3.
       run: |
