@@ -74,14 +74,10 @@ public class Python3Loader extends PythonLoader {
 				return new ConstantFoldingRewriter(ast) {
 					@Override
 					protected Object eval(CAstOperator op, Object lhs, Object rhs) {
-						try {
-							PyObject x = Python3Interpreter.getInterp().eval(lhs + " " + op.getValue() + " " + rhs);
-							if (x.isNumberType()) {
-								System.err.println(lhs + " " + op.getValue() + " " + rhs + " -> " + x.asInt());
-								return x.asInt();
-							}
-						} catch (Exception e) {
-							// interpreter died for some reason, so no information.
+						PyObject x = Python3Interpreter.getInterp().eval(lhs + " " + op.getValue() + " " + rhs);
+						if (x.isNumberType()) {
+							System.err.println(lhs + " " + op.getValue() + " " + rhs + " -> " + x.asInt());
+							return x.asInt();
 						}
 						return null;
 					}
