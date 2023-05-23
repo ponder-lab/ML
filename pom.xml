@@ -5,7 +5,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.ibm.wala</groupId>
   <artifactId>ml</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
+  <version>0.3.0-SNAPSHOT</version>
   <packaging>pom</packaging>
   <properties>
     <project-version>0.0.1-SNAPSHOT</project-version>
@@ -19,9 +19,9 @@
   </properties>
   <distributionManagement>
     <repository>
-      <id>internal.repo</id>
-      <name>Temporary Staging Repository</name>
-      <url>file://${project.build.directory}/mvn-repo</url>
+      <id>github</id>
+      <name>GitHub ponder-lab Apache Maven Packages</name>
+      <url>https://maven.pkg.github.com/ponder-lab/ML</url>
     </repository>
   </distributionManagement>
   <modules>
@@ -105,6 +105,11 @@
         <groupId>com.github.jnr</groupId>
         <artifactId>jnr-constants</artifactId>
         <version>0.9.12</version>
+      </dependency>
+      <dependency>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>versions-maven-plugin</artifactId>
+        <version>2.15.0</version>
       </dependency>
     </dependencies>
   </dependencyManagement>

@@ -3,7 +3,7 @@
   <parent>
     <groupId>com.ibm.wala</groupId>
     <artifactId>ml</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.3.0-SNAPSHOT</version>
   </parent>
   <artifactId>com.ibm.wala.cast.python.ml</artifactId>
   <dependencies>
@@ -66,7 +66,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
-        <version>2.3</version>
+        <version>3.4.1</version>
         <configuration>
         <filters>
           <filter>
@@ -94,7 +94,14 @@
                 <mainClass>com.ibm.wala.cast.python.ml.driver.Ariadne</mainClass>
                 </transformer>
               </transformers>
-              <shadedArtifactAttached>true</shadedArtifactAttached>
+              <artifactSet>
+                <excludes>
+                  <exclude>com.ibm.wala:com.ibm.wala.core</exclude>
+                  <exclude>com.ibm.wala:com.ibm.wala.util</exclude>
+                  <exclude>com.ibm.wala:com.ibm.wala.shrike</exclude>
+                  <exclude>com.ibm.wala:com.ibm.wala.cast</exclude>
+                </excludes>
+              </artifactSet>
             </configuration>
           </execution>
         </executions>
