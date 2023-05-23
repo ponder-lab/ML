@@ -136,8 +136,7 @@ public abstract class PythonAnalysisEngine<T>
 			assert false : e;
 			return null;
 		} catch (WalaException e) {
-			e.printStackTrace();
-			throw new WalaRuntimeException(e.getMessage(), e);
+			throw new WalaRuntimeException(e.getMessage());
 		}
 	}
 
