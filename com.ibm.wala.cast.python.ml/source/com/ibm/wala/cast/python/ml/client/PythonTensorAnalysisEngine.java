@@ -96,8 +96,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 					if ((ni.getCallSite().getDeclaredTarget().getName().toString().equals("read_data")
 							|| Objects.equal(tensorFlowAPI, "ones")) && ni.getException() != vn
 							|| Objects.equal(tensorFlowAPI, "Variable") && ni.getException() != vn
-							|| Objects.equal(tensorFlowAPI, "constant") && ni.getException() != vn
-							|| Objects.equal(tensorFlowAPI, "random.uniform") && ni.getException() != vn) {
+							|| Objects.equal(tensorFlowAPI, "constant") && ni.getException() != vn) {
 						sources.add(src);
 					}
 				}
