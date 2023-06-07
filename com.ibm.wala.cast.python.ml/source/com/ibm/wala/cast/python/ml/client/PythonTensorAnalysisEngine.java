@@ -94,10 +94,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 					}
 
 					if ((ni.getCallSite().getDeclaredTarget().getName().toString().equals("read_data")
-							|| Objects.equal(tensorFlowAPI, "ones")) && ni.getException() != vn
-							|| Objects.equal(tensorFlowAPI, "Variable") && ni.getException() != vn
-							|| Objects.equal(tensorFlowAPI, "zeros") && ni.getException() != vn
-							|| Objects.equal(tensorFlowAPI, "constant") && ni.getException() != vn) {
+							|| Objects.equal(tensorFlowAPI, "ones") || Objects.equal(tensorFlowAPI, "Variable")
+							|| Objects.equal(tensorFlowAPI, "zeros") || Objects.equal(tensorFlowAPI, "constant"))
+							&& ni.getException() != vn) {
 						sources.add(src);
 					}
 				}
