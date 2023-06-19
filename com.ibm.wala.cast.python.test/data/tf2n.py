@@ -1,11 +1,13 @@
 import tensorflow as tf
 
-def value_index(a,b):
-  return a.value_index + b.value_index
+def add(s, t):
+  return s + t
 
-g = tf.Graph()
-with g.as_default():
-  c = tf.constant(30.0)
-op = g.get_operations()
-operation = op[0]
-c = value_index(tf.Tensor(operation, 0, tf.float32), tf.Tensor(operation, 0, tf.float32))
+@tf.function
+def func():
+  a = tf.constant([[1.0, 2.0], [3.0, 4.0]])
+  b = tf.constant([[1.0, 1.0], [0.0, 1.0]])
+  c = tf.matmul(a, b)
+  add(tf.Tensor(c.op, 0, tf.float32), tf.Tensor(c.op, 0, tf.float32))
+
+func()
