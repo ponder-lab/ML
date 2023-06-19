@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-def value_index(a,b):
+def value_index(a, b):
   return a.value_index + b.value_index
 
 g = tf.Graph()
