@@ -74,6 +74,7 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
 		// TODO: Uncomment below test when https://github.com/wala/ML/issues/49 is fixed.
 		// testTf2("tf2n.py", "func2", 1, 2);
 		testTf2("tf2o.py", "add", 2, 2, 3);
+		testTf2("tf2p.py", "value_index", 2, 2, 3);
 	}
 
 	private void testTf2(String filename, String functionName, int expectedNumberOfTensorParameters, int... expectedValueNumbers) throws ClassHierarchyException, CancelException, IOException {
