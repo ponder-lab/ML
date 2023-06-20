@@ -75,6 +75,28 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
 		// testTf2("tf2n.py", "func2", 1, 2);
 		testTf2("tf2o.py", "add", 2, 2, 3);
 		testTf2("tf2p.py", "value_index", 2, 2, 3);
+		testTf2("tf2q.py", "add", 2, 2, 3);
+		testTf2("tf2r.py", "add", 2, 2, 3);
+		testTf2("tf2s.py", "add", 2, 2, 3);
+		testTf2("tf2t.py", "add", 2, 2, 3);
+		testTf2("tf2u.py", "add", 2, 2, 3);
+		testTf2("tf2v.py", "add", 2, 2, 3);
+		testTf2("tf2w.py", "add", 2, 2, 3);
+		testTf2("tf2x.py", "add", 2, 2, 3);
+		// TODO: Uncomment below test when https://github.com/ponder-lab/ML/issues/27 is fixed.
+		// testTf2("tf2y.py", "add", 2, 2, 3);
+		testTf2("tf2z.py", "add", 2, 2, 3);
+		testTf2("tf2aa.py", "add", 2, 2, 3);
+		// TODO: Uncomment below test when https://github.com/ponder-lab/ML/issues/27 is fixed.
+		// testTf2("tf2bb.py", "add", 2, 2, 3);
+		testTf2("tf2cc.py", "add", 2, 2, 3);
+		testTf2("tf2dd.py", "add", 2, 2, 3);
+		testTf2("tf2ee.py", "add", 2, 2, 3);
+		testTf2("tf2ff.py", "add", 2, 2, 3);
+		testTf2("tf2gg.py", "add", 2, 2, 3);
+		testTf2("tf2hh.py", "add", 2, 2, 3);
+		// TODO: Uncomment below test when https://github.com/ponder-lab/ML/issues/28 is fixed.
+		// testTf2("tf2ii.py", "add", 2, 2, 3);
 	}
 
 	private void testTf2(String filename, String functionName, int expectedNumberOfTensorParameters, int... expectedValueNumbers) throws ClassHierarchyException, CancelException, IOException {

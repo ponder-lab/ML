@@ -121,7 +121,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 									|| Objects.equal(tensorFlowAPI, "range"))
 								sources.add(src);
 							// Double-level APIs.
-							else if (Objects.equal(tensorFlowAPI, "uniform")) {
+							else if (Objects.equal(tensorFlowAPI, "uniform") || Objects.equal(tensorFlowAPI, "gamma")
+									|| Objects.equal(tensorFlowAPI, "normal") || Objects.equal(tensorFlowAPI, "poisson")
+									|| Objects.equal(tensorFlowAPI, "truncated_normal")) {
 								// Check the next "level".
 								if (tensorFlowAPIQueue.isEmpty())
 									// not expecting this API call.
@@ -130,6 +132,65 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 								tensorFlowAPI = tensorFlowAPIQueue.remove();
 
 								if (Objects.equal(tensorFlowAPI, "random"))
+									sources.add(src);
+							} else if (Objects.equal(tensorFlowAPI, "SparseTensor")) {
+								// Check the next "level".
+								if (tensorFlowAPIQueue.isEmpty())
+									// not expecting this API call.
+									throw new IllegalStateException("Encountered unexpected API call.");
+
+								tensorFlowAPI = tensorFlowAPIQueue.remove();
+
+								if (Objects.equal(tensorFlowAPI, "sparse"))
+									sources.add(src);
+							} else if (Objects.equal(tensorFlowAPI, "Input")) {
+								// Check the next "level".
+								if (tensorFlowAPIQueue.isEmpty())
+									// not expecting this API call.
+									throw new IllegalStateException("Encountered unexpected API call.");
+
+								tensorFlowAPI = tensorFlowAPIQueue.remove();
+
+								if (Objects.equal(tensorFlowAPI, "keras"))
+									sources.add(src);
+							} else if (Objects.equal(tensorFlowAPI, "eye")) {
+								// Check the next "level".
+								if (tensorFlowAPIQueue.isEmpty())
+									// not expecting this API call.
+									throw new IllegalStateException("Encountered unexpected API call.");
+
+								tensorFlowAPI = tensorFlowAPIQueue.remove();
+
+								if (Objects.equal(tensorFlowAPI, "sparse") || Objects.equal(tensorFlowAPI, "linalg"))
+									sources.add(src);
+							} else if (Objects.equal(tensorFlowAPI, "range")
+									|| Objects.equal(tensorFlowAPI, "constant")) {
+								// Check the next "level".
+								if (tensorFlowAPIQueue.isEmpty())
+									// not expecting this API call.
+									throw new IllegalStateException("Encountered unexpected API call.");
+
+								tensorFlowAPI = tensorFlowAPIQueue.remove();
+
+								if (Objects.equal(tensorFlowAPI, "ragged"))
+									sources.add(src);
+							}
+							if (Objects.equal(tensorFlowAPI, "from_nested_row_lengths")
+									|| Objects.equal(tensorFlowAPI, "from_nested_row_splits")
+									|| Objects.equal(tensorFlowAPI, "from_nested_value_rowids")
+									|| Objects.equal(tensorFlowAPI, "from_row_lengths")
+									|| Objects.equal(tensorFlowAPI, "from_row_limits")
+									|| Objects.equal(tensorFlowAPI, "from_row_splits")
+									|| Objects.equal(tensorFlowAPI, "from_row_starts")
+									|| Objects.equal(tensorFlowAPI, "from_value_rowids")) {
+								// Check the next "level".
+								if (tensorFlowAPIQueue.isEmpty())
+									// not expecting this API call.
+									throw new IllegalStateException("Encountered unexpected API call.");
+
+								tensorFlowAPI = tensorFlowAPIQueue.remove();
+
+								if (Objects.equal(tensorFlowAPI, "RaggedTensor"))
 									sources.add(src);
 							}
 						} else if (ni.getCallSite().getDeclaredTarget().getName().toString().equals("read_data"))
