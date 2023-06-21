@@ -1,7 +1,7 @@
 import sys
 
 try:
-    f = open('myfile.txt')
+    f = open("myfile.txt")
     s = f.readline()
     i = int(s.strip())
 except IOError as e:
