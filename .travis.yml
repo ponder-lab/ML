@@ -2,6 +2,12 @@ os: linux
 dist: focal
 language: java
 jdk: openjdk11
+cache:
+  apt: true
+addons:
+  apt:
+    packages:
+      - black
 before_install:
  - git clone --depth=50 https://github.com/wala/IDE /tmp/IDE
  - git clone https://github.com/juliandolby/jython3.git /tmp/jython3
@@ -17,6 +23,7 @@ install:
  - popd
 script:
  - mvn spotless:check -B
+ - black --check --quiet . # Check Python format.
  - mvn clean verify -B
 deploy:
   provider: script
