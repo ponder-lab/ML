@@ -1,7 +1,7 @@
-import tensorflow as tf
+from tensorflow import SparseTensor
 
 def add(a, b):
-  return a + b
+  return a
 
 
-c = add(tf.RaggedTensor.from_value_rowids([3, 1, 4, 1, 5, 9, 2, 6],[0, 0, 0, 0, 2, 2, 2, 3]), tf.RaggedTensor.from_value_rowids([3, 1, 14, 1, 5, 19, 2, 16],[0, 0, 0, 0, 2, 2, 2, 3]))
+c = add(SparseTensor([[0, 0], [1, 2]], [1, 2],[3, 4]), SparseTensor([[0, 0], [1, 2]], [1, 2], [3, 4]))
