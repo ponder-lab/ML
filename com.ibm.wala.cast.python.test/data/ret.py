@@ -4,7 +4,7 @@ def ret(a):
 def noret(a):
     a
 
-print ret(3)
-print noret(5)
+print(ret(3))
+print(noret(5))
 
 
