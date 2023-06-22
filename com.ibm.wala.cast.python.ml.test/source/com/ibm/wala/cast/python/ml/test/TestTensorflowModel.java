@@ -80,6 +80,7 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
     testTf2("tf2o.py", "add", 2, 2, 3);
     testTf2("tf2p.py", "value_index", 2, 2, 3);
     testTf2("tf2q.py", "add", 2, 2, 3);
+    testTf2("tf2r.py", "add", 2, 2, 3);
   }
 
   private void testTf2(
