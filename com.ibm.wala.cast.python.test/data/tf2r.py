@@ -1,7 +1,7 @@
-from tensorflow import random
+from tensorflow import ones
 
 def add(a, b):
   return a + b
 
 
-c = add(random.uniform([1, 2]), random.uniform([2, 2]))
+c = add(ones([1, 2]), ones([2, 2]))  #  [[2., 2.], [2., 2.]]
