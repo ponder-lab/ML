@@ -128,7 +128,7 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
 
     TensorTypeAnalysis analysis = E.performAnalysis(builder);
 
-    logger.info("The analysis results: " + analysis);
+    logger.info("Tensor analysis: " + analysis);
 
     // Create a mapping from method signatures to pointer keys.
     Map<String, Set<LocalPointerKey>> methodSignatureToPointerKeys = new HashMap<>();
