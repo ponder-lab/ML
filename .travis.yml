@@ -17,7 +17,7 @@ install:
  - popd
 script:
  - mvn spotless:check -B
- - mvn -Djava.util.logging.config.file=${maven.multiModuleProjectDirectory}/logging.ci.properties clean verify -B
+ - mvn -DargLine="-Djava.util.logging.config.file=logging.ci.properties" clean verify -B
 deploy:
   provider: script
   script: mvn -s .travis.settings.xml -Dgithub.username=$GITHUB_USERNAME -Dgithub.password=$GITHUB_TOKEN deploy -DskipTests
