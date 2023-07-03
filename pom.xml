@@ -140,7 +140,7 @@
             <threadCount>1</threadCount>
             <systemPropertyVariables>
               <!-- Set JUL Formatting -->
-              <java.util.logging.config.file>data/logging.properties</java.util.logging.config.file>
+              <java.util.logging.config.file>${maven.multiModuleProjectDirectory}/logging.properties</java.util.logging.config.file>
             </systemPropertyVariables>
             <forkMode>once</forkMode>
             <argLine>-Dpython.import.site=false</argLine>
