@@ -40,4 +40,4 @@ jobs:
     - name: Check formatting with spotless.
       run: mvn spotless:check -B
     - name: Build with Maven
-      run: mvn clean verify -B
+      run: mvn -Djava.util.logging.config.file=data/logging.ci.properties clean verify -B
