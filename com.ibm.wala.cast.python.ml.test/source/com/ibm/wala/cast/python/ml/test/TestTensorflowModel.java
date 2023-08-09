@@ -2,18 +2,6 @@ package com.ibm.wala.cast.python.ml.test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-
-import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
-import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
-import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
-import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
-import com.ibm.wala.classLoader.IMethod;
-import com.ibm.wala.ipa.callgraph.CGNode;
-import com.ibm.wala.ipa.callgraph.CallGraph;
-import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
-import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
-import com.ibm.wala.ipa.cha.ClassHierarchyException;
-import com.ibm.wala.util.CancelException;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
@@ -26,6 +14,17 @@ import java.util.Set;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import org.junit.Test;
+import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
+import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
+import com.ibm.wala.classLoader.IMethod;
+import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.CallGraph;
+import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
+import com.ibm.wala.ipa.cha.ClassHierarchyException;
+import com.ibm.wala.util.CancelException;
 
 public class TestTensorflowModel extends TestPythonMLCallGraphShape {
 
@@ -47,10 +46,9 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
 
     Collection<CGNode> nodes = getNodes(CG, "script tf1.py/model_fn");
     assert !nodes.isEmpty() : "model_fn should be called";
-    check:
-    {
+    check: {
       for (CGNode node : nodes) {
-        for (Iterator<CGNode> ns = CG.getPredNodes(node); ns.hasNext(); ) {
+        for (Iterator<CGNode> ns = CG.getPredNodes(node); ns.hasNext();) {
           if (ns.next().getMethod().isWalaSynthetic()) {
             break check;
           }
@@ -106,9 +104,8 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
     testTf2("tf2p2.py", "value_index", 2, 4, 2, 3);
     testTf2("tf2q.py", "add", 2, 3, 2, 3);
     testTf2("tf2r.py", "add", 2, 3, 2, 3);
-    testTf2(
-        "tf2s.py", "add", 0,
-        0); // NOTE: Set the expected number of tensor parameters, variables, and tensor parameter
+    testTf2("tf2s.py", "add", 0, 0); // NOTE: Set the expected number of tensor parameters,
+                                     // variables, and tensor parameter
     // value numbers to 2, 3, and 2 and 3, respectively, when
     // https://github.com/wala/ML/issues/65 is fixed.
     testTf2("tf2t.py", "add", 2, 3, 2, 3);
@@ -185,16 +182,12 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
     testTf2("tf2oo2.py", "func2", 1, 4, 2);
     testTf2("tf2oo3.py", "func2", 1, 4, 2);
     testTf2("tf2oo4.py", "func2", 1, 4, 2);
-    testTf2("tf2pp.py", "add", 2, 3, 2, 3);
-    testTf2("tf2pp2.py", "add", 2, 3, 2, 3);
+    testTf2("tf2_testing_decorator.py", "returned", 1, 3, 2);
+    testTf2("tf2_testing_decorator2.py", "returned", 1, 3, 2);
   }
 
-  private void testTf2(
-      String filename,
-      String functionName,
-      int expectedNumberOfTensorParameters,
-      int expectedNumberOfTensorVariables,
-      int... expectedTensorParameterValueNumbers)
+  private void testTf2(String filename, String functionName, int expectedNumberOfTensorParameters,
+      int expectedNumberOfTensorVariables, int... expectedTensorParameterValueNumbers)
       throws ClassHierarchyException, CancelException, IOException {
     PythonAnalysisEngine<TensorTypeAnalysis> E = makeEngine(filename);
     PythonSSAPropagationCallGraphBuilder builder = E.defaultCallGraphBuilder();
@@ -218,41 +211,39 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
     Map<String, Set<TensorVariable>> methodSignatureToTensorVariables = new HashMap<>();
 
     // for each pointer key, tensor variable pair.
-    analysis.forEach(
-        p -> {
-          PointerKey pointerKey = p.fst;
+    analysis.forEach(p -> {
+      PointerKey pointerKey = p.fst;
 
-          if (pointerKey instanceof LocalPointerKey) {
-            LocalPointerKey localPointerKey = (LocalPointerKey) pointerKey;
+      if (pointerKey instanceof LocalPointerKey) {
+        LocalPointerKey localPointerKey = (LocalPointerKey) pointerKey;
 
-            // get the call graph node associated with the
-            CGNode node = localPointerKey.getNode();
+        // get the call graph node associated with the
+        CGNode node = localPointerKey.getNode();
 
-            // get the method associated with the call graph node.
-            IMethod method = node.getMethod();
-            String methodSignature = method.getSignature();
+        // get the method associated with the call graph node.
+        IMethod method = node.getMethod();
+        String methodSignature = method.getSignature();
 
-            // associate the method to the pointer key.
-            methodSignatureToPointerKeys.compute(
-                methodSignature,
-                (k, v) -> {
-                  if (v == null) v = new HashSet<>();
-                  v.add(localPointerKey);
-                  return v;
-                });
-
-            TensorVariable tensorVariable = p.snd;
-
-            // associate the method to the tensor variables.
-            methodSignatureToTensorVariables.compute(
-                methodSignature,
-                (k, v) -> {
-                  if (v == null) v = new HashSet<>();
-                  v.add(tensorVariable);
-                  return v;
-                });
-          } else logger.warning(() -> "Encountered: " + pointerKey.getClass());
+        // associate the method to the pointer key.
+        methodSignatureToPointerKeys.compute(methodSignature, (k, v) -> {
+          if (v == null)
+            v = new HashSet<>();
+          v.add(localPointerKey);
+          return v;
         });
+
+        TensorVariable tensorVariable = p.snd;
+
+        // associate the method to the tensor variables.
+        methodSignatureToTensorVariables.compute(methodSignature, (k, v) -> {
+          if (v == null)
+            v = new HashSet<>();
+          v.add(tensorVariable);
+          return v;
+        });
+      } else
+        logger.warning(() -> "Encountered: " + pointerKey.getClass());
+    });
 
     // check the maps.
     assertEquals(expectedNumberOfTensorVariables, methodSignatureToPointerKeys.size());
@@ -268,10 +259,8 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
     assertEquals(expectedNumberOfTensorParameters, functionPointerKeys.size());
 
     // check value numbers.
-    Set<Integer> actualValueNumberSet =
-        functionPointerKeys.stream()
-            .map(LocalPointerKey::getValueNumber)
-            .collect(Collectors.toSet());
+    Set<Integer> actualValueNumberSet = functionPointerKeys.stream()
+        .map(LocalPointerKey::getValueNumber).collect(Collectors.toSet());
 
     assertEquals(expectedTensorParameterValueNumbers.length, actualValueNumberSet.size());
     Arrays.stream(expectedTensorParameterValueNumbers)
