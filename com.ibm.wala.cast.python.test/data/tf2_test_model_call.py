@@ -28,16 +28,7 @@ class SequentialModel(tf.keras.Model):
 
     return x
 
+input_data = tf.random.uniform([20, 28, 28])
 
-if __name__ == '__main__':
-    input_data = tf.random.uniform([20, 28, 28])
-    print("Input:")
-    print(type(input_data))
-    print(input_data)
-
-    model = SequentialModel()
-    result = model(input_data)
-
-    print("Output:")
-    print(type(input_data))
-    print(result)
+model = SequentialModel()
+result = model(input_data)
