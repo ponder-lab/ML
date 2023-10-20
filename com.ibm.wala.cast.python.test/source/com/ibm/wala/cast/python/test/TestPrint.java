@@ -85,9 +85,11 @@ public class TestPrint extends TestPythonCallGraphShape {
               IClass concreteType = ik.getConcreteType();
               TypeReference typeReference = concreteType.getReference();
 
-              if (typeReference.equals(PRINT_FUNCTION_TYPE_REFERENCE))
+              if (typeReference.equals(PRINT_FUNCTION_TYPE_REFERENCE)) {
                 // found the built-in function in the pointer analysis.
                 foundBuiltIn = true;
+                break;
+              }
             }
           }
         }
