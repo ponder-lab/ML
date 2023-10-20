@@ -30,7 +30,7 @@ public class TestPrint extends TestPythonCallGraphShape {
   private static final String PRINT_FUNCTION_VARIABLE_NAME = "print";
 
   private static final TypeReference PRINT_FUNCTION_TYPE_REFERENCE =
-      TypeReference.findOrCreate(PythonTypes.pythonLoader, "Lwala/builtin/print");
+      TypeReference.findOrCreate(PythonTypes.pythonLoader, "Lwala/builtin/" + PRINT_FUNCTION_VARIABLE_NAME);
 
   @Test
   public void testPrint()
