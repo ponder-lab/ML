@@ -86,7 +86,11 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
             pc++;
           }
 
+          Boolean call = false;
+
           for (MethodReference r : x.getMethodReferences()) {
+            if (r.getName().toString().equals("__call__"))
+              call = true;
             int f = v++;
             ctor.addStatement(
                 insts.NewInstruction(
@@ -148,6 +152,34 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
                     FieldReference.findOrCreate(
                         PythonTypes.Root,
                         Atom.findOrCreateUnicodeAtom("__init__"),
+                        PythonTypes.Root)));
+            pc++;
+
+            int[] cps = new int[init.getNumberOfParameters()];
+            cps[0] = fv;
+            cps[1] = inst;
+            for (int j = 2; j < init.getNumberOfParameters(); j++) {
+              cps[j] = j;
+            }
+
+            int result = v++;
+            int except = v++;
+            CallSiteReference cref = new DynamicCallSiteReference(site.getDeclaredTarget(), pc);
+            ctor.addStatement(
+                new PythonInvokeInstruction(2, result, except, cref, cps, new Pair[0]));
+            pc++;
+          }
+
+          if (call != null) {
+            int fv = v++;
+            ctor.addStatement(
+                insts.GetInstruction(
+                    pc,
+                    fv,
+                    1,
+                    FieldReference.findOrCreate(
+                        PythonTypes.Root,
+                        Atom.findOrCreateUnicodeAtom("__call__"),
                         PythonTypes.Root)));
             pc++;
 
