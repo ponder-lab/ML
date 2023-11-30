@@ -5,8 +5,10 @@ import tensorflow as tf
 strategy = tf.distribute.MirroredStrategy(["GPU:0", "GPU:1"])
 tensor_input = tf.constant(3.0)
 
+
 @tf.function
 def replica_fn(input):
-  return input*2.0
+  return input * 2.0
+
 
 result = strategy.run(replica_fn, args=(tensor_input,))
