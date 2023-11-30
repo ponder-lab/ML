@@ -330,6 +330,7 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     testTf3("tf2_test_callbacks.py", "get_dataset");
     testTf3("tf2_test_callbacks2.py", "replica_fn");
+    testTf3("tf2_test_callbacks3.py", "get_dataset");
   }
 
   public void testTf3(String file, String callback_function)
