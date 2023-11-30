@@ -11,4 +11,4 @@ tensor_input = tf.constant(3.0)
 def replica_fn(input):
   return input*2.0
 
-result = strategy.run(replica_fn, args=(tensor_input,))
+result = strategy.run(replica_fn, (tensor_input,))

@@ -223,6 +223,10 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
     // https://github.com/wala/ML/issues/24 is fixed.
     testTf2("tf2_test_model_call3.py", "SequentialModel.call", 1, 4, 2);
     testTf2("tf2_test_model_call4.py", "SequentialModel.__call__", 1, 4, 2);
+    testTf2("tf2_test_callbacks.py", "get_dataset", 0, 0);
+    testTf2("tf2_test_callbacks2.py", "replica_fn", 0, 2);
+    testTf2("tf2_test_callbacks3.py", "get_dataset", 0, 0);
+    testTf2("tf2_test_callbacks4.py", "replica_fn", 0, 2);
   }
 
   private void testTf2(
@@ -323,32 +327,5 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
 
     // check tensor parameters.
     assertEquals(expectedNumberOfTensorParameters, functionTensors.size());
-  }
-
-  @Test
-  public void testTf3()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    testTf3("tf2_test_callbacks.py", "get_dataset");
-    testTf3("tf2_test_callbacks2.py", "replica_fn");
-    testTf3("tf2_test_callbacks3.py", "get_dataset");
-  }
-
-  public void testTf3(String file, String callback_function)
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    PythonAnalysisEngine<TensorTypeAnalysis> E = makeEngine(file);
-    PythonSSAPropagationCallGraphBuilder builder = E.defaultCallGraphBuilder();
-    CallGraph CG = builder.makeCallGraph(builder.getOptions());
-
-    if (logger.isLoggable(Level.FINE)) {
-      CAstCallGraphUtil.AVOID_DUMP = false;
-      CAstCallGraphUtil.dumpCG(
-          ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
-          builder.getPointerAnalysis(),
-          CG);
-      logger.fine("Call graph:\n" + CG);
-    }
-
-    Collection<CGNode> nodes = getNodes(CG, "script " + file + "/" + callback_function);
-    assert !nodes.isEmpty() : callback_function + " should be called";
   }
 }

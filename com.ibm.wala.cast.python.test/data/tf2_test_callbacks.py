@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-# Testing API https://www.tensorflow.org/api_docs/python/tf/distribute/MirroredStrategy#distribute_datasets_from_function
+# Testing API  https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/distribute/MirroredStrategy#distribute_datasets_from_function
 # Making sure that function `get_dataset` is in the CG
 
 def get_dataset(input_context):
