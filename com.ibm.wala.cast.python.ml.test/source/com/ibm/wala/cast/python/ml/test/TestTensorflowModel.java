@@ -334,7 +334,7 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
 
   public void testTf3(String file, String callback_function)
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    PythonAnalysisEngine<TensorTypeAnalysis> E = makeEngine("tf1.py");
+    PythonAnalysisEngine<TensorTypeAnalysis> E = makeEngine(file);
     PythonSSAPropagationCallGraphBuilder builder = E.defaultCallGraphBuilder();
     CallGraph CG = builder.makeCallGraph(builder.getOptions());
 
