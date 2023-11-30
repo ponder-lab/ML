@@ -347,7 +347,7 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
       logger.fine("Call graph:\n" + CG);
     }
 
-    Collection<CGNode> nodes = getNodes(CG, "script "+ file + "/" + callback_function);
+    Collection<CGNode> nodes = getNodes(CG, "script " + file + "/" + callback_function);
     assert !nodes.isEmpty() : callback_function + " should be called";
   }
 }
