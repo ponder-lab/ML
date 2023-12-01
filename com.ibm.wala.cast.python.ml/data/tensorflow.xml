@@ -838,6 +838,7 @@
           <new def="x" class="Lobject" />
           <putfield class="LRoot" field="MirroredStrategy" fieldType="LRoot" ref="self" value="x" />
           <putfield class="LRoot" field="$callback" fieldType="LRoot" ref="x" value="fn" />
+          <putfield class="LRoot" field="args" fieldType="LRoot" ref="x" value="args" />
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="fn" arg1="args" numArgs="2" def="xx" />
           <return value="xx" />
         </method>
