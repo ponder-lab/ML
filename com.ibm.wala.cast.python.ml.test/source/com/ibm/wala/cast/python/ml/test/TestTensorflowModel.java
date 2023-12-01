@@ -223,7 +223,7 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
         "replica_fn",
         1,
         3,
-        1); // NOTE: We may not wind up with 1, 3, 1, but we need the one tensor param.
+        2); // NOTE: We may not wind up with 1, 3, 1, but we need the one tensor param.
   }
 
   private void testTf2(
