@@ -805,7 +805,8 @@
     <package name="tensorflow/distribute/run">
       <class name="run" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3">
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="arg1" arg1="arg2" numArgs="2" def="v" />
+          <getfield class="LRoot" field="0" fieldType="LRoot" ref="arg2" def="x" />
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="arg1" arg1="x" numArgs="2" def="v" />
           <return value="v" />
         </method>
       </class>
