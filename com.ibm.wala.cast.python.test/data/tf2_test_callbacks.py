@@ -7,9 +7,9 @@ tensor_input = tf.constant(3.0)
 
 @tf.function
 def replica_fn(input):
-  return input * 2.0
+  return input[0] * 2.0
 
 
 # Direct call.
-result = replica_fn(tensor_input)
+result = replica_fn((tensor_input,))
 print(result)
