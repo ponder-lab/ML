@@ -191,28 +191,24 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
           declaringClass.getClassLoader().getReference();
       TypeName declaringClassName = declaringClass.getName();
       final String packageName = "$" + declaringClassName.toString().substring(1);
-      IClass callable = getClass(packageName, CALLABLE_METHOD_NAME, classLoaderReference, cha);
+
+      IClass callable =
+          cha.lookupClass(
+              TypeReference.findOrCreateClass(
+                  classLoaderReference, packageName, CALLABLE_METHOD_NAME));
 
       if (callable == null)
         // try the workaround for https://github.com/wala/ML/issues/106. NOTE: We cannot verify that
         // the super class is tf.keras.Model due to https://github.com/wala/ML/issues/118.
         callable =
-            getClass(packageName, CALLABLE_METHOD_NAME_FOR_KERAS_MODELS, classLoaderReference, cha);
+            cha.lookupClass(
+                TypeReference.findOrCreateClass(
+                    classLoaderReference, packageName, CALLABLE_METHOD_NAME_FOR_KERAS_MODELS));
 
       if (callable != null) return callable;
     }
 
     return null;
-  }
-
-  private static IClass getClass(
-      String packageName,
-      String className,
-      ClassLoaderReference classLoaderReference,
-      IClassHierarchy cha) {
-    TypeReference typeReference =
-        TypeReference.findOrCreateClass(classLoaderReference, packageName, className);
-    return cha.lookupClass(typeReference);
   }
 
   public PythonAnalysisEngine<T> getEngine() {
