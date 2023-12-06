@@ -214,6 +214,7 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
     testTf2("tf2_test_model_call4.py", "SequentialModel.__call__", 1, 4, 3);
     testTf2("tf2_test_callbacks.py", "replica_fn", 1, 3, 2);
     testTf2("tf2_test_callbacks2.py", "replica_fn", 1, 4, 2);
+    testTf2("tf2_test_callbacks3.py", "dataset_fn", 0, 0);
   }
 
   private void testTf2(
