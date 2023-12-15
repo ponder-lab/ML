@@ -33,6 +33,9 @@ import java.util.logging.Logger;
 
 public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeAnalysis> {
 
+  /** Special name in the summaries that indicates that an API produces a new tensor. */
+  private static final String TENSOR_GENERATOR_FUNCTION_NAME = "read_data";
+
   private static final Logger logger = Logger.getLogger(PythonTensorAnalysisEngine.class.getName());
 
   private static final MethodReference conv2d =
@@ -83,7 +86,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         if (inst instanceof SSAAbstractInvokeInstruction) {
           SSAAbstractInvokeInstruction ni = (SSAAbstractInvokeInstruction) inst;
 
-          if (ni.getCallSite().getDeclaredTarget().getName().toString().equals("read_data")
+          if (ni.getCallSite()
+                  .getDeclaredTarget()
+                  .getName()
+                  .toString()
+                  .equals(TENSOR_GENERATOR_FUNCTION_NAME)
               && ni.getException() != vn) {
             sources.add(src);
             logger.info("Added dataflow source " + src + ".");
