@@ -804,8 +804,13 @@
       </class>
 
       <class name="shuffle" allocatable="true">
+        <method name="read_dataset" descriptor="()LRoot;">
+          <new def="x" class="Ltensorflow/data/Dataset" />
+          <return value="x" />
+        </method>
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self buffer_size seed reshuffle_each_iteration name">
-          <return value="self" />
+          <call class="LRoot" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="arg0" def="x" />
+          <return value="x" />
         </method>
       </class>
     </package>
