@@ -790,13 +790,22 @@
     <package name="tensorflow/data">
       <class name="Dataset" allocatable="true">
         <method name="read_dataset" descriptor="()LRoot;">
-          <new def="x" class="Ltensorflow/data/shuffle/shuffle" />
+          <new def="x" class="Lobject" />
           <return value="x" />
         </method>
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self variant_tensor">
           <call class="LRoot" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="arg0" def="x" />
-          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="self" value="x" />
-          <return value="arg0" />
+
+          <new def="shuffle" class="Ltensorflow/data/shuffle" />
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="shuffle" />
+
+          <return value="x" />
+        </method>
+      </class>
+
+      <class name="shuffle" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self buffer_size seed reshuffle_each_iteration name">
+          <return value="self" />
         </method>
       </class>
     </package>
@@ -808,14 +817,6 @@
           <getfield class="LRoot" field="data" fieldType="LRoot" ref="arg1" def="data" />
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="xx" arg1="data" arg2="3" numArgs="3" def="v" />
           <return value="v" />
-        </method>
-      </class>
-    </package>
-
-    <package name="tensorflow/data/shuffle">
-      <class name="shuffle" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self buffer_size seed reshuffle_each_iteration name">
-          <return value="self" />
         </method>
       </class>
     </package>
