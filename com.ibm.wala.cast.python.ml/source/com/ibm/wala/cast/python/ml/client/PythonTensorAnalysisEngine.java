@@ -120,7 +120,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           EachElementGetInstruction eachElementGetInstruction = (EachElementGetInstruction) inst;
 
           // Find the potential tensor iterable creation site.
-          SSAInstruction def = du.getDef(eachElementGetInstruction.getUse(0));
+          int use = eachElementGetInstruction.getUse(0);
+          SSAInstruction def = du.getDef(use);
 
           if (createsTensorIterable(def, localPointerKeyNode, callGraph, pointerAnalysis)) {
             sources.add(src);
