@@ -790,7 +790,7 @@
     <package name="tensorflow/data">
       <class name="Dataset" allocatable="true">
         <method name="read_dataset" descriptor="()LRoot;">
-          <new def="x" class="Lobject" />
+          <new def="x" class="Ltensorflow/data/Dataset" />
           <return value="x" />
         </method>
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self variant_tensor">
