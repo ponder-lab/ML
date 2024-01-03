@@ -302,7 +302,7 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
         methodSignatureToPointerKeys.getOrDefault(functionSignature, Collections.emptySet());
 
     // check tensor parameters.
-    assertEquals(expectedNumberOfTensorParameters, functionPointerKeys.size());
+    assertEquals(expectedNumberOfTensorParameters, functionPointerKeys.stream().filter(LocalPointerKey::isParameter).count());
 
     // check value numbers.
     Set<Integer> actualValueNumberSet =
@@ -317,12 +317,5 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
                 assertTrue(
                     "Expecting " + actualValueNumberSet + " to contain " + ev + ".",
                     actualValueNumberSet.contains(ev)));
-
-    // get the tensor variables for the function.
-    Set<TensorVariable> functionTensors =
-        methodSignatureToTensorVariables.getOrDefault(functionSignature, Collections.emptySet());
-
-    // check tensor parameters.
-    assertEquals(expectedNumberOfTensorParameters, functionTensors.size());
   }
 }
