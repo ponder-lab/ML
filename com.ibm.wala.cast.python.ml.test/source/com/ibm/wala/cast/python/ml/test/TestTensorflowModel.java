@@ -219,6 +219,7 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
     testTf2("tf2_test_callbacks.py", "replica_fn", 1, 3, 2);
     testTf2("tf2_test_callbacks2.py", "replica_fn", 1, 4, 2);
     testTf2("tensorflow_gan_tutorial.py", "train_step", 1, 10, 7);
+    testTf2("tensorflow_gan_tutorial2.py", "train_step", 1, 10, 7);
   }
 
   private void testTf2(
