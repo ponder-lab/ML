@@ -123,6 +123,15 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           int use = eachElementGetInstruction.getUse(0);
           SSAInstruction def = du.getDef(use);
 
+          if (def == null)
+            logger.warning(
+                () ->
+                    "Can't find potential tensor iterable definition for use: "
+                        + use
+                        + " of instruction: "
+                        + eachElementGetInstruction
+                        + ".");
+
           if (definesTensorIterable(def, localPointerKeyNode, callGraph, pointerAnalysis)) {
             sources.add(src);
             logger.info("Added dataflow source from tensor iterable: " + src + ".");
