@@ -310,7 +310,8 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
 
     // check value numbers.
     Set<Integer> actualParameterValueNumberSet =
-        functionPointerKeys.stream().filter(LocalPointerKey::isParameter)
+        functionPointerKeys.stream()
+            .filter(LocalPointerKey::isParameter)
             .map(LocalPointerKey::getValueNumber)
             .collect(Collectors.toSet());
 
