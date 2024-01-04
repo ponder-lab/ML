@@ -208,6 +208,7 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
     testTf2("tf2_test_dataset4.py", "add", 2, 2, 2, 3);
     testTf2("tf2_test_dataset5.py", "add", 2, 2, 2, 3);
     testTf2("tf2_test_dataset6.py", "add", 2, 2, 2, 3);
+    testTf2("tf2_test_dataset7.py", "add", 2, 2, 2, 3);
     testTf2("tf2_test_tensor_list.py", "add", 2, 3, 2, 3);
     testTf2("tf2_test_tensor_list2.py", "add", 0, 2);
     testTf2("tf2_test_tensor_list3.py", "add", 0, 2);
