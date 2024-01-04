@@ -303,7 +303,9 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
         methodSignatureToPointerKeys.getOrDefault(functionSignature, Collections.emptySet());
 
     // check tensor parameters.
-    assertEquals(expectedNumberOfTensorParameters, functionPointerKeys.stream().filter(LocalPointerKey::isParameter).count());
+    assertEquals(
+        expectedNumberOfTensorParameters,
+        functionPointerKeys.stream().filter(LocalPointerKey::isParameter).count());
 
     // check value numbers.
     Set<Integer> actualValueNumberSet =
