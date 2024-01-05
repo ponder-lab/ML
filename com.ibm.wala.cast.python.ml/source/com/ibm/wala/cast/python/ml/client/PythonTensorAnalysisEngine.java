@@ -8,6 +8,7 @@ import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
@@ -120,44 +121,68 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           // We are potentially pulling a tensor out of a tensor iterable.
           EachElementGetInstruction eachElementGetInstruction = (EachElementGetInstruction) inst;
 
-          // Find the potential tensor iterable definition.
-          int use = eachElementGetInstruction.getUse(0);
-          SSAInstruction def = du.getDef(use);
+          // Don't add the source if the container has elements in it. In that case, we want to add
+          // the individual elements themselves as sources instead.
+          if (!definitionIsNonScalar(eachElementGetInstruction, du)) {
+            // Find the potential tensor iterable definition.
+            int use = eachElementGetInstruction.getUse(0);
+            SSAInstruction def = du.getDef(use);
 
-          if (def == null) {
-            logger.info(
-                () ->
-                    "Can't find potential tensor iterable definition for use: "
-                        + use
-                        + " of instruction: "
-                        + eachElementGetInstruction
-                        + ". Trying interprocedural analysis...");
+            if (def == null) {
+              logger.info(
+                  () ->
+                      "Can't find potential tensor iterable definition for use: "
+                          + use
+                          + " of instruction: "
+                          + eachElementGetInstruction
+                          + ". Trying interprocedural analysis...");
 
-            // Look up the use in the pointer analysis to see if it points to a dataset.
-            PointerKey usePointerKey =
-                pointerAnalysis.getHeapModel().getPointerKeyForLocal(localPointerKeyNode, use);
+              // Look up the use in the pointer analysis to see if it points to a dataset.
+              PointerKey usePointerKey =
+                  pointerAnalysis.getHeapModel().getPointerKeyForLocal(localPointerKeyNode, use);
 
-            for (InstanceKey ik : pointerAnalysis.getPointsToSet(usePointerKey)) {
-              if (ik instanceof AllocationSiteInNode) {
-                AllocationSiteInNode asin = (AllocationSiteInNode) ik;
-                IClass concreteType = asin.getConcreteType();
-                TypeReference reference = concreteType.getReference();
+              for (InstanceKey ik : pointerAnalysis.getPointsToSet(usePointerKey)) {
+                if (ik instanceof AllocationSiteInNode) {
+                  AllocationSiteInNode asin = (AllocationSiteInNode) ik;
+                  IClass concreteType = asin.getConcreteType();
+                  TypeReference reference = concreteType.getReference();
 
-                if (reference.equals(DATASET)) {
-                  sources.add(src);
-                  logger.info("Added dataflow source from tensor dataset: " + src + ".");
-                  break;
+                  if (reference.equals(DATASET)) {
+                    sources.add(src);
+                    logger.info("Added dataflow source from tensor dataset: " + src + ".");
+                    break;
+                  }
                 }
               }
+            } else if (definesTensorIterable(
+                def, localPointerKeyNode, callGraph, pointerAnalysis)) {
+              sources.add(src);
+              logger.info("Added dataflow source from tensor iterable: " + src + ".");
             }
-          } else if (definesTensorIterable(def, localPointerKeyNode, callGraph, pointerAnalysis)) {
-            sources.add(src);
-            logger.info("Added dataflow source from tensor iterable: " + src + ".");
           }
         }
       }
     }
     return sources;
+  }
+
+  /**
+   * True iff the given {@link EachElementGetInstruction} constitutes individual elements.
+   *
+   * @param eachElementGetInstruction The {@link EachElementGetInstruction} in question.
+   * @param du The {@link DefUse} for the containing {@link CGNode}.
+   * @return True iff the definition of the given {@link EachElementGetInstruction} is non-scalar.
+   */
+  private static boolean definitionIsNonScalar(
+      EachElementGetInstruction eachElementGetInstruction, DefUse du) {
+    for (int i = 0; i < du.getNumberOfUses(eachElementGetInstruction.getDef()); i++) {
+      for (Iterator<SSAInstruction> uses = du.getUses(eachElementGetInstruction.getDef());
+          uses.hasNext(); ) {
+        SSAInstruction instruction = uses.next();
+        if (instruction instanceof PythonPropertyRead) return true;
+      }
+    }
+    return false;
   }
 
   /**
