@@ -226,6 +226,9 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
     testTf2("tensorflow_gan_tutorial2.py", "train_step", 1, 10, 2);
     testTf2("tensorflow_eager_execution.py", "MyModel.call", 1, 5, 3);
     testTf2("neural_network.py", "NeuralNet.call", 1, 1, 3);
+    testTf2("neural_network.py", "cross_entropy_loss", 2, 2, 2, 3);
+    testTf2("neural_network.py", "run_optimization", 2, 2, 2, 3);
+    testTf2("neural_network.py", "accuracy", 2, 2, 2, 3);
   }
 
   private void testTf2(
