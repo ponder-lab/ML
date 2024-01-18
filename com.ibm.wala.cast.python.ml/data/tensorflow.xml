@@ -90,6 +90,9 @@
         <new def="conv3d" class="Ltensorflow/functions/conv3d" />
         <putfield class="LRoot" field="conv3d" fieldType="LRoot" ref="nn" value="conv3d" />
 
+        <new def="softmax" class="Ltensorflow/functions/softmax" />
+        <putfield class="LRoot" field="softmax" fieldType="LRoot" ref="nn" value="softmax" />
+
         <new def="placeholder" class="Ltensorflow/functions/placeholder" />
         <putfield class="LRoot" field="placeholder" fieldType="LRoot" ref="x" value="placeholder" />
 
@@ -765,6 +768,17 @@
 
       <class name="conv3d" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x y">
+          <return value="x" />
+        </method>
+      </class>
+
+      <class name="softmax" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;">
+          <new def="x" class="Ltensorflow/functions/softmax" />
+          <return value="x" />
+        </method>
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self logits axis name">
+          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="x" />
           <return value="x" />
         </method>
       </class>
