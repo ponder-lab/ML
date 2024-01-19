@@ -231,7 +231,8 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
     testTf2("neural_network.py", "NeuralNet.call", 1, 5, 3);
     testTf2("neural_network.py", "cross_entropy_loss", 2, 6, 2, 3);
     testTf2("neural_network.py", "run_optimization", 2, 3, 2, 3);
-    // FIXME: This test is disabled because, currently, the number of expected tensor parameters differs between calls to accuracy(). They should be consistent.
+    // FIXME: This test is disabled because, currently, the number of expected tensor parameters
+    // differs between calls to accuracy(). They should be consistent.
     // testTf2("neural_network.py", "accuracy", 2, 5, 2, 3);
   }
 
