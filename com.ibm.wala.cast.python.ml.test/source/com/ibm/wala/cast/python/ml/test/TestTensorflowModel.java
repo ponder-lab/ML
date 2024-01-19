@@ -309,18 +309,19 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
     assertEquals(expectedNumberOfTensorVariables, functionTensorVariables.size());
 
     // get the pointer keys for the function.
-    Set<LocalPointerKey> functionPointerKeys =
-        functionSignatureToPointerKeys.getOrDefault(functionSignature, Collections.emptySet());
+    Set<LocalPointerKey> functionParameterPointerKeys =
+        functionSignatureToPointerKeys
+            .getOrDefault(functionSignature, Collections.emptySet())
+            .stream()
+            .filter(LocalPointerKey::isParameter)
+            .collect(Collectors.toSet());
 
     // check tensor parameters.
-    assertEquals(
-        expectedNumberOfTensorParameters,
-        functionPointerKeys.stream().filter(LocalPointerKey::isParameter).count());
+    assertEquals(expectedNumberOfTensorParameters, functionParameterPointerKeys.size());
 
     // check value numbers.
     Set<Integer> actualParameterValueNumberSet =
-        functionPointerKeys.stream()
-            .filter(LocalPointerKey::isParameter)
+        functionParameterPointerKeys.stream()
             .map(LocalPointerKey::getValueNumber)
             .collect(Collectors.toSet());
 
