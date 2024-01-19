@@ -323,6 +323,7 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
     for (Context ctx : contextToFunctionParameterPointerKeys.keySet()) {
       Set<LocalPointerKey> functionParameterPointerKeys =
           contextToFunctionParameterPointerKeys.get(ctx);
+
       assertEquals(expectedNumberOfTensorParameters, functionParameterPointerKeys.size());
 
       // check value numbers.
