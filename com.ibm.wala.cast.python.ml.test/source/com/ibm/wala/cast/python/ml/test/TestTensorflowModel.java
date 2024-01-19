@@ -326,6 +326,7 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
             .collect(Collectors.toSet());
 
     assertEquals(expectedTensorParameterValueNumbers.length, actualParameterValueNumberSet.size());
+
     Arrays.stream(expectedTensorParameterValueNumbers)
         .forEach(
             ev ->
