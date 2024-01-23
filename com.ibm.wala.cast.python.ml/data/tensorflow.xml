@@ -669,12 +669,6 @@
           <return value="logits" />
         </method>
       </class>
-      <class name="sigmoid" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/sigmoid -->
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
-          <return value="x" />
-        </method>
-      </class>
     </package>
     <package name="tensorflow/estimator">
       <class name="Estimator" allocatable="true">
