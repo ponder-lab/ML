@@ -33,6 +33,7 @@
     <spotless.version>2.37.0</spotless.version>
     <maven.surefire.version>3.0.0-M7</maven.surefire.version>
     <logging.config.file>${maven.multiModuleProjectDirectory}/logging.properties</logging.config.file>
+    <black.version>24.1.1</black.version>
   </properties>
   <dependencyManagement>
     <dependencies>
@@ -208,7 +209,7 @@
                 <exclude>com.ibm.wala.cast.python.test/data/ret.py</exclude>
               </excludes>
               <black>
-                <version>23.1.0</version>
+                <version>${black.version}</version>
               </black>
             </python>
           </configuration>
