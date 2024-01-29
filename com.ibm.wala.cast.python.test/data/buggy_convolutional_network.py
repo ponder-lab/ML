@@ -10,6 +10,7 @@ example for a raw implementation with variables.
 Author: Aymeric Damien
 Project: https://github.com/aymericdamien/TensorFlow-Examples/
 """
+
 from __future__ import division, print_function, absolute_import
 
 # Import MNIST data
