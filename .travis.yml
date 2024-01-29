@@ -4,10 +4,6 @@ language: java
 jdk: openjdk11
 cache:
   apt: true
-addons:
-  apt:
-    packages:
-      - black=23.1.0
 before_install:
  - git clone --depth=50 https://github.com/wala/IDE /tmp/IDE
  - git clone --depth=50 https://github.com/ponder-lab/jython3.git /tmp/jython3
@@ -21,6 +17,7 @@ install:
  - pushd /tmp/IDE/com.ibm.wala.cast.lsp
  - mvn clean install -B -q -DskipTests
  - popd
+ - pip install black==24.1.1
 script:
  - mvn spotless:check -B
  - black --check --quiet . # Check Python format.
