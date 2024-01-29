@@ -10,7 +10,7 @@ addons:
       - black
 before_install:
  - git clone --depth=50 https://github.com/wala/IDE /tmp/IDE
- - git clone https://github.com/juliandolby/jython3.git /tmp/jython3
+ - git clone --depth=50 https://github.com/ponder-lab/jython3.git /tmp/jython3
 install:
  - pushd /tmp/jython3
  - ant
@@ -24,7 +24,7 @@ install:
 script:
  - mvn spotless:check -B
  - black --check --quiet . # Check Python format.
- - mvn clean verify -B
+ - mvn -Dlogging.config.file=\${maven.multiModuleProjectDirectory}/logging.ci.properties clean verify -B
 deploy:
   provider: script
   script: mvn -s .travis.settings.xml -Dgithub.username=$GITHUB_USERNAME -Dgithub.password=$GITHUB_TOKEN deploy -DskipTests

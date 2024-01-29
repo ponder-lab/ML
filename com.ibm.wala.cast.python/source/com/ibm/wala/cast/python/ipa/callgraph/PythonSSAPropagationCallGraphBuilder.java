@@ -12,11 +12,15 @@ package com.ibm.wala.cast.python.ipa.callgraph;
 
 import com.ibm.wala.cast.ipa.callgraph.AstSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.ipa.callgraph.GlobalObjectKey;
+import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
+import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.python.ipa.summaries.BuiltinFunctions.BuiltinFunction;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.ssa.PythonInstructionVisitor;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
+import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.fixpoint.AbstractOperator;
@@ -25,6 +29,7 @@ import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.IAnalysisCacheView;
 import com.ibm.wala.ipa.callgraph.propagation.AbstractFieldPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKeyFactory;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
@@ -35,18 +40,26 @@ import com.ibm.wala.ssa.SSAArrayLoadInstruction;
 import com.ibm.wala.ssa.SSAArrayStoreInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAGetInstruction;
+import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.Pair;
+import com.ibm.wala.util.intset.IntIterator;
+import com.ibm.wala.util.intset.IntSet;
 import com.ibm.wala.util.intset.IntSetUtil;
 import com.ibm.wala.util.intset.MutableIntSet;
+import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map;
+import java.util.logging.Logger;
 
 public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallGraphBuilder {
+
+  private static final Logger logger =
+      Logger.getLogger(PythonSSAPropagationCallGraphBuilder.class.getName());
 
   public PythonSSAPropagationCallGraphBuilder(
       IClassHierarchy cha,
@@ -167,6 +180,42 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
 
     @Override
+    public void visitPropertyRead(AstPropertyRead instruction) {
+      super.visitPropertyRead(instruction);
+
+      if (instruction instanceof PythonPropertyRead) {
+        PythonPropertyRead ppr = (PythonPropertyRead) instruction;
+        SSAInstruction memberRefDef = du.getDef(ppr.getMemberRef());
+
+        if (memberRefDef != null && memberRefDef instanceof EachElementGetInstruction) {
+          // most likely a for each "property."
+          final PointerKey memberRefKey = this.getPointerKeyForLocal(ppr.getMemberRef());
+
+          // for each def of the property read.
+          for (int i = 0; i < ppr.getNumberOfDefs(); i++) {
+            PointerKey defKey = this.getPointerKeyForLocal(ppr.getDef(i));
+
+            // add an assignment constraint straight away as the traversal variable won't have a
+            // non-empty points-to set but still may be used for a dataflow analysis.
+            if (this.system.newConstraint(defKey, assignOperator, memberRefKey))
+              logger.fine(
+                  () ->
+                      "Added new system constraint for global read from: "
+                          + defKey
+                          + " to: "
+                          + memberRefKey
+                          + " for instruction: "
+                          + instruction
+                          + ".");
+            else
+              logger.fine(
+                  () -> "No constraint added for global read in instruction: " + instruction + ".");
+          }
+        }
+      }
+    }
+
+    @Override
     public void visitPythonInvoke(PythonInvokeInstruction inst) {
       visitInvokeInternal(inst, new DefaultInvariantComputer());
     }
@@ -211,7 +260,21 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           }
         } else {
           PointerKey rval = getPointerKeyForLocal(caller, call.getUse(i));
-          getSystem().newConstraint(lval, assignOperator, rval);
+
+          // If we are looking at the implicit parameter of a callable.
+          if (call.getCallSite().isDispatch() && i == 0 && refersToAnObject(rval)) {
+            // Ensure that lval's variable refers to the callable method instead of callable object.
+            IClass callable = target.getMethod().getDeclaringClass();
+            IntSet instanceKeysForCallable = this.getSystem().getInstanceKeysForClass(callable);
+
+            for (IntIterator it = instanceKeysForCallable.intIterator(); it.hasNext(); ) {
+              int instanceKeyIndex = it.next();
+              InstanceKey instanceKey = this.getSystem().getInstanceKey(instanceKeyIndex);
+              this.getSystem().newConstraint(lval, instanceKey);
+            }
+          } else {
+            getSystem().newConstraint(lval, assignOperator, rval);
+          }
         }
       }
 
@@ -269,6 +332,29 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       PointerKey lret = getPointerKeyForLocal(caller, call.getReturnValue(0));
       getSystem().newConstraint(lret, assignOperator, rret);
     }
+  }
+
+  /**
+   * Returns true iff the given {@link PointerKey} points to at least one instance whose concrete
+   * type equals {@link PythonTypes#object}.
+   *
+   * @param pointerKey The {@link PointerKey} in question.
+   * @return True iff the given {@link PointerKey} points to at least one object whose concrete type
+   *     equals {@link PythonTypes#object}.,
+   */
+  protected boolean refersToAnObject(PointerKey pointerKey) {
+    PointerAnalysis<InstanceKey> pointerAnalysis = this.getPointerAnalysis();
+    OrdinalSet<InstanceKey> pointsToSet = pointerAnalysis.getPointsToSet(pointerKey);
+
+    for (InstanceKey instanceKey : pointsToSet) {
+      IClass concreteType = instanceKey.getConcreteType();
+      TypeReference reference = concreteType.getReference();
+
+      // If it's an "object" method.
+      if (reference.equals(PythonTypes.object)) return true;
+    }
+
+    return false;
   }
 
   @Override

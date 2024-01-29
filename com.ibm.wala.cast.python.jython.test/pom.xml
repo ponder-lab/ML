@@ -4,7 +4,7 @@
   <parent>
     <groupId>com.ibm.wala</groupId>
     <artifactId>ml</artifactId>
-    <version>0.5.0-SNAPSHOT</version>
+    <version>0.23.0-SNAPSHOT</version>
   </parent>
   <artifactId>com.ibm.wala.cast.python.jython.test</artifactId>
   <dependencies>
@@ -58,10 +58,6 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <configuration>
-          <forkMode>once</forkMode>
-          <argLine>-Dpython.import.site=false</argLine>
-        </configuration>
       </plugin>
     </plugins>
     <sourceDirectory>test-source</sourceDirectory>
