@@ -1,9 +1,7 @@
 os: linux
-dist: focal
+dist: jammy
 language: java
 jdk: openjdk11
-cache:
-  apt: true
 before_install:
  - git clone --depth=50 https://github.com/wala/IDE /tmp/IDE
  - git clone --depth=50 https://github.com/ponder-lab/jython3.git /tmp/jython3
