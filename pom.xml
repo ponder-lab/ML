@@ -201,12 +201,12 @@
             </pom>
             <python>
               <includes>
-                <!-- This is where the TF 2 data is. The other directories have Python 2 files, which are not supported by later versions of black. -->
-                <include>com.ibm.wala.cast.python.test/data/**/*.py</include>
+                <include>**/*.py</include>
               </includes>
               <excludes>
-                <!-- This file uses Python 2, which isn't supported by later versions of black. -->
-                <exclude>com.ibm.wala.cast.python.test/data/ret.py</exclude>
+                <!-- Don't format generated files. -->
+                <exclude>**/bin/</exclude>
+                <exclude>**/target/</exclude>
               </excludes>
               <black>
                 <version>${black.version}</version>
