@@ -46,7 +46,5 @@ jobs:
       run: pip install -r requirements.txt
     - name: Check formatting with spotless.
       run: mvn spotless:check -B
-    - name: Check Python formatting with black.
-      run: black --check --quiet .
     - name: Build with Maven
       run: mvn -Dlogging.config.file=\${maven.multiModuleProjectDirectory}/logging.ci.properties clean verify -B

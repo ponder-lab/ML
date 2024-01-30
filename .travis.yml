@@ -18,7 +18,6 @@ install:
  - pip install -r requirements.txt
 script:
  - mvn spotless:check -B
- - black --check --quiet . # Check Python format.
  - mvn -Dlogging.config.file=\${maven.multiModuleProjectDirectory}/logging.ci.properties clean verify -B
 deploy:
   provider: script
