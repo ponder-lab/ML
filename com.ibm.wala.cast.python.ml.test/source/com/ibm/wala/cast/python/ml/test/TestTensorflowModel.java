@@ -238,10 +238,10 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
         "neural_network.py",
         "cross_entropy_loss",
         1,
-        4,
+        8,
         3); // NOTE: Change to 2 tensor parameters once https://github.com/wala/ML/issues/127 is
     // fixed. Values 2 and 3 will correspond to the tensor parameters.
-    testTf2("neural_network.py", "run_optimization", 2, 2, 2, 3);
+    testTf2("neural_network.py", "run_optimization", 2, 3, 2, 3);
     testTf2(
         "neural_network.py",
         "accuracy",
