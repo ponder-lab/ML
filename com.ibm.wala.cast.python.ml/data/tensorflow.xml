@@ -754,7 +754,7 @@
       <class name="gradient" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/GradientTape#gradient -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self target sources output_gradients unconnected_gradients">
-          <return value="sources" />
+          <return value="target" />
         </method>
       </class>
     </package>
