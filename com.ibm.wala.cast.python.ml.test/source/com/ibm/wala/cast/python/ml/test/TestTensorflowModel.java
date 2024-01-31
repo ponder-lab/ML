@@ -271,6 +271,7 @@ public class TestTensorflowModel extends TestPythonMLCallGraphShape {
     testTf2("tf2_test_gradient2.py", "f", 1, 1, 2);
     testTf2("tf2_test_multiply.py", "f", 1, 1, 2);
     testTf2("tf2_test_multiply2.py", "f", 1, 1, 2);
+    testTf2("tf2_test_sparse_softmax_cross_entropy_with_logits.py", "f", 1, 1, 2);
   }
 
   private void testTf2(
