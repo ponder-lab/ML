@@ -7,9 +7,8 @@ def f(a):
     pass
 
 
-logits = tf.constant([[2., -5., .5, -.1],
-                      [0., 0., 1.9, 1.4],
-                      [-100., 100., -100., -100.]])
+logits = tf.constant(
+    [[2.0, -5.0, 0.5, -0.1], [0.0, 0.0, 1.9, 1.4], [-100.0, 100.0, -100.0, -100.0]]
+)
 labels = tf.constant([0, 3, 1])
-f(tf.nn.sparse_softmax_cross_entropy_with_logits(
-    labels=labels, logits=logits.numpy()))
+f(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels, logits=logits.numpy()))
