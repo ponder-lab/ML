@@ -866,6 +866,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_dataset10.py", "add", 2, 2, 2, 3);
   }
 
+  /** Test enumerating a dataset. The first element of the tuple returned isn't a tensor. */
+  @Test
+  public void testDataset11()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset11.py", "f", 0, 0);
+    test("tf2_test_dataset11.py", "g", 1, 1, 2);
+  }
+
   @Test
   public void testTensorList()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
