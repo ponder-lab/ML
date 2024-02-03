@@ -9,6 +9,7 @@ import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
@@ -19,6 +20,8 @@ import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConcreteTypeKey;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
@@ -86,6 +89,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           TypeReference.findOrCreate(
               PythonTypes.pythonLoader,
               TypeName.string2TypeName("Ltensorflow/functions/set_shape")),
+          AstMethodReference.fnSelector);
+
+  private static final MethodReference enumerate =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lwala/builtin/enumerate")),
           AstMethodReference.fnSelector);
 
   private final Map<PointerKey, AnalysisError> errorLog = HashMapFactory.make();
@@ -275,7 +284,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         IClass concreteType = asin.getConcreteType();
         TypeReference reference = concreteType.getReference();
 
-        if (reference.equals(DATASET)) {
+        if (reference.equals(DATASET) && isTensorElement(src, use, node, pointerAnalysis)) {
           sources.add(src);
           logger.info("Added dataflow source from tensor dataset: " + src + ".");
           return true;
@@ -284,6 +293,55 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     }
 
     return false;
+  }
+
+  private static boolean isTensorElement(
+      PointsToSetVariable src, int use, CGNode node, PointerAnalysis<InstanceKey> pointerAnalysis) {
+    SSAInstruction def = node.getDU().getDef(use);
+
+    if (def instanceof PythonInvokeInstruction) {
+      PythonInvokeInstruction invokeInstruction = (PythonInvokeInstruction) def;
+
+      // Check whether we are calling enumerate(), as that returns a tuple.
+      // Get the invoked function.
+      int invocationUse = invokeInstruction.getUse(0);
+
+      PointerKey invocationUsePointerKey =
+          pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, invocationUse);
+
+      for (InstanceKey functionInstance : pointerAnalysis.getPointsToSet(invocationUsePointerKey)) {
+        if (functionInstance instanceof ConcreteTypeKey) {
+          ConcreteTypeKey typeKey = (ConcreteTypeKey) functionInstance;
+          IClass type = typeKey.getType();
+          TypeReference typeReference = type.getReference();
+
+          if (typeReference.equals(enumerate.getDeclaringClass())) {
+            // it's a call to enumerate(), where the returned value is an iterator over
+            // tuples. Each tuple consists of the enumeration number and the dataset
+            // element. Check that we are not looking at the enumeration number.
+
+            SSAInstruction srcDef =
+                node.getDU().getDef(((LocalPointerKey) src.getPointerKey()).getValueNumber());
+
+            int memberRef = ((PythonPropertyRead) srcDef).getMemberRef();
+
+            // What does the member reference point to?
+            PointerKey memberRefPointerKey =
+                pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, memberRef);
+
+            for (InstanceKey memberInstance : pointerAnalysis.getPointsToSet(memberRefPointerKey)) {
+              ConstantKey<?> constant = (ConstantKey<?>) memberInstance;
+              Object value = constant.getValue();
+
+              // if it's the enumeration number.
+              if (value.equals(0)) return false;
+            }
+          }
+        }
+      }
+    }
+
+    return true;
   }
 
   /**
