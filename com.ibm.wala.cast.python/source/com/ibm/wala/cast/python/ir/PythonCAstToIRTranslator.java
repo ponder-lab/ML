@@ -619,7 +619,9 @@ public class PythonCAstToIRTranslator extends AstTranslator {
             () -> {
               FieldReference fnField =
                   FieldReference.findOrCreate(
-                      PythonTypes.Root, Atom.findOrCreateUnicodeAtom(n.getName()), PythonTypes.Root);
+                      PythonTypes.Root,
+                      Atom.findOrCreateUnicodeAtom(n.getName()),
+                      PythonTypes.Root);
               code.cfg()
                   .addInstruction(
                       Python.instructionFactory()
