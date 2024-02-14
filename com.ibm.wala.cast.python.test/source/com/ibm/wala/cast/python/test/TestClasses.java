@@ -1,16 +1,24 @@
 package com.ibm.wala.cast.python.test;
 
+import static org.junit.Assert.assertEquals;
+
 import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.SSAContextInterpreter;
 import com.ibm.wala.ipa.callgraph.propagation.SSAPropagationCallGraphBuilder;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.logging.Logger;
 import org.junit.Test;
 
 public class TestClasses extends TestPythonCallGraphShape {
+
+  private static final Logger LOGGER = Logger.getLogger(TestClasses.class.getName());
 
   protected static final Object[][] assertionsClasses1 =
       new Object[][] {
@@ -118,5 +126,20 @@ public class TestClasses extends TestPythonCallGraphShape {
     CAstCallGraphUtil.dumpCG(
         (SSAContextInterpreter) builder.getContextInterpreter(), builder.getPointerAnalysis(), CG);
     verifyGraphAssertions(CG, assertionsClasses3);
+  }
+
+  /** Can we find a class (and initialize it) from another file? */
+  @Test
+  public void testExternalClass()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    CallGraph callGraph = this.process("client.py", "class.py");
+    Collection<CGNode> nodes = this.getNodes(callGraph, "script client.py/f");
+    assertEquals(1, nodes.size());
+    CGNode f = nodes.iterator().next();
+
+    for (Iterator<CGNode> succNodes = callGraph.getSuccNodes(f); succNodes.hasNext(); ) {
+      CGNode next = succNodes.next();
+      LOGGER.info(() -> "Next node: " + next + ".");
+    }
   }
 }
