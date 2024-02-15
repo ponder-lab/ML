@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNotEquals;
 
 import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
