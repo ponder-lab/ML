@@ -170,7 +170,7 @@ public class TestClasses extends TestPythonCallGraphShape {
     assertFalse(succNodes.hasNext());
 
     CGNode node =
-        f; // Change to succNodes.next() once https://github.com/wala/ML/issues/146 is fixed.
+        f; // TODO: Change to succNodes.next() once https://github.com/wala/ML/issues/146 is fixed.
     assertFalse("Expecting only one callee.", succNodes.hasNext());
 
     IMethod method = node.getMethod();
