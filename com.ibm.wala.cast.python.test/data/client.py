@@ -1,14 +1,7 @@
-from B import g
-from B import C
-
-
-class D:
-    pass
+from classes4 import C
 
 
 def f():
-    g()
-    D()
     C()
 
 
