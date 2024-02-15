@@ -167,7 +167,7 @@ public class TestClasses extends TestPythonCallGraphShape {
 
     Iterator<CGNode> succNodes = callGraph.getSuccNodes(f);
     // TODO: Change to assertTrue() once https://github.com/wala/ML/issues/146 is fixed.
-    assertFalse(succNodes.hasNext());
+    assertTrue(succNodes.hasNext());
 
     CGNode node =
         f; // TODO: Change to succNodes.next() once https://github.com/wala/ML/issues/146 is fixed.
