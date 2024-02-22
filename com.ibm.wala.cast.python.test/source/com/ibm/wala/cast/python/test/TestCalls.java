@@ -2,13 +2,18 @@ package com.ibm.wala.cast.python.test;
 
 import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
+import com.ibm.wala.cast.python.ipa.callgraph.PytestEntrypointBuilder;
+import com.ibm.wala.client.AbstractAnalysisEngine.EntrypointBuilder;
 import com.ibm.wala.ipa.callgraph.CallGraph;
+import com.ibm.wala.ipa.callgraph.Entrypoint;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.SSAContextInterpreter;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 import org.junit.Test;
 
 public class TestCalls extends TestPythonCallGraphShape {
@@ -231,5 +236,64 @@ public class TestCalls extends TestPythonCallGraphShape {
         cgBuilder.getPointerAnalysis(),
         CG);
     verifyGraphAssertions(CG, assertionsDefaultValues);
+  }
+
+  protected static final Object[][] PYTEST_ASSERTIONS =
+      new Object[][] {
+        new Object[] {ROOT, new String[] {"script test_sample.py"}},
+        new Object[] {ROOT, new String[] {"script test_sample.py/test_answer"}},
+        new Object[] {
+          "script test_sample.py/test_answer", new String[] {"script test_sample.py/func"}
+        },
+      };
+
+  @Test
+  public void testPytestCalls()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+
+    PythonAnalysisEngine<?> engine =
+        new PythonAnalysisEngine<Void>() {
+          @Override
+          public Void performAnalysis(PropagationCallGraphBuilder builder) throws CancelException {
+            assert false;
+            return null;
+          }
+        };
+
+    engine.setModuleFiles(Collections.singleton(getScript("test_sample.py")));
+
+    PropagationCallGraphBuilder callGraphBuilder =
+        (PropagationCallGraphBuilder) engine.defaultCallGraphBuilder();
+
+    Iterable<? extends Entrypoint> defaultEntrypoints =
+        callGraphBuilder.getOptions().getEntrypoints();
+
+    Stream<? extends Entrypoint> defaultEntrypointStream =
+        StreamSupport.stream(defaultEntrypoints.spliterator(), false);
+
+    EntrypointBuilder pytestEntrypointBuilder = new PytestEntrypointBuilder();
+    Iterable<Entrypoint> pytestEntrypoints =
+        pytestEntrypointBuilder.createEntrypoints(callGraphBuilder.getClassHierarchy());
+    Stream<Entrypoint> pytestEntrypointStream =
+        StreamSupport.stream(pytestEntrypoints.spliterator(), false);
+
+    Stream<Entrypoint> entrypointStream =
+        Stream.concat(defaultEntrypointStream, pytestEntrypointStream);
+
+    callGraphBuilder.getOptions().setEntrypoints(entrypointStream.toList());
+
+    StreamSupport.stream(callGraphBuilder.getOptions().getEntrypoints().spliterator(), false)
+        .forEach(System.out::println);
+    System.out.println();
+
+    CallGraph callGraph = callGraphBuilder.makeCallGraph(callGraphBuilder.getOptions());
+
+    CAstCallGraphUtil.AVOID_DUMP = false;
+    CAstCallGraphUtil.dumpCG(
+        (SSAContextInterpreter) callGraphBuilder.getContextInterpreter(),
+        callGraphBuilder.getPointerAnalysis(),
+        callGraph);
+
+    verifyGraphAssertions(callGraph, PYTEST_ASSERTIONS);
   }
 }
