@@ -209,22 +209,25 @@ public class PytestEntrypointBuilder implements EntrypointBuilder {
           IClass container = dmb.getContainer();
           String containerName = container.getReference().getName().getClassName().toString();
 
-          if (containerName.startsWith("Test")) {
-            if (container instanceof PythonClass) {
-              PythonClass containerClass = (PythonClass) container;
+          if (containerName.startsWith("Test") && container instanceof PythonClass) {
+            // It's a test class.
+            PythonClass containerClass = (PythonClass) container;
 
-              final boolean hasCtor =
-                  containerClass.getMethodReferences().stream()
-                      .anyMatch(
-                          mr -> {
-                            return mr.getName().toString().equals("__init__");
-                          });
+            final boolean hasCtor =
+                containerClass.getMethodReferences().stream()
+                    .anyMatch(
+                        mr -> {
+                          return mr.getName().toString().equals("__init__");
+                        });
 
-              if (!hasCtor) {
-                String methodName = className.toString();
+            // Test classes can't have constructors.
+            if (!hasCtor) {
+              // In Ariadne, methods are modeled as classes. Thus, a class name in this case is the
+              // method name.
+              String methodName = className.toString();
 
-                if (methodName.startsWith("test")) return true;
-              }
+              // If the method starts with "test."
+              if (methodName.startsWith("test")) return true;
             }
           }
         } else if (className.toString().startsWith("test")) return true; // It's a function.
