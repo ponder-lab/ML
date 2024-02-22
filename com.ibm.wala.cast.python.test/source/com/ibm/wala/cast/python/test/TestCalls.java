@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.test;
 
 import static com.google.common.collect.Iterables.concat;
+import static java.util.Collections.singleton;
 
 import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
@@ -262,7 +263,7 @@ public class TestCalls extends TestPythonCallGraphShape {
           }
         };
 
-    engine.setModuleFiles(Collections.singleton(getScript("test_sample.py")));
+    engine.setModuleFiles(singleton(getScript("test_sample.py")));
 
     PropagationCallGraphBuilder callGraphBuilder =
         (PropagationCallGraphBuilder) engine.defaultCallGraphBuilder();
