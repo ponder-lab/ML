@@ -1,9 +1,10 @@
 package com.ibm.wala.cast.python.test;
 
+import static com.google.common.collect.Iterables.concat;
+
 import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ipa.callgraph.PytestEntrypointBuilder;
-import com.ibm.wala.client.AbstractAnalysisEngine.EntrypointBuilder;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.Entrypoint;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
@@ -12,7 +13,6 @@ import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
 import java.util.Collections;
-import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 import org.junit.Test;
 
@@ -268,19 +268,12 @@ public class TestCalls extends TestPythonCallGraphShape {
     Iterable<? extends Entrypoint> defaultEntrypoints =
         callGraphBuilder.getOptions().getEntrypoints();
 
-    Stream<? extends Entrypoint> defaultEntrypointStream =
-        StreamSupport.stream(defaultEntrypoints.spliterator(), false);
-
-    EntrypointBuilder pytestEntrypointBuilder = new PytestEntrypointBuilder();
     Iterable<Entrypoint> pytestEntrypoints =
-        pytestEntrypointBuilder.createEntrypoints(callGraphBuilder.getClassHierarchy());
-    Stream<Entrypoint> pytestEntrypointStream =
-        StreamSupport.stream(pytestEntrypoints.spliterator(), false);
+        new PytestEntrypointBuilder().createEntrypoints(callGraphBuilder.getClassHierarchy());
 
-    Stream<Entrypoint> entrypointStream =
-        Stream.concat(defaultEntrypointStream, pytestEntrypointStream);
+    Iterable<Entrypoint> entrypoints = concat(defaultEntrypoints, pytestEntrypoints);
 
-    callGraphBuilder.getOptions().setEntrypoints(entrypointStream.toList());
+    callGraphBuilder.getOptions().setEntrypoints(entrypoints);
 
     StreamSupport.stream(callGraphBuilder.getOptions().getEntrypoints().spliterator(), false)
         .forEach(System.out::println);
