@@ -13,10 +13,12 @@ import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
 import java.util.Collections;
-import java.util.stream.StreamSupport;
+import java.util.logging.Logger;
 import org.junit.Test;
 
 public class TestCalls extends TestPythonCallGraphShape {
+
+  private static final Logger LOGGER = Logger.getLogger(TestCalls.class.getName());
 
   protected static final Object[][] assertionsCalls1 =
       new Object[][] {
@@ -275,9 +277,8 @@ public class TestCalls extends TestPythonCallGraphShape {
 
     callGraphBuilder.getOptions().setEntrypoints(entrypoints);
 
-    StreamSupport.stream(callGraphBuilder.getOptions().getEntrypoints().spliterator(), false)
-        .forEach(System.out::println);
-    System.out.println();
+    for (Entrypoint ep : callGraphBuilder.getOptions().getEntrypoints())
+      LOGGER.info(() -> "Using entrypoint: " + ep.getMethod().getDeclaringClass().getName() + ".");
 
     CallGraph callGraph = callGraphBuilder.makeCallGraph(callGraphBuilder.getOptions());
 
