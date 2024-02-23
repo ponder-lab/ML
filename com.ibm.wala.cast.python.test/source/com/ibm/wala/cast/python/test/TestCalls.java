@@ -268,6 +268,20 @@ public class TestCalls extends TestPythonCallGraphShape {
     PropagationCallGraphBuilder callGraphBuilder =
         (PropagationCallGraphBuilder) engine.defaultCallGraphBuilder();
 
+    addPytestEntrypoints(callGraphBuilder);
+
+    CallGraph callGraph = callGraphBuilder.makeCallGraph(callGraphBuilder.getOptions());
+
+    CAstCallGraphUtil.AVOID_DUMP = false;
+    CAstCallGraphUtil.dumpCG(
+        (SSAContextInterpreter) callGraphBuilder.getContextInterpreter(),
+        callGraphBuilder.getPointerAnalysis(),
+        callGraph);
+
+    verifyGraphAssertions(callGraph, PYTEST_ASSERTIONS);
+  }
+
+  private static void addPytestEntrypoints(PropagationCallGraphBuilder callGraphBuilder) {
     Iterable<? extends Entrypoint> defaultEntrypoints =
         callGraphBuilder.getOptions().getEntrypoints();
 
@@ -280,6 +294,28 @@ public class TestCalls extends TestPythonCallGraphShape {
 
     for (Entrypoint ep : callGraphBuilder.getOptions().getEntrypoints())
       LOGGER.info(() -> "Using entrypoint: " + ep.getMethod().getDeclaringClass().getName() + ".");
+  }
+
+  protected static final Object[][] PYTEST_ASSERTIONS2 =
+      new Object[][] {
+        new Object[] {ROOT, new String[] {"script test_class.py"}},
+        new Object[] {
+          ROOT,
+          new String[] {
+            "script test_class.py/TestClass",
+            "$script test_class.py/TestClass/test_one:trampoline2",
+            "$script test_class.py/TestClass/test_two:trampoline2"
+          }
+        },
+      };
+
+  @Test
+  public void testPytestCalls2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = this.makeEngine("test_class.py");
+    PropagationCallGraphBuilder callGraphBuilder = engine.defaultCallGraphBuilder();
+
+    addPytestEntrypoints(callGraphBuilder);
 
     CallGraph callGraph = callGraphBuilder.makeCallGraph(callGraphBuilder.getOptions());
 
@@ -289,6 +325,6 @@ public class TestCalls extends TestPythonCallGraphShape {
         callGraphBuilder.getPointerAnalysis(),
         callGraph);
 
-    verifyGraphAssertions(callGraph, PYTEST_ASSERTIONS);
+    verifyGraphAssertions(callGraph, PYTEST_ASSERTIONS2);
   }
 }
