@@ -327,4 +327,24 @@ public class TestCalls extends TestPythonCallGraphShape {
 
     verifyGraphAssertions(callGraph, PYTEST_ASSERTIONS2);
   }
+
+  protected static final Object[][] PYTEST_ASSERTIONS3 =
+      new Object[][] {
+        new Object[] {ROOT, new String[] {"script test_class2.py"}},
+      };
+
+  @Test
+  public void testPytestCalls3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = this.makeEngine("test_class2.py");
+    PropagationCallGraphBuilder callGraphBuilder = engine.defaultCallGraphBuilder();
+    addPytestEntrypoints(callGraphBuilder);
+    CallGraph callGraph = callGraphBuilder.makeCallGraph(callGraphBuilder.getOptions());
+    CAstCallGraphUtil.AVOID_DUMP = false;
+    CAstCallGraphUtil.dumpCG(
+        (SSAContextInterpreter) callGraphBuilder.getContextInterpreter(),
+        callGraphBuilder.getPointerAnalysis(),
+        callGraph);
+    verifyGraphAssertions(callGraph, PYTEST_ASSERTIONS3);
+  }
 }
