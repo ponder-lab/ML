@@ -243,8 +243,9 @@ public class TestCalls extends TestPythonCallGraphShape {
 
   protected static final Object[][] PYTEST_ASSERTIONS =
       new Object[][] {
-        new Object[] {ROOT, new String[] {"script test_sample.py"}},
-        new Object[] {ROOT, new String[] {"script test_sample.py/test_answer"}},
+        new Object[] {
+          ROOT, new String[] {"script test_sample.py", "script test_sample.py/test_answer"}
+        },
         new Object[] {
           "script test_sample.py/test_answer", new String[] {"script test_sample.py/func"}
         },
@@ -298,10 +299,10 @@ public class TestCalls extends TestPythonCallGraphShape {
 
   protected static final Object[][] PYTEST_ASSERTIONS2 =
       new Object[][] {
-        new Object[] {ROOT, new String[] {"script test_class.py"}},
         new Object[] {
           ROOT,
           new String[] {
+            "script test_class.py",
             "script test_class.py/TestClass",
             "$script test_class.py/TestClass/test_one:trampoline2",
             "$script test_class.py/TestClass/test_two:trampoline2"
