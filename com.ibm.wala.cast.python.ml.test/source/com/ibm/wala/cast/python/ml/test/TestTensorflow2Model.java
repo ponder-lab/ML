@@ -1204,6 +1204,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_tf_range.py", "f", 1, 1, 2);
   }
 
+  @Test
+  public void testTFRange2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_tf_range2.py", "f", 1, 1, 2);
+  }
+
   private void test(
       String filename,
       String functionName,
