@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.test;
 
+import static com.ibm.wala.cast.python.util.Util.addPytestEntrypoints;
 import static java.util.Collections.emptySet;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.toSet;
@@ -1198,6 +1199,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_relu.py", "f", 1, 1, 2);
   }
 
+  @Test
+  public void testTFRange()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_tf_range.py", "f", 1, 1, 2);
+  }
+
+  @Test
+  public void testTFRange2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_tf_range2.py", "f", 1, 1, 2);
+  }
+
+  @Test
+  public void testTFRange3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("test_tf_range.py", "f", 1, 1, 2);
+  }
+
   private void test(
       String filename,
       String functionName,
@@ -1207,6 +1226,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       throws ClassHierarchyException, CancelException, IOException {
     PythonAnalysisEngine<TensorTypeAnalysis> E = makeEngine(filename);
     PythonSSAPropagationCallGraphBuilder builder = E.defaultCallGraphBuilder();
+
+    addPytestEntrypoints(builder);
 
     CallGraph CG = builder.makeCallGraph(builder.getOptions());
     assertNotNull(CG);
