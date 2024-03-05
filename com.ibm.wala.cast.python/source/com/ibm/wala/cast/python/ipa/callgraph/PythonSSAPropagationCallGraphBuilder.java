@@ -50,8 +50,12 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map;
+import java.util.logging.Logger;
 
 public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallGraphBuilder {
+
+  private static final Logger logger =
+      Logger.getLogger(PythonSSAPropagationCallGraphBuilder.class.getName());
 
   public PythonSSAPropagationCallGraphBuilder(
       IClassHierarchy cha,
