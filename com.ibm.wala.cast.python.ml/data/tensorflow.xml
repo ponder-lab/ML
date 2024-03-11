@@ -69,6 +69,8 @@
         <putfield class="LRoot" field="numpy_input_fn" fieldType="LRoot" ref="inputs" value="numpy_input_fn" />
         <new def="from_tensor_slices" class="Ltensorflow/data/Dataset/from_tensor_slices" />
         <putfield class="LRoot" field="from_tensor_slices" fieldType="LRoot" ref="Dataset" value="from_tensor_slices" />
+        <new def="sample_from_datasets" class="Ltensorflow/data/Dataset/sample_from_datasets" />
+        <putfield class="LRoot" field="sample_from_datasets" fieldType="LRoot" ref="Dataset" value="sample_from_datasets" />
         <new def="list_files" class="Ltensorflow/data/Dataset/list_files" />
         <putfield class="LRoot" field="list_files" fieldType="LRoot" ref="Dataset" value="list_files" />
         <new def="choose_from_datasets" class="Ltensorflow/data/Dataset/choose_from_datasets" />
@@ -989,6 +991,14 @@
       <class name="from_tensor_slices" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#from_tensor_slices -->
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="tensors name">
+          <new def="x" class="Ltensorflow/data/Dataset" />
+          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" def="xx" />
+          <return value="xx" />
+        </method>
+      </class>
+      <class name="sample_from_datasets" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#sample_from_datasets -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="datasets weights seed stop_on_empty_dataset">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" def="xx" />
           <return value="xx" />
