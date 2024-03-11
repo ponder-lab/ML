@@ -955,6 +955,38 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_dataset19.py", "distributed_train_step", 1, 1, 2);
   }
 
+  @Test
+  public void testDataset20()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset20.py", "f", 1, 1, 2);
+  }
+
+  @Test
+  public void testDataset21()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset21.py", "f", 1, 1, 2);
+  }
+
+  @Test
+  public void testDataset22()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset22.py", "f", 1, 1, 2);
+  }
+
+  @Test
+  public void testDataset23()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset23.py", "f", 1, 1, 2);
+    test("tf2_test_dataset23.py", "g", 1, 1, 2);
+  }
+
+  @Test
+  public void testDataset24()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset24.py", "f", 1, 1, 2);
+    test("tf2_test_dataset24.py", "g", 1, 1, 2);
+  }
+
   /**
    * Test enumerating a dataset (https://github.com/wala/ML/issues/140). The first element of the
    * tuple returned isn't a tensor.
