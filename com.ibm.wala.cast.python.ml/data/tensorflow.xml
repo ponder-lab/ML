@@ -69,8 +69,12 @@
         <putfield class="LRoot" field="numpy_input_fn" fieldType="LRoot" ref="inputs" value="numpy_input_fn" />
         <new def="from_tensor_slices" class="Ltensorflow/data/Dataset/from_tensor_slices" />
         <putfield class="LRoot" field="from_tensor_slices" fieldType="LRoot" ref="Dataset" value="from_tensor_slices" />
+        <new def="choose_from_datasets" class="Ltensorflow/data/Dataset/choose_from_datasets" />
+        <putfield class="LRoot" field="choose_from_datasets" fieldType="LRoot" ref="Dataset" value="choose_from_datasets" />
         <new def="from_generator" class="Ltensorflow/data/Dataset/from_generator" />
         <putfield class="LRoot" field="from_generator" fieldType="LRoot" ref="Dataset" value="from_generator" />
+        <new def="zip" class="Ltensorflow/data/Dataset/zip" />
+        <putfield class="LRoot" field="zip" fieldType="LRoot" ref="Dataset" value="zip" />
         <new def="dsrange" class="Ltensorflow/data/Dataset/range" />
         <putfield class="LRoot" field="range" fieldType="LRoot" ref="Dataset" value="dsrange" />
         <new def="from_tensors" class="Ltensorflow/data/Dataset/from_tensors" />
@@ -866,6 +870,8 @@
           <return value="arg0" />
           <new def="filter" class="Ltensorflow/data/filter" />
           <putfield class="LRoot" field="filter" fieldType="LRoot" ref="arg0" value="filter" />
+          <new def="concatenate" class="Ltensorflow/data/concatenate" />
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="arg0" value="concatenate" />
           <new def="reduce" class="Ltensorflow/data/reduce" />
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="arg0" value="reduce" />
           <new def="enumerate" class="Ltensorflow/data/enumerate" />
@@ -940,6 +946,15 @@
           <return value="xx" />
         </method>
       </class>
+      <class name="concatenate" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#concatenate-->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self predicate name">
+          <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. -->
+          <new def="x" class="Ltensorflow/data/Dataset" />
+          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" def="xx" />
+          <return value="xx" />
+        </method>
+      </class>
       <class name="reduce" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#reduce -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self initial_state reduce_func name">
@@ -975,11 +990,28 @@
           <return value="xx" />
         </method>
       </class>
+      <class name="choose_from_datasets" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#choose_from_datasets -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="datasets choice_dataset stop_on_empty_dataset">
+          <!-- Return the first one in the list. -->
+          <getfield class="Llist" field="0" fieldType="Ltensorflow/data/Dataset" ref="datasets" def="x" />
+          <return value="x" />
+        </method>
+      </class>
       <class name="from_generator" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#from_generator -->
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="generator output_types output_shapes args output_signature name">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" def="xx" />
+          <return value="xx" />
+        </method>
+      </class>
+      <class name="zip" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#zip-->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="datasets name">
+          <new def="x" class="Ltensorflow/data/Dataset" />
+          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" def="xx" />
+          <!-- FIXME: This could return tuples of tensors. See https://github.com/wala/ML/issues/165. -->
           <return value="xx" />
         </method>
       </class>

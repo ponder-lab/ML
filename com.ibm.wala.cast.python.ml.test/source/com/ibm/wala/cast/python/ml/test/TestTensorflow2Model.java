@@ -1035,6 +1035,49 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     // TODO: Change to 0, 0 when https://github.com/wala/ML/issues/164 is fixed:
     test("tf2_test_dataset28.py", "h", 1, 1, 2);
   }
+  
+  @Test
+  public void testDataset29()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset29.py", "f", 1, 1, 2);
+  }
+
+  @Test
+  public void testDataset30()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset30.py", "f", 1, 1, 2);
+  }
+
+  @Test
+  public void testDataset31()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+	// TODO: Change to 0, 0 once https://github.com/wala/ML/issues/166 is fixed.
+    test("tf2_test_dataset31.py", "f", 1, 1, 2);
+	// TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/166 is fixed.
+    test("tf2_test_dataset31.py", "g1", 0, 0);
+	// TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/166 is fixed.
+    test("tf2_test_dataset31.py", "g2", 0, 0);
+	// TODO: Change to 0, 0 once https://github.com/wala/ML/issues/166 is fixed.
+    test("tf2_test_dataset31.py", "h", 1, 1, 2);
+	// TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/166 is fixed.
+    test("tf2_test_dataset31.py", "i1", 0, 0);
+	// TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/166 is fixed.
+    test("tf2_test_dataset31.py", "i2", 0, 0);
+	// TODO: Change to 0, 0 once https://github.com/wala/ML/issues/166 is fixed.
+    test("tf2_test_dataset31.py", "j", 1, 1, 2);
+	// TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/166 is fixed.
+    test("tf2_test_dataset31.py", "k1", 0, 0);
+	// TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/166 is fixed.
+    test("tf2_test_dataset31.py", "k2", 0, 0);
+	// TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/166 is fixed.
+    test("tf2_test_dataset31.py", "k2", 0, 0);
+	// TODO: Change to 0, 0 once https://github.com/wala/ML/issues/166 is fixed.
+    test("tf2_test_dataset31.py", "l", 1, 1, 2);
+	// TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/166 is fixed.
+    test("tf2_test_dataset31.py", "m1", 0, 0);
+	// TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/166 is fixed.
+    test("tf2_test_dataset31.py", "m2", 0, 0);
+  }
 
   /**
    * Test enumerating a dataset (https://github.com/wala/ML/issues/140). The first element of the
