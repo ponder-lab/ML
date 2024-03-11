@@ -987,6 +987,29 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_dataset24.py", "g", 1, 1, 2);
   }
 
+  @Test
+  public void testDataset27()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset27.py", "f", 1, 1, 2);
+    // TODO: Change to 1, 1, 2 when https://github.com/wala/ML/issues/164 is fixed:
+    test("tf2_test_dataset27.py", "g", 0, 0);
+    // TODO: Change to 1, 1, 2 when https://github.com/wala/ML/issues/164 is fixed:
+    test("tf2_test_dataset27.py", "h", 0, 0);
+    // TODO: Change to 1, 1, 2 when https://github.com/wala/ML/issues/164 is fixed:
+    test("tf2_test_dataset27.py", "i", 0, 0);
+  }
+
+  @Test
+  public void testDataset28()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    // TODO: Change to 1, 1, 2 when https://github.com/wala/ML/issues/164 is fixed:
+    test("tf2_test_dataset28.py", "f", 0, 0);
+    // TODO: Change to 1, 1, 2 when https://github.com/wala/ML/issues/164 is fixed:
+    test("tf2_test_dataset28.py", "g", 0, 0);
+    // TODO: Change to 0, 0 when https://github.com/wala/ML/issues/164 is fixed:
+    test("tf2_test_dataset28.py", "h", 1, 1, 2);
+  }
+
   /**
    * Test enumerating a dataset (https://github.com/wala/ML/issues/140). The first element of the
    * tuple returned isn't a tensor.

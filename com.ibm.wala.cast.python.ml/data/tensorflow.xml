@@ -73,6 +73,8 @@
         <putfield class="LRoot" field="from_generator" fieldType="LRoot" ref="Dataset" value="from_generator" />
         <new def="dsrange" class="Ltensorflow/data/Dataset/range" />
         <putfield class="LRoot" field="range" fieldType="LRoot" ref="Dataset" value="dsrange" />
+        <new def="from_tensors" class="Ltensorflow/data/Dataset/from_tensors" />
+        <putfield class="LRoot" field="from_tensors" fieldType="LRoot" ref="Dataset" value="from_tensors" />
         <new def="reshape" class="Ltensorflow/functions/reshape" />
         <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="x" value="reshape" />
         <new def="conv2d" class="Ltensorflow/functions/conv2d" />
@@ -945,6 +947,15 @@
       </class>
     </package>
     <package name="tensorflow/data/Dataset">
+      <class name="from_tensors" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#from_tensors -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="tensors name">
+          <!-- FIXME: We should encode the tensors argument here. See https://github.com/wala/ML/issues/164. -->
+          <new def="x" class="Ltensorflow/data/Dataset" />
+          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" def="xx" />
+          <return value="xx" />
+        </method>
+      </class>
       <class name="from_tensor_slices" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#from_tensor_slices -->
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="tensors name">
