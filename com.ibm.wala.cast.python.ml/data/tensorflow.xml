@@ -1005,7 +1005,7 @@
         </method>
       </class>
       <class name="list_files" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#list_files-->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#list_files -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="file_pattern shuffle seed name">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" def="xx" />
@@ -1046,7 +1046,7 @@
         </method>
       </class>
       <class name="random" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#random-->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#random -->
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="seed name">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" def="xx" />
