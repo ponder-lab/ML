@@ -7,9 +7,11 @@ def f(a):
     assert isinstance(a, tf.Tensor)
 
 
-datasets = [tf.data.Dataset.from_tensors("foo").repeat(),
-            tf.data.Dataset.from_tensors("bar").repeat(),
-            tf.data.Dataset.from_tensors("baz").repeat()]
+datasets = [
+    tf.data.Dataset.from_tensors("foo").repeat(),
+    tf.data.Dataset.from_tensors("bar").repeat(),
+    tf.data.Dataset.from_tensors("baz").repeat(),
+]
 
 # Define a dataset containing `[0, 1, 2, 0, 1, 2, 0, 1, 2]`.
 choice_dataset = tf.data.Dataset.range(3).repeat(3)

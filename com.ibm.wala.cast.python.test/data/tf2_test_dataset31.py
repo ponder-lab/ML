@@ -77,8 +77,8 @@ for element in ds:
 
 # The `datasets` argument may contain an arbitrary number of datasets.
 c = tf.data.Dataset.range(7, 13).batch(2)  # ==> [ [7, 8],
-                                           #       [9, 10],
-                                           #       [11, 12] ]
+#       [9, 10],
+#       [11, 12] ]
 ds = tf.data.Dataset.zip((a, b, c))
 
 for element in ds:

@@ -947,7 +947,7 @@
         </method>
       </class>
       <class name="concatenate" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#concatenate-->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#concatenate -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self predicate name">
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
@@ -1007,7 +1007,7 @@
         </method>
       </class>
       <class name="zip" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#zip-->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#zip -->
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="datasets name">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" def="xx" />
