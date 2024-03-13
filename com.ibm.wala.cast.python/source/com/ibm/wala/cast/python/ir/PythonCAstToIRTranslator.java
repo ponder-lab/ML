@@ -26,6 +26,7 @@ import com.ibm.wala.cast.python.parser.AbstractParser.PythonGlobalsEntity;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.tree.CAstEntity;
+import com.ibm.wala.cast.tree.CAstLeafNode;
 import com.ibm.wala.cast.tree.CAstNode;
 import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
 import com.ibm.wala.cast.tree.CAstType;
@@ -469,7 +470,42 @@ public class PythonCAstToIRTranslator extends AstTranslator {
           : "no type for " + nm + " at " + CAstPrinter.print(n, context.getSourceMap());
       TypeReference type = makeType(s.type());
       if (context.currentScope().isGlobal(s) || isGlobal(context, nm)) {
-        c.setValue(n, doGlobalRead(n, context, nm, type));
+        if (nm.equals("ones")) {
+          CAstLeafNode node =
+              new CAstLeafNode() {
+
+                @Override
+                public Object getValue() {
+                  return "ones";
+                }
+
+                @Override
+                public int getKind() {
+                  return CAstNode.CONSTANT;
+                }
+              };
+          visit(node, context, this);
+          assert context.getValue(node) != -1;
+
+          int result = context.currentScope().allocateTempValue();
+
+          int currentInstruction = context.cfg().getCurrentInstruction();
+          context
+              .cfg()
+              .addInstruction(
+                  ((AstInstructionFactory) insts)
+                      .PropertyRead(currentInstruction, result, 238, context.getValue(node)));
+
+          context
+              .cfg()
+              .noteOperands(
+                  currentInstruction,
+                  context.getSourceMap().getPosition(n.getChild(0)),
+                  context.getSourceMap().getPosition(node));
+
+          c.setValue(n, result);
+        } else c.setValue(n, doGlobalRead(n, context, nm, type));
+
       } else if (context.currentScope().isLexicallyScoped(s)) {
         c.setValue(n, doLexicallyScopedRead(n, context, nm, type));
       } else {
