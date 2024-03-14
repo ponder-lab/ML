@@ -1462,6 +1462,28 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_import6.py", "g", 1, 1, 2);
   }
 
+  /**
+   * This is an invalid case. If there are no wildcard imports, we should resolve them like they
+   * are.
+   */
+  @Test
+  public void testImport7()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_import7.py", "f", 0, 0);
+    test("tf2_test_import7.py", "g", 0, 0);
+  }
+
+  /**
+   * This is an invalid case. If there are no wildcard imports, we should resolve them like they
+   * are.
+   */
+  @Test
+  public void testImport8()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_import8.py", "f", 0, 0);
+    test("tf2_test_import8.py", "g", 0, 0);
+  }
+
   private void test(
       String filename,
       String functionName,
