@@ -10,18 +10,23 @@
  *****************************************************************************/
 package com.ibm.wala.cast.python.ipa.callgraph;
 
+import static com.ibm.wala.cast.python.types.PythonTypes.pythonLoader;
+
 import com.ibm.wala.cast.ipa.callgraph.AstSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.ipa.callgraph.GlobalObjectKey;
+import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.ssa.PythonInstructionVisitor;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
+import com.ibm.wala.classLoader.NewSiteReference;
 import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.fixpoint.AbstractOperator;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.IAnalysisCacheView;
 import com.ibm.wala.ipa.callgraph.propagation.AbstractFieldPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -38,6 +43,7 @@ import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAGetInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
+import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.IntIterator;
@@ -47,6 +53,8 @@ import com.ibm.wala.util.intset.MutableIntSet;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Iterator;
+import java.util.Set;
 import java.util.logging.Logger;
 
 public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallGraphBuilder {
@@ -98,6 +106,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
   public static class PythonConstraintVisitor extends AstConstraintVisitor
       implements PythonInstructionVisitor {
+
+    private static final String GLOBAL_IDENTIFIER = "global";
 
     @Override
     protected PythonSSAPropagationCallGraphBuilder getBuilder() {
@@ -183,6 +193,52 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public void visitArrayStore(SSAArrayStoreInstruction inst) {
       newFieldWrite(node, inst.getArrayRef(), inst.getIndex(), inst.getValue());
+    }
+
+    @Override
+    public void visitAstGlobalRead(AstGlobalRead instruction) {
+      super.visitAstGlobalRead(instruction);
+
+      String declaredFieldName = getStrippedDeclaredFieldName(instruction);
+      logger.fine("Examining global: " + declaredFieldName + " for wildcard import.");
+
+      PointerKey def = getPointerKeyForLocal(instruction.getDef());
+      assert def != null;
+
+      CallGraph callGraph = this.getBuilder().getCallGraph();
+      TypeReference tensorFlowTypeReference =
+          TypeReference.findOrCreate(pythonLoader, "Ltensorflow");
+      MethodReference importTensorFlowMethodReference =
+          MethodReference.findOrCreate(tensorFlowTypeReference, "import", "()Ltensorflow;");
+      Set<CGNode> nodes = callGraph.getNodes(importTensorFlowMethodReference);
+
+      nodes.forEach(
+          n -> {
+            assert n.getMethod().getReference().equals(importTensorFlowMethodReference);
+
+            for (Iterator<NewSiteReference> nit = n.iterateNewSites(); nit.hasNext(); ) {
+              NewSiteReference newSiteReference = nit.next();
+              String name = newSiteReference.getDeclaredType().getName().getClassName().toString();
+
+              if (name.equals(declaredFieldName)) {
+                InstanceKey instanceKey = this.getInstanceKeyForAllocation(newSiteReference);
+
+                if (this.system.newConstraint(def, instanceKey))
+                  logger.fine("Added constraint that: " + def + " gets: " + instanceKey + ".");
+              }
+            }
+          });
+    }
+
+    private static String getStrippedDeclaredFieldName(AstGlobalRead instruction) {
+      String declaredFieldName = instruction.getDeclaredField().getName().toString();
+      assert declaredFieldName.startsWith(GLOBAL_IDENTIFIER + " ");
+
+      // Remove the global identifier.
+      String strippedDeclaredFieldName =
+          declaredFieldName.substring(
+              (GLOBAL_IDENTIFIER + " ").length(), declaredFieldName.length());
+      return strippedDeclaredFieldName;
     }
   }
 
