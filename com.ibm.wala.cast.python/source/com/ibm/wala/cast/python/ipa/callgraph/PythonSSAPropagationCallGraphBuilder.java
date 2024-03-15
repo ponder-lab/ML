@@ -54,12 +54,13 @@ import com.ibm.wala.util.intset.IntSet;
 import com.ibm.wala.util.intset.IntSetUtil;
 import com.ibm.wala.util.intset.MutableIntSet;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
-import java.util.Stack;
 import java.util.logging.Logger;
 
 public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallGraphBuilder {
@@ -117,8 +118,12 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
     private static final Atom IMPORT_FUNCTION_NAME = Atom.findOrCreateAsciiAtom("import");
 
-    /** A mapping of script names to wildcard imports. */
-    private static Map<Atom, Stack<MethodReference>> scriptToWildcardImports = Maps.newHashMap();
+    /**
+     * A mapping of script names to wildcard imports. We use a {@link Deque} here because we want to
+     * always examine the last (front of the queue) encountered wildcard import library for known
+     * names assuming that import instructions are traversed from first to last.
+     */
+    private static Map<Atom, Deque<MethodReference>> scriptToWildcardImports = Maps.newHashMap();
 
     @Override
     protected PythonSSAPropagationCallGraphBuilder getBuilder() {
@@ -230,7 +235,6 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
           if (declaredTargetName.equals(IMPORT_FUNCTION_NAME)) {
             // It's an import "statement."
-
             TypeName scriptName = this.ir.getMethod().getReference().getDeclaringClass().getName();
             assert scriptName.getPackage() == null
                 : "Import statement should only occur at the top-level script.";
@@ -251,9 +255,9 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                 scriptClassName,
                 (k, v) -> {
                   if (v == null) {
-                    Stack<MethodReference> stack = new Stack<>();
-                    stack.push(declaredTarget);
-                    return stack;
+                    Deque<MethodReference> deque = new ArrayDeque<>();
+                    deque.push(declaredTarget);
+                    return deque;
                   } else {
                     v.push(declaredTarget);
                     return v;
@@ -278,16 +282,15 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       if (scriptToWildcardImports.containsKey(scriptClassName)) {
         logger.info("Found wildcard imports in " + scriptClassName + " for " + instruction + ".");
 
-        Stack<MethodReference> stack = scriptToWildcardImports.get(scriptClassName);
+        Deque<MethodReference> deque = scriptToWildcardImports.get(scriptClassName);
 
-        while (!stack.isEmpty()) {
+        for (MethodReference importMethodReference : deque) {
           String declaredFieldName = getStrippedDeclaredFieldName(instruction);
           logger.fine("Examining global: " + declaredFieldName + " for wildcard import.");
 
           PointerKey def = getPointerKeyForLocal(instruction.getDef());
           assert def != null;
 
-          MethodReference importMethodReference = stack.pop();
           logger.fine(
               "Library with wildcard import is: "
                   + importMethodReference.getDeclaringClass().getName().getClassName()
