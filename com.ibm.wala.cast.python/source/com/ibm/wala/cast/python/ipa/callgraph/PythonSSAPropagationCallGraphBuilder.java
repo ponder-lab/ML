@@ -300,32 +300,30 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           CallGraph callGraph = this.getBuilder().getCallGraph();
           Set<CGNode> nodes = callGraph.getNodes(importMethodReference);
 
-          nodes.forEach(
-              n -> {
-                assert n.getMethod().getReference().equals(importMethodReference);
+          for (CGNode n : nodes) {
+            assert n.getMethod().getReference().equals(importMethodReference);
 
-                for (Iterator<NewSiteReference> nit = n.iterateNewSites(); nit.hasNext(); ) {
-                  NewSiteReference newSiteReference = nit.next();
+            for (Iterator<NewSiteReference> nit = n.iterateNewSites(); nit.hasNext(); ) {
+              NewSiteReference newSiteReference = nit.next();
 
-                  String name =
-                      newSiteReference.getDeclaredType().getName().getClassName().toString();
-                  logger.finest("Examining: " + name + ".");
+              String name = newSiteReference.getDeclaredType().getName().getClassName().toString();
+              logger.finest("Examining: " + name + ".");
 
-                  if (name.equals(declaredFieldName)) {
-                    logger.info("Found wildcard import for: " + name + ".");
+              if (name.equals(declaredFieldName)) {
+                logger.info("Found wildcard import for: " + name + ".");
 
-                    PointerKey def = getPointerKeyForLocal(instruction.getDef());
-                    assert def != null;
+                PointerKey def = getPointerKeyForLocal(instruction.getDef());
+                assert def != null;
 
-                    InstanceKey instanceKey = this.getInstanceKeyForAllocation(newSiteReference);
+                InstanceKey instanceKey = this.getInstanceKeyForAllocation(newSiteReference);
 
-                    if (this.system.newConstraint(def, instanceKey)) {
-                      logger.fine("Added constraint that: " + def + " gets: " + instanceKey + ".");
-                      // FIXME: Should "break" here.
-                    }
-                  }
+                if (this.system.newConstraint(def, instanceKey)) {
+                  logger.fine("Added constraint that: " + def + " gets: " + instanceKey + ".");
+                  return;
                 }
-              });
+              }
+            }
+          }
         }
       }
     }
