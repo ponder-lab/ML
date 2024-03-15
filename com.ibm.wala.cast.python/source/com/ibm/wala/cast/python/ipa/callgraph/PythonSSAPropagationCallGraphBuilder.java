@@ -257,7 +257,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
               // Add the library to the script's stack of wildcard imports.
               scriptToWildcardImports.compute(
-                  scriptName.toString(),
+                  scriptName,
                   (k, v) -> {
                     if (v == null) {
                       Deque<TypeReference> deque = new ArrayDeque<>();
