@@ -216,53 +216,57 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       super.visitPropertyRead(instruction);
 
       int memberRef = instruction.getMemberRef();
-      Object constantValue = this.ir.getSymbolTable().getConstantValue(memberRef);
 
-      if (constantValue.equals(IMPORT_WILDCARD_CHARACTER)) {
-        // We have a wildcard.
-        logger.fine("Detected wildcard.");
+      if (this.ir.getSymbolTable().isConstant(memberRef)) {
+        Object constantValue = this.ir.getSymbolTable().getConstantValue(memberRef);
 
-        int objRef = instruction.getObjectRef();
-        logger.fine("Seeing if v" + objRef + " refers to an import.");
+        if (constantValue.equals(IMPORT_WILDCARD_CHARACTER)) {
+          // We have a wildcard.
+          logger.fine("Detected wildcard.");
 
-        SSAInstruction def = this.du.getDef(objRef);
-        logger.finer("Found definition: " + def + ".");
+          int objRef = instruction.getObjectRef();
+          logger.fine("Seeing if v" + objRef + " refers to an import.");
 
-        if (def instanceof SSAInvokeInstruction) {
-          SSAInvokeInstruction invokeInstruction = (SSAInvokeInstruction) def;
-          MethodReference declaredTarget = invokeInstruction.getDeclaredTarget();
-          Atom declaredTargetName = declaredTarget.getName();
+          SSAInstruction def = this.du.getDef(objRef);
+          logger.finer("Found definition: " + def + ".");
 
-          if (declaredTargetName.equals(IMPORT_FUNCTION_NAME)) {
-            // It's an import "statement."
-            TypeName scriptName = this.ir.getMethod().getReference().getDeclaringClass().getName();
-            assert scriptName.getPackage() == null
-                : "Import statement should only occur at the top-level script.";
+          if (def instanceof SSAInvokeInstruction) {
+            SSAInvokeInstruction invokeInstruction = (SSAInvokeInstruction) def;
+            MethodReference declaredTarget = invokeInstruction.getDeclaredTarget();
+            Atom declaredTargetName = declaredTarget.getName();
 
-            logger.fine("Found import statement in: " + scriptName + ".");
+            if (declaredTargetName.equals(IMPORT_FUNCTION_NAME)) {
+              // It's an import "statement."
+              TypeName scriptName =
+                  this.ir.getMethod().getReference().getDeclaringClass().getName();
+              assert scriptName.getPackage() == null
+                  : "Import statement should only occur at the top-level script.";
 
-            Atom scriptClassName = scriptName.getClassName();
+              logger.fine("Found import statement in: " + scriptName + ".");
 
-            logger.info(
-                "Adding: "
-                    + declaredTarget.getDeclaringClass().getName().getClassName()
-                    + " to wildcard imports for: "
-                    + scriptClassName
-                    + ".");
+              Atom scriptClassName = scriptName.getClassName();
 
-            // Add the library to the script's stack of wildcard imports.
-            scriptToWildcardImports.compute(
-                scriptClassName,
-                (k, v) -> {
-                  if (v == null) {
-                    Deque<MethodReference> deque = new ArrayDeque<>();
-                    deque.push(declaredTarget);
-                    return deque;
-                  } else {
-                    v.push(declaredTarget);
-                    return v;
-                  }
-                });
+              logger.info(
+                  "Adding: "
+                      + declaredTarget.getDeclaringClass().getName().getClassName()
+                      + " to wildcard imports for: "
+                      + scriptClassName
+                      + ".");
+
+              // Add the library to the script's stack of wildcard imports.
+              scriptToWildcardImports.compute(
+                  scriptClassName,
+                  (k, v) -> {
+                    if (v == null) {
+                      Deque<MethodReference> deque = new ArrayDeque<>();
+                      deque.push(declaredTarget);
+                      return deque;
+                    } else {
+                      v.push(declaredTarget);
+                      return v;
+                    }
+                  });
+            }
           }
         }
       }
