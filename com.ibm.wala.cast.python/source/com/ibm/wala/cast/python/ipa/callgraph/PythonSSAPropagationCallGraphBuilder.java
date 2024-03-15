@@ -239,25 +239,25 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
             if (declaredTargetName.equals(IMPORT_FUNCTION_NAME)) {
               // It's an import "statement" importing a library.
-              TypeName scriptName =
+              TypeName scriptTypeName =
                   this.ir.getMethod().getReference().getDeclaringClass().getName();
-              assert scriptName.getPackage() == null
+              assert scriptTypeName.getPackage() == null
                   : "Import statement should only occur at the top-level script.";
 
-              logger.fine("Found import statement in: " + scriptName + ".");
+              logger.fine("Found import statement in: " + scriptTypeName + ".");
 
-              Atom scriptClassName = scriptName.getClassName();
+              String scriptName = scriptTypeName.getClassName().toString();
 
               logger.info(
                   "Adding: "
                       + declaredTarget.getDeclaringClass().getName().getClassName()
                       + " to wildcard imports for: "
-                      + scriptClassName
+                      + scriptName
                       + ".");
 
               // Add the library to the script's stack of wildcard imports.
               scriptToWildcardImports.compute(
-                  scriptClassName.toString(),
+                  scriptName.toString(),
                   (k, v) -> {
                     if (v == null) {
                       Deque<TypeReference> deque = new ArrayDeque<>();
