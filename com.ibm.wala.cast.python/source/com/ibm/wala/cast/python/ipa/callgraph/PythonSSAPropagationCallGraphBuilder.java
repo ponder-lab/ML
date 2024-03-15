@@ -289,19 +289,15 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         Deque<MethodReference> deque = scriptToWildcardImports.get(scriptClassName);
 
         for (MethodReference importMethodReference : deque) {
-          String declaredFieldName = getStrippedDeclaredFieldName(instruction);
-          logger.fine("Examining global: " + declaredFieldName + " for wildcard import.");
-
-          PointerKey def = getPointerKeyForLocal(instruction.getDef());
-          assert def != null;
-
           logger.fine(
               "Library with wildcard import is: "
                   + importMethodReference.getDeclaringClass().getName().getClassName()
                   + ".");
 
-          CallGraph callGraph = this.getBuilder().getCallGraph();
+          String declaredFieldName = getStrippedDeclaredFieldName(instruction);
+          logger.fine("Examining global: " + declaredFieldName + " for wildcard import.");
 
+          CallGraph callGraph = this.getBuilder().getCallGraph();
           Set<CGNode> nodes = callGraph.getNodes(importMethodReference);
 
           nodes.forEach(
@@ -317,6 +313,9 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
                   if (name.equals(declaredFieldName)) {
                     logger.info("Found wildcard import for: " + name + ".");
+
+                    PointerKey def = getPointerKeyForLocal(instruction.getDef());
+                    assert def != null;
 
                     InstanceKey instanceKey = this.getInstanceKeyForAllocation(newSiteReference);
 
