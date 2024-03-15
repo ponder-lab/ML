@@ -10,11 +10,11 @@
  *****************************************************************************/
 package com.ibm.wala.cast.python.ipa.callgraph;
 
-import static com.ibm.wala.cast.python.types.PythonTypes.pythonLoader;
-
+import com.google.common.collect.Maps;
 import com.ibm.wala.cast.ipa.callgraph.AstSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.ipa.callgraph.GlobalObjectKey;
 import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
+import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.ssa.PythonInstructionVisitor;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
@@ -41,9 +41,12 @@ import com.ibm.wala.ssa.SSAArrayLoadInstruction;
 import com.ibm.wala.ssa.SSAArrayStoreInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAGetInstruction;
+import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSAInvokeInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
+import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.IntIterator;
@@ -54,7 +57,9 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
+import java.util.Stack;
 import java.util.logging.Logger;
 
 public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallGraphBuilder {
@@ -107,6 +112,13 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       implements PythonInstructionVisitor {
 
     private static final String GLOBAL_IDENTIFIER = "global";
+
+    private static final String IMPORT_WILDCARD_CHARACTER = "*";
+
+    private static final Atom IMPORT_FUNCTION_NAME = Atom.findOrCreateAsciiAtom("import");
+
+    /** A mapping of script names to wildcard imports. */
+    private static Map<Atom, Stack<MethodReference>> scriptToWildcardImports = Maps.newHashMap();
 
     @Override
     protected PythonSSAPropagationCallGraphBuilder getBuilder() {
@@ -195,40 +207,121 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
 
     @Override
+    public void visitPropertyRead(AstPropertyRead instruction) {
+      super.visitPropertyRead(instruction);
+
+      int memberRef = instruction.getMemberRef();
+      Object constantValue = this.ir.getSymbolTable().getConstantValue(memberRef);
+
+      if (constantValue.equals(IMPORT_WILDCARD_CHARACTER)) {
+        // We have a wildcard.
+        logger.fine("Detected wildcard.");
+
+        int objRef = instruction.getObjectRef();
+        logger.fine("Seeing if v" + objRef + " refers to an import.");
+
+        SSAInstruction def = this.du.getDef(objRef);
+        logger.finer("Found definition: " + def + ".");
+
+        if (def instanceof SSAInvokeInstruction) {
+          SSAInvokeInstruction invokeInstruction = (SSAInvokeInstruction) def;
+          MethodReference declaredTarget = invokeInstruction.getDeclaredTarget();
+          Atom declaredTargetName = declaredTarget.getName();
+
+          if (declaredTargetName.equals(IMPORT_FUNCTION_NAME)) {
+            // It's an import "statement."
+
+            TypeName scriptName = this.ir.getMethod().getReference().getDeclaringClass().getName();
+            assert scriptName.getPackage() == null
+                : "Import statement should only occur at the top-level script.";
+
+            logger.fine("Found import statement in: " + scriptName + ".");
+
+            Atom scriptClassName = scriptName.getClassName();
+
+            logger.info(
+                "Adding: "
+                    + declaredTarget.getDeclaringClass().getName().getClassName()
+                    + " to wildcard imports for: "
+                    + scriptClassName
+                    + ".");
+
+            // Add the library to the script's stack of wildcard imports.
+            scriptToWildcardImports.compute(
+                scriptClassName,
+                (k, v) -> {
+                  if (v == null) {
+                    Stack<MethodReference> stack = new Stack<>();
+                    stack.push(declaredTarget);
+                    return stack;
+                  } else {
+                    v.push(declaredTarget);
+                    return v;
+                  }
+                });
+          }
+        }
+      }
+    }
+
+    @Override
     public void visitAstGlobalRead(AstGlobalRead instruction) {
       super.visitAstGlobalRead(instruction);
 
-      String declaredFieldName = getStrippedDeclaredFieldName(instruction);
-      logger.fine("Examining global: " + declaredFieldName + " for wildcard import.");
+      TypeName scriptName = this.ir.getMethod().getReference().getDeclaringClass().getName();
 
-      PointerKey def = getPointerKeyForLocal(instruction.getDef());
-      assert def != null;
+      Atom scriptClassName =
+          scriptName.getPackage() == null ? scriptName.getClassName() : scriptName.getPackage();
+      logger.finer("Script name is: " + scriptClassName + ".");
 
-      CallGraph callGraph = this.getBuilder().getCallGraph();
-      TypeReference tensorFlowTypeReference =
-          TypeReference.findOrCreate(pythonLoader, "Ltensorflow");
-      MethodReference importTensorFlowMethodReference =
-          MethodReference.findOrCreate(tensorFlowTypeReference, "import", "()Ltensorflow;");
-      Set<CGNode> nodes = callGraph.getNodes(importTensorFlowMethodReference);
+      // Are there any wildcard imports for this script?
+      if (scriptToWildcardImports.containsKey(scriptClassName)) {
+        logger.info("Found wildcard imports in " + scriptClassName + " for " + instruction + ".");
 
-      nodes.forEach(
-          n -> {
-            assert n.getMethod().getReference().equals(importTensorFlowMethodReference);
+        Stack<MethodReference> stack = scriptToWildcardImports.get(scriptClassName);
 
-            for (Iterator<NewSiteReference> nit = n.iterateNewSites(); nit.hasNext(); ) {
-              NewSiteReference newSiteReference = nit.next();
-              String name = newSiteReference.getDeclaredType().getName().getClassName().toString();
+        while (!stack.isEmpty()) {
+          String declaredFieldName = getStrippedDeclaredFieldName(instruction);
+          logger.fine("Examining global: " + declaredFieldName + " for wildcard import.");
 
-              if (name.equals(declaredFieldName)) {
-                logger.info("Found wildcard import for: " + name + ".");
+          PointerKey def = getPointerKeyForLocal(instruction.getDef());
+          assert def != null;
 
-                InstanceKey instanceKey = this.getInstanceKeyForAllocation(newSiteReference);
+          MethodReference importMethodReference = stack.pop();
+          logger.fine(
+              "Library with wildcard import is: "
+                  + importMethodReference.getDeclaringClass().getName().getClassName()
+                  + ".");
 
-                if (this.system.newConstraint(def, instanceKey))
-                  logger.fine("Added constraint that: " + def + " gets: " + instanceKey + ".");
-              }
-            }
-          });
+          CallGraph callGraph = this.getBuilder().getCallGraph();
+
+          Set<CGNode> nodes = callGraph.getNodes(importMethodReference);
+
+          nodes.forEach(
+              n -> {
+                assert n.getMethod().getReference().equals(importMethodReference);
+
+                for (Iterator<NewSiteReference> nit = n.iterateNewSites(); nit.hasNext(); ) {
+                  NewSiteReference newSiteReference = nit.next();
+
+                  String name =
+                      newSiteReference.getDeclaredType().getName().getClassName().toString();
+                  logger.finest("Examining: " + name + ".");
+
+                  if (name.equals(declaredFieldName)) {
+                    logger.info("Found wildcard import for: " + name + ".");
+
+                    InstanceKey instanceKey = this.getInstanceKeyForAllocation(newSiteReference);
+
+                    if (this.system.newConstraint(def, instanceKey)) {
+                      logger.fine("Added constraint that: " + def + " gets: " + instanceKey + ".");
+                      // FIXME: Should "break" here.
+                    }
+                  }
+                }
+              });
+        }
+      }
     }
 
     private static String getStrippedDeclaredFieldName(AstGlobalRead instruction) {
