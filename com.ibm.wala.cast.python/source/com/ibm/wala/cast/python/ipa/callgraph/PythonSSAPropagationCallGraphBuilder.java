@@ -231,6 +231,13 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           SSAInstruction def = this.du.getDef(objRef);
           logger.finer("Found definition: " + def + ".");
 
+          TypeName scriptTypeName =
+              this.ir.getMethod().getReference().getDeclaringClass().getName();
+          assert scriptTypeName.getPackage() == null
+              : "Import statement should only occur at the top-level script.";
+
+          String scriptName = scriptTypeName.getClassName().toString();
+
           if (def instanceof SSAInvokeInstruction) {
             // Library case.
             SSAInvokeInstruction invokeInstruction = (SSAInvokeInstruction) def;
@@ -239,14 +246,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
             if (declaredTargetName.equals(IMPORT_FUNCTION_NAME)) {
               // It's an import "statement" importing a library.
-              TypeName scriptTypeName =
-                  this.ir.getMethod().getReference().getDeclaringClass().getName();
-              assert scriptTypeName.getPackage() == null
-                  : "Import statement should only occur at the top-level script.";
-
-              logger.fine("Found import statement in: " + scriptTypeName + ".");
-
-              String scriptName = scriptTypeName.getClassName().toString();
+              logger.fine("Found library import statement in: " + scriptTypeName + ".");
 
               logger.info(
                   "Adding: "
