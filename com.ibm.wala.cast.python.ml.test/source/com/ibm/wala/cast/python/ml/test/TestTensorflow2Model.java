@@ -1484,6 +1484,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_import8.py", "g", 0, 0);
   }
 
+  @Test
+  public void testImport9()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_import9.py", "f", 1, 1, 2);
+    test("tf2_test_import9.py", "g", 1, 1, 2);
+  }
+
   private void test(
       String filename,
       String functionName,
