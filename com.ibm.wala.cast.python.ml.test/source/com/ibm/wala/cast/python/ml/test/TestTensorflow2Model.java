@@ -293,11 +293,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testS()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2s.py", "add", 0,
-        0); // NOTE: Set the expected number of tensor parameters, variables, and tensor parameter
-    // value numbers to 2, 3, and 2 and 3, respectively, when
-    // https://github.com/wala/ML/issues/65 is fixed.
+    // NOTE: Set the expected number of tensor variables to 3 once
+    // https://github.com/wala/ML/issues/135 is fixed.
+    test("tf2s.py", "add", 2, 2, 2, 3);
   }
 
   @Test
