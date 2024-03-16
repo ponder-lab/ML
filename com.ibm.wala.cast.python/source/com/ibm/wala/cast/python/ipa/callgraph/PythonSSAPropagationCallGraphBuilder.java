@@ -124,7 +124,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      * always examine the last (front of the queue) encountered wildcard import library for known
      * names assuming that import instructions are traversed from first to last.
      */
-    private static Map<String, Deque<TypeReference>> scriptToWildcardImports = Maps.newHashMap();
+    private static Map<String, Deque<MethodReference>> scriptToWildcardImports = Maps.newHashMap();
 
     @Override
     protected PythonSSAPropagationCallGraphBuilder getBuilder() {
@@ -223,10 +223,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
         if (constantValue.equals(IMPORT_WILDCARD_CHARACTER)) {
           // We have a wildcard.
-          logger.fine("Detected wildcard.");
+          logger.fine("Detected wildcard for " + memberRef + " in " + instruction + ".");
 
           int objRef = instruction.getObjectRef();
-          logger.fine("Seeing if v" + objRef + " refers to an import.");
+          logger.fine("Seeing if " + objRef + " refers to an import.");
 
           SSAInstruction def = this.du.getDef(objRef);
           logger.finer("Found definition: " + def + ".");
@@ -255,20 +255,55 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                       + scriptName
                       + ".");
 
-              // Add the library to the script's stack of wildcard imports.
+              // Add the library to the script's queue of wildcard imports.
               scriptToWildcardImports.compute(
                   scriptName,
                   (k, v) -> {
                     if (v == null) {
-                      Deque<TypeReference> deque = new ArrayDeque<>();
-                      deque.push(declaredTarget.getDeclaringClass());
+                      Deque<MethodReference> deque = new ArrayDeque<>();
+                      deque.push(declaredTarget);
                       return deque;
                     } else {
-                      v.push(declaredTarget.getDeclaringClass());
+                      v.push(declaredTarget);
                       return v;
                     }
                   });
             }
+          } else if (def instanceof SSAGetInstruction) {
+            // We are importing from a script.
+            SSAGetInstruction getInstruction = (SSAGetInstruction) def;
+            FieldReference declaredField = getInstruction.getDeclaredField();
+            Atom fieldName = declaredField.getName();
+            String strippedFieldName =
+                fieldName.toString().substring(GLOBAL_IDENTIFIER.length() + 1);
+            TypeReference typeReference =
+                TypeReference.findOrCreate(PythonTypes.pythonLoader, "L" + strippedFieldName);
+            MethodReference methodReference =
+                MethodReference.findOrCreate(
+                    typeReference,
+                    Atom.findOrCreateAsciiAtom("do"),
+                    Descriptor.findOrCreate(null, PythonTypes.rootTypeName));
+
+            logger.info(
+                "Adding: "
+                    + methodReference.getDeclaringClass().getName().getClassName()
+                    + " to wildcard imports for: "
+                    + scriptName
+                    + ".");
+
+            // Add the script to the queue of this script's wildcard imports.
+            scriptToWildcardImports.compute(
+                scriptName,
+                (k, v) -> {
+                  if (v == null) {
+                    Deque<MethodReference> deque = new ArrayDeque<>();
+                    deque.push(methodReference);
+                    return deque;
+                  } else {
+                    v.push(methodReference);
+                    return v;
+                  }
+                });
           }
         }
       }
@@ -291,24 +326,18 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       if (scriptToWildcardImports.containsKey(scriptName)) {
         logger.info("Found wildcard imports in " + scriptName + " for " + instruction + ".");
 
-        Deque<TypeReference> deque = scriptToWildcardImports.get(scriptName);
+        Deque<MethodReference> deque = scriptToWildcardImports.get(scriptName);
 
-        for (TypeReference importTypeReference : deque) {
+        for (MethodReference importMethodReference : deque) {
           logger.fine(
               "Library with wildcard import is: "
-                  + importTypeReference.getName().getClassName()
+                  + importMethodReference.getDeclaringClass().getName().getClassName()
                   + ".");
 
           String declaredFieldName = getStrippedDeclaredFieldName(instruction);
           logger.fine("Examining global: " + declaredFieldName + " for wildcard import.");
 
           CallGraph callGraph = this.getBuilder().getCallGraph();
-
-          MethodReference importMethodReference =
-              MethodReference.findOrCreate(
-                  importTypeReference,
-                  IMPORT_FUNCTION_NAME,
-                  Descriptor.findOrCreate(null, importTypeReference.getName()));
 
           Set<CGNode> nodes = callGraph.getNodes(importMethodReference);
 
