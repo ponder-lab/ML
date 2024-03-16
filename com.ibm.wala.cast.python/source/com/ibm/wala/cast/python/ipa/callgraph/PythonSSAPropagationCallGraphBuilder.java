@@ -338,12 +338,9 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           logger.fine("Examining global: " + declaredFieldName + " for wildcard import.");
 
           CallGraph callGraph = this.getBuilder().getCallGraph();
-
           Set<CGNode> nodes = callGraph.getNodes(importMethodReference);
 
           for (CGNode n : nodes) {
-            assert n.getMethod().getReference().equals(importMethodReference);
-
             for (Iterator<NewSiteReference> nit = n.iterateNewSites(); nit.hasNext(); ) {
               NewSiteReference newSiteReference = nit.next();
 
