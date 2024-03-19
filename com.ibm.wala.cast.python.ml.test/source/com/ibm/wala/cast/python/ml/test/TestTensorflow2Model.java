@@ -1501,6 +1501,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2);
   }
 
+  /**
+   * TODO: This test needs a PYTHONPATH that points to `proj`.
+   */
   @Test
   public void testModule2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
