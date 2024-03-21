@@ -1527,6 +1527,38 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2);
   }
 
+  /**
+   * This test should not need a PYTHONPATH, meaning that I don't need to set one in the console
+   * when I run the files.
+   */
+  @Test
+  public void testModule4()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "proj3/src/tf2_test_module4a.py",
+          "proj3/src/tf2_test_module6.py",
+          "proj3/tf2_test_module5.py"
+        },
+        "src/tf2_test_module4a.py",
+        "f",
+        1,
+        1,
+        2);
+
+    test(
+        new String[] {
+          "proj3/src/tf2_test_module4a.py",
+          "proj3/src/tf2_test_module6.py",
+          "proj3/tf2_test_module5.py"
+        },
+        "src/tf2_test_module4a.py",
+        "g",
+        1,
+        1,
+        2);
+  }
+
   private void test(
       String filename,
       String functionName,
