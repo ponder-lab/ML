@@ -2337,6 +2337,11 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
           cast = pythonAst.accept(visitor);
         }
 
+        @Override
+        public String getSignature() {
+          return null;
+        }
+
         private final WalkContext context;
         private final CAstVisitor visitor;
         private final CAstNode cast;
