@@ -39,9 +39,11 @@ import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.ReverseIterator;
+import java.io.File;
 import java.io.IOException;
 import java.io.Reader;
 import java.net.URL;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -2339,7 +2341,23 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
 
         @Override
         public String getSignature() {
-          return null;
+          // TODO Auto-generated method stub
+          File file = this.getFile();
+          assert file.isAbsolute() || file.getPath().startsWith("file:");
+
+          File projRoot =
+              new File("/home/rk1424/git/ML/com.ibm.wala.cast.python.test/target/classes/proj3");
+          Path scriptRelativePath = projRoot.toPath().relativize(file.toPath());
+
+          //          String name = super.getName();
+          //          if (name.equals("script tf2_test_module3a.py")) return "script
+          // src/tf2_test_module3a.py";
+          //          if (name.equals("script tf2_test_module4a.py")) return "script
+          // src/tf2_test_module4a.py";
+          //          if (name.equals("script tf2_test_module6.py")) return "script
+          // src/tf2_test_module6.py";
+
+          return "script " + scriptRelativePath.toString();
         }
 
         private final WalkContext context;

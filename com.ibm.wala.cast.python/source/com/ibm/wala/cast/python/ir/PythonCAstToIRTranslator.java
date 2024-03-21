@@ -224,7 +224,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
 
   @Override
   protected String composeEntityName(WalkContext parent, CAstEntity f) {
-    if (f.getKind() == CAstEntity.SCRIPT_ENTITY) return f.getName();
+    if (f.getKind() == CAstEntity.SCRIPT_ENTITY) return f.getSignature();
     else {
       String name;
       // if (f.getType() instanceof CAstType.Method) {
@@ -245,7 +245,10 @@ public class PythonCAstToIRTranslator extends AstTranslator {
           .unknownInstructions(
               () -> {
                 doGlobalWrite(
-                    context, context.currentScope().getEntity().getName(), PythonTypes.Root, 1);
+                    context,
+                    context.currentScope().getEntity().getSignature(),
+                    PythonTypes.Root,
+                    1);
               });
     }
 
