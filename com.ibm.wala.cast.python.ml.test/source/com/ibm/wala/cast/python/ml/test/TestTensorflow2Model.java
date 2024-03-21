@@ -1615,7 +1615,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
           } else LOGGER.warning(() -> "Encountered: " + pointerKey.getClass());
         });
 
-    final String functionSignature = "script " + filename + "." + functionName + ".do()LRoot;";
+    final String functionSignature =
+        "script " + filename.replace('/', '.') + "." + functionName + ".do()LRoot;";
 
     // get the tensor variables for the function.
     Set<TensorVariable> functionTensorVariables =
