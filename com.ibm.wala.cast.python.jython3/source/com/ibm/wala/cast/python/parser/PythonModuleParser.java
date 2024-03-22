@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.net.URL;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -43,7 +44,7 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
 
   private static final Logger LOGGER = Logger.getLogger(PythonModuleParser.class.getName());
 
-  private final Set<String> localModules = HashSetFactory.make();
+  private final Set<SourceModule> localModules = HashSetFactory.make();
 
   private final SourceModule fileName;
 
@@ -86,6 +87,37 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
 
           if (isLocalModule(moduleName)) {
             LOGGER.finer("Module: " + moduleName + ".py" + " is local.");
+
+            List<File> pythonPath = PythonModuleParser.this.getPythonPath();
+
+            // If there is a PYTHONPATH specified.
+            if (!pythonPath.isEmpty()) {
+              // Adjust the module name per the PYTHONPATH.
+              Optional<SourceModule> localModule = getLocalModule(moduleName);
+
+              for (File pathEntry : pythonPath) {
+                assert pathEntry.isAbsolute();
+
+                Path modulePath =
+                    localModule
+                        .map(SourceModule::getURL)
+                        .map(URL::getFile)
+                        .map(Path::of)
+                        .orElseThrow(IllegalStateException::new);
+                LOGGER.finer("Found module path: " + modulePath + ".");
+
+                if (modulePath.startsWith(pathEntry.toPath())) {
+                  // Found it.
+                  Path scriptRelativePath = pathEntry.toPath().relativize(modulePath);
+                  LOGGER.finer("Relativized path is: " + scriptRelativePath + ".");
+
+                  // Remove the file extension.
+                  moduleName = scriptRelativePath.toString().replaceFirst("\\.py$", "");
+                  LOGGER.fine("Using module name: " + moduleName + ".");
+                  break;
+                }
+              }
+            }
 
             String yuck = moduleName;
             return Ast.makeNode(
@@ -134,9 +166,10 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
                                   accept(sm);
                                 });
                       } else {
-                        String scriptName = scriptName((SourceModule) f);
+                        SourceModule sourceModule = (SourceModule) f;
+                        String scriptName = scriptName(sourceModule);
                         LOGGER.fine(() -> "**CLS: " + scriptName);
-                        localModules.add(scriptName);
+                        localModules.add(sourceModule);
                       }
                     }
                   });
@@ -177,6 +210,18 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
   }
 
   private boolean isLocalModule(String moduleName) {
-    return localModules.stream().anyMatch(lm -> lm.endsWith(moduleName + ".py"));
+    return localModules.stream()
+        .map(lm -> scriptName((SourceModule) lm))
+        .anyMatch(sn -> sn.endsWith(moduleName + ".py"));
+  }
+
+  private Optional<SourceModule> getLocalModule(String moduleName) {
+    return localModules.stream()
+        .filter(
+            lm -> {
+              String scriptName = scriptName((SourceModule) lm);
+              return scriptName.endsWith(moduleName + ".py");
+            })
+        .findFirst();
   }
 }
