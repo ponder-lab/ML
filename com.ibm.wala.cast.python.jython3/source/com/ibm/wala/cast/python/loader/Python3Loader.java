@@ -29,17 +29,22 @@ import com.ibm.wala.classLoader.Module;
 import com.ibm.wala.classLoader.ModuleEntry;
 import com.ibm.wala.classLoader.SourceModule;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import org.python.core.PyObject;
 
 public class Python3Loader extends PythonLoader {
-  public Python3Loader(IClassHierarchy cha, IClassLoader parent) {
+  protected List<File> pythonPath;
+
+  public Python3Loader(IClassHierarchy cha, IClassLoader parent, List<File> pythonPath) {
     super(cha, parent);
+    this.pythonPath = pythonPath;
   }
 
-  public Python3Loader(IClassHierarchy cha) {
+  public Python3Loader(IClassHierarchy cha, List<File> pythonPath) {
     super(cha);
+    this.pythonPath = pythonPath;
   }
 
   @Override
@@ -48,7 +53,8 @@ public class Python3Loader extends PythonLoader {
     RewritingTranslatorToCAst x =
         new RewritingTranslatorToCAst(
             M,
-            new PythonModuleParser((SourceModule) M, typeDictionary, allModules) {
+            new PythonModuleParser(
+                (SourceModule) M, typeDictionary, allModules, this.getPythonPath()) {
               @Override
               public CAstEntity translateToCAst() throws Error, IOException {
                 CAstEntity ce = super.translateToCAst();
@@ -108,5 +114,9 @@ public class Python3Loader extends PythonLoader {
         },
         false);
     return x;
+  }
+
+  public List<File> getPythonPath() {
+    return pythonPath;
   }
 }

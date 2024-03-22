@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.test;
 
 import static com.ibm.wala.cast.python.util.Util.addPytestEntrypoints;
+import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.toSet;
@@ -14,6 +15,7 @@ import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuild
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
 import com.ibm.wala.classLoader.IMethod;
+import com.ibm.wala.core.util.io.FileProvider;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.Context;
@@ -22,10 +24,15 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.SSAPropagationCallGraphBuilder;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
@@ -1496,6 +1503,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         new String[] {"tf2_test_module2.py", "tf2_test_module.py"},
         "tf2_test_module2.py",
         "f",
+        "",
         1,
         1,
         2);
@@ -1509,6 +1517,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         new String[] {"proj/src/tf2_test_module2a.py", "proj/src/tf2_test_module3.py"},
         "src/tf2_test_module2a.py",
         "f",
+        "", // TODO.
         1,
         1,
         2);
@@ -1522,6 +1531,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         new String[] {"proj2/src/tf2_test_module3a.py", "proj2/tf2_test_module4.py"},
         "src/tf2_test_module3a.py",
         "f",
+        "proj2",
         1,
         1,
         2);
@@ -1542,6 +1552,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         },
         "src/tf2_test_module4a.py",
         "f",
+        "proj3",
         1,
         1,
         2);
@@ -1554,6 +1565,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         },
         "src/tf2_test_module4a.py",
         "g",
+        "proj3",
         1,
         1,
         2);
@@ -1570,6 +1582,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         new String[] {filename},
         filename,
         functionName,
+        "",
         expectedNumberOfTensorParameters,
         expectedNumberOfTensorVariables,
         expectedTensorParameterValueNumbers);
@@ -1579,11 +1592,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       String[] projectFilenames,
       String filename,
       String functionName,
+      String pythonPath,
       int expectedNumberOfTensorParameters,
       int expectedNumberOfTensorVariables,
       int... expectedTensorParameterValueNumbers)
       throws ClassHierarchyException, CancelException, IOException {
-    PythonAnalysisEngine<TensorTypeAnalysis> E = makeEngine(projectFilenames);
+    List<File> pathFiles = this.getPathFiles(pythonPath);
+    PythonAnalysisEngine<TensorTypeAnalysis> E = makeEngine(pathFiles, projectFilenames);
     PythonSSAPropagationCallGraphBuilder builder = E.defaultCallGraphBuilder();
 
     addPytestEntrypoints(builder);
@@ -1696,5 +1711,30 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
                       "Expecting " + actualParameterValueNumberSet + " to contain " + ev + ".",
                       actualParameterValueNumberSet.contains(ev)));
     }
+  }
+
+  private List<File> getPathFiles(String string) {
+    if (string == null || string.isEmpty() || string.isBlank()) return emptyList();
+
+    return Arrays.asList(string.split(":")).stream()
+        .map(
+            s -> {
+              File f = new File(s);
+
+              if (f.exists()) return f;
+
+              try {
+                URL url = new URL(s);
+                return new File(new FileProvider().filePathFromURL(url));
+              } catch (MalformedURLException e) {
+                try {
+                  return new FileProvider()
+                      .getFileFromClassLoader(s, this.getClass().getClassLoader());
+                } catch (FileNotFoundException e1) {
+                  throw new RuntimeException(e1);
+                }
+              }
+            })
+        .toList();
   }
 }

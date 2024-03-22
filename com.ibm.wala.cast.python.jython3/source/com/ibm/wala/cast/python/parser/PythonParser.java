@@ -2272,8 +2272,11 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
 
   private final CAstTypeDictionaryImpl<String> types;
 
-  protected PythonParser(CAstTypeDictionaryImpl<String> types) {
+  protected java.util.List<File> pythonPath;
+
+  protected PythonParser(CAstTypeDictionaryImpl<String> types, java.util.List<File> pythonPath) {
     this.types = types;
+    this.pythonPath = pythonPath;
   }
 
   @Override
@@ -2341,23 +2344,39 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
 
         @Override
         public String getSignature() {
-          // TODO Auto-generated method stub
           File file = this.getFile();
           assert file.isAbsolute() || file.getPath().startsWith("file:");
 
-          File projRoot =
-              new File("/home/rk1424/git/ML/com.ibm.wala.cast.python.test/target/classes/proj3");
-          Path scriptRelativePath = projRoot.toPath().relativize(file.toPath());
+          java.util.List<File> pythonPath = getPythonPath();
 
-          //          String name = super.getName();
-          //          if (name.equals("script tf2_test_module3a.py")) return "script
-          // src/tf2_test_module3a.py";
-          //          if (name.equals("script tf2_test_module4a.py")) return "script
-          // src/tf2_test_module4a.py";
-          //          if (name.equals("script tf2_test_module6.py")) return "script
-          // src/tf2_test_module6.py";
+          // If the PYTHONPATH isn't specified.
+          if (pythonPath.isEmpty())
+            // Revert to just the name.
+            return this.getName();
 
-          return "script " + scriptRelativePath.toString();
+          for (File pathEntry : pythonPath) {
+            //			  File projRoot =
+            //				  new
+            // File("/home/rk1424/git/ML/com.ibm.wala.cast.python.test/target/classes/proj3");
+
+            assert pathEntry.isAbsolute();
+
+            if (file.toPath().startsWith(pathEntry.toPath())) {
+              // Found it.
+              Path scriptRelativePath = pathEntry.toPath().relativize(file.toPath());
+
+              //          String name = super.getName();
+              //          if (name.equals("script tf2_test_module3a.py")) return "script
+              // src/tf2_test_module3a.py";
+              //          if (name.equals("script tf2_test_module4a.py")) return "script
+              // src/tf2_test_module4a.py";
+              //          if (name.equals("script tf2_test_module6.py")) return "script
+              // src/tf2_test_module6.py";
+
+              return "script " + scriptRelativePath.toString();
+            }
+          }
+          return null; // Not found.
         }
 
         private final WalkContext context;
@@ -2406,5 +2425,9 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
 
   public void print(PyObject ast) {
     System.err.println(ast.getClass());
+  }
+
+  public java.util.List<File> getPythonPath() {
+    return pythonPath;
   }
 }
