@@ -2355,24 +2355,11 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
             return this.getName();
 
           for (File pathEntry : pythonPath) {
-            //			  File projRoot =
-            //				  new
-            // File("/home/rk1424/git/ML/com.ibm.wala.cast.python.test/target/classes/proj3");
-
             assert pathEntry.isAbsolute();
 
             if (file.toPath().startsWith(pathEntry.toPath())) {
               // Found it.
               Path scriptRelativePath = pathEntry.toPath().relativize(file.toPath());
-
-              //          String name = super.getName();
-              //          if (name.equals("script tf2_test_module3a.py")) return "script
-              // src/tf2_test_module3a.py";
-              //          if (name.equals("script tf2_test_module4a.py")) return "script
-              // src/tf2_test_module4a.py";
-              //          if (name.equals("script tf2_test_module6.py")) return "script
-              // src/tf2_test_module6.py";
-
               return "script " + scriptRelativePath.toString();
             }
           }
