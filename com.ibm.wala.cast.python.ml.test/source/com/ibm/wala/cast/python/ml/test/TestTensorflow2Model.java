@@ -1509,7 +1509,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2);
   }
 
-  /** TODO: This test needs a PYTHONPATH that points to `proj`. */
+  /** This test needs a PYTHONPATH that points to `proj`. */
   @Test
   public void testModule2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -1517,7 +1517,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         new String[] {"proj/src/tf2_test_module2a.py", "proj/src/tf2_test_module3.py"},
         "src/tf2_test_module2a.py",
         "f",
-        "", // TODO.
+        "proj",
         1,
         1,
         2);
