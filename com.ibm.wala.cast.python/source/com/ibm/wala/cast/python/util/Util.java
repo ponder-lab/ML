@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.util;
 
 import static com.google.common.collect.Iterables.concat;
 import static java.util.Collections.emptyList;
+import static java.util.stream.Collectors.toList;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PytestEntrypointBuilder;
 import com.ibm.wala.ipa.callgraph.Entrypoint;
@@ -38,7 +39,7 @@ public class Util {
 
   public static List<File> getPathFiles(String string) {
     if (string == null || string.isEmpty() || string.isBlank()) return emptyList();
-    return Arrays.asList(string.split(":")).stream().map(s -> new File(s)).toList();
+    return Arrays.asList(string.split(":")).stream().map(s -> new File(s)).collect(toList());
   }
 
   private Util() {}
