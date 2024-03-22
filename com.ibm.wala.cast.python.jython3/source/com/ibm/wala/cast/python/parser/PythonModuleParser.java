@@ -74,14 +74,6 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
                       return a + "/" + b;
                     });
         if (s.isPresent()) {
-          LOGGER.finer(
-              () ->
-                  "Local modules:\n"
-                      + localModules.stream()
-                          .map(lm -> "\t" + lm + "\n")
-                          .collect(Collectors.joining())
-                          .replaceAll("\n$", ""));
-
           String moduleName = s.get();
           LOGGER.finer("Module name from " + importFrom + " is: " + moduleName + ".");
 
