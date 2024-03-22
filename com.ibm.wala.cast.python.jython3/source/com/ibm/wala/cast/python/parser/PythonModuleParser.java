@@ -95,9 +95,6 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
           if (isLocalModule(moduleName)) {
             LOGGER.finer("Module: " + moduleName + ".py" + " is local.");
 
-            if (moduleName.equals("tf2_test_module3a")) moduleName = "src/tf2_test_module3a";
-            if (moduleName.equals("tf2_test_module4a")) moduleName = "src/tf2_test_module4a";
-
             String yuck = moduleName;
             return Ast.makeNode(
                 CAstNode.BLOCK_STMT,
