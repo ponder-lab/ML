@@ -2345,8 +2345,6 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
         @Override
         public String getSignature() {
           File file = this.getFile();
-          assert file.isAbsolute() || file.getPath().startsWith("file:");
-
           java.util.List<File> pythonPath = getPythonPath();
 
           // If the PYTHONPATH isn't specified.
@@ -2354,10 +2352,12 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
             // Revert to just the name.
             return this.getName();
 
+          System.out.println("PYTHONPATH size: " + pythonPath.size());
+
           for (File pathEntry : pythonPath) {
             assert pathEntry.isAbsolute();
 
-            if (file.toPath().startsWith(pathEntry.toPath())) {
+            if (file.toPath().toAbsolutePath().startsWith(pathEntry.toPath().toAbsolutePath())) {
               // Found it.
               Path scriptRelativePath = pathEntry.toPath().relativize(file.toPath());
               return "script " + scriptRelativePath.toString();

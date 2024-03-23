@@ -4,6 +4,7 @@ import static com.ibm.wala.cast.python.util.Util.addPytestEntrypoints;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
 import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -1735,6 +1736,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
                 }
               }
             })
-        .toList();
+        .collect(toList());
   }
 }

@@ -39,9 +39,11 @@ import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.ReverseIterator;
+import java.io.File;
 import java.io.IOException;
 import java.io.Reader;
 import java.net.URL;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -1821,8 +1823,11 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
 
   private final CAstTypeDictionaryImpl<String> types;
 
-  protected PythonParser(CAstTypeDictionaryImpl<String> types) {
+  protected java.util.List<File> pythonPath;
+
+  protected PythonParser(CAstTypeDictionaryImpl<String> types, java.util.List<File> pythonPath) {
     this.types = types;
+    this.pythonPath = pythonPath;
   }
 
   @Override
@@ -1906,6 +1911,28 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
             public Position getNamePosition() {
               return null;
             }
+
+            @Override
+            public String getSignature() {
+              File file = this.getFile();
+              java.util.List<File> pythonPath = getPythonPath();
+
+              // If the PYTHONPATH isn't specified.
+              if (pythonPath.isEmpty())
+                // Revert to just the name.
+                return this.getName();
+
+              for (File pathEntry : pythonPath) {
+                assert pathEntry.isAbsolute();
+
+                if (file.toPath().startsWith(pathEntry.toPath())) {
+                  // Found it.
+                  Path scriptRelativePath = pathEntry.toPath().relativize(file.toPath());
+                  return "script " + scriptRelativePath.toString();
+                }
+              }
+              return null; // Not found.
+            }
           };
 
       return script;
@@ -1923,5 +1950,9 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
 
   public void print(PyObject ast) {
     System.err.println(ast.getClass());
+  }
+
+  public java.util.List<File> getPythonPath() {
+    return pythonPath;
   }
 }
