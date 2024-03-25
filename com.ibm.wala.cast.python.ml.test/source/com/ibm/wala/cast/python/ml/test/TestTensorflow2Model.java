@@ -26,7 +26,6 @@ import com.ibm.wala.ipa.callgraph.propagation.SSAPropagationCallGraphBuilder;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -1729,9 +1728,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
                 return new File(new FileProvider().filePathFromURL(url));
               } catch (MalformedURLException e) {
                 try {
-                  return new FileProvider()
-                      .getFileFromClassLoader(s, this.getClass().getClassLoader());
-                } catch (FileNotFoundException e1) {
+                  URL resource = this.getClass().getResource("/" + string);
+                  String path = resource.getPath();
+                  return new File(path);
+                } catch (Exception e1) {
                   throw new RuntimeException(e1);
                 }
               }

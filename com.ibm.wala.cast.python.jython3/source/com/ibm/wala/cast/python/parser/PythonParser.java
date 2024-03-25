@@ -44,6 +44,7 @@ import java.io.IOException;
 import java.io.Reader;
 import java.net.URL;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -2352,14 +2353,19 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
             // Revert to just the name.
             return this.getName();
 
-          System.out.println("PYTHONPATH size: " + pythonPath.size());
-
           for (File pathEntry : pythonPath) {
-            assert pathEntry.isAbsolute();
+            String pathEntryAbsolutePath = pathEntry.getAbsoluteFile().getPath();
+            // Remove protocol.
+            pathEntryAbsolutePath = pathEntryAbsolutePath.replaceFirst("file:.*!/", "");
 
-            if (file.toPath().toAbsolutePath().startsWith(pathEntry.toPath().toAbsolutePath())) {
+            String fileAbsolutePath = file.getAbsolutePath();
+
+            if (fileAbsolutePath.startsWith(pathEntryAbsolutePath)) {
               // Found it.
-              Path scriptRelativePath = pathEntry.toPath().relativize(file.toPath());
+              Path filePath = Paths.get(fileAbsolutePath);
+              Path pathEntryPath = Paths.get(pathEntryAbsolutePath);
+
+              Path scriptRelativePath = pathEntryPath.relativize(filePath);
               return "script " + scriptRelativePath.toString();
             }
           }
