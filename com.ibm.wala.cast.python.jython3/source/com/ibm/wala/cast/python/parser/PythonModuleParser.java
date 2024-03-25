@@ -96,8 +96,6 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
               Optional<SourceModule> localModule = getLocalModule(moduleName);
 
               for (File pathEntry : pythonPath) {
-                assert pathEntry.isAbsolute();
-
                 Path modulePath =
                     localModule
                         .map(SourceModule::getURL)
