@@ -37,9 +37,17 @@ public class Util {
       LOGGER.info(() -> "Using entrypoint: " + ep.getMethod().getDeclaringClass().getName() + ".");
   }
 
-  public static List<File> getPathFiles(String string) {
-    if (string == null || string.isEmpty() || string.isBlank()) return emptyList();
-    return Arrays.asList(string.split(":")).stream().map(s -> new File(s)).collect(toList());
+  /**
+   * Get a {@link List} of {@link File}s corresponding to the sequence of paths represented by the
+   * given {@link String}. The paths are seperated by a colon.
+   *
+   * @param pathSequence A colon-seperated list of paths.
+   * @return A {@link List} of {@link File}s constructed from the given path sequence.
+   */
+  public static List<File> getPathFiles(String pathSequence) {
+    if (pathSequence == null || pathSequence.isEmpty() || pathSequence.isBlank())
+      return emptyList();
+    return Arrays.asList(pathSequence.split(":")).stream().map(s -> new File(s)).collect(toList());
   }
 
   private Util() {}

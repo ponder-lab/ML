@@ -224,6 +224,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
 
   @Override
   protected String composeEntityName(WalkContext parent, CAstEntity f) {
+    // Use the entity signature here to resolve entities in files under different directories.
     if (f.getKind() == CAstEntity.SCRIPT_ENTITY) return f.getSignature();
     else {
       String name;

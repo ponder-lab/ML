@@ -35,6 +35,14 @@ import java.util.List;
 import org.python.core.PyObject;
 
 public class Python3Loader extends PythonLoader {
+
+  /**
+   * The <a href="https://docs.python.org/3/using/cmdline.html#envvar-PYTHONPATH">PYTHONPATH</a> to
+   * use in the analysis.
+   *
+   * @apiNote PYTHONPATH is currently only supported for Python 3.
+   * @see https://docs.python.org/3/tutorial/modules.html#the-module-search-path.
+   */
   protected List<File> pythonPath;
 
   public Python3Loader(IClassHierarchy cha, IClassLoader parent, List<File> pythonPath) {
@@ -116,6 +124,14 @@ public class Python3Loader extends PythonLoader {
     return x;
   }
 
+  /**
+   * Gets the <a
+   * href="https://docs.python.org/3/using/cmdline.html#envvar-PYTHONPATH">PYTHONPATH</a> to use in
+   * the analysis.
+   *
+   * @apiNote PYTHONPATH is currently only supported for Python 3.
+   * @see https://docs.python.org/3/tutorial/modules.html#the-module-search-path.
+   */
   public List<File> getPythonPath() {
     return pythonPath;
   }

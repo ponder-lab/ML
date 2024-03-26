@@ -2273,6 +2273,13 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
 
   private final CAstTypeDictionaryImpl<String> types;
 
+  /**
+   * The <a href="https://docs.python.org/3/using/cmdline.html#envvar-PYTHONPATH">PYTHONPATH</a> to
+   * use in the analysis.
+   *
+   * @apiNote PYTHONPATH is currently only supported for Python 3.
+   * @see https://docs.python.org/3/tutorial/modules.html#the-module-search-path.
+   */
   protected java.util.List<File> pythonPath;
 
   protected PythonParser(CAstTypeDictionaryImpl<String> types, java.util.List<File> pythonPath) {
@@ -2420,6 +2427,14 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
     System.err.println(ast.getClass());
   }
 
+  /**
+   * Gets the <a
+   * href="https://docs.python.org/3/using/cmdline.html#envvar-PYTHONPATH">PYTHONPATH</a> to use in
+   * the analysis.
+   *
+   * @apiNote PYTHONPATH is currently only supported for Python 3.
+   * @see https://docs.python.org/3/tutorial/modules.html#the-module-search-path.
+   */
   public java.util.List<File> getPythonPath() {
     return pythonPath;
   }

@@ -213,6 +213,12 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
         .anyMatch(sn -> sn.endsWith(moduleName + ".py"));
   }
 
+  /**
+   * Gets the local Python {@link SourceModule} represented by the given {@link String}.
+   *
+   * @param moduleName The name of the local Python module as a {@link String}.
+   * @return The corresponding {@link SourceModule}.
+   */
   private Optional<SourceModule> getLocalModule(String moduleName) {
     return localModules.stream()
         .filter(

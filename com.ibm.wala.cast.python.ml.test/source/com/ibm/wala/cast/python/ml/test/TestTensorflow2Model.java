@@ -1766,6 +1766,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     }
   }
 
+  /**
+   * Extracts a {@link List} of {@link File}s from the given {@link String} representing a list of
+   * paths. Each path is separated by a colon.
+   *
+   * @param string A colon-separated list of paths.
+   * @return {@link List} of {@link File}s constructed by parsing the given {@link String}.
+   */
   private List<File> getPathFiles(String string) {
     if (string == null || string.isEmpty() || string.isBlank()) return emptyList();
 
