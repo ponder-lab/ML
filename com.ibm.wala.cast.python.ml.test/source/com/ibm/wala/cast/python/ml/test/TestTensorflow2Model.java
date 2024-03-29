@@ -995,10 +995,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testDataset25()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    // TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/165 is fixed.
-    test("tf2_test_dataset25.py", "f", 0, 0);
-    // TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/165 is fixed.
-    test("tf2_test_dataset25.py", "g", 0, 0);
+    test("tf2_test_dataset25.py", "f", 1, 1, 2);
+    test("tf2_test_dataset25.py", "g", 1, 1, 2);
     // TODO: Change to 0, 0 once https://github.com/wala/ML/issues/165 is fixed.
     test("tf2_test_dataset25.py", "h", 1, 1, 2);
   }
@@ -1006,14 +1004,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testDataset26()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    // TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/165 is fixed.
-    test("tf2_test_dataset26.py", "f", 0, 0);
-    // TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/165 is fixed.
-    test("tf2_test_dataset26.py", "g1", 0, 0);
-    // TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/165 is fixed.
-    test("tf2_test_dataset26.py", "g2", 0, 0);
-    // TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/165 is fixed.
-    test("tf2_test_dataset26.py", "g3", 0, 0);
+    test("tf2_test_dataset26.py", "f", 1, 1, 2);
+    test("tf2_test_dataset26.py", "g1", 1, 1, 2);
+    test("tf2_test_dataset26.py", "g2", 1, 1, 2);
+    test("tf2_test_dataset26.py", "g3", 1, 1, 2);
     // TODO: Change to 0, 0 once https://github.com/wala/ML/issues/165 is fixed.
     test("tf2_test_dataset26.py", "h", 1, 1, 2);
   }
@@ -1022,21 +1016,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testDataset27()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_dataset27.py", "f", 1, 1, 2);
-    // TODO: Change to 1, 1, 2 when https://github.com/wala/ML/issues/164 is fixed:
-    test("tf2_test_dataset27.py", "g", 0, 0);
-    // TODO: Change to 1, 1, 2 when https://github.com/wala/ML/issues/164 is fixed:
-    test("tf2_test_dataset27.py", "h", 0, 0);
-    // TODO: Change to 1, 1, 2 when https://github.com/wala/ML/issues/164 is fixed:
-    test("tf2_test_dataset27.py", "i", 0, 0);
+    test("tf2_test_dataset27.py", "g", 1, 1, 2);
+    test("tf2_test_dataset27.py", "h", 1, 1, 2);
+    test("tf2_test_dataset27.py", "i", 1, 1, 2);
   }
 
   @Test
   public void testDataset28()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    // TODO: Change to 1, 1, 2 when https://github.com/wala/ML/issues/164 is fixed:
-    test("tf2_test_dataset28.py", "f", 0, 0);
-    // TODO: Change to 1, 1, 2 when https://github.com/wala/ML/issues/164 is fixed:
-    test("tf2_test_dataset28.py", "g", 0, 0);
+    test("tf2_test_dataset28.py", "f", 1, 1, 2);
+    test("tf2_test_dataset28.py", "g", 1, 1, 2);
     // TODO: Change to 0, 0 when https://github.com/wala/ML/issues/164 is fixed:
     test("tf2_test_dataset28.py", "h", 1, 1, 2);
   }
@@ -1058,30 +1047,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     // TODO: Change to 0, 0 once https://github.com/wala/ML/issues/166 is fixed.
     test("tf2_test_dataset31.py", "f", 1, 1, 2);
-    // TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/166 is fixed.
-    test("tf2_test_dataset31.py", "g1", 0, 0);
-    // TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/166 is fixed.
-    test("tf2_test_dataset31.py", "g2", 0, 0);
+    test("tf2_test_dataset31.py", "g1", 1, 1, 2);
+    test("tf2_test_dataset31.py", "g2", 1, 1, 2);
     // TODO: Change to 0, 0 once https://github.com/wala/ML/issues/166 is fixed.
     test("tf2_test_dataset31.py", "h", 1, 1, 2);
-    // TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/166 is fixed.
-    test("tf2_test_dataset31.py", "i1", 0, 0);
-    // TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/166 is fixed.
-    test("tf2_test_dataset31.py", "i2", 0, 0);
+    test("tf2_test_dataset31.py", "i1", 1, 1, 2);
+    test("tf2_test_dataset31.py", "i2", 1, 1, 2);
     // TODO: Change to 0, 0 once https://github.com/wala/ML/issues/166 is fixed.
     test("tf2_test_dataset31.py", "j", 1, 1, 2);
-    // TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/166 is fixed.
-    test("tf2_test_dataset31.py", "k1", 0, 0);
-    // TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/166 is fixed.
-    test("tf2_test_dataset31.py", "k2", 0, 0);
-    // TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/166 is fixed.
-    test("tf2_test_dataset31.py", "k2", 0, 0);
+    test("tf2_test_dataset31.py", "k1", 1, 1, 2);
+    test("tf2_test_dataset31.py", "k2", 1, 1, 2);
+    test("tf2_test_dataset31.py", "k2", 1, 1, 2);
     // TODO: Change to 0, 0 once https://github.com/wala/ML/issues/166 is fixed.
     test("tf2_test_dataset31.py", "l", 1, 1, 2);
-    // TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/166 is fixed.
-    test("tf2_test_dataset31.py", "m1", 0, 0);
-    // TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/166 is fixed.
-    test("tf2_test_dataset31.py", "m2", 0, 0);
+    test("tf2_test_dataset31.py", "m1", 1, 1, 2);
+    test("tf2_test_dataset31.py", "m2", 1, 1, 2);
   }
 
   @Test
