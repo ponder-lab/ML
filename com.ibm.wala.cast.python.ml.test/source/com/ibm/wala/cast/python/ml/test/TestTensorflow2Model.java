@@ -1625,9 +1625,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         new int[] {3});
   }
-  
+
   @Test
   public void testModule9()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"tf2_test_module8.py", "tf2_test_module9.py", "tf2_test_module7.py"},
+        "tf2_test_module9.py",
+        "D.f",
+        "",
+        1,
+        1,
+        3);
+  }
+
+  @Test
+  public void testModule10()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         new String[] {"tf2_test_module6.py", "tf2_test_module5.py"},
