@@ -3,5 +3,7 @@
 from tensorflow import Tensor
 
 
-def f(a):
-    assert isinstance(a, Tensor)
+class C:
+
+    def f(self, a):
+        assert isinstance(a, Tensor)
