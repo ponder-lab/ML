@@ -1711,10 +1711,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testModule16()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        new String[] {
-          "proj12/C/B.py",
-          "proj12/A.py"
-        },
+        new String[] {"proj12/C/B.py", "proj12/A.py"},
         "C/B.py",
         "f",
         "proj12",
