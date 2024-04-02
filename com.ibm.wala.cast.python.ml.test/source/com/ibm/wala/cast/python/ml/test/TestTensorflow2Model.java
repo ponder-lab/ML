@@ -1726,6 +1726,26 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     // fixed.
   }
 
+  /**
+   * Test for https://github.com/wala/ML/issues/178.
+   *
+   * <p>This test should not need a PYTHONPATH.
+   */
+  @Test
+  public void testModule15()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"proj11/C/__init__.py", "proj11/C/B.py", "proj11/A.py"},
+        "C/B.py",
+        "f",
+        "proj11",
+        0, // NOTE: Change to 1 once https://github.com/wala/ML/issues/178 is fixed.
+        0, // NOTE: Change to 1 once https://github.com/wala/ML/issues/178 is fixed.
+        new int
+            [] {}); // NOTE: Change to new int[] {2} once https://github.com/wala/ML/issues/178 is
+    // fixed.
+  }
+
   /** This test should not need a PYTHONPATH. */
   @Test
   public void testModule16()
