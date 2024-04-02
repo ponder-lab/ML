@@ -1705,7 +1705,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         new int[] {3});
   }
-  
+
   /** This test should not need a PYTHONPATH. */
   @Test
   public void testModule16()
