@@ -1494,7 +1494,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testModule2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        new String[] {"proj/src/tf2_test_module2a.py", "proj/src/tf2_test_module3.py"},
+        new String[] {"proj/src/__init__.py", "proj/src/tf2_test_module2a.py", "proj/src/tf2_test_module3.py"},
         "src/tf2_test_module2a.py",
         "f",
         "proj",
@@ -1508,7 +1508,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testModule3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        new String[] {"proj2/src/tf2_test_module3a.py", "proj2/tf2_test_module4.py"},
+        new String[] {"proj2/src/__init__.py", "proj2/src/tf2_test_module3a.py", "proj2/tf2_test_module4.py"},
         "src/tf2_test_module3a.py",
         "f",
         "proj2",
@@ -1526,6 +1526,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         new String[] {
+          "proj3/src/__init__.py",
           "proj3/src/tf2_test_module4a.py",
           "proj3/src/tf2_test_module6.py",
           "proj3/tf2_test_module5.py"
@@ -1539,6 +1540,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
     test(
         new String[] {
+          "proj3/src/__init__.py",
           "proj3/src/tf2_test_module4a.py",
           "proj3/src/tf2_test_module6.py",
           "proj3/tf2_test_module5.py"
@@ -1569,7 +1571,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testModule6()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        new String[] {"proj4/src/tf2_test_module4a.py", "proj4/src/tf2_test_module5.py"},
+        new String[] {"proj4/src/__init__.py", "proj4/src/tf2_test_module4a.py", "proj4/src/tf2_test_module5.py"},
         "src/tf2_test_module4a.py",
         "C.f",
         "proj4",
@@ -1583,7 +1585,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testModule7()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        new String[] {"proj5/src/tf2_test_module5a.py", "proj5/tf2_test_module6.py"},
+        new String[] {"proj5/src/__init__.py", "proj5/src/tf2_test_module5a.py", "proj5/tf2_test_module6.py"},
         "src/tf2_test_module5a.py",
         "C.f",
         "proj5",
@@ -1601,6 +1603,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         new String[] {
+          "proj6/src/__init__.py",
           "proj6/src/tf2_test_module8a.py",
           "proj6/src/tf2_test_module6.py",
           "proj6/tf2_test_module7.py"
@@ -1614,6 +1617,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
     test(
         new String[] {
+          "proj6/src/__init__.py",
           "proj6/src/tf2_test_module8a.py",
           "proj6/src/tf2_test_module6.py",
           "proj6/tf2_test_module7.py"
@@ -1658,6 +1662,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         new String[] {
+          "proj7/src/__init__.py",
           "proj7/src/tf2_test_module9a.py",
           "proj7/src/tf2_test_module9b.py",
           "proj7/src/tf2_test_module10.py"
@@ -1676,6 +1681,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         new String[] {
+          "proj8/src/__init__.py",
           "proj8/src/tf2_test_module10a.py",
           "proj8/src/tf2_test_module10b.py",
           "proj8/tf2_test_module11.py"
@@ -1694,6 +1700,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         new String[] {
+          "proj9/src/__init__.py",
           "proj9/src/tf2_test_module11a.py",
           "proj9/src/tf2_test_module11b.py",
           "proj9/tf2_test_module12.py"
@@ -1751,7 +1758,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testModule16()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        new String[] {"proj12/C/B.py", "proj12/A.py"},
+        new String[] {"proj12/C/__init__.py", "proj12/C/B.py", "proj12/A.py"},
         "C/B.py",
         "f",
         "proj12",
