@@ -1494,7 +1494,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testModule2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        new String[] {"proj/src/__init__.py", "proj/src/tf2_test_module2a.py", "proj/src/tf2_test_module3.py"},
+        new String[] {
+          "proj/src/__init__.py", "proj/src/tf2_test_module2a.py", "proj/src/tf2_test_module3.py"
+        },
         "src/tf2_test_module2a.py",
         "f",
         "proj",
@@ -1508,7 +1510,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testModule3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        new String[] {"proj2/src/__init__.py", "proj2/src/tf2_test_module3a.py", "proj2/tf2_test_module4.py"},
+        new String[] {
+          "proj2/src/__init__.py", "proj2/src/tf2_test_module3a.py", "proj2/tf2_test_module4.py"
+        },
         "src/tf2_test_module3a.py",
         "f",
         "proj2",
@@ -1571,7 +1575,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testModule6()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        new String[] {"proj4/src/__init__.py", "proj4/src/tf2_test_module4a.py", "proj4/src/tf2_test_module5.py"},
+        new String[] {
+          "proj4/src/__init__.py", "proj4/src/tf2_test_module4a.py", "proj4/src/tf2_test_module5.py"
+        },
         "src/tf2_test_module4a.py",
         "C.f",
         "proj4",
@@ -1585,7 +1591,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testModule7()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        new String[] {"proj5/src/__init__.py", "proj5/src/tf2_test_module5a.py", "proj5/tf2_test_module6.py"},
+        new String[] {
+          "proj5/src/__init__.py", "proj5/src/tf2_test_module5a.py", "proj5/tf2_test_module6.py"
+        },
         "src/tf2_test_module5a.py",
         "C.f",
         "proj5",
