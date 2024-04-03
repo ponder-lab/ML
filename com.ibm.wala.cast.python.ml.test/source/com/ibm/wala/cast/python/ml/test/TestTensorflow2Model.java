@@ -1796,6 +1796,47 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         new int[] {2});
   }
 
+  /**
+   * Test for https://github.com/wala/ML/issues/178. Multi-submodule case. See
+   * https://docs.python.org/3/tutorial/modules.html#packages. This test has multiple modules in
+   * different packages.
+   *
+   * <p>This test should not need a PYTHONPATH.
+   */
+  @Test
+  public void testModule18()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "proj14/C/__init__.py",
+          "proj14/C/E.py",
+          "proj14/C/D/__init__.py",
+          "proj14/C/D/B.py",
+          "proj14/A.py"
+        },
+        "C/D/B.py",
+        "f",
+        "proj14",
+        1,
+        1,
+        new int[] {2});
+
+    test(
+        new String[] {
+          "proj14/C/__init__.py",
+          "proj14/C/E.py",
+          "proj14/C/D/__init__.py",
+          "proj14/C/D/B.py",
+          "proj14/A.py"
+        },
+        "C/E.py",
+        "g",
+        "proj14",
+        1,
+        1,
+        new int[] {2});
+  }
+
   private void test(
       String filename,
       String functionName,
