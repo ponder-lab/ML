@@ -489,16 +489,31 @@ public class PythonCAstToIRTranslator extends AstTranslator {
       localModules.stream()
           .filter(
               m -> {
+                LOGGER.finer("Examining: " + m + " for filteration.");
+
                 Path path = Path.of(m.getURL().getFile());
                 Path parent = path.getParent();
                 String parentFileName = parent.getFileName().toString();
 
                 // Return whether the script is in the module but not __init__.py.
-                return parentFileName.equals(moduleName)
-                    && !path.getFileName().toString().equals(MODULE_INITIALIZATION_FILE_NAME);
+                boolean include =
+                    parentFileName.equals(moduleName)
+                        && !path.getFileName().toString().equals(MODULE_INITIALIZATION_FILE_NAME);
+
+                LOGGER.finer(
+                    (include ? "Including" : "Not including")
+                        + " script: "
+                        + path.getFileName()
+                        + " in module: "
+                        + moduleName
+                        + " initialization.");
+
+                return include;
               })
           .map(
               m -> {
+                LOGGER.finer("Mapping: " + m + " to instructions.");
+
                 // For each module in the package, add a field referring to the script representing
                 // the module.
                 SSAInstruction[] instructions = new SSAInstruction[2];
@@ -506,13 +521,19 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                 Path path = Path.of(m.getURL().getFile());
                 Path parent = path.getParent();
 
+                LOGGER.finer("Mapping fields for package: " + parent.getFileName() + ".");
+
                 FieldReference global =
                     makeGlobalRef("script " + parent.getFileName() + "/" + path.getFileName());
+
+                LOGGER.finer("Adding global field reference: " + global + ".");
 
                 int idx = codeContext.cfg().getCurrentInstruction();
                 int res = codeContext.currentScope().allocateTempValue();
 
                 instructions[0] = new AstGlobalRead(idx, res, global);
+
+                LOGGER.finer("Adding global read: " + instructions[0] + ".");
 
                 FieldReference moduleField =
                     FieldReference.findOrCreate(
@@ -520,10 +541,14 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                         Atom.findOrCreateUnicodeAtom(getNameWithoutExtension(path.toString())),
                         PythonTypes.Root);
 
+                LOGGER.finer("Adding module field reference: " + moduleField + ".");
+
                 instructions[1] =
                     Python.instructionFactory()
                         .PutInstruction(
                             codeContext.cfg().getCurrentInstruction(), 1, res, moduleField);
+
+                LOGGER.finer("Adding field write: " + instructions[0] + ".");
 
                 return instructions;
               })
