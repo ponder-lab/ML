@@ -10,7 +10,9 @@
  *****************************************************************************/
 package com.ibm.wala.cast.python.ir;
 
+import static com.google.common.io.Files.getNameWithoutExtension;
 import static com.ibm.wala.cast.python.ir.PythonLanguage.Python;
+import static com.ibm.wala.cast.python.types.PythonTypes.pythonLoader;
 
 import com.ibm.wala.cast.ir.ssa.AssignInstruction;
 import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
@@ -39,8 +41,13 @@ import com.ibm.wala.cfg.IBasicBlock;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IClassLoader;
+import com.ibm.wala.classLoader.Module;
+import com.ibm.wala.classLoader.ModuleEntry;
 import com.ibm.wala.classLoader.NewSiteReference;
+import com.ibm.wala.classLoader.SourceModule;
 import com.ibm.wala.core.util.strings.Atom;
+import com.ibm.wala.ipa.callgraph.AnalysisScope;
+import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction.IOperator;
 import com.ibm.wala.shrike.shrikeBT.IInvokeInstruction.Dispatch;
@@ -53,6 +60,7 @@ import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -61,12 +69,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
+import java.util.function.Consumer;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public class PythonCAstToIRTranslator extends AstTranslator {
 
   private static final Logger LOGGER = Logger.getLogger(PythonCAstToIRTranslator.class.getName());
+
+  private static final String MODULE_INITIALIZATION_FILE_NAME = "__init__.py";
 
   private final Map<CAstType, TypeName> walaTypeNames = HashMapFactory.make();
   private final Set<Pair<Scope, String>> globalDeclSet = new HashSet<>();
@@ -447,6 +458,99 @@ public class PythonCAstToIRTranslator extends AstTranslator {
     }
 
     return false;
+  }
+
+  @Override
+  protected boolean visitScriptEntity(
+      CAstEntity n,
+      WalkContext context,
+      WalkContext codeContext,
+      CAstVisitor<WalkContext> visitor) {
+    boolean ret = super.visitScriptEntity(n, context, codeContext, visitor);
+
+    ModuleEntry module = context.getModule();
+    String scriptName = module.getName();
+
+    // if the module is the special initialization module.
+    if (scriptName.endsWith(MODULE_INITIALIZATION_FILE_NAME)) {
+      // we've hit a module. Get the other scripts in the module.
+      PythonLoader loader = (PythonLoader) this.loader;
+      IClassHierarchy classHierarchy = loader.getClassHierarchy();
+      AnalysisScope scope = classHierarchy.getScope();
+      List<Module> allModules = scope.getModules(pythonLoader);
+
+      // collect the all local modules.
+      Set<SourceModule> localModules = getLocalModules(allModules);
+
+      String moduleName = Path.of(scriptName).getParent().getFileName().toString();
+      System.out.println(moduleName);
+      LOGGER.fine("Initializing module: " + moduleName + ".");
+
+      localModules.stream()
+          .filter(
+              m -> {
+                Path path = Path.of(m.getURL().getFile());
+                Path parent = path.getParent();
+                String parentFileName = parent.getFileName().toString();
+
+                // Return whether the script is in the module but not __init__.py.
+                return parentFileName.equals(moduleName)
+                    && !path.getFileName().toString().equals(MODULE_INITIALIZATION_FILE_NAME);
+              })
+          .map(
+              m -> {
+                // For each module in the package, add a field referring to the script representing
+                // the module.
+                List<SSAInstruction> instructions = new ArrayList<>(2);
+
+                Path path = Path.of(m.getURL().getFile());
+                Path parent = path.getParent();
+
+                FieldReference global =
+                    makeGlobalRef("script " + parent.getFileName() + "/" + path.getFileName());
+
+                int idx = codeContext.cfg().getCurrentInstruction();
+                int res = codeContext.currentScope().allocateTempValue();
+
+                instructions.add(new AstGlobalRead(idx, res, global));
+
+                FieldReference moduleField =
+                    FieldReference.findOrCreate(
+                        PythonTypes.Root,
+                        Atom.findOrCreateUnicodeAtom(getNameWithoutExtension(path.toString())),
+                        PythonTypes.Root);
+
+                instructions.add(
+                    Python.instructionFactory()
+                        .PutInstruction(
+                            codeContext.cfg().getCurrentInstruction(), 1, res, moduleField));
+
+                return instructions;
+              })
+          .flatMap(List::stream)
+          .forEachOrdered(i -> codeContext.cfg().addInstruction(i));
+    }
+    return ret;
+  }
+
+  private static Set<SourceModule> getLocalModules(List<Module> allModules) {
+    Set<SourceModule> ret = HashSetFactory.make();
+
+    allModules.stream()
+        .map(Module::getEntries)
+        .forEach(
+            it ->
+                it.forEachRemaining(
+                    new Consumer<ModuleEntry>() {
+                      @Override
+                      public void accept(ModuleEntry f) {
+                        if (f.isModuleFile())
+                          f.asModule().getEntries().forEachRemaining(sm -> accept(sm));
+                        else ret.add((SourceModule) f);
+                      }
+                    }));
+
+    return ret;
   }
 
   @Override

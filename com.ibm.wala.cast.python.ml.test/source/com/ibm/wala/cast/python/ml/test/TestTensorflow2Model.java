@@ -1754,11 +1754,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "C/B.py",
         "f",
         "proj11",
-        0, // NOTE: Change to 1 once https://github.com/wala/ML/issues/178 is fixed.
-        0, // NOTE: Change to 1 once https://github.com/wala/ML/issues/178 is fixed.
-        new int
-            [] {}); // NOTE: Change to new int[] {2} once https://github.com/wala/ML/issues/178 is
-    // fixed.
+        1,
+        1,
+        new int[] {2});
   }
 
   /** This test should not need a PYTHONPATH. */
