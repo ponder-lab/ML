@@ -62,6 +62,7 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -501,7 +502,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
               m -> {
                 // For each module in the package, add a field referring to the script representing
                 // the module.
-                List<SSAInstruction> instructions = new ArrayList<>(2);
+                SSAInstruction[] instructions = new SSAInstruction[2];
 
                 Path path = Path.of(m.getURL().getFile());
                 Path parent = path.getParent();
@@ -512,7 +513,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                 int idx = codeContext.cfg().getCurrentInstruction();
                 int res = codeContext.currentScope().allocateTempValue();
 
-                instructions.add(new AstGlobalRead(idx, res, global));
+                instructions[0] = new AstGlobalRead(idx, res, global);
 
                 FieldReference moduleField =
                     FieldReference.findOrCreate(
@@ -520,14 +521,14 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                         Atom.findOrCreateUnicodeAtom(getNameWithoutExtension(path.toString())),
                         PythonTypes.Root);
 
-                instructions.add(
+                instructions[1] =
                     Python.instructionFactory()
                         .PutInstruction(
-                            codeContext.cfg().getCurrentInstruction(), 1, res, moduleField));
+                            codeContext.cfg().getCurrentInstruction(), 1, res, moduleField);
 
                 return instructions;
               })
-          .flatMap(List::stream)
+          .flatMap(Arrays::stream)
           .forEachOrdered(i -> codeContext.cfg().addInstruction(i));
     }
     return ret;
