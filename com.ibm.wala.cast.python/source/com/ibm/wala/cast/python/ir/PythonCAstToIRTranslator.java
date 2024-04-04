@@ -10,6 +10,7 @@
  *****************************************************************************/
 package com.ibm.wala.cast.python.ir;
 
+import static com.google.common.io.Files.getNameWithoutExtension;
 import static com.ibm.wala.cast.python.ir.PythonLanguage.Python;
 import static com.ibm.wala.cast.python.types.PythonTypes.pythonLoader;
 
@@ -17,7 +18,6 @@ import com.ibm.wala.cast.ir.ssa.AssignInstruction;
 import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
 import com.ibm.wala.cast.ir.ssa.AstInstructionFactory;
 import com.ibm.wala.cast.ir.translator.AstTranslator;
-import com.ibm.wala.cast.ir.translator.AstTranslator.WalkContext;
 import com.ibm.wala.cast.loader.AstMethod.DebuggingInformation;
 import com.ibm.wala.cast.loader.DynamicCallSiteReference;
 import com.ibm.wala.cast.python.loader.DynamicAnnotatableEntity;
@@ -486,43 +486,49 @@ public class PythonCAstToIRTranslator extends AstTranslator {
       System.out.println(moduleName);
       LOGGER.fine("Initializing module: " + moduleName + ".");
 
-      Set<SourceModule> moduleScripts =
-          localModules.stream()
-              .filter(
-                  m -> {
-                    Path path = Path.of(m.getURL().getFile());
-                    System.out.println(path);
+      localModules.stream()
+          .filter(
+              m -> {
+                Path path = Path.of(m.getURL().getFile());
+                Path parent = path.getParent();
+                String parentFileName = parent.getFileName().toString();
 
-                    Path parent = path.getParent();
-                    System.out.println(parent);
+                // Return whether the script is in the module but not __init__.py.
+                return parentFileName.equals(moduleName)
+                    && !path.getFileName().toString().equals(MODULE_INITIALIZATION_FILE_NAME);
+              })
+          .map(
+              m -> {
+                // For each module in the package, add a field referring to the script representing
+                // the module.
+                List<SSAInstruction> instructions = new ArrayList<>(2);
 
-                    String parentFileName = parent.getFileName().toString();
-                    System.out.println(parentFileName);
+                Path path = Path.of(m.getURL().getFile());
+                Path parent = path.getParent();
 
-                    // Return whether the script is in the module but not __init__.py.
-                    return parentFileName.equals(moduleName)
-                        && !path.getFileName().toString().equals(MODULE_INITIALIZATION_FILE_NAME);
-                  })
-              .collect(Collectors.toSet());
+                FieldReference global =
+                    makeGlobalRef("script " + parent.getFileName() + "/" + path.getFileName());
 
-      System.out.println(moduleScripts);
+                int idx = codeContext.cfg().getCurrentInstruction();
+                int res = codeContext.currentScope().allocateTempValue();
 
-      FieldReference global = makeGlobalRef("script " + "C/B" + ".py");
+                instructions.add(new AstGlobalRead(idx, res, global));
 
-      int idx = codeContext.cfg().getCurrentInstruction();
-      int res = codeContext.currentScope().allocateTempValue();
+                FieldReference moduleField =
+                    FieldReference.findOrCreate(
+                        PythonTypes.Root,
+                        Atom.findOrCreateUnicodeAtom(getNameWithoutExtension(path.toString())),
+                        PythonTypes.Root);
 
-      codeContext.cfg().addInstruction(new AstGlobalRead(idx, res, global));
+                instructions.add(
+                    Python.instructionFactory()
+                        .PutInstruction(
+                            codeContext.cfg().getCurrentInstruction(), 1, res, moduleField));
 
-      FieldReference moduleField =
-          FieldReference.findOrCreate(
-              PythonTypes.Root, Atom.findOrCreateUnicodeAtom("B"), PythonTypes.Root);
-
-      codeContext
-          .cfg()
-          .addInstruction(
-              Python.instructionFactory()
-                  .PutInstruction(codeContext.cfg().getCurrentInstruction(), 1, res, moduleField));
+                return instructions;
+              })
+          .flatMap(List::stream)
+          .forEachOrdered(i -> codeContext.cfg().addInstruction(i));
     }
     return ret;
   }
