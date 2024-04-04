@@ -484,7 +484,6 @@ public class PythonCAstToIRTranslator extends AstTranslator {
       Set<SourceModule> localModules = getLocalModules(allModules);
 
       String moduleName = Path.of(scriptName).getParent().getFileName().toString();
-      System.out.println(moduleName);
       LOGGER.fine("Initializing module: " + moduleName + ".");
 
       localModules.stream()
