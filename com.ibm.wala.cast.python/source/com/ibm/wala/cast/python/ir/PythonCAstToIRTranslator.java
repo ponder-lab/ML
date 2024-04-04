@@ -60,6 +60,7 @@ import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
+import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -512,45 +513,61 @@ public class PythonCAstToIRTranslator extends AstTranslator {
               })
           .map(
               m -> {
-                LOGGER.finer("Mapping: " + m + " to instructions.");
-
                 // For each module in the package, add a field referring to the script representing
                 // the module.
-                SSAInstruction[] instructions = new SSAInstruction[2];
+                LOGGER.finer("Mapping: " + m + " to instructions.");
 
-                Path path = Path.of(m.getURL().getFile());
-                Path parent = path.getParent();
+                List<File> pythonPath = loader.getPythonPath();
 
-                LOGGER.finer("Mapping fields for package: " + parent.getFileName() + ".");
+                for (File pathEntry : pythonPath) {
+                  Path path = Path.of(m.getURL().getFile());
+                  LOGGER.finer("Found module path: " + path + ".");
 
-                FieldReference global =
-                    makeGlobalRef("script " + parent.getFileName() + "/" + path.getFileName());
+                  if (path.startsWith(pathEntry.toPath())) {
+                    // Found it.
+                    Path scriptRelativePath = pathEntry.toPath().relativize(path);
+                    LOGGER.finer("Relativized path is: " + scriptRelativePath + ".");
 
-                LOGGER.finer("Creating global field reference: " + global + ".");
+                    // Get the package name.
+                    Path packagePath = scriptRelativePath.getParent();
+                    LOGGER.fine("Package path is: " + packagePath + ".");
 
-                int idx = codeContext.cfg().getCurrentInstruction();
-                int res = codeContext.currentScope().allocateTempValue();
+                    LOGGER.finer("Mapping fields for package: " + packagePath + ".");
 
-                instructions[0] = new AstGlobalRead(idx, res, global);
+                    FieldReference global =
+                        makeGlobalRef("script " + packagePath + "/" + path.getFileName());
 
-                LOGGER.finer("Adding global read: " + instructions[0] + ".");
+                    LOGGER.finer("Creating global field reference: " + global + ".");
 
-                FieldReference moduleField =
-                    FieldReference.findOrCreate(
-                        PythonTypes.Root,
-                        Atom.findOrCreateUnicodeAtom(getNameWithoutExtension(path.toString())),
-                        PythonTypes.Root);
+                    int idx = codeContext.cfg().getCurrentInstruction();
+                    int res = codeContext.currentScope().allocateTempValue();
 
-                LOGGER.finer("Creating module field reference: " + moduleField + ".");
+                    SSAInstruction[] instructions = new SSAInstruction[2];
+                    instructions[0] = new AstGlobalRead(idx, res, global);
 
-                instructions[1] =
-                    Python.instructionFactory()
-                        .PutInstruction(
-                            codeContext.cfg().getCurrentInstruction(), 1, res, moduleField);
+                    LOGGER.finer("Adding global read: " + instructions[0] + ".");
 
-                LOGGER.finer("Adding field write: " + instructions[1] + ".");
+                    FieldReference moduleField =
+                        FieldReference.findOrCreate(
+                            PythonTypes.Root,
+                            Atom.findOrCreateUnicodeAtom(getNameWithoutExtension(path.toString())),
+                            PythonTypes.Root);
 
-                return instructions;
+                    LOGGER.finer("Creating module field reference: " + moduleField + ".");
+
+                    instructions[1] =
+                        Python.instructionFactory()
+                            .PutInstruction(
+                                codeContext.cfg().getCurrentInstruction(), 1, res, moduleField);
+
+                    LOGGER.finer("Adding field write: " + instructions[1] + ".");
+
+                    return instructions;
+                  }
+                }
+                //  Not found.
+                throw new IllegalStateException(
+                    "Cannot find module: " + m + " in PYTHONPATH: " + pythonPath);
               })
           .flatMap(Arrays::stream)
           .forEachOrdered(i -> codeContext.cfg().addInstruction(i));
