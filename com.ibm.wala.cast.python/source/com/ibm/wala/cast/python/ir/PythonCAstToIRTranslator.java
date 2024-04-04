@@ -548,7 +548,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                         .PutInstruction(
                             codeContext.cfg().getCurrentInstruction(), 1, res, moduleField);
 
-                LOGGER.finer("Adding field write: " + instructions[0] + ".");
+                LOGGER.finer("Adding field write: " + instructions[1] + ".");
 
                 return instructions;
               })
