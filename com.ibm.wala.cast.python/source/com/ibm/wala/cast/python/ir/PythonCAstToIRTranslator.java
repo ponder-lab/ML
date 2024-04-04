@@ -555,6 +555,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
           .flatMap(Arrays::stream)
           .forEachOrdered(i -> codeContext.cfg().addInstruction(i));
     }
+
     return ret;
   }
 
