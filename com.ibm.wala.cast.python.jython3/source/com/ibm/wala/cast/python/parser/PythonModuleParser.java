@@ -38,6 +38,7 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import org.antlr.runtime.ANTLRInputStream;
 import org.antlr.runtime.CharStream;
+import org.python.antlr.ast.Import;
 import org.python.antlr.ast.ImportFrom;
 import org.python.antlr.ast.Name;
 import org.python.antlr.ast.alias;
@@ -63,6 +64,75 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
   protected PythonParser<ModuleEntry>.CAstVisitor makeVisitor(
       WalkContext context, WalaPythonParser parser) {
     return new CAstVisitor(context, parser) {
+
+      @Override
+      public CAstNode visitImport(Import imp) throws Exception {
+        Optional<String> s =
+            imp.getInternalNames().stream()
+                .map(alias::getInternalName)
+                .reduce((a, b) -> a + "/" + b);
+
+        if (s.isPresent()) {
+          String moduleName = s.get().replace('.', '/');
+          LOGGER.finer("Module name from " + imp + " is: " + moduleName + ".");
+
+          if (!isLocalModule(moduleName)) moduleName += "/__init__";
+
+          LOGGER.finer("Module name from " + imp + " is: " + moduleName + ".");
+
+          if (isLocalModule(moduleName)) {
+            List<File> pythonPath = PythonModuleParser.this.getPythonPath();
+            LOGGER.info("PYTHONPATH is: " + pythonPath + ".");
+
+            // If there is a PYTHONPATH specified.
+            if (pythonPath != null && !pythonPath.isEmpty()) {
+              // Adjust the module name per the PYTHONPATH.
+              Optional<SourceModule> localModule = getLocalModule(moduleName);
+
+              for (File pathEntry : pythonPath) {
+                Path modulePath =
+                    localModule
+                        .map(SourceModule::getURL)
+                        .map(URL::getFile)
+                        .map(Path::of)
+                        .orElseThrow(IllegalStateException::new);
+                LOGGER.finer("Found module path: " + modulePath + ".");
+
+                if (modulePath.startsWith(pathEntry.toPath())) {
+                  // Found it.
+                  Path scriptRelativePath = pathEntry.toPath().relativize(modulePath);
+                  LOGGER.finer("Relativized path is: " + scriptRelativePath + ".");
+
+                  // Remove the file extension.
+                  moduleName = scriptRelativePath.toString().replaceFirst("\\.py$", "");
+                  LOGGER.fine("Using module name: " + moduleName + ".");
+                  break;
+                }
+              }
+            }
+
+            String yuck = moduleName;
+            return Ast.makeNode(
+                CAstNode.BLOCK_STMT,
+                imp.getInternalNames().stream()
+                    .map(alias::getInternalName)
+                    .map(
+                        n ->
+                            Ast.makeNode(
+                                CAstNode.DECL_STMT,
+                                Ast.makeConstant(
+                                    new CAstSymbolImpl(n, PythonCAstToIRTranslator.Any)),
+                                Ast.makeNode(
+                                    CAstNode.PRIMITIVE,
+                                    Ast.makeConstant("import"),
+                                    Ast.makeConstant(yuck),
+                                    Ast.makeConstant(n))))
+                    .collect(Collectors.toList()));
+          }
+        }
+
+        return super.visitImport(imp);
+      }
 
       @Override
       public CAstNode visitImportFrom(ImportFrom importFrom) throws Exception {
