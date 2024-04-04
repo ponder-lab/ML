@@ -526,7 +526,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                 FieldReference global =
                     makeGlobalRef("script " + parent.getFileName() + "/" + path.getFileName());
 
-                LOGGER.finer("Adding global field reference: " + global + ".");
+                LOGGER.finer("Creating global field reference: " + global + ".");
 
                 int idx = codeContext.cfg().getCurrentInstruction();
                 int res = codeContext.currentScope().allocateTempValue();
@@ -541,7 +541,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                         Atom.findOrCreateUnicodeAtom(getNameWithoutExtension(path.toString())),
                         PythonTypes.Root);
 
-                LOGGER.finer("Adding module field reference: " + moduleField + ".");
+                LOGGER.finer("Creating module field reference: " + moduleField + ".");
 
                 instructions[1] =
                     Python.instructionFactory()
