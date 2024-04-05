@@ -10,6 +10,9 @@
  *****************************************************************************/
 package com.ibm.wala.cast.python.parser;
 
+import static com.google.common.io.Files.getNameWithoutExtension;
+import static com.ibm.wala.cast.python.ir.PythonLanguage.MODULE_INITIALIZATION_FILENAME;
+
 import com.ibm.wala.cast.python.ir.PythonCAstToIRTranslator;
 import com.ibm.wala.cast.python.util.Util;
 import com.ibm.wala.cast.tree.CAstEntity;
@@ -76,7 +79,7 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
           String moduleName = s.get().replace('.', '/');
           LOGGER.finer("Module name from " + imp + " is: " + moduleName + ".");
 
-          if (!isLocalModule(moduleName)) moduleName += "/__init__";
+          if (!isLocalModule(moduleName)) moduleName += "/" + MODULE_INITIALIZATION_FILENAME;
 
           LOGGER.finer("Module name from " + imp + " is: " + moduleName + ".");
 
@@ -103,8 +106,18 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
                   Path scriptRelativePath = pathEntry.toPath().relativize(modulePath);
                   LOGGER.finer("Relativized path is: " + scriptRelativePath + ".");
 
-                  // Remove the file extension.
+                  // Remove the file extension if it exists.
                   moduleName = scriptRelativePath.toString().replaceFirst("\\.py$", "");
+
+                  // If it's a package.
+                  if (moduleName.indexOf('/') != -1) {
+                    // Use the beginning segment initialization file.
+                    moduleName =
+                        moduleName.split("/")[0]
+                            + "/"
+                            + getNameWithoutExtension(MODULE_INITIALIZATION_FILENAME);
+                  }
+
                   LOGGER.fine("Using module name: " + moduleName + ".");
                   break;
                 }
@@ -117,16 +130,21 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
                 imp.getInternalNames().stream()
                     .map(alias::getInternalName)
                     .map(
-                        n ->
-                            Ast.makeNode(
-                                CAstNode.DECL_STMT,
-                                Ast.makeConstant(
-                                    new CAstSymbolImpl(n, PythonCAstToIRTranslator.Any)),
-                                Ast.makeNode(
-                                    CAstNode.PRIMITIVE,
-                                    Ast.makeConstant("import"),
-                                    Ast.makeConstant(yuck),
-                                    Ast.makeConstant(n))))
+                        n -> {
+                          // If it's a package.
+                          if (n.indexOf('.') != -1)
+                            // Use the beginning segment.
+                            n = n.split("\\.")[0];
+
+                          return Ast.makeNode(
+                              CAstNode.DECL_STMT,
+                              Ast.makeConstant(new CAstSymbolImpl(n, PythonCAstToIRTranslator.Any)),
+                              Ast.makeNode(
+                                  CAstNode.PRIMITIVE,
+                                  Ast.makeConstant("import"),
+                                  Ast.makeConstant(yuck),
+                                  Ast.makeConstant(n)));
+                        })
                     .collect(Collectors.toList()));
           }
         }
@@ -145,7 +163,7 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
           String moduleName = s.get();
           LOGGER.finer("Module name from " + importFrom + " is: " + moduleName + ".");
 
-          if (!isLocalModule(moduleName)) moduleName += "/__init__";
+          if (!isLocalModule(moduleName)) moduleName += "/" + MODULE_INITIALIZATION_FILENAME;
 
           LOGGER.finer("Module name from " + importFrom + " is: " + moduleName + ".");
 
@@ -172,7 +190,7 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
                   Path scriptRelativePath = pathEntry.toPath().relativize(modulePath);
                   LOGGER.finer("Relativized path is: " + scriptRelativePath + ".");
 
-                  // Remove the file extension.
+                  // Remove the file extension if it exists.
                   moduleName = scriptRelativePath.toString().replaceFirst("\\.py$", "");
                   LOGGER.fine("Using module name: " + moduleName + ".");
                   break;

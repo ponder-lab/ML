@@ -11,6 +11,7 @@
 package com.ibm.wala.cast.python.ir;
 
 import static com.google.common.io.Files.getNameWithoutExtension;
+import static com.ibm.wala.cast.python.ir.PythonLanguage.MODULE_INITIALIZATION_FILENAME;
 import static com.ibm.wala.cast.python.ir.PythonLanguage.Python;
 import static com.ibm.wala.cast.python.types.PythonTypes.pythonLoader;
 
@@ -78,8 +79,6 @@ import java.util.stream.Collectors;
 public class PythonCAstToIRTranslator extends AstTranslator {
 
   private static final Logger LOGGER = Logger.getLogger(PythonCAstToIRTranslator.class.getName());
-
-  private static final String MODULE_INITIALIZATION_FILE_NAME = "__init__.py";
 
   private final Map<CAstType, TypeName> walaTypeNames = HashMapFactory.make();
   private final Set<Pair<Scope, String>> globalDeclSet = new HashSet<>();
@@ -474,7 +473,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
     String scriptName = module.getName();
 
     // if the module is the special initialization module.
-    if (scriptName.endsWith(MODULE_INITIALIZATION_FILE_NAME)) {
+    if (scriptName.endsWith(MODULE_INITIALIZATION_FILENAME)) {
       // we've hit a module. Get the other scripts in the module.
       PythonLoader loader = (PythonLoader) this.loader;
       IClassHierarchy classHierarchy = loader.getClassHierarchy();
@@ -593,7 +592,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
   }
 
   private static boolean isModuleInitializationFile(Path path) {
-    return path.getFileName().toString().equals(MODULE_INITIALIZATION_FILE_NAME);
+    return path.getFileName().toString().equals(MODULE_INITIALIZATION_FILENAME);
   }
 
   private static Set<SourceModule> getLocalModules(List<Module> allModules) {

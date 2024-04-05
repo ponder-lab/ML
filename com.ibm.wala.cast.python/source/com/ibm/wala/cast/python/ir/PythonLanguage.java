@@ -65,6 +65,8 @@ public class PythonLanguage implements Language {
 
   public static PythonLanguage Python = new PythonLanguage();
 
+  public static final String MODULE_INITIALIZATION_FILENAME = "__init__.py";
+
   private PythonLanguage() {}
 
   @Override
