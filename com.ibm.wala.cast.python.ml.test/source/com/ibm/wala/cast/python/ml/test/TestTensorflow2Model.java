@@ -1846,7 +1846,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
           "proj15/C/__init__.py", "proj15/C/D/__init__.py", "proj15/C/D/B.py", "proj15/A.py"
         },
         "C/D/B.py",
-        "B.f",
+        "f",
         "proj15",
         1,
         1,
