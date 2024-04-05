@@ -50,6 +50,9 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
 
   private static final Logger LOGGER = Logger.getLogger(PythonModuleParser.class.getName());
 
+  private static final String MODULE_INITIALIZATION_ENTITY_NAME =
+      getNameWithoutExtension(MODULE_INITIALIZATION_FILENAME);
+
   private final Set<SourceModule> localModules = HashSetFactory.make();
 
   private final SourceModule fileName;
@@ -79,7 +82,7 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
           String moduleName = s.get().replace('.', '/');
           LOGGER.finer("Module name from " + imp + " is: " + moduleName + ".");
 
-          if (!isLocalModule(moduleName)) moduleName += "/" + MODULE_INITIALIZATION_FILENAME;
+          if (!isLocalModule(moduleName)) moduleName += "/" + MODULE_INITIALIZATION_ENTITY_NAME;
 
           LOGGER.finer("Module name from " + imp + " is: " + moduleName + ".");
 
@@ -112,10 +115,7 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
                   // If it's a package.
                   if (moduleName.indexOf('/') != -1) {
                     // Use the beginning segment initialization file.
-                    moduleName =
-                        moduleName.split("/")[0]
-                            + "/"
-                            + getNameWithoutExtension(MODULE_INITIALIZATION_FILENAME);
+                    moduleName = moduleName.split("/")[0] + "/" + MODULE_INITIALIZATION_ENTITY_NAME;
                   }
 
                   LOGGER.fine("Using module name: " + moduleName + ".");
@@ -163,7 +163,7 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
           String moduleName = s.get();
           LOGGER.finer("Module name from " + importFrom + " is: " + moduleName + ".");
 
-          if (!isLocalModule(moduleName)) moduleName += "/" + MODULE_INITIALIZATION_FILENAME;
+          if (!isLocalModule(moduleName)) moduleName += "/" + MODULE_INITIALIZATION_ENTITY_NAME;
 
           LOGGER.finer("Module name from " + importFrom + " is: " + moduleName + ".");
 
