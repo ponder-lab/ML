@@ -1732,7 +1732,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test(
         new String[] {"proj10/C/__init__.py", "proj10/C/B.py", "proj10/A.py"},
         "C/B.py",
-        "B.f",
+        "f",
         "proj10",
         1,
         1,
