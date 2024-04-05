@@ -82,70 +82,68 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
           String moduleName = s.get().replace('.', '/');
           LOGGER.finer("Module name from " + imp + " is: " + moduleName + ".");
 
-          if (!isLocalModule(moduleName)) moduleName += "/" + MODULE_INITIALIZATION_ENTITY_NAME;
+          // if it's a package.
+          if (moduleName.indexOf('/') != -1) {
+            if (!isLocalModule(moduleName)) moduleName += "/" + MODULE_INITIALIZATION_ENTITY_NAME;
 
-          LOGGER.finer("Module name from " + imp + " is: " + moduleName + ".");
+            LOGGER.finer("Module name from " + imp + " is: " + moduleName + ".");
 
-          if (isLocalModule(moduleName)) {
-            List<File> pythonPath = PythonModuleParser.this.getPythonPath();
-            LOGGER.info("PYTHONPATH is: " + pythonPath + ".");
+            if (isLocalModule(moduleName)) {
+              List<File> pythonPath = PythonModuleParser.this.getPythonPath();
+              LOGGER.info("PYTHONPATH is: " + pythonPath + ".");
 
-            // If there is a PYTHONPATH specified.
-            if (pythonPath != null && !pythonPath.isEmpty()) {
-              // Adjust the module name per the PYTHONPATH.
-              Optional<SourceModule> localModule = getLocalModule(moduleName);
+              // If there is a PYTHONPATH specified.
+              if (pythonPath != null && !pythonPath.isEmpty()) {
+                // Adjust the module name per the PYTHONPATH.
+                Optional<SourceModule> localModule = getLocalModule(moduleName);
 
-              for (File pathEntry : pythonPath) {
-                Path modulePath =
-                    localModule
-                        .map(SourceModule::getURL)
-                        .map(URL::getFile)
-                        .map(Path::of)
-                        .orElseThrow(IllegalStateException::new);
-                LOGGER.finer("Found module path: " + modulePath + ".");
+                for (File pathEntry : pythonPath) {
+                  Path modulePath =
+                      localModule
+                          .map(SourceModule::getURL)
+                          .map(URL::getFile)
+                          .map(Path::of)
+                          .orElseThrow(IllegalStateException::new);
+                  LOGGER.finer("Found module path: " + modulePath + ".");
 
-                if (modulePath.startsWith(pathEntry.toPath())) {
-                  // Found it.
-                  Path scriptRelativePath = pathEntry.toPath().relativize(modulePath);
-                  LOGGER.finer("Relativized path is: " + scriptRelativePath + ".");
+                  if (modulePath.startsWith(pathEntry.toPath())) {
+                    // Found it.
+                    Path scriptRelativePath = pathEntry.toPath().relativize(modulePath);
+                    LOGGER.finer("Relativized path is: " + scriptRelativePath + ".");
 
-                  // Remove the file extension if it exists.
-                  moduleName = scriptRelativePath.toString().replaceFirst("\\.py$", "");
+                    // Remove the file extension if it exists.
+                    moduleName = scriptRelativePath.toString().replaceFirst("\\.py$", "");
 
-                  // If it's a package.
-                  if (moduleName.indexOf('/') != -1) {
                     // Use the beginning segment initialization file.
                     moduleName = moduleName.split("/")[0] + "/" + MODULE_INITIALIZATION_ENTITY_NAME;
-                  }
 
-                  LOGGER.fine("Using module name: " + moduleName + ".");
-                  break;
+                    LOGGER.fine("Using module name: " + moduleName + ".");
+                    break;
+                  }
                 }
               }
-            }
 
-            String yuck = moduleName;
-            return Ast.makeNode(
-                CAstNode.BLOCK_STMT,
-                imp.getInternalNames().stream()
-                    .map(alias::getInternalName)
-                    .map(
-                        n -> {
-                          // If it's a package.
-                          if (n.indexOf('.') != -1)
-                            // Use the beginning segment.
+              String yuck = moduleName;
+              return Ast.makeNode(
+                  CAstNode.BLOCK_STMT,
+                  imp.getInternalNames().stream()
+                      .map(alias::getInternalName)
+                      .map(
+                          n -> {
                             n = n.split("\\.")[0];
 
-                          return Ast.makeNode(
-                              CAstNode.DECL_STMT,
-                              Ast.makeConstant(new CAstSymbolImpl(n, PythonCAstToIRTranslator.Any)),
-                              Ast.makeNode(
-                                  CAstNode.PRIMITIVE,
-                                  Ast.makeConstant("import"),
-                                  Ast.makeConstant(yuck),
-                                  Ast.makeConstant(n)));
-                        })
-                    .collect(Collectors.toList()));
+                            return Ast.makeNode(
+                                CAstNode.DECL_STMT,
+                                Ast.makeConstant(
+                                    new CAstSymbolImpl(n, PythonCAstToIRTranslator.Any)),
+                                Ast.makeNode(
+                                    CAstNode.PRIMITIVE,
+                                    Ast.makeConstant("import"),
+                                    Ast.makeConstant(yuck),
+                                    Ast.makeConstant(n)));
+                          })
+                      .collect(Collectors.toList()));
+            }
           }
         }
 
