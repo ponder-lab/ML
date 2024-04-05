@@ -52,6 +52,7 @@ import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction.IOperator;
 import com.ibm.wala.shrike.shrikeBT.IInvokeInstruction.Dispatch;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSAPutInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
@@ -63,7 +64,6 @@ import com.ibm.wala.util.collections.Pair;
 import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -496,10 +496,8 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                 Path parent = path.getParent();
                 String parentFileName = parent.getFileName().toString();
 
-                // Return whether the script is in the module but not __init__.py.
-                boolean include =
-                    parentFileName.equals(moduleName)
-                        && !path.getFileName().toString().equals(MODULE_INITIALIZATION_FILE_NAME);
+                // Return whether the script is in the module.
+                boolean include = parentFileName.equals(moduleName);
 
                 LOGGER.finer(
                     (include ? "Including" : "Not including")
@@ -534,33 +532,51 @@ public class PythonCAstToIRTranslator extends AstTranslator {
 
                     LOGGER.finer("Mapping fields for package: " + packagePath + ".");
 
-                    FieldReference global =
-                        makeGlobalRef("script " + packagePath + "/" + path.getFileName());
+                    List<SSAInstruction> instructions = new ArrayList<SSAInstruction>(2);
+                    int res = 0;
 
-                    LOGGER.finer("Creating global field reference: " + global + ".");
+                    // Don't add a redundant global read for `__init__.py`.
+                    boolean moduleInitializationFile = isModuleInitializationFile(path);
 
-                    int idx = codeContext.cfg().getCurrentInstruction();
-                    int res = codeContext.currentScope().allocateTempValue();
+                    if (!moduleInitializationFile) {
+                      FieldReference global =
+                          makeGlobalRef("script " + packagePath + "/" + path.getFileName());
 
-                    SSAInstruction[] instructions = new SSAInstruction[2];
-                    instructions[0] = new AstGlobalRead(idx, res, global);
+                      LOGGER.finer("Creating global field reference: " + global + ".");
 
-                    LOGGER.finer("Adding global read: " + instructions[0] + ".");
+                      int idx = codeContext.cfg().getCurrentInstruction();
+                      res = codeContext.currentScope().allocateTempValue();
+
+                      AstGlobalRead globalRead = new AstGlobalRead(idx, res, global);
+                      instructions.add(globalRead);
+                      LOGGER.finer("Adding global read: " + globalRead + ".");
+                    }
 
                     FieldReference moduleField =
                         FieldReference.findOrCreate(
                             PythonTypes.Root,
-                            Atom.findOrCreateUnicodeAtom(getNameWithoutExtension(path.toString())),
+                            // If it's the package, use the package name. Otherwise, use the
+                            // filename.
+                            Atom.findOrCreateUnicodeAtom(
+                                getNameWithoutExtension(
+                                    (moduleInitializationFile ? path.getParent() : path)
+                                        .toString())),
                             PythonTypes.Root);
 
                     LOGGER.finer("Creating module field reference: " + moduleField + ".");
 
-                    instructions[1] =
+                    // If we are looking at the package.
+                    if (moduleInitializationFile)
+                      // use the existing global read.
+                      res = 1;
+
+                    SSAPutInstruction putInstruction =
                         Python.instructionFactory()
                             .PutInstruction(
                                 codeContext.cfg().getCurrentInstruction(), 1, res, moduleField);
 
-                    LOGGER.finer("Adding field write: " + instructions[1] + ".");
+                    instructions.add(putInstruction);
+                    LOGGER.finer("Adding field write: " + putInstruction + ".");
 
                     return instructions;
                   }
@@ -569,11 +585,15 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                 throw new IllegalStateException(
                     "Cannot find module: " + m + " in PYTHONPATH: " + pythonPath);
               })
-          .flatMap(Arrays::stream)
+          .flatMap(List::stream)
           .forEachOrdered(i -> codeContext.cfg().addInstruction(i));
     }
 
     return ret;
+  }
+
+  private static boolean isModuleInitializationFile(Path path) {
+    return path.getFileName().toString().equals(MODULE_INITIALIZATION_FILE_NAME);
   }
 
   private static Set<SourceModule> getLocalModules(List<Module> allModules) {
