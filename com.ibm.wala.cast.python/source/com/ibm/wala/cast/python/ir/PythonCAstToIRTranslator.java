@@ -494,9 +494,16 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                 Path path = Path.of(m.getURL().getFile());
                 Path parent = path.getParent();
                 String parentFileName = parent.getFileName().toString();
+                String grandparentFileName = parent.getParent().getFileName().toString();
 
-                // Return whether the script is in the module.
-                boolean include = parentFileName.equals(moduleName);
+                // Return whether the script is in the module or whether we are looking at a direct
+                // subpackage.
+                boolean include =
+                    parentFileName.equals(moduleName)
+                        || (grandparentFileName.equals(moduleName)
+                            && path.getFileName()
+                                .toString()
+                                .equals(MODULE_INITIALIZATION_FILENAME));
 
                 LOGGER.finer(
                     (include ? "Including" : "Not including")
@@ -534,10 +541,10 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                     List<SSAInstruction> instructions = new ArrayList<SSAInstruction>(2);
                     int res = 0;
 
-                    // Don't add a redundant global read for `__init__.py`.
+                    // Don't add a redundant global read for `__init__.py` for `moduleName`.
                     boolean moduleInitializationFile = isModuleInitializationFile(path);
 
-                    if (!moduleInitializationFile) {
+                    if (!moduleInitializationFile || !packagePath.toString().equals(moduleName)) {
                       FieldReference global =
                           makeGlobalRef("script " + packagePath + "/" + path.getFileName());
 
@@ -564,9 +571,9 @@ public class PythonCAstToIRTranslator extends AstTranslator {
 
                     LOGGER.finer("Creating module field reference: " + moduleField + ".");
 
-                    // If we are looking at the package.
-                    if (moduleInitializationFile)
-                      // use the existing global read.
+                    // If we are looking at the package for `moduleName`..
+                    if (moduleInitializationFile && packagePath.toString().equals(moduleName))
+                      // use the existing global read for the script.
                       res = 1;
 
                     SSAPutInstruction putInstruction =
