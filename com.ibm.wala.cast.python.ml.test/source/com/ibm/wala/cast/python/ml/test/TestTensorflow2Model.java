@@ -1974,7 +1974,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Test for https://github.com/wala/ML/issues/177.
+   * Test for https://github.com/wala/ML/issues/178.
    *
    * <p>This test should not need a PYTHONPATH.
    */
