@@ -598,10 +598,24 @@ public class PythonCAstToIRTranslator extends AstTranslator {
     return ret;
   }
 
+  /**
+   * Returns true iff the given {@link Path} represents the Python modularization file
+   * (`__init__.py`).
+   *
+   * @param path The {@link Path} in question.
+   * @return true iff the given {@link Path} represents the Python modularization file
+   *     (`__init__.py`).
+   */
   private static boolean isModuleInitializationFile(Path path) {
     return path.getFileName().toString().equals(MODULE_INITIALIZATION_FILENAME);
   }
 
+  /**
+   * Returns local modules {@link Module}s from the given {@link List} of {@link Module}s.
+   *
+   * @param allModules A {@link List} of {@link Module}s in question.
+   * @return A {@link Set} of local {@link Module}s.
+   */
   private static Set<SourceModule> getLocalModules(List<Module> allModules) {
     Set<SourceModule> ret = HashSetFactory.make();
 

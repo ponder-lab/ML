@@ -50,6 +50,7 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
 
   private static final Logger LOGGER = Logger.getLogger(PythonModuleParser.class.getName());
 
+  /** Name of the Python initialization file without the extension. */
   private static final String MODULE_INITIALIZATION_ENTITY_NAME =
       getNameWithoutExtension(MODULE_INITIALIZATION_FILENAME);
 

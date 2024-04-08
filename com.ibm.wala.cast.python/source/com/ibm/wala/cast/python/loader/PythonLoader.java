@@ -432,6 +432,11 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
             });
   }
 
+  /**
+   * Return this {@link PythonLoader}'s {@link IClassHierarchy}.
+   *
+   * @return this {@link PythonLoader}'s {@link IClassHierarchy}.
+   */
   public IClassHierarchy getClassHierarchy() {
     return this.cha;
   }
