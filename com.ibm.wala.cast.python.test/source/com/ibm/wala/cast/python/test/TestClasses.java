@@ -1,16 +1,30 @@
 package com.ibm.wala.cast.python.test;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNotEquals;
+
 import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
+import com.ibm.wala.classLoader.IClass;
+import com.ibm.wala.classLoader.IMethod;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.SSAContextInterpreter;
 import com.ibm.wala.ipa.callgraph.propagation.SSAPropagationCallGraphBuilder;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
+import com.ibm.wala.types.TypeName;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.logging.Logger;
 import org.junit.Test;
 
 public class TestClasses extends TestPythonCallGraphShape {
+
+  private static final Logger LOGGER = Logger.getLogger(TestClasses.class.getName());
 
   protected static final Object[][] assertionsClasses1 =
       new Object[][] {
@@ -118,5 +132,53 @@ public class TestClasses extends TestPythonCallGraphShape {
     CAstCallGraphUtil.dumpCG(
         (SSAContextInterpreter) builder.getContextInterpreter(), builder.getPointerAnalysis(), CG);
     verifyGraphAssertions(CG, assertionsClasses3);
+  }
+
+  protected static final Object[][] externalClassAssertions =
+      new Object[][] {
+        new Object[] {ROOT, new String[] {"script client.py"}},
+        new Object[] {
+          "script client.py",
+          new String[] {
+            "script client.py/f",
+          }
+        },
+        // TODO: Re-add once https://github.com/wala/ML/issues/146 is fixed.
+        /*
+        new Object[] {
+          "script client.py/f",
+          new String[] {
+            "script client.py/C",
+          }
+        }
+        */
+      };
+
+  /** Can we find a class (and initialize it) from another file? */
+  @Test
+  public void testExternalClass()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    CallGraph callGraph = this.process("client.py", "classes4.py");
+
+    verifyGraphAssertions(callGraph, externalClassAssertions);
+
+    Collection<CGNode> nodes = this.getNodes(callGraph, "script client.py/f");
+    assertEquals(1, nodes.size());
+    CGNode f = nodes.iterator().next();
+
+    Iterator<CGNode> succNodes = callGraph.getSuccNodes(f);
+    // TODO: Change to assertTrue() once https://github.com/wala/ML/issues/146 is fixed.
+    assertFalse(succNodes.hasNext());
+
+    CGNode node =
+        f; // TODO: Change to succNodes.next() once https://github.com/wala/ML/issues/146 is fixed.
+    assertFalse("Expecting only one callee.", succNodes.hasNext());
+
+    IMethod method = node.getMethod();
+    IClass declaringClass = method.getDeclaringClass();
+    TypeName name = declaringClass.getName();
+
+    // TODO: Change to assertEquals() once https://github.com/wala/ML/issues/146 is fixed.
+    assertNotEquals("Lscript classes4.py/C", name.toString());
   }
 }
