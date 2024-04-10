@@ -10,6 +10,7 @@
         <path>/${PROJECT_DIR_NAME}/data/proj</path>
         <path>/${PROJECT_DIR_NAME}/data/proj3</path>
         <path>/${PROJECT_DIR_NAME}/data/proj31</path>
+        <path>/${PROJECT_DIR_NAME}/data/proj32</path>
     </pydev_pathproperty>
     
 </pydev_project>

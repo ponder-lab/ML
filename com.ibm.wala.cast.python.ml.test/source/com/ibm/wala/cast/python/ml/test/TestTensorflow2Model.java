@@ -2198,6 +2198,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         new int[] {2});
   }
 
+  /**
+   * Test relative imports.
+   *
+   * <p>This test should not need a PYTHONPATH.
+   */
+  @Test
+  public void testModule38()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"proj32/C/__init__.py", "proj32/C/B.py", "proj32/C/A.py", "proj32/main.py"},
+        "C/B.py",
+        "f",
+        "proj32",
+        1,
+        1,
+        new int[] {2});
+  }
+
   private void test(
       String filename,
       String functionName,
