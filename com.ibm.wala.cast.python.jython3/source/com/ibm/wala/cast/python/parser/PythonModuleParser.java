@@ -81,17 +81,17 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
 
         if (s.isPresent()) {
           String moduleName = s.get().replace('.', '/');
-          LOGGER.finer("Module name from " + imp + " is: " + moduleName + ".");
+          LOGGER.finer("Module name from " + imp + " is: " + moduleName);
 
           // if it's a package.
           if (moduleName.indexOf('/') != -1) {
             if (!isLocalModule(moduleName)) moduleName += "/" + MODULE_INITIALIZATION_ENTITY_NAME;
 
-            LOGGER.finer("Module name from " + imp + " is: " + moduleName + ".");
+            LOGGER.finer("Module name from " + imp + " is: " + moduleName);
 
             if (isLocalModule(moduleName)) {
               List<File> pythonPath = PythonModuleParser.this.getPythonPath();
-              LOGGER.info("PYTHONPATH is: " + pythonPath + ".");
+              LOGGER.info("PYTHONPATH is: " + pythonPath);
 
               // If there is a PYTHONPATH specified.
               if (pythonPath != null && !pythonPath.isEmpty()) {
@@ -105,12 +105,12 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
                           .map(URL::getFile)
                           .map(Path::of)
                           .orElseThrow(IllegalStateException::new);
-                  LOGGER.finer("Found module path: " + modulePath + ".");
+                  LOGGER.finer("Found module path: " + modulePath);
 
                   if (modulePath.startsWith(pathEntry.toPath())) {
                     // Found it.
                     Path scriptRelativePath = pathEntry.toPath().relativize(modulePath);
-                    LOGGER.finer("Relativized path is: " + scriptRelativePath + ".");
+                    LOGGER.finer("Relativized path is: " + scriptRelativePath);
 
                     // Remove the file extension if it exists.
                     moduleName = scriptRelativePath.toString().replaceFirst("\\.py$", "");
@@ -118,7 +118,7 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
                     // Use the beginning segment initialization file.
                     moduleName = moduleName.split("/")[0] + "/" + MODULE_INITIALIZATION_ENTITY_NAME;
 
-                    LOGGER.fine("Using module name: " + moduleName + ".");
+                    LOGGER.fine("Using module name: " + moduleName);
                     break;
                   }
                 }
@@ -160,15 +160,15 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
 
         if (s.isPresent()) {
           String moduleName = s.get();
-          LOGGER.finer("Module name from " + importFrom + " is: " + moduleName + ".");
+          LOGGER.finer("Module name from " + importFrom + " is: " + moduleName);
 
           if (!isLocalModule(moduleName)) moduleName += "/" + MODULE_INITIALIZATION_ENTITY_NAME;
 
-          LOGGER.finer("Module name from " + importFrom + " is: " + moduleName + ".");
+          LOGGER.finer("Module name from " + importFrom + " is: " + moduleName);
 
           if (isLocalModule(moduleName)) {
             List<File> pythonPath = PythonModuleParser.this.getPythonPath();
-            LOGGER.info("PYTHONPATH is: " + pythonPath + ".");
+            LOGGER.info("PYTHONPATH is: " + pythonPath);
 
             // If there is a PYTHONPATH specified.
             if (pythonPath != null && !pythonPath.isEmpty()) {
@@ -182,16 +182,16 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
                         .map(URL::getFile)
                         .map(Path::of)
                         .orElseThrow(IllegalStateException::new);
-                LOGGER.finer("Found module path: " + modulePath + ".");
+                LOGGER.finer("Found module path: " + modulePath);
 
                 if (modulePath.startsWith(pathEntry.toPath())) {
                   // Found it.
                   Path scriptRelativePath = pathEntry.toPath().relativize(modulePath);
-                  LOGGER.finer("Relativized path is: " + scriptRelativePath + ".");
+                  LOGGER.finer("Relativized path is: " + scriptRelativePath);
 
                   // Remove the file extension if it exists.
                   moduleName = scriptRelativePath.toString().replaceFirst("\\.py$", "");
-                  LOGGER.fine("Using module name: " + moduleName + ".");
+                  LOGGER.fine("Using module name: " + moduleName);
                   break;
                 }
               }
