@@ -58,7 +58,7 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
 
   private final SourceModule fileName;
 
-  protected URL getParsedURL() throws IOException {
+  protected URL getParsedURL() {
     return fileName.getURL();
   }
 
@@ -162,6 +162,11 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
           String moduleName = s.get();
           LOGGER.finer("Module name from " + importFrom + " is: " + moduleName);
 
+          if (moduleName.startsWith(".")) {
+            LOGGER.info("Found relative import: " + moduleName);
+            moduleName = this.resolveModuleNameFromRelativeImport(moduleName);
+          }
+
           if (!isLocalModule(moduleName)) moduleName += "/" + MODULE_INITIALIZATION_ENTITY_NAME;
 
           LOGGER.finer("Module name from " + importFrom + " is: " + moduleName);
@@ -218,6 +223,16 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
         }
 
         return super.visitImportFrom(importFrom);
+      }
+
+      private String resolveModuleNameFromRelativeImport(String moduleName) {
+        URL url = PythonModuleParser.this.getParsedURL();
+        String file = url.getFile();
+        Path path = Path.of(file);
+        Path resolvedSibling = path.resolveSibling(moduleName);
+        Path normalizedPath = resolvedSibling.normalize();
+        Path fileName = normalizedPath.getFileName();
+        return fileName.toString();
       }
     };
   }
