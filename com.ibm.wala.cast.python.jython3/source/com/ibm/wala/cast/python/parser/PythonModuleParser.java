@@ -233,17 +233,39 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
        * @return The actual corresponding package, subpackage, or module name.
        */
       private String resolveRelativeImport(String importName) {
-        // FIXME: Since we aren't resolving the entire module name here, the following code works
-        // when `moduleName` represents a relative import that includes the module, e.g., ".B",
-        // "..D". We should actually process the periods in these cases. For now, just taking the
-        // module name off the end suffices. See https://github.com/wala/ML/issues/183.
+        assert importName.startsWith(".") : "Relative import must start with a period.";
+
+        // Replace path separators for dots except for the last one. We'll use this to resolve the
+        // import.
+        importName = importName.replaceAll("\\./\\B", ".");
+
         URL url = PythonModuleParser.this.getParsedURL();
         String file = url.getFile();
         Path path = Path.of(file);
         Path resolvedSibling = path.resolveSibling(importName);
         Path normalizedPath = resolvedSibling.normalize();
-        Path fileName = normalizedPath.getFileName();
-        return fileName.toString();
+
+        // Replace the dots with the actual (sub)packages.
+        int numBeginningDots = getNumberOfBeginningDots(importName);
+
+        Path subpath =
+            normalizedPath.subpath(
+                normalizedPath.getNameCount() - numBeginningDots, normalizedPath.getNameCount());
+
+        return subpath.toString();
+      }
+
+      private int getNumberOfBeginningDots(String string) {
+        int numBeginningDots = 0;
+
+        for (int i = 0; i < string.length(); i++) {
+          char character = string.charAt(i);
+
+          if (character == '.') ++numBeginningDots;
+          else break;
+        }
+
+        return numBeginningDots;
       }
     };
   }
@@ -330,10 +352,6 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
    * @return The corresponding {@link SourceModule}.
    */
   private Optional<SourceModule> getLocalModule(String moduleName) {
-    // FIXME: Because we are using java.lang.String.endsWith(String) below, there may be a case
-    // where there are multiple modules in different packages having the same ending name. It such
-    // cases, the module chosen will be nondeterministic. We would need to resolve the full module
-    // name prior to calling this method. See https://github.com/wala/ML/issues/183.
     return localModules.stream()
         .filter(
             lm -> {
