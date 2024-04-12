@@ -235,10 +235,16 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
           TypeName scriptTypeName =
               this.ir.getMethod().getReference().getDeclaringClass().getName();
-          assert scriptTypeName.getPackage() == null
-              : "Import statement should only occur at the top-level script.";
+          logger.finer("Found script: " + scriptTypeName + ".");
 
-          String scriptName = scriptTypeName.getClassName().toString();
+          Atom scriptPackage = scriptTypeName.getPackage();
+          logger.finer("Found script package: " + scriptPackage + ".");
+
+          String scriptName =
+              scriptPackage == null
+                  ? scriptTypeName.getClassName().toString()
+                  : scriptPackage.toString() + "/" + scriptTypeName.getClassName().toString();
+          logger.fine("Script name is: " + scriptName);
 
           if (def instanceof SSAInvokeInstruction) {
             // Library case.
