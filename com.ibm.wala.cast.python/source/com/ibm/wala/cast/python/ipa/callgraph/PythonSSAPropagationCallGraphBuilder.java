@@ -361,7 +361,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
               if (name.equals(globalFieldName)) {
                 logger.info("Found wildcard import for: " + name + ".");
 
-                InstanceKey instanceKey = this.getInstanceKeyForAllocation(newSiteReference);
+                InstanceKey instanceKey =
+                    this.getBuilder().getInstanceKeyForAllocation(n, newSiteReference);
 
                 if (this.system.newConstraint(globalDefPK, instanceKey)) {
                   logger.fine(
