@@ -21,6 +21,7 @@ import com.ibm.wala.cast.python.ir.PythonCAstToIRTranslator;
 import com.ibm.wala.cast.python.loader.DynamicAnnotatableEntity;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.tree.CAst;
+import com.ibm.wala.cast.tree.CAstAnnotation;
 import com.ibm.wala.cast.tree.CAstEntity;
 import com.ibm.wala.cast.tree.CAstNode;
 import com.ibm.wala.cast.tree.CAstQualifier;
@@ -51,6 +52,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Map;
@@ -1199,7 +1201,11 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
 
       class PythonCodeEntity extends AbstractCodeEntity
           implements PythonGlobalsEntity, DynamicAnnotatableEntity {
+        private static final String DYNAMIC_ANNOTATION_KEY = "dynamicAnnotation";
+
         private final java.util.Set<String> downwardGlobals;
+
+        private final Collection<CAstAnnotation> annotationCollection = new ArrayList<>();
 
         @Override
         public Iterable<CAstNode> dynamicAnnotations() {
@@ -1209,6 +1215,37 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
         protected PythonCodeEntity(CAstType type, java.util.Set<String> downwardGlobals) {
           super(type);
           this.downwardGlobals = downwardGlobals;
+
+          for (CAstNode node : dynamicAnnotations) {
+            CAstAnnotation cAstAnnotation =
+                new CAstAnnotation() {
+                  @Override
+                  public CAstType getType() {
+                    return PythonTypes.cAstDynamicAnnotation;
+                  }
+
+                  @Override
+                  public Map<String, Object> getArguments() {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put(DYNAMIC_ANNOTATION_KEY, node);
+                    return map;
+                  }
+
+                  @Override
+                  public String toString() {
+                    return this.getArguments()
+                        .getOrDefault(DYNAMIC_ANNOTATION_KEY, this)
+                        .toString();
+                  }
+                };
+
+            annotationCollection.add(cAstAnnotation);
+          }
+        }
+
+        @Override
+        public Collection<CAstAnnotation> getAnnotations() {
+          return this.annotationCollection;
         }
 
         @Override

@@ -10,11 +10,14 @@
  *****************************************************************************/
 package com.ibm.wala.cast.python.types;
 
+import com.ibm.wala.cast.tree.CAstType;
 import com.ibm.wala.cast.types.AstTypeReference;
 import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.types.ClassLoaderReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
+import java.util.Collection;
+import java.util.HashSet;
 
 public class PythonTypes extends AstTypeReference {
 
@@ -76,4 +79,20 @@ public class PythonTypes extends AstTypeReference {
   /** https://docs.python.org/3/library/stdtypes.html#typeiter. */
   public static final TypeReference iterator =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Literator"));
+
+  public static final TypeReference staticMethod =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lstaticmethod"));
+
+  public static final CAstType cAstDynamicAnnotation =
+      new CAstType() {
+        @Override
+        public String getName() {
+          return "DYNAMIC_ANNOTATION";
+        }
+
+        @Override
+        public Collection<CAstType> getSupertypes() {
+          return new HashSet<>();
+        }
+      };
 }
