@@ -221,11 +221,13 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
 
         if (!codeBodies.containsKey(key)) {
           Map<Integer, Atom> names = HashMapFactory.make();
+
           MethodReference tr =
               MethodReference.findOrCreate(
                   receiver.getReference(),
                   Atom.findOrCreateUnicodeAtom("trampoline" + call.getNumberOfTotalParameters()),
                   AstMethodReference.fnDesc);
+
           PythonSummary x = new PythonSummary(tr, call.getNumberOfTotalParameters());
           IClass filter = ((PythonInstanceMethodTrampoline) receiver).getRealClass();
           int v = call.getNumberOfTotalParameters() + 1;
