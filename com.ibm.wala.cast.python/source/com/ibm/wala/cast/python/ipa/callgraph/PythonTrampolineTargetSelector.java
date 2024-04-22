@@ -74,6 +74,11 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
     public int hashCode() {
       return Objects.hash(cgNode, receiver);
     }
+
+    @Override
+    public String toString() {
+      return this.cgNode + ", " + this.receiver;
+    }
   }
 
   private static final Logger logger =
