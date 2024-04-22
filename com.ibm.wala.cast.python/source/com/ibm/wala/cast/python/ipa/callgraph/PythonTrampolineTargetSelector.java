@@ -126,9 +126,10 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
           };
       String hashCode = Integer.toHexString(hashCodes.hashCode());
       PythonInvokeInstruction call = (PythonInvokeInstruction) caller.getIR().getCalls(site)[0];
+      String callingMethodName = caller.getMethod().getName().toString();
 
       if (receiver.getAnnotations().contains(Annotation.make(PythonTypes.staticMethod))
-          && !caller.getMethod().getName().toString().startsWith("static_trampoline")) {
+          && !callingMethodName.startsWith("static_trampoline")) {
         Atom defFuncName =
             ((DynamicMethodBody) receiver)
                 .getCodeBody()
@@ -159,14 +160,14 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
           int i = 0;
 
           int[] params;
-          if (caller.getMethod().getName().toString().startsWith("self_trampoline")) {
+          if (callingMethodName.startsWith("self_trampoline")) {
             params = new int[Math.max(2, call.getNumberOfPositionalParameters() - 1)];
           } else {
             params = new int[Math.max(2, call.getNumberOfPositionalParameters())];
           }
           params[i++] = 1;
 
-          if (caller.getMethod().getName().toString().startsWith("self_trampoline")) {
+          if (callingMethodName.startsWith("self_trampoline")) {
             for (int j = 2; j < call.getNumberOfPositionalParameters(); j++) {
               params[i++] = j + 1;
             }
