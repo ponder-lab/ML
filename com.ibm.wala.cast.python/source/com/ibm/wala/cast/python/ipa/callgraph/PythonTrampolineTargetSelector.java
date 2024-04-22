@@ -144,6 +144,7 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
                 .getDeclaringClass()
                 .getName()
                 .getClassName();
+
         Atom trampolineName =
             Atom.findOrCreateUnicodeAtom(
                 "static_trampoline_"
@@ -155,6 +156,7 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
                     + ")");
 
         CalleeKey key = new CalleeKey(caller, receiver);
+
         if (!wrapperBodies.containsKey(key)) {
           Map<Integer, Atom> names = HashMapFactory.make();
           MethodReference tr =
