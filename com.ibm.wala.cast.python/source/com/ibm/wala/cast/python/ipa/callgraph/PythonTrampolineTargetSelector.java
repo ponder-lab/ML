@@ -17,7 +17,6 @@ import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
-import com.ibm.wala.cast.python.loader.PythonLoader.DynamicMethodBody;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
@@ -114,8 +113,6 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
 
   private final Map<Pair<IClass, Integer>, IMethod> codeBodies = HashMapFactory.make();
 
-  private final Map<CalleeKey, IMethod> wrapperBodies = HashMapFactory.make();
-
   @SuppressWarnings("unchecked")
   @Override
   public IMethod getCalleeTarget(CGNode caller, CallSiteReference site, IClass receiver) {
@@ -124,89 +121,13 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
 
       IClassHierarchy cha = receiver.getClassHierarchy();
       final boolean callable = receiver.getReference().equals(PythonTypes.object);
-      final boolean staticMethod =
-          receiver.getAnnotations().contains(Annotation.make(PythonTypes.staticMethod));
 
-      int[] hashCodes =
-          new int[] {
-            caller.hashCode(), caller.getContext().hashCode(), site.hashCode(), receiver.hashCode()
-          };
-      String hashCode = Integer.toHexString(hashCodes.hashCode());
       PythonInvokeInstruction call = (PythonInvokeInstruction) caller.getIR().getCalls(site)[0];
       String callingMethodName = caller.getMethod().getName().toString();
 
       logger.fine("Calling method name is: " + callingMethodName);
 
-      if (false && staticMethod && !callingMethodName.startsWith("static_trampoline")) {
-        Atom defFuncName =
-            ((DynamicMethodBody) receiver)
-                .getCodeBody()
-                .getReference()
-                .getDeclaringClass()
-                .getName()
-                .getClassName();
-
-        Atom trampolineName =
-            Atom.findOrCreateUnicodeAtom(
-                "static_trampoline_"
-                    + defFuncName
-                    + "_"
-                    + hashCode
-                    + "("
-                    + call.getNumberOfTotalParameters()
-                    + ")");
-
-        CalleeKey key = new CalleeKey(caller, receiver);
-
-        if (!wrapperBodies.containsKey(key)) {
-          Map<Integer, Atom> names = HashMapFactory.make();
-          MethodReference tr =
-              MethodReference.findOrCreate(
-                  receiver.getReference(), trampolineName, AstMethodReference.fnDesc);
-          PythonSummary x = new PythonSummary(tr, call.getNumberOfTotalParameters());
-          int iindex = 0;
-          int v = call.getNumberOfTotalParameters();
-          // 如果是内部类调用则要用getInstruction
-          int i = 0;
-
-          int[] params;
-          if (callingMethodName.startsWith("self_trampoline")) {
-            params = new int[Math.max(2, call.getNumberOfPositionalParameters() - 1)];
-          } else {
-            params = new int[Math.max(2, call.getNumberOfPositionalParameters())];
-          }
-          params[i++] = 1;
-
-          if (callingMethodName.startsWith("self_trampoline")) {
-            for (int j = 2; j < call.getNumberOfPositionalParameters(); j++) {
-              params[i++] = j + 1;
-            }
-          } else {
-            for (int j = 1; j < call.getNumberOfPositionalParameters(); j++) {
-              params[i++] = j + 1;
-            }
-          }
-          int ki = 0, ji = call.getNumberOfPositionalParameters() + 1;
-          Pair<String, Integer>[] keys = new Pair[0];
-          if (call.getKeywords() != null) {
-            keys = new Pair[call.getKeywords().size()];
-            for (String k : call.getKeywords()) {
-              names.put(ji, Atom.findOrCreateUnicodeAtom(k));
-              keys[ki++] = Pair.make(k, ji++);
-            }
-          }
-
-          int result = ++v;
-          int except = ++v;
-          CallSiteReference ref =
-              new DynamicCallSiteReference(call.getCallSite().getDeclaredTarget(), 2);
-          x.addStatement(new PythonInvokeInstruction(iindex++, result, except, ref, params, keys));
-          x.addStatement(new SSAReturnInstruction(iindex, result, false));
-          x.setValueNames(names);
-          wrapperBodies.put(key, new PythonSummarizedFunction(tr, x, receiver));
-        }
-        return wrapperBodies.get(key);
-      } else if (cha.isSubclassOf(receiver, cha.lookupClass(PythonTypes.trampoline)) || callable) {
+      if (cha.isSubclassOf(receiver, cha.lookupClass(PythonTypes.trampoline)) || callable) {
         if (callable) {
           logger.fine("Encountered callable.");
 
