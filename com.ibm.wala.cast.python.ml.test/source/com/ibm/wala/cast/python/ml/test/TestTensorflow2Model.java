@@ -2608,6 +2608,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testStaticMethod8() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_static_method8.py", "MyClass.the_static_method", 1, 1, 3);
   }
+  
+  @Test
+  public void testStaticMethod9() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_static_method9.py", "MyClass.the_static_method", 2, 2, 2, 3);
+  }
+
+  @Test
+  public void testStaticMethod10() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_static_method10.py", "MyClass.the_static_method", 2, 2, 2, 3);
+  }
 
   private void test(
       String filename,
