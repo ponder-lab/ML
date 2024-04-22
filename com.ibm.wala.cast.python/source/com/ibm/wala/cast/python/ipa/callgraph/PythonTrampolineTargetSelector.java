@@ -133,6 +133,8 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
       PythonInvokeInstruction call = (PythonInvokeInstruction) caller.getIR().getCalls(site)[0];
       String callingMethodName = caller.getMethod().getName().toString();
 
+      logger.fine("Calling method name is: " + callingMethodName);
+
       if (receiver.getAnnotations().contains(Annotation.make(PythonTypes.staticMethod))
           && !callingMethodName.startsWith("static_trampoline")) {
         Atom defFuncName =
