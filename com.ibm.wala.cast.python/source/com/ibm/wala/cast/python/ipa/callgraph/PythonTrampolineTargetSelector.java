@@ -124,7 +124,8 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
 
       IClassHierarchy cha = receiver.getClassHierarchy();
       final boolean callable = receiver.getReference().equals(PythonTypes.object);
-      final boolean staticMethod = receiver.getAnnotations().contains(Annotation.make(PythonTypes.staticMethod));
+      final boolean staticMethod =
+          receiver.getAnnotations().contains(Annotation.make(PythonTypes.staticMethod));
 
       int[] hashCodes =
           new int[] {
@@ -136,8 +137,7 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
 
       logger.fine("Calling method name is: " + callingMethodName);
 
-      if (false && staticMethod
-          && !callingMethodName.startsWith("static_trampoline")) {
+      if (false && staticMethod && !callingMethodName.startsWith("static_trampoline")) {
         Atom defFuncName =
             ((DynamicMethodBody) receiver)
                 .getCodeBody()
@@ -282,7 +282,7 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
           int result = v1 + 1;
           int except = v1 + 2;
 
-	  // TODO: Change stuff here.
+          // TODO: Change stuff here.
 
           CallSiteReference ref =
               new DynamicCallSiteReference(call.getCallSite().getDeclaredTarget(), 2);
