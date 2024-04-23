@@ -28,6 +28,9 @@ public class Util {
   /** Name of the annotation (decorator) that marks methods as static. */
   public static final String STATIC_METHOD_ANNOTATION_NAME = "staticmethod";
 
+  /** Name of the annotation (decorator) that marks methods as a class method. */
+  public static final String CLASS_METHOD_ANNOTATION_NAME = "classmethod";
+
   /**
    * Add Pytest entrypoints to the given {@link PropagationCallGraphBuilder}.
    *

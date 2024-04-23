@@ -10,6 +10,7 @@
  *****************************************************************************/
 package com.ibm.wala.cast.python.ipa.callgraph;
 
+import static com.ibm.wala.cast.python.types.PythonTypes.CLASS_METHOD;
 import static com.ibm.wala.cast.python.types.PythonTypes.STATIC_METHOD;
 import static com.ibm.wala.types.annotations.Annotation.make;
 
@@ -145,8 +146,15 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
                   ? "Found static method receiver: " + filter
                   : "Method is not static: " + filter);
 
-          // only add self if the receiver isn't static.
-          if (!staticMethodReceiver) {
+          // Are we calling a class method?
+          boolean classMethodReceiver = filter.getAnnotations().contains(make(CLASS_METHOD));
+          logger.fine(
+              classMethodReceiver
+                  ? "Found class method receiver: " + filter
+                  : "Receiver: " + filter + " is not a class method.");
+
+          // only add self if the receiver isn't static or a class method.
+          if (!staticMethodReceiver && !classMethodReceiver) {
             v1 = v + 2;
 
             x.addStatement(
@@ -158,6 +166,19 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
                         FieldReference.findOrCreate(
                             PythonTypes.Root,
                             Atom.findOrCreateUnicodeAtom("$self"),
+                            PythonTypes.Root)));
+          } else if (classMethodReceiver) {
+            v1 = v + 2;
+
+            x.addStatement(
+                PythonLanguage.Python.instructionFactory()
+                    .GetInstruction(
+                        1,
+                        v1,
+                        1,
+                        FieldReference.findOrCreate(
+                            PythonTypes.Root,
+                            Atom.findOrCreateUnicodeAtom("$class"),
                             PythonTypes.Root)));
           } else v1 = v + 1;
 
