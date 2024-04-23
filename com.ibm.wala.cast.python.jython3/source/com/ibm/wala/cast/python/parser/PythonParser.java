@@ -1256,8 +1256,21 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
         @Override
         public CAstNode getAST() {
           if (function instanceof FunctionDef) {
-            if (isMethod) {
+            boolean staticMethod =
+                this.getAnnotations().stream()
+                    .filter(a -> a.getType().equals(PythonTypes.cAstDynamicAnnotation))
+                    .map(a -> a.getArguments().get("dynamicAnnotation"))
+                    .map(CAstNode.class::cast)
+                    .map(n -> n.getChild(0))
+                    .map(n -> n.getChild(0))
+                    .map(CAstNode::getValue)
+                    .filter(v -> v instanceof String)
+                    .anyMatch(s -> s.equals("staticmethod"));
+
+            // Only add object metadata for non-static methods.
+            if (isMethod && !staticMethod) {
               CAst Ast = PythonParser.this.Ast;
+
               CAstNode[] newNodes = new CAstNode[nodes.length + 2];
               System.arraycopy(nodes, 0, newNodes, 2, nodes.length);
 
