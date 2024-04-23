@@ -27,6 +27,7 @@ public class PythonTypes extends AstTypeReference {
 
   public static final String pythonLoaderNameStr = "PythonLoader";
 
+  /** The name of the type used for CAst dynamic annotations (decorators). */
   private static final String DYNAMIC_ANNOTATION_TYPE_NAME = "DYNAMIC_ANNOTATION";
 
   public static final Atom pythonName = Atom.findOrCreateUnicodeAtom(pythonNameStr);
