@@ -7,7 +7,6 @@ import static java.util.Collections.emptyList;
 import static java.util.stream.Collectors.toList;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PytestEntrypointBuilder;
-import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.tree.CAstAnnotation;
 import com.ibm.wala.cast.tree.CAstNode;
 import com.ibm.wala.ipa.callgraph.Entrypoint;
