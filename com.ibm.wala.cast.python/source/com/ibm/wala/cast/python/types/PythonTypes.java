@@ -27,6 +27,8 @@ public class PythonTypes extends AstTypeReference {
 
   public static final String pythonLoaderNameStr = "PythonLoader";
 
+  private static final String DYNAMIC_ANNOTATION_TYPE_NAME = "DYNAMIC_ANNOTATION";
+
   public static final Atom pythonName = Atom.findOrCreateUnicodeAtom(pythonNameStr);
 
   public static final Atom pythonLoaderName = Atom.findOrCreateUnicodeAtom(pythonLoaderNameStr);
@@ -90,7 +92,7 @@ public class PythonTypes extends AstTypeReference {
       new CAstType() {
         @Override
         public String getName() {
-          return "DYNAMIC_ANNOTATION";
+          return DYNAMIC_ANNOTATION_TYPE_NAME;
         }
 
         @Override
