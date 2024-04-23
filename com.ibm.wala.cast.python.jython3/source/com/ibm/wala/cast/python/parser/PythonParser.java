@@ -10,6 +10,8 @@
  *****************************************************************************/
 package com.ibm.wala.cast.python.parser;
 
+import static com.ibm.wala.cast.python.util.Util.DYNAMIC_ANNOTATION_KEY;
+import static com.ibm.wala.cast.python.util.Util.getNameStream;
 import static com.ibm.wala.cast.python.util.Util.removeFileProtocolFromPath;
 
 import com.ibm.wala.cast.ir.translator.AbstractClassEntity;
@@ -1159,7 +1161,6 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
       }
       ;
 
-      final String DYNAMIC_ANNOTATION_KEY = "dynamicAnnotation";
       Collection<CAstAnnotation> annotations = new ArrayList<>();
 
       for (CAstNode node : dynamicAnnotations) {
@@ -1186,16 +1187,7 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
         annotations.add(cAstAnnotation);
       }
 
-      boolean staticMethod =
-          annotations.stream()
-              .filter(a -> a.getType().equals(PythonTypes.cAstDynamicAnnotation))
-              .map(a -> a.getArguments().get(DYNAMIC_ANNOTATION_KEY))
-              .map(CAstNode.class::cast)
-              .map(n -> n.getChild(0))
-              .map(n -> n.getChild(0))
-              .map(CAstNode::getValue)
-              .filter(v -> v instanceof String)
-              .anyMatch(s -> s.equals("staticmethod"));
+      boolean staticMethod = getNameStream(annotations).anyMatch(s -> s.equals("staticmethod"));
 
       CAstType functionType;
       boolean isMethod =
