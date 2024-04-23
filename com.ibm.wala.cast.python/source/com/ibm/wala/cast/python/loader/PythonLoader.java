@@ -78,7 +78,7 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
       this.container = container;
 
       // fill in the decorators.
-      // FIXME 现在只处理无参的annotation
+      // FIXME: Process annotations with parameters.
       this.annotations =
           getNameStream(entity.getAnnotations())
               .map(s -> "L" + s)
