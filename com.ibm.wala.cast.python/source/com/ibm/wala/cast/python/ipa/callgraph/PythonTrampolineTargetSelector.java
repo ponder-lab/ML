@@ -10,6 +10,9 @@
  *****************************************************************************/
 package com.ibm.wala.cast.python.ipa.callgraph;
 
+import static com.ibm.wala.cast.python.types.PythonTypes.staticMethod;
+import static com.ibm.wala.types.annotations.Annotation.make;
+
 import com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKeys.ScopeMappingInstanceKey;
 import com.ibm.wala.cast.loader.DynamicCallSiteReference;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
@@ -38,7 +41,6 @@ import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
-import com.ibm.wala.types.annotations.Annotation;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
@@ -116,8 +118,7 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
           IClass filter = ((PythonInstanceMethodTrampoline) receiver).getRealClass();
 
           // Are we calling a static method?
-          boolean staticMethodReceiver =
-              filter.getAnnotations().contains(Annotation.make(PythonTypes.staticMethod));
+          boolean staticMethodReceiver = filter.getAnnotations().contains(make(staticMethod));
           logger.fine(
               staticMethodReceiver
                   ? "Found static method receiver: " + filter
