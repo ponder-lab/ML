@@ -85,10 +85,12 @@ public class PythonTypes extends AstTypeReference {
   public static final TypeReference iterator =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Literator"));
 
+  /** https://docs.python.org/3/library/functions.html#staticmethod. */
   public static final TypeReference STATIC_METHOD =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("L" + STATIC_METHOD_ANNOTATION_NAME));
 
+  /** A {@link CAstType} representing a dynamic annotation (decorator). */
   public static final CAstType CAST_DYNAMIC_ANNOTATION =
       new CAstType() {
         @Override
