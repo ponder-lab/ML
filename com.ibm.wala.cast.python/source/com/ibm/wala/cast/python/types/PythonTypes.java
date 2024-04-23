@@ -10,6 +10,8 @@
  *****************************************************************************/
 package com.ibm.wala.cast.python.types;
 
+import static com.ibm.wala.cast.python.util.Util.STATIC_METHOD_ANNOTATION_NAME;
+
 import com.ibm.wala.cast.tree.CAstType;
 import com.ibm.wala.cast.types.AstTypeReference;
 import com.ibm.wala.core.util.strings.Atom;
@@ -81,7 +83,8 @@ public class PythonTypes extends AstTypeReference {
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Literator"));
 
   public static final TypeReference staticMethod =
-      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lstaticmethod"));
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("L" + STATIC_METHOD_ANNOTATION_NAME));
 
   public static final CAstType cAstDynamicAnnotation =
       new CAstType() {

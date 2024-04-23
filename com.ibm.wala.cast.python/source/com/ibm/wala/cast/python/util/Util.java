@@ -2,7 +2,6 @@ package com.ibm.wala.cast.python.util;
 
 import static com.google.common.collect.Iterables.concat;
 import static com.ibm.wala.cast.python.types.PythonTypes.cAstDynamicAnnotation;
-import static com.ibm.wala.cast.python.util.Util.DYNAMIC_ANNOTATION_KEY;
 import static java.util.Collections.emptyList;
 import static java.util.stream.Collectors.toList;
 
@@ -25,6 +24,9 @@ public class Util {
 
   /** Key used to map annotations (decorators) to names. */
   public static final String DYNAMIC_ANNOTATION_KEY = "dynamicAnnotation";
+
+  /** Name of the annotation (decorator) that marks methods as static. */
+  public static final String STATIC_METHOD_ANNOTATION_NAME = "staticmethod";
 
   /**
    * Add Pytest entrypoints to the given {@link PropagationCallGraphBuilder}.

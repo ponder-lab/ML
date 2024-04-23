@@ -11,6 +11,7 @@
 package com.ibm.wala.cast.python.parser;
 
 import static com.ibm.wala.cast.python.util.Util.DYNAMIC_ANNOTATION_KEY;
+import static com.ibm.wala.cast.python.util.Util.STATIC_METHOD_ANNOTATION_NAME;
 import static com.ibm.wala.cast.python.util.Util.getNameStream;
 import static com.ibm.wala.cast.python.util.Util.removeFileProtocolFromPath;
 
@@ -1187,7 +1188,8 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
         annotations.add(cAstAnnotation);
       }
 
-      boolean staticMethod = getNameStream(annotations).anyMatch(s -> s.equals("staticmethod"));
+      boolean staticMethod =
+          getNameStream(annotations).anyMatch(s -> s.equals(STATIC_METHOD_ANNOTATION_NAME));
 
       CAstType functionType;
       boolean isMethod =
