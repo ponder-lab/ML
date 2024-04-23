@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.loader;
 
-import static com.google.common.collect.Lists.newArrayList;
+import static com.ibm.wala.cast.python.util.Util.getNameStream;
+import static java.util.stream.Collectors.toList;
 
 import com.ibm.wala.cast.ir.translator.AstTranslator.AstLexicalInformation;
 import com.ibm.wala.cast.ir.translator.AstTranslator.WalkContext;
@@ -11,7 +12,6 @@ import com.ibm.wala.cast.python.ir.PythonCAstToIRTranslator;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.tree.CAst;
-import com.ibm.wala.cast.tree.CAstAnnotation;
 import com.ibm.wala.cast.tree.CAstEntity;
 import com.ibm.wala.cast.tree.CAstNode;
 import com.ibm.wala.cast.tree.CAstSourcePositionMap;
@@ -63,7 +63,7 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
   public class DynamicMethodBody extends DynamicCodeBody {
     private final IClass container;
 
-    private final Collection<Annotation> annotations = newArrayList();
+    private final Collection<Annotation> annotations;
 
     public DynamicMethodBody(
         TypeReference codeName,
@@ -77,19 +77,14 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
       this.container = container;
 
       // fill in the decorators.
-      for (CAstAnnotation astAnnotation : entity.getAnnotations()) {
-        if (astAnnotation.getType().equals(PythonTypes.cAstDynamicAnnotation)) {
-          CAstNode node = (CAstNode) astAnnotation.getArguments().get("dynamicAnnotation");
-          // FIXME 现在只处理无参的annotation
-          if (node.getChild(0).getChild(0).getValue() instanceof String) {
-            String annotation = (String) node.getChild(0).getChild(0).getValue();
-            TypeReference typeReference =
-                TypeReference.findOrCreate(
-                    PythonTypes.pythonLoader, TypeName.findOrCreate("L" + annotation));
-            annotations.add(Annotation.make(typeReference));
-          }
-        }
-      }
+      // FIXME 现在只处理无参的annotation
+      this.annotations =
+          getNameStream(entity.getAnnotations())
+              .map(s -> "L" + s)
+              .map(TypeName::findOrCreate)
+              .map(tn -> TypeReference.findOrCreate(PythonTypes.pythonLoader, tn))
+              .map(Annotation::make)
+              .collect(toList());
     }
 
     public IClass getContainer() {
