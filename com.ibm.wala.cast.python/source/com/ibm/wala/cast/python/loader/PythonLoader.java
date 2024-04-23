@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.loader;
 
+import static com.ibm.wala.cast.python.types.PythonTypes.pythonLoader;
 import static com.ibm.wala.cast.python.util.Util.getNameStream;
 import static java.util.stream.Collectors.toList;
 
@@ -82,7 +83,7 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
           getNameStream(entity.getAnnotations())
               .map(s -> "L" + s)
               .map(TypeName::findOrCreate)
-              .map(tn -> TypeReference.findOrCreate(PythonTypes.pythonLoader, tn))
+              .map(tn -> TypeReference.findOrCreate(pythonLoader, tn))
               .map(Annotation::make)
               .collect(toList());
     }
