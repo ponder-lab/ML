@@ -315,6 +315,7 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
 
     assert types.containsKey(typeName);
 
+    // Includes static methods.
     MethodReference me =
         MethodReference.findOrCreate(
             fun.getReference(),
