@@ -1,7 +1,7 @@
 package com.ibm.wala.cast.python.util;
 
 import static com.google.common.collect.Iterables.concat;
-import static com.ibm.wala.cast.python.types.PythonTypes.cAstDynamicAnnotation;
+import static com.ibm.wala.cast.python.types.PythonTypes.CAST_DYNAMIC_ANNOTATION;
 import static java.util.Collections.emptyList;
 import static java.util.stream.Collectors.toList;
 
@@ -77,7 +77,7 @@ public class Util {
    */
   public static Stream<String> getNameStream(Collection<CAstAnnotation> annotations) {
     return annotations.stream()
-        .filter(a -> a.getType().equals(cAstDynamicAnnotation))
+        .filter(a -> a.getType().equals(CAST_DYNAMIC_ANNOTATION))
         .map(a -> a.getArguments().get(DYNAMIC_ANNOTATION_KEY))
         .filter(Objects::nonNull)
         .map(CAstNode.class::cast)

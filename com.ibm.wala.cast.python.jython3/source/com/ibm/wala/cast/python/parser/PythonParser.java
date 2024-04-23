@@ -1169,7 +1169,7 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
             new CAstAnnotation() {
               @Override
               public CAstType getType() {
-                return PythonTypes.cAstDynamicAnnotation;
+                return PythonTypes.CAST_DYNAMIC_ANNOTATION;
               }
 
               @Override

@@ -82,11 +82,11 @@ public class PythonTypes extends AstTypeReference {
   public static final TypeReference iterator =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Literator"));
 
-  public static final TypeReference staticMethod =
+  public static final TypeReference STATIC_METHOD =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("L" + STATIC_METHOD_ANNOTATION_NAME));
 
-  public static final CAstType cAstDynamicAnnotation =
+  public static final CAstType CAST_DYNAMIC_ANNOTATION =
       new CAstType() {
         @Override
         public String getName() {
