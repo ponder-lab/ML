@@ -1159,6 +1159,44 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
       }
       ;
 
+      final String DYNAMIC_ANNOTATION_KEY = "dynamicAnnotation";
+      Collection<CAstAnnotation> annotations = new ArrayList<>();
+
+      for (CAstNode node : dynamicAnnotations) {
+        CAstAnnotation cAstAnnotation =
+            new CAstAnnotation() {
+              @Override
+              public CAstType getType() {
+                return PythonTypes.cAstDynamicAnnotation;
+              }
+
+              @Override
+              public Map<String, Object> getArguments() {
+                Map<String, Object> map = new HashMap<>();
+                map.put(DYNAMIC_ANNOTATION_KEY, node);
+                return map;
+              }
+
+              @Override
+              public String toString() {
+                return this.getArguments().getOrDefault(DYNAMIC_ANNOTATION_KEY, this).toString();
+              }
+            };
+
+        annotations.add(cAstAnnotation);
+      }
+
+      boolean staticMethod =
+          annotations.stream()
+              .filter(a -> a.getType().equals(PythonTypes.cAstDynamicAnnotation))
+              .map(a -> a.getArguments().get(DYNAMIC_ANNOTATION_KEY))
+              .map(CAstNode.class::cast)
+              .map(n -> n.getChild(0))
+              .map(n -> n.getChild(0))
+              .map(CAstNode::getValue)
+              .filter(v -> v instanceof String)
+              .anyMatch(s -> s.equals("staticmethod"));
+
       CAstType functionType;
       boolean isMethod =
           context.entity().getKind() == CAstEntity.TYPE_ENTITY
@@ -1174,7 +1212,7 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
 
           @Override
           public boolean isStatic() {
-            return false;
+            return staticMethod;
           }
         }
         ;
@@ -1201,51 +1239,27 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
 
       class PythonCodeEntity extends AbstractCodeEntity
           implements PythonGlobalsEntity, DynamicAnnotatableEntity {
-        private static final String DYNAMIC_ANNOTATION_KEY = "dynamicAnnotation";
-
         private final java.util.Set<String> downwardGlobals;
 
-        private final Collection<CAstAnnotation> annotationCollection = new ArrayList<>();
+        private final Collection<CAstAnnotation> annotations;
 
         @Override
         public Iterable<CAstNode> dynamicAnnotations() {
           return dynamicAnnotations;
         }
 
-        protected PythonCodeEntity(CAstType type, java.util.Set<String> downwardGlobals) {
+        protected PythonCodeEntity(
+            CAstType type,
+            java.util.Set<String> downwardGlobals,
+            Collection<CAstAnnotation> annotations) {
           super(type);
           this.downwardGlobals = downwardGlobals;
-
-          for (CAstNode node : dynamicAnnotations) {
-            CAstAnnotation cAstAnnotation =
-                new CAstAnnotation() {
-                  @Override
-                  public CAstType getType() {
-                    return PythonTypes.cAstDynamicAnnotation;
-                  }
-
-                  @Override
-                  public Map<String, Object> getArguments() {
-                    Map<String, Object> map = new HashMap<>();
-                    map.put(DYNAMIC_ANNOTATION_KEY, node);
-                    return map;
-                  }
-
-                  @Override
-                  public String toString() {
-                    return this.getArguments()
-                        .getOrDefault(DYNAMIC_ANNOTATION_KEY, this)
-                        .toString();
-                  }
-                };
-
-            annotationCollection.add(cAstAnnotation);
-          }
+          this.annotations = annotations;
         }
 
         @Override
         public Collection<CAstAnnotation> getAnnotations() {
-          return this.annotationCollection;
+          return this.annotations;
         }
 
         @Override
@@ -1256,17 +1270,6 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
         @Override
         public CAstNode getAST() {
           if (function instanceof FunctionDef) {
-            boolean staticMethod =
-                this.getAnnotations().stream()
-                    .filter(a -> a.getType().equals(PythonTypes.cAstDynamicAnnotation))
-                    .map(a -> a.getArguments().get("dynamicAnnotation"))
-                    .map(CAstNode.class::cast)
-                    .map(n -> n.getChild(0))
-                    .map(n -> n.getChild(0))
-                    .map(CAstNode::getValue)
-                    .filter(v -> v instanceof String)
-                    .anyMatch(s -> s.equals("staticmethod"));
-
             // Only add object metadata for non-static methods.
             if (isMethod && !staticMethod) {
               CAst Ast = PythonParser.this.Ast;
@@ -1358,7 +1361,7 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
 
       java.util.Set<String> downwardGlobals = HashSetFactory.make();
 
-      PythonCodeEntity fun = new PythonCodeEntity(functionType, downwardGlobals);
+      PythonCodeEntity fun = new PythonCodeEntity(functionType, downwardGlobals, annotations);
 
       PythonParser.FunctionContext child =
           new PythonParser.FunctionContext(context, fun, downwardGlobals, function);
