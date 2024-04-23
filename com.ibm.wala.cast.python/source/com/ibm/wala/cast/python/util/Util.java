@@ -16,6 +16,7 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
 
@@ -77,6 +78,7 @@ public class Util {
     return annotations.stream()
         .filter(a -> a.getType().equals(cAstDynamicAnnotation))
         .map(a -> a.getArguments().get(DYNAMIC_ANNOTATION_KEY))
+        .filter(Objects::nonNull)
         .map(CAstNode.class::cast)
         .map(n -> n.getChild(0))
         .map(n -> n.getChild(0))
