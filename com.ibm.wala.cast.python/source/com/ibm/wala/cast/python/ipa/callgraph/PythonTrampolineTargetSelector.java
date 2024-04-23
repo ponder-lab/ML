@@ -43,42 +43,9 @@ import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Map;
-import java.util.Objects;
 import java.util.logging.Logger;
 
 public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
-
-  class CalleeKey {
-    private CGNode cgNode;
-    private IClass receiver;
-
-    public CalleeKey(CGNode cgNode, IClass receiver) {
-      this.cgNode = cgNode;
-      this.receiver = receiver;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) return true;
-      if (o == null || getClass() != o.getClass()) return false;
-
-      @SuppressWarnings("unchecked")
-      CalleeKey calleeKey = (CalleeKey) o;
-
-      return Objects.equals(cgNode, calleeKey.cgNode)
-          && Objects.equals(receiver, calleeKey.receiver);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(cgNode, receiver);
-    }
-
-    @Override
-    public String toString() {
-      return this.cgNode + ", " + this.receiver;
-    }
-  }
 
   private static final Logger logger =
       Logger.getLogger(PythonSSAPropagationCallGraphBuilder.class.getName());
