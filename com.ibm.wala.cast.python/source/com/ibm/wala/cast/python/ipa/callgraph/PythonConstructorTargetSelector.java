@@ -133,6 +133,10 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
             pc++;
 
             // Add a metadata variable that refers to the declaring class.
+            // NOTE: Per https://docs.python.org/3/library/functions.html#classmethod, "[i]f a class
+            // method is called for a derived class, the derived class object is passed as the
+            // implied first argument." I'm unsure whether `receiver` can refer to the derived
+            // class especially in light of https://github.com/wala/ML/issues/107.
             int classVar = v++;
             String globalName = getGlobalName(r);
             FieldReference globalRef = makeGlobalRef(receiver.getClassLoader(), globalName);
