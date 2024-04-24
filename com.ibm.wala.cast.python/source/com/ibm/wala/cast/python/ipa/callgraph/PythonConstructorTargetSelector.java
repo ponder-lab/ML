@@ -10,6 +10,7 @@
  *****************************************************************************/
 package com.ibm.wala.cast.python.ipa.callgraph;
 
+import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
 import com.ibm.wala.cast.loader.DynamicCallSiteReference;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
@@ -19,8 +20,10 @@ import com.ibm.wala.cast.python.loader.PythonLoader.PythonClass;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
+import com.ibm.wala.cast.types.AstTypeReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
+import com.ibm.wala.classLoader.IClassLoader;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.classLoader.NewSiteReference;
 import com.ibm.wala.core.util.strings.Atom;
@@ -43,6 +46,17 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
 
   public PythonConstructorTargetSelector(MethodTargetSelector base) {
     this.base = base;
+  }
+
+  /**
+   * creates a reference to a global named globalName. the declaring type and type of the global are
+   * both the root type.
+   */
+  protected static FieldReference makeGlobalRef(IClassLoader loader, String globalName) {
+    TypeReference rootTypeRef =
+        TypeReference.findOrCreate(loader.getReference(), AstTypeReference.rootTypeName);
+    return FieldReference.findOrCreate(
+        rootTypeRef, Atom.findOrCreateUnicodeAtom("global " + globalName), rootTypeRef);
   }
 
   @Override
@@ -126,6 +140,26 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
                     FieldReference.findOrCreate(
                         PythonTypes.Root,
                         Atom.findOrCreateUnicodeAtom("$function"),
+                        PythonTypes.Root)));
+            pc++;
+
+            int classVar = v++;
+
+            FieldReference globalRef =
+                makeGlobalRef(
+                    // TODO: LastIndexOf('/") of the receiver? Search for it.
+                    receiver.getClassLoader(), "script tf2_test_class_method3.py/MyClass");
+            ctor.addStatement(new AstGlobalRead(pc, classVar, globalRef));
+            pc++;
+
+            ctor.addStatement(
+                insts.PutInstruction(
+                    pc,
+                    f,
+                    classVar,
+                    FieldReference.findOrCreate(
+                        PythonTypes.Root,
+                        Atom.findOrCreateUnicodeAtom("$class"),
                         PythonTypes.Root)));
             pc++;
 

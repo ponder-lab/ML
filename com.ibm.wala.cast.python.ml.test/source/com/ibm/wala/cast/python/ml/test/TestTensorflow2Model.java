@@ -2631,12 +2631,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   @Test
   public void testClassMethod() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_class_method.py", "MyClass.the_class_method", 1, 1, 2);
+    test(
+        "tf2_test_class_method.py",
+        "MyClass.the_class_method",
+        1,
+        1,
+        2); // FIXME: Shouldn't this be v3?
   }
 
   @Test
   public void testClassMethod2() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_class_method2.py", "MyClass.the_class_method", 1, 1, 3);
+  }
+
+  @Test
+  public void testClassMethod3() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_class_method3.py", "MyClass.f", 1, 1, 2);
   }
 
   private void test(

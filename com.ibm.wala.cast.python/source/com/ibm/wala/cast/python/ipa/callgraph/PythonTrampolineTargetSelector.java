@@ -180,6 +180,8 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
                             PythonTypes.Root,
                             Atom.findOrCreateUnicodeAtom("$class"),
                             PythonTypes.Root)));
+
+            // TODO: Do we need a check cast instruction here?
           } else v1 = v + 1;
 
           int i = 0;
