@@ -24,7 +24,6 @@ import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
-import com.ibm.wala.cast.python.types.Util;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
