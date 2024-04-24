@@ -10,6 +10,8 @@
  *****************************************************************************/
 package com.ibm.wala.cast.python.ipa.callgraph;
 
+import static com.ibm.wala.cast.python.types.Util.makeGlobalRef;
+
 import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
 import com.ibm.wala.cast.loader.DynamicCallSiteReference;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
@@ -20,10 +22,8 @@ import com.ibm.wala.cast.python.loader.PythonLoader.PythonClass;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
-import com.ibm.wala.cast.types.AstTypeReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
-import com.ibm.wala.classLoader.IClassLoader;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.classLoader.NewSiteReference;
 import com.ibm.wala.core.util.strings.Atom;
@@ -46,17 +46,6 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
 
   public PythonConstructorTargetSelector(MethodTargetSelector base) {
     this.base = base;
-  }
-
-  /**
-   * creates a reference to a global named globalName. the declaring type and type of the global are
-   * both the root type.
-   */
-  protected static FieldReference makeGlobalRef(IClassLoader loader, String globalName) {
-    TypeReference rootTypeRef =
-        TypeReference.findOrCreate(loader.getReference(), AstTypeReference.rootTypeName);
-    return FieldReference.findOrCreate(
-        rootTypeRef, Atom.findOrCreateUnicodeAtom("global " + globalName), rootTypeRef);
   }
 
   @Override
@@ -143,25 +132,22 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
                         PythonTypes.Root)));
             pc++;
 
+            // Add a metadata variable that refers to the declaring class.
             int classVar = v++;
+            String globalName = getGlobalName(r);
+            FieldReference globalRef = makeGlobalRef(receiver.getClassLoader(), globalName);
 
-            FieldReference globalRef =
-                makeGlobalRef(
-                    // TODO: LastIndexOf('/") of the receiver? Search for it.
-                    receiver.getClassLoader(), "script tf2_test_class_method3.py/MyClass");
-            ctor.addStatement(new AstGlobalRead(pc, classVar, globalRef));
-            pc++;
+            ctor.addStatement(new AstGlobalRead(pc++, classVar, globalRef));
 
             ctor.addStatement(
                 insts.PutInstruction(
-                    pc,
+                    pc++,
                     f,
                     classVar,
                     FieldReference.findOrCreate(
                         PythonTypes.Root,
                         Atom.findOrCreateUnicodeAtom("$class"),
                         PythonTypes.Root)));
-            pc++;
 
             ctor.addStatement(
                 insts.PutInstruction(
@@ -211,5 +197,19 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
       }
     }
     return base.getCalleeTarget(caller, site, receiver);
+  }
+
+  /**
+   * Returns the global name of the given {@link MethodReference}'s declaring class.
+   *
+   * @param r The {@link MethodReference} for which to extrac the global script name.
+   * @return The global name of the given {@link MethodReference}'s declaring class.
+   */
+  private static String getGlobalName(MethodReference r) {
+    String globalName = r.getDeclaringClass().getName().toString();
+
+    if (globalName.startsWith("L")) globalName = globalName.substring(1);
+
+    return globalName.substring(0, globalName.lastIndexOf('/'));
   }
 }
