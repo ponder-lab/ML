@@ -38,5 +38,19 @@ public class Util {
         rootTypeRef, Atom.findOrCreateUnicodeAtom(GLOBAL_KEYWORD + " " + globalName), rootTypeRef);
   }
 
+  /**
+   * Returns the {@link TypeReference} of the given {@link TypeReference}'s declaring class.
+   *
+   * @param reference The {@link TypeReference} for which to extract the {@link TypeReference} of
+   *     the declaring class.
+   * @return The {@link TypeReference} of the given {@link TypeReference}'s declaring class.
+   */
+  public static TypeReference getDeclaringClassTypeReference(TypeReference reference) {
+    TypeName name = reference.getName();
+    Atom packageName = name.getPackage();
+    name = TypeName.findOrCreate("L" + packageName.toString());
+    return TypeReference.findOrCreate(reference.getClassLoader(), name);
+  }
+
   private Util() {}
 }

@@ -12,6 +12,7 @@ package com.ibm.wala.cast.python.ipa.callgraph;
 
 import static com.ibm.wala.cast.python.types.PythonTypes.CLASS_METHOD;
 import static com.ibm.wala.cast.python.types.PythonTypes.STATIC_METHOD;
+import static com.ibm.wala.cast.python.types.Util.getDeclaringClassTypeReference;
 import static com.ibm.wala.types.annotations.Annotation.make;
 
 import com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKeys.ScopeMappingInstanceKey;
@@ -23,6 +24,7 @@ import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.cast.python.types.Util;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
@@ -168,6 +170,7 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
                             Atom.findOrCreateUnicodeAtom("$self"),
                             PythonTypes.Root)));
           } else if (classMethodReceiver) {
+            // Add a class reference.
             v1 = v + 2;
 
             x.addStatement(
@@ -182,18 +185,11 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
                             PythonTypes.Root)));
 
             int v2 = v + 3;
-
-            TypeReference reference = filter.getReference();
-            TypeName name = reference.getName();
-            Atom package1 = name.getPackage();
-
-            TypeName name2 = TypeName.findOrCreate("L" + package1.toString());
-            TypeReference reference2 =
-                TypeReference.findOrCreate(reference.getClassLoader(), name2);
+            TypeReference reference = getDeclaringClassTypeReference(filter.getReference());
 
             x.addStatement(
                 PythonLanguage.Python.instructionFactory()
-                    .CheckCastInstruction(1, v2, v1++, reference2, true));
+                    .CheckCastInstruction(1, v2, v1++, reference, true));
           } else v1 = v + 1;
 
           int i = 0;
