@@ -185,13 +185,11 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
 
             TypeReference reference = filter.getReference();
             TypeName name = reference.getName();
-            System.out.println(name);
             Atom package1 = name.getPackage();
 
             TypeName name2 = TypeName.findOrCreate("L" + package1.toString());
             TypeReference reference2 =
                 TypeReference.findOrCreate(reference.getClassLoader(), name2);
-            System.out.println(reference2);
 
             x.addStatement(
                 PythonLanguage.Python.instructionFactory()
