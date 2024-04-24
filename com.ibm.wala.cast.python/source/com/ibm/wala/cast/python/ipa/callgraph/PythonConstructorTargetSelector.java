@@ -206,10 +206,6 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
    * @return The global name of the given {@link MethodReference}'s declaring class.
    */
   private static String getGlobalName(MethodReference r) {
-    String globalName = r.getDeclaringClass().getName().toString();
-
-    if (globalName.startsWith("L")) globalName = globalName.substring(1);
-
-    return globalName.substring(0, globalName.lastIndexOf('/'));
+    return r.getDeclaringClass().getName().getPackage().toString();
   }
 }
