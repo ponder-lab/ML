@@ -202,7 +202,7 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
   /**
    * Returns the global name of the given {@link MethodReference}'s declaring class.
    *
-   * @param r The {@link MethodReference} for which to extrac the global script name.
+   * @param r The {@link MethodReference} for which to extract the global script name.
    * @return The global name of the given {@link MethodReference}'s declaring class.
    */
   private static String getGlobalName(MethodReference r) {
