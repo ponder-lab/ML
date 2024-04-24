@@ -148,11 +148,7 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
                   : "Method is not static: " + filter);
 
           // Are we calling a class method?
-          boolean classMethodReceiver = filter.getAnnotations().contains(make(CLASS_METHOD));
-          logger.fine(
-              classMethodReceiver
-                  ? "Found class method receiver: " + filter
-                  : "Receiver: " + filter + " is not a class method.");
+          boolean classMethodReceiver = isClassMethod(receiver);
 
           // only add self if the receiver isn't static or a class method.
           if (!staticMethodReceiver && !classMethodReceiver) {
@@ -233,6 +229,32 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
     }
 
     return base.getCalleeTarget(caller, site, receiver);
+  }
+
+  /**
+   * Returns true iff the given {@link IClass} represents a Python <a
+   * href="https://docs.python.org/3/library/functions.html#classmethod">class method</a>.
+   *
+   * @param receiver The {@link IClass} in question.
+   * @return True iff the given {@link IClass} represents a Python <a
+   *     href="https://docs.python.org/3/library/functions.html#classmethod">class method</a>.
+   * @apiNote Python methods and functions are represented using {@link IClass}.
+   * @implNote This method will log whether the given {@link IClass} is a class method or not.
+   */
+  private static boolean isClassMethod(IClass receiver) {
+    // If it's a trampoline.
+    if (receiver instanceof PythonInstanceMethodTrampoline)
+      // Use the "real class."
+      receiver = ((PythonInstanceMethodTrampoline) receiver).getRealClass();
+
+    boolean classMethodReceiver = receiver.getAnnotations().contains(make(CLASS_METHOD));
+
+    logger.fine(
+        classMethodReceiver
+            ? "Found class method receiver: " + receiver
+            : "Receiver: " + receiver + " is not a class method.");
+
+    return classMethodReceiver;
   }
 
   /**
