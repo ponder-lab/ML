@@ -49,9 +49,6 @@ import java.util.logging.Logger;
 public class PythonInstanceMethodTrampolineTargetSelector<T>
     extends PythonMethodTrampolineTargetSelector<T> {
 
-  private static final Logger logger =
-      Logger.getLogger(PythonInstanceMethodTrampolineTargetSelector.class.getName());
-
   /**
    * The method name that is used for Python callables.
    *
@@ -70,6 +67,74 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
    */
   private static final String CALLABLE_METHOD_NAME_FOR_KERAS_MODELS = "call";
 
+  private static final Logger logger =
+      Logger.getLogger(PythonInstanceMethodTrampolineTargetSelector.class.getName());
+
+  /**
+   * If the given {@link ConstantKey}'s value is <code>null</code>, then issue a warning and return
+   * <code>null</code>. Otherwise, throw an {@link IllegalArgumentException} stating that an {@link
+   * AllocationSiteInNode} cannot be extracted from the given {@link ConstantKey}. A value of <code>
+   * null</code> most likely indicates that a receiver can potentially be <code>null</code>.
+   *
+   * @param constantKey The {@link ConstantKey} from which to extract the corresponding {@link
+   *     AllocationSiteInNode}.
+   * @return <code>null</code> if the given {@link ConstantKey}'s value is <code>null</code>.
+   * @throws IllegalArgumentException If the constant's value is another else other than <code>null
+   *     </code>.
+   */
+  private static AllocationSiteInNode getAllocationSiteInNode(ConstantKey<?> constantKey) {
+    Object value = constantKey.getValue();
+
+    if (value == null) {
+      logger.warning("Can't extract AllocationSiteInNode from: " + constantKey + ".");
+      return null;
+    } else
+      throw new IllegalArgumentException(
+          "Can't extract AllocationSiteInNode from: "
+              + constantKey
+              + ". Not expecting value of: "
+              + value
+              + " from ConstantKey.");
+  }
+
+  /**
+   * Extracts the {@link AllocationSiteInNode} from the given {@link InstanceKey}. If the given
+   * {@link InstanceKey} is an instance of {@link AllocationSiteInNode}, then it itself is returned.
+   * If the given {@link InstanceKey} is a {@link ScopeMappingInstanceKey}, then it's base {@link
+   * InstanceKey} is returned if it is an instance {@link AllocationSiteInNode}.
+   *
+   * @param instanceKey The {@link InstanceKey} in question.
+   * @return The {@link AllocationSiteInNode} corresponding to the given {@link InstanceKey}
+   *     according to the above scheme.
+   */
+  private static AllocationSiteInNode getAllocationSiteInNode(InstanceKey instanceKey) {
+    if (instanceKey instanceof AllocationSiteInNode) return (AllocationSiteInNode) instanceKey;
+    else if (instanceKey instanceof ScopeMappingInstanceKey) {
+      ScopeMappingInstanceKey smik = (ScopeMappingInstanceKey) instanceKey;
+      InstanceKey baseInstanceKey = smik.getBase();
+
+      if (baseInstanceKey instanceof AllocationSiteInNode)
+        return (AllocationSiteInNode) baseInstanceKey;
+      else if (baseInstanceKey instanceof ConstantKey) {
+        return getAllocationSiteInNode((ConstantKey<?>) baseInstanceKey);
+      } else
+        throw new IllegalArgumentException(
+            "Can't extract AllocationSiteInNode from: "
+                + baseInstanceKey
+                + ". Not expecting: "
+                + baseInstanceKey.getClass()
+                + ".");
+    } else if (instanceKey instanceof ConstantKey) {
+      return getAllocationSiteInNode((ConstantKey<?>) instanceKey);
+    } else
+      throw new IllegalArgumentException(
+          "Can't extract AllocationSiteInNode from: "
+              + instanceKey
+              + ". Not expecting: "
+              + instanceKey.getClass()
+              + ".");
+  }
+
   private PythonAnalysisEngine<T> engine;
 
   public PythonInstanceMethodTrampolineTargetSelector(
@@ -79,20 +144,10 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
   }
 
   @Override
-  public IMethod getCalleeTarget(CGNode caller, CallSiteReference site, IClass receiver) {
-    if (isCallable(receiver)) {
-      logger.fine("Encountered callable.");
-
-      PythonInvokeInstruction call = this.getCall(caller, site);
-
-      // It's a callable. Change the receiver.
-      receiver = getCallable(caller, receiver.getClassHierarchy(), call);
-
-      if (receiver == null) return null; // not found.
-      else logger.fine("Substituting the receiver with one derived from a callable.");
-    }
-
-    return super.getCalleeTarget(caller, site, receiver);
+  protected boolean shouldProcess(CGNode caller, CallSiteReference site, IClass receiver) {
+    IClassHierarchy cha = receiver.getClassHierarchy();
+    return cha.isSubclassOf(receiver, cha.lookupClass(PythonTypes.trampoline))
+        || this.isCallable(receiver);
   }
 
   @SuppressWarnings("unchecked")
@@ -199,8 +254,21 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
     x.setValueNames(names);
   }
 
-  private boolean isCallable(IClass receiver) {
-    return receiver != null && receiver.getReference().equals(PythonTypes.object);
+  @Override
+  public IMethod getCalleeTarget(CGNode caller, CallSiteReference site, IClass receiver) {
+    if (isCallable(receiver)) {
+      logger.fine("Encountered callable.");
+
+      PythonInvokeInstruction call = this.getCall(caller, site);
+
+      // It's a callable. Change the receiver.
+      receiver = getCallable(caller, receiver.getClassHierarchy(), call);
+
+      if (receiver == null) return null; // not found.
+      else logger.fine("Substituting the receiver with one derived from a callable.");
+    }
+
+    return super.getCalleeTarget(caller, site, receiver);
   }
 
   /**
@@ -258,71 +326,6 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
     return null;
   }
 
-  /**
-   * Extracts the {@link AllocationSiteInNode} from the given {@link InstanceKey}. If the given
-   * {@link InstanceKey} is an instance of {@link AllocationSiteInNode}, then it itself is returned.
-   * If the given {@link InstanceKey} is a {@link ScopeMappingInstanceKey}, then it's base {@link
-   * InstanceKey} is returned if it is an instance {@link AllocationSiteInNode}.
-   *
-   * @param instanceKey The {@link InstanceKey} in question.
-   * @return The {@link AllocationSiteInNode} corresponding to the given {@link InstanceKey}
-   *     according to the above scheme.
-   */
-  private static AllocationSiteInNode getAllocationSiteInNode(InstanceKey instanceKey) {
-    if (instanceKey instanceof AllocationSiteInNode) return (AllocationSiteInNode) instanceKey;
-    else if (instanceKey instanceof ScopeMappingInstanceKey) {
-      ScopeMappingInstanceKey smik = (ScopeMappingInstanceKey) instanceKey;
-      InstanceKey baseInstanceKey = smik.getBase();
-
-      if (baseInstanceKey instanceof AllocationSiteInNode)
-        return (AllocationSiteInNode) baseInstanceKey;
-      else if (baseInstanceKey instanceof ConstantKey) {
-        return getAllocationSiteInNode((ConstantKey<?>) baseInstanceKey);
-      } else
-        throw new IllegalArgumentException(
-            "Can't extract AllocationSiteInNode from: "
-                + baseInstanceKey
-                + ". Not expecting: "
-                + baseInstanceKey.getClass()
-                + ".");
-    } else if (instanceKey instanceof ConstantKey) {
-      return getAllocationSiteInNode((ConstantKey<?>) instanceKey);
-    } else
-      throw new IllegalArgumentException(
-          "Can't extract AllocationSiteInNode from: "
-              + instanceKey
-              + ". Not expecting: "
-              + instanceKey.getClass()
-              + ".");
-  }
-
-  /**
-   * If the given {@link ConstantKey}'s value is <code>null</code>, then issue a warning and return
-   * <code>null</code>. Otherwise, throw an {@link IllegalArgumentException} stating that an {@link
-   * AllocationSiteInNode} cannot be extracted from the given {@link ConstantKey}. A value of <code>
-   * null</code> most likely indicates that a receiver can potentially be <code>null</code>.
-   *
-   * @param constantKey The {@link ConstantKey} from which to extract the corresponding {@link
-   *     AllocationSiteInNode}.
-   * @return <code>null</code> if the given {@link ConstantKey}'s value is <code>null</code>.
-   * @throws IllegalArgumentException If the constant's value is another else other than <code>null
-   *     </code>.
-   */
-  private static AllocationSiteInNode getAllocationSiteInNode(ConstantKey<?> constantKey) {
-    Object value = constantKey.getValue();
-
-    if (value == null) {
-      logger.warning("Can't extract AllocationSiteInNode from: " + constantKey + ".");
-      return null;
-    } else
-      throw new IllegalArgumentException(
-          "Can't extract AllocationSiteInNode from: "
-              + constantKey
-              + ". Not expecting value of: "
-              + value
-              + " from ConstantKey.");
-  }
-
   public PythonAnalysisEngine<T> getEngine() {
     return engine;
   }
@@ -332,10 +335,7 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
     return logger;
   }
 
-  @Override
-  protected boolean shouldProcess(CGNode caller, CallSiteReference site, IClass receiver) {
-    IClassHierarchy cha = receiver.getClassHierarchy();
-    return cha.isSubclassOf(receiver, cha.lookupClass(PythonTypes.trampoline))
-        || this.isCallable(receiver);
+  private boolean isCallable(IClass receiver) {
+    return receiver != null && receiver.getReference().equals(PythonTypes.object);
   }
 }

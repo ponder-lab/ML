@@ -27,10 +27,6 @@ public abstract class PythonMethodTrampolineTargetSelector<T> implements MethodT
     this.base = base;
   }
 
-  protected abstract Logger getLogger();
-
-  protected abstract boolean shouldProcess(CGNode caller, CallSiteReference site, IClass receiver);
-
   @Override
   public IMethod getCalleeTarget(CGNode caller, CallSiteReference site, IClass receiver) {
     if (receiver != null) {
@@ -65,14 +61,18 @@ public abstract class PythonMethodTrampolineTargetSelector<T> implements MethodT
     return base.getCalleeTarget(caller, site, receiver);
   }
 
-  protected abstract void populate(
-      PythonSummary x, int v, IClass receiver, PythonInvokeInstruction call, Logger logger);
+  protected PythonInvokeInstruction getCall(CGNode caller, CallSiteReference site) {
+    return (PythonInvokeInstruction) caller.getIR().getCalls(site)[0];
+  }
 
   private Pair<IClass, Integer> makeKey(IClass receiver, PythonInvokeInstruction call) {
     return Pair.make(receiver, call.getNumberOfTotalParameters());
   }
 
-  protected PythonInvokeInstruction getCall(CGNode caller, CallSiteReference site) {
-    return (PythonInvokeInstruction) caller.getIR().getCalls(site)[0];
-  }
+  protected abstract Logger getLogger();
+
+  protected abstract boolean shouldProcess(CGNode caller, CallSiteReference site, IClass receiver);
+
+  protected abstract void populate(
+      PythonSummary x, int v, IClass receiver, PythonInvokeInstruction call, Logger logger);
 }
