@@ -4,6 +4,7 @@ import com.ibm.wala.cast.types.AstTypeReference;
 import com.ibm.wala.classLoader.IClassLoader;
 import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.types.FieldReference;
+import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 
@@ -53,4 +54,14 @@ public class Util {
   }
 
   private Util() {}
+
+  /**
+   * Returns the global name of the given {@link MethodReference}'s declaring class.
+   *
+   * @param r The {@link MethodReference} for which to extract the global script name.
+   * @return The global name of the given {@link MethodReference}'s declaring class.
+   */
+  public static String getGlobalName(MethodReference r) {
+    return r.getDeclaringClass().getName().getPackage().toString();
+  }
 }

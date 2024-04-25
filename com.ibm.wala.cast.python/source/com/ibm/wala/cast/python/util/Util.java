@@ -2,12 +2,16 @@ package com.ibm.wala.cast.python.util;
 
 import static com.google.common.collect.Iterables.concat;
 import static com.ibm.wala.cast.python.types.PythonTypes.CAST_DYNAMIC_ANNOTATION;
+import static com.ibm.wala.cast.python.types.PythonTypes.CLASS_METHOD;
+import static com.ibm.wala.types.annotations.Annotation.make;
 import static java.util.Collections.emptyList;
 import static java.util.stream.Collectors.toList;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PytestEntrypointBuilder;
+import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.tree.CAstAnnotation;
 import com.ibm.wala.cast.tree.CAstNode;
+import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.ipa.callgraph.Entrypoint;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import java.io.File;
@@ -89,6 +93,32 @@ public class Util {
         .map(CAstNode::getValue)
         .filter(v -> v instanceof String)
         .map(String.class::cast);
+  }
+
+  /**
+   * Returns true iff the given {@link IClass} represents a Python <a
+   * href="https://docs.python.org/3/library/functions.html#classmethod">class method</a>.
+   *
+   * @param receiver The {@link IClass} in question.
+   * @return True iff the given {@link IClass} represents a Python <a
+   *     href="https://docs.python.org/3/library/functions.html#classmethod">class method</a>.
+   * @apiNote Python methods and functions are represented using {@link IClass}.
+   * @implNote This method will log whether the given {@link IClass} is a class method or not.
+   */
+  public static boolean isClassMethod(IClass receiver) {
+    // If it's a trampoline.
+    if (receiver instanceof PythonInstanceMethodTrampoline)
+      // Use the "real class."
+      receiver = ((PythonInstanceMethodTrampoline) receiver).getRealClass();
+
+    boolean classMethodReceiver = receiver.getAnnotations().contains(make(CLASS_METHOD));
+
+    LOGGER.fine(
+        classMethodReceiver
+            ? "Found class method receiver: " + receiver
+            : "Receiver: " + receiver + " is not a class method.");
+
+    return classMethodReceiver;
   }
 
   private Util() {}

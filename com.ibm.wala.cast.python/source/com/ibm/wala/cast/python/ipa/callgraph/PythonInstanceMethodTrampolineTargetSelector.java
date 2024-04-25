@@ -10,9 +10,9 @@
  *****************************************************************************/
 package com.ibm.wala.cast.python.ipa.callgraph;
 
-import static com.ibm.wala.cast.python.types.PythonTypes.CLASS_METHOD;
 import static com.ibm.wala.cast.python.types.PythonTypes.STATIC_METHOD;
 import static com.ibm.wala.cast.python.types.Util.getDeclaringClassTypeReference;
+import static com.ibm.wala.cast.python.util.Util.isClassMethod;
 import static com.ibm.wala.types.annotations.Annotation.make;
 
 import com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKeys.ScopeMappingInstanceKey;
@@ -49,10 +49,10 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Map;
 import java.util.logging.Logger;
 
-public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
+public class PythonInstanceMethodTrampolineTargetSelector<T> implements MethodTargetSelector {
 
-  private static final Logger logger =
-      Logger.getLogger(PythonTrampolineTargetSelector.class.getName());
+  public static final Logger logger =
+      Logger.getLogger(PythonInstanceMethodTrampolineTargetSelector.class.getName());
 
   /**
    * The method name that is used for Python callables.
@@ -76,7 +76,7 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
 
   private PythonAnalysisEngine<T> engine;
 
-  public PythonTrampolineTargetSelector(
+  public PythonInstanceMethodTrampolineTargetSelector(
       MethodTargetSelector base, PythonAnalysisEngine<T> pythonAnalysisEngine) {
     this.base = base;
     this.engine = pythonAnalysisEngine;
@@ -147,7 +147,8 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
                   ? "Found static method receiver: " + filter
                   : "Method is not static: " + filter);
 
-          // Are we calling a class method?
+          // Are we calling a class method? If so, it would be using an object instance instead of a
+          // class on the LHS.
           boolean classMethodReceiver = isClassMethod(receiver);
 
           // only add self if the receiver isn't static or a class method.
@@ -229,32 +230,6 @@ public class PythonTrampolineTargetSelector<T> implements MethodTargetSelector {
     }
 
     return base.getCalleeTarget(caller, site, receiver);
-  }
-
-  /**
-   * Returns true iff the given {@link IClass} represents a Python <a
-   * href="https://docs.python.org/3/library/functions.html#classmethod">class method</a>.
-   *
-   * @param receiver The {@link IClass} in question.
-   * @return True iff the given {@link IClass} represents a Python <a
-   *     href="https://docs.python.org/3/library/functions.html#classmethod">class method</a>.
-   * @apiNote Python methods and functions are represented using {@link IClass}.
-   * @implNote This method will log whether the given {@link IClass} is a class method or not.
-   */
-  private static boolean isClassMethod(IClass receiver) {
-    // If it's a trampoline.
-    if (receiver instanceof PythonInstanceMethodTrampoline)
-      // Use the "real class."
-      receiver = ((PythonInstanceMethodTrampoline) receiver).getRealClass();
-
-    boolean classMethodReceiver = receiver.getAnnotations().contains(make(CLASS_METHOD));
-
-    logger.fine(
-        classMethodReceiver
-            ? "Found class method receiver: " + receiver
-            : "Receiver: " + receiver + " is not a class method.");
-
-    return classMethodReceiver;
   }
 
   /**
