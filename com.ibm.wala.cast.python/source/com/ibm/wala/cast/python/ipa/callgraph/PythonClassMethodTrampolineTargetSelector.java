@@ -82,11 +82,11 @@ public class PythonClassMethodTrampolineTargetSelector<T>
     int getInstRes = v++;
 
     // Read the field from the class corresponding to the called method.
-    FieldReference inner =
+    FieldReference method =
         FieldReference.findOrCreate(
             PythonTypes.Root, Atom.findOrCreateUnicodeAtom("the_class_method"), PythonTypes.Root);
 
-    x.addStatement(insts.GetInstruction(pc++, getInstRes, globalReadRes, inner));
+    x.addStatement(insts.GetInstruction(pc++, getInstRes, globalReadRes, method));
 
     int i = 0;
     int paramSize = Math.max(2, call.getNumberOfPositionalParameters() + 1);
