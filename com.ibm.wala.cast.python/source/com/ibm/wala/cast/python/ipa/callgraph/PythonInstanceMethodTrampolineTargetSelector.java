@@ -51,7 +51,7 @@ import java.util.logging.Logger;
 
 public class PythonInstanceMethodTrampolineTargetSelector<T> implements MethodTargetSelector {
 
-  public static final Logger logger =
+  private static final Logger logger =
       Logger.getLogger(PythonInstanceMethodTrampolineTargetSelector.class.getName());
 
   /**
