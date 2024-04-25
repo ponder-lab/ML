@@ -2666,6 +2666,41 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_abstract_method2.py", "C.f", 1, 1, 3);
   }
 
+  @Test
+  public void testDecoratedMethod() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_decorated_method.py", "f", 1, 1, 2);
+  }
+
+  @Test
+  public void testDecoratedMethod2() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_decorated_method2.py", "f", 1, 1, 2);
+  }
+
+  @Test
+  public void testDecoratedMethod3() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_decorated_method3.py", "raffi", 1, 1, 2);
+  }
+
+  @Test
+  public void testDecoratedMethod4() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_decorated_method4.py", "raffi", 1, 1, 2);
+  }
+
+  @Test
+  public void testDecoratedMethod5() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_decorated_method5.py", "raffi", 1, 1, 2);
+  }
+
+  @Test
+  public void testDecoratedMethod6() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_decorated_method6.py", "f", 1, 1, 2);
+  }
+
+  @Test
+  public void testDecoratedMethod7() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_decorated_method7.py", "f", 1, 1, 2);
+  }
+
   private void test(
       String filename,
       String functionName,
