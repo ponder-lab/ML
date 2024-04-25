@@ -88,89 +88,19 @@ public class PythonClassMethodTrampolineTargetSelector<T> implements MethodTarge
                   AstMethodReference.fnDesc);
 
           PythonSummary x = new PythonSummary(tr, call.getNumberOfTotalParameters());
-
           int v = call.getNumberOfTotalParameters() + 1;
-
           SSAInstructionFactory insts = PythonLanguage.Python.instructionFactory();
 
-          //          x.addStatement(
-          //              PythonLanguage.Python.instructionFactory()
-          //                  .GetInstruction(
-          //                      0,
-          //                      v,
-          //                      1,
-          //                      FieldReference.findOrCreate(
-          //                          PythonTypes.Root,
-          //                          Atom.findOrCreateUnicodeAtom("$function"),
-          //                          PythonTypes.Root)));
-          //
-          int v0 = v + 1;
-          //
-          //          x.addStatement(
-          //              PythonLanguage.Python.instructionFactory()
-          //                  .CheckCastInstruction(1, v0, v, receiver.getReference(), true));
-          //
-          int v1;
-          //
-          //          // Are we calling a static method?
-          //          boolean staticMethodReceiver =
-          // receiver.getAnnotations().contains(make(STATIC_METHOD));
-          //          LOGGER.fine(
-          //              staticMethodReceiver
-          //                  ? "Found static method receiver: " + receiver
-          //                  : "Method is not static: " + receiver);
-          //
-          //          // only add self if the receiver isn't static or a class method.
-          //          if (!staticMethodReceiver && !classMethodReceiver) {
-          //            v1 = v + 2;
-          //
-          //            x.addStatement(
-          //                PythonLanguage.Python.instructionFactory()
-          //                    .GetInstruction(
-          //                        1,
-          //                        v1,
-          //                        1,
-          //                        FieldReference.findOrCreate(
-          //                            PythonTypes.Root,
-          //                            Atom.findOrCreateUnicodeAtom("$self"),
-          //                            PythonTypes.Root)));
-          //          } else if (classMethodReceiver) {
-          //            // Add a class reference.
-          //            v1 = v + 2;
-          //
-          //            x.addStatement(
-          //                PythonLanguage.Python.instructionFactory()
-          //                    .GetInstruction(
-          //                        1,
-          //                        v1,
-          //                        1,
-          //                        FieldReference.findOrCreate(
-          //                            PythonTypes.Root,
-          //                            Atom.findOrCreateUnicodeAtom("$class"),
-          //                            PythonTypes.Root)));
-          //
-          //            int v2 = v + 3;
-          //            TypeReference reference =
-          // getDeclaringClassTypeReference(receiver.getReference());
-          //
-          //            x.addStatement(
-          //                PythonLanguage.Python.instructionFactory()
-          //                    .CheckCastInstruction(1, v2, v1++, reference, true));
-          //          } else
-
+          // Read the class from the global scope.
           String globalName = getGlobalName(receiver.getReference());
-
           FieldReference globalRef = makeGlobalRef(receiver.getClassLoader(), globalName);
-
           int globalReadRes = v++;
 
           x.addStatement(new AstGlobalRead(0, globalReadRes, globalRef));
 
           int getInstRes = v++;
 
-          Atom name = globalRef.getName();
-          System.out.println(name);
-
+          // Read the field from the class corresponding to the called method.
           FieldReference inner =
               FieldReference.findOrCreate(
                   PythonTypes.Root,
@@ -179,12 +109,10 @@ public class PythonClassMethodTrampolineTargetSelector<T> implements MethodTarge
 
           x.addStatement(insts.GetInstruction(1, getInstRes, globalReadRes, inner));
 
-          v1 = v + 1;
-
           int i = 0;
           int paramSize = Math.max(2, call.getNumberOfPositionalParameters() + 1);
           int[] params = new int[paramSize];
-          params[i++] = v0;
+          params[i++] = getInstRes;
           params[i++] = globalReadRes;
 
           for (int j = 1; j < call.getNumberOfPositionalParameters(); j++) params[i++] = j + 1;
@@ -201,12 +129,10 @@ public class PythonClassMethodTrampolineTargetSelector<T> implements MethodTarge
             }
           }
 
-          int result = v1 + 1;
-          int except = v1 + 2;
-
           CallSiteReference ref =
               new DynamicCallSiteReference(call.getCallSite().getDeclaredTarget(), 2);
 
+          int except = v++;
           int invokeResult = v++;
 
           x.addStatement(new PythonInvokeInstruction(2, invokeResult, except, ref, params, keys));
