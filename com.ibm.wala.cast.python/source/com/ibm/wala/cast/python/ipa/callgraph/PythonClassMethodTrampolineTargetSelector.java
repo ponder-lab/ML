@@ -10,22 +10,16 @@
  *****************************************************************************/
 package com.ibm.wala.cast.python.ipa.callgraph;
 
-import static com.ibm.wala.cast.python.types.PythonTypes.STATIC_METHOD;
-import static com.ibm.wala.cast.python.types.Util.getDeclaringClassTypeReference;
-import static com.ibm.wala.cast.python.types.Util.getGlobalName;
 import static com.ibm.wala.cast.python.types.Util.makeGlobalRef;
 import static com.ibm.wala.cast.python.util.Util.isClassMethod;
-import static com.ibm.wala.types.annotations.Annotation.make;
 
 import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
 import com.ibm.wala.cast.loader.DynamicCallSiteReference;
-import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
-import com.ibm.wala.cast.python.types.Util;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
@@ -34,10 +28,10 @@ import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.MethodTargetSelector;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.ssa.SSAInstructionFactory;
 import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
-import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.Pair;
 import java.util.Map;
@@ -68,103 +62,128 @@ public class PythonClassMethodTrampolineTargetSelector<T> implements MethodTarge
       // Are we calling a class method?
       boolean classMethodReceiver = isClassMethod(receiver);
 
+      // Is the caller a trampoline?
+      boolean trampoline =
+          caller
+              .getMethod()
+              .getSelector()
+              .getName()
+              .startsWith(Atom.findOrCreateAsciiAtom("trampoline"));
+
       // Only for class methods with a class on the LHS (not an object instance).
-      if (classMethodReceiver && !cha.isSubclassOf(receiver, cha.lookupClass(PythonTypes.trampoline))) {
+      if (classMethodReceiver
+          && !cha.isSubclassOf(receiver, cha.lookupClass(PythonTypes.trampoline))
+          && !trampoline) {
         PythonInvokeInstruction call = (PythonInvokeInstruction) caller.getIR().getCalls(site)[0];
         Pair<IClass, Integer> key = Pair.make(receiver, call.getNumberOfTotalParameters());
 
         if (!codeBodies.containsKey(key)) {
           Map<Integer, Atom> names = HashMapFactory.make();
-          
+
           MethodReference tr =
               MethodReference.findOrCreate(
                   receiver.getReference(),
                   Atom.findOrCreateUnicodeAtom("trampoline" + call.getNumberOfTotalParameters()),
                   AstMethodReference.fnDesc);
-          
+
           PythonSummary x = new PythonSummary(tr, call.getNumberOfTotalParameters());
 
           int v = call.getNumberOfTotalParameters() + 1;
 
-//          x.addStatement(
-//              PythonLanguage.Python.instructionFactory()
-//                  .GetInstruction(
-//                      0,
-//                      v,
-//                      1,
-//                      FieldReference.findOrCreate(
-//                          PythonTypes.Root,
-//                          Atom.findOrCreateUnicodeAtom("$function"),
-//                          PythonTypes.Root)));
-//
+          SSAInstructionFactory insts = PythonLanguage.Python.instructionFactory();
+
+          //          x.addStatement(
+          //              PythonLanguage.Python.instructionFactory()
+          //                  .GetInstruction(
+          //                      0,
+          //                      v,
+          //                      1,
+          //                      FieldReference.findOrCreate(
+          //                          PythonTypes.Root,
+          //                          Atom.findOrCreateUnicodeAtom("$function"),
+          //                          PythonTypes.Root)));
+          //
           int v0 = v + 1;
-//
-//          x.addStatement(
-//              PythonLanguage.Python.instructionFactory()
-//                  .CheckCastInstruction(1, v0, v, receiver.getReference(), true));
-//
+          //
+          //          x.addStatement(
+          //              PythonLanguage.Python.instructionFactory()
+          //                  .CheckCastInstruction(1, v0, v, receiver.getReference(), true));
+          //
           int v1;
-//
-//          // Are we calling a static method?
-//          boolean staticMethodReceiver = receiver.getAnnotations().contains(make(STATIC_METHOD));
-//          LOGGER.fine(
-//              staticMethodReceiver
-//                  ? "Found static method receiver: " + receiver 
-//                  : "Method is not static: " + receiver);
-//
-//          // only add self if the receiver isn't static or a class method.
-//          if (!staticMethodReceiver && !classMethodReceiver) {
-//            v1 = v + 2;
-//
-//            x.addStatement(
-//                PythonLanguage.Python.instructionFactory()
-//                    .GetInstruction(
-//                        1,
-//                        v1,
-//                        1,
-//                        FieldReference.findOrCreate(
-//                            PythonTypes.Root,
-//                            Atom.findOrCreateUnicodeAtom("$self"),
-//                            PythonTypes.Root)));
-//          } else if (classMethodReceiver) {
-//            // Add a class reference.
-//            v1 = v + 2;
-//
-//            x.addStatement(
-//                PythonLanguage.Python.instructionFactory()
-//                    .GetInstruction(
-//                        1,
-//                        v1,
-//                        1,
-//                        FieldReference.findOrCreate(
-//                            PythonTypes.Root,
-//                            Atom.findOrCreateUnicodeAtom("$class"),
-//                            PythonTypes.Root)));
-//
-//            int v2 = v + 3;
-//            TypeReference reference = getDeclaringClassTypeReference(receiver.getReference());
-//
-//            x.addStatement(
-//                PythonLanguage.Python.instructionFactory()
-//                    .CheckCastInstruction(1, v2, v1++, reference, true));
-//          } else
-          
-          System.out.println(receiver);
-          
-          FieldReference globalRef = makeGlobalRef(receiver.getClassLoader(), "script tf2_test_class_method4.py/MyClass");
-          System.out.println(globalRef);
-          
-          x.addStatement(new AstGlobalRead(99, 99, globalRef));
-          
+          //
+          //          // Are we calling a static method?
+          //          boolean staticMethodReceiver =
+          // receiver.getAnnotations().contains(make(STATIC_METHOD));
+          //          LOGGER.fine(
+          //              staticMethodReceiver
+          //                  ? "Found static method receiver: " + receiver
+          //                  : "Method is not static: " + receiver);
+          //
+          //          // only add self if the receiver isn't static or a class method.
+          //          if (!staticMethodReceiver && !classMethodReceiver) {
+          //            v1 = v + 2;
+          //
+          //            x.addStatement(
+          //                PythonLanguage.Python.instructionFactory()
+          //                    .GetInstruction(
+          //                        1,
+          //                        v1,
+          //                        1,
+          //                        FieldReference.findOrCreate(
+          //                            PythonTypes.Root,
+          //                            Atom.findOrCreateUnicodeAtom("$self"),
+          //                            PythonTypes.Root)));
+          //          } else if (classMethodReceiver) {
+          //            // Add a class reference.
+          //            v1 = v + 2;
+          //
+          //            x.addStatement(
+          //                PythonLanguage.Python.instructionFactory()
+          //                    .GetInstruction(
+          //                        1,
+          //                        v1,
+          //                        1,
+          //                        FieldReference.findOrCreate(
+          //                            PythonTypes.Root,
+          //                            Atom.findOrCreateUnicodeAtom("$class"),
+          //                            PythonTypes.Root)));
+          //
+          //            int v2 = v + 3;
+          //            TypeReference reference =
+          // getDeclaringClassTypeReference(receiver.getReference());
+          //
+          //            x.addStatement(
+          //                PythonLanguage.Python.instructionFactory()
+          //                    .CheckCastInstruction(1, v2, v1++, reference, true));
+          //          } else
+
+          FieldReference globalRef =
+              makeGlobalRef(receiver.getClassLoader(), "script tf2_test_class_method4.py/MyClass");
+
+          int globalReadRes = v++;
+
+          x.addStatement(new AstGlobalRead(0, globalReadRes, globalRef));
+
+          int getInstRes = v++;
+
+          Atom name = globalRef.getName();
+          System.out.println(name);
+
+          FieldReference inner =
+              FieldReference.findOrCreate(
+                  PythonTypes.Root,
+                  Atom.findOrCreateUnicodeAtom("the_class_method"),
+                  PythonTypes.Root);
+
+          x.addStatement(insts.GetInstruction(1, getInstRes, globalReadRes, inner));
+
           v1 = v + 1;
 
           int i = 0;
-          int paramSize =
-              Math.max(
-                  1,
-                  call.getNumberOfPositionalParameters());
+          int paramSize = Math.max(2, call.getNumberOfPositionalParameters() + 1);
           int[] params = new int[paramSize];
           params[i++] = v0;
+          params[i++] = globalReadRes;
 
           for (int j = 1; j < call.getNumberOfPositionalParameters(); j++) params[i++] = j + 1;
 
@@ -186,8 +205,10 @@ public class PythonClassMethodTrampolineTargetSelector<T> implements MethodTarge
           CallSiteReference ref =
               new DynamicCallSiteReference(call.getCallSite().getDeclaredTarget(), 2);
 
-          x.addStatement(new PythonInvokeInstruction(2, result, except, ref, params, keys));
-          x.addStatement(new SSAReturnInstruction(3, result, false));
+          int invokeResult = v++;
+
+          x.addStatement(new PythonInvokeInstruction(2, invokeResult, except, ref, params, keys));
+          x.addStatement(new SSAReturnInstruction(3, invokeResult, false));
           x.setValueNames(names);
 
           codeBodies.put(key, new PythonSummarizedFunction(tr, x, receiver));
