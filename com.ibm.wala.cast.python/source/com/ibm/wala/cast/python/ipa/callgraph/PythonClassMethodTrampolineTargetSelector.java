@@ -16,15 +16,12 @@ import static com.ibm.wala.cast.python.util.Util.isClassMethod;
 
 import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
 import com.ibm.wala.cast.loader.DynamicCallSiteReference;
-import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
-import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
-import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.MethodTargetSelector;
@@ -32,7 +29,6 @@ import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ssa.SSAInstructionFactory;
 import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.types.FieldReference;
-import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.Pair;
 import java.util.Map;
@@ -48,103 +44,82 @@ public class PythonClassMethodTrampolineTargetSelector<T>
     super(base);
   }
 
+  @Override
+  protected boolean shouldProcess(CGNode caller, CallSiteReference site, IClass receiver) {
+    IClassHierarchy cha = receiver.getClassHierarchy();
+
+    // Are we calling a class method?
+    boolean classMethodReceiver = isClassMethod(receiver);
+
+    // Is the caller a trampoline?
+    boolean trampoline =
+        caller
+            .getMethod()
+            .getSelector()
+            .getName()
+            .startsWith(Atom.findOrCreateAsciiAtom("trampoline"));
+
+    return classMethodReceiver
+        && !cha.isSubclassOf(receiver, cha.lookupClass(PythonTypes.trampoline))
+        && !trampoline;
+  }
+
   @SuppressWarnings("unchecked")
   @Override
-  public IMethod getCalleeTarget(CGNode caller, CallSiteReference site, IClass receiver) {
-    if (receiver != null) {
-      log(LOGGER, caller, receiver);
+  protected void populateStatements(
+      PythonSummary x, int v, IClass receiver, PythonInvokeInstruction call, Logger logger) {
+    Map<Integer, Atom> names = HashMapFactory.make();
+    SSAInstructionFactory insts = PythonLanguage.Python.instructionFactory();
 
-      IClassHierarchy cha = receiver.getClassHierarchy();
+    // Read the class from the global scope.
+    String globalName = getGlobalName(receiver.getReference());
+    FieldReference globalRef = makeGlobalRef(receiver.getClassLoader(), globalName);
+    int globalReadRes = v++;
+    int pc = 0;
 
-      // Are we calling a class method?
-      boolean classMethodReceiver = isClassMethod(receiver);
+    x.addStatement(new AstGlobalRead(pc++, globalReadRes, globalRef));
 
-      // Is the caller a trampoline?
-      boolean trampoline =
-          caller
-              .getMethod()
-              .getSelector()
-              .getName()
-              .startsWith(Atom.findOrCreateAsciiAtom("trampoline"));
+    int getInstRes = v++;
 
-      // Only for class methods with a class on the LHS (not an object instance).
-      if (classMethodReceiver
-          && !cha.isSubclassOf(receiver, cha.lookupClass(PythonTypes.trampoline))
-          && !trampoline) {
-        PythonInvokeInstruction call = getCall(caller, site);
-        Pair<IClass, Integer> key = makeKey(receiver, call);
+    // Read the field from the class corresponding to the called method.
+    FieldReference inner =
+        FieldReference.findOrCreate(
+            PythonTypes.Root, Atom.findOrCreateUnicodeAtom("the_class_method"), PythonTypes.Root);
 
-        if (!codeBodies.containsKey(key)) {
-          Map<Integer, Atom> names = HashMapFactory.make();
+    x.addStatement(insts.GetInstruction(pc++, getInstRes, globalReadRes, inner));
 
-          MethodReference tr =
-              MethodReference.findOrCreate(
-                  receiver.getReference(),
-                  Atom.findOrCreateUnicodeAtom("trampoline" + call.getNumberOfTotalParameters()),
-                  AstMethodReference.fnDesc);
+    int i = 0;
+    int paramSize = Math.max(2, call.getNumberOfPositionalParameters() + 1);
+    int[] params = new int[paramSize];
+    params[i++] = getInstRes;
+    params[i++] = globalReadRes;
 
-          PythonSummary x = new PythonSummary(tr, call.getNumberOfTotalParameters());
-          int v = call.getNumberOfTotalParameters() + 1;
-          SSAInstructionFactory insts = PythonLanguage.Python.instructionFactory();
+    for (int j = 1; j < call.getNumberOfPositionalParameters(); j++) params[i++] = j + 1;
 
-          // Read the class from the global scope.
-          String globalName = getGlobalName(receiver.getReference());
-          FieldReference globalRef = makeGlobalRef(receiver.getClassLoader(), globalName);
-          int globalReadRes = v++;
-          int pc = 0;
+    int ki = 0, ji = call.getNumberOfPositionalParameters() + 1;
+    Pair<String, Integer>[] keys = new Pair[0];
 
-          x.addStatement(new AstGlobalRead(pc++, globalReadRes, globalRef));
+    if (call.getKeywords() != null) {
+      keys = new Pair[call.getKeywords().size()];
 
-          int getInstRes = v++;
-
-          // Read the field from the class corresponding to the called method.
-          FieldReference inner =
-              FieldReference.findOrCreate(
-                  PythonTypes.Root,
-                  Atom.findOrCreateUnicodeAtom("the_class_method"),
-                  PythonTypes.Root);
-
-          x.addStatement(insts.GetInstruction(pc++, getInstRes, globalReadRes, inner));
-
-          int i = 0;
-          int paramSize = Math.max(2, call.getNumberOfPositionalParameters() + 1);
-          int[] params = new int[paramSize];
-          params[i++] = getInstRes;
-          params[i++] = globalReadRes;
-
-          for (int j = 1; j < call.getNumberOfPositionalParameters(); j++) params[i++] = j + 1;
-
-          int ki = 0, ji = call.getNumberOfPositionalParameters() + 1;
-          Pair<String, Integer>[] keys = new Pair[0];
-
-          if (call.getKeywords() != null) {
-            keys = new Pair[call.getKeywords().size()];
-
-            for (String k : call.getKeywords()) {
-              names.put(ji, Atom.findOrCreateUnicodeAtom(k));
-              keys[ki++] = Pair.make(k, ji++);
-            }
-          }
-
-          CallSiteReference ref =
-              new DynamicCallSiteReference(call.getCallSite().getDeclaredTarget(), 2);
-
-          int except = v++;
-          int invokeResult = v++;
-
-          x.addStatement(
-              new PythonInvokeInstruction(pc++, invokeResult, except, ref, params, keys));
-          x.addStatement(new SSAReturnInstruction(pc++, invokeResult, false));
-          x.setValueNames(names);
-
-          PythonSummarizedFunction function = new PythonSummarizedFunction(tr, x, receiver);
-          codeBodies.put(key, function);
-        }
-
-        return codeBodies.get(key);
+      for (String k : call.getKeywords()) {
+        names.put(ji, Atom.findOrCreateUnicodeAtom(k));
+        keys[ki++] = Pair.make(k, ji++);
       }
     }
 
-    return base.getCalleeTarget(caller, site, receiver);
+    CallSiteReference ref = new DynamicCallSiteReference(call.getCallSite().getDeclaredTarget(), 2);
+
+    int except = v++;
+    int invokeResult = v++;
+
+    x.addStatement(new PythonInvokeInstruction(pc++, invokeResult, except, ref, params, keys));
+    x.addStatement(new SSAReturnInstruction(pc++, invokeResult, false));
+    x.setValueNames(names);
+  }
+
+  @Override
+  protected Logger getLogger() {
+    return LOGGER;
   }
 }

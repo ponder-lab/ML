@@ -19,12 +19,10 @@ import com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKeys.ScopeMappingInst
 import com.ibm.wala.cast.loader.DynamicCallSiteReference;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
-import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
-import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IMethod;
@@ -40,7 +38,6 @@ import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.types.ClassLoaderReference;
 import com.ibm.wala.types.FieldReference;
-import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashMapFactory;
@@ -81,152 +78,129 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
     this.engine = pythonAnalysisEngine;
   }
 
-  @SuppressWarnings("unchecked")
   @Override
   public IMethod getCalleeTarget(CGNode caller, CallSiteReference site, IClass receiver) {
-    if (receiver != null) {
-      log(logger, caller, receiver);
+    if (isCallable(receiver)) {
+      logger.fine("Encountered callable.");
 
-      IClassHierarchy cha = receiver.getClassHierarchy();
-      final boolean callable = receiver.getReference().equals(PythonTypes.object);
+      PythonInvokeInstruction call = this.getCall(caller, site);
 
-      if (cha.isSubclassOf(receiver, cha.lookupClass(PythonTypes.trampoline)) || callable) {
-        PythonInvokeInstruction call = this.getCall(caller, site);
+      // It's a callable. Change the receiver.
+      receiver = getCallable(caller, receiver.getClassHierarchy(), call);
 
-        if (callable) {
-          logger.fine("Encountered callable.");
+      if (receiver == null) return null; // not found.
+      else logger.fine("Substituting the receiver with one derived from a callable.");
+    }
 
-          // It's a callable. Change the receiver.
-          receiver = getCallable(caller, cha, call);
+    return super.getCalleeTarget(caller, site, receiver);
+  }
 
-          if (receiver == null) return null; // not found.
-          else logger.fine("Substituting the receiver with one derived from a callable.");
-        }
+  @SuppressWarnings("unchecked")
+  @Override
+  protected void populateStatements(
+      PythonSummary x, int v, IClass receiver, PythonInvokeInstruction call, Logger logger) {
+    Map<Integer, Atom> names = HashMapFactory.make();
+    IClass filter = ((PythonInstanceMethodTrampoline) receiver).getRealClass();
 
-        Pair<IClass, Integer> key = this.makeKey(receiver, call);
+    x.addStatement(
+        PythonLanguage.Python.instructionFactory()
+            .GetInstruction(
+                0,
+                v,
+                1,
+                FieldReference.findOrCreate(
+                    PythonTypes.Root,
+                    Atom.findOrCreateUnicodeAtom("$function"),
+                    PythonTypes.Root)));
 
-        if (!codeBodies.containsKey(key)) {
-          Map<Integer, Atom> names = HashMapFactory.make();
-          MethodReference tr =
-              MethodReference.findOrCreate(
-                  receiver.getReference(),
-                  Atom.findOrCreateUnicodeAtom("trampoline" + call.getNumberOfTotalParameters()),
-                  AstMethodReference.fnDesc);
-          PythonSummary x = new PythonSummary(tr, call.getNumberOfTotalParameters());
-          IClass filter = ((PythonInstanceMethodTrampoline) receiver).getRealClass();
+    int v0 = v + 1;
 
-          int v = call.getNumberOfTotalParameters() + 1;
+    x.addStatement(
+        PythonLanguage.Python.instructionFactory()
+            .CheckCastInstruction(1, v0, v, filter.getReference(), true));
 
-          x.addStatement(
-              PythonLanguage.Python.instructionFactory()
-                  .GetInstruction(
-                      0,
-                      v,
-                      1,
-                      FieldReference.findOrCreate(
-                          PythonTypes.Root,
-                          Atom.findOrCreateUnicodeAtom("$function"),
-                          PythonTypes.Root)));
+    int v1;
 
-          int v0 = v + 1;
+    // Are we calling a static method?
+    boolean staticMethodReceiver = filter.getAnnotations().contains(make(STATIC_METHOD));
+    logger.fine(
+        staticMethodReceiver
+            ? "Found static method receiver: " + filter
+            : "Method is not static: " + filter);
 
-          x.addStatement(
-              PythonLanguage.Python.instructionFactory()
-                  .CheckCastInstruction(1, v0, v, filter.getReference(), true));
+    // Are we calling a class method? If so, it would be using an object instance instead of a
+    // class on the LHS.
+    boolean classMethodReceiver = isClassMethod(receiver);
 
-          int v1;
+    // only add self if the receiver isn't static or a class method.
+    if (!staticMethodReceiver && !classMethodReceiver) {
+      v1 = v + 2;
 
-          // Are we calling a static method?
-          boolean staticMethodReceiver = filter.getAnnotations().contains(make(STATIC_METHOD));
-          logger.fine(
-              staticMethodReceiver
-                  ? "Found static method receiver: " + filter
-                  : "Method is not static: " + filter);
+      x.addStatement(
+          PythonLanguage.Python.instructionFactory()
+              .GetInstruction(
+                  1,
+                  v1,
+                  1,
+                  FieldReference.findOrCreate(
+                      PythonTypes.Root, Atom.findOrCreateUnicodeAtom("$self"), PythonTypes.Root)));
+    } else if (classMethodReceiver) {
+      // Add a class reference.
+      v1 = v + 2;
 
-          // Are we calling a class method? If so, it would be using an object instance instead of a
-          // class on the LHS.
-          boolean classMethodReceiver = isClassMethod(receiver);
+      x.addStatement(
+          PythonLanguage.Python.instructionFactory()
+              .GetInstruction(
+                  1,
+                  v1,
+                  1,
+                  FieldReference.findOrCreate(
+                      PythonTypes.Root, Atom.findOrCreateUnicodeAtom("$class"), PythonTypes.Root)));
 
-          // only add self if the receiver isn't static or a class method.
-          if (!staticMethodReceiver && !classMethodReceiver) {
-            v1 = v + 2;
+      int v2 = v + 3;
+      TypeReference reference = getDeclaringClassTypeReference(filter.getReference());
 
-            x.addStatement(
-                PythonLanguage.Python.instructionFactory()
-                    .GetInstruction(
-                        1,
-                        v1,
-                        1,
-                        FieldReference.findOrCreate(
-                            PythonTypes.Root,
-                            Atom.findOrCreateUnicodeAtom("$self"),
-                            PythonTypes.Root)));
-          } else if (classMethodReceiver) {
-            // Add a class reference.
-            v1 = v + 2;
+      x.addStatement(
+          PythonLanguage.Python.instructionFactory()
+              .CheckCastInstruction(1, v2, v1++, reference, true));
+    } else v1 = v + 1;
 
-            x.addStatement(
-                PythonLanguage.Python.instructionFactory()
-                    .GetInstruction(
-                        1,
-                        v1,
-                        1,
-                        FieldReference.findOrCreate(
-                            PythonTypes.Root,
-                            Atom.findOrCreateUnicodeAtom("$class"),
-                            PythonTypes.Root)));
+    int i = 0;
+    int paramSize =
+        Math.max(
+            staticMethodReceiver ? 1 : 2,
+            call.getNumberOfPositionalParameters() + (staticMethodReceiver ? 0 : 1));
+    int[] params = new int[paramSize];
+    params[i++] = v0;
 
-            int v2 = v + 3;
-            TypeReference reference = getDeclaringClassTypeReference(filter.getReference());
+    if (!staticMethodReceiver) params[i++] = v1;
 
-            x.addStatement(
-                PythonLanguage.Python.instructionFactory()
-                    .CheckCastInstruction(1, v2, v1++, reference, true));
-          } else v1 = v + 1;
+    for (int j = 1; j < call.getNumberOfPositionalParameters(); j++) params[i++] = j + 1;
 
-          int i = 0;
-          int paramSize =
-              Math.max(
-                  staticMethodReceiver ? 1 : 2,
-                  call.getNumberOfPositionalParameters() + (staticMethodReceiver ? 0 : 1));
-          int[] params = new int[paramSize];
-          params[i++] = v0;
+    int ki = 0, ji = call.getNumberOfPositionalParameters() + 1;
+    Pair<String, Integer>[] keys = new Pair[0];
 
-          if (!staticMethodReceiver) params[i++] = v1;
+    if (call.getKeywords() != null) {
+      keys = new Pair[call.getKeywords().size()];
 
-          for (int j = 1; j < call.getNumberOfPositionalParameters(); j++) params[i++] = j + 1;
-
-          int ki = 0, ji = call.getNumberOfPositionalParameters() + 1;
-          Pair<String, Integer>[] keys = new Pair[0];
-
-          if (call.getKeywords() != null) {
-            keys = new Pair[call.getKeywords().size()];
-
-            for (String k : call.getKeywords()) {
-              names.put(ji, Atom.findOrCreateUnicodeAtom(k));
-              keys[ki++] = Pair.make(k, ji++);
-            }
-          }
-
-          int result = v1 + 1;
-          int except = v1 + 2;
-
-          CallSiteReference ref =
-              new DynamicCallSiteReference(call.getCallSite().getDeclaredTarget(), 2);
-
-          x.addStatement(new PythonInvokeInstruction(2, result, except, ref, params, keys));
-          x.addStatement(new SSAReturnInstruction(3, result, false));
-          x.setValueNames(names);
-
-          PythonSummarizedFunction function = new PythonSummarizedFunction(tr, x, receiver);
-          codeBodies.put(key, function);
-        }
-
-        return codeBodies.get(key);
+      for (String k : call.getKeywords()) {
+        names.put(ji, Atom.findOrCreateUnicodeAtom(k));
+        keys[ki++] = Pair.make(k, ji++);
       }
     }
 
-    return base.getCalleeTarget(caller, site, receiver);
+    int result = v1 + 1;
+    int except = v1 + 2;
+
+    CallSiteReference ref = new DynamicCallSiteReference(call.getCallSite().getDeclaredTarget(), 2);
+
+    x.addStatement(new PythonInvokeInstruction(2, result, except, ref, params, keys));
+    x.addStatement(new SSAReturnInstruction(3, result, false));
+    x.setValueNames(names);
+  }
+
+  private boolean isCallable(IClass receiver) {
+    return receiver != null && receiver.getReference().equals(PythonTypes.object);
   }
 
   /**
@@ -351,5 +325,17 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
 
   public PythonAnalysisEngine<T> getEngine() {
     return engine;
+  }
+
+  @Override
+  protected Logger getLogger() {
+    return logger;
+  }
+
+  @Override
+  protected boolean shouldProcess(CGNode caller, CallSiteReference site, IClass receiver) {
+    IClassHierarchy cha = receiver.getClassHierarchy();
+    return cha.isSubclassOf(receiver, cha.lookupClass(PythonTypes.trampoline))
+        || this.isCallable(receiver);
   }
 }
