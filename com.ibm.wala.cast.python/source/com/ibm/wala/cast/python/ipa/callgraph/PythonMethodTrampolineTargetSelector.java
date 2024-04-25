@@ -50,8 +50,7 @@ public abstract class PythonMethodTrampolineTargetSelector<T> implements MethodT
 
           populate(x, v, receiver, call, logger);
 
-          PythonSummarizedFunction function = new PythonSummarizedFunction(tr, x, receiver);
-          codeBodies.put(key, function);
+          codeBodies.put(key, new PythonSummarizedFunction(tr, x, receiver));
         }
 
         return codeBodies.get(key);
