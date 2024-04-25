@@ -99,26 +99,24 @@ public class Util {
    * Returns true iff the given {@link IClass} represents a Python <a
    * href="https://docs.python.org/3/library/functions.html#classmethod">class method</a>.
    *
-   * @param receiver The {@link IClass} in question.
+   * @param method The {@link IClass} in question.
    * @return True iff the given {@link IClass} represents a Python <a
    *     href="https://docs.python.org/3/library/functions.html#classmethod">class method</a>.
    * @apiNote Python methods and functions are represented using {@link IClass}.
    * @implNote This method will log whether the given {@link IClass} is a class method or not.
    */
-  public static boolean isClassMethod(IClass receiver) {
+  public static boolean isClassMethod(IClass method) {
     // If it's a trampoline.
-    if (receiver instanceof PythonInstanceMethodTrampoline)
+    if (method instanceof PythonInstanceMethodTrampoline)
       // Use the "real class."
-      receiver = ((PythonInstanceMethodTrampoline) receiver).getRealClass();
+      method = ((PythonInstanceMethodTrampoline) method).getRealClass();
 
-    boolean classMethodReceiver = receiver.getAnnotations().contains(make(CLASS_METHOD));
+    boolean ret = method.getAnnotations().contains(make(CLASS_METHOD));
 
     LOGGER.fine(
-        classMethodReceiver
-            ? "Found class method receiver: " + receiver
-            : "Receiver: " + receiver + " is not a class method.");
+        ret ? "Found class method: " + method : "Method: " + method + " is not a class method.");
 
-    return classMethodReceiver;
+    return ret;
   }
 
   private Util() {}
