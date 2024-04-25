@@ -53,15 +53,25 @@ public class Util {
     return TypeReference.findOrCreate(reference.getClassLoader(), name);
   }
 
-  private Util() {}
-
   /**
    * Returns the global name of the given {@link MethodReference}'s declaring class.
    *
-   * @param r The {@link MethodReference} for which to extract the global script name.
+   * @param methodReference The {@link MethodReference} for which to extract the global script name.
    * @return The global name of the given {@link MethodReference}'s declaring class.
    */
-  public static String getGlobalName(MethodReference r) {
-    return r.getDeclaringClass().getName().getPackage().toString();
+  public static String getGlobalName(MethodReference methodReference) {
+    return getGlobalName(methodReference.getDeclaringClass());
   }
+
+  /**
+   * Returns the global name of the given {@link TypeReference}.
+   *
+   * @param typeReference The {@link TypeReference} for which to extract the global script name.
+   * @return The global name of the given {@link TypeReference}.
+   */
+  public static String getGlobalName(TypeReference typeReference) {
+    return typeReference.getName().getPackage().toString();
+  }
+
+  private Util() {}
 }

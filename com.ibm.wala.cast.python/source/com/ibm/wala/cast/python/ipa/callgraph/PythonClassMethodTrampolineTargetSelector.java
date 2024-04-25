@@ -10,6 +10,7 @@
  *****************************************************************************/
 package com.ibm.wala.cast.python.ipa.callgraph;
 
+import static com.ibm.wala.cast.python.types.Util.getGlobalName;
 import static com.ibm.wala.cast.python.types.Util.makeGlobalRef;
 import static com.ibm.wala.cast.python.util.Util.isClassMethod;
 
@@ -157,8 +158,9 @@ public class PythonClassMethodTrampolineTargetSelector<T> implements MethodTarge
           //                    .CheckCastInstruction(1, v2, v1++, reference, true));
           //          } else
 
-          FieldReference globalRef =
-              makeGlobalRef(receiver.getClassLoader(), "script tf2_test_class_method4.py/MyClass");
+          String globalName = getGlobalName(receiver.getReference());
+
+          FieldReference globalRef = makeGlobalRef(receiver.getClassLoader(), globalName);
 
           int globalReadRes = v++;
 
