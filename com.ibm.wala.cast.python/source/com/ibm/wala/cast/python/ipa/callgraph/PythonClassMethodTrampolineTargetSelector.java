@@ -52,8 +52,7 @@ public class PythonClassMethodTrampolineTargetSelector<T>
   @Override
   public IMethod getCalleeTarget(CGNode caller, CallSiteReference site, IClass receiver) {
     if (receiver != null) {
-      LOGGER.fine("Getting callee target for receiver: " + receiver);
-      LOGGER.fine("Calling method name is: " + caller.getMethod().getName());
+      log(LOGGER, caller, receiver);
 
       IClassHierarchy cha = receiver.getClassHierarchy();
 
@@ -72,8 +71,8 @@ public class PythonClassMethodTrampolineTargetSelector<T>
       if (classMethodReceiver
           && !cha.isSubclassOf(receiver, cha.lookupClass(PythonTypes.trampoline))
           && !trampoline) {
-        PythonInvokeInstruction call = (PythonInvokeInstruction) caller.getIR().getCalls(site)[0];
-        Pair<IClass, Integer> key = Pair.make(receiver, call.getNumberOfTotalParameters());
+        PythonInvokeInstruction call = getCall(caller, site);
+        Pair<IClass, Integer> key = makeKey(receiver, call);
 
         if (!codeBodies.containsKey(key)) {
           Map<Integer, Atom> names = HashMapFactory.make();
