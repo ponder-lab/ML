@@ -10,6 +10,7 @@
  *****************************************************************************/
 package com.ibm.wala.cast.python.ipa.callgraph;
 
+import static com.ibm.wala.cast.python.types.Util.getGlobalName;
 import static com.ibm.wala.cast.python.types.Util.makeGlobalRef;
 
 import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
@@ -209,15 +210,5 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
       }
     }
     return base.getCalleeTarget(caller, site, receiver);
-  }
-
-  /**
-   * Returns the global name of the given {@link MethodReference}'s declaring class.
-   *
-   * @param r The {@link MethodReference} for which to extract the global script name.
-   * @return The global name of the given {@link MethodReference}'s declaring class.
-   */
-  private static String getGlobalName(MethodReference r) {
-    return r.getDeclaringClass().getName().getPackage().toString();
   }
 }
