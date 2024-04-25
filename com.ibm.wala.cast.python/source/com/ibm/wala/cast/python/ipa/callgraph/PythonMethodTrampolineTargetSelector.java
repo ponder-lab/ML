@@ -52,7 +52,7 @@ public abstract class PythonMethodTrampolineTargetSelector<T> implements MethodT
           PythonSummary x = new PythonSummary(tr, call.getNumberOfTotalParameters());
           int v = call.getNumberOfTotalParameters() + 1;
 
-          populateStatements(x, v, receiver, call, logger);
+          populate(x, v, receiver, call, logger);
 
           PythonSummarizedFunction function = new PythonSummarizedFunction(tr, x, receiver);
           codeBodies.put(key, function);
@@ -65,7 +65,7 @@ public abstract class PythonMethodTrampolineTargetSelector<T> implements MethodT
     return base.getCalleeTarget(caller, site, receiver);
   }
 
-  protected abstract void populateStatements(
+  protected abstract void populate(
       PythonSummary x, int v, IClass receiver, PythonInvokeInstruction call, Logger logger);
 
   private Pair<IClass, Integer> makeKey(IClass receiver, PythonInvokeInstruction call) {

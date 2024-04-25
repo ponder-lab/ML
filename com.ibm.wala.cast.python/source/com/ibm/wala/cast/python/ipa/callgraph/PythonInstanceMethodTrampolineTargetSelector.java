@@ -97,7 +97,7 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
 
   @SuppressWarnings("unchecked")
   @Override
-  protected void populateStatements(
+  protected void populate(
       PythonSummary x, int v, IClass receiver, PythonInvokeInstruction call, Logger logger) {
     Map<Integer, Atom> names = HashMapFactory.make();
     IClass filter = ((PythonInstanceMethodTrampoline) receiver).getRealClass();
