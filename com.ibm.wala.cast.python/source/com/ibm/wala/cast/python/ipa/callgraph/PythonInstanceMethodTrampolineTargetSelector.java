@@ -218,7 +218,8 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
           x.addStatement(new SSAReturnInstruction(3, result, false));
           x.setValueNames(names);
 
-          codeBodies.put(key, new PythonSummarizedFunction(tr, x, receiver));
+          PythonSummarizedFunction function = new PythonSummarizedFunction(tr, x, receiver);
+          codeBodies.put(key, function);
         }
 
         return codeBodies.get(key);
