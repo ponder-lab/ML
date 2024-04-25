@@ -335,6 +335,12 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
     return logger;
   }
 
+  /**
+   * Returns true iff the given {@link IClass} represents a Python callable object.
+   *
+   * @param receiver The {@link IClass} in question.
+   * @return True iff the given {@link IClass} represents a Python callable object.
+   */
   private boolean isCallable(IClass receiver) {
     return receiver != null && receiver.getReference().equals(PythonTypes.object);
   }

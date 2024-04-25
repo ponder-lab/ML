@@ -34,6 +34,12 @@ import com.ibm.wala.util.collections.Pair;
 import java.util.Map;
 import java.util.logging.Logger;
 
+/**
+ * A trampoline for <a href="https://docs.python.org/3/library/functions.html#classmethod">class
+ * methods</a> that are not called using object instances.
+ *
+ * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
+ */
 public class PythonClassMethodTrampolineTargetSelector<T>
     extends PythonMethodTrampolineTargetSelector<T> {
 

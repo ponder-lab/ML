@@ -60,18 +60,59 @@ public abstract class PythonMethodTrampolineTargetSelector<T> implements MethodT
     return base.getCalleeTarget(caller, site, receiver);
   }
 
+  /**
+   * Returns the {@link PythonInvokeInstruction} at the given {@link CallSiteReference} within the
+   * given {@link CGNode}.
+   *
+   * @param caller The calling {@link CGNode}.
+   * @param site A {@link CallSiteReference} within the given {@link CGNode}.
+   * @return The {@link PythonInvokeInstruction} at the given {@link CallSiteReference} within the
+   *     given {@link CGNode}.
+   */
   protected PythonInvokeInstruction getCall(CGNode caller, CallSiteReference site) {
     return (PythonInvokeInstruction) caller.getIR().getCalls(site)[0];
   }
 
+  /**
+   * Returns a unique {@link Pair} for the given {@link Receiver} and {@link
+   * PythonInvokeInstruction}.
+   *
+   * @return A unique {@link Pair} for the given {@link Receiver} and {@link
+   *     PythonInvokeInstruction}.
+   */
   private Pair<IClass, Integer> makeKey(IClass receiver, PythonInvokeInstruction call) {
     return Pair.make(receiver, call.getNumberOfTotalParameters());
   }
 
+  /**
+   * The {@link Logger} to be used.
+   *
+   * @return The {@link Logger} to be used.
+   */
   protected abstract Logger getLogger();
 
+  /**
+   * True iff this {@link PythonMethodTrampolineTargetSelector} should handle the given {@link
+   * CGNode}, {@link CallSiteReference}, {@link IClass} combination. If the combination is not to be
+   * processed, the next target selector will be used.
+   *
+   * @return True iff this {@link PythonMethodTrampolineTargetSelector} should handle the given
+   *     {@link CGNode}, {@link CallSiteReference}, {@link IClass} combination.
+   */
   protected abstract boolean shouldProcess(CGNode caller, CallSiteReference site, IClass receiver);
 
+  /**
+   * Populate the given {@link PythonSummary} that will be used as the trampoline. At the completion
+   * of this method, the given {@link PythonInvokeInstruction} will be the last instruction.
+   *
+   * <p>This fill the trampoline body that eventually invokes the original method.
+   *
+   * @param x The {@link PythonSummary} representing the trampoline to fill.
+   * @param v The starting variable number in the SSA.
+   * @param receiver The receiver of the original call.
+   * @param call The original call.
+   * @param logger The {@link Logger} to use.
+   */
   protected abstract void populate(
       PythonSummary x, int v, IClass receiver, PythonInvokeInstruction call, Logger logger);
 }
