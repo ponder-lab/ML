@@ -49,6 +49,9 @@ import java.util.logging.Logger;
 public class PythonInstanceMethodTrampolineTargetSelector<T>
     extends PythonMethodTrampolineTargetSelector<T> {
 
+  private static final Logger logger =
+      Logger.getLogger(PythonInstanceMethodTrampolineTargetSelector.class.getName());
+
   /**
    * The method name that is used for Python callables.
    *
@@ -66,9 +69,6 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
    *     documentation</a>.
    */
   private static final String CALLABLE_METHOD_NAME_FOR_KERAS_MODELS = "call";
-
-  private static final Logger logger =
-      Logger.getLogger(PythonInstanceMethodTrampolineTargetSelector.class.getName());
 
   /**
    * If the given {@link ConstantKey}'s value is <code>null</code>, then issue a warning and return
