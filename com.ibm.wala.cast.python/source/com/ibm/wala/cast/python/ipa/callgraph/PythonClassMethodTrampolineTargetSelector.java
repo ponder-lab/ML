@@ -38,18 +38,15 @@ import com.ibm.wala.util.collections.Pair;
 import java.util.Map;
 import java.util.logging.Logger;
 
-public class PythonClassMethodTrampolineTargetSelector<T> implements MethodTargetSelector {
+public class PythonClassMethodTrampolineTargetSelector<T>
+    extends PythonMethodTrampolineTargetSelector<T> {
 
-  private static final Logger LOGGER =
+  protected static final Logger LOGGER =
       Logger.getLogger(PythonClassMethodTrampolineTargetSelector.class.getName());
 
-  private final MethodTargetSelector base;
-
   public PythonClassMethodTrampolineTargetSelector(MethodTargetSelector base) {
-    this.base = base;
+    super(base);
   }
-
-  private final Map<Pair<IClass, Integer>, IMethod> codeBodies = HashMapFactory.make();
 
   @SuppressWarnings("unchecked")
   @Override
@@ -136,7 +133,8 @@ public class PythonClassMethodTrampolineTargetSelector<T> implements MethodTarge
           int except = v++;
           int invokeResult = v++;
 
-          x.addStatement(new PythonInvokeInstruction(pc++, invokeResult, except, ref, params, keys));
+          x.addStatement(
+              new PythonInvokeInstruction(pc++, invokeResult, except, ref, params, keys));
           x.addStatement(new SSAReturnInstruction(pc++, invokeResult, false));
           x.setValueNames(names);
 

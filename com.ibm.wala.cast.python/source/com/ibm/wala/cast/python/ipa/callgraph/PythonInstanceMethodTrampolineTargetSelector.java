@@ -49,7 +49,8 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Map;
 import java.util.logging.Logger;
 
-public class PythonInstanceMethodTrampolineTargetSelector<T> implements MethodTargetSelector {
+public class PythonInstanceMethodTrampolineTargetSelector<T>
+    extends PythonMethodTrampolineTargetSelector<T> {
 
   private static final Logger logger =
       Logger.getLogger(PythonInstanceMethodTrampolineTargetSelector.class.getName());
@@ -72,17 +73,13 @@ public class PythonInstanceMethodTrampolineTargetSelector<T> implements MethodTa
    */
   private static final String CALLABLE_METHOD_NAME_FOR_KERAS_MODELS = "call";
 
-  private final MethodTargetSelector base;
-
   private PythonAnalysisEngine<T> engine;
 
   public PythonInstanceMethodTrampolineTargetSelector(
       MethodTargetSelector base, PythonAnalysisEngine<T> pythonAnalysisEngine) {
-    this.base = base;
+    super(base);
     this.engine = pythonAnalysisEngine;
   }
-
-  private final Map<Pair<IClass, Integer>, IMethod> codeBodies = HashMapFactory.make();
 
   @SuppressWarnings("unchecked")
   @Override
