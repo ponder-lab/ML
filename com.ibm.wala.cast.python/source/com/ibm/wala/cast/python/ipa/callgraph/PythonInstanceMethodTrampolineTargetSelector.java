@@ -85,6 +85,23 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
         || this.isCallable(receiver);
   }
 
+  @Override
+  public IMethod getCalleeTarget(CGNode caller, CallSiteReference site, IClass receiver) {
+    if (isCallable(receiver)) {
+      logger.fine("Encountered callable.");
+
+      PythonInvokeInstruction call = this.getCall(caller, site);
+
+      // It's a callable. Change the receiver.
+      receiver = getCallable(caller, receiver.getClassHierarchy(), call);
+
+      if (receiver == null) return null; // not found.
+      else logger.fine("Substituting the receiver with one derived from a callable.");
+    }
+
+    return super.getCalleeTarget(caller, site, receiver);
+  }
+
   @SuppressWarnings("unchecked")
   @Override
   protected void populate(
@@ -187,23 +204,6 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
     x.addStatement(new PythonInvokeInstruction(2, result, except, ref, params, keys));
     x.addStatement(new SSAReturnInstruction(3, result, false));
     x.setValueNames(names);
-  }
-
-  @Override
-  public IMethod getCalleeTarget(CGNode caller, CallSiteReference site, IClass receiver) {
-    if (isCallable(receiver)) {
-      logger.fine("Encountered callable.");
-
-      PythonInvokeInstruction call = this.getCall(caller, site);
-
-      // It's a callable. Change the receiver.
-      receiver = getCallable(caller, receiver.getClassHierarchy(), call);
-
-      if (receiver == null) return null; // not found.
-      else logger.fine("Substituting the receiver with one derived from a callable.");
-    }
-
-    return super.getCalleeTarget(caller, site, receiver);
   }
 
   /**
