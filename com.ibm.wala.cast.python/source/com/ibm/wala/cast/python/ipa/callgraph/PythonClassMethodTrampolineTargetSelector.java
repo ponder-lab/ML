@@ -95,8 +95,9 @@ public class PythonClassMethodTrampolineTargetSelector<T> implements MethodTarge
           String globalName = getGlobalName(receiver.getReference());
           FieldReference globalRef = makeGlobalRef(receiver.getClassLoader(), globalName);
           int globalReadRes = v++;
+          int pc = 0;
 
-          x.addStatement(new AstGlobalRead(0, globalReadRes, globalRef));
+          x.addStatement(new AstGlobalRead(pc++, globalReadRes, globalRef));
 
           int getInstRes = v++;
 
@@ -107,7 +108,7 @@ public class PythonClassMethodTrampolineTargetSelector<T> implements MethodTarge
                   Atom.findOrCreateUnicodeAtom("the_class_method"),
                   PythonTypes.Root);
 
-          x.addStatement(insts.GetInstruction(1, getInstRes, globalReadRes, inner));
+          x.addStatement(insts.GetInstruction(pc++, getInstRes, globalReadRes, inner));
 
           int i = 0;
           int paramSize = Math.max(2, call.getNumberOfPositionalParameters() + 1);
@@ -135,8 +136,8 @@ public class PythonClassMethodTrampolineTargetSelector<T> implements MethodTarge
           int except = v++;
           int invokeResult = v++;
 
-          x.addStatement(new PythonInvokeInstruction(2, invokeResult, except, ref, params, keys));
-          x.addStatement(new SSAReturnInstruction(3, invokeResult, false));
+          x.addStatement(new PythonInvokeInstruction(pc++, invokeResult, except, ref, params, keys));
+          x.addStatement(new SSAReturnInstruction(pc++, invokeResult, false));
           x.setValueNames(names);
 
           codeBodies.put(key, new PythonSummarizedFunction(tr, x, receiver));
