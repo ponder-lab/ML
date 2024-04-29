@@ -2711,9 +2711,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_decorated_method8.py", "f", 1, 1, 2);
   }
 
+  /** This decorator isn't defined. Thus, we shouldn't have a CG node for it. */
   @Test
   public void testDecoratedMethod9() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_decorated_method9.py", "f", 1, 1, 2);
+    test("tf2_test_decorated_method9.py", "f", 0, 0);
   }
 
   @Test
