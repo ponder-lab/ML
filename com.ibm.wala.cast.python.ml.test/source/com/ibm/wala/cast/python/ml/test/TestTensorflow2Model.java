@@ -2667,6 +2667,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
+  public void testAbstractMethod3() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_abstract_method3.py", "C.f", 1, 1, 3);
+  }
+
+  @Test
   public void testDecoratedMethod() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_decorated_method.py", "f", 1, 1, 2);
   }
@@ -2699,6 +2704,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testDecoratedMethod7() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_decorated_method7.py", "f", 1, 1, 2);
+  }
+
+  @Test
+  public void testDecoratedMethod8() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_decorated_method8.py", "f", 1, 1, 2);
+  }
+
+  @Test
+  public void testDecoratedMethod9() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_decorated_method9.py", "f", 1, 1, 2);
+  }
+
+  @Test
+  public void testDecoratedMethod10() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_decorated_method10.py", "f", 1, 1, 2);
   }
 
   private void test(
