@@ -2730,7 +2730,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   @Test
   public void testDecoratedMethod12() throws ClassHierarchyException, CancelException, IOException {
-	// NOTE: Change to 1, 1, 2 once https://github.com/wala/ML/issues/188 is fixed.
+    // NOTE: Change to 1, 1, 2 once https://github.com/wala/ML/issues/188 is fixed.
     test("tf2_test_decorated_method12.py", "f", 0, 0);
   }
 
