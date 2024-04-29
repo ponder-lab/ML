@@ -375,7 +375,11 @@ public class PythonCAstToIRTranslator extends AstTranslator {
             .dynamicAnnotations()
             .forEach(
                 a -> {
-                  visit(a, context, this);
+                  // If we visit `a`, we get an unnecessary invocation of the decorator with never
+                  // any arguments. Instead, visit it's child, which should be the decorator
+                  // "variable."
+                  CAstNode child = a.getChild(0);
+                  visit(child, context, this);
                   int pos = context.cfg().getCurrentInstruction();
                   CallSiteReference site = new DynamicCallSiteReference(PythonTypes.CodeBody, pos);
                   context
@@ -386,7 +390,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                               result,
                               context.currentScope().allocateTempValue(),
                               site,
-                              new int[] {context.getValue(a), result},
+                              new int[] {context.getValue(child), result},
                               new Pair[0]));
                 });
       }
