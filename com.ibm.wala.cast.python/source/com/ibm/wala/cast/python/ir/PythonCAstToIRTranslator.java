@@ -386,9 +386,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                               result,
                               context.currentScope().allocateTempValue(),
                               site,
-                              // NOTE: This won't work if there are decorator parameters. See
-                              // https://github.com/wala/ML/issues/189.
-                              new int[] {context.getValue(a.getChild(0)), result},
+                              new int[] {context.getValue(a), result},
                               new Pair[0]));
                 });
       }
