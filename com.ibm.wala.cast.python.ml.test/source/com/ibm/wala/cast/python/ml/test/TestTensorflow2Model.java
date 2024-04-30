@@ -810,6 +810,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
+  public void testDecorator11()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_testing_decorator11.py", "C.returned", 1, 1, 3);
+  }
+
+  @Test
   public void testDataset()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     // FIXME: Test tf2_test_dataset.py really has three tensors in its dataset. We are currently
