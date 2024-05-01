@@ -15,10 +15,10 @@ import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.ipa.callgraph.Entrypoint;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
-import java.util.Objects;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
 
@@ -83,18 +83,29 @@ public class Util {
    *     (decorators).
    */
   public static Stream<String> getNameStream(Collection<CAstAnnotation> annotations) {
-    if (annotations == null) return Stream.empty();
+    Collection<String> ret = new ArrayList<>();
 
-    return annotations.stream()
-        .filter(a -> a.getType().equals(CAST_DYNAMIC_ANNOTATION))
-        .map(a -> a.getArguments().get(DYNAMIC_ANNOTATION_KEY))
-        .filter(Objects::nonNull)
-        .map(CAstNode.class::cast)
-        .map(n -> n.getChild(0))
-        .map(n -> n.getChild(0))
-        .map(CAstNode::getValue)
-        .filter(v -> v instanceof String)
-        .map(String.class::cast);
+    for (CAstAnnotation annotation : annotations) {
+      if (annotation.getType().equals(CAST_DYNAMIC_ANNOTATION)) {
+        CAstNode castNode = (CAstNode) annotation.getArguments().get(DYNAMIC_ANNOTATION_KEY);
+
+        if (castNode != null)
+          while (true) {
+            // get the first child.
+            CAstNode child = castNode.getChild(0);
+            Object value = child.getValue();
+
+            if (value != null) {
+              if (value instanceof String) ret.add((String) value);
+              break;
+            }
+
+            castNode = child;
+          }
+      }
+    }
+
+    return ret.stream();
   }
 
   /**

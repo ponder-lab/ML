@@ -1192,6 +1192,12 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
       boolean staticMethod =
           getNameStream(annotations).anyMatch(s -> s.equals(STATIC_METHOD_ANNOTATION_NAME));
 
+      getNameStream(annotations)
+          .forEach(
+              a -> {
+                System.out.println(a);
+              });
+
       CAstType functionType;
       boolean isMethod =
           context.entity().getKind() == CAstEntity.TYPE_ENTITY
