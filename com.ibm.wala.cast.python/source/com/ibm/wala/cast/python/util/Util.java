@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class Util {
@@ -75,37 +76,47 @@ public class Util {
 
   /**
    * Returns a {@link Stream} of annotation (decorator) names as {@link String}s from the given
-   * {@link Collection} of {@link CAstAnnotation}s.
+   * {@link Collection} of {@link CAstAnnotation}s. The decorator names may be dot (.)-separated.
    *
    * @param annotations A {@link Collection} of {@link CAstAnnotation} for which to stream
    *     annotation (decorator) names.
    * @return A {@link Stream} of names as {@link String}s corresponding to the given annotations
    *     (decorators).
+   * @implNote The decorator names may not be fully-qualified. They are returned here as they are
+   *     presented in the CAst.
    */
   public static Stream<String> getNameStream(Collection<CAstAnnotation> annotations) {
     Collection<String> ret = new ArrayList<>();
 
     for (CAstAnnotation annotation : annotations) {
       if (annotation.getType().equals(CAST_DYNAMIC_ANNOTATION)) {
-        CAstNode castNode = (CAstNode) annotation.getArguments().get(DYNAMIC_ANNOTATION_KEY);
-
-        if (castNode != null)
-          while (true) {
-            // get the first child.
-            CAstNode child = castNode.getChild(0);
-            Object value = child.getValue();
-
-            if (value != null) {
-              if (value instanceof String) ret.add((String) value);
-              break;
-            }
-
-            castNode = child;
-          }
+        CAstNode node = (CAstNode) annotation.getArguments().get(DYNAMIC_ANNOTATION_KEY);
+        List<String> decoratorSegments = getDecoratorSegments(node.getChild(0));
+        String decoratorName = decoratorSegments.stream().collect(Collectors.joining("."));
+        ret.add(decoratorName);
       }
     }
 
     return ret.stream();
+  }
+
+  private static List<String> getDecoratorSegments(CAstNode node) {
+    List<String> ret = new ArrayList<>();
+
+    if (node != null) {
+      List<CAstNode> children = node.getChildren();
+
+      for (CAstNode child : children) {
+        List<String> childDecoratorSegments = getDecoratorSegments(child);
+        ret.addAll(childDecoratorSegments);
+      }
+
+      Object value = node.getValue();
+
+      if (value != null && value instanceof String) ret.add((String) value);
+    }
+
+    return ret;
   }
 
   /**
