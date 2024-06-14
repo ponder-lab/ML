@@ -2801,6 +2801,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("test_decorated_functions2.py", "f", 1, 1, 2);
   }
 
+  /** Test a pytest with a decorator. */
+  @Test
+  public void testDecoratedFunctions5()
+      throws ClassHierarchyException, CancelException, IOException {
+    test("test_decorated_functions3.py", "f", 1, 1, 2);
+  }
+
   @Test
   public void testReshape() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_reshape.py", "f", 1, 1, 2);
