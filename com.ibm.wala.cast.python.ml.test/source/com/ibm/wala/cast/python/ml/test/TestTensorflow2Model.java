@@ -2770,6 +2770,30 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("test_decorated_functions.py", "test_dummy", 0, 0);
   }
 
+  /**
+   * Test a pytest without decorators that needs a PYTHONPATH. This is a "control" case. We'll add a
+   * decorator in the next case.
+   *
+   * @see TestTensorflow2Model#testModule11().
+   */
+  @Test
+  public void testDecoratedFunctions3()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        new String[] {
+          "proj48/src/__init__.py",
+          "proj48/src/tf2_test_module9a.py",
+          "proj48/src/tf2_test_module9b.py",
+          "proj48/src/test_module10.py"
+        },
+        "src/tf2_test_module9b.py",
+        "D.f",
+        "proj48",
+        1,
+        1,
+        new int[] {3});
+  }
+
   @Test
   public void testReshape() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_reshape.py", "f", 1, 1, 2);
