@@ -1009,6 +1009,8 @@ public class PythonCAstToIRTranslator extends AstTranslator {
             FieldReference.findOrCreate(
                 PythonTypes.Root, Atom.findOrCreateUnicodeAtom(eltName), PythonTypes.Root);
 
+        LOGGER.info("Adding write of field: " + eltField + " to initialization script.");
+
         // The script should be in v1.
         idx = context.cfg().getCurrentInstruction();
         context
