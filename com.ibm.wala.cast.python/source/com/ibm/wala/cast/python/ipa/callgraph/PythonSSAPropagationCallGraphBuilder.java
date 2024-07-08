@@ -329,9 +329,6 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
               .toString();
       logger.finer("Script name is: " + scriptName + ".");
 
-      PointerKey globalDefPK = this.getPointerKeyForLocal(globalRead.getDef());
-      assert globalDefPK != null;
-
       // Are there any wildcard imports for this script?
       if (scriptToWildcardImports.containsKey(scriptName)) {
         logger.info("Found wildcard imports in " + scriptName + " for " + globalRead + ".");
@@ -349,6 +346,9 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
           CallGraph callGraph = this.getBuilder().getCallGraph();
           Set<CGNode> nodes = callGraph.getNodes(importMethodReference);
+
+          PointerKey globalDefPK = this.getPointerKeyForLocal(globalRead.getDef());
+          assert globalDefPK != null;
 
           for (CGNode n : nodes) {
             for (Iterator<NewSiteReference> nit = n.iterateNewSites(); nit.hasNext(); ) {
@@ -399,7 +399,6 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                                     + " gets: "
                                     + putValPK
                                     + ".");
-                          return;
                         }
                       }
                     });
@@ -413,10 +412,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       assert declaredFieldName.startsWith(GLOBAL_IDENTIFIER + " ");
 
       // Remove the global identifier.
-      String strippedDeclaredFieldName =
-          declaredFieldName.substring(
-              (GLOBAL_IDENTIFIER + " ").length(), declaredFieldName.length());
-      return strippedDeclaredFieldName;
+      return declaredFieldName.substring(
+          (GLOBAL_IDENTIFIER + " ").length(), declaredFieldName.length());
     }
   }
 
