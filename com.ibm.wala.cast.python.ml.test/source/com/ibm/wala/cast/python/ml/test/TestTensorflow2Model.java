@@ -3142,7 +3142,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testCalls() throws ClassHierarchyException, CancelException, IOException {
     test(
-        new String[] {"tf2_test_calls.py", "tf2_test_calls2.py"},
+        new String[] {"tf2_test_calls.py", "tf2_test_calls2.py", "tf2_test_calls3.py"},
         "tf2_test_calls.py",
         "C.f",
         "",
@@ -3150,7 +3150,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         3);
     test(
-        new String[] {"tf2_test_calls.py", "tf2_test_calls2.py"},
+        new String[] {"tf2_test_calls.py", "tf2_test_calls2.py", "tf2_test_calls3.py"},
         "tf2_test_calls2.py",
         "C.f",
         "",

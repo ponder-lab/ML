@@ -6,7 +6,6 @@ class C:
 
     def f(self, a):
         assert isinstance(a, tf.Tensor)
-        pass
 
 
 g(C())
