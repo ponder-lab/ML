@@ -222,6 +222,8 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
     PointerKey receiver = pkf.getPointerKeyForLocal(caller, call.getUse(0));
     OrdinalSet<InstanceKey> objs = builder.getPointerAnalysis().getPointsToSet(receiver);
 
+    LOGGER.fine(() -> receiver + " points to " + objs.size() + " instance(s).");
+
     for (InstanceKey o : objs) {
       AllocationSiteInNode instanceKey = getAllocationSiteInNode(o);
       if (instanceKey != null) {
