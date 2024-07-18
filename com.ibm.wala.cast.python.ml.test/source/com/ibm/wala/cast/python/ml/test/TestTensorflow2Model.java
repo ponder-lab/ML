@@ -1181,6 +1181,40 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_model_call4.py", "SequentialModel.__call__", 1, 1, 3);
   }
 
+  /**
+   * Test call string imprecision as described in
+   * https://github.com/wala/WALA/discussions/1417#discussioncomment-10085680.
+   */
+  @Test
+  public void testModelCall5()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "proj66/src/tf2_test_model_call5b.py",
+          "proj66/tf2_test_model_call5.py",
+          "proj66/tf2_test_model_call5a.py"
+        },
+        "tf2_test_model_call5.py",
+        "SequentialModel.call",
+        "proj66",
+        1,
+        1,
+        3);
+
+    test(
+        new String[] {
+          "proj66/src/tf2_test_model_call5b.py",
+          "proj66/tf2_test_model_call5.py",
+          "proj66/tf2_test_model_call5a.py"
+        },
+        "tf2_test_model_call5a.py",
+        "SequentialModel.call",
+        "proj66",
+        1,
+        1,
+        3);
+  }
+
   @Test
   public void testModelAttributes()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
