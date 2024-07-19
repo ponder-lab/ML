@@ -1195,7 +1195,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
           "proj66/tf2_test_model_call5a.py"
         },
         "tf2_test_model_call5.py",
-        "SequentialModel.call",
+        "SequentialModel.__call__",
         "proj66",
         1,
         1,
@@ -1208,7 +1208,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
           "proj66/tf2_test_model_call5a.py"
         },
         "tf2_test_model_call5a.py",
-        "SequentialModel.call",
+        "SequentialModel.__call__",
         "proj66",
         1,
         1,
