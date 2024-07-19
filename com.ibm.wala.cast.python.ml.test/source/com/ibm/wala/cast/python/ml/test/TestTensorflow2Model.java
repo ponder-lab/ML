@@ -1183,9 +1183,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Test call string imprecision as described in
-   * https://github.com/wala/WALA/discussions/1417#discussioncomment-10085680.
+   * https://github.com/wala/WALA/discussions/1417#discussioncomment-10085680. This should fail due
+   * to https://github.com/wala/ML/issues/207.
    */
-  @Test
+  @Test(expected = java.lang.AssertionError.class)
   public void testModelCall5()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
