@@ -149,16 +149,12 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
        * @throws IllegalStateException If the given {@link SourceModule} is not present.
        * @implNote The discovered {@link Path} will be logged.
        */
-      private Path getPath(Optional<SourceModule> module) {
-        Path path =
-            module
-                .map(SourceModule::getURL)
-                .map(URL::getFile)
-                .map(Path::of)
-                .orElseThrow(IllegalStateException::new);
-
-        LOGGER.finer("Found path: " + path);
-        return path;
+      private static Path getPath(Optional<SourceModule> module) {
+        return module
+            .map(SourceModule::getURL)
+            .map(URL::getFile)
+            .map(Path::of)
+            .orElseThrow(IllegalStateException::new);
       }
 
       @Override
@@ -207,6 +203,7 @@ public class PythonModuleParser extends PythonParser<ModuleEntry> {
 
           for (File pathEntry : pythonPath) {
             Path modulePath = getPath(localModule);
+            LOGGER.finer("Found path: " + modulePath);
 
             if (modulePath.startsWith(pathEntry.toPath())) {
               // Found it.
