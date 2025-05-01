@@ -53,9 +53,7 @@ jobs:
     - name: Coveralls GitHub Action
       uses: coverallsapp/github-action@v2.3.6
       with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        file: "com.ibm.wala.cast.python.report/target/site/jacoco-aggregate/jacoco.xml"
-        format: jacoco
+        file: com.ibm.wala.cast.python.report/target/site/jacoco-aggregate/jacoco.xml
     - name: Deploy with Maven
       run: mvn -s .travis.settings.xml -Dgithub.username=$GITHUB_USERNAME -Dgithub.password=$GITHUB_TOKEN deploy -DskipTests -B
       env:
