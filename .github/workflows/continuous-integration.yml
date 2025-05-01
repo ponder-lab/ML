@@ -52,10 +52,6 @@ jobs:
       run: mvn -Dlogging.config.file=\${maven.multiModuleProjectDirectory}/logging.ci.properties verify -B -Pjacoco coveralls:report -DrepoToken=$COVERALLS_REPO_TOKEN
       env:
         COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
-    - name: Coveralls GitHub Action
-      uses: coverallsapp/github-action@v2.3.6
-      with:
-        file: com.ibm.wala.cast.python.report/target/site/jacoco-aggregate/jacoco.xml
     - name: Deploy with Maven
       run: mvn -s .travis.settings.xml -Dgithub.username=$GITHUB_USERNAME -Dgithub.password=$GITHUB_TOKEN deploy -DskipTests -B
       env:
