@@ -3567,7 +3567,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
               try {
                 URL url = new URI(s).toURL();
                 return new File(new FileProvider().filePathFromURL(url));
-              } catch (MalformedURLException | URISyntaxException e) {
+              } catch (MalformedURLException | URISyntaxException | IllegalArgumentException e) {
                 try {
                   URL resource = this.getClass().getResource("/" + string);
                   String path = resource.getPath();

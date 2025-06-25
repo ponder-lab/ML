@@ -63,7 +63,7 @@ public abstract class TestPythonCallGraphShape extends TestCallGraphShape {
         URL url = new URI(name).toURL();
         return new SourceURLModule(url);
       }
-    } catch (MalformedURLException | URISyntaxException e) {
+    } catch (MalformedURLException | URISyntaxException | IllegalArgumentException e) {
       return new SourceURLModule(getClass().getClassLoader().getResource(name));
     }
   }
