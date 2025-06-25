@@ -21,6 +21,7 @@ import com.ibm.wala.util.NullProgressMonitor;
 import com.ibm.wala.util.collections.HashSetFactory;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.util.Set;
 
 public class Driver {
@@ -30,14 +31,28 @@ public class Driver {
       Class<?> j3 = Class.forName("com.ibm.wala.cast.python.loader.Python3LoaderFactory");
       PythonAnalysisEngine.setLoaderFactory((Class<? extends PythonLoaderFactory>) j3);
       Class<?> i3 = Class.forName("com.ibm.wala.cast.python.util.Python3Interpreter");
-      PythonInterpreter.setInterpreter((PythonInterpreter) i3.newInstance());
-    } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
+      PythonInterpreter.setInterpreter(
+          (PythonInterpreter) i3.getDeclaredConstructor().newInstance());
+    } catch (ClassNotFoundException
+        | InstantiationException
+        | IllegalAccessException
+        | IllegalArgumentException
+        | InvocationTargetException
+        | NoSuchMethodException
+        | SecurityException e) {
       try {
         Class<?> j2 = Class.forName("com.ibm.wala.cast.python.loader.Python2LoaderFactory");
         PythonAnalysisEngine.setLoaderFactory((Class<? extends PythonLoaderFactory>) j2);
         Class<?> i2 = Class.forName("com.ibm.wala.cast.python.util.Python2Interpreter");
-        PythonInterpreter.setInterpreter((PythonInterpreter) i2.newInstance());
-      } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e1) {
+        PythonInterpreter.setInterpreter(
+            (PythonInterpreter) i2.getDeclaredConstructor().newInstance());
+      } catch (ClassNotFoundException
+          | InstantiationException
+          | IllegalAccessException
+          | IllegalArgumentException
+          | InvocationTargetException
+          | NoSuchMethodException
+          | SecurityException e1) {
         assert false : e.getMessage() + ", then " + e1.getMessage();
       }
     }
