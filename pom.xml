@@ -134,6 +134,7 @@
               <arg>-Xlint:deprecation</arg>
               <arg>-Xlint:unchecked</arg>
             </compilerArgs>
+            <failOnWarning>true</failOnWarning>
           </configuration>
         </plugin>
         <plugin>
