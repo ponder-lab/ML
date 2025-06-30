@@ -34,7 +34,7 @@ jobs:
       run: black --fast --check --extend-exclude IDE --extend-exclude jython3 .
     - name: Install Jython3.
       run: |
-        pushd ${{ runner.temp }}/jython3
+        pushd jython3
         ant
         pushd dist
         mvn install:install-file -Dfile=./jython-dev.jar -DgroupId="org.python" -DartifactId="jython3" -Dversion="0.0.1-SNAPSHOT" -Dpackaging="jar" -DgeneratePom=true -B
@@ -43,7 +43,7 @@ jobs:
       shell: bash
     - name: Install IDE.
       run: |
-        pushd ${{ runner.temp }}/IDE/com.ibm.wala.cast.lsp
+        pushd IDE/com.ibm.wala.cast.lsp
         mvn install -B -q -DskipTests
         popd
     - name: Build with Maven
