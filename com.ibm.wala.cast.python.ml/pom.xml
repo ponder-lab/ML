@@ -4,7 +4,7 @@
   <parent>
     <groupId>com.ibm.wala</groupId>
     <artifactId>ml</artifactId>
-    <version>0.29.0-SNAPSHOT</version>
+    <version>0.40.0-SNAPSHOT</version>
   </parent>
   <artifactId>com.ibm.wala.cast.python.ml</artifactId>
   <dependencies>
@@ -66,7 +66,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
-        <version>3.4.1</version>
+        <version>3.6.0</version>
         <configuration>
           <filters>
             <filter>

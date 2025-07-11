@@ -12,9 +12,12 @@ import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.logging.Logger;
 import org.junit.Test;
 
-public class TestCalls extends TestPythonCallGraphShape {
+public class TestCalls extends TestJythonCallGraphShape {
+
+  private static final Logger LOGGER = Logger.getLogger(TestCalls.class.getName());
 
   protected static final Object[][] assertionsCalls1 =
       new Object[][] {
@@ -155,7 +158,7 @@ public class TestCalls extends TestPythonCallGraphShape {
     PropagationCallGraphBuilder cgBuilder =
         (PropagationCallGraphBuilder) e.defaultCallGraphBuilder();
     CallGraph CG = cgBuilder.makeCallGraph(cgBuilder.getOptions());
-    CAstCallGraphUtil.AVOID_DUMP = false;
+    CAstCallGraphUtil.AVOID_DUMP.set(false);
     CAstCallGraphUtil.dumpCG(
         (SSAContextInterpreter) cgBuilder.getContextInterpreter(),
         cgBuilder.getPointerAnalysis(),
@@ -190,7 +193,7 @@ public class TestCalls extends TestPythonCallGraphShape {
     PropagationCallGraphBuilder cgBuilder =
         (PropagationCallGraphBuilder) e.defaultCallGraphBuilder();
     CallGraph CG = cgBuilder.makeCallGraph(cgBuilder.getOptions());
-    CAstCallGraphUtil.AVOID_DUMP = false;
+    CAstCallGraphUtil.AVOID_DUMP.set(false);
     CAstCallGraphUtil.dumpCG(
         (SSAContextInterpreter) cgBuilder.getContextInterpreter(),
         cgBuilder.getPointerAnalysis(),
@@ -228,11 +231,6 @@ public class TestCalls extends TestPythonCallGraphShape {
     PropagationCallGraphBuilder cgBuilder =
         (PropagationCallGraphBuilder) e.defaultCallGraphBuilder();
     CallGraph CG = cgBuilder.makeCallGraph(cgBuilder.getOptions());
-    CAstCallGraphUtil.AVOID_DUMP = false;
-    CAstCallGraphUtil.dumpCG(
-        (SSAContextInterpreter) cgBuilder.getContextInterpreter(),
-        cgBuilder.getPointerAnalysis(),
-        CG);
     verifyGraphAssertions(CG, assertionsDefaultValues);
   }
 
@@ -268,12 +266,6 @@ public class TestCalls extends TestPythonCallGraphShape {
 
     CallGraph callGraph = callGraphBuilder.makeCallGraph(callGraphBuilder.getOptions());
 
-    CAstCallGraphUtil.AVOID_DUMP = false;
-    CAstCallGraphUtil.dumpCG(
-        (SSAContextInterpreter) callGraphBuilder.getContextInterpreter(),
-        callGraphBuilder.getPointerAnalysis(),
-        callGraph);
-
     verifyGraphAssertions(callGraph, PYTEST_ASSERTIONS);
   }
 
@@ -300,7 +292,7 @@ public class TestCalls extends TestPythonCallGraphShape {
 
     CallGraph callGraph = callGraphBuilder.makeCallGraph(callGraphBuilder.getOptions());
 
-    CAstCallGraphUtil.AVOID_DUMP = false;
+    CAstCallGraphUtil.AVOID_DUMP.set(false);
     CAstCallGraphUtil.dumpCG(
         (SSAContextInterpreter) callGraphBuilder.getContextInterpreter(),
         callGraphBuilder.getPointerAnalysis(),
@@ -321,11 +313,68 @@ public class TestCalls extends TestPythonCallGraphShape {
     PropagationCallGraphBuilder callGraphBuilder = engine.defaultCallGraphBuilder();
     addPytestEntrypoints(callGraphBuilder);
     CallGraph callGraph = callGraphBuilder.makeCallGraph(callGraphBuilder.getOptions());
-    CAstCallGraphUtil.AVOID_DUMP = false;
+    CAstCallGraphUtil.AVOID_DUMP.set(false);
     CAstCallGraphUtil.dumpCG(
         (SSAContextInterpreter) callGraphBuilder.getContextInterpreter(),
         callGraphBuilder.getPointerAnalysis(),
         callGraph);
     verifyGraphAssertions(callGraph, PYTEST_ASSERTIONS3);
+  }
+
+  protected static final Object[][] CLICK_ASSERTIONS =
+      new Object[][] {
+        new Object[] {ROOT, new String[] {"script click_calls.py"}},
+        new Object[] {
+          "script click_calls.py",
+          new String[] {
+            "script click_calls.py/train",
+          }
+        }
+      };
+
+  @Test
+  public void testClickCalls()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = this.makeEngine("click_calls.py");
+    PropagationCallGraphBuilder callGraphBuilder = engine.defaultCallGraphBuilder();
+    CallGraph callGraph = callGraphBuilder.makeCallGraph(callGraphBuilder.getOptions());
+
+    CAstCallGraphUtil.AVOID_DUMP.set(false);
+    CAstCallGraphUtil.dumpCG(
+        (SSAContextInterpreter) callGraphBuilder.getContextInterpreter(),
+        callGraphBuilder.getPointerAnalysis(),
+        callGraph);
+    LOGGER.info("Call graph: " + callGraph);
+
+    verifyGraphAssertions(callGraph, CLICK_ASSERTIONS);
+  }
+
+  protected static final Object[][] ABSEIL_ASSERTIONS =
+      new Object[][] {
+        new Object[] {ROOT, new String[] {"script abseil_calls.py"}},
+        new Object[] {"script abseil_calls.py", new String[] {"absl/run"}},
+        new Object[] {
+          "absl/run",
+          new String[] {
+            "script abseil_calls.py/main",
+          }
+        }
+      };
+
+  @Test
+  public void testAbseilCalls()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = this.makeEngine("abseil_calls.py");
+    PropagationCallGraphBuilder callGraphBuilder = engine.defaultCallGraphBuilder();
+    CallGraph callGraph = callGraphBuilder.makeCallGraph(callGraphBuilder.getOptions());
+
+    CAstCallGraphUtil.AVOID_DUMP.set(false);
+    CAstCallGraphUtil.dumpCG(
+        (SSAContextInterpreter) callGraphBuilder.getContextInterpreter(),
+        callGraphBuilder.getPointerAnalysis(),
+        callGraph);
+    LOGGER.info("Call graph: " + callGraph);
+
+    verifyGraphAssertions(callGraph, ABSEIL_ASSERTIONS);
   }
 }

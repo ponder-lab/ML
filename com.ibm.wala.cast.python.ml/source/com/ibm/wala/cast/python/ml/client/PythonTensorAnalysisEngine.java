@@ -28,6 +28,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ipa.callgraph.propagation.PropagationSystem;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
@@ -42,12 +43,20 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.graph.Graph;
 import com.ibm.wala.util.graph.impl.SlowSparseNumberedGraph;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.io.File;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 
 public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeAnalysis> {
+
+  public PythonTensorAnalysisEngine() {}
+
+  public PythonTensorAnalysisEngine(List<File> pythonPath) {
+    super(pythonPath);
+  }
 
   /** A "fake" function name in the summaries that indicates that an API produces a new tensor. */
   private static final String TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME = "read_data";
@@ -97,6 +106,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               PythonTypes.pythonLoader, TypeName.string2TypeName("Lwala/builtin/enumerate")),
           AstMethodReference.fnSelector);
 
+  private static final MethodReference NEXT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lwala/builtin/next")),
+          AstMethodReference.fnSelector);
+
   private final Map<PointerKey, AnalysisError> errorLog = HashMapFactory.make();
 
   private static Set<PointsToSetVariable> getDataflowSources(
@@ -117,16 +132,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         if (inst instanceof SSAAbstractInvokeInstruction) {
           // We potentially have a function call that generates a tensor.
           SSAAbstractInvokeInstruction ni = (SSAAbstractInvokeInstruction) inst;
-
-          if (ni.getCallSite()
-                  .getDeclaredTarget()
-                  .getName()
-                  .toString()
-                  .equals(TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME)
-              && ni.getException() != vn) {
-            sources.add(src);
-            logger.info("Added dataflow source from tensor generator: " + src + ".");
-          }
+          processInstruction(ni, du, localPointerKeyNode, src, vn, sources, pointerAnalysis);
         } else if (inst instanceof EachElementGetInstruction) {
           // We are potentially pulling a tensor out of a tensor iterable.
           EachElementGetInstruction eachElementGetInstruction = (EachElementGetInstruction) inst;
@@ -152,8 +158,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                 src,
                 sources,
                 callGraph,
-                pointerAnalysis,
-                newHashSet());
+                pointerAnalysis);
           }
         } else if (inst instanceof PythonPropertyRead) {
           // We are potentially pulling a tensor out of a non-scalar tensor iterable.
@@ -171,20 +176,138 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           } else if (def instanceof EachElementGetInstruction
               || def instanceof PythonPropertyRead
               || def instanceof PythonInvokeInstruction) {
-            processInstruction(
-                def,
-                du,
-                localPointerKeyNode,
-                src,
-                sources,
-                callGraph,
-                pointerAnalysis,
-                newHashSet());
+            boolean added = false;
+            // we may be invoking `next()` on a dataset.
+            if (def instanceof SSAAbstractInvokeInstruction && def.getNumberOfUses() > 1) {
+              SSAAbstractInvokeInstruction invokeInstruction = (SSAAbstractInvokeInstruction) def;
+              added =
+                  processInstruction(
+                      invokeInstruction,
+                      du,
+                      localPointerKeyNode,
+                      src,
+                      vn,
+                      sources,
+                      pointerAnalysis);
+            }
+
+            if (!added)
+              processInstruction(
+                  def, du, localPointerKeyNode, src, sources, callGraph, pointerAnalysis);
           }
         }
       }
     }
     return sources;
+  }
+
+  /**
+   * Processes the given {@link SSAAbstractInvokeInstruction}, adding the given {@link PointsToSetVariable} to the given {@link Set} of {@link PointsToSetVariable}s as a dataflow source if the given {@link SSAAbstractInvokeInstruction} results in a tensor value.
+   *
+   * @param instruction The {@link SSAAbstractInvokeInstruction} to consider.
+   * @param du The {@link DefUse} for the given {@link SSAAbstractInvokeInstruction}.
+   * @param node The {@link CGNode} containing the given {@link SSAAbstractInvokeInstruction}.
+   * @param src The {@link PointsToSetVariable} to add to the given {@link Set} of {@link PointsToSetVariable}s if there a tensor flows from the given {@link SSAAbstractInvokeInstruction.
+   * @param vn The value number in the given {@link CGNode} corresponding to the given {@link PointsToSetVariable}.
+   * @param sources The {@link Set} of {@link PointsToSetVariable}s representing tensor dataflow sources.
+   * @param pointerAnalysis The {@link PointerAnalysis} for the given {@link CGNode}.
+   * @return True iff given the source was added to the set.
+   */
+  private static boolean processInstruction(
+      SSAAbstractInvokeInstruction instruction,
+      DefUse du,
+      CGNode node,
+      PointsToSetVariable src,
+      int vn,
+      Set<PointsToSetVariable> sources,
+      PointerAnalysis<InstanceKey> pointerAnalysis) {
+    boolean ret = false;
+
+    // don't consider exceptions as a data source.
+    if (instruction.getException() != vn) {
+      if (instruction
+          .getCallSite()
+          .getDeclaredTarget()
+          .getName()
+          .toString()
+          .equals(TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME)) {
+        sources.add(src);
+        logger.info("Added dataflow source from tensor generator: " + src + ".");
+        ret = true;
+      } else if (instruction.getNumberOfUses() > 1) {
+        // Get the invoked function from the PA.
+        int target = instruction.getUse(0);
+        PointerKey targetKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, target);
+
+        for (InstanceKey ik : pointerAnalysis.getPointsToSet(targetKey)) {
+          if (ik instanceof ConcreteTypeKey) {
+            ConcreteTypeKey ctk = (ConcreteTypeKey) ik;
+            IClass type = ctk.getType();
+            TypeReference reference = type.getReference();
+
+            if (reference.equals(NEXT.getDeclaringClass())) {
+              // it's a call to `next()`. Look up the iterator definition.
+              int iterator = instruction.getUse(1);
+              SSAInstruction iteratorDef = du.getDef(iterator);
+
+              // Let's see if the iterator is over a tensor dataset. First, check the iterator
+              // for a dataset source. NOTE: We can only do this because `iter()` is currently
+              // just passing-through its argument.
+              if (iteratorDef != null && iteratorDef.getNumberOfUses() > 1) {
+                boolean added =
+                    processInstructionInterprocedurally(
+                        iteratorDef, iteratorDef.getDef(), node, src, sources, pointerAnalysis);
+
+                ret |= added;
+
+                if (!added && iteratorDef instanceof SSAAbstractInvokeInstruction) {
+                  // It may be a call to `iter()`. Get the argument.
+                  int iterArg = iteratorDef.getUse(1);
+                  ret |=
+                      processInstructionInterprocedurally(
+                          iteratorDef, iterArg, node, src, sources, pointerAnalysis);
+                }
+              } else
+                // Use the original instruction. NOTE: We can only do this because `iter()` is
+                // currently just passing-through its argument.
+                ret |=
+                    processInstructionInterprocedurally(
+                        instruction, iterator, node, src, sources, pointerAnalysis);
+            }
+          }
+        }
+      }
+    }
+
+    return ret;
+  }
+
+  /**
+   * Processes the given {@link SSAInstruction} to decide if the given {@link PointsToSetVariable}
+   * is added to the given {@link Set} of {@link PointsToSetVariable}s as tensor dataflow sources.
+   *
+   * @param instruction The {@link SSAInstruction} to process.
+   * @param du The {@link DefUse} corresponding to the given {@link SSAInstruction}.
+   * @param node The {@link CGNode} containing the given {@link SSAInstruction}.
+   * @param src The {@link PointsToSetVariable} under question as to whether it should be considered
+   *     a tensor dataflow source.
+   * @param sources The {@link Set} of tensor dataflow sources.
+   * @param callGraph The {@link CallGraph} containing the given {@link SSAInstruction}.
+   * @param pointerAnalysis The {@link PointerAnalysis} corresponding to the given {@link
+   *     CallGraph}.
+   * @return True iff the given {@link PointsToSetVariable} was added to the given {@link Set} of
+   *     {@link PointsToSetVariable} dataflow sources.
+   */
+  private static boolean processInstruction(
+      SSAInstruction instruction,
+      DefUse du,
+      CGNode node,
+      PointsToSetVariable src,
+      Set<PointsToSetVariable> sources,
+      CallGraph callGraph,
+      PointerAnalysis<InstanceKey> pointerAnalysis) {
+    return processInstruction(
+        instruction, du, node, src, sources, callGraph, pointerAnalysis, newHashSet());
   }
 
   /**
@@ -270,7 +393,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       PointerAnalysis<InstanceKey> pointerAnalysis) {
     logger.info(
         () ->
-            "Using interprocedural analysis to find potential tensor iterable definition for use: "
+            "Using interprocedural analysis to find potential tensor definition for use: "
                 + use
                 + " of instruction: "
                 + instruction
@@ -300,7 +423,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * Returns true iff the given {@link PointsToSetVariable} refers to a tensor dataset element of
    * the dataset defined by the given value number in the given {@link CGNode}.
    *
-   * @param src The {@link PointsToSetVariable} to consider.
+   * @param variable The {@link PointsToSetVariable} to consider.
    * @param val The value in the given {@link CGNode} representing the tensor dataset.
    * @param node The {@link CGNode} containing the given {@link PointsToSetVariable} and value.
    * @param pointerAnalysis The {@link PointerAnalysis} that includes points-to information for the
@@ -309,7 +432,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    *     val in node.
    */
   private static boolean isDatasetTensorElement(
-      PointsToSetVariable src, int val, CGNode node, PointerAnalysis<InstanceKey> pointerAnalysis) {
+      PointsToSetVariable variable,
+      int val,
+      CGNode node,
+      PointerAnalysis<InstanceKey> pointerAnalysis) {
     SSAInstruction def = node.getDU().getDef(val);
 
     if (def instanceof PythonInvokeInstruction) {
@@ -335,7 +461,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
             PythonPropertyRead srcDef =
                 (PythonPropertyRead)
-                    node.getDU().getDef(((LocalPointerKey) src.getPointerKey()).getValueNumber());
+                    node.getDU()
+                        .getDef(((LocalPointerKey) variable.getPointerKey()).getValueNumber());
 
             // What does the member reference point to?
             PointerKey memberRefPointerKey =
@@ -542,7 +669,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
     Map<PointsToSetVariable, TensorType> placeholders =
         handleShapeSourceOp(builder, dataflow, placeholder, 2);
-    System.err.println(placeholders);
+    logger.fine(() -> "Placeholders: " + placeholders);
     for (Map.Entry<PointsToSetVariable, TensorType> e : placeholders.entrySet()) {
       init.put(e.getKey(), e.getValue());
     }
@@ -591,7 +718,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       int srcVn = srcNode.getDU().getDef(toVn).getUse(1);
       PointerKey from =
           builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(srcNode, srcVn);
-      dataflow.addEdge(builder.getPropagationSystem().findOrCreatePointsToSet(from), to);
+
+      final PropagationSystem system = builder.getPropagationSystem();
+
+      // If the source is not implicit, we add an edge from the points-to set of the source to the
+      // target https://github.com/wala/ML/issues/268.
+      if (!system.isImplicit(from)) dataflow.addEdge(system.findOrCreatePointsToSet(from), to);
     }
     return reshapeTypes;
   }
