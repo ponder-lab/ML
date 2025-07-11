@@ -718,7 +718,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testVakueIndex3()
+  public void testValueIndex3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_value_index3.py", "value_index", 2, 2, 2, 3);
   }
