@@ -661,10 +661,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     Set<PointsToSetVariable> sources =
         getDataflowSources(dataflow, builder.getCallGraph(), builder.getPointerAnalysis());
 
-    TensorType mnistData = TensorType.mnistInput();
     Map<PointsToSetVariable, TensorType> init = HashMapFactory.make();
 
-    for (PointsToSetVariable v : sources) init.put(v, mnistData);
+    for (PointsToSetVariable v : sources) init.put(v, getTensorType(v));
 
     Map<PointsToSetVariable, TensorType> placeholders =
         handleShapeSourceOp(builder, dataflow, placeholder, 2);
@@ -705,6 +704,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     tt.solve(new NullProgressMonitor());
 
     return tt;
+  }
+
+  private TensorType getTensorType(PointsToSetVariable v) {
+    // TODO Auto-generated method stub
+    return null;
   }
 
   private Map<PointsToSetVariable, TensorType> handleShapeSourceOp(
