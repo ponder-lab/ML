@@ -12,3 +12,6 @@ def add(a, b):
 
 
 c = add(tf.ones([1, 2]), tf.ones([2, 2]))
+
+assert c.shape == (2, 2), f"Expected shape (2, 2), got {c.shape}"
+assert c.dtype == tf.float32, f"Expected dtype float32, got {c.dtype}"
