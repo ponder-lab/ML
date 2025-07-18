@@ -727,6 +727,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
+  public void testCallbacks3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_callbacks3.py", "dataset_fn", 0, 0);
+  }
+
+  @Test
   public void testGanTutorial()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tensorflow_gan_tutorial.py", "train_step", 1, 2, Map.of(2, Set.of(MNIST_INPUT)));
