@@ -11,6 +11,8 @@ import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.types.PythonTypes;
@@ -49,10 +51,12 @@ import com.ibm.wala.util.graph.Graph;
 import com.ibm.wala.util.graph.impl.SlowSparseNumberedGraph;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.logging.Logger;
 
 public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeAnalysis> {
@@ -673,7 +677,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     Set<PointsToSetVariable> sources =
         getDataflowSources(dataflow, builder.getCallGraph(), builder.getPointerAnalysis());
 
-    Map<PointsToSetVariable, TensorType> init = HashMapFactory.make();
+    Map<PointsToSetVariable, Set<TensorType>> init = HashMapFactory.make();
 
     for (PointsToSetVariable v : sources) init.put(v, getTensorType(v, builder));
 
@@ -682,7 +686,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     logger.fine(() -> "Placeholders: " + placeholders);
 
     for (Map.Entry<PointsToSetVariable, TensorType> e : placeholders.entrySet())
-      init.put(e.getKey(), e.getValue());
+      init.put(e.getKey(), Set.of(e.getValue()));
 
     Map<PointsToSetVariable, TensorType> setCalls = HashMapFactory.make();
     Map<PointsToSetVariable, TensorType> set_shapes = getShapeSourceCalls(set_shape, builder, 1);
@@ -710,8 +714,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
     Set<PointsToSetVariable> conv3ds = getKeysDefinedByCall(conv3d, builder);
 
-    TensorTypeAnalysis tt =
-        new TensorTypeAnalysis(dataflow, init, shapeOps, setCalls, conv2ds, conv3ds, errorLog);
+    TensorTypeAnalysis tt = null;
+    //        new TensorTypeAnalysis(dataflow, init, shapeOps, setCalls, conv2ds, conv3ds,
+    // errorLog);
 
     tt.solve(new NullProgressMonitor());
 
@@ -719,12 +724,22 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * Returns the set of possible {@link TensorType}s that the given {@link PointsToSetVariable} can
+   * take on.
+   *
    * @param source The dataflow source to analyze.
-   * @param builder
-   * @return
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph and pointer
+   *     analysis.
+   * @return A set of {@link TensorType}s that the given {@link PointsToSetVariable} can take on.
+   *     Empty set is returned if the possible tensor types cannot be determined.
    */
-  private TensorType getTensorType(
+  private Set<TensorType> getTensorType(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+
+    logger.info("Getting tensor types for source: " + source + ".");
+    Set<TensorType> ret = HashSetFactory.make();
+
+    // Get the pointer key for the source.
     PointerKey pointerKey = source.getPointerKey();
 
     if (pointerKey instanceof LocalPointerKey) {
@@ -754,16 +769,23 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             OrdinalSet<InstanceKey> objectCatalogPointsToSet =
                 pointerAnalysis.getPointsToSet(pointerKeyForObjectCatalog);
 
+            // We expect the object catalog to contain a list of integers. Each element in the map
+            // corresponds to the set of possible dimensions for that index.
+            Map<Integer, Set<Dimension<Integer>>> indexToPossibleDimensions =
+                new TreeMap<Integer, Set<Dimension<Integer>>>();
+
             for (InstanceKey catalogIK : objectCatalogPointsToSet) {
               if (catalogIK instanceof ConstantKey) {
                 ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
                 Object constantKeyValue = constantKey.getValue();
 
                 if (constantKeyValue instanceof Integer) {
+                  Integer fieldIndex = (Integer) constantKeyValue;
+
                   FieldReference subscript =
                       FieldReference.findOrCreate(
                           PythonTypes.Root,
-                          Atom.findOrCreateUnicodeAtom(constantKeyValue.toString()),
+                          Atom.findOrCreateUnicodeAtom(fieldIndex.toString()),
                           PythonTypes.Root);
 
                   IField f = getClassHierarchy().resolveField(subscript);
@@ -782,6 +804,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                       "Points-to set for instance field: " + instanceFieldPointsToSet + ".");
 
                   // If the instance field points to a constant, we can use it as the shape.
+                  Set<Dimension<Integer>> tensorDimensions = HashSetFactory.make();
+
                   for (InstanceKey instanceFieldIK : instanceFieldPointsToSet) {
                     if (instanceFieldIK instanceof ConstantKey) {
                       ConstantKey<?> instanceFieldConstant = (ConstantKey<?>) instanceFieldIK;
@@ -790,9 +814,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                       if (instanceFieldValue instanceof Long) {
                         // We have a shape value.
                         Long shapeValue = (Long) instanceFieldValue;
-                        logger.info(
+                        logger.fine(
                             "Found shape value: " + shapeValue + " for " + pointerKey + ".");
-                        //						return TensorType.shape(shapeValue);
+
+                        Dimension<Integer> dimension = new NumericDim(shapeValue.intValue());
+
+                        logger.fine("Adding dimension: " + dimension + ".");
+                        tensorDimensions.add(dimension);
                       } else
                         throw new IllegalStateException(
                             "Expected a "
@@ -808,6 +836,31 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                               + instanceFieldIK
                               + ".");
                   }
+
+                  logger.info(
+                      "Found possible shape dimensions: "
+                          + tensorDimensions
+                          + " for field: "
+                          + pointerKeyForInstanceField
+                          + " for source: "
+                          + source
+                          + ".");
+
+                  // Add the shape dimensions.
+                  assert !indexToPossibleDimensions.containsKey(fieldIndex)
+                      : "Duplicate field index: "
+                          + fieldIndex
+                          + " in object catalog: "
+                          + objectCatalogPointsToSet
+                          + ".";
+
+                  indexToPossibleDimensions.put(fieldIndex, tensorDimensions);
+                  logger.fine(
+                      "Added shape dimensions: "
+                          + tensorDimensions
+                          + " for field index: "
+                          + fieldIndex
+                          + ".");
                 } else
                   throw new IllegalStateException(
                       "Expected an "
@@ -823,6 +876,24 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                         + catalogIK
                         + ".");
             }
+
+            for (Integer i : indexToPossibleDimensions.keySet()) {
+              Set<Dimension<Integer>> iDims = indexToPossibleDimensions.get(i);
+
+              for (Dimension<Integer> iDim : iDims) {
+                List<Dimension<Integer>> dimensionList = new ArrayList<>();
+                dimensionList.add(iDim);
+
+                for (int j = i + 1; j < indexToPossibleDimensions.keySet().size(); j++) {
+                  Set<Dimension<Integer>> jDims = indexToPossibleDimensions.get(j);
+
+                  for (Dimension<Integer> jDim : jDims) dimensionList.add(jDim);
+                }
+
+                System.out.println(dimensionList);
+              }
+            }
+
           } else
             throw new IllegalStateException(
                 "Expected a " + PythonTypes.list + " for the shape, but got: " + reference + ".");
@@ -840,7 +911,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               + source
               + ".");
 
-    return null;
+    return ret;
   }
 
   private Map<PointsToSetVariable, TensorType> handleShapeSourceOp(
