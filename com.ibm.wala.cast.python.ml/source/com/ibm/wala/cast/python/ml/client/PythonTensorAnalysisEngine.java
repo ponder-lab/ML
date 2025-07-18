@@ -2,8 +2,10 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.google.common.collect.Sets.newHashSet;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
+import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.cast.types.AstMethodReference.fnReference;
 
+import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
@@ -15,7 +17,9 @@ import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
+import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.classLoader.IMethod;
+import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
@@ -33,6 +37,7 @@ import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
@@ -98,6 +103,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           TypeReference.findOrCreate(
               PythonTypes.pythonLoader,
               TypeName.string2TypeName("Ltensorflow/functions/set_shape")),
+          AstMethodReference.fnSelector);
+
+  /** https://www.tensorflow.org/api_docs/python/tf/ones. */
+  private static final MethodReference ONES =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/ones")),
           AstMethodReference.fnSelector);
 
   private static final MethodReference ENUMERATE =
@@ -663,7 +675,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
     Map<PointsToSetVariable, TensorType> init = HashMapFactory.make();
 
-    for (PointsToSetVariable v : sources) init.put(v, getTensorType(v));
+    for (PointsToSetVariable v : sources) init.put(v, getTensorType(v, builder));
 
     Map<PointsToSetVariable, TensorType> placeholders =
         handleShapeSourceOp(builder, dataflow, placeholder, 2);
@@ -706,8 +718,128 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     return tt;
   }
 
-  private TensorType getTensorType(PointsToSetVariable v) {
-    // TODO Auto-generated method stub
+  /**
+   * @param source The dataflow source to analyze.
+   * @param builder
+   * @return
+   */
+  private TensorType getTensorType(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    PointerKey pointerKey = source.getPointerKey();
+
+    if (pointerKey instanceof LocalPointerKey) {
+      LocalPointerKey localPointerKey = (LocalPointerKey) pointerKey;
+      CGNode node = localPointerKey.getNode();
+
+      TypeReference calledFunction = node.getMethod().getDeclaringClass().getReference();
+      logger.info("Getting tensor type for call to: " + calledFunction.getName() + ".");
+
+      if (calledFunction.equals(ONES.getDeclaringClass())) {
+        // This is a call to `ones()`. The shape is in the first explicit argument.
+        PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+        PointerKey shapePointerKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 2);
+        OrdinalSet<InstanceKey> shapePointsToSet = pointerAnalysis.getPointsToSet(shapePointerKey);
+
+        for (InstanceKey shapeIK : shapePointsToSet) {
+          AllocationSiteInNode asin = getAllocationSiteInNode(shapeIK);
+          IClass concreteType = asin.getConcreteType();
+          TypeReference reference = concreteType.getReference();
+
+          if (reference.equals(PythonTypes.list)) {
+            // We have a list of integers that represent the shape.
+            AstPointerKeyFactory pointerKeyFactory =
+                (AstPointerKeyFactory) builder.getPointerKeyFactory();
+            PointerKey pointerKeyForObjectCatalog =
+                pointerKeyFactory.getPointerKeyForObjectCatalog(asin);
+            OrdinalSet<InstanceKey> objectCatalogPointsToSet =
+                pointerAnalysis.getPointsToSet(pointerKeyForObjectCatalog);
+
+            for (InstanceKey catalogIK : objectCatalogPointsToSet) {
+              if (catalogIK instanceof ConstantKey) {
+                ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
+                Object constantKeyValue = constantKey.getValue();
+
+                if (constantKeyValue instanceof Integer) {
+                  FieldReference subscript =
+                      FieldReference.findOrCreate(
+                          PythonTypes.Root,
+                          Atom.findOrCreateUnicodeAtom(constantKeyValue.toString()),
+                          PythonTypes.Root);
+
+                  IField f = getClassHierarchy().resolveField(subscript);
+                  logger.fine("Found field: " + f);
+
+                  // We can now get the pointer key for the instance field.
+                  PointerKey pointerKeyForInstanceField =
+                      builder.getPointerKeyForInstanceField(asin, f);
+                  logger.fine(
+                      "Found pointer key for instance field: " + pointerKeyForInstanceField + ".");
+
+                  // Get the points-to set for the instance field.
+                  OrdinalSet<InstanceKey> instanceFieldPointsToSet =
+                      pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
+                  logger.fine(
+                      "Points-to set for instance field: " + instanceFieldPointsToSet + ".");
+
+                  // If the instance field points to a constant, we can use it as the shape.
+                  for (InstanceKey instanceFieldIK : instanceFieldPointsToSet) {
+                    if (instanceFieldIK instanceof ConstantKey) {
+                      ConstantKey<?> instanceFieldConstant = (ConstantKey<?>) instanceFieldIK;
+                      Object instanceFieldValue = instanceFieldConstant.getValue();
+
+                      if (instanceFieldValue instanceof Long) {
+                        // We have a shape value.
+                        Long shapeValue = (Long) instanceFieldValue;
+                        logger.info(
+                            "Found shape value: " + shapeValue + " for " + pointerKey + ".");
+                        //						return TensorType.shape(shapeValue);
+                      } else
+                        throw new IllegalStateException(
+                            "Expected a "
+                                + Long.class
+                                + "for the shape, but got: "
+                                + instanceFieldValue
+                                + ".");
+                    } else
+                      throw new IllegalStateException(
+                          "Expected a "
+                              + ConstantKey.class
+                              + " for the instance field, but got: "
+                              + instanceFieldIK
+                              + ".");
+                  }
+                } else
+                  throw new IllegalStateException(
+                      "Expected an "
+                          + Integer.class
+                          + " for the object catalog value, but got: "
+                          + constantKeyValue
+                          + ".");
+              } else
+                throw new IllegalStateException(
+                    "Expected a "
+                        + ConstantKey.class
+                        + " for the object catalog, but got: "
+                        + catalogIK
+                        + ".");
+            }
+          } else
+            throw new IllegalStateException(
+                "Expected a " + PythonTypes.list + " for the shape, but got: " + reference + ".");
+        }
+      } else
+        throw new IllegalArgumentException(
+            "Unknown call: " + calledFunction + " for source: " + source + ".");
+    } else
+      throw new IllegalArgumentException(
+          "Expected a "
+              + LocalPointerKey.class
+              + ", but got: "
+              + pointerKey.getClass()
+              + " for source: "
+              + source
+              + ".");
+
     return null;
   }
 
