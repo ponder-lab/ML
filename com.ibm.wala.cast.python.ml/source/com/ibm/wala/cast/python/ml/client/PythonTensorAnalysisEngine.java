@@ -877,26 +877,21 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                         + ".");
             }
 
-            for (int i = 0; i < possibleDimensions.length; i++) {
+            for (int i = 0; i < possibleDimensions.length; i++)
               for (Dimension<Integer> iDim : possibleDimensions[i]) {
                 @SuppressWarnings("unchecked")
                 Dimension<Integer>[] dimensions = new Dimension[possibleDimensions.length];
 
                 dimensions[i] = iDim;
 
-                for (int j = 0; j < possibleDimensions.length; j++) {
-                  if (i != j) {
-                    for (Dimension<Integer> jDim : possibleDimensions[j]) {
-                      dimensions[j] = jDim;
-                    }
-                  }
-                }
+                for (int j = 0; j < possibleDimensions.length; j++)
+                  if (i != j)
+                    for (Dimension<Integer> jDim : possibleDimensions[j]) dimensions[j] = jDim;
 
                 List<Dimension<?>> dimensionList = asList(dimensions);
                 TensorType tensorType = new TensorType("pixel", dimensionList);
                 ret.add(tensorType);
               }
-            }
           } else
             throw new IllegalStateException(
                 "Expected a " + PythonTypes.list + " for the shape, but got: " + reference + ".");
