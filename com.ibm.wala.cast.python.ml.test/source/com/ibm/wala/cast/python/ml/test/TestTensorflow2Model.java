@@ -873,11 +873,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     Dimension<Integer> aX = new NumericDim(1);
     Dimension<Integer> aY = new NumericDim(2);
 
+    List<Dimension<?>> aDimensions = asList(aX, aY);
+
     Dimension<Integer> bX = new NumericDim(2);
     Dimension<Integer> bY = new NumericDim(2);
 
-    TensorType expectedTypeForA = new TensorType("pixel", asList(aX, aY));
-    TensorType expectedTypeForB = new TensorType("pixel", asList(bX, bY));
+    List<Dimension<?>> bDimensions = asList(bX, bY);
+
+    TensorType expectedTypeForA = new TensorType("pixel", aDimensions);
+    TensorType expectedTypeForB = new TensorType("pixel", bDimensions);
 
     test(
         "tf2_test_add7.py",
