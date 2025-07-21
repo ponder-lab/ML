@@ -4,6 +4,7 @@ import static com.google.common.collect.Sets.newHashSet;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.cast.types.AstMethodReference.fnReference;
+import static java.util.Arrays.asList;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
@@ -51,12 +52,10 @@ import com.ibm.wala.util.graph.Graph;
 import com.ibm.wala.util.graph.impl.SlowSparseNumberedGraph;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.logging.Logger;
 
 public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeAnalysis> {
@@ -735,8 +734,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    */
   private Set<TensorType> getTensorType(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
-
     logger.info("Getting tensor types for source: " + source + ".");
+
     Set<TensorType> ret = HashSetFactory.make();
 
     // Get the pointer key for the source.
@@ -769,10 +768,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             OrdinalSet<InstanceKey> objectCatalogPointsToSet =
                 pointerAnalysis.getPointsToSet(pointerKeyForObjectCatalog);
 
-            // We expect the object catalog to contain a list of integers. Each element in the map
+            // We expect the object catalog to contain a list of integers. Each element in the array
             // corresponds to the set of possible dimensions for that index.
-            Map<Integer, Set<Dimension<Integer>>> indexToPossibleDimensions =
-                new TreeMap<Integer, Set<Dimension<Integer>>>();
+            @SuppressWarnings("unchecked")
+            Set<Dimension<Integer>>[] possibleDimensions = new Set[objectCatalogPointsToSet.size()];
 
             for (InstanceKey catalogIK : objectCatalogPointsToSet) {
               if (catalogIK instanceof ConstantKey) {
@@ -847,14 +846,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                           + ".");
 
                   // Add the shape dimensions.
-                  assert !indexToPossibleDimensions.containsKey(fieldIndex)
+                  assert possibleDimensions[fieldIndex] == null
                       : "Duplicate field index: "
                           + fieldIndex
                           + " in object catalog: "
                           + objectCatalogPointsToSet
                           + ".";
 
-                  indexToPossibleDimensions.put(fieldIndex, tensorDimensions);
+                  possibleDimensions[fieldIndex] = tensorDimensions;
                   logger.fine(
                       "Added shape dimensions: "
                           + tensorDimensions
@@ -877,23 +876,26 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                         + ".");
             }
 
-            for (Integer i : indexToPossibleDimensions.keySet()) {
-              Set<Dimension<Integer>> iDims = indexToPossibleDimensions.get(i);
+            for (int i = 0; i < possibleDimensions.length; i++) {
+              for (Dimension<Integer> iDim : possibleDimensions[i]) {
+                @SuppressWarnings("unchecked")
+                Dimension<Integer>[] dimensions = new Dimension[possibleDimensions.length];
 
-              for (Dimension<Integer> iDim : iDims) {
-                List<Dimension<Integer>> dimensionList = new ArrayList<>();
-                dimensionList.add(iDim);
+                dimensions[i] = iDim;
 
-                for (int j = i + 1; j < indexToPossibleDimensions.keySet().size(); j++) {
-                  Set<Dimension<Integer>> jDims = indexToPossibleDimensions.get(j);
-
-                  for (Dimension<Integer> jDim : jDims) dimensionList.add(jDim);
+                for (int j = 0; j < possibleDimensions.length; j++) {
+                  if (i != j) {
+                    for (Dimension<Integer> jDim : possibleDimensions[j]) {
+                      dimensions[j] = jDim;
+                    }
+                  }
                 }
 
-                System.out.println(dimensionList);
+                List<Dimension<?>> dimensionList = asList(dimensions);
+                TensorType tensorType = new TensorType("pixel", dimensionList);
+                ret.add(tensorType);
               }
             }
-
           } else
             throw new IllegalStateException(
                 "Expected a " + PythonTypes.list + " for the shape, but got: " + reference + ".");
