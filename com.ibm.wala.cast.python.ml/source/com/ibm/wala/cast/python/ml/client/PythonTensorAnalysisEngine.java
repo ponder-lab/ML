@@ -715,9 +715,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
     Set<PointsToSetVariable> conv3ds = getKeysDefinedByCall(conv3d, builder);
 
-    TensorTypeAnalysis tt = null;
-    //        new TensorTypeAnalysis(dataflow, init, shapeOps, setCalls, conv2ds, conv3ds,
-    // errorLog);
+    TensorTypeAnalysis tt =
+        new TensorTypeAnalysis(dataflow, init, shapeOps, setCalls, conv2ds, conv3ds, errorLog);
 
     tt.solve(new NullProgressMonitor());
 
