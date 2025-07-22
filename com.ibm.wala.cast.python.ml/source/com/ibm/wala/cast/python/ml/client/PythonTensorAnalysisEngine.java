@@ -752,6 +752,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       if (calledFunction.equals(ONES.getDeclaringClass())) {
         // This is a call to `ones()`. The shape is in the first explicit argument.
         PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+        // FIXME: Handle keyword arguments.
         PointerKey shapePointerKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 2);
         OrdinalSet<InstanceKey> shapePointsToSet = pointerAnalysis.getPointsToSet(shapePointerKey);
 
