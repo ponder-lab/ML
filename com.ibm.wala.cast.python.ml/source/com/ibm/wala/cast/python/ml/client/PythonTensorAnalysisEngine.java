@@ -897,6 +897,16 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             throw new IllegalStateException(
                 "Expected a " + PythonTypes.list + " for the shape, but got: " + reference + ".");
         }
+
+        // The dtype is the second explicit argument.
+        // FIXME: Handle keyword arguments.
+        PointerKey dTypePointerKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 3);
+        OrdinalSet<InstanceKey> dTypePointsToSet = pointerAnalysis.getPointsToSet(dTypePointerKey);
+
+        if (dTypePointsToSet.isEmpty()) {
+          // Use the default dtype of float32.
+        }
+
       } else
         throw new IllegalArgumentException(
             "Unknown call: " + calledFunction + " for source: " + source + ".");

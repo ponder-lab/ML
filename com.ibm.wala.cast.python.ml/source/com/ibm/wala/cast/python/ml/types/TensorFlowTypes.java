@@ -17,5 +17,8 @@ public class TensorFlowTypes extends PythonTypes {
   public static final TypeReference DATASET =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset"));
 
+  public static final TypeReference D_TYPE =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/dtypes/DType"));
+
   private TensorFlowTypes() {}
 }
