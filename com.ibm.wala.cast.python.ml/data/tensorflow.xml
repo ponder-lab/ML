@@ -221,12 +221,8 @@
         <new def="constant" class="Ltensorflow/functions/constant" />
         <putfield class="LRoot" field="constant" fieldType="LRoot" ref="x" value="constant" />
         <putfield class="LRoot" field="constant" fieldType="LRoot" ref="constant_op" value="constant" />
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes/DType -->
-        <new def="DType" class="Ltensorflow/class/DType" />
-        <putfield class="LRoot" field="DType" fieldType="LRoot" ref="x" value="DType" />
-        <putfield class="LRoot" field="DType" fieldType="LRoot" ref="dtypes" value="DType" />
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes#float32 -->
-        <new def="float32" class="Ltensorflow/class/DType" />
+        <new def="float32" class="Ltensorflow/dtypes/DType" />
         <putfield class="LRoot" field="float32" fieldType="LRoot" ref="x" value="float32" />
         <putfield class="LRoot" field="float32" fieldType="LRoot" ref="dtypes" value="float32" />
         <new def="ragged_constant" class="Ltensorflow/functions/ragged_constant" />
@@ -325,10 +321,12 @@
           <return value="closure" />
         </method>
       </class>
+    </package>
+    <package name="tensorflow/dtypes">
       <class name="DType" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes/DType -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self type_enum handle_data">
-          <new def="obj" class="Ltensorflow/class/DType" />
+          <new def="obj" class="Ltensorflow//DType" />
           <putfield class="LRoot" field="type_enum" fieldType="LRoot" ref="obj" value="type_enum" />
           <putfield class="LRoot" field="handle_data" fieldType="LRoot" ref="obj" value="handle_data" />
           <return value="obj" />

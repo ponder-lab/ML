@@ -2,8 +2,11 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.google.common.collect.Sets.newHashSet;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.D_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.cast.types.AstMethodReference.fnReference;
+import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
 import static java.util.Arrays.asList;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
@@ -11,6 +14,7 @@ import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -22,10 +26,12 @@ import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.classLoader.IMethod;
+import com.ibm.wala.classLoader.NewSiteReference;
 import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
+import com.ibm.wala.ipa.callgraph.ContextItem;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConcreteTypeKey;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
@@ -36,10 +42,12 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationSystem;
+import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.types.Descriptor;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
@@ -55,6 +63,7 @@ import java.io.File;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -114,6 +123,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           TypeReference.findOrCreate(
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/ones")),
           AstMethodReference.fnSelector);
+
+  private static final MethodReference IMPORT =
+      MethodReference.findOrCreate(
+          TENSORFLOW,
+          Atom.findOrCreateAsciiAtom("import"),
+          Descriptor.findOrCreate(null, TENSORFLOW.getName()));
 
   private static final MethodReference ENUMERATE =
       MethodReference.findOrCreate(
@@ -786,7 +801,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                   FieldReference subscript =
                       FieldReference.findOrCreate(
                           PythonTypes.Root,
-                          Atom.findOrCreateUnicodeAtom(fieldIndex.toString()),
+                          Atom.findOrCreateAsciiAtom(fieldIndex.toString()),
                           PythonTypes.Root);
 
                   IField f = getClassHierarchy().resolveField(subscript);
@@ -904,7 +919,65 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         OrdinalSet<InstanceKey> dTypePointsToSet = pointerAnalysis.getPointsToSet(dTypePointerKey);
 
         if (dTypePointsToSet.isEmpty()) {
-          // Use the default dtype of float32.
+          // TODO: Use the default dtype of float32.
+        } else { // there's an explicit argument.
+          for (InstanceKey dTypeIK : dTypePointsToSet) {
+            IClass concreteType = dTypeIK.getConcreteType();
+            TypeReference typeReference = concreteType.getReference();
+
+            if (typeReference.equals(TensorFlowTypes.D_TYPE)) {
+              // we have a dtype.
+              // let's see if it's float32.
+              Set<CGNode> importNodes = builder.getCallGraph().getNodes(IMPORT);
+
+              // find the import node from this file.
+              Optional<CGNode> importNode =
+                  importNodes.stream()
+                      .filter(
+                          in -> {
+                            ContextItem contextItem = in.getContext().get(CALL_STRING);
+                            CallString cs = (CallString) contextItem;
+                            IMethod method = cs.getMethods()[0];
+                            CallString nodeCS = (CallString) node.getContext().get(CALL_STRING);
+                            return method.equals(nodeCS.getMethods()[0]);
+                          })
+                      .findFirst();
+
+              System.out.println(importNode);
+
+              InstanceKey tensorFlowIK =
+                  pointerAnalysis
+                      .getHeapModel()
+                      .getInstanceKeyForAllocation(
+                          importNode.get(), NewSiteReference.make(0, TENSORFLOW));
+              System.out.println(tensorFlowIK);
+
+              FieldReference float32 =
+                  FieldReference.findOrCreate(
+                      PythonTypes.Root, Atom.findOrCreateAsciiAtom("float32"), D_TYPE);
+              System.out.println(float32);
+
+              IField float32Field = getClassHierarchy().resolveField(float32);
+
+              PointerKey float32PK =
+                  pointerAnalysis
+                      .getHeapModel()
+                      .getPointerKeyForInstanceField(tensorFlowIK, float32Field);
+
+              OrdinalSet<InstanceKey> float32Instances = pointerAnalysis.getPointsToSet(float32PK);
+
+              for (InstanceKey float32IK : float32Instances) {
+                System.out.println(float32IK);
+
+                if (float32IK.equals(dTypeIK)) {
+                  // We've found a float32.
+                  System.out.println("Here");
+                  // TODO: Add each found type to the tensor types being returned? But, it could be
+                  // those not including float32?
+                }
+              }
+            }
+          }
         }
 
       } else
