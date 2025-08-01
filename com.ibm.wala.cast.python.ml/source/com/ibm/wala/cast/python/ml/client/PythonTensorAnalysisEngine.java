@@ -5,6 +5,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.D_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW;
+import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.cast.types.AstMethodReference.fnReference;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
@@ -761,260 +762,213 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // Get the pointer key for the source.
     PointerKey pointerKey = source.getPointerKey();
 
-    if (pointerKey instanceof LocalPointerKey) {
-      LocalPointerKey localPointerKey = (LocalPointerKey) pointerKey;
-      CGNode node = localPointerKey.getNode();
+    LocalPointerKey localPointerKey = (LocalPointerKey) pointerKey;
+    CGNode node = localPointerKey.getNode();
 
-      TypeReference calledFunction = node.getMethod().getDeclaringClass().getReference();
-      logger.info("Getting tensor type for call to: " + calledFunction.getName() + ".");
+    TypeReference calledFunction = node.getMethod().getDeclaringClass().getReference();
+    logger.info("Getting tensor type for call to: " + calledFunction.getName() + ".");
 
-      if (calledFunction.equals(ONES.getDeclaringClass())) {
-        // This is a call to `ones()`. The shape is in the first explicit argument.
-        PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
-        // FIXME: Handle keyword arguments.
-        PointerKey shapePointerKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 2);
+    if (calledFunction.equals(ONES.getDeclaringClass())) {
+      // This is a call to `ones()`. The shape is in the first explicit argument.
+      PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+      // TODO: Handle keyword arguments.
+      PointerKey shapePointerKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 2);
 
-        for (InstanceKey shapeIK : pointerAnalysis.getPointsToSet(shapePointerKey)) {
-          AllocationSiteInNode asin = getAllocationSiteInNode(shapeIK);
-          IClass concreteType = asin.getConcreteType();
-          TypeReference reference = concreteType.getReference();
+      for (InstanceKey shapeIK : pointerAnalysis.getPointsToSet(shapePointerKey)) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(shapeIK);
+        IClass concreteType = asin.getConcreteType();
+        TypeReference reference = concreteType.getReference();
 
-          if (reference.equals(PythonTypes.list)) {
-            // We have a list of integers that represent the shape.
-            AstPointerKeyFactory pointerKeyFactory =
-                (AstPointerKeyFactory) builder.getPointerKeyFactory();
-            PointerKey pointerKeyForObjectCatalog =
-                pointerKeyFactory.getPointerKeyForObjectCatalog(asin);
-            OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-                pointerAnalysis.getPointsToSet(pointerKeyForObjectCatalog);
+        if (reference.equals(list)) {
+          // We have a list of integers that represent the shape.
+          AstPointerKeyFactory pointerKeyFactory =
+              (AstPointerKeyFactory) builder.getPointerKeyFactory();
+          PointerKey pointerKeyForObjectCatalog =
+              pointerKeyFactory.getPointerKeyForObjectCatalog(asin);
+          OrdinalSet<InstanceKey> objectCatalogPointsToSet =
+              pointerAnalysis.getPointsToSet(pointerKeyForObjectCatalog);
 
-            // We expect the object catalog to contain a list of integers. Each element in the array
-            // corresponds to the set of possible dimensions for that index.
-            @SuppressWarnings("unchecked")
-            Set<Dimension<Integer>>[] possibleDimensions = new Set[objectCatalogPointsToSet.size()];
+          // We expect the object catalog to contain a list of integers. Each element in the array
+          // corresponds to the set of possible dimensions for that index.
+          @SuppressWarnings("unchecked")
+          Set<Dimension<Integer>>[] possibleDimensions = new Set[objectCatalogPointsToSet.size()];
 
-            for (InstanceKey catalogIK : objectCatalogPointsToSet) {
-              if (catalogIK instanceof ConstantKey) {
-                ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
-                Object constantKeyValue = constantKey.getValue();
+          for (InstanceKey catalogIK : objectCatalogPointsToSet) {
+            ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
+            Object constantKeyValue = constantKey.getValue();
 
-                if (constantKeyValue instanceof Integer) {
-                  Integer fieldIndex = (Integer) constantKeyValue;
+            Integer fieldIndex = (Integer) constantKeyValue;
 
-                  FieldReference subscript =
-                      FieldReference.findOrCreate(
-                          PythonTypes.Root,
-                          findOrCreateAsciiAtom(fieldIndex.toString()),
-                          PythonTypes.Root);
+            FieldReference subscript =
+                FieldReference.findOrCreate(
+                    PythonTypes.Root,
+                    findOrCreateAsciiAtom(fieldIndex.toString()),
+                    PythonTypes.Root);
 
-                  IField f = getClassHierarchy().resolveField(subscript);
-                  logger.fine("Found field: " + f);
+            IField f = getClassHierarchy().resolveField(subscript);
+            logger.fine("Found field: " + f);
 
-                  // We can now get the pointer key for the instance field.
-                  PointerKey pointerKeyForInstanceField =
-                      builder.getPointerKeyForInstanceField(asin, f);
-                  logger.fine(
-                      "Found pointer key for instance field: " + pointerKeyForInstanceField + ".");
+            // We can now get the pointer key for the instance field.
+            PointerKey pointerKeyForInstanceField = builder.getPointerKeyForInstanceField(asin, f);
+            logger.fine(
+                "Found pointer key for instance field: " + pointerKeyForInstanceField + ".");
 
-                  // Get the points-to set for the instance field.
-                  OrdinalSet<InstanceKey> instanceFieldPointsToSet =
-                      pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
-                  logger.fine(
-                      "Points-to set for instance field: " + instanceFieldPointsToSet + ".");
+            // Get the points-to set for the instance field.
+            OrdinalSet<InstanceKey> instanceFieldPointsToSet =
+                pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
+            logger.fine("Points-to set for instance field: " + instanceFieldPointsToSet + ".");
 
-                  // If the instance field points to a constant, we can use it as the shape.
-                  Set<Dimension<Integer>> tensorDimensions = HashSetFactory.make();
+            // If the instance field points to a constant, we can use it as the shape.
+            Set<Dimension<Integer>> tensorDimensions = HashSetFactory.make();
 
-                  for (InstanceKey instanceFieldIK : instanceFieldPointsToSet) {
-                    if (instanceFieldIK instanceof ConstantKey) {
-                      ConstantKey<?> instanceFieldConstant = (ConstantKey<?>) instanceFieldIK;
-                      Object instanceFieldValue = instanceFieldConstant.getValue();
+            for (InstanceKey instanceFieldIK : instanceFieldPointsToSet) {
+              ConstantKey<?> instanceFieldConstant = (ConstantKey<?>) instanceFieldIK;
+              Object instanceFieldValue = instanceFieldConstant.getValue();
 
-                      if (instanceFieldValue instanceof Long) {
-                        // We have a shape value.
-                        Long shapeValue = (Long) instanceFieldValue;
-                        logger.fine(
-                            "Found shape value: " + shapeValue + " for " + pointerKey + ".");
+              // We have a shape value.
+              Long shapeValue = (Long) instanceFieldValue;
+              logger.fine("Found shape value: " + shapeValue + " for " + pointerKey + ".");
 
-                        Dimension<Integer> dimension = new NumericDim(shapeValue.intValue());
+              Dimension<Integer> dimension = new NumericDim(shapeValue.intValue());
 
-                        logger.fine("Adding dimension: " + dimension + ".");
-                        tensorDimensions.add(dimension);
-                      } else
-                        throw new IllegalStateException(
-                            "Expected a "
-                                + Long.class
-                                + "for the shape, but got: "
-                                + instanceFieldValue
-                                + ".");
-                    } else
-                      throw new IllegalStateException(
-                          "Expected a "
-                              + ConstantKey.class
-                              + " for the instance field, but got: "
-                              + instanceFieldIK
-                              + ".");
-                  }
-
-                  logger.info(
-                      "Found possible shape dimensions: "
-                          + tensorDimensions
-                          + " for field: "
-                          + pointerKeyForInstanceField
-                          + " for source: "
-                          + source
-                          + ".");
-
-                  // Add the shape dimensions.
-                  assert possibleDimensions[fieldIndex] == null
-                      : "Duplicate field index: "
-                          + fieldIndex
-                          + " in object catalog: "
-                          + objectCatalogPointsToSet
-                          + ".";
-
-                  possibleDimensions[fieldIndex] = tensorDimensions;
-                  logger.fine(
-                      "Added shape dimensions: "
-                          + tensorDimensions
-                          + " for field index: "
-                          + fieldIndex
-                          + ".");
-                } else
-                  throw new IllegalStateException(
-                      "Expected an "
-                          + Integer.class
-                          + " for the object catalog value, but got: "
-                          + constantKeyValue
-                          + ".");
-              } else
-                throw new IllegalStateException(
-                    "Expected a "
-                        + ConstantKey.class
-                        + " for the object catalog, but got: "
-                        + catalogIK
-                        + ".");
+              logger.fine("Adding dimension: " + dimension + ".");
+              tensorDimensions.add(dimension);
             }
 
-            for (int i = 0; i < possibleDimensions.length; i++)
-              for (Dimension<Integer> iDim : possibleDimensions[i]) {
-                @SuppressWarnings("unchecked")
-                Dimension<Integer>[] dimensions = new Dimension[possibleDimensions.length];
+            logger.info(
+                "Found possible shape dimensions: "
+                    + tensorDimensions
+                    + " for field: "
+                    + pointerKeyForInstanceField
+                    + " for source: "
+                    + source
+                    + ".");
 
-                dimensions[i] = iDim;
+            // Add the shape dimensions.
+            assert possibleDimensions[fieldIndex] == null
+                : "Duplicate field index: "
+                    + fieldIndex
+                    + " in object catalog: "
+                    + objectCatalogPointsToSet
+                    + ".";
 
-                for (int j = 0; j < possibleDimensions.length; j++)
-                  if (i != j)
-                    for (Dimension<Integer> jDim : possibleDimensions[j]) dimensions[j] = jDim;
+            possibleDimensions[fieldIndex] = tensorDimensions;
+            logger.fine(
+                "Added shape dimensions: "
+                    + tensorDimensions
+                    + " for field index: "
+                    + fieldIndex
+                    + ".");
+          }
 
-                possibleShapes.add(asList(dimensions));
-              }
-          } else
-            throw new IllegalStateException(
-                "Expected a " + PythonTypes.list + " for the shape, but got: " + reference + ".");
-        }
+          for (int i = 0; i < possibleDimensions.length; i++)
+            for (Dimension<Integer> iDim : possibleDimensions[i]) {
+              @SuppressWarnings("unchecked")
+              Dimension<Integer>[] dimensions = new Dimension[possibleDimensions.length];
 
-        // The dtype is the second explicit argument.
-        // FIXME: Handle keyword arguments.
-        PointerKey dTypePointerKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 3);
-        OrdinalSet<InstanceKey> dTypePointsToSet = pointerAnalysis.getPointsToSet(dTypePointerKey);
+              dimensions[i] = iDim;
 
-        if (dTypePointsToSet.isEmpty()) {
-          // Use the default dtype of float32.
-          possibleDTypes.add(FLOAT32);
-          logger.info(
-              "No dtype specified for source: "
-                  + source
-                  + ". Using default dtype of: "
-                  + FLOAT32
-                  + " .");
-        } else { // there's an explicit argument.
-          for (InstanceKey dTypeIK : dTypePointsToSet) {
-            IClass concreteType = dTypeIK.getConcreteType();
-            TypeReference typeReference = concreteType.getReference();
+              for (int j = 0; j < possibleDimensions.length; j++)
+                if (i != j)
+                  for (Dimension<Integer> jDim : possibleDimensions[j]) dimensions[j] = jDim;
 
-            if (typeReference.equals(TensorFlowTypes.D_TYPE)) {
-              // we have a dtype.
-              // let's see if it's float32.
-              Set<CGNode> importNodes = builder.getCallGraph().getNodes(IMPORT);
+              possibleShapes.add(asList(dimensions));
+            }
+        } else
+          throw new IllegalStateException(
+              "Expected a " + PythonTypes.list + " for the shape, but got: " + reference + ".");
+      }
 
-              // find the import node from this file.
-              Optional<CGNode> importNode =
-                  importNodes.stream()
-                      .filter(
-                          in -> {
-                            ContextItem contextItem = in.getContext().get(CALL_STRING);
-                            CallString cs = (CallString) contextItem;
+      // The dtype is the second explicit argument.
+      // FIXME: Handle keyword arguments.
+      PointerKey dTypePointerKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 3);
+      OrdinalSet<InstanceKey> dTypePointsToSet = pointerAnalysis.getPointsToSet(dTypePointerKey);
 
-                            // We expect the first method in the call string to be the import.
-                            assert cs.getMethods().length == 1
-                                : "Expected a single method in the call string, but got: "
-                                    + cs.getMethods().length
-                                    + " for node: "
-                                    + in;
+      if (dTypePointsToSet.isEmpty()) {
+        // Use the default dtype of float32.
+        possibleDTypes.add(FLOAT32);
+        logger.info(
+            "No dtype specified for source: "
+                + source
+                + ". Using default dtype of: "
+                + FLOAT32
+                + " .");
+      } else { // there's an explicit argument.
+        for (InstanceKey dTypeIK : dTypePointsToSet) {
+          IClass concreteType = dTypeIK.getConcreteType();
+          TypeReference typeReference = concreteType.getReference();
 
-                            IMethod method = cs.getMethods()[0];
+          if (typeReference.equals(TensorFlowTypes.D_TYPE)) {
+            // we have a dtype.
+            // let's see if it's float32.
+            Set<CGNode> importNodes = builder.getCallGraph().getNodes(IMPORT);
 
-                            CallString nodeCS = (CallString) node.getContext().get(CALL_STRING);
+            // find the import node from this file.
+            Optional<CGNode> importNode =
+                importNodes.stream()
+                    .filter(
+                        in -> {
+                          ContextItem contextItem = in.getContext().get(CALL_STRING);
+                          CallString cs = (CallString) contextItem;
 
-                            // We expect the first method in the call string to be the import.
-                            assert nodeCS.getMethods().length == 1
-                                : "Expected a single method in the call string, but got: "
-                                    + nodeCS.getMethods().length
-                                    + " for node: "
-                                    + in;
+                          // We expect the first method in the call string to be the import.
+                          assert cs.getMethods().length == 1
+                              : "Expected a single method in the call string, but got: "
+                                  + cs.getMethods().length
+                                  + " for node: "
+                                  + in;
 
-                            return method.equals(nodeCS.getMethods()[0]);
-                          })
-                      .findFirst();
+                          IMethod method = cs.getMethods()[0];
 
-              InstanceKey tensorFlowIK =
-                  pointerAnalysis
-                      .getHeapModel()
-                      .getInstanceKeyForAllocation(
-                          importNode.get(), NewSiteReference.make(0, TENSORFLOW));
+                          CallString nodeCS = (CallString) node.getContext().get(CALL_STRING);
 
-              FieldReference float32 =
-                  FieldReference.findOrCreate(
-                      PythonTypes.Root,
-                      findOrCreateAsciiAtom(FLOAT32.name().toLowerCase()),
-                      D_TYPE);
+                          // We expect the first method in the call string to be the import.
+                          assert nodeCS.getMethods().length == 1
+                              : "Expected a single method in the call string, but got: "
+                                  + nodeCS.getMethods().length
+                                  + " for node: "
+                                  + in;
 
-              IField float32Field = getClassHierarchy().resolveField(float32);
+                          return method.equals(nodeCS.getMethods()[0]);
+                        })
+                    .findFirst();
 
-              PointerKey float32PK =
-                  pointerAnalysis
-                      .getHeapModel()
-                      .getPointerKeyForInstanceField(tensorFlowIK, float32Field);
+            InstanceKey tensorFlowIK =
+                pointerAnalysis
+                    .getHeapModel()
+                    .getInstanceKeyForAllocation(
+                        importNode.get(), NewSiteReference.make(0, TENSORFLOW));
 
-              for (InstanceKey float32IK : pointerAnalysis.getPointsToSet(float32PK)) {
-                if (float32IK.equals(dTypeIK)) {
-                  possibleDTypes.add(FLOAT32);
-                  logger.info(
-                      "Found dtype: "
-                          + FLOAT32
-                          + " for source: "
-                          + source
-                          + " from dType: "
-                          + dTypeIK
-                          + ".");
-                } else throw new IllegalStateException("Unknown dtype: " + dTypeIK + ".");
-              }
+            FieldReference float32 =
+                FieldReference.findOrCreate(
+                    PythonTypes.Root, findOrCreateAsciiAtom(FLOAT32.name().toLowerCase()), D_TYPE);
+
+            IField float32Field = getClassHierarchy().resolveField(float32);
+
+            PointerKey float32PK =
+                pointerAnalysis
+                    .getHeapModel()
+                    .getPointerKeyForInstanceField(tensorFlowIK, float32Field);
+
+            for (InstanceKey float32IK : pointerAnalysis.getPointsToSet(float32PK)) {
+              if (float32IK.equals(dTypeIK)) {
+                possibleDTypes.add(FLOAT32);
+                logger.info(
+                    "Found dtype: "
+                        + FLOAT32
+                        + " for source: "
+                        + source
+                        + " from dType: "
+                        + dTypeIK
+                        + ".");
+              } else throw new IllegalStateException("Unknown dtype: " + dTypeIK + ".");
             }
           }
         }
-      } else
-        throw new IllegalArgumentException(
-            "Unknown call: " + calledFunction + " for source: " + source + ".");
+      }
     } else
       throw new IllegalArgumentException(
-          "Expected a "
-              + LocalPointerKey.class
-              + ", but got: "
-              + pointerKey.getClass()
-              + " for source: "
-              + source
-              + ".");
+          "Unknown call: " + calledFunction + " for source: " + source + ".");
 
     Set<TensorType> ret = HashSetFactory.make();
 
