@@ -982,12 +982,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                   System.out.println("Here");
                   // TODO: Add each found type to the tensor types being returned? But, it could be
                   // those not including float32?
-                }
+                } else throw new IllegalStateException("Unknown dtype: " + dTypeIK + ".");
               }
             }
           }
         }
-
       } else
         throw new IllegalArgumentException(
             "Unknown call: " + calledFunction + " for source: " + source + ".");
