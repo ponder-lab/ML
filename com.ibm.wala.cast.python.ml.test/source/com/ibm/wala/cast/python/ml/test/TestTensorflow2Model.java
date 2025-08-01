@@ -1568,7 +1568,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     TensorType expectedTypeForB = new TensorType("pixel", bDimensions);
 
     test(
-        "tf2_test_add7.py",
+        "tf2_test_add116.py",
         "add",
         2,
         2,
