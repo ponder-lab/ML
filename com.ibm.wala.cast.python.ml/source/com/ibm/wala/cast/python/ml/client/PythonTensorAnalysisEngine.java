@@ -937,25 +937,38 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                           in -> {
                             ContextItem contextItem = in.getContext().get(CALL_STRING);
                             CallString cs = (CallString) contextItem;
+
+                            // We expect the first method in the call string to be the import.
+                            assert cs.getMethods().length == 1
+                                : "Expected a single method in the call string, but got: "
+                                    + cs.getMethods().length
+                                    + " for node: "
+                                    + in;
+
                             IMethod method = cs.getMethods()[0];
+
                             CallString nodeCS = (CallString) node.getContext().get(CALL_STRING);
+
+                            // We expect the first method in the call string to be the import.
+                            assert nodeCS.getMethods().length == 1
+                                : "Expected a single method in the call string, but got: "
+                                    + nodeCS.getMethods().length
+                                    + " for node: "
+                                    + in;
+
                             return method.equals(nodeCS.getMethods()[0]);
                           })
                       .findFirst();
-
-              System.out.println(importNode);
 
               InstanceKey tensorFlowIK =
                   pointerAnalysis
                       .getHeapModel()
                       .getInstanceKeyForAllocation(
                           importNode.get(), NewSiteReference.make(0, TENSORFLOW));
-              System.out.println(tensorFlowIK);
 
               FieldReference float32 =
                   FieldReference.findOrCreate(
                       PythonTypes.Root, Atom.findOrCreateAsciiAtom("float32"), D_TYPE);
-              System.out.println(float32);
 
               IField float32Field = getClassHierarchy().resolveField(float32);
 
@@ -964,11 +977,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                       .getHeapModel()
                       .getPointerKeyForInstanceField(tensorFlowIK, float32Field);
 
-              OrdinalSet<InstanceKey> float32Instances = pointerAnalysis.getPointsToSet(float32PK);
-
-              for (InstanceKey float32IK : float32Instances) {
-                System.out.println(float32IK);
-
+              for (InstanceKey float32IK : pointerAnalysis.getPointsToSet(float32PK)) {
                 if (float32IK.equals(dTypeIK)) {
                   // We've found a float32.
                   System.out.println("Here");
