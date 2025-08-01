@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.test;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorType.mnistInput;
 import static com.ibm.wala.cast.python.util.Util.addPytestEntrypoints;
 import static java.util.Arrays.asList;
@@ -57,6 +58,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final Logger LOGGER = Logger.getLogger(TestTensorflow2Model.class.getName());
 
   private static final TensorType MNIST_INPUT = mnistInput();
+
+  private static final String FLOAT_32 = FLOAT32.name().toLowerCase();
 
   @Test
   public void testValueIndex()
@@ -880,8 +883,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
     List<Dimension<?>> bDimensions = asList(bX, bY);
 
-    TensorType expectedTypeForA = new TensorType("pixel", aDimensions);
-    TensorType expectedTypeForB = new TensorType("pixel", bDimensions);
+    TensorType expectedTypeForA = new TensorType(FLOAT_32, aDimensions);
+    TensorType expectedTypeForB = new TensorType(FLOAT_32, bDimensions);
 
     test(
         "tf2_test_add7.py",
@@ -1564,8 +1567,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
     List<Dimension<?>> bDimensions = asList(bX, bY);
 
-    TensorType expectedTypeForA = new TensorType("pixel", aDimensions);
-    TensorType expectedTypeForB = new TensorType("pixel", bDimensions);
+    TensorType expectedTypeForA = new TensorType(FLOAT_32, aDimensions);
+    TensorType expectedTypeForB = new TensorType(FLOAT_32, bDimensions);
 
     test(
         "tf2_test_add116.py",
