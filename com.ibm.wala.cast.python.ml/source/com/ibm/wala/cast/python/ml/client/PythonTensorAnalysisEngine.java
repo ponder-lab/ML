@@ -769,9 +769,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
         // FIXME: Handle keyword arguments.
         PointerKey shapePointerKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 2);
-        OrdinalSet<InstanceKey> shapePointsToSet = pointerAnalysis.getPointsToSet(shapePointerKey);
 
-        for (InstanceKey shapeIK : shapePointsToSet) {
+        for (InstanceKey shapeIK : pointerAnalysis.getPointsToSet(shapePointerKey)) {
           AllocationSiteInNode asin = getAllocationSiteInNode(shapeIK);
           IClass concreteType = asin.getConcreteType();
           TypeReference reference = concreteType.getReference();
