@@ -709,7 +709,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       init.put(e.getKey(), Set.of(e.getValue()));
 
     Map<PointsToSetVariable, TensorType> setCalls = HashMapFactory.make();
-    Map<PointsToSetVariable, TensorType> set_shapes = getShapeSourceCalls(set_shape, builder, 1);
+    Map<PointsToSetVariable, TensorType> set_shapes = getShapeSourceCalls(set_shape, builder, 1); // TODO: What if you used tf.ones() here?
 
     for (Map.Entry<PointsToSetVariable, TensorType> x : set_shapes.entrySet()) {
       LocalPointerKey localPointerKey = (LocalPointerKey) x.getKey().getPointerKey();
@@ -768,7 +768,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     TypeReference calledFunction = node.getMethod().getDeclaringClass().getReference();
     logger.info("Getting tensor type for call to: " + calledFunction.getName() + ".");
 
-    if (calledFunction.equals(ONES.getDeclaringClass())) {
+    if (calledFunction.equals(ONES.getDeclaringClass())) { // TODO: This can also be a tuple of Tensor.
       // This is a call to `ones()`. The shape is in the first explicit argument.
       PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
       // TODO: Handle keyword arguments.
@@ -819,6 +819,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             logger.fine("Points-to set for instance field: " + instanceFieldPointsToSet + ".");
 
             // If the instance field points to a constant, we can use it as the shape.
+            // TODO: Is it possible to also do it for (simple) expressions?
             Set<Dimension<Integer>> tensorDimensions = HashSetFactory.make();
 
             for (InstanceKey instanceFieldIK : instanceFieldPointsToSet) {
