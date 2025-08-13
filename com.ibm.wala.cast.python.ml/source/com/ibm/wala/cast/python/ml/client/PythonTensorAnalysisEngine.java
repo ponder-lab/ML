@@ -768,8 +768,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     TypeReference calledFunction = node.getMethod().getDeclaringClass().getReference();
     logger.info("Getting tensor type for call to: " + calledFunction.getName() + ".");
 
-    if (calledFunction.equals(
-        ONES.getDeclaringClass())) { // TODO: This can also be a tuple of Tensor.
+    if (calledFunction.equals(ONES.getDeclaringClass())) {
       // This is a call to `ones()`. The shape is in the first explicit argument.
       PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
       // TODO: Handle keyword arguments.
@@ -780,7 +779,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         IClass concreteType = asin.getConcreteType();
         TypeReference reference = concreteType.getReference();
 
-        if (reference.equals(list)) {
+        if (reference.equals(list)) { // TODO: This can also be a tuple of Tensor.
           // We have a list of integers that represent the shape.
           AstPointerKeyFactory pointerKeyFactory =
               (AstPointerKeyFactory) builder.getPointerKeyFactory();
