@@ -776,8 +776,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
       for (InstanceKey shapeIK : pointerAnalysis.getPointsToSet(shapePointerKey)) {
         AllocationSiteInNode asin = getAllocationSiteInNode(shapeIK);
-        IClass concreteType = asin.getConcreteType();
-        TypeReference reference = concreteType.getReference();
+        TypeReference reference = asin.getConcreteType().getReference();
 
         if (reference.equals(list)) { // TODO: This can also be a tuple of Tensor.
           // We have a list of integers that represent the shape.
