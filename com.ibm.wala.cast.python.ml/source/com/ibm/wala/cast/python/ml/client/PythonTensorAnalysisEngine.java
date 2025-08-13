@@ -709,8 +709,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       init.put(e.getKey(), Set.of(e.getValue()));
 
     Map<PointsToSetVariable, TensorType> setCalls = HashMapFactory.make();
-    Map<PointsToSetVariable, TensorType> set_shapes =
-        getShapeSourceCalls(set_shape, builder, 1); // TODO: What if you used tf.ones() here?
+    Map<PointsToSetVariable, TensorType> set_shapes = getShapeSourceCalls(set_shape, builder, 1);
 
     for (Map.Entry<PointsToSetVariable, TensorType> x : set_shapes.entrySet()) {
       LocalPointerKey localPointerKey = (LocalPointerKey) x.getKey().getPointerKey();
