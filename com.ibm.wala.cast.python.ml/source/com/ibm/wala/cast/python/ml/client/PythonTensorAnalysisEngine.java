@@ -766,7 +766,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     CGNode node = localPointerKey.getNode();
 
     TypeReference calledFunction = node.getMethod().getDeclaringClass().getReference();
-    logger.info("Getting tensor type for call to: " + calledFunction.getName() + ".");
+    logger.info("Getting possible tensor types for call to: " + calledFunction.getName() + ".");
 
     if (calledFunction.equals(ONES.getDeclaringClass())) {
       // This is a call to `ones()`. The shape is in the first explicit argument.
