@@ -1579,6 +1579,36 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
+  public void testAdd117()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    Dimension<Integer> aX1 = new NumericDim(1);
+    Dimension<Integer> aY1 = new NumericDim(2);
+
+    List<Dimension<?>> aDimensions1 = asList(aX1, aY1);
+
+    Dimension<Integer> aX2 = new NumericDim(3);
+    Dimension<Integer> aY2 = new NumericDim(2);
+
+    List<Dimension<?>> aDimensions2 = asList(aX2, aY2);
+
+    Dimension<Integer> bX = new NumericDim(2);
+    Dimension<Integer> bY = new NumericDim(2);
+
+    List<Dimension<?>> bDimensions = asList(bX, bY);
+
+    TensorType expectedTypeForA1 = new TensorType(FLOAT_32, aDimensions1);
+    TensorType expectedTypeForA2 = new TensorType(FLOAT_32, aDimensions2);
+    TensorType expectedTypeForB = new TensorType(FLOAT_32, bDimensions);
+
+    test(
+        "tf2_test_add117.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(expectedTypeForA1, expectedTypeForA2), 3, Set.of(expectedTypeForB)));
+  }
+
+  @Test
   public void testMultiGPUTraining()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
