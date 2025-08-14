@@ -833,17 +833,26 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             Set<Dimension<Integer>> tensorDimensions = HashSetFactory.make();
 
             for (InstanceKey instanceFieldIK : instanceFieldPointsToSet) {
-              ConstantKey<?> instanceFieldConstant = (ConstantKey<?>) instanceFieldIK;
-              Object instanceFieldValue = instanceFieldConstant.getValue();
+              if (instanceFieldIK instanceof ConstantKey<?>) {
+                // We have a constant key.
+                ConstantKey<?> instanceFieldConstant = (ConstantKey<?>) instanceFieldIK;
+                Object instanceFieldValue = instanceFieldConstant.getValue();
 
-              // We have a shape value.
-              Long shapeValue = (Long) instanceFieldValue;
-              logger.fine("Found shape value: " + shapeValue + " for " + pointerKey + ".");
+                // We have a shape value.
+                Long shapeValue = (Long) instanceFieldValue;
+                logger.fine("Found shape value: " + shapeValue + " for " + pointerKey + ".");
 
-              Dimension<Integer> dimension = new NumericDim(shapeValue.intValue());
+                Dimension<Integer> dimension = new NumericDim(shapeValue.intValue());
 
-              logger.fine("Adding dimension: " + dimension + ".");
-              tensorDimensions.add(dimension);
+                logger.fine("Adding dimension: " + dimension + ".");
+                tensorDimensions.add(dimension);
+              } else
+                throw new IllegalStateException(
+                    "Expected a constant key for instance field: "
+                        + pointerKeyForInstanceField
+                        + ", but got: "
+                        + instanceFieldIK
+                        + ".");
             }
 
             logger.info(
