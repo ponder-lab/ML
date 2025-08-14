@@ -793,11 +793,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
         if (reference.equals(list)) { // TODO: This can also be a tuple of Tensor.
           // We have a list of integers that represent the shape.
-          PointerKey pointerKeyForObjectCatalog =
-              ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                  .getPointerKeyForObjectCatalog(asin);
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              pointerAnalysis.getPointsToSet(pointerKeyForObjectCatalog);
+              pointerAnalysis.getPointsToSet(
+                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                      .getPointerKeyForObjectCatalog(asin));
 
           // We expect the object catalog to contain a list of integers. Each element in the array
           // corresponds to the set of possible dimensions for that index.
