@@ -447,11 +447,11 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
     };
   }
 
-  private final Map<PointsToSetVariable, TensorType> init;
+  private final Map<PointsToSetVariable, Set<TensorType>> init;
 
   public TensorTypeAnalysis(
       Graph<PointsToSetVariable> G,
-      Map<PointsToSetVariable, TensorType> init,
+      Map<PointsToSetVariable, Set<TensorType>> init,
       Map<PointsToSetVariable, TensorType> reshapeTypes,
       Map<PointsToSetVariable, TensorType> set_shapes,
       Set<PointsToSetVariable> conv2ds,
@@ -480,7 +480,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
   protected void initializeVariables() {
     super.initializeVariables();
     for (PointsToSetVariable src : init.keySet()) {
-      getOut(src).state.add(init.get(src));
+      Set<TensorType> tensorTypes = init.get(src);
+      getOut(src).state.addAll(tensorTypes);
     }
   }
 

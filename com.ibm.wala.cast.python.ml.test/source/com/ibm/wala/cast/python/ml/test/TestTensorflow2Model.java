@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.test;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorType.mnistInput;
 import static com.ibm.wala.cast.python.util.Util.addPytestEntrypoints;
 import static java.util.Arrays.asList;
@@ -57,6 +58,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final Logger LOGGER = Logger.getLogger(TestTensorflow2Model.class.getName());
 
   private static final TensorType MNIST_INPUT = mnistInput();
+
+  private static final String FLOAT_32 = FLOAT32.name().toLowerCase();
 
   @Test
   public void testValueIndex()
@@ -870,7 +873,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testAdd7()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add7.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    Dimension<Integer> aX = new NumericDim(1);
+    Dimension<Integer> aY = new NumericDim(2);
+
+    List<Dimension<?>> aDimensions = asList(aX, aY);
+
+    Dimension<Integer> bX = new NumericDim(2);
+    Dimension<Integer> bY = new NumericDim(2);
+
+    List<Dimension<?>> bDimensions = asList(bX, bY);
+
+    TensorType expectedTypeForA = new TensorType(FLOAT_32, aDimensions);
+    TensorType expectedTypeForB = new TensorType(FLOAT_32, bDimensions);
+
+    test(
+        "tf2_test_add7.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(expectedTypeForA), 3, Set.of(expectedTypeForB)));
   }
 
   @Test
@@ -1531,6 +1552,60 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testAdd115()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_add115.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+  }
+
+  @Test
+  public void testAdd116()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    Dimension<Integer> aX = new NumericDim(1);
+    Dimension<Integer> aY = new NumericDim(2);
+
+    List<Dimension<?>> aDimensions = asList(aX, aY);
+
+    Dimension<Integer> bX = new NumericDim(2);
+    Dimension<Integer> bY = new NumericDim(2);
+
+    List<Dimension<?>> bDimensions = asList(bX, bY);
+
+    TensorType expectedTypeForA = new TensorType(FLOAT_32, aDimensions);
+    TensorType expectedTypeForB = new TensorType(FLOAT_32, bDimensions);
+
+    test(
+        "tf2_test_add116.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(expectedTypeForA), 3, Set.of(expectedTypeForB)));
+  }
+
+  @Test
+  public void testAdd117()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    Dimension<Integer> aX1 = new NumericDim(1);
+    Dimension<Integer> aY1 = new NumericDim(2);
+
+    List<Dimension<?>> aDimensions1 = asList(aX1, aY1);
+
+    Dimension<Integer> aX2 = new NumericDim(3);
+    Dimension<Integer> aY2 = new NumericDim(2);
+
+    List<Dimension<?>> aDimensions2 = asList(aX2, aY2);
+
+    Dimension<Integer> bX = new NumericDim(2);
+    Dimension<Integer> bY = new NumericDim(2);
+
+    List<Dimension<?>> bDimensions = asList(bX, bY);
+
+    TensorType expectedTypeForA1 = new TensorType(FLOAT_32, aDimensions1);
+    TensorType expectedTypeForA2 = new TensorType(FLOAT_32, aDimensions2);
+    TensorType expectedTypeForB = new TensorType(FLOAT_32, bDimensions);
+
+    test(
+        "tf2_test_add117.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(expectedTypeForA1, expectedTypeForA2), 3, Set.of(expectedTypeForB)));
   }
 
   @Test

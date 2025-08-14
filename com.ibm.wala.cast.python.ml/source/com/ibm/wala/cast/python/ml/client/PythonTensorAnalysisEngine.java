@@ -2,23 +2,39 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.google.common.collect.Sets.newHashSet;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.D_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW;
+import static com.ibm.wala.cast.python.types.PythonTypes.list;
+import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.cast.types.AstMethodReference.fnReference;
+import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
+import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
+import static java.util.Arrays.asList;
 
+import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
+import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.classLoader.IMethod;
+import com.ibm.wala.classLoader.NewSiteReference;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
+import com.ibm.wala.ipa.callgraph.ContextItem;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConcreteTypeKey;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
@@ -29,10 +45,13 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationSystem;
+import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.types.Descriptor;
+import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
@@ -45,9 +64,11 @@ import com.ibm.wala.util.graph.impl.SlowSparseNumberedGraph;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.io.File;
 import java.io.IOException;
+import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -100,6 +121,19 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               PythonTypes.pythonLoader,
               TypeName.string2TypeName("Ltensorflow/functions/set_shape")),
           AstMethodReference.fnSelector);
+
+  /** https://www.tensorflow.org/api_docs/python/tf/ones. */
+  private static final MethodReference ONES =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/ones")),
+          AstMethodReference.fnSelector);
+
+  private static final MethodReference IMPORT =
+      MethodReference.findOrCreate(
+          TENSORFLOW,
+          findOrCreateAsciiAtom("import"),
+          Descriptor.findOrCreate(null, TENSORFLOW.getName()));
 
   private static final MethodReference ENUMERATE =
       MethodReference.findOrCreate(
@@ -667,10 +701,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     Set<PointsToSetVariable> sources =
         getDataflowSources(dataflow, builder.getCallGraph(), builder.getPointerAnalysis());
 
-    TensorType mnistData = TensorType.mnistInput();
-    Map<PointsToSetVariable, TensorType> init = HashMapFactory.make();
+    Map<PointsToSetVariable, Set<TensorType>> init = HashMapFactory.make();
 
-    for (PointsToSetVariable v : sources) init.put(v, mnistData);
+    for (PointsToSetVariable v : sources) init.put(v, getTensorType(v, builder));
 
     Map<PointsToSetVariable, TensorType> placeholders = null;
     try {
@@ -681,7 +714,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     logger.fine("Placeholders: " + placeholders);
 
     for (Map.Entry<PointsToSetVariable, TensorType> e : placeholders.entrySet())
-      init.put(e.getKey(), e.getValue());
+      init.put(e.getKey(), Set.of(e.getValue()));
 
     Map<PointsToSetVariable, TensorType> setCalls = HashMapFactory.make();
     Map<PointsToSetVariable, TensorType> set_shapes = getShapeSourceCalls(set_shape, builder, 1);
@@ -720,6 +753,251 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     tt.solve(new NullProgressMonitor());
 
     return tt;
+  }
+
+  /**
+   * Returns the set of possible {@link TensorType}s that the given {@link PointsToSetVariable} can
+   * take on.
+   *
+   * @param source The dataflow source to analyze.
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph and pointer
+   *     analysis.
+   * @return A set of {@link TensorType}s that the given {@link PointsToSetVariable} can take on.
+   *     Empty set is returned if the possible tensor types cannot be determined.
+   */
+  private Set<TensorType> getTensorType(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    logger.info("Getting tensor types for source: " + source + ".");
+
+    Set<List<Dimension<?>>> possibleShapes = HashSetFactory.make();
+    EnumSet<DType> possibleDTypes = EnumSet.noneOf(DType.class);
+
+    // Get the pointer key for the source.
+    PointerKey pointerKey = source.getPointerKey();
+
+    LocalPointerKey localPointerKey = (LocalPointerKey) pointerKey;
+    CGNode node = localPointerKey.getNode();
+
+    TypeReference calledFunction = node.getMethod().getDeclaringClass().getReference();
+    logger.info("Getting possible tensor types for call to: " + calledFunction.getName() + ".");
+
+    if (calledFunction.equals(ONES.getDeclaringClass())) {
+      // This is a call to `ones()`. The shape is in the first explicit argument.
+      PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+      // TODO: Handle keyword arguments.
+      PointerKey shapePointerKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 2);
+
+      for (InstanceKey shapeIK : pointerAnalysis.getPointsToSet(shapePointerKey)) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(shapeIK);
+        TypeReference reference = asin.getConcreteType().getReference();
+
+        if (reference.equals(list)) { // TODO: This can also be a tuple of Tensor.
+          // We have a list of integers that represent the shape.
+          OrdinalSet<InstanceKey> objectCatalogPointsToSet =
+              pointerAnalysis.getPointsToSet(
+                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                      .getPointerKeyForObjectCatalog(asin));
+
+          // We expect the object catalog to contain a list of integers. Each element in the array
+          // corresponds to the set of possible dimensions for that index.
+          @SuppressWarnings("unchecked")
+          Set<Dimension<Integer>>[] possibleDimensions = new Set[objectCatalogPointsToSet.size()];
+
+          for (InstanceKey catalogIK : objectCatalogPointsToSet) {
+            ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
+            Object constantKeyValue = constantKey.getValue();
+
+            Integer fieldIndex = (Integer) constantKeyValue;
+
+            FieldReference subscript =
+                FieldReference.findOrCreate(
+                    PythonTypes.Root,
+                    findOrCreateAsciiAtom(fieldIndex.toString()),
+                    PythonTypes.Root);
+
+            IField f = getClassHierarchy().resolveField(subscript);
+            logger.fine("Found field: " + f);
+
+            // We can now get the pointer key for the instance field.
+            PointerKey pointerKeyForInstanceField = builder.getPointerKeyForInstanceField(asin, f);
+            logger.fine(
+                "Found pointer key for instance field: " + pointerKeyForInstanceField + ".");
+
+            // Get the points-to set for the instance field.
+            OrdinalSet<InstanceKey> instanceFieldPointsToSet =
+                pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
+            logger.fine("Points-to set for instance field: " + instanceFieldPointsToSet + ".");
+
+            // If the instance field points to a constant, we can use it as the shape.
+            // TODO: Is it possible to also do it for (simple) expressions?
+            Set<Dimension<Integer>> tensorDimensions = HashSetFactory.make();
+
+            for (InstanceKey instanceFieldIK : instanceFieldPointsToSet) {
+              if (instanceFieldIK instanceof ConstantKey<?>) {
+                // We have a constant key.
+                ConstantKey<?> instanceFieldConstant = (ConstantKey<?>) instanceFieldIK;
+                Object instanceFieldValue = instanceFieldConstant.getValue();
+
+                // We have a shape value.
+                Long shapeValue = (Long) instanceFieldValue;
+                logger.fine("Found shape value: " + shapeValue + " for " + pointerKey + ".");
+
+                Dimension<Integer> dimension = new NumericDim(shapeValue.intValue());
+
+                logger.fine("Adding dimension: " + dimension + ".");
+                tensorDimensions.add(dimension);
+              } else
+                throw new IllegalStateException(
+                    "Expected a constant key for instance field: "
+                        + pointerKeyForInstanceField
+                        + ", but got: "
+                        + instanceFieldIK
+                        + ".");
+            }
+
+            logger.info(
+                "Found possible shape dimensions: "
+                    + tensorDimensions
+                    + " for field: "
+                    + pointerKeyForInstanceField
+                    + " for source: "
+                    + source
+                    + ".");
+
+            // Add the shape dimensions.
+            assert possibleDimensions[fieldIndex] == null
+                : "Duplicate field index: "
+                    + fieldIndex
+                    + " in object catalog: "
+                    + objectCatalogPointsToSet
+                    + ".";
+
+            possibleDimensions[fieldIndex] = tensorDimensions;
+            logger.fine(
+                "Added shape dimensions: "
+                    + tensorDimensions
+                    + " for field index: "
+                    + fieldIndex
+                    + ".");
+          }
+
+          for (int i = 0; i < possibleDimensions.length; i++)
+            for (Dimension<Integer> iDim : possibleDimensions[i]) {
+              @SuppressWarnings("unchecked")
+              Dimension<Integer>[] dimensions = new Dimension[possibleDimensions.length];
+
+              dimensions[i] = iDim;
+
+              for (int j = 0; j < possibleDimensions.length; j++)
+                if (i != j)
+                  for (Dimension<Integer> jDim : possibleDimensions[j]) dimensions[j] = jDim;
+
+              possibleShapes.add(asList(dimensions));
+            }
+        } else
+          throw new IllegalStateException(
+              "Expected a " + PythonTypes.list + " for the shape, but got: " + reference + ".");
+      }
+
+      // The dtype is the second explicit argument.
+      // FIXME: Handle keyword arguments.
+      PointerKey dTypePointerKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 3);
+      OrdinalSet<InstanceKey> dTypePointsToSet = pointerAnalysis.getPointsToSet(dTypePointerKey);
+
+      if (dTypePointsToSet.isEmpty()) {
+        // Use the default dtype of float32.
+        possibleDTypes.add(FLOAT32);
+        logger.info(
+            "No dtype specified for source: "
+                + source
+                + ". Using default dtype of: "
+                + FLOAT32
+                + " .");
+      } else { // there's an explicit argument.
+        for (InstanceKey dTypeIK : dTypePointsToSet) {
+          IClass concreteType = dTypeIK.getConcreteType();
+          TypeReference typeReference = concreteType.getReference();
+
+          if (typeReference.equals(TensorFlowTypes.D_TYPE)) {
+            // we have a dtype.
+            // let's see if it's float32.
+            Set<CGNode> importNodes = builder.getCallGraph().getNodes(IMPORT);
+
+            // find the import node from this file.
+            Optional<CGNode> importNode =
+                importNodes.stream()
+                    .filter(
+                        in -> {
+                          ContextItem contextItem = in.getContext().get(CALL_STRING);
+                          CallString cs = (CallString) contextItem;
+
+                          // We expect the first method in the call string to be the import.
+                          assert cs.getMethods().length == 1
+                              : "Expected a single method in the call string, but got: "
+                                  + cs.getMethods().length
+                                  + " for node: "
+                                  + in;
+
+                          IMethod method = cs.getMethods()[0];
+
+                          CallString nodeCS = (CallString) node.getContext().get(CALL_STRING);
+
+                          // We expect the first method in the call string to be the import.
+                          assert nodeCS.getMethods().length == 1
+                              : "Expected a single method in the call string, but got: "
+                                  + nodeCS.getMethods().length
+                                  + " for node: "
+                                  + in;
+
+                          return method.equals(nodeCS.getMethods()[0]);
+                        })
+                    .findFirst();
+
+            InstanceKey tensorFlowIK =
+                pointerAnalysis
+                    .getHeapModel()
+                    .getInstanceKeyForAllocation(
+                        importNode.get(), NewSiteReference.make(0, TENSORFLOW));
+
+            FieldReference float32 =
+                FieldReference.findOrCreate(
+                    PythonTypes.Root, findOrCreateAsciiAtom(FLOAT32.name().toLowerCase()), D_TYPE);
+
+            IField float32Field = getClassHierarchy().resolveField(float32);
+
+            PointerKey float32PK =
+                pointerAnalysis
+                    .getHeapModel()
+                    .getPointerKeyForInstanceField(tensorFlowIK, float32Field);
+
+            for (InstanceKey float32IK : pointerAnalysis.getPointsToSet(float32PK)) {
+              if (float32IK.equals(dTypeIK)) {
+                possibleDTypes.add(FLOAT32);
+                logger.info(
+                    "Found dtype: "
+                        + FLOAT32
+                        + " for source: "
+                        + source
+                        + " from dType: "
+                        + dTypeIK
+                        + ".");
+              } else throw new IllegalStateException("Unknown dtype: " + dTypeIK + ".");
+            }
+          }
+        }
+      }
+    } else
+      throw new IllegalArgumentException(
+          "Unknown call: " + calledFunction + " for source: " + source + ".");
+
+    Set<TensorType> ret = HashSetFactory.make();
+
+    // Create a tensor type for each possible shape and dtype combination.
+    for (List<Dimension<?>> dimensionList : possibleShapes)
+      for (DType dtype : possibleDTypes)
+        ret.add(new TensorType(dtype.name().toLowerCase(), dimensionList));
+
+    return ret;
   }
 
   private Map<PointsToSetVariable, TensorType> handleShapeSourceOp(
