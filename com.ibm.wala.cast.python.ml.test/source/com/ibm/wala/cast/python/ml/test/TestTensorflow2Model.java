@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.test;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.cast.python.ml.types.TensorType.mnistInput;
 import static com.ibm.wala.cast.python.util.Util.addPytestEntrypoints;
 import static java.util.Arrays.asList;
@@ -60,6 +61,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType MNIST_INPUT = mnistInput();
 
   private static final String FLOAT_32 = FLOAT32.name().toLowerCase();
+
+  private static final String INT_32 = INT32.name().toLowerCase();
 
   @Test
   public void testValueIndex()
@@ -3304,12 +3307,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   @Test
   public void testStaticMethod() throws ClassHierarchyException, CancelException, IOException {
+    TensorType expectedType = new TensorType(INT_32, emptyList());
+
     test(
         "tf2_test_static_method.py",
         "MyClass.the_static_method",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(expectedType)));
   }
 
   @Test

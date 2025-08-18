@@ -3,6 +3,8 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.google.common.collect.Sets.newHashSet;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.D_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
@@ -11,6 +13,7 @@ import static com.ibm.wala.cast.types.AstMethodReference.fnReference;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
@@ -127,6 +130,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/ones")),
+          AstMethodReference.fnSelector);
+
+  /** https://www.tensorflow.org/api_docs/python/tf/constant. */
+  private static final MethodReference CONSTANT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/constant")),
           AstMethodReference.fnSelector);
 
   private static final MethodReference IMPORT =
@@ -986,6 +996,70 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             }
           }
         }
+      }
+    } else if (calledFunction.equals(CONSTANT.getDeclaringClass())) {
+      // This is a call to `constant()`. The shape is that of the first explicit argument.
+      // TODO: Handle keyword arguments.
+      PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 2);
+
+      for (InstanceKey valueIK : pointerAnalysis.getPointsToSet(valuePK))
+        if (valueIK instanceof ConstantKey)
+          // It's a scalar value. A scalar has no dimensions, so its shape is represented by an
+          // empty tuple ().
+          possibleShapes.add(emptyList());
+        else // TODO: More cases.
+        throw new IllegalStateException(
+              "Expected a " + ConstantKey.class + " for value, but got: " + valueIK + ".");
+
+      // TODO: Shapes can also be specified as an explicit argument.
+
+      // The dtype is the second explicit argument.
+      // FIXME: Handle keyword arguments.
+      PointerKey dTypePointerKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 3);
+      OrdinalSet<InstanceKey> dTypePointsToSet = pointerAnalysis.getPointsToSet(dTypePointerKey);
+
+      if (dTypePointsToSet.isEmpty()) {
+        // If the argument dtype is not specified, then the type is inferred from the type of value.
+        for (InstanceKey valueIK : pointerAnalysis.getPointsToSet(valuePK))
+          if (valueIK instanceof ConstantKey) { // It's a scalar value.
+            ConstantKey<?> constantKey = (ConstantKey<?>) valueIK;
+            Object value = constantKey.getValue();
+
+            if (value instanceof Float || value instanceof Double) {
+              possibleDTypes.add(FLOAT32);
+              logger.info(
+                  "Inferred dtype: "
+                      + FLOAT32
+                      + " for source: "
+                      + source
+                      + " from value: "
+                      + value
+                      + ".");
+            } else if (value instanceof Integer || value instanceof Long) {
+              possibleDTypes.add(INT32);
+              logger.info(
+                  "Inferred dtype: "
+                      + INT32
+                      + " for source: "
+                      + source
+                      + " from value: "
+                      + value
+                      + ".");
+            } else if (value instanceof String) {
+              possibleDTypes.add(STRING);
+              logger.info(
+                  "Inferred dtype: "
+                      + STRING
+                      + " for source: "
+                      + source
+                      + " from value: "
+                      + value
+                      + ".");
+            } else
+              throw new IllegalStateException("Unknown constant type: " + value.getClass() + ".");
+          } else // TODO: More cases.
+          throw new IllegalStateException(
+                "Expected a " + ConstantKey.class + " for value, but got: " + valueIK + ".");
       }
     } else
       throw new IllegalArgumentException(
