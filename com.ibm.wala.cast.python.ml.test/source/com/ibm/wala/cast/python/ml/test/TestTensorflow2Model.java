@@ -64,6 +64,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final String INT_32 = INT32.name().toLowerCase();
 
+  private static final TensorType SCALAR_TENSOR_OF_INT32 = new TensorType(INT_32, emptyList());
+
   @Test
   public void testValueIndex()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -3307,14 +3309,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   @Test
   public void testStaticMethod() throws ClassHierarchyException, CancelException, IOException {
-    TensorType expectedType = new TensorType(INT_32, emptyList());
-
     test(
         "tf2_test_static_method.py",
         "MyClass.the_static_method",
         1,
         1,
-        Map.of(2, Set.of(expectedType)));
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
@@ -3424,7 +3424,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "MyClass.the_class_method",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
