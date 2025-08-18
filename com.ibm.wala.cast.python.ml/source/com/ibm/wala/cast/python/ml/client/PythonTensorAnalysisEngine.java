@@ -786,9 +786,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     if (calledFunction.equals(ONES.getDeclaringClass())) {
       // This is a call to `ones()`. The shape is in the first explicit argument.
       // TODO: Handle keyword arguments.
-      PointerKey shapePointerKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 2);
+      PointerKey shapePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 2);
 
-      for (InstanceKey shapeIK : pointerAnalysis.getPointsToSet(shapePointerKey)) {
+      for (InstanceKey shapeIK : pointerAnalysis.getPointsToSet(shapePK)) {
         AllocationSiteInNode asin = getAllocationSiteInNode(shapeIK);
         TypeReference reference = asin.getConcreteType().getReference();
 
