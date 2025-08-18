@@ -994,7 +994,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                         + ".");
               } else throw new IllegalStateException("Unknown dtype: " + dTypeIK + ".");
             }
-          }
+          } else
+            throw new IllegalStateException(
+                "Expected a "
+                    + TensorFlowTypes.D_TYPE
+                    + " for the dtype, but got: "
+                    + typeReference
+                    + ".");
         }
       }
     } else if (calledFunction.equals(CONSTANT.getDeclaringClass())) {
@@ -1060,7 +1066,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           } else // TODO: More cases.
           throw new IllegalStateException(
                 "Expected a " + ConstantKey.class + " for value, but got: " + valueIK + ".");
-      }
+      } else // TODO: Handle explicit dtypes.
+      throw new IllegalStateException("Explicit dtype set: " + dTypePointsToSet + ".");
     } else
       throw new IllegalArgumentException(
           "Unknown call: " + calledFunction + " for source: " + source + ".");
