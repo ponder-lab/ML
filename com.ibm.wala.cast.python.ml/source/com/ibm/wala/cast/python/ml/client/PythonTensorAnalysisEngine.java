@@ -834,7 +834,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             Set<Dimension<Integer>> tensorDimensions = HashSetFactory.make();
 
             for (InstanceKey instanceFieldIK : instanceFieldPointsToSet) {
-              if (instanceFieldIK instanceof ConstantKey<?>) {
+              if (instanceFieldIK instanceof ConstantKey) {
                 // We have a constant key.
                 ConstantKey<?> instanceFieldConstant = (ConstantKey<?>) instanceFieldIK;
                 Object instanceFieldValue = instanceFieldConstant.getValue();
