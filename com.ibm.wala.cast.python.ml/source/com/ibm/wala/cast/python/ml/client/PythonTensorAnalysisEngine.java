@@ -781,9 +781,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     TypeReference calledFunction = node.getMethod().getDeclaringClass().getReference();
     logger.info("Getting possible tensor types for call to: " + calledFunction.getName() + ".");
 
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+
     if (calledFunction.equals(ONES.getDeclaringClass())) {
       // This is a call to `ones()`. The shape is in the first explicit argument.
-      PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
       // TODO: Handle keyword arguments.
       PointerKey shapePointerKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 2);
 
