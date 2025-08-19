@@ -77,8 +77,9 @@ public class Constant extends TensorGenerator {
     PointerKey dTypePointerKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 3);
     OrdinalSet<InstanceKey> dTypePointsToSet = pointerAnalysis.getPointsToSet(dTypePointerKey);
 
+    // If the argument dtype is not specified,
     if (dTypePointsToSet.isEmpty()) {
-      // If the argument dtype is not specified, then the type is inferred from the type of value.
+      // then the type is inferred from the type of value.
       PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 2);
 
       for (InstanceKey valueIK : pointerAnalysis.getPointsToSet(valuePK))
