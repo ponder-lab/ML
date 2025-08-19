@@ -1018,7 +1018,18 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           throw new IllegalStateException(
               "Expected a " + ConstantKey.class + " for value, but got: " + valueIK + ".");
 
-      // TODO: Shapes can also be specified as an explicit argument.
+      // Shapes can also be specified as an explicit argument. Here, we examine the third explicit
+      // argument (recall that the first argument is implicit and corresponds to the called
+      // function's name).
+      PointerKey shapePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 4);
+      OrdinalSet<InstanceKey> shapePointsToSet = pointerAnalysis.getPointsToSet(shapePK);
+
+      for (InstanceKey shapeIK : shapePointsToSet)
+        // TODO: This is the above case.
+        throw new IllegalStateException(
+            "Found explicit shape argument: "
+                + shapeIK
+                + ". Currently cannot handle explicit shapes for constant().");
 
       // The dtype is the second explicit argument.
       // FIXME: Handle keyword arguments.
