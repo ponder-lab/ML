@@ -1013,8 +1013,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           // It's a scalar value. A scalar has no dimensions, so its shape is represented by an
           // empty tuple ().
           possibleShapes.add(emptyList());
-        else // TODO: More cases.
-        throw new IllegalStateException(
+        else
+          // TODO: More cases.
+          throw new IllegalStateException(
               "Expected a " + ConstantKey.class + " for value, but got: " + valueIK + ".");
 
       // TODO: Shapes can also be specified as an explicit argument.
@@ -1066,8 +1067,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           } else // TODO: More cases.
           throw new IllegalStateException(
                 "Expected a " + ConstantKey.class + " for value, but got: " + valueIK + ".");
-      } else // TODO: Handle explicit dtypes.
-      throw new IllegalStateException("Explicit dtype set: " + dTypePointsToSet + ".");
+      } else
+        // The dtype points-to set is non-empty, meaning that the dtype was explicitly set. TODO:
+        // Handle explicit dtypes.
+        throw new IllegalStateException("Explicit dtype set: " + dTypePointsToSet + ".");
     } else
       throw new IllegalArgumentException(
           "Unknown call: " + calledFunction + " for source: " + source + ".");
