@@ -67,6 +67,12 @@ public abstract class TensorGenerator {
     return ret;
   }
 
+  /**
+   * Returns the possible shapes of the tensor returned by this generator.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return a set of shapes, where each shape is represented as a list of dimensions
+   */
   protected abstract Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder);
 
   protected abstract EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder);

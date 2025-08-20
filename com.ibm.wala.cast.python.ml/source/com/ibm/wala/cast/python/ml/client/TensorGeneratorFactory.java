@@ -29,6 +29,13 @@ public class TensorGeneratorFactory {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/constant")),
           AstMethodReference.fnSelector);
 
+  /** https://www.tensorflow.org/api_docs/python/tf/range. */
+  private static final MethodReference RANGE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/range")),
+          AstMethodReference.fnSelector);
+
   public static TensorGenerator getGenerator(PointsToSetVariable source) {
     // Get the pointer key for the source.
     PointerKey pointerKey = source.getPointerKey();
@@ -41,6 +48,7 @@ public class TensorGeneratorFactory {
 
     if (calledFunction.equals(ONES.getDeclaringClass())) return new Ones(source, node);
     else if (calledFunction.equals(CONSTANT.getDeclaringClass())) return new Constant(source, node);
+    else if (calledFunction.equals(RANGE.getDeclaringClass())) return new Range(source, node);
     else
       throw new IllegalArgumentException(
           "Unknown call: " + calledFunction + " for source: " + source + ".");

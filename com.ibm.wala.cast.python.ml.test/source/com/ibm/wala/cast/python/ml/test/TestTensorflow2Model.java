@@ -151,7 +151,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testDecorator2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_decorator2.py", "returned", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_decorator2.py",
+        "returned",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_32, asList(new NumericDim(5))))));
   }
 
   @Test

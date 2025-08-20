@@ -54,6 +54,7 @@ public class Constant extends TensorGenerator {
     // Shapes can also be specified as an explicit argument. Here, we examine the third explicit
     // argument (recall that the first argument is implicit and corresponds to the called
     // function's name).
+    // TODO: Handle keyword arguments.
     PointerKey shapePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 4);
     OrdinalSet<InstanceKey> shapePointsToSet = pointerAnalysis.getPointsToSet(shapePK);
 
