@@ -74,6 +74,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_2_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(2)));
 
+  private static final TensorType TENSOR_5_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(5)));
+
   @Test
   public void testValueIndex()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -3413,6 +3416,28 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testStaticMethod12() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_static_method12.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void testStaticMethod13() throws ClassHierarchyException, CancelException, IOException {
+    // NOTE: This test will no longer throw an exception once data types other than lists are
+    // supported for shape arguments.
+    test(
+        "tf2_test_static_method13.py",
+        "MyClass.the_static_method",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_5_FLOAT32)));
+  }
+
+  @Test
+  public void testStaticMethod14() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_static_method14.py",
+        "MyClass.the_static_method",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   @Test
