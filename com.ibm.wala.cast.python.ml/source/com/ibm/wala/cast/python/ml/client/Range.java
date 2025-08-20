@@ -114,4 +114,17 @@ public class Range extends TensorGenerator {
     // TODO Auto-generated method stub
     return null;
   }
+
+  @Override
+  protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    throw new UnsupportedOperationException(
+        "Shapes for range() are derived from mandatory numeric arguments and must be provided"
+            + " explicitly.");
+  }
+
+  @Override
+  protected int getValueNumberForShapeArgument() {
+    throw new UnsupportedOperationException(
+        "Range does not have a shape argument. Its shape is derived from the numeric arguments.");
+  }
 }
