@@ -43,9 +43,9 @@ public class Range extends TensorGenerator {
     // elements in the range.
     // For example, `tf.range(5)` produces a tensor with shape (5,).
 
-    long start = 0; // Default start value.
-    long limit = start; // Default limit value.
-    long delta = 1; // Default step value.
+    double start = 0; // Default start value.
+    double limit = start; // Default limit value.
+    double delta = 1; // Default step value.
 
     // There are two versions of the `range` function:
     // 1. `tf.range(limit)` - generates a range from 0 to limit
@@ -67,7 +67,7 @@ public class Range extends TensorGenerator {
 
       for (InstanceKey limitIK : limitPointsToSet)
         if (limitIK instanceof ConstantKey) {
-          limit = (long) ((ConstantKey<?>) limitIK).getValue();
+          limit = ((Number) ((ConstantKey<?>) limitIK).getValue()).doubleValue();
           int shape = (int) Math.ceil((limit - start) / delta);
           ret.add(List.of(new NumericDim(shape))); // Add the shape as a 1D tensor.
         } else
