@@ -15,7 +15,6 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
-import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -28,16 +27,18 @@ import java.util.Set;
  */
 public class Constant extends TensorGenerator {
 
+  private static final int VALUE_NUMBER_FOR_SHAPE_ARGUMENT = 4;
+
   public Constant(PointsToSetVariable source, CGNode node) {
     super(source, node);
   }
 
   @Override
-  protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+  protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
-    // This is a call to `constant()`. The shape is that of the first explicit argument.
+    // The shape is that of the first explicit argument.
     // TODO: Handle keyword arguments.
     PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 2);
 
@@ -50,20 +51,6 @@ public class Constant extends TensorGenerator {
         // TODO: More cases.
         throw new IllegalStateException(
             "Expected a " + ConstantKey.class + " for value, but got: " + valueIK + ".");
-
-    // Shapes can also be specified as an explicit argument. Here, we examine the third explicit
-    // argument (recall that the first argument is implicit and corresponds to the called
-    // function's name).
-    // TODO: Handle keyword arguments.
-    PointerKey shapePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 4);
-    OrdinalSet<InstanceKey> shapePointsToSet = pointerAnalysis.getPointsToSet(shapePK);
-
-    for (InstanceKey shapeIK : shapePointsToSet)
-      // TODO: This is the same case as `ones()`.
-      throw new IllegalStateException(
-          "Found explicit shape argument: "
-              + shapeIK
-              + ". Currently cannot handle explicit shapes for constant().");
 
     return ret;
   }
@@ -119,5 +106,13 @@ public class Constant extends TensorGenerator {
             "Expected a " + ConstantKey.class + " for value, but got: " + valueIK + ".");
 
     return ret;
+  }
+
+  @Override
+  protected int getValueNumberForShapeArgument() {
+    // Shapes can also be specified as an explicit argument. Here, we examine the third explicit
+    // argument (recall that the first argument is implicit and corresponds to the called
+    // function's name).
+    return VALUE_NUMBER_FOR_SHAPE_ARGUMENT;
   }
 }
