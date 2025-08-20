@@ -77,7 +77,7 @@ public abstract class TensorGenerator {
 
   protected abstract EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder);
 
-  protected EnumSet<DType> getDTypesFromPointsToSet(
+  protected EnumSet<DType> getDTypes(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> dTypePointsToSet) {
     EnumSet<DType> ret = EnumSet.noneOf(DType.class);
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
@@ -174,6 +174,6 @@ public abstract class TensorGenerator {
     if (dTypePointsToSet.isEmpty()) return getDefaultDTypes(builder);
     else
       // The dtype points-to set is non-empty, meaning that the dtype was explicitly set.
-      return getDTypesFromPointsToSet(builder, dTypePointsToSet);
+      return getDTypes(builder, dTypePointsToSet);
   }
 }
