@@ -1586,11 +1586,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         2,
-        Map.of(
-            2,
-            Set.of(new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(2)))),
-            3,
-            Set.of(new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(2))))));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
@@ -1604,10 +1600,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(
             2,
             Set.of(
-                new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(2))),
+                TENSOR_1_2_FLOAT32,
                 new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(2)))),
             3,
-            Set.of(new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(2))))));
+            Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
