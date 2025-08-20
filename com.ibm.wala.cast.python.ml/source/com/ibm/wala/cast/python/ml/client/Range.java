@@ -111,6 +111,8 @@ public class Range extends TensorGenerator {
 
   @Override
   protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    // The dtype of the resulting tensor is inferred from the inputs unless it is provided
+    // explicitly.
     // TODO Auto-generated method stub
     return null;
   }
@@ -127,4 +129,7 @@ public class Range extends TensorGenerator {
     throw new UnsupportedOperationException(
         "Range does not have a shape argument. Its shape is derived from the numeric arguments.");
   }
+
+  // TODO: We need a value number for the dtype argument. Also, that value number can differ
+  // depending on the version of the `range` function being called.
 }

@@ -6,7 +6,7 @@ def returned(a):
     return a
 
 
-a = tf.range(5)
+a = tf.range(5)  # TODO: We also need one here with a dtype explicitly set.
 
 assert a.shape == (5,)
 assert a.dtype == tf.int32
