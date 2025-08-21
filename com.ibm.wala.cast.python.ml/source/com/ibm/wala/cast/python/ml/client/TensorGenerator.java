@@ -357,6 +357,7 @@ public abstract class TensorGenerator {
     EnumSet<DType> ret = EnumSet.noneOf(DType.class);
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
     PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
+
     for (InstanceKey valueIK : pointerAnalysis.getPointsToSet(valuePK))
       if (valueIK
           instanceof com.ibm.wala.ipa.callgraph.propagation.ConstantKey) { // It's a scalar value.
