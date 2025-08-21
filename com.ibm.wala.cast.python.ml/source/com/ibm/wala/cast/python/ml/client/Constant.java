@@ -29,6 +29,8 @@ public class Constant extends TensorGenerator {
 
   private static final int VALUE_NUMBER_FOR_SHAPE_ARGUMENT = 4;
 
+  private static final int VALUE_NUMBER_FOR_DTYPE_ARGUMENT = 3;
+
   public Constant(PointsToSetVariable source, CGNode node) {
     super(source, node);
   }
@@ -114,5 +116,10 @@ public class Constant extends TensorGenerator {
     // argument (recall that the first argument is implicit and corresponds to the called
     // function's name).
     return VALUE_NUMBER_FOR_SHAPE_ARGUMENT;
+  }
+
+  @Override
+  protected int getValueNumberForDTypeArgument() {
+    return VALUE_NUMBER_FOR_DTYPE_ARGUMENT;
   }
 }

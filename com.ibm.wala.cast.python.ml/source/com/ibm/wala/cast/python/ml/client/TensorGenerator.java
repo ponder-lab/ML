@@ -315,12 +315,17 @@ public abstract class TensorGenerator {
    */
   protected abstract EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder);
 
+  protected abstract int getValueNumberForDTypeArgument();
+
   protected EnumSet<DType> getDTypes(PropagationCallGraphBuilder builder) {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
+    int dTypeArgValueNum = this.getValueNumberForDTypeArgument();
+
     // The dtype is the second explicit argument.
     // FIXME: Handle keyword arguments.
-    PointerKey dTypePointerKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 3);
+    PointerKey dTypePointerKey =
+        pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, dTypeArgValueNum);
     OrdinalSet<InstanceKey> dTypePointsToSet = pointerAnalysis.getPointsToSet(dTypePointerKey);
 
     // If the argument dtype is not specified.

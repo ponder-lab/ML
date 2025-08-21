@@ -130,6 +130,10 @@ public class Range extends TensorGenerator {
         "Range does not have a shape argument. Its shape is derived from the numeric arguments.");
   }
 
-  // TODO: We need a value number for the dtype argument. Also, that value number can differ
-  // depending on the version of the `range` function being called.
+  @Override
+  protected int getValueNumberForDTypeArgument() {
+    // TODO: We need a value number for the dtype argument. Also, that value number can differ
+    // depending on the version of the `range` function being called.
+    throw new UnimplementedError("Positional dtype argument for range() is not yet implemented.");
+  }
 }

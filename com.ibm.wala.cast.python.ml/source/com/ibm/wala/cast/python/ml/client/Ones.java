@@ -21,6 +21,8 @@ public class Ones extends TensorGenerator {
 
   private static final int VALUE_NUMBER_FOR_SHAPE_ARGUMENT = 2;
 
+  private static final int VALUE_NUMBER_FOR_DTYPE_ARGUMENT = 3;
+
   public Ones(PointsToSetVariable source, CGNode node) {
     super(source, node);
   }
@@ -43,5 +45,10 @@ public class Ones extends TensorGenerator {
   @Override
   protected int getValueNumberForShapeArgument() {
     return VALUE_NUMBER_FOR_SHAPE_ARGUMENT; // The shape is in the first explicit argument.
+  }
+
+  @Override
+  protected int getValueNumberForDTypeArgument() {
+    return VALUE_NUMBER_FOR_DTYPE_ARGUMENT; // The dtype is in the second explicit argument.
   }
 }
