@@ -28,6 +28,8 @@ public class Constant extends TensorGenerator {
 
   private static final int VALUE_NUMBER_FOR_DTYPE_ARGUMENT = 3;
 
+  private static final int VALUE_NUMBER_FOR_VALUE_ARGUMENT = 2;
+
   public Constant(PointsToSetVariable source, CGNode node) {
     super(source, node);
   }
@@ -58,7 +60,7 @@ public class Constant extends TensorGenerator {
   protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // If the argument dtype is not specified, then the type is inferred from the type of value.
     // TODO: Handle keyword arguments.
-    return getDTypes(builder, 2);
+    return getDTypes(builder, VALUE_NUMBER_FOR_VALUE_ARGUMENT);
   }
 
   @Override
