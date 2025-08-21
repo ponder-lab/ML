@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static java.util.function.Function.identity;
+
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -16,6 +18,8 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
 
 /**
@@ -113,8 +117,26 @@ public class Range extends TensorGenerator {
   protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // The dtype of the resulting tensor is inferred from the inputs unless it is provided
     // explicitly.
-    // TODO Auto-generated method stub
-    return null;
+
+    // TODO: Handle keyword arguments.
+    int numberOfNumericPositionalArgs =
+        getNumberOfNumericPositionalArgs(builder.getPointerAnalysis());
+
+    EnumSet<DType> types =
+        IntStream.range(0, numberOfNumericPositionalArgs)
+            .map(i -> i + 2) // Positional arguments start at index 2.
+            .mapToObj(val -> getDTypes(builder, val).stream())
+            .flatMap(identity())
+            .distinct()
+            .collect(Collectors.toCollection(() -> EnumSet.noneOf(DType.class)));
+
+    if (types.contains(DType.FLOAT64)) return EnumSet.of(DType.FLOAT64);
+    else if (types.contains(DType.FLOAT32)) return EnumSet.of(DType.FLOAT32);
+    else if (types.contains(DType.INT64)) return EnumSet.of(DType.INT64);
+    else if (types.contains(DType.INT32)) return EnumSet.of(DType.INT32);
+
+    throw new IllegalStateException(
+        "Expected at least one numeric dtype for range(), but got: " + types + ".");
   }
 
   @Override
