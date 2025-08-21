@@ -57,14 +57,11 @@ public class Constant extends TensorGenerator {
     return ret;
   }
 
-  @Override
-  protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+  private EnumSet<DType> getDTypes(PropagationCallGraphBuilder builder, int valueNumber) {
     EnumSet<DType> ret = EnumSet.noneOf(DType.class);
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
-    // If the argument dtype is not specified, then the type is inferred from the type of value.
-    // TODO: Handle keyword arguments.
-    PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 2);
+    PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
 
     for (InstanceKey valueIK : pointerAnalysis.getPointsToSet(valuePK))
       if (valueIK instanceof ConstantKey) { // It's a scalar value.
@@ -108,6 +105,13 @@ public class Constant extends TensorGenerator {
             "Expected a " + ConstantKey.class + " for value, but got: " + valueIK + ".");
 
     return ret;
+  }
+
+  @Override
+  protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    // If the argument dtype is not specified, then the type is inferred from the type of value.
+    // TODO: Handle keyword arguments.
+    return getDTypes(builder, 2);
   }
 
   @Override
