@@ -207,9 +207,10 @@ public abstract class TensorGenerator {
 
     // Get the shape from the explicit argument.
     // FIXME: Handle keyword arguments.
-    int valueNumber = this.getValueNumberForShapeArgument();
+    int shapeArgValueNum = this.getValueNumberForShapeArgument();
 
-    PointerKey pointerKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
+    PointerKey pointerKey =
+        pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, shapeArgValueNum);
     OrdinalSet<InstanceKey> pointsToSet = pointerAnalysis.getPointsToSet(pointerKey);
 
     // If the argument shape is not specified.
@@ -304,6 +305,14 @@ public abstract class TensorGenerator {
     return ret;
   }
 
+  /**
+   * Returns a set of possible dtypes of the tensor returned by this generator when an explicit
+   * dtype isn't provided as an argument.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The set of possible dtypes of the tensor returned by this generator when an explicit
+   *     dtype isn't provided as an argument.
+   */
   protected abstract EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder);
 
   protected EnumSet<DType> getDTypes(PropagationCallGraphBuilder builder) {
