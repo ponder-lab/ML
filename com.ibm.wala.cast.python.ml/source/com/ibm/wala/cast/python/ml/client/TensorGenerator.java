@@ -326,21 +326,20 @@ public abstract class TensorGenerator {
   protected EnumSet<DType> getDTypes(PropagationCallGraphBuilder builder) {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
-    int dTypeArgValueNum = this.getValueNumberForDTypeArgument();
-    OrdinalSet<InstanceKey> dTypePointsToSet = null;
+    int valNum = this.getValueNumberForDTypeArgument();
+    OrdinalSet<InstanceKey> pointsToSet = null;
 
-    if (dTypeArgValueNum > 0) {
+    if (valNum > 0) {
       // The dtype is in an explicit argument.
       // FIXME: Handle keyword arguments.
-      PointerKey dTypePointerKey =
-          pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, dTypeArgValueNum);
-      dTypePointsToSet = pointerAnalysis.getPointsToSet(dTypePointerKey);
+      PointerKey pointerKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valNum);
+      pointsToSet = pointerAnalysis.getPointsToSet(pointerKey);
     }
 
     // If the argument dtype is not specified.
-    if (dTypePointsToSet == null || dTypePointsToSet.isEmpty()) return getDefaultDTypes(builder);
+    if (pointsToSet == null || pointsToSet.isEmpty()) return getDefaultDTypes(builder);
     else
       // The dtype points-to set is non-empty, meaning that the dtype was explicitly set.
-      return getDTypes(builder, dTypePointsToSet);
+      return getDTypes(builder, pointsToSet);
   }
 }
