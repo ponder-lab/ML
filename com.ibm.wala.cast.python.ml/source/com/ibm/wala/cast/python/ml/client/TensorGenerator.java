@@ -220,6 +220,14 @@ public abstract class TensorGenerator {
       return getShapes(builder, pointsToSet);
   }
 
+  /**
+   * Returns the possible dtypes of the tensor returned by this generator.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param pointsToSet The points-to set of the dtype argument, which is expected to be a set of
+   *     type literals.
+   * @return A set of possible dtypes of the tensor returned by this generator.
+   */
   protected EnumSet<DType> getDTypes(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
     EnumSet<DType> ret = EnumSet.noneOf(DType.class);
