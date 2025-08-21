@@ -315,21 +315,30 @@ public abstract class TensorGenerator {
    */
   protected abstract EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder);
 
+  /**
+   * Returns the value number for the dtype argument in the function call.
+   *
+   * @return The value number for the dtype argument in the function call or -1 if the dtype
+   *     argument is not supported.
+   */
   protected abstract int getValueNumberForDTypeArgument();
 
   protected EnumSet<DType> getDTypes(PropagationCallGraphBuilder builder) {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     int dTypeArgValueNum = this.getValueNumberForDTypeArgument();
+    OrdinalSet<InstanceKey> dTypePointsToSet = null;
 
-    // The dtype is the second explicit argument.
-    // FIXME: Handle keyword arguments.
-    PointerKey dTypePointerKey =
-        pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, dTypeArgValueNum);
-    OrdinalSet<InstanceKey> dTypePointsToSet = pointerAnalysis.getPointsToSet(dTypePointerKey);
+    if (dTypeArgValueNum > 0) {
+      // The dtype is in an explicit argument.
+      // FIXME: Handle keyword arguments.
+      PointerKey dTypePointerKey =
+          pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, dTypeArgValueNum);
+      dTypePointsToSet = pointerAnalysis.getPointsToSet(dTypePointerKey);
+    }
 
     // If the argument dtype is not specified.
-    if (dTypePointsToSet.isEmpty()) return getDefaultDTypes(builder);
+    if (dTypePointsToSet == null || dTypePointsToSet.isEmpty()) return getDefaultDTypes(builder);
     else
       // The dtype points-to set is non-empty, meaning that the dtype was explicitly set.
       return getDTypes(builder, dTypePointsToSet);
