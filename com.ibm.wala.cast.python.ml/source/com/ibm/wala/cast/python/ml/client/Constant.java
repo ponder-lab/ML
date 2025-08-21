@@ -1,8 +1,5 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
 import static java.util.Collections.emptyList;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -50,56 +47,6 @@ public class Constant extends TensorGenerator {
         // empty tuple ().
         ret.add(emptyList());
       else
-        // TODO: More cases.
-        throw new IllegalStateException(
-            "Expected a " + ConstantKey.class + " for value, but got: " + valueIK + ".");
-
-    return ret;
-  }
-
-  private EnumSet<DType> getDTypes(PropagationCallGraphBuilder builder, int valueNumber) {
-    EnumSet<DType> ret = EnumSet.noneOf(DType.class);
-    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
-
-    PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
-
-    for (InstanceKey valueIK : pointerAnalysis.getPointsToSet(valuePK))
-      if (valueIK instanceof ConstantKey) { // It's a scalar value.
-        ConstantKey<?> constantKey = (ConstantKey<?>) valueIK;
-        Object value = constantKey.getValue();
-
-        if (value instanceof Float || value instanceof Double) {
-          ret.add(FLOAT32);
-          LOGGER.info(
-              "Inferred dtype: "
-                  + FLOAT32
-                  + " for source: "
-                  + source
-                  + " from value: "
-                  + value
-                  + ".");
-        } else if (value instanceof Integer || value instanceof Long) {
-          ret.add(INT32);
-          LOGGER.info(
-              "Inferred dtype: "
-                  + INT32
-                  + " for source: "
-                  + source
-                  + " from value: "
-                  + value
-                  + ".");
-        } else if (value instanceof String) {
-          ret.add(STRING);
-          LOGGER.info(
-              "Inferred dtype: "
-                  + STRING
-                  + " for source: "
-                  + source
-                  + " from value: "
-                  + value
-                  + ".");
-        } else throw new IllegalStateException("Unknown constant type: " + value.getClass() + ".");
-      } else
         // TODO: More cases.
         throw new IllegalStateException(
             "Expected a " + ConstantKey.class + " for value, but got: " + valueIK + ".");

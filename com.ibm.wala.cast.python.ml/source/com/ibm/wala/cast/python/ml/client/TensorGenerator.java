@@ -1,6 +1,8 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.D_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
@@ -349,5 +351,56 @@ public abstract class TensorGenerator {
     else
       // The dtype points-to set is non-empty, meaning that the dtype was explicitly set.
       return getDTypes(builder, pointsToSet);
+  }
+
+  protected EnumSet<DType> getDTypes(PropagationCallGraphBuilder builder, int valueNumber) {
+    EnumSet<DType> ret = EnumSet.noneOf(DType.class);
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+    PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
+    for (InstanceKey valueIK : pointerAnalysis.getPointsToSet(valuePK))
+      if (valueIK
+          instanceof com.ibm.wala.ipa.callgraph.propagation.ConstantKey) { // It's a scalar value.
+        ConstantKey<?> constantKey = (ConstantKey<?>) valueIK;
+        Object value = constantKey.getValue();
+        if (value instanceof Float || value instanceof Double) {
+          ret.add(FLOAT32);
+          LOGGER.info(
+              "Inferred dtype: "
+                  + FLOAT32
+                  + " for source: "
+                  + source
+                  + " from value: "
+                  + value
+                  + ".");
+        } else if (value instanceof Integer || value instanceof Long) {
+          ret.add(INT32);
+          LOGGER.info(
+              "Inferred dtype: "
+                  + INT32
+                  + " for source: "
+                  + source
+                  + " from value: "
+                  + value
+                  + ".");
+        } else if (value instanceof String) {
+          ret.add(STRING);
+          LOGGER.info(
+              "Inferred dtype: "
+                  + STRING
+                  + " for source: "
+                  + source
+                  + " from value: "
+                  + value
+                  + ".");
+        } else throw new IllegalStateException("Unknown constant type: " + value.getClass() + ".");
+      } else
+        // TODO: More cases.
+        throw new IllegalStateException(
+            "Expected a "
+                + com.ibm.wala.ipa.callgraph.propagation.ConstantKey.class
+                + " for value, but got: "
+                + valueIK
+                + ".");
+    return ret;
   }
 }
