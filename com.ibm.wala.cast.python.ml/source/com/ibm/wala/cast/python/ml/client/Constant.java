@@ -58,7 +58,7 @@ public class Constant extends TensorGenerator {
 
   @Override
   protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    // If the argument dtype is not specified, then the type is inferred from the type of value.
+    // If the dtype argument is not specified, then the type is inferred from the type of value.
     // TODO: Handle keyword arguments.
     return getDTypes(builder, this.getValueNumberForValueArgument());
   }
