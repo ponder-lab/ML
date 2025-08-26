@@ -77,6 +77,13 @@ public abstract class TensorGenerator {
     return ret;
   }
 
+  /**
+   * Returns the possible shapes of the tensor returned by this generator.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param pointsToSet The points-to set of the shape argument.
+   * @return A set of possible shapes of the tensor returned by this generator.
+   */
   protected Set<List<Dimension<?>>> getShapes(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
@@ -223,6 +230,14 @@ public abstract class TensorGenerator {
       return getShapes(builder, pointsToSet);
   }
 
+  /**
+   * Returns the possible shapes of the tensor returned by this generator. The shape is inferred
+   * from the argument represented by the given value number.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param valueNumber The value number of the argument from which to infer the shape.
+   * @return A set of possible shapes of the tensor returned by this generator.
+   */
   protected Set<List<Dimension<?>>> getShapes(
       PropagationCallGraphBuilder builder, int valueNumber) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
@@ -373,6 +388,14 @@ public abstract class TensorGenerator {
       return getDTypes(builder, pointsToSet);
   }
 
+  /**
+   * Returns the possible dtypes of the tensor returned by this generator. The dtype is inferred
+   * from the argument represented by the given value number.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param valueNumber The value number of the argument from which to infer the dtype.
+   * @return A set of possible dtypes of the tensor returned by this generator.
+   */
   protected EnumSet<DType> getDTypes(PropagationCallGraphBuilder builder, int valueNumber) {
     EnumSet<DType> ret = EnumSet.noneOf(DType.class);
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
