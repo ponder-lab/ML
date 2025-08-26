@@ -282,7 +282,7 @@ public abstract class TensorGenerator {
             PointerKey pointerKeyForInstanceField = builder.getPointerKeyForInstanceField(asin, f);
             LOGGER.fine(
                 "Found pointer key for instance field: " + pointerKeyForInstanceField + ".");
-
+            // Get the points-to set for the instance field.
             OrdinalSet<InstanceKey> instanceFieldPointsToSet =
                 pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
             LOGGER.fine("Points-to set for instance field: " + instanceFieldPointsToSet + ".");
