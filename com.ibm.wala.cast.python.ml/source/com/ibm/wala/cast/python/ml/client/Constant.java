@@ -1,17 +1,10 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static java.util.Collections.emptyList;
-
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.CGNode;
-import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
-import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
-import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
-import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
-import com.ibm.wala.util.collections.HashSetFactory;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -36,24 +29,9 @@ public class Constant extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    Set<List<Dimension<?>>> ret = HashSetFactory.make();
-    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
-
-    // The shape is that of the first explicit argument.
+    // If the shape argument is not specified, then the shape is inferred from the shape of value.
     // TODO: Handle keyword arguments.
-    PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, 2);
-
-    for (InstanceKey valueIK : pointerAnalysis.getPointsToSet(valuePK))
-      if (valueIK instanceof ConstantKey)
-        // It's a scalar value. A scalar has no dimensions, so its shape is represented by an
-        // empty tuple ().
-        ret.add(emptyList());
-      else
-        // TODO: More cases.
-        throw new IllegalStateException(
-            "Expected a " + ConstantKey.class + " for value, but got: " + valueIK + ".");
-
-    return ret;
+    return getShapes(builder, this.getValueNumberForValueArgument());
   }
 
   @Override

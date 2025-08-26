@@ -10,6 +10,7 @@ import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
@@ -220,6 +221,25 @@ public abstract class TensorGenerator {
     else
       // The shape points-to set is non-empty, meaning that the shape was explicitly set.
       return getShapes(builder, pointsToSet);
+  }
+
+  protected Set<List<Dimension<?>>> getShapes(
+      PropagationCallGraphBuilder builder, int valueNumber) {
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+    PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
+
+    for (InstanceKey valueIK : pointerAnalysis.getPointsToSet(valuePK))
+      if (valueIK instanceof ConstantKey)
+        // It's a scalar value. A scalar has no dimensions, so its shape is represented by an
+        // empty tuple ().
+        ret.add(emptyList());
+      else
+        // TODO: More cases.
+        throw new IllegalStateException(
+            "Expected a " + ConstantKey.class + " for value, but got: " + valueIK + ".");
+
+    return ret;
   }
 
   /**
