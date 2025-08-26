@@ -243,8 +243,9 @@ public abstract class TensorGenerator {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
     PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
+    OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
 
-    for (InstanceKey valueIK : pointerAnalysis.getPointsToSet(valuePK))
+    for (InstanceKey valueIK : valuePointsToSet)
       if (valueIK instanceof ConstantKey)
         // It's a scalar value. A scalar has no dimensions, so its shape is represented by an
         // empty tuple ().
