@@ -359,8 +359,7 @@ public abstract class TensorGenerator {
     PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
 
     for (InstanceKey valueIK : pointerAnalysis.getPointsToSet(valuePK))
-      if (valueIK
-          instanceof com.ibm.wala.ipa.callgraph.propagation.ConstantKey) { // It's a scalar value.
+      if (valueIK instanceof ConstantKey) { // It's a scalar value.
         ConstantKey<?> constantKey = (ConstantKey<?>) valueIK;
         Object value = constantKey.getValue();
         if (value instanceof Float || value instanceof Double) {
