@@ -84,7 +84,7 @@ public abstract class TensorGenerator {
    * @param pointsToSet The points-to set of the shape argument.
    * @return A set of possible shapes of the tensor returned by this generator.
    */
-  protected Set<List<Dimension<?>>> getShapes(
+  protected Set<List<Dimension<?>>> getShapesFromShapeArgument(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
@@ -227,7 +227,7 @@ public abstract class TensorGenerator {
     if (pointsToSet.isEmpty()) return getDefaultShapes(builder);
     else
       // The shape points-to set is non-empty, meaning that the shape was explicitly set.
-      return getShapes(builder, pointsToSet);
+      return getShapesFromShapeArgument(builder, pointsToSet);
   }
 
   /**
