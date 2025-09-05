@@ -487,11 +487,7 @@ public abstract class TensorGenerator {
       } else
         // TODO: More cases.
         throw new IllegalStateException(
-            "Expected a "
-                + com.ibm.wala.ipa.callgraph.propagation.ConstantKey.class
-                + " for value, but got: "
-                + valueIK
-                + ".");
+            "Expected a " + ConstantKey.class + " for value, but got: " + valueIK + ".");
     return ret;
   }
 }
