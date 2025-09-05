@@ -245,11 +245,18 @@ public abstract class TensorGenerator {
     PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
     OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
 
+    getShapesOfValue(builder, valuePointsToSet);
+
+    return ret;
+  }
+
+  private Set<List<Dimension<?>>> getShapesOfValue(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+
     for (InstanceKey valueIK : valuePointsToSet)
-      if (valueIK instanceof ConstantKey)
-        // It's a scalar value. A scalar has no dimensions, so its shape is represented by an
-        // empty tuple ().
-        ret.add(emptyList());
+      if (valueIK instanceof ConstantKey) ret.add(emptyList()); // Scalar value.
       else if (valueIK instanceof AllocationSiteInNode) {
         AllocationSiteInNode asin = (AllocationSiteInNode) valueIK;
         TypeReference reference = asin.getConcreteType().getReference();
@@ -283,20 +290,13 @@ public abstract class TensorGenerator {
             LOGGER.fine(
                 "Found pointer key for instance field: " + pointerKeyForInstanceField + ".");
 
-            // Get the points-to set for the instance field.
             OrdinalSet<InstanceKey> instanceFieldPointsToSet =
                 pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
             LOGGER.fine("Points-to set for instance field: " + instanceFieldPointsToSet + ".");
 
-            // TODO: We have another list here. It would seem to me that the size of each of these
-            // lists corresponds to a dimension. Thus, we could store the already obtained dimension
-            // here and then recursively call this function. However, we would need another method
-            // that takes a points-to set. But, we already have one of those. The problem is that
-            // the existing one represents a points-to set corresponding to a shape, whereas here we
-            // have one that corresponds to a value. So, we would need to distinguish between the
-            // two cases.
+            getShapesOfValue(builder, instanceFieldPointsToSet);
           }
-        }
+        } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
       } else
         // TODO: More cases.
         throw new IllegalStateException(
