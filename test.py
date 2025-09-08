@@ -24,3 +24,13 @@ d = tf.constant(
 )
 print("Shape (2, 3, 4): ", d)
 assert d.shape == (2, 3, 4)
+
+# Shape (2, 3, 3): 2 blocks, each with 3 rows and 3 columns
+e = tf.constant(
+    [
+        [[1, 2, 3], [5, 6, 7], [9, 10, 11]],
+        [[13, 14, 15], [17, 18, 19], [21, 22, 23]],
+    ]
+)
+print("Shape (2, 3, 3): ", e)
+assert e.shape == (2, 3, 3)
