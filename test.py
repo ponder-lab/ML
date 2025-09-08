@@ -3,14 +3,17 @@ import tensorflow as tf
 # Shape (2,)
 a = tf.constant([1.0, 3.0])
 print("Shape (2,): ", a)
+assert a.shape == (2,)
 
 # Shape (2, 1)
 b = tf.constant([[1.0], [3.0]])
 print("Shape (2, 1): ", b)
+assert b.shape == (2, 1)
 
 # Shape (1, 2)
 c = tf.constant([[1.0, 3.0]])
 print("Shape (1, 2): ", c)
+assert c.shape == (1, 2)
 
 # Shape (2, 3, 4): 2 blocks, each with 3 rows and 4 columns
 d = tf.constant(
@@ -20,3 +23,4 @@ d = tf.constant(
     ]
 )
 print("Shape (2, 3, 4): ", d)
+assert d.shape == (2, 3, 4)
