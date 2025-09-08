@@ -240,14 +240,10 @@ public abstract class TensorGenerator {
    */
   protected Set<List<Dimension<?>>> getShapes(
       PropagationCallGraphBuilder builder, int valueNumber) {
-    Set<List<Dimension<?>>> ret = HashSetFactory.make();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
     PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
     OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
-
-    getShapesOfValue(builder, valuePointsToSet);
-
-    return ret;
+    return getShapesOfValue(builder, valuePointsToSet);
   }
 
   private Set<List<Dimension<?>>> getShapesOfValue(
