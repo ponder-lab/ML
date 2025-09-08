@@ -39,6 +39,7 @@ import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
@@ -263,7 +264,6 @@ public abstract class TensorGenerator {
                   ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                       .getPointerKeyForObjectCatalog(asin));
 
-          // TODO: Is this one of the tensor dimensions?
           LOGGER.fine(
               "The object catalog points-to set size is: " + objectCatalogPointsToSet.size() + ".");
 
@@ -290,11 +290,20 @@ public abstract class TensorGenerator {
                 pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
             LOGGER.fine("Points-to set for instance field: " + instanceFieldPointsToSet + ".");
 
-            getShapesOfValue(builder, instanceFieldPointsToSet);
+            Set<List<Dimension<?>>> shapesOfField =
+                getShapesOfValue(builder, instanceFieldPointsToSet);
+
+            for (List<Dimension<?>> shapeList : shapesOfField) {
+              List<Dimension<?>> shape = new ArrayList<>();
+
+              shape.add(new NumericDim(objectCatalogPointsToSet.size()));
+              shape.addAll(shapeList);
+
+              ret.add(shape);
+            }
           }
         } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
       } else
-        // TODO: More cases.
         throw new IllegalStateException(
             "Expected a " + ConstantKey.class + " for value, but got: " + valueIK + ".");
 
