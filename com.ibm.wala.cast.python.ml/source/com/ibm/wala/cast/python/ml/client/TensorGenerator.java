@@ -262,7 +262,7 @@ public abstract class TensorGenerator {
     for (InstanceKey valueIK : valuePointsToSet)
       if (valueIK instanceof ConstantKey) ret.add(emptyList()); // Scalar value.
       else if (valueIK instanceof AllocationSiteInNode) {
-        AllocationSiteInNode asin = (AllocationSiteInNode) valueIK;
+        AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
         TypeReference reference = asin.getConcreteType().getReference();
 
         if (reference.equals(list)) {
