@@ -292,6 +292,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
+  public void testDecorator12()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_decorator12.py",
+        "returned",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32, TENSOR_2_INT32)));
+  }
+
+  @Test
   public void testDataset()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     // FIXME: Test tf2_test_dataset.py really has three tensors in its dataset. We are currently

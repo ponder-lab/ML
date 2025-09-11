@@ -130,6 +130,10 @@ public class Range extends TensorGenerator {
             .distinct()
             .collect(Collectors.toCollection(() -> EnumSet.noneOf(DType.class)));
 
+    // FIXME: We can't tell the difference here between varying dtypes in a single call and that of
+    // possible varying dtypes values from the points-to graph. Below, we are treating it as these
+    // values lie in a single call, but that may not be the case.
+
     if (types.contains(DType.FLOAT64)) return EnumSet.of(DType.FLOAT64);
     else if (types.contains(DType.FLOAT32)) return EnumSet.of(DType.FLOAT32);
     else if (types.contains(DType.INT64)) return EnumSet.of(DType.INT64);
