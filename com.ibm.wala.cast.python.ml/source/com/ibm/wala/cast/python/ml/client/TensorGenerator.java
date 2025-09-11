@@ -511,6 +511,46 @@ public abstract class TensorGenerator {
                   + value
                   + ".");
         } else throw new IllegalStateException("Unknown constant type: " + value.getClass() + ".");
+      } else if (valueIK instanceof AllocationSiteInNode) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
+        TypeReference reference = asin.getConcreteType().getReference();
+
+        if (reference.equals(list)) {
+          OrdinalSet<InstanceKey> objectCatalogPointsToSet =
+              pointerAnalysis.getPointsToSet(
+                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                      .getPointerKeyForObjectCatalog(asin));
+
+          LOGGER.fine(
+              "The object catalog points-to set size is: " + objectCatalogPointsToSet.size() + ".");
+
+          for (InstanceKey catalogIK : objectCatalogPointsToSet) {
+            ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
+            Object constantKeyValue = constantKey.getValue();
+
+            Integer fieldIndex = (Integer) constantKeyValue;
+
+            FieldReference subscript =
+                FieldReference.findOrCreate(
+                    PythonTypes.Root,
+                    findOrCreateAsciiAtom(fieldIndex.toString()),
+                    PythonTypes.Root);
+
+            IField f = builder.getClassHierarchy().resolveField(subscript);
+            LOGGER.fine("Found field: " + f);
+
+            PointerKey pointerKeyForInstanceField = builder.getPointerKeyForInstanceField(asin, f);
+            LOGGER.fine(
+                "Found pointer key for instance field: " + pointerKeyForInstanceField + ".");
+
+            OrdinalSet<InstanceKey> instanceFieldPointsToSet =
+                pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
+            LOGGER.fine("Points-to set for instance field: " + instanceFieldPointsToSet + ".");
+
+            EnumSet<DType> dTypesOfField = getDTypesOfValue(builder, instanceFieldPointsToSet);
+            ret.addAll(dTypesOfField);
+          }
+        } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
       } else
         // TODO: More cases.
         throw new IllegalStateException(
