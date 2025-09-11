@@ -457,11 +457,26 @@ public abstract class TensorGenerator {
    * @return A set of possible dtypes of the tensor returned by this generator.
    */
   protected EnumSet<DType> getDTypes(PropagationCallGraphBuilder builder, int valueNumber) {
-    EnumSet<DType> ret = EnumSet.noneOf(DType.class);
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
     PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
+    OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
+    return getDTypesOfValue(builder, valuePointsToSet);
+  }
 
-    for (InstanceKey valueIK : pointerAnalysis.getPointsToSet(valuePK))
+  /**
+   * Returns the possible dtypes of the tensor returned by this generator. The dtype is inferred
+   * from the given points-to set.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param pointsToSet The points-to set of the value from which the dtype will be derived.
+   * @return A set of possible dtypes of the tensor returned by this generator.
+   */
+  private EnumSet<DType> getDTypesOfValue(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
+    EnumSet<DType> ret = EnumSet.noneOf(DType.class);
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+
+    for (InstanceKey valueIK : valuePointsToSet)
       if (valueIK instanceof ConstantKey) { // It's a scalar value.
         ConstantKey<?> constantKey = (ConstantKey<?>) valueIK;
         Object value = constantKey.getValue();
