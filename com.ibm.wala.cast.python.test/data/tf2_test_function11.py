@@ -12,5 +12,6 @@ a = tf.constant(
     ]
 )
 assert a.shape == (2, 3, 3)
+assert a.dtype == tf.int32
 
 func(a)
