@@ -74,6 +74,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_2_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(2)));
 
+  private static final TensorType TENSOR_3_2_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(2)));
+
   private static final TensorType TENSOR_2_1_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(1)));
 
@@ -223,6 +226,34 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testFunction11()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_function11.py", "func", 1, 1, Map.of(2, Set.of(TENSOR_2_3_3_INT32)));
+  }
+
+  /** Test https://github.com/wala/ML/issues/308. */
+  @Test
+  public void testFunction12()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_function12.py",
+        "func",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_1_FLOAT32, TENSOR_3_2_FLOAT32)));
+  }
+
+  /**
+   * Test https://github.com/wala/ML/issues/308.
+   *
+   * <p>This one has lexical scoping.
+   */
+  @Test
+  public void testFunction13()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_function13.py",
+        "func",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_1_FLOAT32, TENSOR_3_2_FLOAT32)));
   }
 
   @Test
