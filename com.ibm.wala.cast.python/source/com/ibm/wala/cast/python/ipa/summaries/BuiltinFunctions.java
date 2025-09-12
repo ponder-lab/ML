@@ -38,7 +38,7 @@ public class BuiltinFunctions {
 
   private static IMethod typeSummary(IClass cls, String name, TypeReference type) {
     PythonSummary S = typeSummary(cls, builtinFunction(name), type);
-    return new PythonSummarizedFunction((MethodReference) S.getMethod(), S, cls);
+    return new PythonSummarizedFunction(S.getMethod(), S, cls);
   }
 
   private static PythonSummary typeSummary(
@@ -55,7 +55,7 @@ public class BuiltinFunctions {
 
   private static IMethod argSummary(IClass cls, String name, int arg) {
     PythonSummary S = argSummary(cls, builtinFunction(name), arg);
-    return new PythonSummarizedFunction((MethodReference) S.getMethod(), S, cls);
+    return new PythonSummarizedFunction(S.getMethod(), S, cls);
   }
 
   private static PythonSummary argSummary(IClass cls, TypeReference type, int arg) {
@@ -70,7 +70,7 @@ public class BuiltinFunctions {
 
   private static IMethod noopSummary(IClass cls, String name) {
     PythonSummary S = noopSummary(cls, builtinFunction(name));
-    return new PythonSummarizedFunction((MethodReference) S.getMethod(), S, cls);
+    return new PythonSummarizedFunction(S.getMethod(), S, cls);
   }
 
   private static PythonSummary noopSummary(IClass cls, TypeReference type) {
