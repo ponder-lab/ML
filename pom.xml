@@ -134,11 +134,11 @@
           <artifactId>maven-compiler-plugin</artifactId>
           <version>${maven.compiler.version}</version>
           <configuration>
+            <showWarnings>true</showWarnings>
             <compilerArgs>
-              <arg>-Xlint:deprecation</arg>
-              <arg>-Xlint:unchecked</arg>
+              <arg>-Werror</arg>
+              <arg>-Xlint:all</arg>
             </compilerArgs>
-            <failOnWarning>true</failOnWarning>
           </configuration>
         </plugin>
         <plugin>
