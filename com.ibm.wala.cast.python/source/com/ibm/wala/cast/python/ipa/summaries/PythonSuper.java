@@ -188,7 +188,7 @@ public class PythonSuper {
           CallSiteReference ref =
               new DynamicCallSiteReference(
                   AstMethodReference.fnReference(PythonTypes.superfun), pc++);
-          @SuppressWarnings("unchecked")
+          @SuppressWarnings({"unchecked", "rawtypes"})
           Pair<String, Integer>[] pairs = new Pair[0];
           Pair<String, Integer>[] keywordParams = pairs;
           ctor.addStatement(

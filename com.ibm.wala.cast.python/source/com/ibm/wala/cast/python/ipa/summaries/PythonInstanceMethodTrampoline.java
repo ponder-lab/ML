@@ -42,6 +42,7 @@ public class PythonInstanceMethodTrampoline extends PythonSyntheticClass {
 
   private final IClass realClass;
 
+  @SuppressWarnings("this-escape")
   public PythonInstanceMethodTrampoline(TypeReference functionType, IClassHierarchy cha) {
     super(trampoline(functionType), cha);
     realClass = cha.lookupClass(functionType);

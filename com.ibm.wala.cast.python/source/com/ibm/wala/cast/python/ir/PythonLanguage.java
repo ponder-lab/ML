@@ -233,7 +233,7 @@ public class PythonLanguage implements Language {
         return new AstGlobalWrite(iindex, global, rhs);
       }
 
-      @SuppressWarnings("unchecked")
+      @SuppressWarnings({"unchecked", "rawtypes"})
       @Override
       public SSAAbstractInvokeInstruction InvokeInstruction(
           int iindex,
