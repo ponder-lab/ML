@@ -20,7 +20,6 @@ public class TensorFlowTypes extends PythonTypes {
    *
    * @see <a href="https://www.tensorflow.org/api_docs/python/tf/dtypes#other-members">TensorFlow
    *     dtypes</a>.
-   * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
    */
   public enum DType {
     FLOAT32,
