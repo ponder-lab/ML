@@ -27,7 +27,7 @@ jobs:
         cache: 'pip'
     - name: Install Python dependencies
       run: pip install -r requirements.txt
-    - name: Check formatting with spotless
+    - name: Check formatting with Spotless
       run: mvn spotless:check -B
     - name: Check formatting with Black
       run: black --fast --check --extend-exclude IDE --extend-exclude jython3 .
