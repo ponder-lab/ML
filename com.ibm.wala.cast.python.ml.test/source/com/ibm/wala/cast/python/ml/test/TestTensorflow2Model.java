@@ -80,14 +80,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_2_1_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(1)));
 
-  private static final TensorType TENSOR_2_3_3_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(3), new NumericDim(3)));
-
   private static final TensorType TENSOR_2_3_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(3), new NumericDim(3)));
-
-  private static final TensorType TENSOR_2_3_4_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(3), new NumericDim(4)));
 
   private static final TensorType TENSOR_2_3_4_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(3), new NumericDim(4)));
