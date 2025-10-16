@@ -326,7 +326,7 @@
       <class name="DType" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes/DType -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self type_enum handle_data">
-          <new def="obj" class="Ltensorflow//DType" />
+          <new def="obj" class="Ltensorflow/DType" />
           <putfield class="LRoot" field="type_enum" fieldType="LRoot" ref="obj" value="type_enum" />
           <putfield class="LRoot" field="handle_data" fieldType="LRoot" ref="obj" value="handle_data" />
           <return value="obj" />
