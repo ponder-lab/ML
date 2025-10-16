@@ -391,7 +391,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
               .getScriptToWildcardImports()
               .compute(
                   scriptName,
-                  (k, v) -> {
+                  (_, v) -> {
                     if (v == null) {
                       Deque<MethodReference> deque = new ArrayDeque<>();
                       deque.push(declaredTarget);
@@ -421,7 +421,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
             .getScriptToWildcardImports()
             .compute(
                 scriptName,
-                (k, v) -> {
+                (_, v) -> {
                   if (v == null) {
                     Deque<MethodReference> deque = new ArrayDeque<>();
                     deque.push(methodReference);

@@ -76,7 +76,7 @@ public class TestTensorflowModelParsing extends TestPythonMLCallGraphShape {
             // associate the method to the pointer key.
             methodSignatureToPointerKeys.compute(
                 methodSignature,
-                (k, v) -> {
+                (_, v) -> {
                   if (v == null) v = new HashSet<>();
                   v.add(localPointerKey);
                   return v;
