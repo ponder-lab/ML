@@ -217,7 +217,7 @@ public class PythonDriver {
                       lsp.addValueAnalysis(
                           "columns",
                           builder.getPointerAnalysis().getHeapGraph(),
-                          (Boolean useMarkdown, PointerKey v) -> {
+                          (_, v) -> {
                             Set<String> fields = HashSetFactory.make();
                             PA.getPointsToSet(v)
                                 .forEach(

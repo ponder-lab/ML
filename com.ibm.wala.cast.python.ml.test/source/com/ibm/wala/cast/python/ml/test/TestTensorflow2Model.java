@@ -4064,7 +4064,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             // associate the method to the pointer key.
             functionSignatureToPointerKeys.compute(
                 methodSignature,
-                (k, v) -> {
+                (_, v) -> {
                   if (v == null) v = new HashSet<>();
                   v.add(localPointerKey);
                   return v;
@@ -4073,7 +4073,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             // associate the method to the tensor variables.
             functionSignatureToTensorVariables.compute(
                 methodSignature,
-                (k, v) -> {
+                (_, v) -> {
                   if (v == null) v = new HashSet<>();
                   v.add(tensorVariable);
                   return v;
