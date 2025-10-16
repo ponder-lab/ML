@@ -83,7 +83,8 @@ public class Driver {
 
     System.err.println(CG);
 
-    PointerAnalysis<InstanceKey> PA = builder.getPointerAnalysis();
+    @SuppressWarnings({"unchecked", "cast"})
+    PointerAnalysis<InstanceKey> PA = (PointerAnalysis<InstanceKey>) builder.getPointerAnalysis();
 
     CAstCallGraphUtil.AVOID_DUMP.set(false);
     CAstCallGraphUtil.dumpCG(
