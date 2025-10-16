@@ -3,7 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.D_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLOAT_32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
@@ -377,11 +377,7 @@ public abstract class TensorGenerator {
                 .getInstanceKeyForAllocation(
                     importNode.get(), NewSiteReference.make(0, TENSORFLOW));
 
-        FieldReference float32 =
-            FieldReference.findOrCreate(
-                PythonTypes.Root, findOrCreateAsciiAtom(FLOAT32.name().toLowerCase()), D_TYPE);
-
-        IField float32Field = builder.getClassHierarchy().resolveField(float32);
+        IField float32Field = builder.getClassHierarchy().resolveField(FLOAT_32);
 
         PointerKey float32PK =
             pointerAnalysis
