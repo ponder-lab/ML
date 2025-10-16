@@ -3,7 +3,6 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLOAT_32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
@@ -377,25 +376,27 @@ public abstract class TensorGenerator {
                 .getInstanceKeyForAllocation(
                     importNode.get(), NewSiteReference.make(0, TENSORFLOW));
 
-        IField float32Field = builder.getClassHierarchy().resolveField(FLOAT_32);
+        // Check dtype literals.
+        TensorFlowTypes.FIELD_REFERENCE_TO_DTYPE.forEach(
+            (fieldRef, dtype) -> {
+              IField field = builder.getClassHierarchy().resolveField(fieldRef);
 
-        PointerKey float32PK =
-            pointerAnalysis
-                .getHeapModel()
-                .getPointerKeyForInstanceField(tensorFlowIK, float32Field);
+              PointerKey pk =
+                  pointerAnalysis.getHeapModel().getPointerKeyForInstanceField(tensorFlowIK, field);
 
-        for (InstanceKey float32IK : pointerAnalysis.getPointsToSet(float32PK))
-          if (float32IK.equals(instanceKey)) {
-            ret.add(FLOAT32);
-            LOGGER.info(
-                "Found dtype: "
-                    + FLOAT32
-                    + " for source: "
-                    + source
-                    + " from dType: "
-                    + instanceKey
-                    + ".");
-          } else throw new IllegalStateException("Unknown dtype: " + instanceKey + ".");
+              for (InstanceKey ik : pointerAnalysis.getPointsToSet(pk))
+                if (ik.equals(instanceKey)) {
+                  ret.add(dtype);
+                  LOGGER.info(
+                      "Found dtype: "
+                          + dtype
+                          + " for source: "
+                          + source
+                          + " from dType: "
+                          + instanceKey
+                          + ".");
+                } else throw new IllegalStateException("Unknown dtype: " + instanceKey + ".");
+            });
       } else
         throw new IllegalStateException(
             "Expected a "

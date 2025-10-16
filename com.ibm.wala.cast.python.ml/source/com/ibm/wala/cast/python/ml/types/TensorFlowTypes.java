@@ -7,6 +7,7 @@ import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
+import java.util.Map;
 
 /**
  * Types found in the TensorFlow library.
@@ -53,6 +54,10 @@ public class TensorFlowTypes extends PythonTypes {
   public static final FieldReference FLOAT_32 =
       FieldReference.findOrCreate(
           PythonTypes.Root, findOrCreateAsciiAtom(FLOAT32.name().toLowerCase()), D_TYPE);
+
+  /** A mapping from a field reference to its associated {@link DType}, if any. */
+  public static final Map<FieldReference, DType> FIELD_REFERENCE_TO_DTYPE =
+      Map.of(FLOAT_32, FLOAT32);
 
   private TensorFlowTypes() {}
 }
