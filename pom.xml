@@ -134,10 +134,8 @@
           <artifactId>maven-compiler-plugin</artifactId>
           <version>${maven.compiler.version}</version>
           <configuration>
-            <compilerArgs>
-              <arg>-Xlint:deprecation</arg>
-              <arg>-Xlint:unchecked</arg>
-            </compilerArgs>
+            <showDeprecation>true</showDeprecation>
+            <compilerArgument>-Xlint</compilerArgument>
             <failOnWarning>true</failOnWarning>
           </configuration>
         </plugin>
