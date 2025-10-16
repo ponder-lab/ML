@@ -325,8 +325,10 @@ public abstract class TensorGenerator {
    *     type literals.
    * @return A set of possible dtypes of the tensor returned by this generator.
    */
-  protected EnumSet<DType> getDTypesFromShapeArgument(
-      PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
+  protected EnumSet<DType>
+      getDTypesFromShapeArgument( // TODO: Shouldn't this be "fromDTypeArgument" or simply
+          // "fromArgument"?
+          PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
     EnumSet<DType> ret = EnumSet.noneOf(DType.class);
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
