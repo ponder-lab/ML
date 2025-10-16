@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FIELD_REFERENCE_TO_DTYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
@@ -41,6 +42,7 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -377,26 +379,32 @@ public abstract class TensorGenerator {
                     importNode.get(), NewSiteReference.make(0, TENSORFLOW));
 
         // Check dtype literals.
-        TensorFlowTypes.FIELD_REFERENCE_TO_DTYPE.forEach(
-            (fieldRef, dtype) -> {
-              IField field = builder.getClassHierarchy().resolveField(fieldRef);
+        boolean found = false;
 
-              PointerKey pk =
-                  pointerAnalysis.getHeapModel().getPointerKeyForInstanceField(tensorFlowIK, field);
+        for (Entry<FieldReference, DType> entry : FIELD_REFERENCE_TO_DTYPE.entrySet()) {
+          FieldReference fieldRef = entry.getKey();
+          DType dtype = entry.getValue();
+          IField field = builder.getClassHierarchy().resolveField(fieldRef);
 
-              for (InstanceKey ik : pointerAnalysis.getPointsToSet(pk))
-                if (ik.equals(instanceKey)) {
-                  ret.add(dtype);
-                  LOGGER.info(
-                      "Found dtype: "
-                          + dtype
-                          + " for source: "
-                          + source
-                          + " from dType: "
-                          + instanceKey
-                          + ".");
-                } else throw new IllegalStateException("Unknown dtype: " + instanceKey + ".");
-            });
+          PointerKey pk =
+              pointerAnalysis.getHeapModel().getPointerKeyForInstanceField(tensorFlowIK, field);
+
+          for (InstanceKey ik : pointerAnalysis.getPointsToSet(pk))
+            if (ik.equals(instanceKey)) {
+              ret.add(dtype);
+              LOGGER.info(
+                  "Found dtype: "
+                      + dtype
+                      + " for source: "
+                      + source
+                      + " from dType: "
+                      + instanceKey
+                      + ".");
+              found = true;
+            }
+        }
+
+        if (!found) throw new IllegalStateException("Unknown dtype: " + instanceKey + ".");
       } else
         throw new IllegalStateException(
             "Expected a "
