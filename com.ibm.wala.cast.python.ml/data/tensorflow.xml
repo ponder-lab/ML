@@ -225,6 +225,10 @@
         <new def="float32" class="Ltensorflow/dtypes/DType" />
         <putfield class="LRoot" field="float32" fieldType="LRoot" ref="x" value="float32" />
         <putfield class="LRoot" field="float32" fieldType="LRoot" ref="dtypes" value="float32" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes#int32 -->
+        <new def="int32" class="Ltensorflow/dtypes/DType" />
+        <putfield class="LRoot" field="int32" fieldType="LRoot" ref="x" value="int32" />
+        <putfield class="LRoot" field="int32" fieldType="LRoot" ref="dtypes" value="int32" />
         <new def="ragged_constant" class="Ltensorflow/functions/ragged_constant" />
         <putfield class="LRoot" field="constant" fieldType="LRoot" ref="ragged" value="ragged_constant" />
         <putfield class="LRoot" field="constant" fieldType="LRoot" ref="ragged_factory_ops" value="ragged_constant" />

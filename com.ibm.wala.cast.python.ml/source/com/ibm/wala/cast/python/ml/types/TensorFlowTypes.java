@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.types;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.python.types.PythonTypes;
@@ -55,9 +56,20 @@ public class TensorFlowTypes extends PythonTypes {
       FieldReference.findOrCreate(
           PythonTypes.Root, findOrCreateAsciiAtom(FLOAT32.name().toLowerCase()), D_TYPE);
 
+  /**
+   * Represents the TensorFlow int32 data type.
+   *
+   * @see <a
+   *     href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes#int32">TensorFlow
+   *     int32 DType</a>.
+   */
+  public static final FieldReference INT_32 =
+      FieldReference.findOrCreate(
+          PythonTypes.Root, findOrCreateAsciiAtom(INT32.name().toLowerCase()), D_TYPE);
+
   /** A mapping from a field reference to its associated {@link DType}, if any. */
   public static final Map<FieldReference, DType> FIELD_REFERENCE_TO_DTYPE =
-      Map.of(FLOAT_32, FLOAT32);
+      Map.of(FLOAT_32, FLOAT32, INT_32, INT32);
 
   private TensorFlowTypes() {}
 }

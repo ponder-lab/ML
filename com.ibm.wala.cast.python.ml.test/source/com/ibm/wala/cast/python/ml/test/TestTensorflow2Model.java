@@ -92,6 +92,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_2_3_4_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(3), new NumericDim(4)));
 
+  private static final TensorType TENSOR_20_28_28_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(20), new NumericDim(28), new NumericDim(28)));
+
+  private static final TensorType TENSOR_20_28_28_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(20), new NumericDim(28), new NumericDim(28)));
+
   private static final TensorType TENSOR_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2)));
 
@@ -762,19 +768,33 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testModelCall()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_model_call.py", "SequentialModel.__call__", 1, 1, Map.of(3, Set.of(MNIST_INPUT)));
+        "tf2_test_model_call.py",
+        "SequentialModel.__call__",
+        1,
+        1,
+        Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
   @Test
   public void testModelCall2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_model_call2.py", "SequentialModel.call", 1, 1, Map.of(3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_model_call2.py",
+        "SequentialModel.call",
+        1,
+        1,
+        Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
   @Test
   public void testModelCall3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_model_call3.py", "SequentialModel.call", 1, 1, Map.of(3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_model_call3.py",
+        "SequentialModel.call",
+        1,
+        1,
+        Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
   @Test
@@ -785,7 +805,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "SequentialModel.__call__",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
   /**
@@ -821,6 +841,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(3, Set.of(MNIST_INPUT)));
+  }
+
+  /**
+   * Test https://github.com/wala/ML/issues/267.
+   *
+   * <p>Explicit dtype.
+   */
+  @Test
+  public void testModelCall6()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_call6.py",
+        "SequentialModel.__call__",
+        1,
+        1,
+        Map.of(3, Set.of(TENSOR_20_28_28_INT32)));
   }
 
   @Test
@@ -1048,31 +1084,56 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testAdd10()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add10.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add10.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
   public void testAdd11()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add11.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add11.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
   public void testAdd12()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add12.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add12.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
   public void testAdd13()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add13.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add13.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
   public void testAdd14()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add14.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add14.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
