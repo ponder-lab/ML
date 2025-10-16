@@ -110,7 +110,7 @@ public class Driver {
     return E.performAnalysis((PropagationCallGraphBuilder) builder);
   }
 
-  public static void main(String... args)
+  public static void main(String[] args)
       throws IllegalArgumentException, IOException, CancelException {
 
     PythonAnalysisEngine<Void> E =
