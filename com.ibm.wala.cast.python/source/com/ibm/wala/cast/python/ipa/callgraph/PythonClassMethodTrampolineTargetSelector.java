@@ -70,7 +70,7 @@ public class PythonClassMethodTrampolineTargetSelector<T>
         && !trampoline;
   }
 
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"unchecked", "rawtypes"})
   @Override
   protected void populate(
       PythonSummary x, int v, IClass receiver, PythonInvokeInstruction call, Logger logger) {

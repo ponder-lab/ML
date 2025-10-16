@@ -98,7 +98,7 @@ public class PythonInvokeInstruction extends SSAAbstractInvokeInstruction {
     return result;
   }
 
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"unchecked", "rawtypes"})
   @Override
   public SSAInstruction copyForSSA(SSAInstructionFactory insts, int[] defs, int[] uses) {
     int nr = defs == null || defs.length == 0 ? result : defs[0];

@@ -69,7 +69,7 @@ public class PytesttEntrypoint extends DefaultEntrypoint {
           m.statements.add(insts.GlobalRead(m.statements.size(), cls, global));
           idx = m.statements.size();
 
-          @SuppressWarnings("unchecked")
+          @SuppressWarnings({"unchecked", "rawtypes"})
           PythonInvokeInstruction invokeInstruction =
               new PythonInvokeInstruction(
                   idx,
@@ -118,7 +118,7 @@ public class PytesttEntrypoint extends DefaultEntrypoint {
 
     int pc = m.statements.size();
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     PythonInvokeInstruction call =
         new PythonInvokeInstruction(
             pc,

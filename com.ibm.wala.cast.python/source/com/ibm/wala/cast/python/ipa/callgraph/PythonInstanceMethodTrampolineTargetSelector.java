@@ -105,7 +105,7 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
     return super.getCalleeTarget(caller, site, receiver);
   }
 
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"unchecked", "rawtypes"})
   @Override
   protected void populate(
       PythonSummary x, int v, IClass receiver, PythonInvokeInstruction call, Logger logger) {
