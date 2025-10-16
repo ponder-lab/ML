@@ -103,7 +103,7 @@ public abstract class TensorGenerator {
 
         // We expect the object catalog to contain a list of integers. Each element in the array
         // corresponds to the set of possible dimensions for that index.
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings({"unchecked", "rawtypes"})
         Set<Dimension<Integer>>[] possibleDimensions = new Set[objectCatalogPointsToSet.size()];
 
         for (InstanceKey catalogIK : objectCatalogPointsToSet) {
@@ -184,7 +184,7 @@ public abstract class TensorGenerator {
 
         for (int i = 0; i < possibleDimensions.length; i++)
           for (Dimension<Integer> iDim : possibleDimensions[i]) {
-            @SuppressWarnings("unchecked")
+            @SuppressWarnings({"unchecked", "rawtypes"})
             Dimension<Integer>[] dimensions = new Dimension[possibleDimensions.length];
 
             dimensions[i] = iDim;
