@@ -38,17 +38,16 @@ public class Ones extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    throw new UnsupportedOperationException(
-        "Shapes for ones() are mandatory and must be provided explicitly.");
+    throw new UnsupportedOperationException("Shape is mandatory and must be provided explicitly.");
   }
 
   @Override
   protected int getValueNumberForShapeArgument() {
-    return VALUE_NUMBER_FOR_SHAPE_ARGUMENT; // The shape is in the first explicit argument.
+    return VALUE_NUMBER_FOR_SHAPE_ARGUMENT;
   }
 
   @Override
   protected int getValueNumberForDTypeArgument() {
-    return VALUE_NUMBER_FOR_DTYPE_ARGUMENT; // The dtype is in the second explicit argument.
+    return VALUE_NUMBER_FOR_DTYPE_ARGUMENT;
   }
 }
