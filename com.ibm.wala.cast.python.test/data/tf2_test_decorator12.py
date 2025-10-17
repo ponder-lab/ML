@@ -7,7 +7,7 @@ def returned(a):
     return a
 
 
-a = tf.constant([1.0, 1.0])
+a = tf.constant([1, 1.0])
 b = returned(a)
 
 assert a.shape == (2,)
