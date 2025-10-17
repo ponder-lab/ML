@@ -71,8 +71,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_1_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(2)));
 
+  private static final TensorType TENSOR_1_2_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(1), new NumericDim(2)));
+
   private static final TensorType TENSOR_2_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(2)));
+
+  private static final TensorType TENSOR_2_2_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(2)));
 
   private static final TensorType TENSOR_3_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(2)));
@@ -1214,13 +1220,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testAdd26()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add26.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add26.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
   public void testAdd27()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add27.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add27.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
@@ -1799,6 +1815,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
                 new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(2)))),
             3,
             Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  @Test
+  public void testAdd118()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add118.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_INT32), 3, Set.of(TENSOR_2_2_INT32)));
   }
 
   @Test

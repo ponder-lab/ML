@@ -43,6 +43,13 @@ public class TensorGeneratorFactory {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/uniform")),
           AstMethodReference.fnSelector);
 
+  /** https://www.tensorflow.org/api_docs/python/tf/zeros. */
+  private static final MethodReference ZEROS =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/zeros")),
+          AstMethodReference.fnSelector);
+
   public static TensorGenerator getGenerator(PointsToSetVariable source) {
     // Get the pointer key for the source.
     PointerKey pointerKey = source.getPointerKey();
@@ -57,6 +64,7 @@ public class TensorGeneratorFactory {
     else if (calledFunction.equals(CONSTANT.getDeclaringClass())) return new Constant(source, node);
     else if (calledFunction.equals(RANGE.getDeclaringClass())) return new Range(source, node);
     else if (calledFunction.equals(UNIFORM.getDeclaringClass())) return new Uniform(source, node);
+    else if (calledFunction.equals(ZEROS.getDeclaringClass())) return new Zeros(source, node);
     else
       throw new IllegalArgumentException(
           "Unknown call: " + calledFunction + " for source: " + source + ".");
