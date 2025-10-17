@@ -204,8 +204,21 @@ public abstract class TensorGenerator {
     return ret;
   }
 
+  /**
+   * Returns the default shapes if no shape argument is provided.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The default shapes if no shape argument is provided.
+   */
   protected abstract Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder);
 
+  /**
+   * Returns the value number for the shape argument in the function call. A return value of a
+   * number less than or equal to zero signifies that there is no shape parameter.
+   *
+   * @return The value number for the shape argument in the function call. May return a number less
+   *     than or equal to 0 if there is no shape parameter.
+   */
   protected abstract int getValueNumberForShapeArgument();
 
   /**
@@ -220,13 +233,16 @@ public abstract class TensorGenerator {
     // Get the shape from the explicit argument.
     // FIXME: Handle keyword arguments.
     int shapeArgValueNum = this.getValueNumberForShapeArgument();
+    OrdinalSet<InstanceKey> pointsToSet = null;
 
-    PointerKey pointerKey =
-        pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, shapeArgValueNum);
-    OrdinalSet<InstanceKey> pointsToSet = pointerAnalysis.getPointsToSet(pointerKey);
+    if (shapeArgValueNum > 0) {
+      PointerKey pointerKey =
+          pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, shapeArgValueNum);
+      pointsToSet = pointerAnalysis.getPointsToSet(pointerKey);
+    }
 
     // If the argument shape is not specified.
-    if (pointsToSet.isEmpty()) return getDefaultShapes(builder);
+    if (pointsToSet == null || pointsToSet.isEmpty()) return getDefaultShapes(builder);
     else
       // The shape points-to set is non-empty, meaning that the shape was explicitly set.
       return getShapesFromShapeArgument(builder, pointsToSet);
