@@ -1,62 +1,28 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import com.ibm.wala.cast.python.types.PythonTypes;
-import com.ibm.wala.cast.types.AstMethodReference;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONES;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANGE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS_LIKE;
+
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
-import com.ibm.wala.types.MethodReference;
-import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import java.util.logging.Logger;
 
+/**
+ * A factory for creating TensorGenerator instances based on the called TensorFlow function.
+ *
+ * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
+ */
 public class TensorGeneratorFactory {
 
   private static final Logger LOGGER = Logger.getLogger(TensorGeneratorFactory.class.getName());
-
-  /** https://www.tensorflow.org/api_docs/python/tf/ones. */
-  private static final MethodReference ONES =
-      MethodReference.findOrCreate(
-          TypeReference.findOrCreate(
-              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/ones")),
-          AstMethodReference.fnSelector);
-
-  /** https://www.tensorflow.org/api_docs/python/tf/constant. */
-  private static final MethodReference CONSTANT =
-      MethodReference.findOrCreate(
-          TypeReference.findOrCreate(
-              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/constant")),
-          AstMethodReference.fnSelector);
-
-  /** https://www.tensorflow.org/api_docs/python/tf/range. */
-  private static final MethodReference RANGE =
-      MethodReference.findOrCreate(
-          TypeReference.findOrCreate(
-              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/range")),
-          AstMethodReference.fnSelector);
-
-  /** https://www.tensorflow.org/api_docs/python/tf/random/uniform. */
-  private static final MethodReference UNIFORM =
-      MethodReference.findOrCreate(
-          TypeReference.findOrCreate(
-              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/uniform")),
-          AstMethodReference.fnSelector);
-
-  /** https://www.tensorflow.org/api_docs/python/tf/zeros. */
-  private static final MethodReference ZEROS =
-      MethodReference.findOrCreate(
-          TypeReference.findOrCreate(
-              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/zeros")),
-          AstMethodReference.fnSelector);
-
-  /** https://www.tensorflow.org/api_docs/python/tf/zeros_like. */
-  private static final MethodReference ZEROS_LIKE =
-      MethodReference.findOrCreate(
-          TypeReference.findOrCreate(
-              PythonTypes.pythonLoader,
-              TypeName.string2TypeName("Ltensorflow/functions/zeros_like")),
-          AstMethodReference.fnSelector);
 
   public static TensorGenerator getGenerator(PointsToSetVariable source) {
     // Get the pointer key for the source.
@@ -75,6 +41,7 @@ public class TensorGeneratorFactory {
     else if (calledFunction.equals(ZEROS.getDeclaringClass())) return new Zeros(source, node);
     else if (calledFunction.equals(ZEROS_LIKE.getDeclaringClass()))
       return new ZerosLike(source, node);
+    else if (calledFunction.equals(FILL.getDeclaringClass())) return new Fill(source, node);
     else
       throw new IllegalArgumentException(
           "Unknown call: " + calledFunction + " for source: " + source + ".");
