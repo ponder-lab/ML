@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.test;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT64;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.cast.python.ml.types.TensorType.mnistInput;
 import static com.ibm.wala.cast.python.util.Util.addPytestEntrypoints;
@@ -60,6 +61,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final String FLOAT_32 = FLOAT32.name().toLowerCase();
 
+  private static final String FLOAT_64 = FLOAT64.name().toLowerCase();
+
   private static final String INT_32 = INT32.name().toLowerCase();
 
   private static final TensorType MNIST_INPUT = mnistInput();
@@ -112,6 +115,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_4_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(4)));
+
+  private static final TensorType TENSOR_4_FLOAT64 =
+      new TensorType(FLOAT_64, asList(new NumericDim(4)));
 
   private static final TensorType TENSOR_5_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(5)));
@@ -1884,6 +1890,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         2,
         Map.of(2, Set.of(TENSOR_4_FLOAT32), 3, Set.of(TENSOR_4_FLOAT32)));
+  }
+
+  @Test
+  public void testAdd122()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add122.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_4_FLOAT64), 3, Set.of(TENSOR_4_FLOAT64)));
   }
 
   @Test

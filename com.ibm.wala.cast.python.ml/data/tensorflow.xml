@@ -225,6 +225,10 @@
         <new def="float32" class="Ltensorflow/dtypes/DType" />
         <putfield class="LRoot" field="float32" fieldType="LRoot" ref="x" value="float32" />
         <putfield class="LRoot" field="float32" fieldType="LRoot" ref="dtypes" value="float32" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes#float64 -->
+        <new def="float64" class="Ltensorflow/dtypes/DType" />
+        <putfield class="LRoot" field="float64" fieldType="LRoot" ref="x" value="float64" />
+        <putfield class="LRoot" field="float64" fieldType="LRoot" ref="dtypes" value="float64" />
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes#int32 -->
         <new def="int32" class="Ltensorflow/dtypes/DType" />
         <putfield class="LRoot" field="int32" fieldType="LRoot" ref="x" value="int32" />
