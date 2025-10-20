@@ -1855,6 +1855,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
+  public void testAdd120()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add120.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  @Test
   public void testMultiGPUTraining()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
