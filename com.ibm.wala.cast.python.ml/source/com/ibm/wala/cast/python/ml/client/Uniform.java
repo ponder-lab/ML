@@ -4,7 +4,7 @@ import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 
 /**
- * A generator for tensors created by the `uniform()` function in TensorFlow.
+ * A representation of the `random.uniform()` function in TensorFlow.
  *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/random/uniform">TensorFlow uniform()
  *     API</a>.
