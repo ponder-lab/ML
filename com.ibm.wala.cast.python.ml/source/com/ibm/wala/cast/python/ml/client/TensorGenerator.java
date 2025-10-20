@@ -11,6 +11,7 @@ import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
+import static java.util.stream.Collectors.toSet;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
@@ -43,7 +44,6 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map.Entry;
-import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -353,11 +353,11 @@ public abstract class TensorGenerator {
 
       if (typeReference.equals(TensorFlowTypes.D_TYPE)) {
         // we have a dtype.
-        // let's see if it's float32.
+        // let's see if it's a dtype.
         Set<CGNode> importNodes = builder.getCallGraph().getNodes(IMPORT);
 
-        // find the import node from this file.
-        Optional<CGNode> importNode =
+        // find the import nodes from this file.
+        Set<CGNode> importNodesOfInterest =
             importNodes.stream()
                 .filter(
                     in -> {
@@ -384,38 +384,44 @@ public abstract class TensorGenerator {
 
                       return method.equals(nodeCS.getMethods()[0]);
                     })
-                .findFirst();
+                .collect(toSet());
 
-        InstanceKey tensorFlowIK =
-            pointerAnalysis
-                .getHeapModel()
-                .getInstanceKeyForAllocation(
-                    importNode.get(), NewSiteReference.make(0, TENSORFLOW));
+        if (importNodesOfInterest.isEmpty())
+          throw new IllegalStateException("No import nodes found for source: " + source + ".");
 
-        // Check dtype literals.
         boolean found = false;
 
-        for (Entry<FieldReference, DType> entry : FIELD_REFERENCE_TO_DTYPE.entrySet()) {
-          FieldReference fieldRef = entry.getKey();
-          DType dtype = entry.getValue();
-          IField field = builder.getClassHierarchy().resolveField(fieldRef);
+        for (CGNode importNode : importNodesOfInterest) {
+          LOGGER.fine("Found import node of interest: " + importNode + ".");
 
-          PointerKey pk =
-              pointerAnalysis.getHeapModel().getPointerKeyForInstanceField(tensorFlowIK, field);
+          InstanceKey tensorFlowIK =
+              pointerAnalysis
+                  .getHeapModel()
+                  .getInstanceKeyForAllocation(importNode, NewSiteReference.make(0, TENSORFLOW));
 
-          for (InstanceKey ik : pointerAnalysis.getPointsToSet(pk))
-            if (ik.equals(instanceKey)) {
-              ret.add(dtype);
-              LOGGER.info(
-                  "Found dtype: "
-                      + dtype
-                      + " for source: "
-                      + source
-                      + " from dType: "
-                      + instanceKey
-                      + ".");
-              found = true;
-            }
+          // Check dtype literals.
+          for (Entry<FieldReference, DType> entry : FIELD_REFERENCE_TO_DTYPE.entrySet()) {
+            FieldReference fieldRef = entry.getKey();
+            DType dtype = entry.getValue();
+            IField field = builder.getClassHierarchy().resolveField(fieldRef);
+
+            PointerKey pk =
+                pointerAnalysis.getHeapModel().getPointerKeyForInstanceField(tensorFlowIK, field);
+
+            for (InstanceKey ik : pointerAnalysis.getPointsToSet(pk))
+              if (ik.equals(instanceKey)) {
+                ret.add(dtype);
+                LOGGER.info(
+                    "Found dtype: "
+                        + dtype
+                        + " for source: "
+                        + source
+                        + " from dType: "
+                        + instanceKey
+                        + ".");
+                found = true;
+              }
+          }
         }
 
         if (!found) throw new IllegalStateException("Unknown dtype: " + instanceKey + ".");
