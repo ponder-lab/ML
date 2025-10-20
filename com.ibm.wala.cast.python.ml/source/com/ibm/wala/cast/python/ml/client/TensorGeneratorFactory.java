@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONES;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM;
@@ -38,6 +39,7 @@ public class TensorGeneratorFactory {
     else if (calledFunction.equals(CONSTANT.getDeclaringClass())) return new Constant(source, node);
     else if (calledFunction.equals(RANGE.getDeclaringClass())) return new Range(source, node);
     else if (calledFunction.equals(UNIFORM.getDeclaringClass())) return new Uniform(source, node);
+    else if (calledFunction.equals(NORMAL.getDeclaringClass())) return new Normal(source, node);
     else if (calledFunction.equals(ZEROS.getDeclaringClass())) return new Zeros(source, node);
     else if (calledFunction.equals(ZEROS_LIKE.getDeclaringClass()))
       return new ZerosLike(source, node);
