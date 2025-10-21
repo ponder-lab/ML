@@ -5,6 +5,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONES;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANGE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS_LIKE;
@@ -40,6 +41,8 @@ public class TensorGeneratorFactory {
     else if (calledFunction.equals(RANGE.getDeclaringClass())) return new Range(source, node);
     else if (calledFunction.equals(UNIFORM.getDeclaringClass())) return new Uniform(source, node);
     else if (calledFunction.equals(NORMAL.getDeclaringClass())) return new Normal(source, node);
+    else if (calledFunction.equals(TRUNCATED_NORMAL.getDeclaringClass()))
+      return new TruncatedNormal(source, node);
     else if (calledFunction.equals(ZEROS.getDeclaringClass())) return new Zeros(source, node);
     else if (calledFunction.equals(ZEROS_LIKE.getDeclaringClass()))
       return new ZerosLike(source, node);

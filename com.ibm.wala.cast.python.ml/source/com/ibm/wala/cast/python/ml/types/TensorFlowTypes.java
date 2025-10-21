@@ -83,6 +83,14 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/normal")),
           AstMethodReference.fnSelector);
 
+  /** https://www.tensorflow.org/api_docs/python/tf/random/truncated_normal. */
+  public static final MethodReference TRUNCATED_NORMAL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/truncated_normal")),
+          AstMethodReference.fnSelector);
+
   /** https://www.tensorflow.org/api_docs/python/tf/zeros. */
   public static final MethodReference ZEROS =
       MethodReference.findOrCreate(
