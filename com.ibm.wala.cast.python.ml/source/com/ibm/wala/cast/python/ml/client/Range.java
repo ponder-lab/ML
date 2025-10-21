@@ -86,12 +86,11 @@ public class Range extends TensorGenerator {
   }
 
   private int getNumberOfNumericPositionalArgs(PointerAnalysis<InstanceKey> pointerAnalysis) {
-    int ret = 0;
-    int explicitArgumentIndex = 2; // Start from the first explicit argument.
+    int ret = 2; // Start from the first explicit argument.
 
     while (true) {
       PointerKey pk =
-          pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, explicitArgumentIndex);
+          pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, ret); // Positional arguments.
       OrdinalSet<InstanceKey> pointsToSet = pointerAnalysis.getPointsToSet(pk);
 
       if (pointsToSet.isEmpty()) break; // End of positional arguments.
@@ -107,10 +106,9 @@ public class Range extends TensorGenerator {
       if (!allNumeric) break; // There's some argument that is not numeric for this argument.
 
       ret++; // Increment the count of numeric positional arguments.
-      explicitArgumentIndex++; // Move to the next explicit argument.
     }
 
-    return ret;
+    return ret - 2; // Subtract 2 to get the number of numeric positional arguments.
   }
 
   @Override
