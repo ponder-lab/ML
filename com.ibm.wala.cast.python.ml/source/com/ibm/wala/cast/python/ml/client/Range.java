@@ -69,14 +69,11 @@ public class Range extends TensorGenerator {
 
       assert !limitPointsToSet.isEmpty() : "Expected a non-empty points-to set for limit.";
 
-      for (InstanceKey limitIK : limitPointsToSet)
-        if (limitIK instanceof ConstantKey) {
-          limit = ((Number) ((ConstantKey<?>) limitIK).getValue()).doubleValue();
-          int shape = (int) Math.ceil((limit - start) / delta);
-          ret.add(List.of(new NumericDim(shape))); // Add the shape as a 1D tensor.
-        } else
-          throw new IllegalStateException(
-              "Expected a " + ConstantKey.class + " for limit, but got: " + limitIK + ".");
+      for (InstanceKey limitIK : limitPointsToSet) {
+        limit = ((Number) ((ConstantKey<?>) limitIK).getValue()).doubleValue();
+        int shape = (int) Math.ceil((limit - start) / delta);
+        ret.add(List.of(new NumericDim(shape))); // Add the shape as a 1D tensor.
+      }
     } else
       // TODO: Handle more cases.
       throw new UnimplementedError(
