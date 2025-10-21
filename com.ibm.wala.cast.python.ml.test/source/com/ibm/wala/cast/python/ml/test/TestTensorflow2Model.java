@@ -1328,13 +1328,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testAdd38()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add38.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add38.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_5_INT32), 3, Set.of(TENSOR_5_INT32)));
   }
 
   @Test
   public void testAdd39()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add39.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add39.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_5_INT32), 3, Set.of(TENSOR_5_INT32)));
   }
 
   @Test
@@ -1422,7 +1432,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testAdd50()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add50.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add50.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_5_INT32), 3, Set.of(TENSOR_5_INT32)));
   }
 
   @Test

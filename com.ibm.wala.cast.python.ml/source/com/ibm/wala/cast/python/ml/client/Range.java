@@ -18,7 +18,6 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
-import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
 import java.util.Iterator;
@@ -64,10 +63,10 @@ public class Range extends TensorGenerator {
     // 2. `tf.range(start, limit, delta)` - generates a range from start to limit with a step of
     // delta.
 
-    // First, decide which version of the `range` function is being called based on the number of
-    // numeric arguments.j
+    // Decide which version of the `range` function is being called based on the number of numeric
+    // arguments.
     // TODO: Handle keyword arguments.
-    for (Integer numOfPoisitionArguments : getNumberOfPossiblePositionalArguments(builder)) {
+    for (Integer numOfPoisitionArguments : getNumberOfPossiblePositionalArguments(builder))
       if (numOfPoisitionArguments == 1) {
         // it must *just* be `limit`.
         PointerKey limitPK =
@@ -81,11 +80,42 @@ public class Range extends TensorGenerator {
           int shape = (int) Math.ceil((limit - start) / delta);
           ret.add(List.of(new NumericDim(shape))); // Add the shape as a 1D tensor.
         }
+      } else if (numOfPoisitionArguments == 3) {
+        // it must be `start`, `limit`, and `delta`.
+        PointerKey startPK =
+            pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), 2);
+        PointerKey limitPK =
+            pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), 3);
+        PointerKey deltaPK =
+            pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), 4);
+
+        OrdinalSet<InstanceKey> startPointsToSet = pointerAnalysis.getPointsToSet(startPK);
+        OrdinalSet<InstanceKey> limitPointsToSet = pointerAnalysis.getPointsToSet(limitPK);
+        OrdinalSet<InstanceKey> deltaPointsToSet = pointerAnalysis.getPointsToSet(deltaPK);
+
+        assert !startPointsToSet.isEmpty() : "Expected a non-empty points-to set for start.";
+        assert !limitPointsToSet.isEmpty() : "Expected a non-empty points-to set for limit.";
+        assert !deltaPointsToSet.isEmpty() : "Expected a non-empty points-to set for delta.";
+
+        for (InstanceKey startIK : startPointsToSet) {
+          start = ((Number) ((ConstantKey<?>) startIK).getValue()).doubleValue();
+
+          for (InstanceKey limitIK : limitPointsToSet) {
+            limit = ((Number) ((ConstantKey<?>) limitIK).getValue()).doubleValue();
+
+            for (InstanceKey deltaIK : deltaPointsToSet) {
+              delta = ((Number) ((ConstantKey<?>) deltaIK).getValue()).doubleValue();
+
+              int shape = (int) Math.ceil((limit - start) / delta);
+              ret.add(List.of(new NumericDim(shape))); // Add the shape as a 1D tensor.
+            }
+          }
+        }
       } else
-        // TODO: Handle more cases.
-        throw new UnimplementedError(
-            "Currently cannot handle more than one numeric positional argument for range().");
-    }
+        throw new IllegalStateException(
+            "Expected either 1 or 3 positional arguments for range(), but got: "
+                + numOfPoisitionArguments
+                + ".");
 
     return ret;
   }
