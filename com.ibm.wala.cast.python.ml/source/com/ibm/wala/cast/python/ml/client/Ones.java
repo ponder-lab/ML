@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
+import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -18,6 +19,8 @@ import java.util.Set;
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
 public class Ones extends TensorGenerator {
+
+  private static final java.util.logging.Logger LOGGER = getLogger(Ones.class.getName());
 
   private static final int VALUE_NUMBER_FOR_SHAPE_ARGUMENT = 2;
 

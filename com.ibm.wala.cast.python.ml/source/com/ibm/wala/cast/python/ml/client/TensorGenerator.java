@@ -25,7 +25,6 @@ import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.classLoader.NewSiteReference;
 import com.ibm.wala.ipa.callgraph.CGNode;
-import com.ibm.wala.ipa.callgraph.ContextItem;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -49,7 +48,7 @@ import java.util.logging.Logger;
 
 public abstract class TensorGenerator {
 
-  protected static final Logger LOGGER = Logger.getLogger(TensorGenerator.class.getName());
+  private static final Logger LOGGER = Logger.getLogger(TensorGenerator.class.getName());
 
   private static final MethodReference IMPORT =
       MethodReference.findOrCreate(
@@ -237,7 +236,7 @@ public abstract class TensorGenerator {
 
     if (shapeArgValueNum > 0) {
       PointerKey pointerKey =
-          pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, shapeArgValueNum);
+          pointerAnalysis.getHeapModel().getPointerKeyForLocal(getNode(), shapeArgValueNum);
       pointsToSet = pointerAnalysis.getPointsToSet(pointerKey);
     }
 
@@ -259,7 +258,8 @@ public abstract class TensorGenerator {
   protected Set<List<Dimension<?>>> getShapes(
       PropagationCallGraphBuilder builder, int valueNumber) {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
-    PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
+    PointerKey valuePK =
+        pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
     OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
     return getShapesOfValue(builder, valuePointsToSet);
   }
@@ -372,7 +372,7 @@ public abstract class TensorGenerator {
 
                       IMethod method = cs.getMethods()[0];
 
-                      CallString nodeCS = (CallString) node.getContext().get(CALL_STRING);
+                      CallString nodeCS = (CallString) this.getNode().getContext().get(CALL_STRING);
 
                       // We expect the first method in the call string to be the import.
                       assert nodeCS.getMethods().length == 1
@@ -463,7 +463,8 @@ public abstract class TensorGenerator {
     if (valNum > 0) {
       // The dtype is in an explicit argument.
       // FIXME: Handle keyword arguments.
-      PointerKey pointerKey = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valNum);
+      PointerKey pointerKey =
+          pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valNum);
       pointsToSet = pointerAnalysis.getPointsToSet(pointerKey);
     }
 
@@ -484,7 +485,8 @@ public abstract class TensorGenerator {
    */
   protected EnumSet<DType> getDTypes(PropagationCallGraphBuilder builder, int valueNumber) {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
-    PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
+    PointerKey valuePK =
+        pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
     OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
     return getDTypesOfValue(builder, valuePointsToSet);
   }
@@ -582,5 +584,9 @@ public abstract class TensorGenerator {
         throw new IllegalStateException(
             "Expected a " + ConstantKey.class + " for value, but got: " + valueIK + ".");
     return ret;
+  }
+
+  protected CGNode getNode() {
+    return this.node;
   }
 }
