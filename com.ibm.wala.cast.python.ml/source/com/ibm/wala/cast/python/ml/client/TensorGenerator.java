@@ -361,8 +361,7 @@ public abstract class TensorGenerator {
             importNodes.stream()
                 .filter(
                     in -> {
-                      ContextItem contextItem = in.getContext().get(CALL_STRING);
-                      CallString cs = (CallString) contextItem;
+                      CallString cs = (CallString) in.getContext().get(CALL_STRING);
 
                       // We expect the first method in the call string to be the import.
                       assert cs.getMethods().length == 1
