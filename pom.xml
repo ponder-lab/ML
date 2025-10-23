@@ -123,6 +123,11 @@
         <artifactId>guava</artifactId>
         <version>33.5.0-jre</version>
       </dependency>
+      <dependency>
+        <groupId>org.jetbrains</groupId>
+        <artifactId>annotations</artifactId>
+        <version>24.0.1</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
   <build>
