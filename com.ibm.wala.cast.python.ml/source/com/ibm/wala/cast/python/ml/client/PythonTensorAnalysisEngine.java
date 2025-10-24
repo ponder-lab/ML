@@ -733,12 +733,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    */
   private Set<TensorType> getTensorTypes(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
-    logger.info("Getting tensor types for source: " + source + ".");
+    logger.fine("Getting tensor types for source: " + source + ".");
 
     TensorGenerator generator = TensorGeneratorFactory.getGenerator(source);
+    logger.fine("Using tensor generator: " + generator + ".");
 
     Set<TensorType> tensorTypes = generator.getTensorTypes(builder);
-    logger.info(() -> "Tensor types for source: " + source + " are: " + tensorTypes + ".");
+    logger.fine(() -> "Found tensor types: " + tensorTypes + ".");
 
     return tensorTypes;
   }
