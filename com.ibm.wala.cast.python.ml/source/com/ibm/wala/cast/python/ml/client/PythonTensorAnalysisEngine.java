@@ -736,7 +736,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     logger.info("Getting tensor types for source: " + source + ".");
 
     TensorGenerator generator = TensorGeneratorFactory.getGenerator(source);
-    return generator.getTensorTypes(builder);
+
+    Set<TensorType> tensorTypes = generator.getTensorTypes(builder);
+    logger.info(() -> "Tensor types for source: " + source + " are: " + tensorTypes + ".");
+
+    return tensorTypes;
   }
 
   private Map<PointsToSetVariable, TensorType> handleShapeSourceOp(
