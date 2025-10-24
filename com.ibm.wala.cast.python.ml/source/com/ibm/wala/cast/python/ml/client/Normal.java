@@ -12,7 +12,14 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Normal extends Uniform {
 
+  private static final String FUNCTION_NAME = "tf.random.normal()";
+
   public Normal(PointsToSetVariable source, CGNode node) {
     super(source, node);
+  }
+
+  @Override
+  protected String getSignature() {
+    return FUNCTION_NAME;
   }
 }

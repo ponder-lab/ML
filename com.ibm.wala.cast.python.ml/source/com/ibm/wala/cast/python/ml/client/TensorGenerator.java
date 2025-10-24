@@ -589,4 +589,16 @@ public abstract class TensorGenerator {
   protected CGNode getNode() {
     return this.node;
   }
+
+  @Override
+  public String toString() {
+    return this.getSignature();
+  }
+
+  /**
+   * Returns the TensorFlow function signature represented by this generator.
+   *
+   * @return The TensorFlow function signature represented by this generator.
+   */
+  protected abstract String getSignature();
 }

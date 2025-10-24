@@ -12,6 +12,8 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Uniform extends Ones {
 
+  private static final String FUNCTION_NAME = "tf.random.uniform()";
+
   private static final int VALUE_NUMBER_FOR_DTYPE_ARGUMENT = 5;
 
   public Uniform(PointsToSetVariable source, CGNode node) {
@@ -21,5 +23,10 @@ public class Uniform extends Ones {
   @Override
   protected int getValueNumberForDTypeArgument() {
     return VALUE_NUMBER_FOR_DTYPE_ARGUMENT;
+  }
+
+  @Override
+  protected String getSignature() {
+    return FUNCTION_NAME;
   }
 }

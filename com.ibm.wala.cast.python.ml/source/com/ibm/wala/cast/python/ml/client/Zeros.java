@@ -11,7 +11,14 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Zeros extends Ones {
 
+  private static final String FUNCTION_NAME = "tf.zeros()";
+
   public Zeros(PointsToSetVariable source, CGNode node) {
     super(source, node);
+  }
+
+  @Override
+  protected String getSignature() {
+    return FUNCTION_NAME;
   }
 }

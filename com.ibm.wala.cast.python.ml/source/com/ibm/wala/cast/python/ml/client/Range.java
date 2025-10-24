@@ -41,6 +41,8 @@ public class Range extends TensorGenerator {
 
   private static final Logger LOGGER = Logger.getLogger(Range.class.getName());
 
+  private static final String FUNCTION_NAME = "tf.range()";
+
   public Range(PointsToSetVariable source, CGNode node) {
     super(source, node);
   }
@@ -211,5 +213,10 @@ public class Range extends TensorGenerator {
     // depending on the version of the `range` function being called.
 
     return -1; // Positional dtype argument for range() is not yet implemented.
+  }
+
+  @Override
+  protected String getSignature() {
+    return FUNCTION_NAME;
   }
 }

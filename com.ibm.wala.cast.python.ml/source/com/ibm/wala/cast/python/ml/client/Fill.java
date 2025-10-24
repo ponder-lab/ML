@@ -15,6 +15,8 @@ import java.util.Set;
  */
 public class Fill extends Constant {
 
+  private static final String FUNCTION_NAME = "tf.fill()";
+
   private static final int VALUE_NUMBER_FOR_SHAPE_ARGUMENT = 2;
 
   private static final int VALUE_NUMBER_FOR_VALUE_ARGUMENT = 3;
@@ -47,5 +49,10 @@ public class Fill extends Constant {
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     throw new UnsupportedOperationException("Shape is mandatory and must be provided explicitly.");
+  }
+
+  @Override
+  protected String getSignature() {
+    return FUNCTION_NAME;
   }
 }

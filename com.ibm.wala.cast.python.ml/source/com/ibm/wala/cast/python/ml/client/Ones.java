@@ -22,6 +22,8 @@ public class Ones extends TensorGenerator {
 
   private static final java.util.logging.Logger LOGGER = getLogger(Ones.class.getName());
 
+  private static final String FUNCTION_NAME = "tf.ones()";
+
   private static final int VALUE_NUMBER_FOR_SHAPE_ARGUMENT = 2;
 
   private static final int VALUE_NUMBER_FOR_DTYPE_ARGUMENT = 3;
@@ -52,5 +54,10 @@ public class Ones extends TensorGenerator {
   @Override
   protected int getValueNumberForDTypeArgument() {
     return VALUE_NUMBER_FOR_DTYPE_ARGUMENT;
+  }
+
+  @Override
+  protected String getSignature() {
+    return FUNCTION_NAME;
   }
 }
