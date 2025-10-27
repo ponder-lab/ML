@@ -1075,7 +1075,8 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#choose_from_datasets -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="datasets choice_dataset stop_on_empty_dataset">
           <!-- Return the first one in the list. -->
-          <getfield class="Llist" field="0" fieldType="Ltensorflow/data/Dataset" ref="datasets" def="x" />
+          <constant name="l" type="int" value="0" />
+          <aaload index="l" type="Ltensorflow/data/Dataset" ref="datasets" def="x" />
           <return value="x" />
         </method>
       </class>
@@ -1135,7 +1136,8 @@
     <package name="tensorflow/distribute/run">
       <class name="run" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3">
-          <getfield class="LRoot" field="0" fieldType="LRoot" ref="arg2" def="x" />
+          <constant name="l" type="int" value="0" />
+          <aaload index="l" type="LRoot" ref="arg2" def="x" />
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="arg1" arg1="x" numArgs="2" def="v" />
           <return value="v" />
         </method>
