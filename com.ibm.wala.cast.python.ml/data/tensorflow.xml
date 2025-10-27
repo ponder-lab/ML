@@ -537,7 +537,8 @@
         <method name="read_data" descriptor="()LRoot;">
           <new def="x" class="Llist" />
           <new def="z" class="Ltensorflow/functions/constant" />
-          <call class="Ltensorflow/functions/constant" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="1" numArgs="2" def="y" />
+          <constant name="p" type="int" value="1" />
+          <call class="Ltensorflow/functions/constant" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="p" numArgs="2" def="y" />
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="x" value="y" />
           <return value="x" />
         </method>
