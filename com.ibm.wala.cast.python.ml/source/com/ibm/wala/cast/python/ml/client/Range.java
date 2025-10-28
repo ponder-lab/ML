@@ -70,7 +70,13 @@ public class Range extends TensorGenerator {
 
     if (numberOfParameters == 1) {
       // it must *just* be `limit`.
-      PointerKey limitPK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), 2);
+      int limitValueNumber =
+          this.getNode().getMethod().isStatic()
+              ? this.getNode().getIR().getParameter(0)
+              : this.getNode().getIR().getParameter(1);
+
+      PointerKey limitPK =
+          pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), limitValueNumber);
       OrdinalSet<InstanceKey> limitPointsToSet = pointerAnalysis.getPointsToSet(limitPK);
 
       assert !limitPointsToSet.isEmpty() : "Expected a non-empty points-to set for limit.";
@@ -82,9 +88,29 @@ public class Range extends TensorGenerator {
       }
     } else if (numberOfParameters == 3) {
       // it must be `start`, `limit`, and `delta`.
-      PointerKey startPK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), 2);
-      PointerKey limitPK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), 3);
-      PointerKey deltaPK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), 4);
+      int startValueNumber =
+          this.getNode().getMethod().isStatic()
+              ? this.getNode().getIR().getParameter(0)
+              : this.getNode().getIR().getParameter(1);
+
+      PointerKey startPK =
+          pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), startValueNumber);
+
+      int limitValueNumber =
+          this.getNode().getMethod().isStatic()
+              ? this.getNode().getIR().getParameter(1)
+              : this.getNode().getIR().getParameter(2);
+
+      PointerKey limitPK =
+          pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), limitValueNumber);
+
+      int deltaValueNumber =
+          this.getNode().getMethod().isStatic()
+              ? this.getNode().getIR().getParameter(2)
+              : this.getNode().getIR().getParameter(3);
+
+      PointerKey deltaPK =
+          pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), deltaValueNumber);
 
       OrdinalSet<InstanceKey> startPointsToSet = pointerAnalysis.getPointsToSet(startPK);
       OrdinalSet<InstanceKey> limitPointsToSet = pointerAnalysis.getPointsToSet(limitPK);
@@ -129,7 +155,8 @@ public class Range extends TensorGenerator {
 
     EnumSet<DType> types =
         IntStream.range(0, numberOfParameters)
-            .map(i -> i + 2) // Positional arguments start at index 2.
+            .map(i -> this.getNode().getIR().getMethod().isStatic() ? i : i + 1)
+            .map(this.getNode().getIR()::getParameter)
             .mapToObj(val -> getDTypes(builder, val).stream())
             .flatMap(identity())
             .distinct()
