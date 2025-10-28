@@ -15,3 +15,7 @@ def test_tf_range():
 
     for i in r:
         f(i)
+
+
+if __name__ == "__main__":
+    test_tf_range()
