@@ -155,31 +155,28 @@ public class Range extends TensorGenerator {
 
     CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
     CallSiteReference siteReference = cs.getCallSiteRefs()[0];
+    LOGGER.fine(() -> "Analyzing call site: " + siteReference + ".");
 
-    for (CGNode caller : builder.getCallGraph())
-      for (Iterator<CallSiteReference> it = caller.getIR().iterateCallSites(); it.hasNext(); ) {
-        CallSiteReference callSite = it.next();
+    for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode());
+        it.hasNext(); ) {
+      CGNode caller = it.next();
+      LOGGER.fine(() -> "Analyzing caller node: " + caller.getMethod().getSignature() + ".");
 
-        if (callSite.equals(siteReference)) {
-          // caller is the node that made the call.
-          LOGGER.finest(() -> "Caller node: " + caller.getMethod().getSignature() + ".");
+      SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(siteReference);
+      LOGGER.finest(() -> "Number of calls at this site: " + calls.length + ".");
 
-          SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(callSite);
-          LOGGER.finest(() -> "Number of calls at this site: " + calls.length + ".");
+      for (SSAAbstractInvokeInstruction callInstr : calls) {
+        LOGGER.finest(() -> "Call instruction: " + callInstr + ".");
 
-          for (SSAAbstractInvokeInstruction callInstr : calls) {
-            LOGGER.finest(() -> "Call instruction: " + callInstr + ".");
+        PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
+        int numberOfPositionalParameters =
+            pyCallInstr.getNumberOfPositionalParameters() - 1; // Exclude the function name.
+        LOGGER.finer(
+            () -> "Number of positional parameters: " + numberOfPositionalParameters + ".");
 
-            PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
-            int numberOfPositionalParameters =
-                pyCallInstr.getNumberOfPositionalParameters() - 1; // Exclude the function name.
-            LOGGER.finer(
-                () -> "Number of positional parameters: " + numberOfPositionalParameters + ".");
-
-            ret.add(numberOfPositionalParameters);
-          }
-        }
+        ret.add(numberOfPositionalParameters);
       }
+    }
 
     return ret;
   }
