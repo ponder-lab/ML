@@ -43,6 +43,8 @@ public class Range extends TensorGenerator {
 
   private static final String FUNCTION_NAME = "tf.range()";
 
+  private static final int DTYPE_POSITIONAL_PARAMETER_INDEX = 3;
+
   public Range(PointsToSetVariable source, CGNode node) {
     super(source, node);
   }
@@ -232,10 +234,13 @@ public class Range extends TensorGenerator {
 
   @Override
   protected int getValueNumberForDTypeArgument() {
+    // TODO: Handle keyword arguments.
+
     // TODO: We need a value number for the dtype argument. Also, that value number can differ
     // depending on the version of the `range` function being called.
-
-    return -1; // Positional dtype argument for range() is not yet implemented.
+    return this.getNode().getIR().getMethod().isStatic()
+        ? this.getNode().getIR().getParameter(DTYPE_POSITIONAL_PARAMETER_INDEX)
+        : this.getNode().getIR().getParameter(DTYPE_POSITIONAL_PARAMETER_INDEX + 1);
   }
 
   @Override
