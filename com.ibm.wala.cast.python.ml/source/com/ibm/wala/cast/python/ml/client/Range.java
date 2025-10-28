@@ -1,13 +1,10 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
 import static java.util.function.Function.identity;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
-import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
-import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -15,12 +12,9 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
-import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
-import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -39,6 +33,7 @@ import java.util.stream.IntStream;
  */
 public class Range extends TensorGenerator {
 
+  @SuppressWarnings("unused")
   private static final Logger LOGGER = Logger.getLogger(Range.class.getName());
 
   private static final String FUNCTION_NAME = "tf.range()";
@@ -68,98 +63,57 @@ public class Range extends TensorGenerator {
     // Decide which version of the `range` function is being called based on the number of numeric
     // arguments.
     // TODO: Handle keyword arguments.
-    for (Integer numOfPoisitionArguments : getNumberOfPossiblePositionalArguments(builder))
-      if (numOfPoisitionArguments == 1) {
-        // it must *just* be `limit`.
-        PointerKey limitPK =
-            pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), 2);
-        OrdinalSet<InstanceKey> limitPointsToSet = pointerAnalysis.getPointsToSet(limitPK);
+    int numberOfParameters =
+        this.getNode().getMethod().isStatic()
+            ? this.getNode().getIR().getNumberOfParameters()
+            : this.getNode().getIR().getNumberOfParameters() - 1;
 
-        assert !limitPointsToSet.isEmpty() : "Expected a non-empty points-to set for limit.";
+    if (numberOfParameters == 1) {
+      // it must *just* be `limit`.
+      PointerKey limitPK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), 2);
+      OrdinalSet<InstanceKey> limitPointsToSet = pointerAnalysis.getPointsToSet(limitPK);
+
+      assert !limitPointsToSet.isEmpty() : "Expected a non-empty points-to set for limit.";
+
+      for (InstanceKey limitIK : limitPointsToSet) {
+        limit = ((Number) ((ConstantKey<?>) limitIK).getValue()).doubleValue();
+        int shape = (int) Math.ceil((limit - start) / delta);
+        ret.add(List.of(new NumericDim(shape))); // Add the shape as a 1D tensor.
+      }
+    } else if (numberOfParameters == 3) {
+      // it must be `start`, `limit`, and `delta`.
+      PointerKey startPK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), 2);
+      PointerKey limitPK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), 3);
+      PointerKey deltaPK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), 4);
+
+      OrdinalSet<InstanceKey> startPointsToSet = pointerAnalysis.getPointsToSet(startPK);
+      OrdinalSet<InstanceKey> limitPointsToSet = pointerAnalysis.getPointsToSet(limitPK);
+      OrdinalSet<InstanceKey> deltaPointsToSet = pointerAnalysis.getPointsToSet(deltaPK);
+
+      assert !startPointsToSet.isEmpty() : "Expected a non-empty points-to set for start.";
+      assert !limitPointsToSet.isEmpty() : "Expected a non-empty points-to set for limit.";
+      assert !deltaPointsToSet.isEmpty() : "Expected a non-empty points-to set for delta.";
+
+      for (InstanceKey startIK : startPointsToSet) {
+        start = ((Number) ((ConstantKey<?>) startIK).getValue()).doubleValue();
 
         for (InstanceKey limitIK : limitPointsToSet) {
           limit = ((Number) ((ConstantKey<?>) limitIK).getValue()).doubleValue();
-          int shape = (int) Math.ceil((limit - start) / delta);
-          ret.add(List.of(new NumericDim(shape))); // Add the shape as a 1D tensor.
-        }
-      } else if (numOfPoisitionArguments == 3) {
-        // it must be `start`, `limit`, and `delta`.
-        PointerKey startPK =
-            pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), 2);
-        PointerKey limitPK =
-            pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), 3);
-        PointerKey deltaPK =
-            pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), 4);
 
-        OrdinalSet<InstanceKey> startPointsToSet = pointerAnalysis.getPointsToSet(startPK);
-        OrdinalSet<InstanceKey> limitPointsToSet = pointerAnalysis.getPointsToSet(limitPK);
-        OrdinalSet<InstanceKey> deltaPointsToSet = pointerAnalysis.getPointsToSet(deltaPK);
+          for (InstanceKey deltaIK : deltaPointsToSet) {
+            delta = ((Number) ((ConstantKey<?>) deltaIK).getValue()).doubleValue();
 
-        assert !startPointsToSet.isEmpty() : "Expected a non-empty points-to set for start.";
-        assert !limitPointsToSet.isEmpty() : "Expected a non-empty points-to set for limit.";
-        assert !deltaPointsToSet.isEmpty() : "Expected a non-empty points-to set for delta.";
-
-        for (InstanceKey startIK : startPointsToSet) {
-          start = ((Number) ((ConstantKey<?>) startIK).getValue()).doubleValue();
-
-          for (InstanceKey limitIK : limitPointsToSet) {
-            limit = ((Number) ((ConstantKey<?>) limitIK).getValue()).doubleValue();
-
-            for (InstanceKey deltaIK : deltaPointsToSet) {
-              delta = ((Number) ((ConstantKey<?>) deltaIK).getValue()).doubleValue();
-
-              int shape = (int) Math.ceil((limit - start) / delta);
-              ret.add(List.of(new NumericDim(shape))); // Add the shape as a 1D tensor.
-            }
-          }
-        }
-      } else
-        throw new IllegalStateException(
-            "Expected either 1 or 3 positional arguments for range(), but got: "
-                + numOfPoisitionArguments
-                + ".");
-
-    return ret;
-  }
-
-  /**
-   * Returns the set of possible numbers of positional arguments passed to the range function at the
-   * call.
-   *
-   * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
-   * @return A set of integers representing the possible number of positional arguments.
-   */
-  private Set<Integer> getNumberOfPossiblePositionalArguments(PropagationCallGraphBuilder builder) {
-    Set<Integer> ret = HashSetFactory.make();
-
-    CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
-    CallSiteReference siteReference = cs.getCallSiteRefs()[0];
-
-    for (CGNode caller : builder.getCallGraph()) {
-      for (Iterator<CallSiteReference> it = caller.getIR().iterateCallSites(); it.hasNext(); ) {
-        CallSiteReference callSite = it.next();
-
-        if (callSite.equals(siteReference)) {
-          // caller is the node that made the call.
-          LOGGER.finest(() -> "Caller node: " + caller.getMethod().getSignature() + ".");
-
-          SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(callSite);
-          LOGGER.finest(() -> "Number of calls at this site: " + calls.length + ".");
-
-          for (SSAAbstractInvokeInstruction callInstr : calls) {
-            LOGGER.finest(() -> "Call instruction: " + callInstr + ".");
-
-            PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
-            int numberOfPositionalParameters =
-                pyCallInstr.getNumberOfPositionalParameters() - 1; // Exclude the function name.
-            LOGGER.finer(
-                () -> "Number of positional parameters: " + numberOfPositionalParameters + ".");
-
-            ret.add(numberOfPositionalParameters);
+            int shape = (int) Math.ceil((limit - start) / delta);
+            ret.add(List.of(new NumericDim(shape))); // Add the shape as a 1D tensor.
           }
         }
       }
-    }
+    } else
+      throw new IllegalStateException(
+          "Expected either 1 or 3 positional arguments for range(), but got: "
+              + numberOfParameters
+              + ".");
+
     return ret;
   }
 
@@ -167,18 +121,18 @@ public class Range extends TensorGenerator {
   protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // The dtype of the resulting tensor is inferred from the inputs unless it is provided
     // explicitly.
-
     // TODO: Handle keyword arguments.
+    int numberOfParameters =
+        this.getNode().getMethod().isStatic()
+            ? this.getNode().getIR().getNumberOfParameters()
+            : this.getNode().getIR().getNumberOfParameters() - 1;
+
     EnumSet<DType> types =
-        getNumberOfPossiblePositionalArguments(builder).stream()
-            .map(
-                numArgs ->
-                    IntStream.range(0, numArgs)
-                        .map(i -> i + 2) // Positional arguments start at index 2.
-                        .mapToObj(val -> getDTypes(builder, val).stream())
-                        .flatMap(identity())
-                        .distinct())
+        IntStream.range(0, numberOfParameters)
+            .map(i -> i + 2) // Positional arguments start at index 2.
+            .mapToObj(val -> getDTypes(builder, val).stream())
             .flatMap(identity())
+            .distinct()
             .collect(Collectors.toCollection(() -> EnumSet.noneOf(DType.class)));
 
     // FIXME: We can't tell the difference here between varying dtypes in a single call and that of
