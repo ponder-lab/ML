@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
 import static java.util.function.Function.identity;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -8,13 +9,13 @@ import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.ipa.callgraph.CGNode;
-import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
@@ -151,33 +152,34 @@ public class Range extends TensorGenerator {
    */
   private Set<Integer> getNumberOfPossiblePositionalArguments(PropagationCallGraphBuilder builder) {
     Set<Integer> ret = HashSetFactory.make();
-    CallGraph callGraph = builder.getCallGraph();
 
-    for (Iterator<CGNode> pIt = callGraph.getPredNodes(this.getNode()); pIt.hasNext(); ) {
-      CGNode caller = pIt.next();
+    CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
+    CallSiteReference siteReference = cs.getCallSiteRefs()[0];
 
-      for (Iterator<CallSiteReference> cIt = callGraph.getPossibleSites(caller, this.getNode());
-          cIt.hasNext(); ) {
-        CallSiteReference callSite = cIt.next();
-        // caller is the node that made the call.
-        LOGGER.finest(() -> "Caller node: " + caller.getMethod().getSignature() + ".");
+    for (CGNode caller : builder.getCallGraph())
+      for (Iterator<CallSiteReference> it = caller.getIR().iterateCallSites(); it.hasNext(); ) {
+        CallSiteReference callSite = it.next();
 
-        SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(callSite);
-        LOGGER.finest(() -> "Number of calls at this site: " + calls.length + ".");
+        if (callSite.equals(siteReference)) {
+          // caller is the node that made the call.
+          LOGGER.finest(() -> "Caller node: " + caller.getMethod().getSignature() + ".");
 
-        for (SSAAbstractInvokeInstruction callInstr : calls) {
-          LOGGER.finest(() -> "Call instruction: " + callInstr + ".");
+          SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(callSite);
+          LOGGER.finest(() -> "Number of calls at this site: " + calls.length + ".");
 
-          PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
-          int numberOfPositionalParameters =
-              pyCallInstr.getNumberOfPositionalParameters() - 1; // Exclude the function name.
-          LOGGER.finer(
-              () -> "Number of positional parameters: " + numberOfPositionalParameters + ".");
+          for (SSAAbstractInvokeInstruction callInstr : calls) {
+            LOGGER.finest(() -> "Call instruction: " + callInstr + ".");
 
-          ret.add(numberOfPositionalParameters);
+            PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
+            int numberOfPositionalParameters =
+                pyCallInstr.getNumberOfPositionalParameters() - 1; // Exclude the function name.
+            LOGGER.finer(
+                () -> "Number of positional parameters: " + numberOfPositionalParameters + ".");
+
+            ret.add(numberOfPositionalParameters);
+          }
         }
       }
-    }
 
     return ret;
   }
