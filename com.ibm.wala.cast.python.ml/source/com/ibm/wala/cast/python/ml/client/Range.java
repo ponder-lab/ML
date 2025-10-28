@@ -86,7 +86,7 @@ public class Range extends TensorGenerator {
           int shape = (int) Math.ceil((limit - start) / delta);
           ret.add(List.of(new NumericDim(shape))); // Add the shape as a 1D tensor.
         }
-      } else if (numOfPoisitionArguments == 3) {
+      } else if (numOfPoisitionArguments >= 3) {
         // it must be `start`, `limit`, and `delta`.
         int startValueNumber =
             this.getNode().getMethod().isStatic()
@@ -136,7 +136,7 @@ public class Range extends TensorGenerator {
         }
       } else
         throw new IllegalStateException(
-            "Expected either 1 or 3 positional arguments for range(), but got: "
+            "Expected either 1 or >= 3 positional arguments for range(), but got: "
                 + numOfPoisitionArguments
                 + ".");
 
@@ -195,6 +195,7 @@ public class Range extends TensorGenerator {
             .map(
                 numArgs ->
                     IntStream.range(0, numArgs)
+                        .filter(i -> i < 3) // only numeric arguments.
                         .map(i -> this.getNode().getIR().getMethod().isStatic() ? i : i + 1)
                         .map(this.getNode().getIR()::getParameter)
                         .mapToObj(val -> getDTypes(builder, val).stream())
