@@ -37,17 +37,13 @@ public class Fill extends Constant {
   }
 
   @Override
-  protected int getValueNumberForValueArgument() {
-    return this.getNode().getMethod().isStatic()
-        ? this.getNode().getIR().getParameter(VALUE_PARAMETER_POSITION)
-        : this.getNode().getIR().getParameter(VALUE_PARAMETER_POSITION + 1);
+  protected int getValueParameterPosition() {
+    return VALUE_PARAMETER_POSITION;
   }
 
   @Override
-  protected int getValueNumberForShapeArgument() {
-    return this.getNode().getMethod().isStatic()
-        ? this.getNode().getIR().getParameter(SHAPE_PARAMETER_POSITION)
-        : this.getNode().getIR().getParameter(SHAPE_PARAMETER_POSITION + 1);
+  protected int getShapeParameterPosition() {
+    return SHAPE_PARAMETER_POSITION;
   }
 
   @Override

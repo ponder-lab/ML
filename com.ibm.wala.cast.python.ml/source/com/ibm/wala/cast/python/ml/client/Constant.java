@@ -43,31 +43,26 @@ public class Constant extends TensorGenerator {
     return getDTypes(builder, this.getValueNumberForValueArgument());
   }
 
-  @Override
-  protected int getValueNumberForDTypeArgument() {
-    return this.getNode().getMethod().isStatic()
-        ? this.getNode().getIR().getParameter(DTYPE_PARAMETER_POSITION)
-        : this.getNode().getIR().getParameter(DTYPE_PARAMETER_POSITION + 1);
-  }
-
   protected int getValueNumberForValueArgument() {
-    return this.getNode().getMethod().isStatic()
-        ? this.getNode().getIR().getParameter(VALUE_PARAMETER_POSITION)
-        : this.getNode().getIR().getParameter(VALUE_PARAMETER_POSITION + 1);
+    return getValueNumberForArgument(this.getValueParameterPosition());
   }
 
-  @Override
-  protected int getValueNumberForShapeArgument() {
-    // Shapes can also be specified as an explicit argument. Here, we examine the third explicit
-    // argument (recall that the first argument is implicit and corresponds to the called
-    // function's name).
-    return this.getNode().getMethod().isStatic()
-        ? this.getNode().getIR().getParameter(SHAPE_PARAMETER_POSITION)
-        : this.getNode().getIR().getParameter(SHAPE_PARAMETER_POSITION + 1);
+  protected int getValueParameterPosition() {
+    return VALUE_PARAMETER_POSITION;
   }
 
   @Override
   protected String getSignature() {
     return FUNCTION_NAME;
+  }
+
+  @Override
+  protected int getShapeParameterPosition() {
+    return SHAPE_PARAMETER_POSITION;
+  }
+
+  @Override
+  protected int getDTypeParameterPosition() {
+    return DTYPE_PARAMETER_POSITION;
   }
 }

@@ -47,21 +47,17 @@ public class Ones extends TensorGenerator {
   }
 
   @Override
-  protected int getValueNumberForShapeArgument() {
-    return this.getNode().getMethod().isStatic()
-        ? this.getNode().getIR().getParameter(SHAPE_PARAMETER_POSITION)
-        : this.getNode().getIR().getParameter(SHAPE_PARAMETER_POSITION + 1);
-  }
-
-  @Override
-  protected int getValueNumberForDTypeArgument() {
-    return this.getNode().getMethod().isStatic()
-        ? this.getNode().getIR().getParameter(DTYPE_PARAMETER_POSITION)
-        : this.getNode().getIR().getParameter(DTYPE_PARAMETER_POSITION + 1);
-  }
-
-  @Override
   protected String getSignature() {
     return FUNCTION_NAME;
+  }
+
+  @Override
+  protected int getShapeParameterPosition() {
+    return SHAPE_PARAMETER_POSITION;
+  }
+
+  @Override
+  protected int getDTypeParameterPosition() {
+    return DTYPE_PARAMETER_POSITION;
   }
 }

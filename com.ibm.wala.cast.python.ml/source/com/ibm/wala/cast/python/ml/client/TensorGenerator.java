@@ -218,7 +218,11 @@ public abstract class TensorGenerator {
    * @return The value number for the shape argument in the function call. May return a number less
    *     than or equal to 0 if there is no shape parameter.
    */
-  protected abstract int getValueNumberForShapeArgument();
+  protected int getValueNumberForShapeArgument() {
+    return this.getValueNumberForArgument(this.getShapeParameterPosition());
+  }
+
+  protected abstract int getShapeParameterPosition();
 
   /**
    * Returns the possible shapes of the tensor returned by this generator.
@@ -452,7 +456,11 @@ public abstract class TensorGenerator {
    * @return The value number for the dtype argument in the function call or -1 if the dtype
    *     argument is not supported.
    */
-  protected abstract int getValueNumberForDTypeArgument();
+  protected int getValueNumberForDTypeArgument() {
+    return this.getValueNumberForArgument(this.getDTypeParameterPosition());
+  }
+
+  protected abstract int getDTypeParameterPosition();
 
   protected EnumSet<DType> getDTypes(PropagationCallGraphBuilder builder) {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
@@ -601,4 +609,12 @@ public abstract class TensorGenerator {
    * @return The TensorFlow function signature represented by this generator.
    */
   protected abstract String getSignature();
+
+  protected int getValueNumberForArgument(int parameterPosition) {
+    if (parameterPosition < 0) return -1; // No such argument.
+
+    return this.getNode().getMethod().isStatic()
+        ? this.getNode().getIR().getParameter(parameterPosition)
+        : this.getNode().getIR().getParameter(parameterPosition + 1);
+  }
 }
