@@ -17,9 +17,9 @@ public class Fill extends Constant {
 
   private static final String FUNCTION_NAME = "tf.fill()";
 
-  private static final int VALUE_NUMBER_FOR_SHAPE_ARGUMENT = 2;
+  private static final int SHAPE_PARAMETER_POSITION = 0;
 
-  private static final int VALUE_NUMBER_FOR_VALUE_ARGUMENT = 3;
+  private static final int VALUE_PARAMETER_POSITION = 1;
 
   /**
    * The dtype argument is not explicitly provided to fill(); rather, the dtype is inferred from the
@@ -38,12 +38,16 @@ public class Fill extends Constant {
 
   @Override
   protected int getValueNumberForValueArgument() {
-    return VALUE_NUMBER_FOR_VALUE_ARGUMENT;
+    return this.getNode().getMethod().isStatic()
+        ? this.getNode().getIR().getParameter(VALUE_PARAMETER_POSITION)
+        : this.getNode().getIR().getParameter(VALUE_PARAMETER_POSITION + 1);
   }
 
   @Override
   protected int getValueNumberForShapeArgument() {
-    return VALUE_NUMBER_FOR_SHAPE_ARGUMENT;
+    return this.getNode().getMethod().isStatic()
+        ? this.getNode().getIR().getParameter(SHAPE_PARAMETER_POSITION)
+        : this.getNode().getIR().getParameter(SHAPE_PARAMETER_POSITION + 1);
   }
 
   @Override

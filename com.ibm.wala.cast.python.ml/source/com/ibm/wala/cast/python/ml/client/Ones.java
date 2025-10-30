@@ -24,9 +24,9 @@ public class Ones extends TensorGenerator {
 
   private static final String FUNCTION_NAME = "tf.ones()";
 
-  private static final int VALUE_NUMBER_FOR_SHAPE_ARGUMENT = 2;
+  private static final int SHAPE_PARAMETER_POSITION = 0;
 
-  private static final int VALUE_NUMBER_FOR_DTYPE_ARGUMENT = 3;
+  private static final int DTYPE_PARAMETER_POSITION = 1;
 
   public Ones(PointsToSetVariable source, CGNode node) {
     super(source, node);
@@ -48,12 +48,16 @@ public class Ones extends TensorGenerator {
 
   @Override
   protected int getValueNumberForShapeArgument() {
-    return VALUE_NUMBER_FOR_SHAPE_ARGUMENT;
+    return this.getNode().getMethod().isStatic()
+        ? this.getNode().getIR().getParameter(SHAPE_PARAMETER_POSITION)
+        : this.getNode().getIR().getParameter(SHAPE_PARAMETER_POSITION + 1);
   }
 
   @Override
   protected int getValueNumberForDTypeArgument() {
-    return VALUE_NUMBER_FOR_DTYPE_ARGUMENT;
+    return this.getNode().getMethod().isStatic()
+        ? this.getNode().getIR().getParameter(DTYPE_PARAMETER_POSITION)
+        : this.getNode().getIR().getParameter(DTYPE_PARAMETER_POSITION + 1);
   }
 
   @Override

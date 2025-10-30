@@ -14,7 +14,7 @@ public class Uniform extends Ones {
 
   private static final String FUNCTION_NAME = "tf.random.uniform()";
 
-  private static final int VALUE_NUMBER_FOR_DTYPE_ARGUMENT = 5;
+  private static final int DTYPE_PARAMETER_POSITION = 3;
 
   public Uniform(PointsToSetVariable source, CGNode node) {
     super(source, node);
@@ -22,7 +22,9 @@ public class Uniform extends Ones {
 
   @Override
   protected int getValueNumberForDTypeArgument() {
-    return VALUE_NUMBER_FOR_DTYPE_ARGUMENT;
+    return this.getNode().getMethod().isStatic()
+		? this.getNode().getIR().getParameter(DTYPE_PARAMETER_POSITION)
+		: this.getNode().getIR().getParameter(DTYPE_PARAMETER_POSITION + 1);
   }
 
   @Override

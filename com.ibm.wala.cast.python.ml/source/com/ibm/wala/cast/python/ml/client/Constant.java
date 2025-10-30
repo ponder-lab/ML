@@ -19,11 +19,11 @@ public class Constant extends TensorGenerator {
 
   private static final String FUNCTION_NAME = "tf.constant()";
 
-  private static final int VALUE_NUMBER_FOR_VALUE_ARGUMENT = 2;
+  private static final int VALUE_PARAMETER_POSITION = 0;
 
-  private static final int VALUE_NUMBER_FOR_DTYPE_ARGUMENT = 3;
+  private static final int DTYPE_PARAMETER_POSITION = 1;
 
-  private static final int VALUE_NUMBER_FOR_SHAPE_ARGUMENT = 4;
+  private static final int SHAPE_PARAMETER_POSITION = 2;
 
   public Constant(PointsToSetVariable source, CGNode node) {
     super(source, node);
@@ -45,11 +45,15 @@ public class Constant extends TensorGenerator {
 
   @Override
   protected int getValueNumberForDTypeArgument() {
-    return VALUE_NUMBER_FOR_DTYPE_ARGUMENT;
+    return this.getNode().getMethod().isStatic()
+        ? this.getNode().getIR().getParameter(DTYPE_PARAMETER_POSITION)
+        : this.getNode().getIR().getParameter(DTYPE_PARAMETER_POSITION + 1);
   }
 
   protected int getValueNumberForValueArgument() {
-    return VALUE_NUMBER_FOR_VALUE_ARGUMENT;
+    return this.getNode().getMethod().isStatic()
+        ? this.getNode().getIR().getParameter(VALUE_PARAMETER_POSITION)
+        : this.getNode().getIR().getParameter(VALUE_PARAMETER_POSITION + 1);
   }
 
   @Override
@@ -57,7 +61,9 @@ public class Constant extends TensorGenerator {
     // Shapes can also be specified as an explicit argument. Here, we examine the third explicit
     // argument (recall that the first argument is implicit and corresponds to the called
     // function's name).
-    return VALUE_NUMBER_FOR_SHAPE_ARGUMENT;
+    return this.getNode().getMethod().isStatic()
+        ? this.getNode().getIR().getParameter(SHAPE_PARAMETER_POSITION)
+        : this.getNode().getIR().getParameter(SHAPE_PARAMETER_POSITION + 1);
   }
 
   @Override
