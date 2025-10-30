@@ -33,18 +33,18 @@ public class Constant extends TensorGenerator {
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     // If the shape argument is not specified, then the shape is inferred from the shape of value.
     // TODO: Handle keyword arguments.
-    return getShapes(builder, this.getValueNumberForValueArgument());
+    return getShapes(builder, this.getValueArgumentValueNumber());
   }
 
   @Override
   protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // If the dtype argument is not specified, then the type is inferred from the type of value.
     // TODO: Handle keyword arguments.
-    return getDTypes(builder, this.getValueNumberForValueArgument());
+    return getDTypes(builder, this.getValueArgumentValueNumber());
   }
 
-  protected int getValueNumberForValueArgument() {
-    return getValueNumberForArgument(this.getValueParameterPosition());
+  protected int getValueArgumentValueNumber() {
+    return getArgumentValueNumber(this.getValueParameterPosition());
   }
 
   protected int getValueParameterPosition() {

@@ -218,8 +218,8 @@ public abstract class TensorGenerator {
    * @return The value number for the shape argument in the function call. May return a number less
    *     than or equal to 0 if there is no shape parameter.
    */
-  protected int getValueNumberForShapeArgument() {
-    return this.getValueNumberForArgument(this.getShapeParameterPosition());
+  protected int getShapeArgumentValueNumber() {
+    return this.getArgumentValueNumber(this.getShapeParameterPosition());
   }
 
   protected abstract int getShapeParameterPosition();
@@ -235,7 +235,7 @@ public abstract class TensorGenerator {
 
     // Get the shape from the explicit argument.
     // FIXME: Handle keyword arguments.
-    int shapeArgValueNum = this.getValueNumberForShapeArgument();
+    int shapeArgValueNum = this.getShapeArgumentValueNumber();
     OrdinalSet<InstanceKey> pointsToSet = null;
 
     if (shapeArgValueNum > 0) {
@@ -456,8 +456,8 @@ public abstract class TensorGenerator {
    * @return The value number for the dtype argument in the function call or -1 if the dtype
    *     argument is not supported.
    */
-  protected int getValueNumberForDTypeArgument() {
-    return this.getValueNumberForArgument(this.getDTypeParameterPosition());
+  protected int getDTypeArgumentValueNumber() {
+    return this.getArgumentValueNumber(this.getDTypeParameterPosition());
   }
 
   protected abstract int getDTypeParameterPosition();
@@ -465,7 +465,7 @@ public abstract class TensorGenerator {
   protected EnumSet<DType> getDTypes(PropagationCallGraphBuilder builder) {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
-    int valNum = this.getValueNumberForDTypeArgument();
+    int valNum = this.getDTypeArgumentValueNumber();
     OrdinalSet<InstanceKey> pointsToSet = null;
 
     if (valNum > 0) {
@@ -610,7 +610,7 @@ public abstract class TensorGenerator {
    */
   protected abstract String getSignature();
 
-  protected int getValueNumberForArgument(int parameterPosition) {
+  protected int getArgumentValueNumber(int parameterPosition) {
     if (parameterPosition < 0) return -1; // No such argument.
 
     return this.getNode().getMethod().isStatic()

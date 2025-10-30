@@ -32,7 +32,7 @@ public class Fill extends Constant {
   }
 
   @Override
-  protected int getValueNumberForDTypeArgument() {
+  protected int getDTypeArgumentValueNumber() {
     return VALUE_NUMBER_FOR_DTYPE_ARGUMENT;
   }
 

@@ -25,7 +25,7 @@ public class ZerosLike extends Constant {
   }
 
   @Override
-  protected int getValueNumberForShapeArgument() {
+  protected int getShapeArgumentValueNumber() {
     return VALUE_NUMBER_FOR_SHAPE_ARGUMENT;
   }
 
