@@ -17,7 +17,6 @@ public class TruncatedNormal extends Normal {
 
   public TruncatedNormal(PointsToSetVariable source, CGNode node) {
     super(source, node);
-    // TODO Auto-generated constructor stub
   }
 
   @Override
