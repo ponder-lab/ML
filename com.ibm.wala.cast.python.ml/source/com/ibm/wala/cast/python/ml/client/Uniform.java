@@ -23,8 +23,8 @@ public class Uniform extends Ones {
   @Override
   protected int getValueNumberForDTypeArgument() {
     return this.getNode().getMethod().isStatic()
-		? this.getNode().getIR().getParameter(DTYPE_PARAMETER_POSITION)
-		: this.getNode().getIR().getParameter(DTYPE_PARAMETER_POSITION + 1);
+        ? this.getNode().getIR().getParameter(DTYPE_PARAMETER_POSITION)
+        : this.getNode().getIR().getParameter(DTYPE_PARAMETER_POSITION + 1);
   }
 
   @Override
