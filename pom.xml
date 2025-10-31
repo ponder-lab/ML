@@ -35,6 +35,7 @@
     <logging.config.file>./logging.properties</logging.config.file>
     <jacoco-version>0.8.14</jacoco-version>
     <argLine/>
+    <junit.4.version>4.13.2</junit.4.version>
   </properties>
   <dependencyManagement>
     <dependencies>
@@ -81,7 +82,7 @@
       <dependency>
         <groupId>junit</groupId>
         <artifactId>junit</artifactId>
-        <version>4.13.2</version>
+        <version>${junit.4.version}</version>
       </dependency>
       <dependency>
         <groupId>org.python</groupId>
