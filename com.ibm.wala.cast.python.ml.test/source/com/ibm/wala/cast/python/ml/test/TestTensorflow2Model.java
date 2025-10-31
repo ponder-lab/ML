@@ -1,5 +1,8 @@
 package com.ibm.wala.cast.python.ml.test;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT64;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.cast.python.ml.types.TensorType.mnistInput;
 import static com.ibm.wala.cast.python.util.Util.addPytestEntrypoints;
 import static java.util.Arrays.asList;
@@ -56,7 +59,71 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final Logger LOGGER = Logger.getLogger(TestTensorflow2Model.class.getName());
 
+  private static final String FLOAT_32 = FLOAT32.name().toLowerCase();
+
+  private static final String FLOAT_64 = FLOAT64.name().toLowerCase();
+
+  private static final String INT_32 = INT32.name().toLowerCase();
+
   private static final TensorType MNIST_INPUT = mnistInput();
+
+  private static final TensorType SCALAR_TENSOR_OF_INT32 = new TensorType(INT_32, emptyList());
+
+  private static final TensorType SCALAR_TENSOR_OF_FLOAT32 = new TensorType(FLOAT_32, emptyList());
+
+  private static final TensorType TENSOR_1_2_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(2)));
+
+  private static final TensorType TENSOR_1_2_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(1), new NumericDim(2)));
+
+  private static final TensorType TENSOR_2_2_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(2)));
+
+  private static final TensorType TENSOR_2_2_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(2)));
+
+  private static final TensorType TENSOR_3_2_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(2)));
+
+  private static final TensorType TENSOR_2_1_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(1)));
+
+  private static final TensorType TENSOR_2_3_3_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(3), new NumericDim(3)));
+
+  private static final TensorType TENSOR_2_3_4_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(3), new NumericDim(4)));
+
+  private static final TensorType TENSOR_20_28_28_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(20), new NumericDim(28), new NumericDim(28)));
+
+  private static final TensorType TENSOR_20_28_28_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(20), new NumericDim(28), new NumericDim(28)));
+
+  private static final TensorType TENSOR_2_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(2)));
+
+  private static final TensorType TENSOR_2_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(2)));
+
+  private static final TensorType TENSOR_3_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(3)));
+
+  private static final TensorType TENSOR_3_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(3)));
+
+  private static final TensorType TENSOR_4_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(4)));
+
+  private static final TensorType TENSOR_4_FLOAT64 =
+      new TensorType(FLOAT_64, asList(new NumericDim(4)));
+
+  private static final TensorType TENSOR_5_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(5)));
+
+  private static final TensorType TENSOR_5_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(5)));
 
   @Test
   public void testValueIndex()
@@ -127,69 +194,155 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
+  public void testFunction5()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_function5.py", "func", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  @Test
+  public void testFunction6()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_function6.py", "func", 1, 1, Map.of(2, Set.of(TENSOR_2_1_FLOAT32)));
+  }
+
+  @Test
+  public void testFunction7()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_function7.py", "func", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+  }
+
+  @Test
+  public void testFunction8()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_function8.py",
+        "func",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_1_FLOAT32, TENSOR_2_FLOAT32)));
+  }
+
+  @Test
+  public void testFunction9()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_function9.py", "func", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
+  }
+
+  @Test
+  public void testFunction10()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_function10.py", "func", 1, 1, Map.of(2, Set.of(TENSOR_2_3_4_INT32)));
+  }
+
+  @Test
+  public void testFunction11()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_function11.py", "func", 1, 1, Map.of(2, Set.of(TENSOR_2_3_3_INT32)));
+  }
+
+  /** Test https://github.com/wala/ML/issues/308. */
+  @Test
+  public void testFunction12()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_function12.py",
+        "func",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_1_FLOAT32, TENSOR_3_2_FLOAT32)));
+  }
+
+  /**
+   * Test https://github.com/wala/ML/issues/308.
+   *
+   * <p>This one has lexical scoping.
+   */
+  @Test
+  public void testFunction13()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_function13.py",
+        "func",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_1_FLOAT32, TENSOR_3_2_FLOAT32)));
+  }
+
+  @Test
   public void testDecorator()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_decorator.py", "returned", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_decorator.py", "returned", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
   @Test
   public void testDecorator2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_decorator2.py", "returned", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_decorator2.py", "returned", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
   @Test
   public void testDecorator3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_decorator3.py", "returned", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_decorator3.py", "returned", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
   }
 
   @Test
   public void testDecorator4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_decorator4.py", "returned", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_decorator4.py", "returned", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
   @Test
   public void testDecorator5()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_decorator5.py", "returned", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_decorator5.py", "returned", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
   @Test
   public void testDecorator6()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_decorator6.py", "returned", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_decorator6.py", "returned", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
   @Test
   public void testDecorator7()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_decorator7.py", "returned", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_decorator7.py", "returned", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
   @Test
   public void testDecorator8()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_decorator8.py", "returned", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_decorator8.py", "returned", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
   @Test
   public void testDecorator9()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_decorator9.py", "returned", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_decorator9.py", "returned", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
   @Test
   public void testDecorator10()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_decorator10.py", "returned", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_decorator10.py", "returned", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
   @Test
   public void testDecorator11()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_decorator11.py", "C.returned", 1, 1, Map.of(3, Set.of(MNIST_INPUT)));
+    test("tf2_test_decorator11.py", "C.returned", 1, 1, Map.of(3, Set.of(TENSOR_5_INT32)));
+  }
+
+  @Test
+  public void testDecorator12()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_decorator12.py",
+        "returned",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32, TENSOR_2_INT32)));
   }
 
   @Test
@@ -582,7 +735,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         2,
-        Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+        Map.of(
+            2,
+            Set.of(TENSOR_1_2_FLOAT32, TENSOR_2_2_FLOAT32),
+            3,
+            Set.of(TENSOR_1_2_FLOAT32, TENSOR_2_2_FLOAT32)));
   }
 
   @Test
@@ -617,19 +774,33 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testModelCall()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_model_call.py", "SequentialModel.__call__", 1, 1, Map.of(3, Set.of(MNIST_INPUT)));
+        "tf2_test_model_call.py",
+        "SequentialModel.__call__",
+        1,
+        1,
+        Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
   @Test
   public void testModelCall2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_model_call2.py", "SequentialModel.call", 1, 1, Map.of(3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_model_call2.py",
+        "SequentialModel.call",
+        1,
+        1,
+        Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
   @Test
   public void testModelCall3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_model_call3.py", "SequentialModel.call", 1, 1, Map.of(3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_model_call3.py",
+        "SequentialModel.call",
+        1,
+        1,
+        Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
   @Test
@@ -640,7 +811,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "SequentialModel.__call__",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
   /**
@@ -676,6 +847,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(3, Set.of(MNIST_INPUT)));
+  }
+
+  /**
+   * Test https://github.com/wala/ML/issues/267.
+   *
+   * <p>Explicit dtype.
+   */
+  @Test
+  public void testModelCall6()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_call6.py",
+        "SequentialModel.__call__",
+        1,
+        1,
+        Map.of(3, Set.of(TENSOR_20_28_28_INT32)));
   }
 
   @Test
@@ -717,13 +904,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testCallbacks()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_callbacks.py", "replica_fn", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_callbacks.py", "replica_fn", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
   @Test
   public void testCallbacks2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_callbacks2.py", "replica_fn", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_callbacks2.py", "replica_fn", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
   @Test
@@ -822,13 +1009,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testSigmoid()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_sigmoid.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_sigmoid.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32)));
   }
 
   @Test
   public void testSigmoid2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_sigmoid2.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_sigmoid2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32)));
   }
 
   @Test
@@ -870,49 +1057,89 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testAdd7()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add7.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add7.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
   public void testAdd8()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add8.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add8.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
   public void testAdd9()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add9.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add9.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
   public void testAdd10()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add10.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add10.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
   public void testAdd11()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add11.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add11.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
   public void testAdd12()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add12.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add12.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
   public void testAdd13()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add13.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add13.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
   public void testAdd14()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add14.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add14.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
@@ -966,31 +1193,56 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testAdd23()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add23.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add23.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_2_INT32), 3, Set.of(TENSOR_2_INT32)));
   }
 
   @Test
   public void testAdd24()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add24.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add24.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_2_INT32), 3, Set.of(TENSOR_2_INT32)));
   }
 
   @Test
   public void testAdd25()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add25.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add25.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_2_INT32), 3, Set.of(TENSOR_2_INT32)));
   }
 
   @Test
   public void testAdd26()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add26.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add26.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
   public void testAdd27()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add27.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add27.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
@@ -1008,25 +1260,45 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testAdd30()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add30.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add30.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_INT32), 3, Set.of(TENSOR_2_2_INT32)));
   }
 
   @Test
   public void testAdd31()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add31.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add31.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_INT32), 3, Set.of(TENSOR_2_2_INT32)));
   }
 
   @Test
   public void testAdd32()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add32.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add32.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_2_INT32), 3, Set.of(TENSOR_2_INT32)));
   }
 
   @Test
   public void testAdd33()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add33.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add33.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_2_INT32), 3, Set.of(TENSOR_2_INT32)));
   }
 
   @Test
@@ -1044,25 +1316,45 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testAdd36()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add36.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add36.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32), 3, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
   public void testAdd37()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add37.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add37.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32), 3, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
   public void testAdd38()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add38.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add38.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_5_INT32), 3, Set.of(TENSOR_5_INT32)));
   }
 
   @Test
   public void testAdd39()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add39.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add39.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_5_INT32), 3, Set.of(TENSOR_5_INT32)));
   }
 
   @Test
@@ -1126,7 +1418,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testAdd48()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add48.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add48.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
@@ -1134,13 +1431,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     // NOTE: Set the expected number of tensor variables to 3 once
     // https://github.com/wala/ML/issues/135 is fixed.
-    test("tf2_test_add49.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add49.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
   public void testAdd50()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add50.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add50.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_5_INT32), 3, Set.of(TENSOR_5_INT32)));
   }
 
   @Test
@@ -1464,19 +1771,34 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testAdd104()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add104.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add104.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_4_FLOAT32), 3, Set.of(TENSOR_4_FLOAT32)));
   }
 
   @Test
   public void testAdd105()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add105.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add105.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_4_FLOAT32), 3, Set.of(TENSOR_4_FLOAT32)));
   }
 
   @Test
   public void testAdd106()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add106.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add106.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_4_FLOAT32), 3, Set.of(TENSOR_4_FLOAT32)));
   }
 
   @Test
@@ -1494,13 +1816,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testAdd109()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add109.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add109.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TENSOR_2_FLOAT32)));
   }
 
   @Test
   public void testAdd110()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add110.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add110.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TENSOR_2_FLOAT32)));
   }
 
   @Test
@@ -1534,6 +1866,89 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
+  public void testAdd116()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add116.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  @Test
+  public void testAdd117()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add117.py",
+        "add",
+        2,
+        2,
+        Map.of(
+            2,
+            Set.of(
+                TENSOR_1_2_FLOAT32,
+                new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(2)))),
+            3,
+            Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  @Test
+  public void testAdd118()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add118.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_INT32), 3, Set.of(TENSOR_2_2_INT32)));
+  }
+
+  @Test
+  public void testAdd119()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add119.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TENSOR_2_FLOAT32)));
+  }
+
+  @Test
+  public void testAdd120()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add120.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  @Test
+  public void testAdd121()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add121.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_4_FLOAT32), 3, Set.of(TENSOR_4_FLOAT32)));
+  }
+
+  @Test
+  public void testAdd122()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add122.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_4_FLOAT64), 3, Set.of(TENSOR_4_FLOAT64)));
+  }
+
+  @Test
   public void testMultiGPUTraining()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -1557,19 +1972,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testReduceMean()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_reduce_mean.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_reduce_mean.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
   public void testReduceMean2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_reduce_mean.py", "g", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_reduce_mean.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
   public void testReduceMean3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_reduce_mean.py", "h", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_reduce_mean.py", "h", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
@@ -1604,71 +2019,71 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "f",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_3_INT32)));
   }
 
   @Test
   public void testRelu()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_relu.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_relu.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
   }
 
   @Test
   public void testTFRange()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_tf_range.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_tf_range.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
   public void testTFRange2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_tf_range2.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_tf_range2.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
   public void testTFRange3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("test_tf_range.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_tf_range3.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
   public void testImport()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_import.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_import.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   @Test
   public void testImport2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_import2.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_import2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   @Test
   public void testImport3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_import3.py", "f", 1, 2, Map.of(2, Set.of(MNIST_INPUT)));
-    test("tf2_test_import3.py", "g", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_import3.py", "f", 1, 2, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
+    test("tf2_test_import3.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   @Test
   public void testImport4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_import4.py", "f", 1, 2, Map.of(2, Set.of(MNIST_INPUT)));
-    test("tf2_test_import4.py", "g", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_import4.py", "f", 1, 2, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
+    test("tf2_test_import4.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   @Test
   public void testImport5()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_import5.py", "f", 0, 1);
-    test("tf2_test_import5.py", "g", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_import5.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   @Test
   public void testImport6()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_import6.py", "f", 0, 1);
-    test("tf2_test_import6.py", "g", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_import6.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -1696,8 +2111,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testImport9()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_import9.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
-    test("tf2_test_import9.py", "g", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_import9.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
+    test("tf2_test_import9.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   @Test
@@ -1710,7 +2125,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** This test needs a PYTHONPATH that points to `proj`. */
@@ -1726,7 +2141,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** This test should not need a PYTHONPATH. */
@@ -1742,7 +2157,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj2",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -1764,7 +2179,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj3",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
 
     test(
         new String[] {
@@ -1778,7 +2193,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj3",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   @Test
@@ -1791,7 +2206,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** This test needs a PYTHONPATH that points to `proj4`. */
@@ -1807,7 +2222,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj4",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** This test should not need a PYTHONPATH. */
@@ -1823,7 +2238,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj5",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -1845,7 +2260,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj6",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
 
     test(
         new String[] {
@@ -1859,7 +2274,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj6",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   @Test
@@ -1872,7 +2287,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   @Test
@@ -1885,7 +2300,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** This test needs a PYTHONPATH that points to `proj7`. */
@@ -1904,7 +2319,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj7",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** This test should not need a PYTHONPATH. */
@@ -1923,7 +2338,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj8",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** This test should not need a PYTHONPATH. */
@@ -1942,7 +2357,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj9",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -1960,7 +2375,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj10",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -1978,7 +2393,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj11",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** This test should not need a PYTHONPATH. */
@@ -1992,7 +2407,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj12",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2013,7 +2428,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj13",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2039,7 +2454,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj14",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
 
     test(
         new String[] {
@@ -2054,7 +2469,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj14",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2074,7 +2489,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj15",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2092,7 +2507,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj16",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2112,7 +2527,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj17",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2130,7 +2545,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj18",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2154,7 +2569,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj19",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2172,7 +2587,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2190,7 +2605,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj20",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2208,7 +2623,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2232,7 +2647,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj21",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
 
     test(
         new String[] {
@@ -2247,7 +2662,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj21",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2265,7 +2680,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj22",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2283,7 +2698,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj23",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2301,7 +2716,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj24",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2321,7 +2736,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj25",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2339,7 +2754,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj26",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2359,7 +2774,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj27",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2379,7 +2794,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj28",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2397,7 +2812,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj29",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2415,7 +2830,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj30",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2433,7 +2848,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj31",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2451,7 +2866,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj32",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2469,7 +2884,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj33",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2487,7 +2902,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj34",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2512,7 +2927,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj35",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2537,7 +2952,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj36",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2562,7 +2977,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj37",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2587,7 +3002,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj38",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2605,7 +3020,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj39",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2623,7 +3038,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj40",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2641,7 +3056,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj41",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2659,7 +3074,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj42",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2684,7 +3099,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj43",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2709,7 +3124,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj44",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2734,7 +3149,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj45",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2759,7 +3174,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj46",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -2786,7 +3201,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj47",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
 
     test(
         new String[] {
@@ -2804,7 +3219,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj47",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/202. */
@@ -2818,7 +3233,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj51",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/202. */
@@ -2832,7 +3247,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj52",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/202. */
@@ -2846,7 +3261,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj53",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/202. */
@@ -2860,7 +3275,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj54",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/202. */
@@ -2874,7 +3289,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj55",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/202. */
@@ -2888,7 +3303,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj51",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/202. */
@@ -2902,7 +3317,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj52",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/202. */
@@ -2916,7 +3331,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj56",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/202. */
@@ -2930,7 +3345,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj57",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/202. */
@@ -2944,7 +3359,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj58",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/202. */
@@ -2958,7 +3373,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj59",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/202. */
@@ -2972,7 +3387,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj60",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/202. */
@@ -2986,7 +3401,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj61",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/202. */
@@ -3000,7 +3415,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj62",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/205. */
@@ -3014,7 +3429,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj63",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/205. */
@@ -3028,7 +3443,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj64",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/210. */
@@ -3042,7 +3457,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj65",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/210. */
@@ -3056,7 +3471,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj67",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/210. */
@@ -3070,7 +3485,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj68",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/210. */
@@ -3084,7 +3499,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj69",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/210. */
@@ -3098,7 +3513,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj70",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/211. */
@@ -3112,7 +3527,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj71",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/211. */
@@ -3126,7 +3541,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/211. */
@@ -3140,7 +3555,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj72",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/211. */
@@ -3154,7 +3569,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/209. */
@@ -3174,7 +3589,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj73",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
 
     test(
         new String[] {
@@ -3189,7 +3604,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj73",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/209. */
@@ -3209,7 +3624,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj74",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
 
     test(
         new String[] {
@@ -3224,7 +3639,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj74",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
@@ -3234,7 +3649,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "MyClass.the_static_method",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
@@ -3244,7 +3659,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "MyClass.the_static_method",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
@@ -3254,7 +3669,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "MyClass.the_static_method",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
@@ -3264,7 +3679,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "MyClass.the_static_method",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
@@ -3274,7 +3689,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "MyClass.the_static_method",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
@@ -3284,7 +3699,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "MyClass.the_static_method",
         1,
         1,
-        Map.of(2, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
@@ -3294,7 +3709,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "MyClass.the_static_method",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
@@ -3304,7 +3719,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "MyClass.the_static_method",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
@@ -3314,7 +3729,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "MyClass.the_static_method",
         2,
         2,
-        Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32), 3, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
@@ -3324,17 +3739,39 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "MyClass.the_static_method",
         2,
         2,
-        Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32), 3, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
   public void testStaticMethod11() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_static_method11.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_static_method11.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
   public void testStaticMethod12() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_static_method12.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_static_method12.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void testStaticMethod13() throws ClassHierarchyException, CancelException, IOException {
+    // NOTE: This test will no longer throw an exception once data types other than lists are
+    // supported for shape arguments.
+    test(
+        "tf2_test_static_method13.py",
+        "MyClass.the_static_method",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_5_FLOAT32)));
+  }
+
+  @Test
+  public void testStaticMethod14() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_static_method14.py",
+        "MyClass.the_static_method",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   @Test
@@ -3344,7 +3781,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "MyClass.the_class_method",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
@@ -3354,44 +3791,44 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "MyClass.the_class_method",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
   public void testClassMethod3() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_class_method3.py", "MyClass.f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_class_method3.py", "MyClass.f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
   public void testClassMethod4() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_class_method4.py", "MyClass.f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_class_method4.py", "MyClass.f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
   public void testClassMethod5() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_class_method5.py", "MyClass.f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_class_method5.py", "MyClass.f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
   public void testAbstractMethod() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_abstract_method.py", "D.f", 1, 1, Map.of(3, Set.of(MNIST_INPUT)));
-    test("tf2_test_abstract_method.py", "C.f", 1, 1, Map.of(3, Set.of(MNIST_INPUT)));
+    test("tf2_test_abstract_method.py", "D.f", 1, 1, Map.of(3, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test("tf2_test_abstract_method.py", "C.f", 1, 1, Map.of(3, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
   public void testAbstractMethod2() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_abstract_method2.py", "D.f", 1, 1, Map.of(3, Set.of(MNIST_INPUT)));
-    test("tf2_test_abstract_method2.py", "C.f", 1, 1, Map.of(3, Set.of(MNIST_INPUT)));
+    test("tf2_test_abstract_method2.py", "D.f", 1, 1, Map.of(3, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test("tf2_test_abstract_method2.py", "C.f", 1, 1, Map.of(3, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
   public void testAbstractMethod3() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_abstract_method3.py", "C.f", 1, 1, Map.of(3, Set.of(MNIST_INPUT)));
+    test("tf2_test_abstract_method3.py", "C.f", 1, 1, Map.of(3, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
   public void testDecoratedMethod() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_decorated_method.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_decorated_method.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/188. */
@@ -3408,27 +3845,27 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   @Test
   public void testDecoratedMethod4() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_decorated_method4.py", "raffi", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_decorated_method4.py", "raffi", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
   public void testDecoratedMethod5() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_decorated_method5.py", "raffi", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_decorated_method5.py", "raffi", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
   public void testDecoratedMethod6() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_decorated_method6.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_decorated_method6.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
   public void testDecoratedMethod7() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_decorated_method7.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_decorated_method7.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
   public void testDecoratedMethod8() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_decorated_method8.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_decorated_method8.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   /**
@@ -3450,7 +3887,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   @Test
   public void testDecoratedMethod11() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_decorated_method11.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_decorated_method11.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
@@ -3468,12 +3905,42 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testDecoratedFunctions()
       throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_decorated_functions.py", "dummy_fun", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
-    test("tf2_test_decorated_functions.py", "dummy_test", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
-    test("tf2_test_decorated_functions.py", "test_function", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
-    test("tf2_test_decorated_functions.py", "test_function2", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
-    test("tf2_test_decorated_functions.py", "test_function3", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
-    test("tf2_test_decorated_functions.py", "test_function4", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_decorated_functions.py",
+        "dummy_fun",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test(
+        "tf2_test_decorated_functions.py",
+        "dummy_test",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test(
+        "tf2_test_decorated_functions.py",
+        "test_function",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test(
+        "tf2_test_decorated_functions.py",
+        "test_function2",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test(
+        "tf2_test_decorated_functions.py",
+        "test_function3",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test(
+        "tf2_test_decorated_functions.py",
+        "test_function4",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   /** Test a pytest with decorators. */
@@ -3504,21 +3971,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj48",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test a pytest without decorators. This is a "control." */
   @Test
   public void testDecoratedFunctions4()
       throws ClassHierarchyException, CancelException, IOException {
-    test("test_decorated_functions2.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("test_decorated_functions2.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   /** Test a pytest with a decorator. */
   @Test
   public void testDecoratedFunctions5()
       throws ClassHierarchyException, CancelException, IOException {
-    test("test_decorated_functions3.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("test_decorated_functions3.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   /**
@@ -3541,14 +4008,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj49",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /** Test a Pytest with a decorator without parameters. */
   @Test
   public void testDecoratedFunctions7()
       throws ClassHierarchyException, CancelException, IOException {
-    test("test_decorated_functions4.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("test_decorated_functions4.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   /**
@@ -3571,7 +4038,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "proj50",
         1,
         1,
-        Map.of(3, Set.of(MNIST_INPUT)));
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   /**
@@ -3580,7 +4047,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testDecoratedFunctions9()
       throws ClassHierarchyException, CancelException, IOException {
-    test("decorated_function_test.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("decorated_function_test.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/195. */
@@ -3635,6 +4102,72 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     TensorType expectedType = new TensorType("pixel", asList(batch, x, y, z));
 
     test("tf2_test_reshape5.py", "f", 1, 1, Map.of(2, Set.of(expectedType)));
+  }
+
+  @Test
+  public void testConvertToTensor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_convert_to_tensor.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  @Test
+  public void testConvertToTensor2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_convert_to_tensor2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
+  }
+
+  @Test
+  public void testConvertToTensor3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_convert_to_tensor3.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
+  }
+
+  @Test
+  public void testConvertToTensor4()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_convert_to_tensor4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  @Test
+  public void testConvertToTensor5()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_convert_to_tensor5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  @Test
+  public void testConvertToTensor6()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_convert_to_tensor6.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
+  }
+
+  @Test
+  public void testConvertToTensor7()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_convert_to_tensor7.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
+  }
+
+  @Test
+  public void testConvertToTensor8()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_convert_to_tensor8.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_FLOAT32)));
+  }
+
+  @Test
+  public void testConvertToTensor9()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_convert_to_tensor9.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
+  }
+
+  @Test
+  public void testConvertToTensor10()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_convert_to_tensor10.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_FLOAT32)));
+  }
+
+  @Test
+  public void testConvertToTensor11()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_convert_to_tensor11.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_FLOAT32)));
   }
 
   private void test(
