@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONES;
@@ -47,6 +48,8 @@ public class TensorGeneratorFactory {
     else if (calledFunction.equals(ZEROS_LIKE.getDeclaringClass()))
       return new ZerosLike(source, node);
     else if (calledFunction.equals(FILL.getDeclaringClass())) return new Fill(source, node);
+    else if (calledFunction.equals(CONVERT_TO_TENSOR.getDeclaringClass()))
+      return new ConvertToTensor(source, node);
     else
       throw new IllegalArgumentException(
           "Unknown call: " + calledFunction + " for source: " + source + ".");

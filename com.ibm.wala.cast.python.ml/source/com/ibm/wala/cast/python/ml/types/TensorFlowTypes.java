@@ -27,11 +27,33 @@ public class TensorFlowTypes extends PythonTypes {
    *     dtypes</a>.
    */
   public enum DType {
-    FLOAT32,
-    FLOAT64,
-    INT32,
-    INT64,
-    STRING;
+    FLOAT32(true, true, 32),
+    FLOAT64(true, true, 64),
+    INT32(true, false, 32),
+    INT64(true, false, 64),
+    STRING(false, false, 0);
+
+    private boolean numeric;
+
+    private boolean floatingPoint;
+
+    private int precision;
+
+    DType(boolean numeric, boolean floatingPoint, int precision) {
+      this.numeric = numeric;
+      this.floatingPoint = floatingPoint;
+      this.precision = precision;
+    }
+
+    public boolean canConvertTo(DType other) {
+      if (other == null) return false;
+
+      if (!this.numeric || !other.numeric) return this == other;
+
+      if (this.floatingPoint && !other.floatingPoint) return false;
+
+      return this.precision <= other.precision;
+    }
   }
 
   public static final TypeReference TENSORFLOW =
@@ -111,6 +133,14 @@ public class TensorFlowTypes extends PythonTypes {
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/fill")),
+          AstMethodReference.fnSelector);
+
+  /** https://www.tensorflow.org/api_docs/python/tf/convert_to_tensor. */
+  public static final MethodReference CONVERT_TO_TENSOR =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/convert_to_tensor")),
           AstMethodReference.fnSelector);
 
   /**

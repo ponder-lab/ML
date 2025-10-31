@@ -6,6 +6,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FIELD_REFERENCE_TO_DTYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
+import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
@@ -286,7 +287,7 @@ public abstract class TensorGenerator {
         AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
         TypeReference reference = asin.getConcreteType().getReference();
 
-        if (reference.equals(list)) {
+        if (reference.equals(list) || reference.equals(tuple)) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               pointerAnalysis.getPointsToSet(
                   ((AstPointerKeyFactory) builder.getPointerKeyFactory())
@@ -352,6 +353,18 @@ public abstract class TensorGenerator {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey instanceKey : pointsToSet) {
+      // First, check for `None`.
+      if (instanceKey instanceof ConstantKey) {
+        ConstantKey<?> constantKey = (ConstantKey<?>) instanceKey;
+        Object value = constantKey.getValue();
+
+        if (value == null) {
+          LOGGER.info(
+              "DType argument is None for source: " + source + "; using default dtypes." + ".");
+          return getDefaultDTypes(builder);
+        }
+      }
+
       IClass concreteType = instanceKey.getConcreteType();
       TypeReference typeReference = concreteType.getReference();
 
@@ -551,7 +564,7 @@ public abstract class TensorGenerator {
         AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
         TypeReference reference = asin.getConcreteType().getReference();
 
-        if (reference.equals(list)) {
+        if (reference.equals(list) || reference.equals(tuple)) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               pointerAnalysis.getPointsToSet(
                   ((AstPointerKeyFactory) builder.getPointerKeyFactory())
