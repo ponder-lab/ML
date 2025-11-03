@@ -4128,13 +4128,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_convert_to_tensor4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
-  @Test
+  /**
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340 is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testConvertToTensor5()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_convert_to_tensor5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
-  @Test
+  /**
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340 is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testConvertToTensor6()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_convert_to_tensor6.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));

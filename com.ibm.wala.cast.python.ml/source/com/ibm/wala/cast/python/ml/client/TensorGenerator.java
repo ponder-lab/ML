@@ -88,6 +88,10 @@ public abstract class TensorGenerator {
    */
   protected Set<List<Dimension<?>>> getShapesFromShapeArgument(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
+    if (pointsToSet == null || !pointsToSet.iterator().hasNext())
+      throw new IllegalArgumentException(
+          "Empty points-to set for shape argument in source: " + source + ".");
+
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
@@ -266,6 +270,11 @@ public abstract class TensorGenerator {
     PointerKey valuePK =
         pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
     OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
+
+    if (valuePointsToSet.isEmpty())
+      throw new IllegalArgumentException(
+          "Empty points-to set for value number: " + valueNumber + " in: " + this.getNode() + ".");
+
     return getShapesOfValue(builder, valuePointsToSet);
   }
 
@@ -278,6 +287,10 @@ public abstract class TensorGenerator {
    */
   private Set<List<Dimension<?>>> getShapesOfValue(
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
+    if (valuePointsToSet == null || valuePointsToSet.isEmpty())
+      throw new IllegalArgumentException(
+          "Empty points-to set for value in source: " + source + ".");
+
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
@@ -349,6 +362,10 @@ public abstract class TensorGenerator {
    */
   protected EnumSet<DType> getDTypesFromDTypeArgument(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
+    if (pointsToSet == null || !pointsToSet.iterator().hasNext())
+      throw new IllegalArgumentException(
+          "Empty points-to set for dtype argument in source: " + source + ".");
+
     EnumSet<DType> ret = EnumSet.noneOf(DType.class);
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
@@ -509,6 +526,11 @@ public abstract class TensorGenerator {
     PointerKey valuePK =
         pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
     OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
+
+    if (valuePointsToSet == null || valuePointsToSet.isEmpty())
+      throw new IllegalArgumentException(
+          "Empty points-to set for value number: " + valueNumber + " in: " + this.getNode() + ".");
+
     return getDTypesOfValue(builder, valuePointsToSet);
   }
 
@@ -522,6 +544,10 @@ public abstract class TensorGenerator {
    */
   private EnumSet<DType> getDTypesOfValue(
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
+    if (valuePointsToSet == null || valuePointsToSet.isEmpty())
+      throw new IllegalArgumentException(
+          "Empty points-to set for value in source: " + source + ".");
+
     EnumSet<DType> ret = EnumSet.noneOf(DType.class);
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
