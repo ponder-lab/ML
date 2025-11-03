@@ -4050,8 +4050,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("decorated_function_test.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
-  /** Test https://github.com/wala/ML/issues/195. */
-  @Test
+  /**
+   * Test https://github.com/wala/ML/issues/195.
+   *
+   * <p>Should not throw an {@link IllegalArgumentException} once
+   * https://github.com/wala/ML/issues/340 is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testReshape() throws ClassHierarchyException, CancelException, IOException {
     Dimension<Integer> x = new NumericDim(6);
     TensorType expectedType = new TensorType("pixel", asList(x));
@@ -4080,8 +4085,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_reshape3.py", "f", 1, 1, Map.of(2, Set.of(expectedType)));
   }
 
-  /** Test https://github.com/wala/ML/issues/195. */
-  @Test
+  /**
+   * Test https://github.com/wala/ML/issues/195.
+   *
+   * <p>Should not throw an {@link IllegalArgumentException} once
+   * https://github.com/wala/ML/issues/340 is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testReshape4() throws ClassHierarchyException, CancelException, IOException {
     Dimension<String> batch = new SymbolicDim("?");
     Dimension<Integer> x = new NumericDim(28);
@@ -4092,8 +4102,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_reshape4.py", "f", 1, 1, Map.of(2, Set.of(expectedType)));
   }
 
-  /** Test https://github.com/wala/ML/issues/195. */
-  @Test
+  /**
+   * Test https://github.com/wala/ML/issues/195.
+   *
+   * <p>Should not throw an {@link IllegalArgumentException} once
+   * https://github.com/wala/ML/issues/340 is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testReshape5() throws ClassHierarchyException, CancelException, IOException {
     Dimension<String> batch = new SymbolicDim("?");
     Dimension<Integer> x = new NumericDim(28);
