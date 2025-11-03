@@ -10,6 +10,9 @@ import java.util.Set;
 /**
  * A representation of the TensorFlow <code>fill()</code> function.
  *
+ * <p>The fill() function creates a new tensor with a specified shape and fills it with a specified
+ * value.
+ *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/fill">TensorFlow fill() API</a>.
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
