@@ -4129,7 +4129,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340 is fixed.
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
    */
   @Test(expected = IllegalArgumentException.class)
   public void testConvertToTensor5()
@@ -4138,7 +4139,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340 is fixed.
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
    */
   @Test(expected = IllegalArgumentException.class)
   public void testConvertToTensor6()
