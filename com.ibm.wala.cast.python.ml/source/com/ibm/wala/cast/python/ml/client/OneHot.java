@@ -58,8 +58,8 @@ public class OneHot extends ZerosLike {
       if (numArgs == Parameters.DEPTH.ordinal() + 1)
         // Neither on_value nor off_value is provided.
         ret.add(DType.FLOAT32);
-      else if (numArgs <= Parameters.OFF_VALUE.ordinal() + 1) {
-        // Either on_value and off_value are provided.
+      else if (numArgs >= Parameters.ON_VALUE.ordinal() + 1) {
+        // Either on_value and off_value are provided. We must at least have the on_value.
         EnumSet<DType> onValueDTypes =
             this.getDTypes(builder, this.getOnValueArgumentValueNumber());
 
