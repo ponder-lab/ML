@@ -18,15 +18,15 @@ public class ZerosLike extends Constant {
    * The shape argument is not explicitly provided to zeros_like(); rather, the shape is inferred
    * from the `input` argument.
    */
-  private static final int VALUE_NUMBER_FOR_SHAPE_ARGUMENT = -1;
+  private static final int SHAPE_PARAMETER_POSITION = -1;
 
   public ZerosLike(PointsToSetVariable source, CGNode node) {
     super(source, node);
   }
 
   @Override
-  protected int getShapeArgumentValueNumber() {
-    return VALUE_NUMBER_FOR_SHAPE_ARGUMENT;
+  protected int getShapeParameterPosition() {
+    return SHAPE_PARAMETER_POSITION;
   }
 
   @Override
