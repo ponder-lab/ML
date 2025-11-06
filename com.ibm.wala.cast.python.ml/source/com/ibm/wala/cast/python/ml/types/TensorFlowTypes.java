@@ -143,6 +143,13 @@ public class TensorFlowTypes extends PythonTypes {
               TypeName.string2TypeName("Ltensorflow/functions/convert_to_tensor")),
           AstMethodReference.fnSelector);
 
+  /** https://www.tensorflow.org/api_docs/python/tf/one_hot. */
+  public static final MethodReference ONE_HOT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/one_hot")),
+          AstMethodReference.fnSelector);
+
   /**
    * Represents the TensorFlow float32 data type.
    *

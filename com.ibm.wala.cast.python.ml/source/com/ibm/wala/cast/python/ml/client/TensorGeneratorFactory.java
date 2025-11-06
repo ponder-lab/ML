@@ -5,6 +5,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSO
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONES;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONE_HOT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM;
@@ -50,6 +51,7 @@ public class TensorGeneratorFactory {
     else if (calledFunction.equals(FILL.getDeclaringClass())) return new Fill(source, node);
     else if (calledFunction.equals(CONVERT_TO_TENSOR.getDeclaringClass()))
       return new ConvertToTensor(source, node);
+    else if (calledFunction.equals(ONE_HOT.getDeclaringClass())) return new OneHot(source, node);
     else
       throw new IllegalArgumentException(
           "Unknown call: " + calledFunction + " for source: " + source + ".");

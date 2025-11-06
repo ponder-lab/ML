@@ -1,13 +1,10 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
 import static java.util.function.Function.identity;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
-import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
-import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -15,12 +12,9 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
-import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
-import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -39,6 +33,7 @@ import java.util.stream.IntStream;
  */
 public class Range extends TensorGenerator {
 
+  @SuppressWarnings("unused")
   private static final Logger LOGGER = Logger.getLogger(Range.class.getName());
 
   private static final String FUNCTION_NAME = "tf.range()";
@@ -139,44 +134,6 @@ public class Range extends TensorGenerator {
             "Expected either 1 or >= 3 positional arguments for range(), but got: "
                 + numOfPoisitionArguments
                 + ".");
-
-    return ret;
-  }
-
-  /**
-   * Returns the set of possible numbers of positional arguments passed to the range function at the
-   * call.
-   *
-   * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
-   * @return A set of integers representing the possible number of positional arguments.
-   */
-  private Set<Integer> getNumberOfPossiblePositionalArguments(PropagationCallGraphBuilder builder) {
-    Set<Integer> ret = HashSetFactory.make();
-
-    CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
-    CallSiteReference siteReference = cs.getCallSiteRefs()[0];
-    LOGGER.fine(() -> "Analyzing call site: " + siteReference + ".");
-
-    for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode());
-        it.hasNext(); ) {
-      CGNode caller = it.next();
-      LOGGER.fine(() -> "Analyzing caller node: " + caller.getMethod().getSignature() + ".");
-
-      SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(siteReference);
-      LOGGER.finest(() -> "Number of calls at this site: " + calls.length + ".");
-
-      for (SSAAbstractInvokeInstruction callInstr : calls) {
-        LOGGER.finest(() -> "Call instruction: " + callInstr + ".");
-
-        PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
-        int numberOfPositionalParameters =
-            pyCallInstr.getNumberOfPositionalParameters() - 1; // Exclude the function name.
-        LOGGER.finer(
-            () -> "Number of positional parameters: " + numberOfPositionalParameters + ".");
-
-        ret.add(numberOfPositionalParameters);
-      }
-    }
 
     return ret;
   }
