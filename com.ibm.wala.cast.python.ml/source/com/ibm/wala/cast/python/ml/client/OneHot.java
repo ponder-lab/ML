@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.OneHot.Parameters.AXIS;
 import static com.ibm.wala.cast.python.ml.client.OneHot.Parameters.DEPTH;
 import static com.ibm.wala.cast.python.ml.client.OneHot.Parameters.DTYPE;
 import static com.ibm.wala.cast.python.ml.client.OneHot.Parameters.OFF_VALUE;
@@ -25,6 +26,8 @@ import java.util.Set;
 public class OneHot extends ZerosLike {
 
   private static final String FUNCTION_NAME = "tf.one_hot()";
+
+  private static final int AXIS_END = -1;
 
   enum Parameters {
     INDICES,
@@ -87,6 +90,10 @@ public class OneHot extends ZerosLike {
     return DEPTH.ordinal();
   }
 
+  protected int getAxisParameterPosition() {
+    return AXIS.ordinal();
+  }
+
   protected int getOnValueParameterPosition() {
     return ON_VALUE.ordinal();
   }
@@ -115,31 +122,70 @@ public class OneHot extends ZerosLike {
 
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
-    PointerKey pointerKey =
+    PointerKey depthPointerKey =
         pointerAnalysis
             .getHeapModel()
             .getPointerKeyForLocal(this.getNode(), depthArgumentValueNumber);
-    OrdinalSet<InstanceKey> pointsToSet = pointerAnalysis.getPointsToSet(pointerKey);
 
-    if (pointsToSet == null || pointsToSet.isEmpty())
+    OrdinalSet<InstanceKey> depthPTS = pointerAnalysis.getPointsToSet(depthPointerKey);
+
+    if (depthPTS == null || depthPTS.isEmpty())
       throw new IllegalStateException(
           "No depth argument value found for OneHot tensor generation.");
 
-    for (InstanceKey instanceKey : pointsToSet) {
-      int depth = getIntValueFromInstanceKey(instanceKey);
+    Set<Integer> possibleAxes = this.getPossibleAxes(builder);
 
-      // For each shape in indices, append the depth as a new dimension.
-      for (List<Dimension<?>> shape : indices) {
-        NumericDim dim = new NumericDim(depth);
+    for (int axis : possibleAxes)
+      for (InstanceKey depthIK : depthPTS) {
+        int depth = getIntValueFromInstanceKey(depthIK);
 
-        List<Dimension<?>> newShape = new ArrayList<>(shape);
-        newShape.add(dim);
-        ret.add(newShape);
+        // For each shape in indices, append the depth as a new dimension.
+        for (List<Dimension<?>> shape : indices) {
+          NumericDim dim = new NumericDim(depth);
+          List<Dimension<?>> newShape = new ArrayList<>(shape);
+
+          if (axis == AXIS_END) newShape.add(dim);
+          else newShape.add(axis, dim);
+
+          ret.add(newShape);
+        }
       }
-    }
 
     assert ret.size() >= indices.size()
         : "Number of OneHot shapes should be at least the number of indices shapes.";
+
+    return ret;
+  }
+
+  private Set<Integer> getPossibleAxes(PropagationCallGraphBuilder builder) {
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+    Set<Integer> ret = HashSetFactory.make();
+
+    // TODO: Handle keyword arguments.
+    for (int numArgs : this.getNumberOfPossiblePositionalArguments(builder)) {
+      if (numArgs <= Parameters.AXIS.ordinal())
+        // Axis argument not provided.
+        ret.add(AXIS_END);
+      else { // Axis argument may be provided.
+        int axisArgumentValueNumber = this.getAxisArgumentValueNumber();
+
+        PointerKey pointerKey =
+            pointerAnalysis
+                .getHeapModel()
+                .getPointerKeyForLocal(this.getNode(), axisArgumentValueNumber);
+
+        OrdinalSet<InstanceKey> pointsToSet = pointerAnalysis.getPointsToSet(pointerKey);
+
+        if (pointsToSet == null || pointsToSet.isEmpty())
+          // No axis argument value found; default to AXIS_END.
+          ret.add(AXIS_END);
+        else
+          for (InstanceKey instanceKey : pointsToSet) {
+            int axis = getIntValueFromInstanceKey(instanceKey);
+            ret.add(axis);
+          }
+      }
+    }
 
     return ret;
   }
@@ -156,7 +202,13 @@ public class OneHot extends ZerosLike {
   }
 
   private int getDepthArgumentValueNumber() {
+    // TODO: Handle keyword arguments.
     return this.getArgumentValueNumber(this.getDepthParameterPosition());
+  }
+
+  private int getAxisArgumentValueNumber() {
+    // TODO: Handle keyword arguments.
+    return this.getArgumentValueNumber(this.getAxisParameterPosition());
   }
 
   @Override

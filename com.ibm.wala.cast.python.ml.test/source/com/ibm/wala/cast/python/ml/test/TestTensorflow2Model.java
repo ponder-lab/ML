@@ -86,6 +86,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_3_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(2)));
 
+  private static final TensorType TENSOR_2_3_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(3)));
+
   private static final TensorType TENSOR_3_3_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(3)));
 
@@ -4285,6 +4288,30 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testOneHot13()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_one_hot13.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_3_INT32)));
+  }
+
+  @Test
+  public void testOneHot14()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_one_hot14.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_2_FLOAT32)));
+  }
+
+  @Test
+  public void testOneHot15()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_one_hot15.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_2_FLOAT32)));
+  }
+
+  @Test
+  public void testOneHot16()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_one_hot16.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_2_FLOAT32)));
+  }
+
+  @Test
+  public void testOneHot17()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_one_hot17.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
   }
 
   private void test(
