@@ -589,7 +589,8 @@ public abstract class TensorGenerator {
                   + " from value: "
                   + value
                   + ".");
-        } else throw new IllegalStateException("Unknown constant type: " + value.getClass() + ".");
+        } else if (value != null)
+          throw new IllegalStateException("Unknown constant type: " + value.getClass() + ".");
       } else if (valueIK instanceof AllocationSiteInNode) {
         AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
         TypeReference reference = asin.getConcreteType().getReference();
