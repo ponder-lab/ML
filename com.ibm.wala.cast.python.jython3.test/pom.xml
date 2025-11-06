@@ -22,8 +22,6 @@
       <groupId>${project.groupId}</groupId>
       <artifactId>com.ibm.wala.cast.python.test</artifactId>
       <version>${project.version}</version>
-      <type>test-jar</type>
-      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>com.ibm.wala</groupId>
@@ -70,6 +68,7 @@
         <artifactId>maven-surefire-plugin</artifactId>
       </plugin>
     </plugins>
+    <sourceDirectory>test-source</sourceDirectory>
     <testSourceDirectory>test-source</testSourceDirectory>
   </build>
 </project>
