@@ -56,20 +56,24 @@ public class OneHot extends ZerosLike {
 
     for (int numArgs : possiblePositionalArguments)
       if (numArgs == Parameters.DEPTH.ordinal() + 1)
-        // Neither on_value nor off_value is provided.
+        // Neither on_value nor off_value is provided. Default to float32.
         ret.add(DType.FLOAT32);
-      else if (numArgs >= Parameters.ON_VALUE.ordinal() + 1) {
-        // Either on_value and off_value are provided. We must at least have the on_value.
-        EnumSet<DType> onValueDTypes =
-            this.getDTypes(builder, this.getOnValueArgumentValueNumber());
+      else if (numArgs == Parameters.ON_VALUE.ordinal() + 1) {
+        // Only on_value may be provided.
+        ret.addAll(this.getDTypes(builder, this.getOnValueArgumentValueNumber()));
 
-        if (!onValueDTypes.isEmpty()) ret.addAll(onValueDTypes);
-        else {
-          EnumSet<DType> offValueDTypes =
-              this.getDTypes(builder, this.getOffValueArgumentValueNumber());
-          ret.addAll(offValueDTypes);
-        }
-      }
+        // If on_value has no known dtypes, default to float32.
+        if (ret.isEmpty()) ret.add(DType.FLOAT32);
+      } else if (numArgs >= Parameters.ON_VALUE.ordinal() + 1) {
+        // Either on_value and off_value may be provided.
+        ret.addAll(this.getDTypes(builder, this.getOnValueArgumentValueNumber()));
+        ret.addAll(this.getDTypes(builder, this.getOffValueArgumentValueNumber()));
+
+        // If neither on_value nor off_value have known dtypes, default to float32.
+        if (ret.isEmpty()) ret.add(DType.FLOAT32);
+      } else
+        throw new IllegalStateException(
+            "Unexpected number of positional arguments: " + numArgs + ".");
 
     return ret;
   }
