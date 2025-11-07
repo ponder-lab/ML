@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 
-def f(ab):
+def f(a):
     pass
 
 
