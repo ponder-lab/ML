@@ -21,6 +21,7 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 public class OneHot extends ZerosLike {
@@ -137,7 +138,12 @@ public class OneHot extends ZerosLike {
 
     for (int axis : possibleAxes)
       for (InstanceKey depthIK : depthPTS) {
-        int depth = getIntValueFromInstanceKey(depthIK);
+        int depth =
+            getIntValueFromInstanceKey(depthIK)
+                .orElseThrow(
+                    () ->
+                        new IllegalStateException(
+                            "Depth argument value for OneHot is not an integer: " + depthIK + "."));
 
         // For each shape in indices, append the depth as a new dimension.
         for (List<Dimension<?>> shape : indices) {
@@ -180,21 +186,21 @@ public class OneHot extends ZerosLike {
           // No axis argument value found; default to AXIS_END.
           ret.add(AXIS_END);
         else
-          for (InstanceKey instanceKey : pointsToSet) {
-            int axis = getIntValueFromInstanceKey(instanceKey);
-            ret.add(axis);
-          }
+          for (InstanceKey instanceKey : pointsToSet)
+            ret.add(getIntValueFromInstanceKey(instanceKey).orElse(AXIS_END));
       }
     }
 
     return ret;
   }
 
-  private static int getIntValueFromInstanceKey(InstanceKey instanceKey) {
+  private static Optional<Integer> getIntValueFromInstanceKey(InstanceKey instanceKey) {
     if (instanceKey instanceof ConstantKey) {
       ConstantKey<?> constantKey = (ConstantKey<?>) instanceKey;
       Object value = constantKey.getValue();
-      return ((Long) value).intValue();
+
+      if (value == null) return Optional.empty();
+      return Optional.of(((Long) value).intValue());
     }
 
     throw new IllegalStateException(
