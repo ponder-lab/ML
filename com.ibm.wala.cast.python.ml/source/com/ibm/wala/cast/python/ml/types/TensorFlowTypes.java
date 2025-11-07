@@ -150,6 +150,13 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/one_hot")),
           AstMethodReference.fnSelector);
 
+  /** https://www.tensorflow.org/api_docs/python/tf/eye. */
+  public static final MethodReference EYE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/eye")),
+          AstMethodReference.fnSelector);
+
   /**
    * Represents the TensorFlow float32 data type.
    *
