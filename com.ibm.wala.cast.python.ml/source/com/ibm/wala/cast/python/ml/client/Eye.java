@@ -4,6 +4,7 @@ import static com.ibm.wala.cast.python.ml.client.Eye.Parameters.BATCH_SHAPE;
 import static com.ibm.wala.cast.python.ml.client.Eye.Parameters.DTYPE;
 import static com.ibm.wala.cast.python.ml.client.Eye.Parameters.NUM_COLUMNS;
 import static com.ibm.wala.cast.python.ml.client.Eye.Parameters.NUM_ROWS;
+import static java.util.Collections.emptySet;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -14,6 +15,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -53,24 +55,25 @@ public class Eye extends Ones {
     return NUM_ROWS.ordinal();
   }
 
-  protected int getNumRowsValueNumber(PropagationCallGraphBuilder builder) {
+  protected int getNumRowsArgumentValueNumber() {
     return this.getArgumentValueNumber(this.getNumRowsParameterPosition());
+  }
+
+  protected int getBatchShapesArgumentValueNumber() {
+    // TOOD: Handle keyword arguments.
+    return this.getArgumentValueNumber(this.getBatchShapeParameterPosition());
   }
 
   protected int getNumColumnsParameterPosition() {
     return NUM_COLUMNS.ordinal();
   }
 
-  protected int getNumColumnsValueNumber(PropagationCallGraphBuilder builder) {
+  protected int getNumColumnsArgumentValueNumber(PropagationCallGraphBuilder builder) {
     return this.getArgumentValueNumber(this.getNumColumnsParameterPosition());
   }
 
   protected int getBatchShapeParameterPosition() {
     return BATCH_SHAPE.ordinal();
-  }
-
-  protected int getBatchShapeValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(this.getBatchShapeParameterPosition());
   }
 
   @Override
@@ -114,6 +117,12 @@ public class Eye extends Ones {
         }
     }
 
+    Set<List<Dimension<?>>> batchShapes = this.getBatchShapes(builder);
+
+    // prepend batch dimensions to each shape.
+    for (List<Dimension<?>> batchDim : batchShapes)
+      for (List<Dimension<?>> retDim : ret) retDim.addAll(0, batchDim);
+
     return ret;
   }
 
@@ -131,6 +140,33 @@ public class Eye extends Ones {
   private Set<Optional<Integer>> getNumberOfColumns(PropagationCallGraphBuilder builder) {
     // TODO Handle keyword arguments.
     return this.getPossiblePositionalArgumentValues(builder, this.getNumColumnsParameterPosition());
+  }
+
+  private Set<List<Dimension<?>>> getBatchShapes(PropagationCallGraphBuilder builder) {
+    // TODO Handle keyword arguments.
+    Set<Integer> possibleNumArgs = this.getNumberOfPossiblePositionalArguments(builder);
+
+    if (possibleNumArgs.contains(this.getBatchShapeParameterPosition() + 1)) {
+      PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+
+      PointerKey pointerKey =
+          pointerAnalysis
+              .getHeapModel()
+              .getPointerKeyForLocal(this.getNode(), this.getBatchShapesArgumentValueNumber());
+
+      OrdinalSet<InstanceKey> pts = pointerAnalysis.getPointsToSet(pointerKey);
+
+      Set<List<Dimension<?>>> shapesFromShapeArgument =
+          this.getShapesFromShapeArgument(builder, pts);
+
+      if (shapesFromShapeArgument == null || shapesFromShapeArgument.isEmpty())
+        throw new IllegalStateException(
+            "Batch shape argument for tf.eye() should be a list of dimensions.");
+
+      return shapesFromShapeArgument;
+    }
+
+    return emptySet();
   }
 
   private Set<Optional<Integer>> getPossiblePositionalArgumentValues(

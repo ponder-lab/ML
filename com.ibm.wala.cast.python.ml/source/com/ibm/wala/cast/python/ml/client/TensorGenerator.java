@@ -103,7 +103,7 @@ public abstract class TensorGenerator {
       AllocationSiteInNode asin = getAllocationSiteInNode(instanceKey);
       TypeReference reference = asin.getConcreteType().getReference();
 
-      if (reference.equals(list)) { // TODO: This can also be a tuple of tensors.
+      if (reference.equals(list) || reference.equals(tuple)) {
         // We have a list of integers that represent the shape.
         OrdinalSet<InstanceKey> objectCatalogPointsToSet =
             pointerAnalysis.getPointsToSet(
@@ -206,7 +206,13 @@ public abstract class TensorGenerator {
           }
       } else
         throw new IllegalStateException(
-            "Expected a " + PythonTypes.list + " for the shape, but got: " + reference + ".");
+            "Expected a "
+                + PythonTypes.list
+                + " or "
+                + PythonTypes.tuple
+                + " for the shape, but got: "
+                + reference
+                + ".");
     }
 
     return ret;
