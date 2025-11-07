@@ -119,7 +119,13 @@ public class Eye extends Ones {
 
   private Set<Optional<Integer>> getNumberOfRows(PropagationCallGraphBuilder builder) {
     // TODO Handle keyword arguments.
-    return this.getPossiblePositionalArgumentValues(builder, this.getNumRowsParameterPosition());
+    Set<Optional<Integer>> values =
+        this.getPossiblePositionalArgumentValues(builder, this.getNumRowsParameterPosition());
+
+    if (values == null || values.isEmpty())
+      throw new IllegalStateException("The num_rows parameter is required for tf.eye().");
+
+    return values;
   }
 
   private Set<Optional<Integer>> getNumberOfColumns(PropagationCallGraphBuilder builder) {
