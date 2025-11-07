@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.ml.client.OneHot.Parameters.AXIS;
 import static com.ibm.wala.cast.python.ml.client.OneHot.Parameters.DEPTH;
 import static com.ibm.wala.cast.python.ml.client.OneHot.Parameters.DTYPE;
+import static com.ibm.wala.cast.python.ml.client.OneHot.Parameters.INDICES;
 import static com.ibm.wala.cast.python.ml.client.OneHot.Parameters.OFF_VALUE;
 import static com.ibm.wala.cast.python.ml.client.OneHot.Parameters.ON_VALUE;
 
@@ -24,7 +25,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-public class OneHot extends ZerosLike {
+public class OneHot extends Ones {
 
   private static final String FUNCTION_NAME = "tf.one_hot()";
 
@@ -87,6 +88,10 @@ public class OneHot extends ZerosLike {
     return DTYPE.ordinal();
   }
 
+  protected int getIndicesParameterPosition() {
+    return INDICES.ordinal();
+  }
+
   protected int getDepthParameterPosition() {
     return DEPTH.ordinal();
   }
@@ -111,10 +116,14 @@ public class OneHot extends ZerosLike {
     return this.getArgumentValueNumber(this.getOffValueParameterPosition());
   }
 
+  protected int getIndicesArgumentValueNumber() {
+    return this.getArgumentValueNumber(this.getIndicesParameterPosition());
+  }
+
   @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
-    Set<List<Dimension<?>>> indices = this.getShapes(builder, this.getValueArgumentValueNumber());
+    Set<List<Dimension<?>>> indices = this.getShapes(builder, this.getIndicesArgumentValueNumber());
     int depthArgumentValueNumber = this.getDepthArgumentValueNumber();
 
     if (depthArgumentValueNumber <= 0)
