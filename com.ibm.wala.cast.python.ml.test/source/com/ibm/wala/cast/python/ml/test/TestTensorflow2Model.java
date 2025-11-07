@@ -3800,10 +3800,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_static_method12.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void testStaticMethod13() throws ClassHierarchyException, CancelException, IOException {
-    // NOTE: This test will no longer throw an exception once data types other than lists are
-    // supported for shape arguments.
     test(
         "tf2_test_static_method13.py",
         "MyClass.the_static_method",
