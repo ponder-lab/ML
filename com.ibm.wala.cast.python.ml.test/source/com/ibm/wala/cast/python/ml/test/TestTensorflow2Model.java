@@ -4364,6 +4364,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_eye2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
+  @Test
+  public void testEye3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_eye3.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
   private void test(
       String filename,
       String functionName,
