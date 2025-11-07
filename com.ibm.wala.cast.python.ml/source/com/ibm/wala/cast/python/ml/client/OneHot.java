@@ -6,6 +6,7 @@ import static com.ibm.wala.cast.python.ml.client.OneHot.Parameters.DTYPE;
 import static com.ibm.wala.cast.python.ml.client.OneHot.Parameters.INDICES;
 import static com.ibm.wala.cast.python.ml.client.OneHot.Parameters.OFF_VALUE;
 import static com.ibm.wala.cast.python.ml.client.OneHot.Parameters.ON_VALUE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -60,22 +61,22 @@ public class OneHot extends Ones {
     Set<Integer> possiblePositionalArguments = this.getNumberOfPossiblePositionalArguments(builder);
 
     for (int numArgs : possiblePositionalArguments)
-      if (numArgs == Parameters.DEPTH.ordinal() + 1)
+      if (numArgs == DEPTH.ordinal() + 1)
         // Neither on_value nor off_value is provided. Default to float32.
-        ret.add(DType.FLOAT32);
-      else if (numArgs == Parameters.ON_VALUE.ordinal() + 1) {
+        ret.add(FLOAT32);
+      else if (numArgs == ON_VALUE.ordinal() + 1) {
         // Only on_value may be provided.
         ret.addAll(this.getDTypes(builder, this.getOnValueArgumentValueNumber()));
 
         // If on_value has no known dtypes, default to float32.
-        if (ret.isEmpty()) ret.add(DType.FLOAT32);
-      } else if (numArgs >= Parameters.ON_VALUE.ordinal() + 1) {
+        if (ret.isEmpty()) ret.add(FLOAT32);
+      } else if (numArgs >= ON_VALUE.ordinal() + 1) {
         // Either on_value and off_value may be provided.
         ret.addAll(this.getDTypes(builder, this.getOnValueArgumentValueNumber()));
         ret.addAll(this.getDTypes(builder, this.getOffValueArgumentValueNumber()));
 
         // If neither on_value nor off_value have known dtypes, default to float32.
-        if (ret.isEmpty()) ret.add(DType.FLOAT32);
+        if (ret.isEmpty()) ret.add(FLOAT32);
       } else
         throw new IllegalStateException(
             "Unexpected number of positional arguments: " + numArgs + ".");
