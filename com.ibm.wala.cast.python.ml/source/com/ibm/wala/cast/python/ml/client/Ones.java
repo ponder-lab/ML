@@ -6,10 +6,13 @@ import static java.util.logging.Logger.getLogger;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -59,5 +62,18 @@ public class Ones extends TensorGenerator {
   @Override
   protected int getDTypeParameterPosition() {
     return DTYPE_PARAMETER_POSITION;
+  }
+
+  protected static Optional<Integer> getIntValueFromInstanceKey(InstanceKey instanceKey) {
+    if (instanceKey instanceof ConstantKey) {
+      ConstantKey<?> constantKey = (ConstantKey<?>) instanceKey;
+      Object value = constantKey.getValue();
+
+      if (value == null) return Optional.empty();
+      return Optional.of(((Long) value).intValue());
+    }
+
+    throw new IllegalArgumentException(
+        "Cannot get integer value from non-constant InstanceKey: " + instanceKey + ".");
   }
 }

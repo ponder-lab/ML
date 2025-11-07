@@ -12,7 +12,6 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
-import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
@@ -23,7 +22,6 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 public class OneHot extends Ones {
@@ -202,19 +200,6 @@ public class OneHot extends Ones {
     }
 
     return ret;
-  }
-
-  private static Optional<Integer> getIntValueFromInstanceKey(InstanceKey instanceKey) {
-    if (instanceKey instanceof ConstantKey) {
-      ConstantKey<?> constantKey = (ConstantKey<?>) instanceKey;
-      Object value = constantKey.getValue();
-
-      if (value == null) return Optional.empty();
-      return Optional.of(((Long) value).intValue());
-    }
-
-    throw new IllegalArgumentException(
-        "Cannot get integer value from non-constant InstanceKey: " + instanceKey + ".");
   }
 
   private int getDepthArgumentValueNumber() {
