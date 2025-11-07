@@ -95,6 +95,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_3_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3), new NumericDim(3)));
 
+  private static final TensorType TENSOR_2_3_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(3)));
+
   private static final TensorType TENSOR_2_1_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(1)));
 
@@ -103,6 +106,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_2_3_4_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(3), new NumericDim(4)));
+
+  private static final TensorType TENSOR_2_5_3_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(5), new NumericDim(3)));
 
   private static final TensorType TENSOR_20_28_28_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(20), new NumericDim(28), new NumericDim(28)));
@@ -4312,6 +4318,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testOneHot17()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_one_hot17.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  @Test
+  public void testOneHot18()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_one_hot18.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_5_3_FLOAT32)));
+  }
+
+  /**
+   * FIXME: Should not throw an {@link IllegalArgumentException} once
+   * https://github.com/wala/ML/issues/340 is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
+  public void testOneHot19()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_one_hot19.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_2_3_INT32)));
+    test("tf2_test_one_hot19.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_5_3_FLOAT32)));
   }
 
   private void test(
