@@ -203,8 +203,8 @@ public class OneHot extends ZerosLike {
       return Optional.of(((Long) value).intValue());
     }
 
-    throw new IllegalStateException(
-        "Cannot get integer value from non-constant InstanceKey: " + instanceKey);
+    throw new IllegalArgumentException(
+        "Cannot get integer value from non-constant InstanceKey: " + instanceKey + ".");
   }
 
   private int getDepthArgumentValueNumber() {
