@@ -93,6 +93,7 @@ public abstract class TensorGenerator {
   protected Set<List<Dimension<?>>> getShapesFromShapeArgument(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
     if (pointsToSet == null || !pointsToSet.iterator().hasNext())
+      // TODO: The shape argument could be a tensor, in which case the points-to set would be empty.
       throw new IllegalArgumentException(
           "Empty points-to set for shape argument in source: " + source + ".");
 
