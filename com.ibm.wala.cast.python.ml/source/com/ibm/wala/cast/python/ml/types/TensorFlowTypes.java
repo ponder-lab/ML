@@ -157,6 +157,13 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/eye")),
           AstMethodReference.fnSelector);
 
+  /** https://www.tensorflow.org/api_docs/python/tf/gamma. */
+  public static final MethodReference GAMMA =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/gamma")),
+          AstMethodReference.fnSelector);
+
   /**
    * Represents the TensorFlow float32 data type.
    *
