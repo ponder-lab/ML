@@ -95,9 +95,9 @@ public class Gamma extends Ones {
       shapes.forEach(
           shape -> {
             alphaShapes.forEach(
-                alphaShape -> {
+                aShape -> {
                   List<Dimension<?>> newShape = new ArrayList<>(shape);
-                  newShape.addAll(alphaShape);
+                  newShape.addAll(aShape);
                   ret.add(newShape);
                 });
           });
