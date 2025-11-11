@@ -164,6 +164,13 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/gamma")),
           AstMethodReference.fnSelector);
 
+  /** https://www.tensorflow.org/api_docs/python/tf/poisson. */
+  public static final MethodReference POISSON =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/poisson")),
+          AstMethodReference.fnSelector);
+
   /**
    * Represents the TensorFlow float32 data type.
    *

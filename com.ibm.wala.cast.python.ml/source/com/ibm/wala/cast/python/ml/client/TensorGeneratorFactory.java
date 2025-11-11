@@ -8,6 +8,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONES;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONE_HOT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.POISSON;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM;
@@ -56,6 +57,7 @@ public class TensorGeneratorFactory {
     else if (calledFunction.equals(ONE_HOT.getDeclaringClass())) return new OneHot(source, node);
     else if (calledFunction.equals(EYE.getDeclaringClass())) return new Eye(source, node);
     else if (calledFunction.equals(GAMMA.getDeclaringClass())) return new Gamma(source, node);
+    else if (calledFunction.equals(POISSON.getDeclaringClass())) return new Poisson(source, node);
     else
       throw new IllegalArgumentException(
           "Unknown call: " + calledFunction + " for source: " + source + ".");
