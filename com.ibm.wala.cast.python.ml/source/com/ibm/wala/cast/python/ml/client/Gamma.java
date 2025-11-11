@@ -24,7 +24,7 @@ public class Gamma extends Ones {
 
   private static final String FUNCTION_NAME = "tf.random.gamma()";
 
-  enum Parameters {
+  protected enum Parameters {
     SHAPE,
     ALPHA,
     BETA,

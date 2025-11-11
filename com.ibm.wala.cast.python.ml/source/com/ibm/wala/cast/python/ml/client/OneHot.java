@@ -30,7 +30,7 @@ public class OneHot extends Ones {
 
   private static final int AXIS_END = -1;
 
-  enum Parameters {
+  protected enum Parameters {
     INDICES,
     DEPTH,
     ON_VALUE,

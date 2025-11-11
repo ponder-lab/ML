@@ -23,7 +23,7 @@ public class Poisson extends Ones {
 
   private static final String FUNCTION_NAME = "tf.random.poisson()";
 
-  enum Parameters {
+  protected enum Parameters {
     SHAPE,
     LAM,
     DTYPE,

@@ -29,7 +29,7 @@ public class Eye extends Ones {
 
   private static final int SHAPE_PARAMETER_POSITION = -1;
 
-  enum Parameters {
+  protected enum Parameters {
     NUM_ROWS,
     NUM_COLUMNS,
     BATCH_SHAPE,
