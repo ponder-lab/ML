@@ -79,9 +79,15 @@ public class Gamma extends Ones {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     Set<List<Dimension<?>>> shapes = super.getShapes(builder);
 
+    if (shapes.isEmpty())
+      throw new IllegalStateException("Cannot determine shape for mandatory shape parameter.");
+
     // Get the shape of the alpha parameter.
     Set<List<Dimension<?>>> alphaShapes =
         this.getShapes(builder, this.getAlphaParameterValueNumber(builder));
+
+    if (alphaShapes.isEmpty())
+      throw new IllegalStateException("Cannot determine shape for mandatory alpha parameter.");
 
     // If there is no beta parameter.
     if (this.getBetaParameterValueNumber(builder) < 0)
