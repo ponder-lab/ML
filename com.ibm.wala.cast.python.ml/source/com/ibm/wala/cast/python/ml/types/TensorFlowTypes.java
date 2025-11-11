@@ -157,6 +157,14 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/eye")),
           AstMethodReference.fnSelector);
 
+  /** https://www.tensorflow.org/api_docs/python/tf/sparse/eye. */
+  public static final MethodReference SPARSE_EYE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/sparse_eye")),
+          AstMethodReference.fnSelector);
+
   /** https://www.tensorflow.org/api_docs/python/tf/gamma. */
   public static final MethodReference GAMMA =
       MethodReference.findOrCreate(
