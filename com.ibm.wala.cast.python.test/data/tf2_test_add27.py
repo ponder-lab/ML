@@ -6,4 +6,8 @@ def add(a, b):
     return a + b
 
 
-c = add(tensorflow.zeros([1, 2]), zeros([2, 2]))
+arg = tensorflow.zeros([1, 2])
+assert arg.shape == (1, 2)
+assert arg.dtype == tensorflow.float32
+
+c = add(arg, zeros([2, 2]))
