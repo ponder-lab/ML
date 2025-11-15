@@ -65,7 +65,7 @@ public class Poisson extends Ones {
       throw new IllegalStateException(
           "Cannot determine shape for " + this.getSignature() + " call.");
 
-    // Get the shape of the alpha parameter.
+    // Get the shape of the lam parameter.
     Set<List<Dimension<?>>> lamShapes =
         this.getShapes(builder, this.getLamParameterValueNumber(builder));
 
