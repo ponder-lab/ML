@@ -669,18 +669,17 @@ public abstract class TensorGenerator {
         : this.getNode().getIR().getParameter(parameterPosition + 1);
   }
 
-  protected int getArgumentValueNumber(PropagationCallGraphBuilder builder, int parameterPosition) {
-    Set<Integer> numberOfPossiblePositionalArguments =
-        this.getNumberOfPossiblePositionalArguments(builder);
+  protected int getArgumentValueNumber(PropagationCallGraphBuilder builder, int paramPos) {
+    Set<Integer> numArgs = this.getNumberOfPossiblePositionalArguments(builder);
 
-    if (!numberOfPossiblePositionalArguments.stream().anyMatch(n -> n >= parameterPosition + 1))
+    if (!numArgs.stream().anyMatch(n -> n >= paramPos + 1))
       throw new IllegalStateException(
           "Cannot determine value number for parameter at position "
-              + parameterPosition
+              + paramPos
               + " of "
               + this.getSignature());
 
-    return this.getArgumentValueNumber(parameterPosition);
+    return this.getArgumentValueNumber(paramPos);
   }
 
   /**
