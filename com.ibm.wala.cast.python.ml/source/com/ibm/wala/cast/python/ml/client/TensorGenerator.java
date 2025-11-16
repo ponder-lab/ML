@@ -669,6 +669,20 @@ public abstract class TensorGenerator {
         : this.getNode().getIR().getParameter(parameterPosition + 1);
   }
 
+  protected int getArgumentValueNumber(PropagationCallGraphBuilder builder, int parameterPosition) {
+    Set<Integer> numberOfPossiblePositionalArguments =
+        this.getNumberOfPossiblePositionalArguments(builder);
+
+    if (!numberOfPossiblePositionalArguments.stream().anyMatch(n -> n >= parameterPosition + 1))
+      throw new IllegalStateException(
+          "Cannot determine value number for parameter at position "
+              + parameterPosition
+              + " of "
+              + this.getSignature());
+
+    return this.getArgumentValueNumber(parameterPosition);
+  }
+
   /**
    * Returns the set of possible numbers of positional arguments passed to the range function at the
    * call.

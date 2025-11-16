@@ -44,20 +44,6 @@ public class Poisson extends Ones {
     return LAM.ordinal();
   }
 
-  protected int getArgumentValueNumber(PropagationCallGraphBuilder builder, int parameterPosition) {
-    Set<Integer> numberOfPossiblePositionalArguments =
-        this.getNumberOfPossiblePositionalArguments(builder);
-
-    if (!numberOfPossiblePositionalArguments.stream().anyMatch(n -> n >= parameterPosition + 1))
-      throw new IllegalStateException(
-          "Cannot determine value number for parameter at position "
-              + parameterPosition
-              + " of "
-              + this.getSignature());
-
-    return this.getArgumentValueNumber(parameterPosition);
-  }
-
   protected int getLamParameterValueNumber(PropagationCallGraphBuilder builder) {
     return this.getArgumentValueNumber(this.getLamParameterPosition());
   }
