@@ -110,6 +110,17 @@ public class TensorType implements Iterable<Dimension<?>> {
       } else if (!v.equals(other.v)) return false;
       return true;
     }
+
+    public static Dimension<?> max(Dimension<?> d1, Dimension<?> d2) {
+      if (d1 instanceof NumericDim && d2 instanceof NumericDim) {
+        Integer v1 = ((NumericDim) d1).value();
+        Integer v2 = ((NumericDim) d2).value();
+
+        return new NumericDim(Math.max(v1, v2));
+      } else
+        throw new IllegalArgumentException(
+            "Cannot compute max of non-numeric dimensions: " + d1 + ", " + d2);
+    }
   }
 
   public static class SymbolicDim extends Dimension<String> {
