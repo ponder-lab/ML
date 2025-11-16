@@ -45,7 +45,7 @@ public class Poisson extends Ones {
   }
 
   protected int getLamParameterValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(this.getLamParameterPosition());
+    return this.getArgumentValueNumber(builder, this.getLamParameterPosition());
   }
 
   @Override
