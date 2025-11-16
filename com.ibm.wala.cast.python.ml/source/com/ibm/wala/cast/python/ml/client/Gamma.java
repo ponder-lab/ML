@@ -51,27 +51,11 @@ public class Gamma extends Ones {
   }
 
   protected int getAlphaParameterValueNumber(PropagationCallGraphBuilder builder) {
-    Set<Integer> numberOfPossiblePositionalArguments =
-        this.getNumberOfPossiblePositionalArguments(builder);
-    int alphaParameterPosition = this.getAlphaParameterPosition();
-
-    if (!numberOfPossiblePositionalArguments.stream()
-        .anyMatch(n -> n >= alphaParameterPosition + 1))
-      throw new IllegalStateException(
-          "Alpha parameter is mandatory and must be provided explicitly.");
-
-    return this.getArgumentValueNumber(alphaParameterPosition);
+    return this.getArgumentValueNumber(builder, this.getAlphaParameterPosition());
   }
 
   protected int getBetaParameterValueNumber(PropagationCallGraphBuilder builder) {
-    Set<Integer> numberOfPossiblePositionalArguments =
-        this.getNumberOfPossiblePositionalArguments(builder);
-    int betaParameterPosition = this.getBetaParameterPosition();
-
-    if (!numberOfPossiblePositionalArguments.stream().anyMatch(n -> n >= betaParameterPosition + 1))
-      return -1; // Beta parameter is optional.
-
-    return this.getArgumentValueNumber(betaParameterPosition);
+    return this.getArgumentValueNumber(builder, this.getBetaParameterPosition(), true);
   }
 
   @Override
