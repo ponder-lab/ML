@@ -31,6 +31,7 @@ import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
@@ -63,11 +64,8 @@ public abstract class TensorGenerator {
 
   protected PointsToSetVariable source;
 
-  protected CGNode node;
-
-  public TensorGenerator(PointsToSetVariable source, CGNode node) {
+  public TensorGenerator(PointsToSetVariable source) {
     this.source = source;
-    this.node = node;
   }
 
   public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
@@ -95,7 +93,7 @@ public abstract class TensorGenerator {
     if (pointsToSet == null || !pointsToSet.iterator().hasNext())
       // TODO: The shape argument could be a tensor, in which case the points-to set would be empty.
       throw new IllegalArgumentException(
-          "Empty points-to set for shape argument in source: " + source + ".");
+          "Empty points-to set for shape argument in source: " + this.getSource() + ".");
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
@@ -151,7 +149,11 @@ public abstract class TensorGenerator {
               // We have a shape value.
               Long shapeValue = (Long) instanceFieldValue;
               LOGGER.fine(
-                  "Found shape value: " + shapeValue + " for " + source.getPointerKey() + ".");
+                  "Found shape value: "
+                      + shapeValue
+                      + " for "
+                      + this.getSource().getPointerKey()
+                      + ".");
 
               Dimension<Integer> dimension = new NumericDim(shapeValue.intValue());
 
@@ -172,7 +174,7 @@ public abstract class TensorGenerator {
                   + " for field: "
                   + pointerKeyForInstanceField
                   + " for source: "
-                  + source
+                  + this.getSource()
                   + ".");
 
           // Add the shape dimensions.
@@ -300,7 +302,7 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
     if (valuePointsToSet == null || valuePointsToSet.isEmpty())
       throw new IllegalArgumentException(
-          "Empty points-to set for value in source: " + source + ".");
+          "Empty points-to set for value in source: " + this.getSource() + ".");
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
@@ -375,7 +377,7 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
     if (pointsToSet == null || !pointsToSet.iterator().hasNext())
       throw new IllegalArgumentException(
-          "Empty points-to set for dtype argument in source: " + source + ".");
+          "Empty points-to set for dtype argument in source: " + this.getSource() + ".");
 
     EnumSet<DType> ret = EnumSet.noneOf(DType.class);
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
@@ -388,7 +390,10 @@ public abstract class TensorGenerator {
 
         if (value == null) {
           LOGGER.info(
-              "DType argument is None for source: " + source + "; using default dtypes." + ".");
+              "DType argument is None for source: "
+                  + this.getSource()
+                  + "; using default dtypes."
+                  + ".");
           return getDefaultDTypes(builder);
         }
       }
@@ -431,7 +436,8 @@ public abstract class TensorGenerator {
                 .collect(toSet());
 
         if (importNodesOfInterest.isEmpty())
-          throw new IllegalStateException("No import nodes found for source: " + source + ".");
+          throw new IllegalStateException(
+              "No import nodes found for source: " + this.getSource() + ".");
 
         boolean found = false;
 
@@ -459,7 +465,7 @@ public abstract class TensorGenerator {
                     "Found dtype: "
                         + dtype
                         + " for source: "
-                        + source
+                        + this.getSource()
                         + " from dType: "
                         + instanceKey
                         + ".");
@@ -557,7 +563,7 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
     if (valuePointsToSet == null || valuePointsToSet.isEmpty())
       throw new IllegalArgumentException(
-          "Empty points-to set for value in source: " + source + ".");
+          "Empty points-to set for value in source: " + this.getSource() + ".");
 
     EnumSet<DType> ret = EnumSet.noneOf(DType.class);
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
@@ -572,7 +578,7 @@ public abstract class TensorGenerator {
               "Inferred dtype: "
                   + FLOAT32
                   + " for source: "
-                  + source
+                  + this.getSource()
                   + " from value: "
                   + value
                   + ".");
@@ -582,7 +588,7 @@ public abstract class TensorGenerator {
               "Inferred dtype: "
                   + INT32
                   + " for source: "
-                  + source
+                  + this.getSource()
                   + " from value: "
                   + value
                   + ".");
@@ -592,7 +598,7 @@ public abstract class TensorGenerator {
               "Inferred dtype: "
                   + STRING
                   + " for source: "
-                  + source
+                  + this.getSource()
                   + " from value: "
                   + value
                   + ".");
@@ -645,8 +651,12 @@ public abstract class TensorGenerator {
     return ret;
   }
 
+  protected PointsToSetVariable getSource() {
+    return this.source;
+  }
+
   protected CGNode getNode() {
-    return this.node;
+    return ((LocalPointerKey) this.getSource().getPointerKey()).getNode();
   }
 
   @Override

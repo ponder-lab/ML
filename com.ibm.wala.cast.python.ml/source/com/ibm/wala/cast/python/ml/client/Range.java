@@ -5,7 +5,6 @@ import static java.util.function.Function.identity;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
-import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
@@ -38,8 +37,8 @@ public class Range extends TensorGenerator {
 
   private static final String FUNCTION_NAME = "tf.range()";
 
-  public Range(PointsToSetVariable source, CGNode node) {
-    super(source, node);
+  public Range(PointsToSetVariable source) {
+    super(source);
   }
 
   @Override

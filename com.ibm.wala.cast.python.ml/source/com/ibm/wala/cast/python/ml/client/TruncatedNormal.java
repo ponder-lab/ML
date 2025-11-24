@@ -1,6 +1,5 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 
 /**
@@ -15,8 +14,8 @@ public class TruncatedNormal extends Normal {
 
   private static final String FUNCTION_NAME = "tf.random.truncated_normal()";
 
-  public TruncatedNormal(PointsToSetVariable source, CGNode node) {
-    super(source, node);
+  public TruncatedNormal(PointsToSetVariable source) {
+    super(source);
   }
 
   @Override

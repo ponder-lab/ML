@@ -1,7 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
-import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
@@ -79,8 +78,8 @@ public class ConvertToTensor extends ZerosLike {
     }
   }
 
-  public ConvertToTensor(PointsToSetVariable source, CGNode node) {
-    super(source, node);
+  public ConvertToTensor(PointsToSetVariable source) {
+    super(source);
   }
 
   /**

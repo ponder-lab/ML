@@ -4,7 +4,6 @@ import static com.ibm.wala.cast.python.ml.client.Poisson.Parameters.DTYPE;
 import static com.ibm.wala.cast.python.ml.client.Poisson.Parameters.LAM;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
-import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
@@ -31,8 +30,8 @@ public class Poisson extends Ones {
     NAME
   }
 
-  public Poisson(PointsToSetVariable source, CGNode node) {
-    super(source, node);
+  public Poisson(PointsToSetVariable source) {
+    super(source);
   }
 
   @Override

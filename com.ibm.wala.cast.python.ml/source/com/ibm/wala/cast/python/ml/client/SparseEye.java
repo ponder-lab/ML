@@ -6,7 +6,6 @@ import static com.ibm.wala.cast.python.ml.client.SparseEye.Parameters.NUM_ROWS;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
-import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
@@ -33,8 +32,8 @@ public class SparseEye extends Ones {
     NAME
   }
 
-  public SparseEye(PointsToSetVariable source, CGNode node) {
-    super(source, node);
+  public SparseEye(PointsToSetVariable source) {
+    super(source);
   }
 
   private Set<Optional<Integer>> getPossiblePositionalArgumentValues(

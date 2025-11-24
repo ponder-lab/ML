@@ -5,7 +5,6 @@ import static com.ibm.wala.cast.python.ml.client.Eye.Parameters.DTYPE;
 import static java.util.Collections.emptySet;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
-import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
@@ -27,8 +26,8 @@ public class Eye extends SparseEye {
     NAME
   }
 
-  public Eye(PointsToSetVariable source, CGNode node) {
-    super(source, node);
+  public Eye(PointsToSetVariable source) {
+    super(source);
   }
 
   @Override

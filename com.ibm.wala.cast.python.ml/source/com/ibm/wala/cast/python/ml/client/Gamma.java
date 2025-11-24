@@ -5,7 +5,6 @@ import static com.ibm.wala.cast.python.ml.client.Gamma.Parameters.BETA;
 import static com.ibm.wala.cast.python.ml.client.Gamma.Parameters.DTYPE;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
-import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
@@ -33,8 +32,8 @@ public class Gamma extends Ones {
     NAME
   }
 
-  public Gamma(PointsToSetVariable source, CGNode node) {
-    super(source, node);
+  public Gamma(PointsToSetVariable source) {
+    super(source);
   }
 
   @Override

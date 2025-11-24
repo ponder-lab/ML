@@ -1,7 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
-import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
@@ -25,8 +24,8 @@ public class ZerosLike extends Constant {
    */
   private static final int SHAPE_PARAMETER_POSITION = -1;
 
-  public ZerosLike(PointsToSetVariable source, CGNode node) {
-    super(source, node);
+  public ZerosLike(PointsToSetVariable source) {
+    super(source);
   }
 
   @Override

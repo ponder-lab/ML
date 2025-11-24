@@ -1,7 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
-import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import java.util.List;
@@ -30,8 +29,8 @@ public class Fill extends Constant {
    */
   private static final int VALUE_NUMBER_FOR_DTYPE_ARGUMENT = -1;
 
-  public Fill(PointsToSetVariable source, CGNode node) {
-    super(source, node);
+  public Fill(PointsToSetVariable source) {
+    super(source);
   }
 
   @Override
