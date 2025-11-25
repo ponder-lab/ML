@@ -51,8 +51,6 @@ public class TensorGeneratorFactory {
     else if (calledFunction.equals(SPARSE_EYE.getDeclaringClass())) return new SparseEye(source);
     else if (calledFunction.equals(GAMMA.getDeclaringClass())) return new Gamma(source);
     else if (calledFunction.equals(POISSON.getDeclaringClass())) return new Poisson(source);
-    else
-      throw new IllegalArgumentException(
-          "Unknown call: " + calledFunction + " for source: " + source + ".");
+    else return new UnknownTensorGenerator(source);
   }
 }
