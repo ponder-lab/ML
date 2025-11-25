@@ -187,6 +187,10 @@ public class TensorFlowTypes extends PythonTypes {
               TypeName.string2TypeName("Ltensorflow/functions/ragged_constant")),
           AstMethodReference.fnSelector);
 
+  /** A mapping from a {@link TypeReference} to its associated TensorFlow signature. */
+  public static final Map<TypeReference, String> TYPE_REFERENCE_TO_SIGNATURE =
+      Map.of(RAGGED_CONSTANT.getDeclaringClass(), "tf.ragged.constant");
+
   /**
    * Represents the TensorFlow float32 data type.
    *
