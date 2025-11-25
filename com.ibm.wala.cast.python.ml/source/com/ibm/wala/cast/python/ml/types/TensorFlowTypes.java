@@ -179,6 +179,14 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/poisson")),
           AstMethodReference.fnSelector);
 
+  /** https://www.tensorflow.org/api_docs/python/tf/ragged/constant. */
+  public static final MethodReference RAGGED_CONSTANT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/ragged_constant")),
+          AstMethodReference.fnSelector);
+
   /**
    * Represents the TensorFlow float32 data type.
    *
