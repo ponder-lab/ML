@@ -14,11 +14,15 @@ import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.tree.CAstAnnotation;
 import com.ibm.wala.cast.tree.CAstNode;
 import com.ibm.wala.classLoader.IClass;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.Entrypoint;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.types.TypeReference;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -229,5 +233,22 @@ public class Util {
               + ". Not expecting: "
               + instanceKey.getClass()
               + ".");
+  }
+
+  /**
+   * Returns the {@link TypeReference} of the function represented by the {@link CGNode} associated
+   * with the given {@link PointsToSetVariable}.
+   *
+   * @param source The {@link PointsToSetVariable} whose associated {@link CGNode}'s function {@link
+   *     TypeReference} is to be retrieved.
+   * @return The {@link TypeReference} of the function represented by the {@link CGNode} associated
+   *     with the given {@link PointsToSetVariable}.
+   */
+  public static TypeReference getFunction(PointsToSetVariable source) {
+    return ((LocalPointerKey) source.getPointerKey())
+        .getNode()
+        .getMethod()
+        .getDeclaringClass()
+        .getReference();
   }
 }

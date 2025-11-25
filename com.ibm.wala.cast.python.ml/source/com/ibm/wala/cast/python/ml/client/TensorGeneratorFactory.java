@@ -15,9 +15,8 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS_LIKE;
+import static com.ibm.wala.cast.python.util.Util.getFunction;
 
-import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
-import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.types.TypeReference;
 import java.util.logging.Logger;
@@ -32,11 +31,7 @@ public class TensorGeneratorFactory {
   private static final Logger LOGGER = Logger.getLogger(TensorGeneratorFactory.class.getName());
 
   public static TensorGenerator getGenerator(PointsToSetVariable source) {
-    // Get the pointer key for the source.
-    PointerKey pointerKey = source.getPointerKey();
-
-    TypeReference calledFunction =
-        ((LocalPointerKey) pointerKey).getNode().getMethod().getDeclaringClass().getReference();
+    TypeReference calledFunction = getFunction(source);
     LOGGER.info("Getting tensor generator for call to: " + calledFunction.getName() + ".");
 
     if (calledFunction.equals(ONES.getDeclaringClass())) return new Ones(source);
