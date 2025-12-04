@@ -3680,8 +3680,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       Map<Integer, Set<TensorType>> expectedTensorParameterValueNumberToTypes)
       throws ClassHierarchyException, CancelException, IOException {
     List<File> pathFiles = this.getPathFiles(pythonPath);
-    PythonTensorAnalysisEngine E = makeEngine(pathFiles, projectFilenames);
-    PythonSSAPropagationCallGraphBuilder builder = E.defaultCallGraphBuilder();
+    PythonTensorAnalysisEngine engine = makeEngine(pathFiles, projectFilenames);
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
 
     addPytestEntrypoints(builder);
 
@@ -3697,10 +3697,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       LOGGER.fine("Call graph:\n" + CG);
     }
 
-    TensorTypeAnalysis analysis = E.performAnalysis(builder);
+    TensorTypeAnalysis analysis = engine.performAnalysis(builder);
     LOGGER.info("Tensor analysis: " + analysis);
 
-    Map<PointerKey, AnalysisError> errors = E.getErrors();
+    Map<PointerKey, AnalysisError> errors = engine.getErrors();
 
     errors.forEach(
         (k, v) ->
