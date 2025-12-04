@@ -95,6 +95,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_3_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3), new NumericDim(3)));
 
+  private static final TensorType TENSOR_3_NONE_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(3), null));
+
   private static final TensorType TENSOR_2_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(3)));
 
@@ -4560,6 +4563,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testSparseEye6() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_sparse_eye6.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_2_INT32)));
+  }
+
+  @Test
+  public void testRaggedConstant() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_ragged_constant.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_NONE_INT32)));
   }
 
   private void test(
