@@ -313,6 +313,8 @@ public abstract class TensorGenerator {
         AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
         TypeReference reference = asin.getConcreteType().getReference();
 
+        // TODO: Does this work for nested lists/tuples? Try
+        // https://gemini.google.com/share/4db81a3c0908.
         if (reference.equals(list) || reference.equals(tuple)) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               pointerAnalysis.getPointsToSet(
