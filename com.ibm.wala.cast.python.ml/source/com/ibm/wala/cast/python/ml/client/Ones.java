@@ -13,6 +13,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.logging.Logger;
 
 /**
  * A generator for tensors created by the `ones()` function in TensorFlow.
@@ -22,7 +23,7 @@ import java.util.Set;
  */
 public class Ones extends TensorGenerator {
 
-  private static final java.util.logging.Logger LOGGER = getLogger(Ones.class.getName());
+  private static final Logger LOGGER = getLogger(Ones.class.getName());
 
   private static final String FUNCTION_NAME = "tf.ones()";
 
