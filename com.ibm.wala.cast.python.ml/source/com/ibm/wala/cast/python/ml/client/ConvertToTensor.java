@@ -35,6 +35,10 @@ public class ConvertToTensor extends ZerosLike {
    */
   private static final int DTYPE_HINT_PARAMETER_POSITION = 2;
 
+  public ConvertToTensor(PointsToSetVariable source) {
+    super(source);
+  }
+
   @Override
   protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // If the dtype argument is not specified, then the type is inferred from the type of value,
@@ -76,10 +80,6 @@ public class ConvertToTensor extends ZerosLike {
         // No compatible dtypes found, return the default dtypes.
         return defaultDTypes;
     }
-  }
-
-  public ConvertToTensor(PointsToSetVariable source) {
-    super(source);
   }
 
   /**
