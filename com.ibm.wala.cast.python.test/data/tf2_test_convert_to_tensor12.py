@@ -6,10 +6,7 @@ def f(a):
 
 
 # A 2D list (Matrix)
-matrix_list = [
-    [1, 2, 3],
-    [4, 5, 6]
-]
+matrix_list = [[1, 2, 3], [4, 5, 6]]
 
 assert isinstance(matrix_list, list)
 assert len(matrix_list) == 2
