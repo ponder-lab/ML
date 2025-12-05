@@ -5,10 +5,12 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FIELD_REFERENCE_TO_DTYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.getFunction;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
 import static java.util.Arrays.asList;
@@ -663,7 +665,10 @@ public abstract class TensorGenerator {
    *
    * @return The TensorFlow function signature represented by this generator.
    */
-  protected abstract String getSignature();
+  protected String getSignature() {
+    TypeReference function = getFunction(this.getSource());
+    return TYPE_REFERENCE_TO_SIGNATURE.get(function);
+  }
 
   protected int getArgumentValueNumber(int parameterPosition) {
     if (parameterPosition < 0) return -1; // No such argument.

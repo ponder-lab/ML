@@ -1,11 +1,9 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
-import static com.ibm.wala.cast.python.util.Util.getFunction;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.util.logging.Logger.getLogger;
 
@@ -52,12 +50,6 @@ public class RaggedConstant extends ZerosLike {
 
   public RaggedConstant(PointsToSetVariable source) {
     super(source);
-  }
-
-  @Override
-  protected String getSignature() {
-    TypeReference function = getFunction(this.getSource());
-    return TYPE_REFERENCE_TO_SIGNATURE.get(function);
   }
 
   private static Set<Integer> getPossibleListLengths(
