@@ -5,6 +5,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FIELD_REFERENCE_TO_DTYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW;
+import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
@@ -121,8 +122,7 @@ public abstract class TensorGenerator {
           Integer fieldIndex = (Integer) constantKeyValue;
 
           FieldReference subscript =
-              FieldReference.findOrCreate(
-                  PythonTypes.Root, findOrCreateAsciiAtom(fieldIndex.toString()), PythonTypes.Root);
+              FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
 
           IField f = builder.getClassHierarchy().resolveField(subscript);
           LOGGER.fine("Found field: " + f);
@@ -330,9 +330,7 @@ public abstract class TensorGenerator {
 
             FieldReference subscript =
                 FieldReference.findOrCreate(
-                    PythonTypes.Root,
-                    findOrCreateAsciiAtom(fieldIndex.toString()),
-                    PythonTypes.Root);
+                    Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
 
             IField f = builder.getClassHierarchy().resolveField(subscript);
             LOGGER.fine("Found field: " + f);
@@ -623,9 +621,7 @@ public abstract class TensorGenerator {
 
             FieldReference subscript =
                 FieldReference.findOrCreate(
-                    PythonTypes.Root,
-                    findOrCreateAsciiAtom(fieldIndex.toString()),
-                    PythonTypes.Root);
+                    Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
 
             IField f = builder.getClassHierarchy().resolveField(subscript);
             LOGGER.fine("Found field: " + f);
