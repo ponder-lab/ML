@@ -288,18 +288,18 @@ public abstract class TensorGenerator {
       throw new IllegalArgumentException(
           "Empty points-to set for value number: " + valueNumber + " in: " + this.getNode() + ".");
 
-    return getShapesOfValue(valuePointsToSet, builder);
+    return getShapesOfValue(builder, valuePointsToSet);
   }
 
   /**
    * Returns the possible shapes of the tensor returned by this generator.
    *
-   * @param pointsToSet The points-to set of the value from which the shape will be derived.
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param pointsToSet The points-to set of the value from which the shape will be derived.
    * @return A set of possible shapes of the tensor returned by this generator.
    */
   private Set<List<Dimension<?>>> getShapesOfValue(
-      OrdinalSet<InstanceKey> valuePointsToSet, PropagationCallGraphBuilder builder) {
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
     if (valuePointsToSet == null || valuePointsToSet.isEmpty())
       throw new IllegalArgumentException(
           "Empty points-to set for value in source: " + this.getSource() + ".");
@@ -346,7 +346,7 @@ public abstract class TensorGenerator {
             LOGGER.fine("Points-to set for instance field: " + instanceFieldPointsToSet + ".");
 
             Set<List<Dimension<?>>> shapesOfField =
-                getShapesOfValue(instanceFieldPointsToSet, builder);
+                getShapesOfValue(builder, instanceFieldPointsToSet);
 
             for (List<Dimension<?>> shapeList : shapesOfField) {
               List<Dimension<?>> shape = new ArrayList<>();
