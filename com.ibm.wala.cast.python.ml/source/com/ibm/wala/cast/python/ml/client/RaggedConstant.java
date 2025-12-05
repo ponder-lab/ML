@@ -148,7 +148,7 @@ public class RaggedConstant extends ZerosLike {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
     Set<Integer> maxDepthOfScalars = getMaximumDepthOfScalars(builder, valuePointsToSet);
-    LOGGER.fine("Maximum depth of scalars in pylist: " + maxDepthOfScalars);
+    LOGGER.fine("Maximum depth of scalars in `pylist`: " + maxDepthOfScalars);
 
     // Step 2: Determine Ragged Rank (R).
     for (int K : maxDepthOfScalars) {
