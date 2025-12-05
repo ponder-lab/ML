@@ -95,6 +95,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_3_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3), new NumericDim(3)));
 
+  @SuppressWarnings("unused")
+  private static final TensorType TENSOR_1_NONE_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(1), null));
+
+  private static final TensorType TENSOR_1_NONE_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(1), null));
+
+  private static final TensorType TENSOR_2_NONE_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(2), null));
+
+  @SuppressWarnings("unused")
+  private static final TensorType TENSOR_2_NONE_NONE_NONE_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(2), null));
+
+  private static final TensorType TENSOR_2_NONE_NONE_NONE_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(2), null));
+
   private static final TensorType TENSOR_3_NONE_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3), null));
 
@@ -4574,6 +4591,31 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testRaggedConstant() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_ragged_constant.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_NONE_INT32)));
+  }
+
+  @Test
+  public void testRaggedConstant2() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_ragged_constant2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_NONE_INT32)));
+  }
+
+  @Test
+  public void testRaggedConstant3() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_ragged_constant3.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_NONE_INT32)));
+  }
+
+  @Test
+  public void testRaggedConstant4() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_ragged_constant4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_NONE_FLOAT32)));
+  }
+
+  @Test
+  public void testRaggedConstant5() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_constant5.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_NONE_NONE_NONE_FLOAT32)));
   }
 
   private void test(
