@@ -298,7 +298,7 @@ public abstract class TensorGenerator {
    * @param pointsToSet The points-to set of the value from which the shape will be derived.
    * @return A set of possible shapes of the tensor returned by this generator.
    */
-  private Set<List<Dimension<?>>> getShapesOfValue(
+  protected Set<List<Dimension<?>>> getShapesOfValue(
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
     if (valuePointsToSet == null || valuePointsToSet.isEmpty())
       throw new IllegalArgumentException(
