@@ -52,7 +52,7 @@ public class RaggedConstant extends ZerosLike {
     super(source);
   }
 
-  private static Set<Integer> getPossibleListLengths(
+  private static Set<Integer> getPossibleOuterListLengths(
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
     Set<Integer> ret = HashSetFactory.make();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
@@ -159,7 +159,8 @@ public class RaggedConstant extends ZerosLike {
       // Step 3: Construct shape with rank K and ragged rank R.
 
       // Get the length of the outer list.
-      Set<Integer> possibleOuterListLengths = getPossibleListLengths(builder, valuePointsToSet);
+      Set<Integer> possibleOuterListLengths =
+          getPossibleOuterListLengths(builder, valuePointsToSet);
 
       for (int outerListLength : possibleOuterListLengths) {
         List<Dimension<?>> shape = new ArrayList<>();
