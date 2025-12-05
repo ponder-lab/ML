@@ -358,9 +358,7 @@ public abstract class TensorGenerator {
             }
           }
         } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
-      } else
-        throw new IllegalStateException(
-            "Expected a " + ConstantKey.class + " for value, but got: " + valueIK + ".");
+      } else throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
 
     return ret;
   }
