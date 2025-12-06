@@ -77,56 +77,145 @@ public class RaggedConstant extends ZerosLike {
     return ret;
   }
 
-  private static Set<Integer> getMaximumDepthOfScalars(
-      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
-    Set<Integer> ret = HashSetFactory.make();
+  private static Set<InstanceKey> containsScalars(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> pts) {
+    Set<InstanceKey> ret = HashSetFactory.make();
+    for (InstanceKey ik : pts) if (containsScalars(builder, ik)) ret.add(ik);
+    return ret;
+  }
+
+  private static boolean containsScalars(PropagationCallGraphBuilder builder, InstanceKey ik) {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
-    for (InstanceKey valueIK : valuePointsToSet) {
-      int maxDepth = -1;
+    if (ik instanceof ConstantKey) return true; // Scalar value.
+    else {
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      TypeReference reference = asin.getConcreteType().getReference();
 
-      if (valueIK instanceof ConstantKey) maxDepth = Math.max(maxDepth, 0); // Scalar value.
-      else {
-        AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
-        TypeReference reference = asin.getConcreteType().getReference();
+      // A nested `list`, `tuple`, or `np.ndarray`.
+      if (reference.equals(list) || reference.equals(tuple)) {
+        OrdinalSet<InstanceKey> objectCatalogPointsToSet =
+            pointerAnalysis.getPointsToSet(
+                ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                    .getPointerKeyForObjectCatalog(asin));
 
-        // A nested `list`, `tuple`, or `np.ndarray`.
-        if (reference.equals(list) || reference.equals(tuple)) {
-          OrdinalSet<InstanceKey> objectCatalogPointsToSet =
-              pointerAnalysis.getPointsToSet(
-                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                      .getPointerKeyForObjectCatalog(asin));
+        for (InstanceKey catalogIK : objectCatalogPointsToSet) {
+          ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
+          Object constantKeyValue = constantKey.getValue();
 
-          for (InstanceKey catalogIK : objectCatalogPointsToSet) {
-            ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
-            Object constantKeyValue = constantKey.getValue();
+          Integer fieldIndex = (Integer) constantKeyValue;
 
-            Integer fieldIndex = (Integer) constantKeyValue;
+          FieldReference subscript =
+              FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
 
-            FieldReference subscript =
-                FieldReference.findOrCreate(
-                    Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+          IField f = builder.getClassHierarchy().resolveField(subscript);
 
-            IField f = builder.getClassHierarchy().resolveField(subscript);
+          PointerKey pointerKeyForInstanceField = builder.getPointerKeyForInstanceField(asin, f);
 
-            PointerKey pointerKeyForInstanceField = builder.getPointerKeyForInstanceField(asin, f);
+          OrdinalSet<InstanceKey> instanceFieldPointsToSet =
+              pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
 
-            OrdinalSet<InstanceKey> instanceFieldPointsToSet =
-                pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
-
-            Set<Integer> possibleDepthsOfField =
-                getMaximumDepthOfScalars(builder, instanceFieldPointsToSet);
-
-            for (int depthOfField : possibleDepthsOfField)
-              maxDepth = Math.max(maxDepth, 1 + depthOfField);
-          }
+          for (InstanceKey fieldIK : instanceFieldPointsToSet)
+            if (containsScalars(builder, fieldIK)) return true;
         }
-      }
-
-      ret.add(maxDepth);
+      } else
+        throw new IllegalArgumentException(
+            "Expected a list or tuple, but found: " + reference + ".");
     }
 
-    return ret;
+    return false;
+  }
+
+  private static int getMaximumDepthOfEmptyList(
+      PropagationCallGraphBuilder builder, InstanceKey valueIK) {
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+    int maxDepth = 0;
+
+    AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
+    TypeReference reference = asin.getConcreteType().getReference();
+
+    // A nested `list` or `tuple`.
+    if (reference.equals(list) || reference.equals(tuple)) {
+      OrdinalSet<InstanceKey> objectCatalogPointsToSet =
+          pointerAnalysis.getPointsToSet(
+              ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                  .getPointerKeyForObjectCatalog(asin));
+
+      for (InstanceKey catalogIK : objectCatalogPointsToSet) {
+        ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
+        Object constantKeyValue = constantKey.getValue();
+
+        Integer fieldIndex = (Integer) constantKeyValue;
+
+        FieldReference subscript =
+            FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+
+        IField f = builder.getClassHierarchy().resolveField(subscript);
+
+        PointerKey pointerKeyForInstanceField = builder.getPointerKeyForInstanceField(asin, f);
+
+        OrdinalSet<InstanceKey> instanceFieldPointsToSet =
+            pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
+
+        if (instanceFieldPointsToSet.isEmpty())
+          // An empty list at this field.
+          maxDepth = Math.max(maxDepth, 0);
+
+        for (InstanceKey fieldIK : instanceFieldPointsToSet) {
+          int depthOfField = getMaximumDepthOfEmptyList(builder, fieldIK);
+          maxDepth = Math.max(maxDepth, 1 + depthOfField);
+        }
+      }
+    } else
+      throw new IllegalArgumentException("Expected a list or tuple, but found: " + reference + ".");
+
+    return maxDepth;
+  }
+
+  private static int getMaximumDepthOfScalars(
+      PropagationCallGraphBuilder builder, InstanceKey valueIK) {
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+    int maxDepth = 0;
+
+    if (valueIK instanceof ConstantKey) maxDepth = Math.max(maxDepth, 0); // Scalar value.
+    else {
+      AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
+      TypeReference reference = asin.getConcreteType().getReference();
+
+      // A nested `list`, `tuple`, or `np.ndarray`.
+      if (reference.equals(list) || reference.equals(tuple)) {
+        OrdinalSet<InstanceKey> objectCatalogPointsToSet =
+            pointerAnalysis.getPointsToSet(
+                ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                    .getPointerKeyForObjectCatalog(asin));
+
+        for (InstanceKey catalogIK : objectCatalogPointsToSet) {
+          ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
+          Object constantKeyValue = constantKey.getValue();
+
+          Integer fieldIndex = (Integer) constantKeyValue;
+
+          FieldReference subscript =
+              FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+
+          IField f = builder.getClassHierarchy().resolveField(subscript);
+
+          PointerKey pointerKeyForInstanceField = builder.getPointerKeyForInstanceField(asin, f);
+
+          OrdinalSet<InstanceKey> instanceFieldPointsToSet =
+              pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
+
+          for (InstanceKey fieldIK : instanceFieldPointsToSet) {
+            int depthOfField = getMaximumDepthOfScalars(builder, fieldIK);
+            maxDepth = Math.max(maxDepth, 1 + depthOfField);
+          }
+        }
+      } else
+        throw new IllegalArgumentException(
+            "Expected a list or tuple, but found: " + reference + ".");
+    }
+
+    return maxDepth;
   }
 
   @Override
@@ -147,11 +236,16 @@ public class RaggedConstant extends ZerosLike {
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
-    Set<Integer> maxDepthOfScalars = getMaximumDepthOfScalars(builder, valuePointsToSet);
-    LOGGER.fine("Maximum depth of scalars in `pylist`: " + maxDepthOfScalars);
+    Set<InstanceKey> scalars = containsScalars(builder, valuePointsToSet);
 
-    // Step 2: Determine Ragged Rank (R).
-    for (int K : maxDepthOfScalars) {
+    for (InstanceKey valueIK : valuePointsToSet) {
+      int maxDepth = getMaxDepth(builder, scalars, valueIK);
+      LOGGER.fine("Maximum depth of `pylist`: " + maxDepth);
+
+      // Step 2: Determine Ragged Rank (R).
+      int K = maxDepth;
+      LOGGER.fine("Tensor rank: " + K);
+
       Optional<Integer> raggedRank = this.getRaggedRankArgumentValue(builder);
       int R = raggedRank.orElse(K - 1);
       LOGGER.fine("Ragged rank: " + R);
@@ -181,6 +275,18 @@ public class RaggedConstant extends ZerosLike {
     }
 
     return ret;
+  }
+
+  private static int getMaxDepth(
+      PropagationCallGraphBuilder builder, Set<InstanceKey> scalars, InstanceKey valueIK) {
+    int maxDepth;
+
+    if (scalars.contains(valueIK)) maxDepth = getMaximumDepthOfScalars(builder, valueIK);
+    else
+      // If `pylist` contains no scalar values, then K is one greater than the maximum depth of
+      // empty lists in `pylist`.
+      maxDepth = 1 + getMaximumDepthOfEmptyList(builder, valueIK);
+    return maxDepth;
   }
 
   private Optional<Integer> getRaggedRankArgumentValue(PropagationCallGraphBuilder builder) {
