@@ -8,6 +8,7 @@ import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.classLoader.IField;
@@ -23,6 +24,7 @@ import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -292,5 +294,31 @@ public class RaggedConstant extends ZerosLike {
   private Optional<Integer> getRaggedRankArgumentValue(PropagationCallGraphBuilder builder) {
     // TODO Auto-generated method stub
     return Optional.empty();
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * <p>If there no scalars, we default to <code>tf.float32</code>. This isn't in the documentation,
+   * but it seems to be the case.
+   *
+   * @see The <a href="https://github.com/tensorflow/tensorflow/issues/105858">"Update default dtype
+   *     description in ragged_factory_ops.py" GitHub issue</a>.
+   */
+  @Override
+  protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+
+    int valueNumber = this.getValueArgumentValueNumber();
+    PointerKey valuePK =
+        pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
+    OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
+
+    if (containsScalars(builder, valuePointsToSet).isEmpty()) {
+      LOGGER.fine("No scalars found in `pylist`; defaulting to `tf.float32` dtype.");
+      return EnumSet.of(DType.FLOAT32);
+    }
+
+    return super.getDefaultDTypes(builder);
   }
 }
