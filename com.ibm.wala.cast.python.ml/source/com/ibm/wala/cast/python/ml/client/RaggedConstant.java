@@ -1,11 +1,13 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.util.logging.Logger.getLogger;
+import static java.util.stream.Collectors.toSet;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -29,6 +31,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Logger;
+import java.util.stream.StreamSupport;
 
 /**
  * A representation of the `tf.ragged.constant()` API in TensorFlow.
@@ -76,13 +79,6 @@ public class RaggedConstant extends ZerosLike {
             "Expected a list or tuple, but found: " + reference + ".");
     }
 
-    return ret;
-  }
-
-  private static Set<InstanceKey> containsScalars(
-      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> pts) {
-    Set<InstanceKey> ret = HashSetFactory.make();
-    for (InstanceKey ik : pts) if (containsScalars(builder, ik)) ret.add(ik);
     return ret;
   }
 
@@ -231,17 +227,19 @@ public class RaggedConstant extends ZerosLike {
     // than the maximum depth of empty lists in `pylist`.
 
     // Step 1: Calculate K, the maximum depth of scalar values in `pylist`.
-
     if (valuePointsToSet == null || valuePointsToSet.isEmpty())
       throw new IllegalArgumentException(
           "Empty points-to set for value in source: " + this.getSource() + ".");
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
-    Set<InstanceKey> scalars = containsScalars(builder, valuePointsToSet);
+    Set<InstanceKey> valuesWithScalars =
+        StreamSupport.stream(valuePointsToSet.spliterator(), false)
+            .filter(ik -> containsScalars(builder, ik))
+            .collect(toSet());
 
     for (InstanceKey valueIK : valuePointsToSet) {
-      int maxDepth = getMaxDepth(builder, scalars, valueIK);
+      int maxDepth = getMaximumDepthOfInstance(builder, valuesWithScalars, valueIK);
       LOGGER.fine("Maximum depth of `pylist`: " + maxDepth);
 
       // Step 2: Determine Ragged Rank (R).
@@ -279,16 +277,15 @@ public class RaggedConstant extends ZerosLike {
     return ret;
   }
 
-  private static int getMaxDepth(
-      PropagationCallGraphBuilder builder, Set<InstanceKey> scalars, InstanceKey valueIK) {
-    int maxDepth;
-
-    if (scalars.contains(valueIK)) maxDepth = getMaximumDepthOfScalars(builder, valueIK);
+  private static int getMaximumDepthOfInstance(
+      PropagationCallGraphBuilder builder,
+      Set<InstanceKey> instancesWithScalars,
+      InstanceKey instance) {
+    if (instancesWithScalars.contains(instance)) return getMaximumDepthOfScalars(builder, instance);
     else
       // If `pylist` contains no scalar values, then K is one greater than the maximum depth of
       // empty lists in `pylist`.
-      maxDepth = 1 + getMaximumDepthOfEmptyList(builder, valueIK);
-    return maxDepth;
+      return 1 + getMaximumDepthOfEmptyList(builder, instance);
   }
 
   private Optional<Integer> getRaggedRankArgumentValue(PropagationCallGraphBuilder builder) {
@@ -314,9 +311,16 @@ public class RaggedConstant extends ZerosLike {
         pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
     OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
 
-    if (containsScalars(builder, valuePointsToSet).isEmpty()) {
+    if (valuePointsToSet == null || valuePointsToSet.isEmpty())
+      throw new IllegalArgumentException(
+          "Empty points-to set for value in source: " + this.getSource() + ".");
+
+    if (StreamSupport.stream(valuePointsToSet.spliterator(), false)
+            .filter(ik -> containsScalars(builder, ik))
+            .count()
+        == 0) {
       LOGGER.fine("No scalars found in `pylist`; defaulting to `tf.float32` dtype.");
-      return EnumSet.of(DType.FLOAT32);
+      return EnumSet.of(FLOAT32);
     }
 
     return super.getDefaultDTypes(builder);
