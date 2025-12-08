@@ -98,8 +98,8 @@ public class RaggedConstant extends ZerosLike {
         boolean containsAllListsOrTuples =
             StreamSupport.stream(instanceFieldPointsToSet.spliterator(), false)
                 .allMatch(
-                    ik -> {
-                      AllocationSiteInNode innerAsin = getAllocationSiteInNode(ik);
+                    ifk -> {
+                      AllocationSiteInNode innerAsin = getAllocationSiteInNode(ifk);
 
                       if (innerAsin == null) return false;
 
