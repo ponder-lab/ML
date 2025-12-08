@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.RaggedConstant.Parameters.RAGGED_RANK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
@@ -28,7 +29,6 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Logger;
 import java.util.stream.StreamSupport;
@@ -55,6 +55,65 @@ public class RaggedConstant extends ZerosLike {
 
   public RaggedConstant(PointsToSetVariable source) {
     super(source);
+  }
+
+  private static Set<Integer> getPossibleInnerListLengths(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> pts) {
+    Set<Integer> ret = HashSetFactory.make();
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+
+    for (InstanceKey ik : pts) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      TypeReference reference = asin.getConcreteType().getReference();
+
+      // A `list` or `tuple`.
+      if (reference.equals(list) || reference.equals(tuple)) {
+        OrdinalSet<InstanceKey> objectCatalogPointsToSet =
+            pointerAnalysis.getPointsToSet(
+                ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                    .getPointerKeyForObjectCatalog(asin));
+
+        assert objectCatalogPointsToSet.iterator().hasNext();
+
+        InstanceKey catalogIK =
+            objectCatalogPointsToSet
+                .iterator()
+                .next(); // Just need one element to check inner length.
+
+        ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
+        Object constantKeyValue = constantKey.getValue();
+
+        Integer fieldIndex = (Integer) constantKeyValue;
+
+        FieldReference subscript =
+            FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+
+        IField f = builder.getClassHierarchy().resolveField(subscript);
+
+        PointerKey pointerKeyForInstanceField = builder.getPointerKeyForInstanceField(asin, f);
+
+        OrdinalSet<InstanceKey> instanceFieldPointsToSet =
+            pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
+
+        boolean containsAllListsOrTuples =
+            StreamSupport.stream(instanceFieldPointsToSet.spliterator(), false)
+                .allMatch(
+                    ik -> {
+                      AllocationSiteInNode innerAsin = getAllocationSiteInNode(ik);
+
+                      if (innerAsin == null) return false;
+
+                      TypeReference innerReference = innerAsin.getConcreteType().getReference();
+                      return innerReference.equals(list) || innerReference.equals(tuple);
+                    });
+
+        if (!containsAllListsOrTuples) ret.add(objectCatalogPointsToSet.size());
+        else ret.addAll(getPossibleInnerListLengths(builder, instanceFieldPointsToSet));
+      } else
+        throw new IllegalStateException("Expected a list or tuple, but found: " + reference + ".");
+    }
+
+    return ret;
   }
 
   private static Set<Integer> getPossibleOuterListLengths(
@@ -246,31 +305,58 @@ public class RaggedConstant extends ZerosLike {
       int K = maxDepth;
       LOGGER.fine("Tensor rank: " + K);
 
-      Optional<Integer> raggedRank = this.getRaggedRankArgumentValue(builder);
-      int R = raggedRank.orElse(K - 1);
-      LOGGER.fine("Ragged rank: " + R);
+      Set<Long> rankArguments = this.getPossibleRaggedRankArguments(builder);
 
-      // Step 3: Construct shape with rank K and ragged rank R.
+      if (rankArguments.isEmpty()) rankArguments.add(K - 1L); // Default ragged rank.
 
-      // Get the length of the outer list.
-      Set<Integer> possibleOuterListLengths =
-          getPossibleOuterListLengths(builder, valuePointsToSet);
+      for (Long R : rankArguments) {
+        LOGGER.fine("Ragged rank: " + R);
 
-      for (int outerListLength : possibleOuterListLengths) {
-        List<Dimension<?>> shape = new ArrayList<>();
-        shape.add(new NumericDim(outerListLength));
+        // Step 3: Construct shape with rank K and ragged rank R.
+        // The final shape is constructed by concatenating the Ragged Portion and the Uniform
+        // Portion.
 
-        // The first R dimensions are ragged.
-        for (int i = 0; i < R; i++) shape.add(null); // Unknown size for ragged dimensions.
+        // Part A: The Ragged Portion (Dimensions 0 to R)
 
-        /*
-        // The remaining K - R dimensions are dense.
-        for (int i = R; i < K; i++) {
-          shape.add(new NumericDim(-1)); // Unknown size for dense dimensions.
+        // For the ragged dimensions, TensorFlow does not look for a uniform length. It assigns the
+        // shape based on the row_splits.
+
+        // Get the length of the outer list.
+        Set<Integer> possibleOuterListLengths =
+            getPossibleOuterListLengths(builder, valuePointsToSet);
+
+        for (int outerListLength : possibleOuterListLengths) {
+          List<Dimension<?>> shape = new ArrayList<>();
+
+          // Dim 0 (Batch): Always fixed. It is simply len(input_list).
+          shape.add(new NumericDim(outerListLength));
+
+          // The first R dimensions are ragged.
+          // Dim 1 to R: These are assigned None (or ? in older outputs) in the static shape,
+          // indicating they can vary.
+          for (Long i = 0L; i < R; i++) shape.add(null); // Unknown size for ragged dimensions.
+
+          // Part B: The Uniform Portion (Dimensions R + 1 to K)
+          // If R < K - 1 (meaning you requested fewer ragged dimensions than the total depth),
+          // TensorFlow enforces uniformity on the remaining inner dimensions.
+
+          // 1. It checks the length of every sub-list at these levels.
+          // 2. If any lengths differ, it throws a ValueError.
+          // 3. If they match, that length becomes the fixed size for that dimension.
+
+          if (R < K - 1) {
+            Set<Integer> possibleInnerListLengths =
+                getPossibleInnerListLengths(builder, valuePointsToSet);
+
+            // Determine the uniform lengths for dimensions R + 1 to K - 1.
+            for (long i = R + 1; i < K; i++) {
+              for (int innerListLength : possibleInnerListLengths)
+                shape.add(new NumericDim(innerListLength));
+            }
+          }
+
+          ret.add(shape);
         }
-        */
-
-        ret.add(shape);
       }
     }
 
@@ -288,9 +374,46 @@ public class RaggedConstant extends ZerosLike {
       return 1 + getMaximumDepthOfEmptyList(builder, instance);
   }
 
-  private Optional<Integer> getRaggedRankArgumentValue(PropagationCallGraphBuilder builder) {
-    // TODO Auto-generated method stub
-    return Optional.empty();
+  protected Set<Long> getPossibleRaggedRankArguments(PropagationCallGraphBuilder builder) {
+    Set<Long> ret = HashSetFactory.make();
+    int valueNumber = this.getRaggedRankArgumentValueNumber(builder);
+
+    if (valueNumber >= 0) {
+      PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+      PointerKey raggedRankPK =
+          pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
+      OrdinalSet<InstanceKey> raggedRankPointsToSet = pointerAnalysis.getPointsToSet(raggedRankPK);
+
+      if (raggedRankPointsToSet == null || raggedRankPointsToSet.isEmpty())
+        throw new IllegalArgumentException(
+            "Empty points-to set for ragged_rank in source: " + this.getSource() + ".");
+
+      for (InstanceKey raggedRankIK : raggedRankPointsToSet)
+        if (raggedRankIK instanceof ConstantKey) {
+          ConstantKey<?> constantKey = (ConstantKey<?>) raggedRankIK;
+          Object constantKeyValue = constantKey.getValue();
+
+          if (constantKeyValue instanceof Long) {
+            Long raggedRankValue = (Long) constantKeyValue;
+            ret.add(raggedRankValue);
+          } else
+            throw new IllegalArgumentException(
+                "Expected an integer for ragged_rank, but found: " + constantKeyValue + ".");
+        } else
+          throw new IllegalArgumentException(
+              "Expected a constant key for ragged_rank, but found: " + raggedRankIK + ".");
+    }
+
+    return ret;
+  }
+
+  protected int getRaggedRankParameterPosition() {
+    return RAGGED_RANK.ordinal();
+  }
+
+  protected int getRaggedRankArgumentValueNumber(PropagationCallGraphBuilder builder) {
+    // TODO: Handle keyword arguments.
+    return this.getArgumentValueNumber(builder, this.getRaggedRankParameterPosition(), true);
   }
 
   /**
@@ -323,6 +446,7 @@ public class RaggedConstant extends ZerosLike {
       return EnumSet.of(FLOAT32);
     }
 
+    // Otherwise, there are values available to infer the dtype from.
     return super.getDefaultDTypes(builder);
   }
 }
