@@ -219,11 +219,11 @@ public class RaggedConstant extends ZerosLike {
 
         if (instanceFieldPointsToSet.isEmpty())
           // An empty list at this field.
-          maxDepth = Math.max(maxDepth, 0);
+          maxDepth = max(maxDepth, 0);
 
         for (InstanceKey fieldIK : instanceFieldPointsToSet) {
           int depthOfField = getMaximumDepthOfEmptyList(builder, fieldIK);
-          maxDepth = Math.max(maxDepth, 1 + depthOfField);
+          maxDepth = max(maxDepth, 1 + depthOfField);
         }
       }
     } else
@@ -237,7 +237,7 @@ public class RaggedConstant extends ZerosLike {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
     int maxDepth = 0;
 
-    if (valueIK instanceof ConstantKey) maxDepth = Math.max(maxDepth, 0); // Scalar value.
+    if (valueIK instanceof ConstantKey) maxDepth = max(maxDepth, 0); // Scalar value.
     else {
       AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
       TypeReference reference = asin.getConcreteType().getReference();
@@ -267,7 +267,7 @@ public class RaggedConstant extends ZerosLike {
 
           for (InstanceKey fieldIK : instanceFieldPointsToSet) {
             int depthOfField = getMaximumDepthOfScalars(builder, fieldIK);
-            maxDepth = Math.max(maxDepth, 1 + depthOfField);
+            maxDepth = max(maxDepth, 1 + depthOfField);
           }
         }
       } else
