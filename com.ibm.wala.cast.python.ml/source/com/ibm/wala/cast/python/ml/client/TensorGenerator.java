@@ -738,6 +738,15 @@ public abstract class TensorGenerator {
     return ret;
   }
 
+  /**
+   * Returns the possible long arguments for the given value number. If the argument is `None`, then
+   * a null value will be contained within the returned set.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
+   * @param valueNumber The value number of the argument.
+   * @return A set of possible long arguments. If the argument is `None`, then a null value will be
+   *     contained within the returned set.
+   */
   protected Set<Long> getPossibleLongArguments(
       PropagationCallGraphBuilder builder, int valueNumber) {
     Set<Long> ret = HashSetFactory.make();
@@ -753,14 +762,17 @@ public abstract class TensorGenerator {
             "Empty points-to set in source: " + this.getSource() + ".");
 
       for (InstanceKey instanceKey : pointsToSet)
-        if (instanceKey instanceof com.ibm.wala.ipa.callgraph.propagation.ConstantKey) {
+        if (instanceKey instanceof ConstantKey) {
           ConstantKey<?> constantKey = (ConstantKey<?>) instanceKey;
           Object constantKeyValue = constantKey.getValue();
 
           if (constantKeyValue instanceof Long) {
             Long value = (Long) constantKeyValue;
             ret.add(value);
-          } else
+          } else if (constantKeyValue == null)
+            // The argument may be `None`.
+            ret.add(null);
+          else
             throw new IllegalStateException(
                 "Expected a long, but found: " + constantKeyValue + ".");
         } else

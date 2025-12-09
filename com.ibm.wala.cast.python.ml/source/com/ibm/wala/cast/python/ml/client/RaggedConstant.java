@@ -32,6 +32,7 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.logging.Logger;
 import java.util.stream.StreamSupport;
@@ -308,8 +309,15 @@ public class RaggedConstant extends ZerosLike {
       int K = maxDepth;
       LOGGER.fine("Tensor rank: " + K);
 
-      Set<Long> rankArguments = this.getPossibleRaggedRankArguments(builder);
-      Set<List<Dimension<?>>> innerShapeArguments = this.getPossibleInnerShapeArguments(builder);
+      Set<Long> rankArguments =
+          this.getPossibleRaggedRankArguments(builder).stream()
+              .filter(Objects::nonNull)
+              .collect(toSet());
+
+      Set<List<Dimension<?>>> innerShapeArguments =
+          this.getPossibleInnerShapeArguments(builder).stream()
+              .filter(Objects::nonNull)
+              .collect(toSet());
 
       if (rankArguments.isEmpty())
         // Default ragged rank.

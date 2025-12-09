@@ -4692,6 +4692,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_ragged_constant15.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_NONE_2_INT32)));
   }
 
+  @Test
+  public void testRaggedConstant16() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_ragged_constant16.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_NONE_2_INT32)));
+  }
+
   private void test(
       String filename,
       String functionName,
