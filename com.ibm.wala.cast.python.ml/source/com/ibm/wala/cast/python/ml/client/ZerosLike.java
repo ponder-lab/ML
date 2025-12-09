@@ -1,11 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
-import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
-import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
-import java.util.List;
-import java.util.Set;
 
 /**
  * A generator for tensors created by the `zeros_like()` function in TensorFlow.
@@ -26,13 +21,6 @@ public class ZerosLike extends Constant {
 
   public ZerosLike(PointsToSetVariable source) {
     super(source);
-  }
-
-  @Override
-  protected Set<List<Dimension<?>>> getShapesFromShapeArgument(
-      PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
-    throw new UnsupportedOperationException(
-        "Shapes are derived from the `input` argument and cannot be provided explicitly.");
   }
 
   @Override

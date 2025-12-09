@@ -88,7 +88,7 @@ public abstract class TensorGenerator {
    * Returns the possible shapes of the tensor returned by this generator.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @param pointsToSet The points-to set of the shape argument.
+   * @param pointsToSet The points-to set of the shape argument. FIXME: Why not take a value number?
    * @return A set of possible shapes of the tensor returned by this generator.
    */
   protected Set<List<Dimension<?>>> getShapesFromShapeArgument(
@@ -290,6 +290,7 @@ public abstract class TensorGenerator {
       throw new IllegalArgumentException(
           "Empty points-to set for value number: " + valueNumber + " in: " + this.getNode() + ".");
 
+    // FIXME: Just use the value number directly?
     return getShapesOfValue(builder, valuePointsToSet);
   }
 
@@ -732,6 +733,39 @@ public abstract class TensorGenerator {
 
         ret.add(numberOfPositionalParameters);
       }
+    }
+
+    return ret;
+  }
+
+  protected Set<Long> getPossibleLongArguments(
+      PropagationCallGraphBuilder builder, int valueNumber) {
+    Set<Long> ret = HashSetFactory.make();
+
+    if (valueNumber >= 0) {
+      PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+      PointerKey pointerKey =
+          pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
+      OrdinalSet<InstanceKey> pointsToSet = pointerAnalysis.getPointsToSet(pointerKey);
+
+      if (pointsToSet == null || pointsToSet.isEmpty())
+        throw new IllegalArgumentException(
+            "Empty points-to set in source: " + this.getSource() + ".");
+
+      for (InstanceKey instanceKey : pointsToSet)
+        if (instanceKey instanceof com.ibm.wala.ipa.callgraph.propagation.ConstantKey) {
+          ConstantKey<?> constantKey = (ConstantKey<?>) instanceKey;
+          Object constantKeyValue = constantKey.getValue();
+
+          if (constantKeyValue instanceof Long) {
+            Long value = (Long) constantKeyValue;
+            ret.add(value);
+          } else
+            throw new IllegalStateException(
+                "Expected a long, but found: " + constantKeyValue + ".");
+        } else
+          throw new IllegalStateException(
+              "Expected a constant key, but found: " + instanceKey + ".");
     }
 
     return ret;

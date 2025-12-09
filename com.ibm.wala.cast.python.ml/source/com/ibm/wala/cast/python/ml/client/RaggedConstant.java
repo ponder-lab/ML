@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.RaggedConstant.Parameters.INNER_SHAPE;
 import static com.ibm.wala.cast.python.ml.client.RaggedConstant.Parameters.RAGGED_RANK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
@@ -7,6 +8,8 @@ import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
+import static java.lang.Math.max;
+import static java.util.Collections.emptySet;
 import static java.util.logging.Logger.getLogger;
 import static java.util.stream.Collectors.toSet;
 
@@ -306,8 +309,14 @@ public class RaggedConstant extends ZerosLike {
       LOGGER.fine("Tensor rank: " + K);
 
       Set<Long> rankArguments = this.getPossibleRaggedRankArguments(builder);
+      Set<List<Dimension<?>>> innerShapeArguments = this.getPossibleInnerShapeArguments(builder);
 
-      if (rankArguments.isEmpty()) rankArguments.add(K - 1L); // Default ragged rank.
+      if (rankArguments.isEmpty())
+        // Default ragged rank.
+        if (innerShapeArguments.isEmpty()) rankArguments.add(max(0, K - 1L));
+        else
+          for (List<Dimension<?>> innerShape : innerShapeArguments)
+            rankArguments.add(max(0, K - 1L - innerShape.size()));
 
       for (Long R : rankArguments) {
         LOGGER.fine("Ragged rank: " + R);
@@ -375,36 +384,7 @@ public class RaggedConstant extends ZerosLike {
   }
 
   protected Set<Long> getPossibleRaggedRankArguments(PropagationCallGraphBuilder builder) {
-    Set<Long> ret = HashSetFactory.make();
-    int valueNumber = this.getRaggedRankArgumentValueNumber(builder);
-
-    if (valueNumber >= 0) {
-      PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
-      PointerKey raggedRankPK =
-          pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
-      OrdinalSet<InstanceKey> raggedRankPointsToSet = pointerAnalysis.getPointsToSet(raggedRankPK);
-
-      if (raggedRankPointsToSet == null || raggedRankPointsToSet.isEmpty())
-        throw new IllegalArgumentException(
-            "Empty points-to set for ragged_rank in source: " + this.getSource() + ".");
-
-      for (InstanceKey raggedRankIK : raggedRankPointsToSet)
-        if (raggedRankIK instanceof ConstantKey) {
-          ConstantKey<?> constantKey = (ConstantKey<?>) raggedRankIK;
-          Object constantKeyValue = constantKey.getValue();
-
-          if (constantKeyValue instanceof Long) {
-            Long raggedRankValue = (Long) constantKeyValue;
-            ret.add(raggedRankValue);
-          } else
-            throw new IllegalArgumentException(
-                "Expected an integer for ragged_rank, but found: " + constantKeyValue + ".");
-        } else
-          throw new IllegalArgumentException(
-              "Expected a constant key for ragged_rank, but found: " + raggedRankIK + ".");
-    }
-
-    return ret;
+    return this.getPossibleLongArguments(builder, this.getRaggedRankArgumentValueNumber(builder));
   }
 
   protected int getRaggedRankParameterPosition() {
@@ -414,6 +394,26 @@ public class RaggedConstant extends ZerosLike {
   protected int getRaggedRankArgumentValueNumber(PropagationCallGraphBuilder builder) {
     // TODO: Handle keyword arguments.
     return this.getArgumentValueNumber(builder, this.getRaggedRankParameterPosition(), true);
+  }
+
+  protected int getInnerShapeParameterPosition() {
+    return INNER_SHAPE.ordinal();
+  }
+
+  protected int getInnerShapeArgumentValueNumber(PropagationCallGraphBuilder builder) {
+    // TODO: Handle keyword arguments.
+    return this.getArgumentValueNumber(builder, this.getInnerShapeParameterPosition(), true);
+  }
+
+  protected Set<List<Dimension<?>>> getPossibleInnerShapeArguments(
+      PropagationCallGraphBuilder builder) {
+    int valueNumber = this.getInnerShapeArgumentValueNumber(builder);
+
+    if (valueNumber >= 0) {
+      PointerKey pointerKey = builder.getPointerKeyForLocal(this.getNode(), valueNumber);
+      OrdinalSet<InstanceKey> pointsToSet = builder.getPointerAnalysis().getPointsToSet(pointerKey);
+      return this.getShapesFromShapeArgument(builder, pointsToSet);
+    } else return emptySet();
   }
 
   /**

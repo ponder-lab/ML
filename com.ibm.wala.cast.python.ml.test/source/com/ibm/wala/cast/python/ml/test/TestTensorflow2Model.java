@@ -95,6 +95,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_3_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3), new NumericDim(3)));
 
+  private static final TensorType TENSOR_0_NONE_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(0), null));
+
+  private static final TensorType TENSOR_0_NONE_3_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(0), null, new NumericDim(3)));
+
   @SuppressWarnings("unused")
   private static final TensorType TENSOR_1_NONE_INT32 =
       new TensorType(INT_32, asList(new NumericDim(1), null));
@@ -110,6 +116,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_2_NONE_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), null, new NumericDim(2)));
+
+  private static final TensorType TENSOR_2_NONE_2_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(2), null, new NumericDim(2)));
 
   @SuppressWarnings("unused")
   private static final TensorType TENSOR_2_NONE_NONE_NONE_INT32 =
@@ -4666,6 +4675,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testRaggedConstant12() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_ragged_constant12.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_NONE_2_FLOAT32)));
+  }
+
+  @Test
+  public void testRaggedConstant13() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_ragged_constant13.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_0_NONE_FLOAT32)));
+  }
+
+  @Test
+  public void testRaggedConstant14() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_ragged_constant14.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_0_NONE_3_FLOAT32)));
+  }
+
+  @Test
+  public void testRaggedConstant15() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_ragged_constant15.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_NONE_2_INT32)));
   }
 
   private void test(
