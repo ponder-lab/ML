@@ -369,7 +369,7 @@ public class RaggedConstant extends ZerosLike {
 
             // Determine the uniform lengths for dimensions R + 1 to K - 1.
             for (int innerListLength : possibleInnerListLengths) {
-              List<Dimension<?>> newShape = new ArrayList<>();
+              List<Dimension<?>> newShape = new ArrayList<>(shape.size());
               newShape.addAll(shape);
 
               for (long i = R + 1; i < K; i++) newShape.add(new NumericDim(innerListLength));
