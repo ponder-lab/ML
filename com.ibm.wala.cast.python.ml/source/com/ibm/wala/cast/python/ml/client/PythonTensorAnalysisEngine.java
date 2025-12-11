@@ -667,10 +667,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     Set<PointsToSetVariable> sources =
         getDataflowSources(dataflow, builder.getCallGraph(), builder.getPointerAnalysis());
 
-    TensorType mnistData = TensorType.mnistInput();
-    Map<PointsToSetVariable, TensorType> init = HashMapFactory.make();
+    Map<PointsToSetVariable, Set<TensorType>> init = HashMapFactory.make();
 
-    for (PointsToSetVariable v : sources) init.put(v, mnistData);
+    for (PointsToSetVariable v : sources) init.put(v, getTensorTypes(v, builder));
 
     Map<PointsToSetVariable, TensorType> placeholders = null;
     try {
@@ -681,7 +680,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     logger.fine("Placeholders: " + placeholders);
 
     for (Map.Entry<PointsToSetVariable, TensorType> e : placeholders.entrySet())
-      init.put(e.getKey(), e.getValue());
+      init.put(e.getKey(), Set.of(e.getValue()));
 
     Map<PointsToSetVariable, TensorType> setCalls = HashMapFactory.make();
     Map<PointsToSetVariable, TensorType> set_shapes = getShapeSourceCalls(set_shape, builder, 1);
@@ -720,6 +719,29 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     tt.solve(new NullProgressMonitor());
 
     return tt;
+  }
+
+  /**
+   * Returns the set of possible {@link TensorType}s that the given {@link PointsToSetVariable} can
+   * take on.
+   *
+   * @param source The dataflow source to analyze.
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph and pointer
+   *     analysis.
+   * @return A set of {@link TensorType}s that the given {@link PointsToSetVariable} can take on.
+   *     Empty set is returned if the possible tensor types cannot be determined.
+   */
+  private Set<TensorType> getTensorTypes(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    logger.fine("Getting tensor types for source: " + source + ".");
+
+    TensorGenerator generator = TensorGeneratorFactory.getGenerator(source);
+    logger.fine("Using tensor generator: " + generator + ".");
+
+    Set<TensorType> tensorTypes = generator.getTensorTypes(builder);
+    logger.fine(() -> "Found tensor types: " + tensorTypes + ".");
+
+    return tensorTypes;
   }
 
   private Map<PointsToSetVariable, TensorType> handleShapeSourceOp(
