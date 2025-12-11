@@ -120,6 +120,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_2_NONE_2_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), null, new NumericDim(2)));
 
+  private static final TensorType TENSOR_2_NONE_2_3_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(2), null, new NumericDim(2), new NumericDim(3)));
+
+  private static final TensorType TENSOR_2_NONE_2_2_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(2), null, new NumericDim(2), new NumericDim(2)));
+
   @SuppressWarnings("unused")
   private static final TensorType TENSOR_2_NONE_NONE_NONE_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), null));
@@ -4695,6 +4701,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testRaggedConstant16() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_ragged_constant16.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_NONE_2_INT32)));
+  }
+
+  /**
+   * Test non-uniform inner dimensions.
+   *
+   * <p>FIXME: Should not throw an {@link AssertionError}.
+   */
+  @Test(expected = AssertionError.class)
+  public void testRaggedConstant17() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_ragged_constant17.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_NONE_2_3_INT32)));
+  }
+
+  /** This one works because the inner dimensions are uniform. */
+  @Test
+  public void testRaggedConstant18() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_ragged_constant18.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_NONE_2_2_INT32)));
   }
 
   private void test(

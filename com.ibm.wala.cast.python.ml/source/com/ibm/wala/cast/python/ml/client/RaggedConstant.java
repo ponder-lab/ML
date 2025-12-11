@@ -380,6 +380,19 @@ public class RaggedConstant extends ZerosLike {
             continue;
           }
 
+          if (!innerShapeArguments.isEmpty()) {
+            for (List<Dimension<?>> innerShape : innerShapeArguments) {
+              List<Dimension<?>> newShape = new ArrayList<>(shape.size());
+
+              newShape.addAll(shape);
+              newShape.addAll(innerShape);
+
+              ret.add(newShape);
+            }
+
+            continue;
+          }
+
           ret.add(shape);
         }
       }
