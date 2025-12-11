@@ -4706,7 +4706,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Test non-uniform inner dimensions.
    *
-   * <p>FIXME: Should not throw an {@link AssertionError}.
+   * <p>TODO: Remove expected assertion error once https://github.com/wala/ML/issues/350 is fixed.
    */
   @Test(expected = AssertionError.class)
   public void testRaggedConstant17() throws ClassHierarchyException, CancelException, IOException {
