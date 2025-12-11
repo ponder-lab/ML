@@ -343,6 +343,8 @@ public class RaggedConstant extends ZerosLike {
             getPossibleOuterListLengths(builder, valuePointsToSet);
 
         for (int outerListLength : possibleOuterListLengths) {
+          LOGGER.fine("Outer list length: " + outerListLength);
+
           List<Dimension<?>> shape = new ArrayList<>();
 
           // Dim 0 (Batch): Always fixed. It is simply len(input_list).
