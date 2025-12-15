@@ -32,7 +32,7 @@ public class Constant extends TensorGenerator {
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     // If the shape argument is not specified, then the shape is inferred from the shape of value.
     // TODO: Handle keyword arguments.
-    return getShapes(builder, this.getValueArgumentValueNumber());
+    return this.getShapes(builder, this.getValueArgumentValueNumber());
   }
 
   /**
