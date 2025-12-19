@@ -5,6 +5,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSO
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MULTIPLY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONES;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONE_HOT;
@@ -54,6 +55,7 @@ public class TensorGeneratorFactory {
     else if (calledFunction.equals(POISSON.getDeclaringClass())) return new Poisson(source);
     else if (calledFunction.equals(RAGGED_CONSTANT.getDeclaringClass()))
       return new RaggedConstant(source);
+    else if (calledFunction.equals(MULTIPLY.getDeclaringClass())) return new Multiply(source);
     else
       throw new IllegalArgumentException(
           "Unknown call: " + calledFunction + " for source: " + source + ".");

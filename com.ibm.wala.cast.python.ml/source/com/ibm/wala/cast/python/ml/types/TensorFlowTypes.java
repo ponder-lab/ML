@@ -189,9 +189,21 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String RAGGED_CONSTANT_SIGNATURE = "tf.ragged.constant()";
 
+  public static final MethodReference MULTIPLY =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/multiply")),
+          AstMethodReference.fnSelector);
+
+  private static final String MULTIPLY_SIGNATURE = "tf.multiply()";
+
   /** A mapping from a {@link TypeReference} to its associated TensorFlow signature. */
   public static final Map<TypeReference, String> TYPE_REFERENCE_TO_SIGNATURE =
-      Map.of(RAGGED_CONSTANT.getDeclaringClass(), RAGGED_CONSTANT_SIGNATURE);
+      Map.of(
+          RAGGED_CONSTANT.getDeclaringClass(),
+          RAGGED_CONSTANT_SIGNATURE,
+          MULTIPLY.getDeclaringClass(),
+          MULTIPLY_SIGNATURE);
 
   /**
    * Represents the TensorFlow float32 data type.

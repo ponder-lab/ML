@@ -3,10 +3,12 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.ml.client.RaggedConstant.Parameters.INNER_SHAPE;
 import static com.ibm.wala.cast.python.ml.client.RaggedConstant.Parameters.RAGGED_RANK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.cast.python.util.Util.getFunction;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.lang.Math.max;
 import static java.util.Collections.emptySet;
@@ -345,6 +347,8 @@ public class RaggedConstant extends ZerosLike {
         // FIXME: Doesn't seem right if there are multiple possible values. We need to create new
         // shapes to return in that case.
         for (int outerListLength : possibleOuterListLengths) {
+          LOGGER.fine("Outer list length: " + outerListLength);
+
           List<Dimension<?>> shape = new ArrayList<>();
 
           // Dim 0 (Batch): Always fixed. It is simply len(input_list).
@@ -368,10 +372,29 @@ public class RaggedConstant extends ZerosLike {
                 getPossibleInnerListLengths(builder, valuePointsToSet);
 
             // Determine the uniform lengths for dimensions R + 1 to K - 1.
-            for (long i = R + 1; i < K; i++) {
-              for (int innerListLength : possibleInnerListLengths)
-                shape.add(new NumericDim(innerListLength));
+            for (int innerListLength : possibleInnerListLengths) {
+              List<Dimension<?>> newShape = new ArrayList<>(shape.size());
+              newShape.addAll(shape);
+
+              for (long i = R + 1; i < K; i++) newShape.add(new NumericDim(innerListLength));
+
+              ret.add(newShape);
             }
+
+            continue;
+          }
+
+          if (!innerShapeArguments.isEmpty()) {
+            for (List<Dimension<?>> innerShape : innerShapeArguments) {
+              List<Dimension<?>> newShape = new ArrayList<>(shape.size());
+
+              newShape.addAll(shape);
+              newShape.addAll(innerShape);
+
+              ret.add(newShape);
+            }
+
+            continue;
           }
 
           ret.add(shape);
@@ -458,5 +481,16 @@ public class RaggedConstant extends ZerosLike {
 
     // Otherwise, there are values available to infer the dtype from.
     return super.getDefaultDTypes(builder);
+  }
+
+  /**
+   * Returns the TensorFlow function signature represented by this generator.
+   *
+   * @return The TensorFlow function signature represented by this generator.
+   */
+  @Override
+  protected String getSignature() {
+    TypeReference function = getFunction(this.getSource());
+    return TYPE_REFERENCE_TO_SIGNATURE.get(function);
   }
 }
