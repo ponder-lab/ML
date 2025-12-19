@@ -1,0 +1,24 @@
+package com.ibm.wala.cast.python.ml.client;
+
+import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+
+/**
+ * A representation of the `random.normal()` function in TensorFlow.
+ *
+ * @see <a href="https://www.tensorflow.org/api_docs/python/tf/random/normal">TensorFlow
+ *     random.normal() API</a>.
+ * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
+ */
+public class Normal extends Uniform {
+
+  private static final String FUNCTION_NAME = "tf.random.normal()";
+
+  public Normal(PointsToSetVariable source) {
+    super(source);
+  }
+
+  @Override
+  protected String getSignature() {
+    return FUNCTION_NAME;
+  }
+}
