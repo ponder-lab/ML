@@ -344,6 +344,8 @@ public class RaggedConstant extends ZerosLike {
         Set<Integer> possibleOuterListLengths =
             getPossibleOuterListLengths(builder, valuePointsToSet);
 
+        // FIXME: Doesn't seem right if there are multiple possible values. We need to create new
+        // shapes to return in that case.
         for (int outerListLength : possibleOuterListLengths) {
           LOGGER.fine("Outer list length: " + outerListLength);
 
