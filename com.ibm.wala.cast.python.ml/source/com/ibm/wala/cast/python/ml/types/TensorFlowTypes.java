@@ -197,13 +197,43 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String MULTIPLY_SIGNATURE = "tf.multiply()";
 
+  public static final MethodReference ADD =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/add")),
+          AstMethodReference.fnSelector);
+
+  private static final String ADD_SIGNATURE = "tf.add()";
+
+  public static final MethodReference SUBTRACT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/subtract")),
+          AstMethodReference.fnSelector);
+
+  private static final String SUBTRACT_SIGNATURE = "tf.subtract()";
+
+  public static final MethodReference DIVIDE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/divide")),
+          AstMethodReference.fnSelector);
+
+  private static final String DIVIDE_SIGNATURE = "tf.divide()";
+
   /** A mapping from a {@link TypeReference} to its associated TensorFlow signature. */
   public static final Map<TypeReference, String> TYPE_REFERENCE_TO_SIGNATURE =
       Map.of(
           RAGGED_CONSTANT.getDeclaringClass(),
           RAGGED_CONSTANT_SIGNATURE,
           MULTIPLY.getDeclaringClass(),
-          MULTIPLY_SIGNATURE);
+          MULTIPLY_SIGNATURE,
+          ADD.getDeclaringClass(),
+          ADD_SIGNATURE,
+          SUBTRACT.getDeclaringClass(),
+          SUBTRACT_SIGNATURE,
+          DIVIDE.getDeclaringClass(),
+          DIVIDE_SIGNATURE);
 
   /**
    * Represents the TensorFlow float32 data type.

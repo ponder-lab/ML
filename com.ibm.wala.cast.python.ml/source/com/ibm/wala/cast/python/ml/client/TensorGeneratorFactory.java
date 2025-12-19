@@ -55,7 +55,14 @@ public class TensorGeneratorFactory {
     else if (calledFunction.equals(POISSON.getDeclaringClass())) return new Poisson(source);
     else if (calledFunction.equals(RAGGED_CONSTANT.getDeclaringClass()))
       return new RaggedConstant(source);
-    else if (calledFunction.equals(MULTIPLY.getDeclaringClass())) return new Multiply(source);
+    else if (calledFunction.equals(MULTIPLY.getDeclaringClass())
+        || calledFunction.equals(
+            com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD.getDeclaringClass())
+        || calledFunction.equals(
+            com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SUBTRACT.getDeclaringClass())
+        || calledFunction.equals(
+            com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIVIDE.getDeclaringClass()))
+      return new ElementWiseOperation(source);
     else
       throw new IllegalArgumentException(
           "Unknown call: " + calledFunction + " for source: " + source + ".");

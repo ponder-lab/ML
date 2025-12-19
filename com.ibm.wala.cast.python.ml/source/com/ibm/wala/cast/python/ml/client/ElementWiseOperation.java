@@ -1,7 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.ml.client.Multiply.Parameters.X;
-import static com.ibm.wala.cast.python.ml.client.Multiply.Parameters.Y;
+import static com.ibm.wala.cast.python.ml.client.ElementWiseOperation.Parameters.X;
+import static com.ibm.wala.cast.python.ml.client.ElementWiseOperation.Parameters.Y;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
 import static com.ibm.wala.cast.python.ml.util.TensorShapeUtil.areBroadcastable;
 import static com.ibm.wala.cast.python.ml.util.TensorShapeUtil.getBroadcastedShapes;
@@ -18,15 +18,15 @@ import java.util.Set;
 import java.util.logging.Logger;
 
 /**
- * A representation of a multiply operation in TensorFlow.
+ * A representation of an element-wise operation in TensorFlow.
  *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/multiply">tf.multiply</a>.
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class Multiply extends ZerosLike {
+public class ElementWiseOperation extends ZerosLike {
 
   @SuppressWarnings("unused")
-  private static final Logger logger = getLogger(Multiply.class.getName());
+  private static final Logger logger = getLogger(ElementWiseOperation.class.getName());
 
   protected enum Parameters {
     X,
@@ -35,8 +35,8 @@ public class Multiply extends ZerosLike {
   }
 
   /**
-   * The dtype argument is not explicitly provided to multiply(); rather, the dtype is inferred from
-   * the `x` argument.
+   * The dtype argument is not explicitly provided to element-wise operations; rather, the dtype is
+   * inferred from the `x` argument.
    *
    * @see <a
    *     href="https://www.tensorflow.org/api_docs/python/tf/math/multiply#returns">tf.math.multiply
@@ -49,7 +49,7 @@ public class Multiply extends ZerosLike {
     return DTYPE_PARAMETER_POSITION;
   }
 
-  public Multiply(PointsToSetVariable source) {
+  public ElementWiseOperation(PointsToSetVariable source) {
     super(source);
   }
 
