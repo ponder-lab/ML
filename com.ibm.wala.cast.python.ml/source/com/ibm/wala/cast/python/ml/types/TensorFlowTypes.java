@@ -157,6 +157,16 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/eye")),
           AstMethodReference.fnSelector);
 
+  /** https://www.tensorflow.org/api_docs/python/tf/sparse/SparseTensor. */
+  public static final MethodReference SPARSE_TENSOR =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/SparseTensor")),
+          AstMethodReference.fnSelector);
+
+  private static final String SPARSE_TENSOR_SIGNATURE = "tf.sparse.SparseTensor";
+
   /** https://www.tensorflow.org/api_docs/python/tf/sparse/eye. */
   public static final MethodReference SPARSE_EYE =
       MethodReference.findOrCreate(
@@ -234,6 +244,8 @@ public class TensorFlowTypes extends PythonTypes {
   /** A mapping from a {@link TypeReference} to its associated TensorFlow signature. */
   public static final Map<TypeReference, String> TYPE_REFERENCE_TO_SIGNATURE =
       Map.of(
+          SPARSE_TENSOR.getDeclaringClass(),
+          SPARSE_TENSOR_SIGNATURE,
           RAGGED_CONSTANT.getDeclaringClass(),
           RAGGED_CONSTANT_SIGNATURE,
           RAGGED_RANGE.getDeclaringClass(),
