@@ -189,6 +189,16 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String RAGGED_CONSTANT_SIGNATURE = "tf.ragged.constant()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/ragged/range. */
+  public static final MethodReference RAGGED_RANGE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/ragged_range")),
+          AstMethodReference.fnSelector);
+
+  private static final String RAGGED_RANGE_SIGNATURE = "tf.ragged.range()";
+
   public static final MethodReference MULTIPLY =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
@@ -226,6 +236,8 @@ public class TensorFlowTypes extends PythonTypes {
       Map.of(
           RAGGED_CONSTANT.getDeclaringClass(),
           RAGGED_CONSTANT_SIGNATURE,
+          RAGGED_RANGE.getDeclaringClass(),
+          RAGGED_RANGE_SIGNATURE,
           MULTIPLY.getDeclaringClass(),
           MULTIPLY_SIGNATURE,
           ADD.getDeclaringClass(),

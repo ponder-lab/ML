@@ -11,6 +11,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONES;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONE_HOT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.POISSON;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_CONSTANT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL;
@@ -55,6 +56,8 @@ public class TensorGeneratorFactory {
     else if (calledFunction.equals(POISSON.getDeclaringClass())) return new Poisson(source);
     else if (calledFunction.equals(RAGGED_CONSTANT.getDeclaringClass()))
       return new RaggedConstant(source);
+    else if (calledFunction.equals(RAGGED_RANGE.getDeclaringClass()))
+      return new RaggedRange(source);
     else if (calledFunction.equals(MULTIPLY.getDeclaringClass())
         || calledFunction.equals(
             com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD.getDeclaringClass())

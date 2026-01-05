@@ -1731,37 +1731,67 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testAdd66()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add66.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add66.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_NONE_INT32), 3, Set.of(TENSOR_1_NONE_INT32)));
   }
 
   @Test
   public void testAdd67()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add67.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add67.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_NONE_INT32), 3, Set.of(TENSOR_1_NONE_INT32)));
   }
 
   @Test
   public void testAdd68()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add68.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add68.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_NONE_INT32), 3, Set.of(TENSOR_1_NONE_INT32)));
   }
 
   @Test
   public void testAdd69()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add69.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add69.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_NONE_INT32), 3, Set.of(TENSOR_1_NONE_INT32)));
   }
 
   @Test
   public void testAdd70()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add70.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add70.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_NONE_INT32), 3, Set.of(TENSOR_1_NONE_INT32)));
   }
 
   @Test
   public void testAdd71()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add71.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add71.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_NONE_INT32), 3, Set.of(TENSOR_1_NONE_INT32)));
   }
 
   @Test
@@ -2326,6 +2356,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testTFRange3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_tf_range3.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  @Test
+  public void testRange() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_tf_range4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
   @Test
@@ -4832,6 +4867,26 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testRaggedConstant18() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_ragged_constant18.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_NONE_2_2_INT32)));
+  }
+
+  @Test
+  public void testRaggedRange1() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_ragged_range1.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_NONE_INT32)));
+  }
+
+  @Test
+  public void testRaggedRange2() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_ragged_range2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_NONE_INT32)));
+  }
+
+  @Test
+  public void testRaggedRange3() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_ragged_range3.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_NONE_INT32)));
+  }
+
+  @Test
+  public void testRaggedRange4() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_ragged_range4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_NONE_INT32)));
   }
 
   private void test(

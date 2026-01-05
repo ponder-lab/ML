@@ -53,9 +53,10 @@ public class Range extends TensorGenerator {
     double limit = start; // Default limit value.
     double delta = 1; // Default step value.
 
-    // There are two versions of the `range` function:
+    // There are three versions of the `range` function:
     // 1. `tf.range(limit)` - generates a range from 0 to limit
-    // 2. `tf.range(start, limit, delta)` - generates a range from start to limit with a step of
+    // 2. `tf.range(start, limit)` - generates a range from start to limit with a step of 1.
+    // 3. `tf.range(start, limit, delta)` - generates a range from start to limit with a step of
     // delta.
 
     // Decide which version of the `range` function is being called based on the number of numeric
@@ -79,6 +80,40 @@ public class Range extends TensorGenerator {
           limit = ((Number) ((ConstantKey<?>) limitIK).getValue()).doubleValue();
           int shape = (int) Math.ceil((limit - start) / delta);
           ret.add(List.of(new NumericDim(shape))); // Add the shape as a 1D tensor.
+        }
+      } else if (numOfPoisitionArguments == 2) {
+        // it must be `start` and `limit`.
+        int startValueNumber =
+            this.getNode().getMethod().isStatic()
+                ? this.getNode().getIR().getParameter(0)
+                : this.getNode().getIR().getParameter(1);
+
+        PointerKey startPK =
+            pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), startValueNumber);
+
+        int limitValueNumber =
+            this.getNode().getMethod().isStatic()
+                ? this.getNode().getIR().getParameter(1)
+                : this.getNode().getIR().getParameter(2);
+
+        PointerKey limitPK =
+            pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), limitValueNumber);
+
+        OrdinalSet<InstanceKey> startPointsToSet = pointerAnalysis.getPointsToSet(startPK);
+        OrdinalSet<InstanceKey> limitPointsToSet = pointerAnalysis.getPointsToSet(limitPK);
+
+        assert !startPointsToSet.isEmpty() : "Expected a non-empty points-to set for start.";
+        assert !limitPointsToSet.isEmpty() : "Expected a non-empty points-to set for limit.";
+
+        for (InstanceKey startIK : startPointsToSet) {
+          start = ((Number) ((ConstantKey<?>) startIK).getValue()).doubleValue();
+
+          for (InstanceKey limitIK : limitPointsToSet) {
+            limit = ((Number) ((ConstantKey<?>) limitIK).getValue()).doubleValue();
+
+            int shape = (int) Math.ceil((limit - start) / delta);
+            ret.add(List.of(new NumericDim(shape))); // Add the shape as a 1D tensor.
+          }
         }
       } else if (numOfPoisitionArguments >= 3) {
         // it must be `start`, `limit`, and `delta`.
@@ -130,7 +165,7 @@ public class Range extends TensorGenerator {
         }
       } else
         throw new IllegalStateException(
-            "Expected either 1 or >= 3 positional arguments for range(), but got: "
+            "Expected either 1, 2, or >= 3 positional arguments for range(), but got: "
                 + numOfPoisitionArguments
                 + ".");
 
