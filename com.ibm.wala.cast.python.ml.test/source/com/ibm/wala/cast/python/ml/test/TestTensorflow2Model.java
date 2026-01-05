@@ -2341,26 +2341,26 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testTFRange()
+  public void testRange()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_tf_range.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test("tf2_test_range.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
-  public void testTFRange2()
+  public void testRange2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_tf_range2.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test("tf2_test_range2.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
-  public void testTFRange3()
+  public void testRange3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_tf_range3.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test("tf2_test_range3.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
-  public void testRange() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_tf_range4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
+  public void testRange4() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_range4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
   @Test
