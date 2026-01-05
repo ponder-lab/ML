@@ -4889,6 +4889,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_ragged_range4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_NONE_INT32)));
   }
 
+  @Test
+  public void testRaggedRange5() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_ragged_range5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_NONE_INT32)));
+  }
+
+  @Test
+  public void testRaggedRange6() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_ragged_range6.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_NONE_INT32)));
+  }
+
+  @Test
+  public void testRaggedRange7() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_ragged_range7.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_NONE_INT32)));
+  }
+
   private void test(
       String filename,
       String functionName,
