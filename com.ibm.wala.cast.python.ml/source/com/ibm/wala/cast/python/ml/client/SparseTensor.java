@@ -44,6 +44,7 @@ public class SparseTensor extends TensorGenerator {
 
   @Override
   protected int getShapeParameterPosition() {
+    // TODO: Handle keyword arguments.
     return DENSE_SHAPE_PARAMETER_POSITION;
   }
 
