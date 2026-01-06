@@ -112,13 +112,13 @@ public class Input extends TensorGenerator {
       PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
       PointerKey pk = pa.getHeapModel().getPointerKeyForLocal(this.getNode(), batchSizeValNum);
       OrdinalSet<InstanceKey> pts = pa.getPointsToSet(pk);
-      batchSizes.addAll(getPossibleLongArguments(builder, pts));
+      batchSizes.addAll(getPossibleLongArguments(pts));
     }
 
     // Also check for batch_size keyword
     OrdinalSet<InstanceKey> batchSizePts = getKeywordArgumentPointsToSet(builder, "batch_size");
     if (batchSizePts != null && !batchSizePts.isEmpty()) {
-      batchSizes.addAll(getPossibleLongArguments(builder, batchSizePts));
+      batchSizes.addAll(getPossibleLongArguments(batchSizePts));
     }
 
     if (batchSizes.isEmpty()) {
@@ -194,8 +194,7 @@ public class Input extends TensorGenerator {
     return result;
   }
 
-  private Set<Long> getPossibleLongArguments(
-      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> pointsToSet) {
+  private Set<Long> getPossibleLongArguments(OrdinalSet<InstanceKey> pointsToSet) {
     Set<Long> ret = HashSetFactory.make();
     if (pointsToSet == null) return ret;
 
