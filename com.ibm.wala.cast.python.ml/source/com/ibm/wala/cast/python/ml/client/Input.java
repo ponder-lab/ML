@@ -148,14 +148,6 @@ public class Input extends TensorGenerator {
   }
 
   @Override
-  protected int getArgumentValueNumber(int parameterPosition) {
-    if (parameterPosition < 0) {
-      return -1;
-    }
-    return this.getNode().getIR().getParameter(parameterPosition);
-  }
-
-  @Override
   protected int getShapeParameterPosition() {
     return SHAPE_PARAMETER_POSITION;
   }
@@ -194,7 +186,7 @@ public class Input extends TensorGenerator {
               result = pts;
             } else {
               result = OrdinalSet.unify(result, pts);
-            }
+            } 
           }
         }
       }
@@ -202,12 +194,13 @@ public class Input extends TensorGenerator {
     return result;
   }
 
-  private static Set<Long> getPossibleLongArguments(
+  private Set<Long> getPossibleLongArguments(
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> pointsToSet) {
     Set<Long> ret = HashSetFactory.make();
     if (pointsToSet == null) return ret;
 
     for (InstanceKey instanceKey : pointsToSet) {
+
       if (instanceKey instanceof ConstantKey) {
         ConstantKey<?> constantKey = (ConstantKey<?>) instanceKey;
         Object constantKeyValue = constantKey.getValue();
