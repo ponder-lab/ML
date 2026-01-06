@@ -119,9 +119,7 @@ public abstract class TensorGenerator {
 
         for (InstanceKey catalogIK : objectCatalogPointsToSet) {
           ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
-          Object constantKeyValue = constantKey.getValue();
-
-          Integer fieldIndex = (Integer) constantKeyValue;
+          Integer fieldIndex = getFieldIndex(constantKey);
 
           FieldReference subscript =
               FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
@@ -221,6 +219,15 @@ public abstract class TensorGenerator {
     }
 
     return ret;
+  }
+
+  private static Integer getFieldIndex(ConstantKey<?> constantKey) {
+    Object constantKeyValue = constantKey.getValue();
+
+    if (constantKeyValue instanceof Integer) return (Integer) constantKeyValue;
+    else if (constantKeyValue instanceof String) return Integer.parseInt((String) constantKeyValue);
+
+    return null;
   }
 
   /**
@@ -327,9 +334,7 @@ public abstract class TensorGenerator {
 
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
             ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
-            Object constantKeyValue = constantKey.getValue();
-
-            Integer fieldIndex = (Integer) constantKeyValue;
+            Integer fieldIndex = getFieldIndex(constantKey);
 
             FieldReference subscript =
                 FieldReference.findOrCreate(
@@ -558,7 +563,7 @@ public abstract class TensorGenerator {
    * @param pointsToSet The points-to set of the value from which the dtype will be derived.
    * @return A set of possible dtypes of the tensor returned by this generator.
    */
-  private EnumSet<DType> getDTypesOfValue(
+  protected EnumSet<DType> getDTypesOfValue(
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
     if (valuePointsToSet == null || valuePointsToSet.isEmpty())
       throw new IllegalArgumentException(
@@ -618,9 +623,7 @@ public abstract class TensorGenerator {
 
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
             ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
-            Object constantKeyValue = constantKey.getValue();
-
-            Integer fieldIndex = (Integer) constantKeyValue;
+            Integer fieldIndex = getFieldIndex(constantKey);
 
             FieldReference subscript =
                 FieldReference.findOrCreate(

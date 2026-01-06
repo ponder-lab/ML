@@ -13,6 +13,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.POISSON;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANGE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL;
@@ -69,6 +70,7 @@ public class TensorGeneratorFactory {
         || calledFunction.equals(
             com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIVIDE.getDeclaringClass()))
       return new ElementWiseOperation(source);
+    else if (calledFunction.equals(SPARSE_ADD.getDeclaringClass())) return new SparseAdd(source);
     else
       throw new IllegalArgumentException(
           "Unknown call: " + calledFunction + " for source: " + source + ".");

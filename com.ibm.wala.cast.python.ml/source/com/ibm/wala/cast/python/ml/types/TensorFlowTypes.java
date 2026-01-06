@@ -175,6 +175,16 @@ public class TensorFlowTypes extends PythonTypes {
               TypeName.string2TypeName("Ltensorflow/functions/sparse_eye")),
           AstMethodReference.fnSelector);
 
+  /** https://www.tensorflow.org/api_docs/python/tf/sparse/add. */
+  public static final MethodReference SPARSE_ADD =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/sparse_add")),
+          AstMethodReference.fnSelector);
+
+  private static final String SPARSE_ADD_SIGNATURE = "tf.sparse.add()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/gamma. */
   public static final MethodReference GAMMA =
       MethodReference.findOrCreate(
@@ -246,6 +256,8 @@ public class TensorFlowTypes extends PythonTypes {
       Map.of(
           SPARSE_TENSOR.getDeclaringClass(),
           SPARSE_TENSOR_SIGNATURE,
+          SPARSE_ADD.getDeclaringClass(),
+          SPARSE_ADD_SIGNATURE,
           RAGGED_CONSTANT.getDeclaringClass(),
           RAGGED_CONSTANT_SIGNATURE,
           RAGGED_RANGE.getDeclaringClass(),

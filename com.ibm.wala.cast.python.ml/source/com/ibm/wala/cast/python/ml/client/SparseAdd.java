@@ -1,0 +1,127 @@
+package com.ibm.wala.cast.python.ml.client;
+
+import static com.ibm.wala.cast.python.types.PythonTypes.Root;
+import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
+
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.classLoader.IField;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.types.FieldReference;
+import com.ibm.wala.types.TypeName;
+import com.ibm.wala.types.TypeReference;
+import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Set;
+
+public class SparseAdd extends ElementWiseOperation {
+
+  public SparseAdd(PointsToSetVariable source) {
+    super(source);
+  }
+
+  private OrdinalSet<InstanceKey> getPointsToSet(
+      PropagationCallGraphBuilder builder, int valueNumber) {
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+    PointerKey valuePK =
+        pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
+    return pointerAnalysis.getPointsToSet(valuePK);
+  }
+
+  @Override
+  protected Set<List<Dimension<?>>> getShapes(
+      PropagationCallGraphBuilder builder, int argumentValueNumber) {
+
+    OrdinalSet<InstanceKey> pointsToSet = getPointsToSet(builder, argumentValueNumber);
+    if (pointsToSet == null || pointsToSet.isEmpty()) {
+      return super.getShapes(builder, argumentValueNumber);
+    }
+
+    TypeReference sparseTensorType =
+        TypeReference.findOrCreate(
+            PythonTypes.pythonLoader,
+            TypeName.string2TypeName("Ltensorflow/python/framework/sparse_tensor/SparseTensor"));
+
+    boolean hasSparseTensor = false;
+    for (InstanceKey ik : pointsToSet) {
+      if (ik.getConcreteType().getReference().equals(sparseTensorType)) {
+        hasSparseTensor = true;
+        break;
+      }
+    }
+
+    if (!hasSparseTensor) {
+      return super.getShapes(builder, argumentValueNumber);
+    }
+
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+
+    for (InstanceKey ik : pointsToSet) {
+      if (ik.getConcreteType().getReference().equals(sparseTensorType)) {
+        FieldReference denseShapeFieldRef =
+            FieldReference.findOrCreate(Root, findOrCreateAsciiAtom("dense_shape"), Root);
+
+        IField field = builder.getClassHierarchy().resolveField(denseShapeFieldRef);
+        if (field != null) {
+          PointerKey pk = builder.getPointerKeyForInstanceField(ik, field);
+          OrdinalSet<InstanceKey> fieldPointsTo = pointerAnalysis.getPointsToSet(pk);
+          ret.addAll(getShapesFromShapeArgument(builder, fieldPointsTo));
+        }
+      }
+    }
+    return ret;
+  }
+
+  @Override
+  protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    int xArgValueNum = this.getXArgumentValueNumber(builder);
+    OrdinalSet<InstanceKey> pointsToSet = getPointsToSet(builder, xArgValueNum);
+
+    if (pointsToSet == null || pointsToSet.isEmpty()) {
+      return super.getDefaultDTypes(builder);
+    }
+
+    TypeReference sparseTensorType =
+        TypeReference.findOrCreate(
+            PythonTypes.pythonLoader,
+            TypeName.string2TypeName("Ltensorflow/python/framework/sparse_tensor/SparseTensor"));
+
+    boolean hasSparseTensor = false;
+    for (InstanceKey ik : pointsToSet) {
+      if (ik.getConcreteType().getReference().equals(sparseTensorType)) {
+        hasSparseTensor = true;
+        break;
+      }
+    }
+
+    if (!hasSparseTensor) {
+      return super.getDefaultDTypes(builder);
+    }
+
+    EnumSet<DType> ret = EnumSet.noneOf(DType.class);
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+
+    for (InstanceKey ik : pointsToSet) {
+      if (ik.getConcreteType().getReference().equals(sparseTensorType)) {
+        FieldReference valuesFieldRef =
+            FieldReference.findOrCreate(Root, findOrCreateAsciiAtom("values"), Root);
+
+        IField field = builder.getClassHierarchy().resolveField(valuesFieldRef);
+        if (field != null) {
+          PointerKey pk = builder.getPointerKeyForInstanceField(ik, field);
+          OrdinalSet<InstanceKey> fieldPointsTo = pointerAnalysis.getPointsToSet(pk);
+          ret.addAll(getDTypesOfValue(builder, fieldPointsTo));
+        }
+      }
+    }
+    return ret;
+  }
+}

@@ -243,6 +243,9 @@
         <new def="sparse_eye" class="Ltensorflow/functions/sparse_eye" />
         <putfield class="LRoot" field="eye" fieldType="LRoot" ref="sparse" value="sparse_eye" />
         <putfield class="LRoot" field="sparse_eye" fieldType="LRoot" ref="sparse_ops" value="sparse_eye" />
+        <new def="sparse_add" class="Ltensorflow/functions/sparse_add" />
+        <putfield class="LRoot" field="add" fieldType="LRoot" ref="sparse" value="sparse_add" />
+        <putfield class="LRoot" field="sparse_add" fieldType="LRoot" ref="sparse_ops" value="sparse_add" />
         <new def="convert_to_tensor" class="Ltensorflow/functions/convert_to_tensor" />
         <putfield class="LRoot" field="convert_to_tensor" fieldType="LRoot" ref="x" value="convert_to_tensor" />
         <putfield class="LRoot" field="convert_to_tensor" fieldType="LRoot" ref="ops" value="convert_to_tensor" />
@@ -346,6 +349,18 @@
     </package>
     <package name="keras/objects">
       <class name="feature" allocatable="true" />
+    </package>
+    <package name="tensorflow/python/framework/sparse_tensor">
+      <class name="SparseTensor" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self indices values dense_shape">
+          <return value="self" />
+        </method>
+      </class>
+      <class name="sparse_eye" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self num_rows num_columns dtype name">
+          <return value="self" />
+        </method>
+      </class>
     </package>
     <package name="tensorflow/math">
       <class name="sigmoid" allocatable="true">
@@ -480,15 +495,36 @@
         </method>
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self indices values dense_shape">
           <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
+          <putfield class="LRoot" field="indices" fieldType="LRoot" ref="x" value="indices" />
+          <putfield class="LRoot" field="values" fieldType="LRoot" ref="x" value="values" />
+          <putfield class="LRoot" field="dense_shape" fieldType="LRoot" ref="x" value="dense_shape" />
           <return value="x" />
         </method>
       </class>
       <class name="sparse_eye" allocatable="true">
         <method name="read_data" descriptor="()LRoot;">
-          <new def="x" class="Ltensorflow/python/framework/sparse_tensor/sparse_eye" />
+          <new def="x" class="Ltensorflow/python/framework/sparse_tensor/SparseTensor" />
           <return value="x" />
         </method>
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="num_rows num_columns dtype name">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self num_rows num_columns dtype name">
+          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
+          <new def="shape" class="Llist" />
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="shape" value="num_rows" />
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="shape" value="num_columns" />
+          <putfield class="LRoot" field="dense_shape" fieldType="LRoot" ref="x" value="shape" />
+          <new def="val_list" class="Llist" />
+          <constant name="one" type="float" value="1.0" />
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="val_list" value="one" />
+          <putfield class="LRoot" field="values" fieldType="LRoot" ref="x" value="val_list" />
+          <return value="x" />
+        </method>
+      </class>
+      <class name="sparse_add" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;">
+          <new def="x" class="Ltensorflow/python/framework/sparse_tensor/SparseTensor" />
+          <return value="x" />
+        </method>
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self a b threshold name">
           <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
           <return value="x" />
         </method>
