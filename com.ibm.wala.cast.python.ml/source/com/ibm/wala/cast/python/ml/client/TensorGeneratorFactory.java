@@ -5,6 +5,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSO
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MULTIPLY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONES;
@@ -37,7 +38,6 @@ public class TensorGeneratorFactory {
 
   public static TensorGenerator getGenerator(PointsToSetVariable source) {
     TypeReference calledFunction = getFunction(source);
-    LOGGER.info("Getting tensor generator for call to: " + calledFunction.getName() + ".");
 
     if (calledFunction.equals(ONES.getDeclaringClass())) return new Ones(source);
     else if (calledFunction.equals(CONSTANT.getDeclaringClass())) return new Constant(source);
@@ -57,6 +57,7 @@ public class TensorGeneratorFactory {
     else if (calledFunction.equals(SPARSE_TENSOR.getDeclaringClass()))
       return new SparseTensor(source);
     else if (calledFunction.equals(GAMMA.getDeclaringClass())) return new Gamma(source);
+    else if (calledFunction.equals(INPUT.getDeclaringClass())) return new Input(source);
     else if (calledFunction.equals(POISSON.getDeclaringClass())) return new Poisson(source);
     else if (calledFunction.equals(RAGGED_CONSTANT.getDeclaringClass()))
       return new RaggedConstant(source);

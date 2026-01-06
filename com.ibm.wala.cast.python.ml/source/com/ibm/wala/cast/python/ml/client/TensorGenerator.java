@@ -168,15 +168,6 @@ public abstract class TensorGenerator {
                       + ".");
           }
 
-          LOGGER.info(
-              "Found possible shape dimensions: "
-                  + tensorDimensions
-                  + " for field: "
-                  + pointerKeyForInstanceField
-                  + " for source: "
-                  + this.getSource()
-                  + ".");
-
           // Add the shape dimensions.
           assert possibleDimensions[fieldIndex] == null
               : "Duplicate field index: "
@@ -207,15 +198,7 @@ public abstract class TensorGenerator {
 
             ret.add(asList(dimensions));
           }
-      } else
-        throw new IllegalStateException(
-            "Expected a "
-                + PythonTypes.list
-                + " or "
-                + PythonTypes.tuple
-                + " for the shape, but got: "
-                + reference
-                + ".");
+      }
     }
 
     return ret;
@@ -272,10 +255,12 @@ public abstract class TensorGenerator {
     }
 
     // If the argument shape is not specified.
-    if (pointsToSet == null || pointsToSet.isEmpty()) return getDefaultShapes(builder);
-    else
+    if (pointsToSet == null || pointsToSet.isEmpty()) {
+      return getDefaultShapes(builder);
+    } else {
       // The shape points-to set is non-empty, meaning that the shape was explicitly set.
       return getShapesFromShapeArgument(builder, pointsToSet);
+    }
   }
 
   /**

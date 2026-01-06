@@ -84,6 +84,13 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/constant")),
           AstMethodReference.fnSelector);
 
+  /** https://www.tensorflow.org/api_docs/python/tf/keras/Input. */
+  public static final MethodReference INPUT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/Input")),
+          AstMethodReference.fnSelector);
+
   /** https://www.tensorflow.org/api_docs/python/tf/range. */
   public static final MethodReference RANGE =
       MethodReference.findOrCreate(
