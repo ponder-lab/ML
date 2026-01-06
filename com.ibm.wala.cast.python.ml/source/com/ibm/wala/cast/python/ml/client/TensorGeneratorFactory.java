@@ -38,6 +38,7 @@ public class TensorGeneratorFactory {
 
   public static TensorGenerator getGenerator(PointsToSetVariable source) {
     TypeReference calledFunction = getFunction(source);
+    LOGGER.info("Getting tensor generator for call to: " + calledFunction.getName() + ".");
 
     if (calledFunction.equals(ONES.getDeclaringClass())) return new Ones(source);
     else if (calledFunction.equals(CONSTANT.getDeclaringClass())) return new Constant(source);

@@ -167,6 +167,15 @@ public abstract class TensorGenerator {
                       + ".");
           }
 
+          LOGGER.info(
+              "Found possible shape dimensions: "
+                  + tensorDimensions
+                  + " for field: "
+                  + pointerKeyForInstanceField
+                  + " for source: "
+                  + this.getSource()
+                  + ".");
+
           // Add the shape dimensions.
           assert possibleDimensions[fieldIndex] == null
               : "Duplicate field index: "
