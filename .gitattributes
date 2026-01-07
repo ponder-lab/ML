@@ -1,0 +1,8 @@
+* text=auto eol=lf
+*.java text diff=java
+*.py text diff=python
+*.xml text
+*.md text
+*.json text
+*.sh text eol=lf
+*.bat text eol=crlf
