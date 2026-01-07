@@ -208,13 +208,7 @@ public abstract class TensorGenerator {
           }
       } else
         throw new IllegalStateException(
-            "Expected a "
-                + list
-                + " or "
-                + tuple
-                + " for the shape, but got: "
-                + reference
-                + ".");
+            "Expected a " + list + " or " + tuple + " for the shape, but got: " + reference + ".");
     }
 
     return ret;
