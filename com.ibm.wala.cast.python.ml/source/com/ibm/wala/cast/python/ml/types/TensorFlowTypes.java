@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.ml.types;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT64;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT64;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.python.types.PythonTypes;
@@ -351,9 +352,32 @@ public class TensorFlowTypes extends PythonTypes {
       FieldReference.findOrCreate(
           PythonTypes.Root, findOrCreateAsciiAtom(INT32.name().toLowerCase()), D_TYPE);
 
+  /**
+   * Represents the TensorFlow int64 data type.
+   *
+   * @see <a
+   *     href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes#int64">TensorFlow
+   *     int64 DType</a>.
+   */
+  public static final FieldReference INT_64 =
+      FieldReference.findOrCreate(
+          PythonTypes.Root, findOrCreateAsciiAtom(INT64.name().toLowerCase()), D_TYPE);
+
+  /**
+   * Represents the TensorFlow string data type.
+   *
+   * @see <a
+   *     href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes#string">TensorFlow
+   *     string DType</a>.
+   */
+  public static final FieldReference STRING =
+      FieldReference.findOrCreate(
+          PythonTypes.Root, findOrCreateAsciiAtom(DType.STRING.name().toLowerCase()), D_TYPE);
+
   /** A mapping from a field reference to its associated {@link DType}, if any. */
   public static final Map<FieldReference, DType> FIELD_REFERENCE_TO_DTYPE =
-      Map.of(FLOAT_32, FLOAT32, FLOAT_64, FLOAT64, INT_32, INT32);
+      Map.of(
+          FLOAT_32, FLOAT32, FLOAT_64, FLOAT64, INT_32, INT32, INT_64, INT64, STRING, DType.STRING);
 
   private TensorFlowTypes() {}
 }
