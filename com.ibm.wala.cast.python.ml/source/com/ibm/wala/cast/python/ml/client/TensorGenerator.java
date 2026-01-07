@@ -263,11 +263,10 @@ public abstract class TensorGenerator {
     }
 
     // If the argument shape is not specified.
-    if (pointsToSet == null || pointsToSet.isEmpty())
-		return getDefaultShapes(builder);
-	else
-		// The shape points-to set is non-empty, meaning that the shape was explicitly set.
-		  return getShapesFromShapeArgument(builder, pointsToSet);
+    if (pointsToSet == null || pointsToSet.isEmpty()) return getDefaultShapes(builder);
+    else
+      // The shape points-to set is non-empty, meaning that the shape was explicitly set.
+      return getShapesFromShapeArgument(builder, pointsToSet);
   }
 
   /**
