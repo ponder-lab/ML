@@ -95,7 +95,8 @@ public class Input extends Ones {
     Set<List<Dimension<?>>> shapes;
 
     if (shapePts != null && !shapePts.isEmpty()) {
-      LOGGER.info("Found possible shape points-to set: " + shapePts + " for source: " + source + ".");
+      LOGGER.info(
+          "Found possible shape points-to set: " + shapePts + " for source: " + source + ".");
       shapes = getShapesFromShapeArgument(builder, shapePts);
     } else {
       LOGGER.info("No shapes found for source: " + source + "; using default shapes.");
