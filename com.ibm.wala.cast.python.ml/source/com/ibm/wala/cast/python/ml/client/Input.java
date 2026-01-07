@@ -39,8 +39,6 @@ public class Input extends TensorGenerator {
 
   private static final Logger LOGGER = getLogger(Input.class.getName());
 
-  private static final String FUNCTION_NAME = "tf.keras.Input()";
-
   private static final int SHAPE_PARAMETER_POSITION = 0;
   private static final int BATCH_SIZE_PARAMETER_POSITION = 1;
   private static final int DTYPE_PARAMETER_POSITION = 3;
@@ -140,11 +138,6 @@ public class Input extends TensorGenerator {
       }
     }
     return newShapes;
-  }
-
-  @Override
-  protected String getSignature() {
-    return FUNCTION_NAME;
   }
 
   @Override

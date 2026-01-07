@@ -91,6 +91,8 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/keras/layers/Input")),
           AstMethodReference.fnSelector);
 
+  private static final String INPUT_SIGNATURE = "tf.keras.Input()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/range. */
   public static final MethodReference RANGE =
       MethodReference.findOrCreate(
@@ -265,6 +267,8 @@ public class TensorFlowTypes extends PythonTypes {
           SPARSE_TENSOR_SIGNATURE,
           SPARSE_ADD.getDeclaringClass(),
           SPARSE_ADD_SIGNATURE,
+          INPUT.getDeclaringClass(),
+          INPUT_SIGNATURE,
           RAGGED_CONSTANT.getDeclaringClass(),
           RAGGED_CONSTANT_SIGNATURE,
           RAGGED_RANGE.getDeclaringClass(),
