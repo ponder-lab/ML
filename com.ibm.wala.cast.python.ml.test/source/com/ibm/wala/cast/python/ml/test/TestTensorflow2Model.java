@@ -14,6 +14,7 @@ import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
@@ -37,6 +38,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.SSAPropagationCallGraphBuilder;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
+import com.ibm.wala.util.debug.UnimplementedError;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -1700,6 +1702,69 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         3,
         3,
         Map.of(2, Set.of(t1), 3, Set.of(t2), 4, Set.of(t3)));
+  }
+
+  @Test
+  public void testInputUnimplemented() {
+    assertThrows(
+        UnimplementedError.class,
+        () ->
+            test(
+                "tf2_test_input_unimplemented_sparse_kw.py",
+                "tf2_test_input_unimplemented_sparse_kw.py",
+                0,
+                0,
+                emptyMap()));
+
+    assertThrows(
+        UnimplementedError.class,
+        () ->
+            test(
+                "tf2_test_input_unimplemented_tensor_kw.py",
+                "tf2_test_input_unimplemented_tensor_kw.py",
+                0,
+                0,
+                emptyMap()));
+
+    assertThrows(
+        UnimplementedError.class,
+        () ->
+            test(
+                "tf2_test_input_unimplemented_ragged_kw.py",
+                "tf2_test_input_unimplemented_ragged_kw.py",
+                0,
+                0,
+                emptyMap()));
+
+    assertThrows(
+        UnimplementedError.class,
+        () ->
+            test(
+                "tf2_test_input_unimplemented_type_spec_kw.py",
+                "tf2_test_input_unimplemented_type_spec_kw.py",
+                0,
+                0,
+                emptyMap()));
+
+    assertThrows(
+        UnimplementedError.class,
+        () ->
+            test(
+                "tf2_test_input_unimplemented_sparse_pos.py",
+                "tf2_test_input_unimplemented_sparse_pos.py",
+                0,
+                0,
+                emptyMap()));
+
+    assertThrows(
+        UnimplementedError.class,
+        () ->
+            test(
+                "tf2_test_input_unimplemented_tensor_pos.py",
+                "tf2_test_input_unimplemented_tensor_pos.py",
+                0,
+                0,
+                emptyMap()));
   }
 
   @Test
