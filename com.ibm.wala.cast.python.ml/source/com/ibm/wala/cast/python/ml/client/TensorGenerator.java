@@ -481,7 +481,7 @@ public abstract class TensorGenerator {
         try {
           dtype = DType.valueOf(value.toUpperCase()); // Validate the dtype string.
         } catch (IllegalArgumentException | NullPointerException e) {
-          throw new IllegalStateException("Unknown dtype string: " + value + ".");
+          throw new IllegalStateException("Unknown dtype string: " + value + ".", e);
         }
 
         ret.add(dtype);
