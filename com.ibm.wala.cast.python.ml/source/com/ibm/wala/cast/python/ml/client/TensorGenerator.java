@@ -206,7 +206,15 @@ public abstract class TensorGenerator {
 
             ret.add(asList(dimensions));
           }
-      }
+      } else
+        throw new IllegalStateException(
+            "Expected a "
+                + list
+                + " or "
+                + tuple
+                + " for the shape, but got: "
+                + reference
+                + ".");
     }
 
     return ret;
