@@ -475,18 +475,23 @@ public abstract class TensorGenerator {
       } else if (instanceKey instanceof ConstantKey
           && ((ConstantKey<?>) instanceKey).getValue() instanceof String) {
         String value = (String) ((ConstantKey<?>) instanceKey).getValue();
-        DType dtype = TensorFlowTypes.STRING_TO_DTYPE.get(value);
-        if (dtype != null) {
-          ret.add(dtype);
-          LOGGER.info(
-              "Found dtype: "
-                  + dtype
-                  + " for source: "
-                  + this.getSource()
-                  + " from string: "
-                  + value
-                  + ".");
-        } else {
+        boolean foundDType = false;
+        for (DType dtype : DType.values()) {
+          if (dtype.name().toLowerCase().equals(value)) {
+            ret.add(dtype);
+            LOGGER.info(
+                "Found dtype: "
+                    + dtype
+                    + " for source: "
+                    + this.getSource()
+                    + " from string: "
+                    + value
+                    + ".");
+            foundDType = true;
+            break;
+          }
+        }
+        if (!foundDType) {
           throw new IllegalStateException("Unknown dtype string: " + value + ".");
         }
       } else
