@@ -11,8 +11,6 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Uniform extends Ones {
 
-  private static final String FUNCTION_NAME = "tf.random.uniform()";
-
   private static final int DTYPE_PARAMETER_POSITION = 3;
 
   public Uniform(PointsToSetVariable source) {
@@ -22,10 +20,5 @@ public class Uniform extends Ones {
   @Override
   protected int getDTypeParameterPosition() {
     return DTYPE_PARAMETER_POSITION;
-  }
-
-  @Override
-  protected String getSignature() {
-    return FUNCTION_NAME;
   }
 }

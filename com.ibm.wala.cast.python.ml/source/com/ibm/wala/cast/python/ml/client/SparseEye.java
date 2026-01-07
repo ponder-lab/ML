@@ -21,8 +21,6 @@ import java.util.stream.StreamSupport;
 
 public class SparseEye extends Ones {
 
-  private static final String FUNCTION_NAME = "tf.sparse.eye()";
-
   private static final int SHAPE_PARAMETER_POSITION = -1;
 
   protected enum Parameters {
@@ -141,10 +139,5 @@ public class SparseEye extends Ones {
 
   protected int getNumColumnsArgumentValueNumber(PropagationCallGraphBuilder builder) {
     return this.getArgumentValueNumber(this.getNumColumnsParameterPosition());
-  }
-
-  @Override
-  protected String getSignature() {
-    return FUNCTION_NAME;
   }
 }

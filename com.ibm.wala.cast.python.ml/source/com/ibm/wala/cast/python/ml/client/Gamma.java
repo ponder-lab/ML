@@ -21,8 +21,6 @@ import java.util.Set;
  */
 public class Gamma extends Ones {
 
-  private static final String FUNCTION_NAME = "tf.random.gamma()";
-
   protected enum Parameters {
     SHAPE,
     ALPHA,
@@ -126,10 +124,5 @@ public class Gamma extends Ones {
     }
 
     return ret;
-  }
-
-  @Override
-  protected String getSignature() {
-    return FUNCTION_NAME;
   }
 }

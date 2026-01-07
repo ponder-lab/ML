@@ -25,8 +25,6 @@ import java.util.Set;
 
 public class OneHot extends Ones {
 
-  private static final String FUNCTION_NAME = "tf.one_hot()";
-
   private static final int AXIS_END = -1;
 
   protected enum Parameters {
@@ -209,10 +207,5 @@ public class OneHot extends Ones {
   private int getAxisArgumentValueNumber() {
     // TODO: Handle keyword arguments.
     return this.getArgumentValueNumber(this.getAxisParameterPosition());
-  }
-
-  @Override
-  protected String getSignature() {
-    return FUNCTION_NAME;
   }
 }

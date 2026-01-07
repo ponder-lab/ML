@@ -20,8 +20,6 @@ import java.util.Set;
  */
 public class Poisson extends Ones {
 
-  private static final String FUNCTION_NAME = "tf.random.poisson()";
-
   protected enum Parameters {
     SHAPE,
     LAM,
@@ -72,10 +70,5 @@ public class Poisson extends Ones {
         });
 
     return ret;
-  }
-
-  @Override
-  protected String getSignature() {
-    return FUNCTION_NAME;
   }
 }

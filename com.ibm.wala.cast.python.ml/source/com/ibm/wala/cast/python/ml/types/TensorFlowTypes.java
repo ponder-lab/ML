@@ -109,6 +109,8 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/uniform")),
           AstMethodReference.fnSelector);
 
+  private static final String UNIFORM_SIGNATURE = "tf.random.uniform()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/random/normal. */
   public static final MethodReference NORMAL =
       MethodReference.findOrCreate(
@@ -130,6 +132,8 @@ public class TensorFlowTypes extends PythonTypes {
           TypeReference.findOrCreate(
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/zeros")),
           AstMethodReference.fnSelector);
+
+  private static final String ZEROS_SIGNATURE = "tf.zeros()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/zeros_like. */
   public static final MethodReference ZEROS_LIKE =
@@ -161,6 +165,8 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/one_hot")),
           AstMethodReference.fnSelector);
 
+  private static final String ONE_HOT_SIGNATURE = "tf.one_hot()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/eye. */
   public static final MethodReference EYE =
       MethodReference.findOrCreate(
@@ -186,6 +192,8 @@ public class TensorFlowTypes extends PythonTypes {
               TypeName.string2TypeName("Ltensorflow/functions/sparse_eye")),
           AstMethodReference.fnSelector);
 
+  private static final String SPARSE_EYE_SIGNATURE = "tf.sparse.eye()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/sparse/add. */
   public static final MethodReference SPARSE_ADD =
       MethodReference.findOrCreate(
@@ -203,12 +211,16 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/gamma")),
           AstMethodReference.fnSelector);
 
+  private static final String GAMMA_SIGNATURE = "tf.random.gamma()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/poisson. */
   public static final MethodReference POISSON =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/poisson")),
           AstMethodReference.fnSelector);
+
+  private static final String POISSON_SIGNATURE = "tf.random.poisson()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/ragged/constant. */
   public static final MethodReference RAGGED_CONSTANT =
@@ -267,10 +279,22 @@ public class TensorFlowTypes extends PythonTypes {
       Map.of(
           SPARSE_TENSOR.getDeclaringClass(),
           SPARSE_TENSOR_SIGNATURE,
+          SPARSE_EYE.getDeclaringClass(),
+          SPARSE_EYE_SIGNATURE,
           SPARSE_ADD.getDeclaringClass(),
           SPARSE_ADD_SIGNATURE,
           ONES.getDeclaringClass(),
           ONES_SIGNATURE,
+          ZEROS.getDeclaringClass(),
+          ZEROS_SIGNATURE,
+          ONE_HOT.getDeclaringClass(),
+          ONE_HOT_SIGNATURE,
+          UNIFORM.getDeclaringClass(),
+          UNIFORM_SIGNATURE,
+          GAMMA.getDeclaringClass(),
+          GAMMA_SIGNATURE,
+          POISSON.getDeclaringClass(),
+          POISSON_SIGNATURE,
           INPUT.getDeclaringClass(),
           INPUT_SIGNATURE,
           RAGGED_CONSTANT.getDeclaringClass(),

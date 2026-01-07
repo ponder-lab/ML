@@ -1,12 +1,8 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
-import static com.ibm.wala.cast.python.util.Util.getFunction;
-
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
-import com.ibm.wala.types.TypeReference;
 import java.util.EnumSet;
 
 /**
@@ -52,11 +48,5 @@ public class SparseTensor extends Ones {
   @Override
   protected int getDTypeParameterPosition() {
     return DTYPE_PARAMETER_POSITION;
-  }
-
-  @Override
-  protected String getSignature() {
-    TypeReference function = getFunction(this.getSource());
-    return TYPE_REFERENCE_TO_SIGNATURE.get(function);
   }
 }
