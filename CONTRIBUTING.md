@@ -36,6 +36,11 @@ You must install the `jython-dev.jar` to your local maven repository.
 
 Build and install to your local Maven repo: `mvn install`
 
+## Commit Messages
+
+- End commit messages with a period.
+- Use backticks (fences) for code entities (e.g., class names, file names). For example: "Refactor `Input` definition in `tensorflow.xml` to correct package."
+
 ## Code Style
 
 Please run the following command before committing any changes to ensure code style consistency:
@@ -43,11 +48,5 @@ Please run the following command before committing any changes to ensure code st
 ```bash
 mvn spotless:apply
 ```
-
-## Commit Messages
-
-Please follow these guidelines for Git commit messages:
-* Use backticks for code entities (e.g., \`Class\`, \`method()\`, \`variable\`).
-* End the first line with a period.
 
 [SO post]: https://stackoverflow.com/questions/4955635/how-to-add-local-jar-files-to-a-maven-project#answer-4955695
