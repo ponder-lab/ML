@@ -36,4 +36,9 @@ You must install the `jython-dev.jar` to your local maven repository.
 
 Build and install to your local Maven repo: `mvn install`
 
-[SO post]: https://stackoverflow.com/questions/4955635/how-to-add-local-jar-files-to-a-maven-project#answer-4955695
+## Commit Messages
+
+- End commit messages with a period.
+- Use backticks (fences) for code entities (e.g., class names, file names). For example: "Refactor `Input` definition in `tensorflow.xml` to correct package."
+
+[SO post]: https://stackoverflow.com/questions/4955635/how-to-add-local-jar-files-to-a-maven-project#answer-4955635
