@@ -1674,6 +1674,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
+  public void testInputInt32()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType t1 = new TensorType(INT_32, asList(new NumericDim(32), new NumericDim(10)));
+    TensorType t2 =
+        new TensorType(INT_32, asList(new NumericDim(8), new NumericDim(5), new NumericDim(5)));
+
+    test("tf2_test_input_int32.py", "check_input", 2, 2, Map.of(2, Set.of(t1), 3, Set.of(t2)));
+  }
+
+  @Test
   public void testAdd54()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(

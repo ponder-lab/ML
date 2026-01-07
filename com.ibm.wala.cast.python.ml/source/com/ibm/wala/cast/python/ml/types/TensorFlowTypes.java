@@ -353,7 +353,21 @@ public class TensorFlowTypes extends PythonTypes {
 
   /** A mapping from a field reference to its associated {@link DType}, if any. */
   public static final Map<FieldReference, DType> FIELD_REFERENCE_TO_DTYPE =
-      Map.of(FLOAT_32, FLOAT32, FLOAT_64, FLOAT64, INT_32, INT32);
+      Map.of(FLOAT_32, DType.FLOAT32, FLOAT_64, DType.FLOAT64, INT_32, DType.INT32);
+
+  /** A mapping from a string to its associated {@link DType}. */
+  public static final Map<String, DType> STRING_TO_DTYPE =
+      Map.of(
+          "float32",
+          DType.FLOAT32,
+          "float64",
+          DType.FLOAT64,
+          "int32",
+          DType.INT32,
+          "int64",
+          DType.INT64,
+          "string",
+          DType.STRING);
 
   private TensorFlowTypes() {}
 }

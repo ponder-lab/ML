@@ -472,6 +472,23 @@ public abstract class TensorGenerator {
         }
 
         if (!found) throw new IllegalStateException("Unknown dtype: " + instanceKey + ".");
+      } else if (instanceKey instanceof ConstantKey
+          && ((ConstantKey<?>) instanceKey).getValue() instanceof String) {
+        String value = (String) ((ConstantKey<?>) instanceKey).getValue();
+        DType dtype = TensorFlowTypes.STRING_TO_DTYPE.get(value);
+        if (dtype != null) {
+          ret.add(dtype);
+          LOGGER.info(
+              "Found dtype: "
+                  + dtype
+                  + " for source: "
+                  + this.getSource()
+                  + " from string: "
+                  + value
+                  + ".");
+        } else {
+          throw new IllegalStateException("Unknown dtype string: " + value + ".");
+        }
       } else
         throw new IllegalStateException(
             "Expected a "
