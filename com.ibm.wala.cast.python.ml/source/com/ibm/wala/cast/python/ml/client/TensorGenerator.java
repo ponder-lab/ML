@@ -15,7 +15,6 @@ import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
-import static java.util.stream.Collectors.toSet;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
@@ -27,7 +26,6 @@ import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
-import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.classLoader.NewSiteReference;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -401,75 +399,44 @@ public abstract class TensorGenerator {
 
       if (typeReference.equals(TensorFlowTypes.D_TYPE)) {
         // we have a dtype.
-        // let's see if it's a dtype.
-        Set<CGNode> importNodes = builder.getCallGraph().getNodes(IMPORT);
-
-        // find the import nodes from this file.
-        Set<CGNode> importNodesOfInterest =
-            importNodes.stream()
-                .filter(
-                    in -> {
-                      CallString cs = (CallString) in.getContext().get(CALL_STRING);
-
-                      // We expect the first method in the call string to be the import.
-                      assert cs.getMethods().length == 1
-                          : "Expected a single method in the call string, but got: "
-                              + cs.getMethods().length
-                              + " for node: "
-                              + in;
-
-                      IMethod method = cs.getMethods()[0];
-
-                      CallString nodeCS = (CallString) this.getNode().getContext().get(CALL_STRING);
-
-                      // We expect the first method in the call string to be the import.
-                      assert nodeCS.getMethods().length == 1
-                          : "Expected a single method in the call string, but got: "
-                              + nodeCS.getMethods().length
-                              + " for node: "
-                              + in;
-
-                      return method.equals(nodeCS.getMethods()[0]);
-                    })
-                .collect(toSet());
-
-        if (importNodesOfInterest.isEmpty())
-          throw new IllegalStateException(
-              "No import nodes found for source: " + this.getSource() + ".");
-
         boolean found = false;
+        CGNode importNode = null;
 
-        for (CGNode importNode : importNodesOfInterest) {
-          LOGGER.fine("Found import node of interest: " + importNode + ".");
+        if (instanceKey instanceof AllocationSiteInNode)
+          importNode = ((AllocationSiteInNode) instanceKey).getNode();
 
-          InstanceKey tensorFlowIK =
-              pointerAnalysis
-                  .getHeapModel()
-                  .getInstanceKeyForAllocation(importNode, NewSiteReference.make(0, TENSORFLOW));
+        if (importNode == null)
+          throw new IllegalStateException("Cannot find import node for DType: " + instanceKey);
 
-          // Check dtype literals.
-          for (Entry<FieldReference, DType> entry : FIELD_REFERENCE_TO_DTYPE.entrySet()) {
-            FieldReference fieldRef = entry.getKey();
-            DType dtype = entry.getValue();
-            IField field = builder.getClassHierarchy().resolveField(fieldRef);
+        LOGGER.fine("Found import node of interest: " + importNode + ".");
 
-            PointerKey pk =
-                pointerAnalysis.getHeapModel().getPointerKeyForInstanceField(tensorFlowIK, field);
+        InstanceKey tensorFlowIK =
+            pointerAnalysis
+                .getHeapModel()
+                .getInstanceKeyForAllocation(importNode, NewSiteReference.make(0, TENSORFLOW));
 
-            for (InstanceKey ik : pointerAnalysis.getPointsToSet(pk))
-              if (ik.equals(instanceKey)) {
-                ret.add(dtype);
-                LOGGER.info(
-                    "Found dtype: "
-                        + dtype
-                        + " for source: "
-                        + this.getSource()
-                        + " from dType: "
-                        + instanceKey
-                        + ".");
-                found = true;
-              }
-          }
+        // Check dtype literals.
+        for (Entry<FieldReference, DType> entry : FIELD_REFERENCE_TO_DTYPE.entrySet()) {
+          FieldReference fieldRef = entry.getKey();
+          DType dtype = entry.getValue();
+          IField field = builder.getClassHierarchy().resolveField(fieldRef);
+
+          PointerKey pk =
+              pointerAnalysis.getHeapModel().getPointerKeyForInstanceField(tensorFlowIK, field);
+
+          for (InstanceKey ik : pointerAnalysis.getPointsToSet(pk))
+            if (ik.equals(instanceKey)) {
+              ret.add(dtype);
+              LOGGER.info(
+                  "Found dtype: "
+                      + dtype
+                      + " for source: "
+                      + this.getSource()
+                      + " from dType: "
+                      + instanceKey
+                      + ".");
+              found = true;
+            }
         }
 
         if (!found) throw new IllegalStateException("Unknown dtype: " + instanceKey + ".");
