@@ -6,7 +6,6 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT_LAYER;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MULTIPLY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONES;
@@ -18,7 +17,6 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS;
@@ -59,10 +57,8 @@ public class TensorGeneratorFactory {
     else if (calledFunction.equals(SPARSE_EYE.getDeclaringClass())) return new SparseEye(source);
     else if (calledFunction.equals(SPARSE_TENSOR.getDeclaringClass()))
       return new SparseTensor(source);
-    else if (calledFunction.equals(TENSOR.getDeclaringClass())) return new Tensor(source);
     else if (calledFunction.equals(GAMMA.getDeclaringClass())) return new Gamma(source);
     else if (calledFunction.equals(INPUT.getDeclaringClass())) return new Input(source);
-    else if (calledFunction.equals(INPUT_LAYER.getDeclaringClass())) return new Input(source);
     else if (calledFunction.equals(POISSON.getDeclaringClass())) return new Poisson(source);
     else if (calledFunction.equals(RAGGED_CONSTANT.getDeclaringClass()))
       return new RaggedConstant(source);

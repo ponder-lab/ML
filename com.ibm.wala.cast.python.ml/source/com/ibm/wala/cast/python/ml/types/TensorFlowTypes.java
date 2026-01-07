@@ -97,24 +97,6 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String INPUT_SIGNATURE = "tf.keras.Input()";
 
-  public static final MethodReference INPUT_LAYER =
-      MethodReference.findOrCreate(
-          TypeReference.findOrCreate(
-              PythonTypes.pythonLoader,
-              TypeName.string2TypeName("Lkeras/engine/input_layer/Input")),
-          AstMethodReference.fnSelector);
-
-  private static final String INPUT_LAYER_SIGNATURE = "keras.engine.input_layer.Input()";
-
-  /** https://www.tensorflow.org/api_docs/python/tf/Tensor */
-  public static final MethodReference TENSOR =
-      MethodReference.findOrCreate(
-          TypeReference.findOrCreate(
-              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/Tensor")),
-          AstMethodReference.fnSelector);
-
-  private static final String TENSOR_SIGNATURE = "tf.Tensor";
-
   /** https://www.tensorflow.org/api_docs/python/tf/range. */
   public static final MethodReference RANGE =
       MethodReference.findOrCreate(
@@ -318,7 +300,6 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(ZEROS_LIKE.getDeclaringClass(), ZEROS_LIKE_SIGNATURE),
           Map.entry(FILL.getDeclaringClass(), FILL_SIGNATURE),
           Map.entry(CONVERT_TO_TENSOR.getDeclaringClass(), CONVERT_TO_TENSOR_SIGNATURE),
-          Map.entry(TENSOR.getDeclaringClass(), TENSOR_SIGNATURE),
           Map.entry(EYE.getDeclaringClass(), EYE_SIGNATURE),
           Map.entry(SPARSE_TENSOR.getDeclaringClass(), SPARSE_TENSOR_SIGNATURE),
           Map.entry(SPARSE_EYE.getDeclaringClass(), SPARSE_EYE_SIGNATURE),
@@ -330,7 +311,6 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(GAMMA.getDeclaringClass(), GAMMA_SIGNATURE),
           Map.entry(POISSON.getDeclaringClass(), POISSON_SIGNATURE),
           Map.entry(INPUT.getDeclaringClass(), INPUT_SIGNATURE),
-          Map.entry(INPUT_LAYER.getDeclaringClass(), INPUT_LAYER_SIGNATURE),
           Map.entry(RAGGED_CONSTANT.getDeclaringClass(), RAGGED_CONSTANT_SIGNATURE),
           Map.entry(RAGGED_RANGE.getDeclaringClass(), RAGGED_RANGE_SIGNATURE),
           Map.entry(MULTIPLY.getDeclaringClass(), MULTIPLY_SIGNATURE),

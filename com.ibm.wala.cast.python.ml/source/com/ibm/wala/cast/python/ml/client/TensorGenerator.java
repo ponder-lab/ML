@@ -401,45 +401,75 @@ public abstract class TensorGenerator {
 
       if (typeReference.equals(TensorFlowTypes.D_TYPE)) {
         // we have a dtype.
+        // let's see if it's a dtype.
+        Set<CGNode> importNodes = builder.getCallGraph().getNodes(IMPORT);
+
+        // find the import nodes from this file.
+        Set<CGNode> importNodesOfInterest =
+            importNodes.stream()
+                .filter(
+                    in -> {
+                      CallString cs = (CallString) in.getContext().get(CALL_STRING);
+
+                      // We expect the first method in the call string to be the import.
+                      assert cs.getMethods().length == 1
+                          : "Expected a single method in the call string, but got: "
+                              + cs.getMethods().length
+                              + " for node: "
+                              + in;
+
+                      IMethod method = cs.getMethods()[0];
+
+                      CallString nodeCS = (CallString) this.getNode().getContext().get(CALL_STRING);
+
+                      // We expect the first method in the call string to be the import.
+                      assert nodeCS.getMethods().length == 1
+                          : "Expected a single method in the call string, but got: "
+                              + nodeCS.getMethods().length
+                              + " for node: "
+                              + in;
+
+                      return method.equals(nodeCS.getMethods()[0]);
+                    })
+                .collect(toSet());
+
+        if (importNodesOfInterest.isEmpty())
+          throw new IllegalStateException(
+              "No import nodes found for source: " + this.getSource() + ".");
+
         boolean found = false;
-        CGNode importNode = null;
-        if (instanceKey instanceof AllocationSiteInNode) {
-          importNode = ((AllocationSiteInNode) instanceKey).getNode();
-        }
 
-        if (importNode == null) {
-          throw new IllegalStateException("Cannot find import node for DType: " + instanceKey);
-        }
+        for (CGNode importNode : importNodesOfInterest) {
+          LOGGER.fine("Found import node of interest: " + importNode + ".");
 
-        LOGGER.fine("Found import node of interest: " + importNode + ".");
+          InstanceKey tensorFlowIK =
+              pointerAnalysis
+                  .getHeapModel()
+                  .getInstanceKeyForAllocation(importNode, NewSiteReference.make(0, TENSORFLOW));
 
-        InstanceKey tensorFlowIK =
-            pointerAnalysis
-                .getHeapModel()
-                .getInstanceKeyForAllocation(importNode, NewSiteReference.make(0, TENSORFLOW));
+          // Check dtype literals.
+          for (Entry<FieldReference, DType> entry : FIELD_REFERENCE_TO_DTYPE.entrySet()) {
+            FieldReference fieldRef = entry.getKey();
+            DType dtype = entry.getValue();
+            IField field = builder.getClassHierarchy().resolveField(fieldRef);
 
-        // Check dtype literals.
-        for (Entry<FieldReference, DType> entry : FIELD_REFERENCE_TO_DTYPE.entrySet()) {
-          FieldReference fieldRef = entry.getKey();
-          DType dtype = entry.getValue();
-          IField field = builder.getClassHierarchy().resolveField(fieldRef);
+            PointerKey pk =
+                pointerAnalysis.getHeapModel().getPointerKeyForInstanceField(tensorFlowIK, field);
 
-          PointerKey pk =
-              pointerAnalysis.getHeapModel().getPointerKeyForInstanceField(tensorFlowIK, field);
-
-          for (InstanceKey ik : pointerAnalysis.getPointsToSet(pk))
-            if (ik.equals(instanceKey)) {
-              ret.add(dtype);
-              LOGGER.info(
-                  "Found dtype: "
-                      + dtype
-                      + " for source: "
-                      + this.getSource()
-                      + " from dType: "
-                      + instanceKey
-                      + ".");
-              found = true;
-            }
+            for (InstanceKey ik : pointerAnalysis.getPointsToSet(pk))
+              if (ik.equals(instanceKey)) {
+                ret.add(dtype);
+                LOGGER.info(
+                    "Found dtype: "
+                        + dtype
+                        + " for source: "
+                        + this.getSource()
+                        + " from dType: "
+                        + instanceKey
+                        + ".");
+                found = true;
+              }
+          }
         }
 
         if (!found) throw new IllegalStateException("Unknown dtype: " + instanceKey + ".");
