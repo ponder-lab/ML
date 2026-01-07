@@ -1,7 +1,5 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
-import static com.ibm.wala.cast.python.util.Util.getFunction;
 import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
 import static java.util.Collections.emptySet;
 import static java.util.logging.Logger.getLogger;
@@ -20,7 +18,6 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
-import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
@@ -140,12 +137,6 @@ public class Input extends Ones {
 
     LOGGER.info("Generated shapes: " + newShapes + " for source: " + source + ".");
     return newShapes;
-  }
-
-  @Override
-  protected String getSignature() {
-    TypeReference function = getFunction(this.getSource());
-    return TYPE_REFERENCE_TO_SIGNATURE.get(function);
   }
 
   @Override

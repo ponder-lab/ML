@@ -3,12 +3,10 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.ml.client.RaggedConstant.Parameters.INNER_SHAPE;
 import static com.ibm.wala.cast.python.ml.client.RaggedConstant.Parameters.RAGGED_RANK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
-import static com.ibm.wala.cast.python.util.Util.getFunction;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.lang.Math.max;
 import static java.util.Collections.emptySet;
@@ -481,16 +479,5 @@ public class RaggedConstant extends ZerosLike {
 
     // Otherwise, there are values available to infer the dtype from.
     return super.getDefaultDTypes(builder);
-  }
-
-  /**
-   * Returns the TensorFlow function signature represented by this generator.
-   *
-   * @return The TensorFlow function signature represented by this generator.
-   */
-  @Override
-  protected String getSignature() {
-    TypeReference function = getFunction(this.getSource());
-    return TYPE_REFERENCE_TO_SIGNATURE.get(function);
   }
 }

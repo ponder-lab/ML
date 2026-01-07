@@ -2,16 +2,13 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.client.ElementWiseOperation.Parameters.X;
 import static com.ibm.wala.cast.python.ml.client.ElementWiseOperation.Parameters.Y;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
 import static com.ibm.wala.cast.python.ml.util.TensorShapeUtil.areBroadcastable;
 import static com.ibm.wala.cast.python.ml.util.TensorShapeUtil.getBroadcastedShapes;
-import static com.ibm.wala.cast.python.util.Util.getFunction;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
-import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import java.util.List;
 import java.util.Set;
@@ -69,17 +66,6 @@ public class ElementWiseOperation extends ZerosLike {
   protected int getYArgumentValueNumber(PropagationCallGraphBuilder builder) {
     // TODO: Handle keyword arguments.
     return this.getArgumentValueNumber(builder, this.getYParameterPosition());
-  }
-
-  /**
-   * Returns the TensorFlow function signature represented by this generator.
-   *
-   * @return The TensorFlow function signature represented by this generator.
-   */
-  @Override
-  protected String getSignature() {
-    TypeReference function = getFunction(this.getSource());
-    return TYPE_REFERENCE_TO_SIGNATURE.get(function);
   }
 
   @Override

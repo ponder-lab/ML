@@ -12,14 +12,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class TruncatedNormal extends Normal {
 
-  private static final String FUNCTION_NAME = "tf.random.truncated_normal()";
-
   public TruncatedNormal(PointsToSetVariable source) {
     super(source);
-  }
-
-  @Override
-  protected String getSignature() {
-    return FUNCTION_NAME;
   }
 }

@@ -22,8 +22,6 @@ import java.util.EnumSet;
  */
 public class ConvertToTensor extends ZerosLike {
 
-  private static final String FUNCTION_NAME = "tf.convert_to_tensor()";
-
   /**
    * Optional element type for the returned tensor, used when <code>dtype</code> is <code>None
    * </code>.
@@ -90,10 +88,5 @@ public class ConvertToTensor extends ZerosLike {
    */
   protected int getDTypeHintArgumentValueNumber() {
     return this.getArgumentValueNumber(DTYPE_HINT_PARAMETER_POSITION);
-  }
-
-  @Override
-  protected String getSignature() {
-    return FUNCTION_NAME;
   }
 }

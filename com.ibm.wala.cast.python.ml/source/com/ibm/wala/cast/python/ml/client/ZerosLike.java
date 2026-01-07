@@ -11,8 +11,6 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class ZerosLike extends Constant {
 
-  public static final String FUNCTION_NAME = "tf.zeros_like()";
-
   /**
    * The shape argument is not explicitly provided to zeros_like(); rather, the shape is inferred
    * from the `input` argument.
@@ -26,10 +24,5 @@ public class ZerosLike extends Constant {
   @Override
   protected int getShapeParameterPosition() {
     return SHAPE_PARAMETER_POSITION;
-  }
-
-  @Override
-  protected String getSignature() {
-    return FUNCTION_NAME;
   }
 }

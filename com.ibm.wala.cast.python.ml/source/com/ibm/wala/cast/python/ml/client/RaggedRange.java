@@ -1,8 +1,5 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
-import static com.ibm.wala.cast.python.util.Util.getFunction;
-
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -124,11 +121,5 @@ public class RaggedRange extends Range {
         .getPointerAnalysis()
         .getPointsToSet(
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(this.getNode(), vn));
-  }
-
-  @Override
-  protected String getSignature() {
-    TypeReference function = getFunction(this.getSource());
-    return TYPE_REFERENCE_TO_SIGNATURE.get(function);
   }
 }

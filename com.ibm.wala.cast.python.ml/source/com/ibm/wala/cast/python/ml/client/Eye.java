@@ -16,8 +16,6 @@ import java.util.Set;
 
 public class Eye extends SparseEye {
 
-  private static final String FUNCTION_NAME = "tf.eye()";
-
   protected enum Parameters {
     NUM_ROWS,
     NUM_COLUMNS,
@@ -28,11 +26,6 @@ public class Eye extends SparseEye {
 
   public Eye(PointsToSetVariable source) {
     super(source);
-  }
-
-  @Override
-  protected String getSignature() {
-    return FUNCTION_NAME;
   }
 
   protected int getBatchShapesArgumentValueNumber() {
