@@ -102,6 +102,7 @@ public abstract class TensorGenerator {
 
     for (InstanceKey instanceKey : pointsToSet) {
       AllocationSiteInNode asin = getAllocationSiteInNode(instanceKey);
+      if (asin == null) continue;
       TypeReference reference = asin.getConcreteType().getReference();
 
       if (reference.equals(list) || reference.equals(tuple)) {
