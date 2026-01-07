@@ -186,7 +186,7 @@ public class Input extends TensorGenerator {
               result = pts;
             } else {
               result = OrdinalSet.unify(result, pts);
-            } 
+            }
           }
         }
       }

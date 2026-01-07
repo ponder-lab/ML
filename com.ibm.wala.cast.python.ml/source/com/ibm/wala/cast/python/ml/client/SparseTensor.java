@@ -16,8 +16,11 @@ import java.util.Set;
  */
 public class SparseTensor extends TensorGenerator {
 
+  @SuppressWarnings("unused")
   private static final int INDICES_PARAMETER_POSITION = 0;
+
   private static final int VALUES_PARAMETER_POSITION = 1;
+
   private static final int DENSE_SHAPE_PARAMETER_POSITION = 2;
 
   public SparseTensor(PointsToSetVariable source) {
