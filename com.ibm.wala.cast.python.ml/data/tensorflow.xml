@@ -588,7 +588,7 @@
           <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="op value_index dtype">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self op value_index dtype">
           <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
           <return value="x" />
         </method>
