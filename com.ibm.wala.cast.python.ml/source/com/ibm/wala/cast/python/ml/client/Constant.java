@@ -16,8 +16,6 @@ import java.util.Set;
  */
 public class Constant extends TensorGenerator {
 
-  private static final String FUNCTION_NAME = "tf.constant()";
-
   private static final int VALUE_PARAMETER_POSITION = 0;
 
   private static final int DTYPE_PARAMETER_POSITION = 1;
@@ -53,11 +51,6 @@ public class Constant extends TensorGenerator {
 
   protected int getValueParameterPosition() {
     return VALUE_PARAMETER_POSITION;
-  }
-
-  @Override
-  protected String getSignature() {
-    return FUNCTION_NAME;
   }
 
   @Override

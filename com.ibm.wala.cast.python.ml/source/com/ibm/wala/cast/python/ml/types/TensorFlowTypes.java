@@ -86,6 +86,8 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/constant")),
           AstMethodReference.fnSelector);
 
+  private static final String CONSTANT_SIGNATURE = "tf.constant()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/keras/Input. */
   public static final MethodReference INPUT =
       MethodReference.findOrCreate(
@@ -101,6 +103,8 @@ public class TensorFlowTypes extends PythonTypes {
           TypeReference.findOrCreate(
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/range")),
           AstMethodReference.fnSelector);
+
+  private static final String RANGE_SIGNATURE = "tf.range()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/random/uniform. */
   public static final MethodReference UNIFORM =
@@ -118,6 +122,8 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/normal")),
           AstMethodReference.fnSelector);
 
+  private static final String NORMAL_SIGNATURE = "tf.random.normal()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/random/truncated_normal. */
   public static final MethodReference TRUNCATED_NORMAL =
       MethodReference.findOrCreate(
@@ -125,6 +131,8 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader,
               TypeName.string2TypeName("Ltensorflow/functions/truncated_normal")),
           AstMethodReference.fnSelector);
+
+  private static final String TRUNCATED_NORMAL_SIGNATURE = "tf.random.truncated_normal()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/zeros. */
   public static final MethodReference ZEROS =
@@ -143,12 +151,16 @@ public class TensorFlowTypes extends PythonTypes {
               TypeName.string2TypeName("Ltensorflow/functions/zeros_like")),
           AstMethodReference.fnSelector);
 
+  private static final String ZEROS_LIKE_SIGNATURE = "tf.zeros_like()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/fill. */
   public static final MethodReference FILL =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/fill")),
           AstMethodReference.fnSelector);
+
+  private static final String FILL_SIGNATURE = "tf.fill()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/convert_to_tensor. */
   public static final MethodReference CONVERT_TO_TENSOR =
@@ -157,6 +169,8 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader,
               TypeName.string2TypeName("Ltensorflow/functions/convert_to_tensor")),
           AstMethodReference.fnSelector);
+
+  private static final String CONVERT_TO_TENSOR_SIGNATURE = "tf.convert_to_tensor()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/one_hot. */
   public static final MethodReference ONE_HOT =
@@ -173,6 +187,8 @@ public class TensorFlowTypes extends PythonTypes {
           TypeReference.findOrCreate(
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/eye")),
           AstMethodReference.fnSelector);
+
+  private static final String EYE_SIGNATURE = "tf.eye()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/sparse/SparseTensor. */
   public static final MethodReference SPARSE_TENSOR =
@@ -277,6 +293,22 @@ public class TensorFlowTypes extends PythonTypes {
   /** A mapping from a {@link TypeReference} to its associated TensorFlow signature. */
   public static final Map<TypeReference, String> TYPE_REFERENCE_TO_SIGNATURE =
       Map.of(
+          CONSTANT.getDeclaringClass(),
+          CONSTANT_SIGNATURE,
+          RANGE.getDeclaringClass(),
+          RANGE_SIGNATURE,
+          NORMAL.getDeclaringClass(),
+          NORMAL_SIGNATURE,
+          TRUNCATED_NORMAL.getDeclaringClass(),
+          TRUNCATED_NORMAL_SIGNATURE,
+          ZEROS_LIKE.getDeclaringClass(),
+          ZEROS_LIKE_SIGNATURE,
+          FILL.getDeclaringClass(),
+          FILL_SIGNATURE,
+          CONVERT_TO_TENSOR.getDeclaringClass(),
+          CONVERT_TO_TENSOR_SIGNATURE,
+          EYE.getDeclaringClass(),
+          EYE_SIGNATURE,
           SPARSE_TENSOR.getDeclaringClass(),
           SPARSE_TENSOR_SIGNATURE,
           SPARSE_EYE.getDeclaringClass(),
