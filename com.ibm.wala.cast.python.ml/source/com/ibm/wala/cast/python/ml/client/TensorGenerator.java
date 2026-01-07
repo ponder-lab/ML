@@ -476,25 +476,23 @@ public abstract class TensorGenerator {
       } else if (instanceKey instanceof ConstantKey
           && ((ConstantKey<?>) instanceKey).getValue() instanceof String) {
         String value = (String) ((ConstantKey<?>) instanceKey).getValue();
-        boolean foundDType = false;
-        for (DType dtype : DType.values()) {
-          if (dtype.name().toLowerCase().equals(value)) {
-            ret.add(dtype);
-            LOGGER.info(
-                "Found dtype: "
-                    + dtype
-                    + " for source: "
-                    + this.getSource()
-                    + " from string: "
-                    + value
-                    + ".");
-            foundDType = true;
-            break;
-          }
-        }
-        if (!foundDType) {
+        DType dtype = null;
+
+        try {
+          dtype = DType.valueOf(value.toUpperCase()); // Validate the dtype string.
+        } catch (IllegalArgumentException | NullPointerException e) {
           throw new IllegalStateException("Unknown dtype string: " + value + ".");
         }
+
+        ret.add(dtype);
+        LOGGER.info(
+            "Found dtype: "
+                + dtype
+                + " for source: "
+                + this.getSource()
+                + " from string: "
+                + value
+                + ".");
       } else
         throw new IllegalStateException(
             "Expected a "
