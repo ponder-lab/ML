@@ -165,7 +165,7 @@
         <putfield class="LRoot" field="ragged_tensor" fieldType="LRoot" ref="ragged" value="ragged_tensor" />
         <new def="ndarray" class="Ltensorflow/functions/ndarray" />
         <putfield class="LRoot" field="ndarray" fieldType="LRoot" ref="numpy" value="ndarray" />
-        <new def="Input" class="Ltensorflow/functions/Input" />
+        <new def="Input" class="Ltensorflow/keras/layers/Input" />
         <putfield class="LRoot" field="Input" fieldType="LRoot" ref="keras" value="Input" />
         <putfield class="LRoot" field="Input" fieldType="LRoot" ref="layers" value="Input" />
         <new def="Dense" class="Ltensorflow/keras/layers/Dense" />
@@ -683,16 +683,6 @@
           <return value="x" />
         </method>
       </class>
-      <class name="Input" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;">
-          <new def="x" class="Ltensorflow/functions/Input" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="shape batch_size name dtype sparse tensor ragged type_spec">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <return value="x" />
-        </method>
-      </class>
       <class name="from_nested_row_lengths" allocatable="true">
         <method name="read_data" descriptor="()LRoot;">
           <new def="x" class="Ltensorflow/python/ops/ragged/ragged_tensor/from_nested_row_lengths" />
@@ -899,6 +889,16 @@
       </class>
     </package>
     <package name="tensorflow/keras/layers">
+      <class name="Input" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;">
+          <new def="x" class="Ltensorflow/keras/layers/Input" />
+          <return value="x" />
+        </method>
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="shape batch_size name dtype sparse tensor ragged type_spec">
+          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
+          <return value="x" />
+        </method>
+      </class>
       <class name="Dense" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Dense -->
         <method name="do" descriptor="()LRoot;" numArgs="11" paramNames="self units activation use_bias kernel_initializer bias_initializer kernel_regularizer bias_regularizer activity_regularizer kernel_constraint bias_constraint">
@@ -1229,7 +1229,7 @@
     <package name="keras/engine/input_layer">
       <class name="Input" allocatable="true">
         <method name="read_data" descriptor="()LRoot;">
-          <new def="x" class="Ltensorflow/functions/Input" />
+          <new def="x" class="Ltensorflow/keras/layers/Input" />
           <return value="x" />
         </method>
         <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="shape batch_size name dtype sparse tensor ragged type_spec">
