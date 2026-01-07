@@ -36,4 +36,12 @@ You must install the `jython-dev.jar` to your local maven repository.
 
 Build and install to your local Maven repo: `mvn install`
 
+## Code Style
+
+Please run the following command before committing any changes to ensure code style consistency:
+
+```bash
+mvn spotless:apply
+```
+
 [SO post]: https://stackoverflow.com/questions/4955635/how-to-add-local-jar-files-to-a-maven-project#answer-4955695
