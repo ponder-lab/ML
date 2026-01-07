@@ -50,4 +50,10 @@ mvn spotless:apply
 mvn compile
 ```
 
-[SO post]: https://stackoverflow.com/questions/4955635/how-to-add-local-jar-files-to-a-maven-project#answer-4955695
+## Python Testing
+
+- Always verify that newly created Python test files run to completion using `python3.10`.
+- Always add `assert` statements in Python test files for tensor `shape` and `dtype`.
+- Ensure that `assert` statements in Python test files match the expectations defined in the corresponding JUnit test cases.
+
+[SO post]: https://stackoverflow.com/questions/4955635/how-to-add-local-jar-files-to-a-maven-project#answer-4955635
