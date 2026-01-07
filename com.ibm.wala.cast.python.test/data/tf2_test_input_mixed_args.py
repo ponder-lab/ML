@@ -1,7 +1,9 @@
 import tensorflow as tf
 
+
 def check_input(i1, i2, i3):
     pass
+
 
 # 1. Positional arguments only: shape, batch_size, name, dtype
 # Input((10,), 32, "my_input", tf.int32)

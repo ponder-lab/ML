@@ -1,7 +1,9 @@
 import tensorflow as tf
 
+
 def check_input(i1, i2, i3):
     pass
+
 
 # Test Input with explicit batch_size
 # Expected: (16, 32)
