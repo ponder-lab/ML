@@ -69,8 +69,10 @@ public class Input extends Ones {
     if (pointsToSet == null || pointsToSet.isEmpty())
       pointsToSet = getKeywordArgumentPointsToSet(builder, "dtype");
 
-    if (pointsToSet != null && !pointsToSet.isEmpty())
+    if (pointsToSet != null && !pointsToSet.isEmpty()) {
+      LOGGER.info("Found possible dtypes: " + pointsToSet + " for source: " + source + ".");
       return getDTypesFromDTypeArgument(builder, pointsToSet);
+    }
 
     return getDefaultDTypes(builder);
   }
@@ -92,9 +94,13 @@ public class Input extends Ones {
 
     Set<List<Dimension<?>>> shapes;
 
-    if (shapePts != null && !shapePts.isEmpty())
+    if (shapePts != null && !shapePts.isEmpty()) {
+      LOGGER.info("Found possible shape points-to set: " + shapePts + " for source: " + source + ".");
       shapes = getShapesFromShapeArgument(builder, shapePts);
-    else shapes = getDefaultShapes(builder);
+    } else {
+      LOGGER.info("No shapes found for source: " + source + "; using default shapes.");
+      shapes = getDefaultShapes(builder);
+    }
 
     // Handle `batch_size`.
     int batchSizeValNum = getArgumentValueNumber(builder, BATCH_SIZE_PARAMETER_POSITION, true);
@@ -115,6 +121,7 @@ public class Input extends Ones {
       batchSizes.addAll(getPossibleLongArguments(batchSizePts));
 
     if (batchSizes.isEmpty()) batchSizes.add(null);
+    else LOGGER.info("Found possible batch sizes: " + batchSizes + " for source: " + source + ".");
 
     Set<List<Dimension<?>>> newShapes = HashSetFactory.make();
 
@@ -130,6 +137,7 @@ public class Input extends Ones {
         newShapes.add(newShape);
       }
 
+    LOGGER.info("Generated shapes: " + newShapes + " for source: " + source + ".");
     return newShapes;
   }
 
@@ -191,7 +199,12 @@ public class Input extends Ones {
         else if (constantKeyValue instanceof Integer)
           ret.add(((Integer) constantKeyValue).longValue());
         else if (constantKeyValue == null) ret.add(null);
-      }
+        else
+          LOGGER.warning(
+              "Expected Long or Integer constant for batch size, but got: "
+                  + constantKeyValue.getClass());
+      } else
+        LOGGER.warning("Expected ConstantKey for batch size, but got: " + instanceKey.getClass());
 
     return ret;
   }
