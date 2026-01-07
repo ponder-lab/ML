@@ -330,7 +330,7 @@ public class TensorFlowTypes extends PythonTypes {
           PythonTypes.Root, findOrCreateAsciiAtom(FLOAT32.name().toLowerCase()), D_TYPE);
 
   /**
-   * Represents the TensorFlow float65 data type.
+   * Represents the TensorFlow float64 data type.
    *
    * @see <a
    *     href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes#float64">TensorFlow
