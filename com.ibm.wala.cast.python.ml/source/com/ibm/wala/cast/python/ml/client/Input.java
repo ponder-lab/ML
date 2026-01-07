@@ -19,6 +19,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -41,6 +42,14 @@ public class Input extends Ones {
   private static final int BATCH_SIZE_PARAMETER_POSITION = 1;
 
   private static final int DTYPE_PARAMETER_POSITION = 3;
+
+  private static final int SPARSE_PARAMETER_POSITION = 4;
+
+  private static final int TENSOR_PARAMETER_POSITION = 5;
+
+  private static final int RAGGED_PARAMETER_POSITION = 6;
+
+  private static final int TYPE_SPEC_PARAMETER_POSITION = 7;
 
   public Input(PointsToSetVariable source) {
     super(source);
@@ -76,6 +85,8 @@ public class Input extends Ones {
 
   @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+    checkUnimplementedParameters(builder);
+
     int shapeValNum = getArgumentValueNumber(builder, this.getShapeParameterPosition(), true);
 
     OrdinalSet<InstanceKey> shapePts = null;
@@ -137,6 +148,28 @@ public class Input extends Ones {
 
     LOGGER.info("Generated shapes: " + newShapes + " for source: " + source + ".");
     return newShapes;
+  }
+
+  private void checkUnimplementedParameters(PropagationCallGraphBuilder builder) {
+    int[] unimplementedPositionalArgs = {
+      SPARSE_PARAMETER_POSITION,
+      TENSOR_PARAMETER_POSITION,
+      RAGGED_PARAMETER_POSITION,
+      TYPE_SPEC_PARAMETER_POSITION
+    };
+
+    for (int pos : unimplementedPositionalArgs) {
+      int valNum = getArgumentValueNumber(builder, pos, true);
+      if (valNum > 0)
+        throw new UnimplementedError("Unimplemented positional argument at position " + pos);
+    }
+
+    String[] unimplementedKeywords = {"sparse", "tensor", "ragged", "type_spec"};
+    for (String kw : unimplementedKeywords) {
+      OrdinalSet<InstanceKey> pts = getKeywordArgumentPointsToSet(builder, kw);
+      if (pts != null && !pts.isEmpty())
+        throw new UnimplementedError("Unimplemented keyword argument: " + kw);
+    }
   }
 
   @Override
