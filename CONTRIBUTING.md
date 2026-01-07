@@ -43,10 +43,11 @@ Build and install to your local Maven repo: `mvn install`
 
 ## Code Style
 
-Please run the following command before committing any changes to ensure code style consistency:
+Please run the following commands before committing any changes to ensure code style consistency and that the project compiles:
 
 ```bash
 mvn spotless:apply
+mvn compile
 ```
 
 [SO post]: https://stackoverflow.com/questions/4955635/how-to-add-local-jar-files-to-a-maven-project#answer-4955695
