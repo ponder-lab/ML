@@ -3,6 +3,8 @@ package com.ibm.wala.cast.python.ml.types;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT64;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT64;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.python.types.PythonTypes;
@@ -353,21 +355,12 @@ public class TensorFlowTypes extends PythonTypes {
 
   /** A mapping from a field reference to its associated {@link DType}, if any. */
   public static final Map<FieldReference, DType> FIELD_REFERENCE_TO_DTYPE =
-      Map.of(FLOAT_32, DType.FLOAT32, FLOAT_64, DType.FLOAT64, INT_32, DType.INT32);
+      Map.of(FLOAT_32, FLOAT32, FLOAT_64, FLOAT64, INT_32, INT32);
 
   /** A mapping from a string to its associated {@link DType}. */
   public static final Map<String, DType> STRING_TO_DTYPE =
       Map.of(
-          "float32",
-          DType.FLOAT32,
-          "float64",
-          DType.FLOAT64,
-          "int32",
-          DType.INT32,
-          "int64",
-          DType.INT64,
-          "string",
-          DType.STRING);
+          "float32", FLOAT32, "float64", FLOAT64, "int32", INT32, "int64", INT64, "string", STRING);
 
   private TensorFlowTypes() {}
 }
