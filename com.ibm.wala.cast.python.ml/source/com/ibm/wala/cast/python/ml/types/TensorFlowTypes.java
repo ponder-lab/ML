@@ -77,6 +77,8 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/ones")),
           AstMethodReference.fnSelector);
 
+  private static final String ONES_SIGNATURE = "tf.ones()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/constant. */
   public static final MethodReference CONSTANT =
       MethodReference.findOrCreate(
@@ -267,6 +269,8 @@ public class TensorFlowTypes extends PythonTypes {
           SPARSE_TENSOR_SIGNATURE,
           SPARSE_ADD.getDeclaringClass(),
           SPARSE_ADD_SIGNATURE,
+          ONES.getDeclaringClass(),
+          ONES_SIGNATURE,
           INPUT.getDeclaringClass(),
           INPUT_SIGNATURE,
           RAGGED_CONSTANT.getDeclaringClass(),

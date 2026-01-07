@@ -25,8 +25,6 @@ public class Ones extends TensorGenerator {
 
   private static final Logger LOGGER = getLogger(Ones.class.getName());
 
-  private static final String FUNCTION_NAME = "tf.ones()";
-
   private static final int SHAPE_PARAMETER_POSITION = 0;
 
   private static final int DTYPE_PARAMETER_POSITION = 1;
@@ -47,11 +45,6 @@ public class Ones extends TensorGenerator {
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     throw new UnsupportedOperationException("Shape is mandatory and must be provided explicitly.");
-  }
-
-  @Override
-  protected String getSignature() {
-    return FUNCTION_NAME;
   }
 
   @Override
