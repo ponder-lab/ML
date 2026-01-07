@@ -41,4 +41,12 @@ Build and install to your local Maven repo: `mvn install`
 - End commit messages with a period.
 - Use backticks (fences) for code entities (e.g., class names, file names). For example: "Refactor `Input` definition in `tensorflow.xml` to correct package."
 
-[SO post]: https://stackoverflow.com/questions/4955635/how-to-add-local-jar-files-to-a-maven-project#answer-4955635
+## Code Style
+
+Please run the following command before committing any changes to ensure code style consistency:
+
+```bash
+mvn spotless:apply
+```
+
+[SO post]: https://stackoverflow.com/questions/4955635/how-to-add-local-jar-files-to-a-maven-project#answer-4955695
