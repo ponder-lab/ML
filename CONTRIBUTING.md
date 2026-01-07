@@ -44,4 +44,10 @@ Please run the following command before committing any changes to ensure code st
 mvn spotless:apply
 ```
 
+## Commit Messages
+
+Please follow these guidelines for Git commit messages:
+* Use backticks for code entities (e.g., \`Class\`, \`method()\`, \`variable\`).
+* End the first line with a period.
+
 [SO post]: https://stackoverflow.com/questions/4955635/how-to-add-local-jar-files-to-a-maven-project#answer-4955695
