@@ -201,11 +201,11 @@ public class Input extends Ones {
           ret.add(((Integer) constantKeyValue).longValue());
         else if (constantKeyValue == null) ret.add(null);
         else
-          throw new IllegalArgumentException(
+          throw new IllegalStateException(
               "Expected Long or Integer constant for batch size, but got: "
                   + constantKeyValue.getClass());
       } else
-        throw new IllegalArgumentException(
+        throw new IllegalStateException(
             "Expected ConstantKey for batch size, but got: " + instanceKey.getClass());
 
     return ret;
