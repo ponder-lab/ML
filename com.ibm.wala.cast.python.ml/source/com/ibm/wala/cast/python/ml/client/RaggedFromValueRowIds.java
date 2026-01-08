@@ -45,7 +45,9 @@ public class RaggedFromValueRowIds extends TensorGenerator {
   private static final Logger LOGGER = Logger.getLogger(RaggedFromValueRowIds.class.getName());
 
   private static final String VALUES_PARAM = "values";
+
   private static final String VALUE_ROWIDS_PARAM = "value_rowids";
+
   private static final String NROWS_PARAM = "nrows";
 
   protected enum Parameters {
