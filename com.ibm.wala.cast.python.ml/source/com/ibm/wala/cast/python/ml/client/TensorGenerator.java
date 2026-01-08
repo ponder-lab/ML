@@ -681,11 +681,13 @@ public abstract class TensorGenerator {
     return this.getArgumentValueNumber(paramPos);
   }
 
-  protected boolean isKeywordArgumentPresent(PropagationCallGraphBuilder builder, String paramName) {
+  protected boolean isKeywordArgumentPresent(
+      PropagationCallGraphBuilder builder, String paramName) {
     CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
     CallSiteReference siteReference = cs.getCallSiteRefs()[0];
 
-    for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode()); it.hasNext(); ) {
+    for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode());
+        it.hasNext(); ) {
       CGNode caller = it.next();
       SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(siteReference);
 

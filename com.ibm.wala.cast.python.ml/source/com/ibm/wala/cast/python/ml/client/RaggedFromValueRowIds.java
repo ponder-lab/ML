@@ -45,8 +45,8 @@ public class RaggedFromValueRowIds extends TensorGenerator {
   private static final Logger LOGGER = Logger.getLogger(RaggedFromValueRowIds.class.getName());
 
   protected enum Parameters {
-    VALUE_ROWIDS,
     VALUES,
+    VALUE_ROWIDS,
     NROWS,
     NAME,
     VALIDATE
@@ -61,8 +61,7 @@ public class RaggedFromValueRowIds extends TensorGenerator {
   }
 
   protected int getValuesArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(
-        builder, this.getValuesParameterPosition(), "values", true);
+    return this.getArgumentValueNumber(builder, this.getValuesParameterPosition(), "values", true);
   }
 
   protected int getValueRowidsParameterPosition() {
@@ -151,8 +150,7 @@ public class RaggedFromValueRowIds extends TensorGenerator {
   }
 
   protected int getNrowsArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(
-        builder, this.getNrowsParameterPosition(), "nrows", true);
+    return this.getArgumentValueNumber(builder, this.getNrowsParameterPosition(), "nrows", true);
   }
 
   protected Set<Long> getPossibleNrowsArguments(PropagationCallGraphBuilder builder) {
