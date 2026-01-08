@@ -148,6 +148,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_3_NONE_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(3), null));
 
+  private static final TensorType TENSOR_4_NONE_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(4), null));
+
   private static final TensorType TENSOR_3_NONE_NONE_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(3), null, null));
 
@@ -2126,7 +2129,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         2,
-        Map.of(2, Set.of(TENSOR_NONE_NONE_INT32), 3, Set.of(TENSOR_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_4_NONE_INT32), 3, Set.of(TENSOR_4_NONE_INT32)));
   }
 
   @Test
@@ -2137,7 +2140,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         2,
-        Map.of(2, Set.of(TENSOR_NONE_NONE_INT32), 3, Set.of(TENSOR_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_4_NONE_INT32), 3, Set.of(TENSOR_4_NONE_INT32)));
   }
 
   @Test
@@ -2148,7 +2151,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         2,
-        Map.of(2, Set.of(TENSOR_NONE_NONE_INT32), 3, Set.of(TENSOR_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_4_NONE_INT32), 3, Set.of(TENSOR_4_NONE_INT32)));
   }
 
   @Test
