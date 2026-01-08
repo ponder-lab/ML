@@ -22,3 +22,5 @@ c = add(
     arg1,
     arg2,
 )
+assert c.shape == (4, None)
+assert c.dtype == tf.int32
