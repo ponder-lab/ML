@@ -142,6 +142,8 @@ public class RaggedFromValueRowIds extends TensorGenerator {
         }
       }
     }
+
+    LOGGER.info("Possible value rowids for " + this.getSource() + ": " + ret + ".");
     return ret;
   }
 
@@ -177,7 +179,11 @@ public class RaggedFromValueRowIds extends TensorGenerator {
         }
         nrowsArgs = singleton(max + 1);
       }
+      LOGGER.info("Inferred nrows for " + this.getSource() + ": " + nrowsArgs + ".");
+    } else {
+      LOGGER.info("Found nrows arguments for " + this.getSource() + ": " + nrowsArgs + ".");
     }
+
     // For now, if nrows is missing, we might assume unknown or handle it if we can deduce from
     // value_rowids.
     // However, if we can't find it, we'll assume null (unknown).
@@ -211,6 +217,8 @@ public class RaggedFromValueRowIds extends TensorGenerator {
       }
     }
 
+    LOGGER.info("Possible values shapes for " + this.getSource() + ": " + valuesShapes + ".");
+
     if (valuesShapes.isEmpty()) {
       for (Dimension<?> rowDim : possibleRowDims) {
         List<Dimension<?>> shape = new ArrayList<>();
@@ -218,6 +226,7 @@ public class RaggedFromValueRowIds extends TensorGenerator {
         shape.add(null); // Ragged dimension
         ret.add(shape);
       }
+      LOGGER.info("Determined default ragged shapes for " + this.getSource() + ": " + ret + ".");
       return ret;
     }
 
@@ -235,6 +244,7 @@ public class RaggedFromValueRowIds extends TensorGenerator {
       }
     }
 
+    LOGGER.info("Determined final ragged shapes for " + this.getSource() + ": " + ret + ".");
     return ret;
   }
 
@@ -260,7 +270,9 @@ public class RaggedFromValueRowIds extends TensorGenerator {
     // Infer from values
     int valuesValNum = this.getValuesArgumentValueNumber(builder);
     if (valuesValNum > 0) {
-      return this.getDTypes(builder, valuesValNum);
+      EnumSet<DType> ret = this.getDTypes(builder, valuesValNum);
+      LOGGER.info("Inferred dtypes from values for " + this.getSource() + ": " + ret + ".");
+      return ret;
     }
     return EnumSet.noneOf(DType.class);
   }
