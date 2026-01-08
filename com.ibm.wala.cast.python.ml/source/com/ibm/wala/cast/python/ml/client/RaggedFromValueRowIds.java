@@ -2,7 +2,9 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.client.RaggedFromValueRowIds.Parameters.NROWS;
 import static com.ibm.wala.cast.python.ml.client.RaggedFromValueRowIds.Parameters.VALUES;
+import static com.ibm.wala.cast.python.ml.client.RaggedFromValueRowIds.Parameters.VALUE_ROWIDS;
 import static java.util.Collections.emptySet;
+import static java.util.Collections.singleton;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -50,6 +52,18 @@ public class RaggedFromValueRowIds extends TensorGenerator {
     return this.getArgumentValueNumber(builder, this.getValuesParameterPosition(), true);
   }
 
+  protected int getValueRowidsParameterPosition() {
+    return VALUE_ROWIDS.ordinal();
+  }
+
+  protected int getValueRowidsArgumentValueNumber(PropagationCallGraphBuilder builder) {
+    return this.getArgumentValueNumber(builder, this.getValueRowidsParameterPosition(), true);
+  }
+
+  protected Set<Long> getPossibleValueRowidsArguments(PropagationCallGraphBuilder builder) {
+    return this.getPossibleLongArguments(builder, this.getValueRowidsArgumentValueNumber(builder));
+  }
+
   protected int getNrowsParameterPosition() {
     return NROWS.ordinal();
   }
@@ -69,7 +83,20 @@ public class RaggedFromValueRowIds extends TensorGenerator {
     // 1. Determine `nrows`.
     Set<Long> nrowsArgs = this.getPossibleNrowsArguments(builder);
 
-    // If nrows is not specified, we might look at value_rowids (complex).
+    // If nrows is not specified, then it is inferred from `value_rowids`.
+    if (nrowsArgs.isEmpty()) {
+      // It's `value_rowids[-1] + 1` if `value_rowids` is non-empty, and `0` otherwise.
+      Set<Long> valueRowids = this.getPossibleValueRowidsArguments(builder);
+      if (valueRowids.isEmpty()) nrowsArgs = singleton(0L);
+      else {
+        Long max = null;
+        for (Long l : valueRowids) {
+          if (max == null) max = l;
+          else if (l > max) max = l;
+        }
+        nrowsArgs = singleton(max + 1);
+      }
+    }
     // For now, if nrows is missing, we might assume unknown or handle it if we can deduce from
     // value_rowids.
     // However, if we can't find it, we'll assume null (unknown).
