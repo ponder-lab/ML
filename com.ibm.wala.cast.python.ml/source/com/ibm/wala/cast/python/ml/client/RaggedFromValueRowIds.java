@@ -181,10 +181,10 @@ public class RaggedFromValueRowIds extends TensorGenerator {
       if (valueRowids.isEmpty()) nrowsArgs = singleton(0L);
       else {
         Long max = null;
-        for (Long l : valueRowids) {
+        for (Long l : valueRowids)
           if (max == null) max = l;
           else if (l > max) max = l;
-        }
+
         nrowsArgs = singleton(max + 1);
       }
       LOGGER.info("Inferred nrows for " + this.getSource() + ": " + nrowsArgs + ".");
@@ -220,9 +220,7 @@ public class RaggedFromValueRowIds extends TensorGenerator {
               .getHeapModel()
               .getPointerKeyForLocal(this.getNode(), valuesValNum);
       OrdinalSet<InstanceKey> valuesPts = builder.getPointerAnalysis().getPointsToSet(valuesPK);
-      if (!valuesPts.isEmpty()) {
-        valuesShapes = this.getShapesOfValue(builder, valuesPts);
-      }
+      if (!valuesPts.isEmpty()) valuesShapes = this.getShapesOfValue(builder, valuesPts);
     }
 
     LOGGER.info("Possible values shapes for " + this.getSource() + ": " + valuesShapes + ".");
