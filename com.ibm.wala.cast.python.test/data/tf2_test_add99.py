@@ -1,13 +1,24 @@
 from tensorflow.python.ops.ragged.ragged_tensor import RaggedTensor
+import tensorflow as tf
 
 
 def add(a, b):
     return a + b
 
 
+arg1 = RaggedTensor.from_value_rowids(
+    [3, 1, 4, 1, 5, 9, 2, 6], [0, 0, 0, 0, 2, 2, 2, 3]
+)
+assert arg1.shape == (4, None)
+assert arg1.dtype == tf.int32
+
+arg2 = RaggedTensor.from_value_rowids(
+    [3, 1, 14, 1, 5, 19, 2, 16], [0, 0, 0, 0, 2, 2, 2, 3]
+)
+assert arg2.shape == (4, None)
+assert arg2.dtype == tf.int32
+
 c = add(
-    RaggedTensor.from_value_rowids([3, 1, 4, 1, 5, 9, 2, 6], [0, 0, 0, 0, 2, 2, 2, 3]),
-    RaggedTensor.from_value_rowids(
-        [3, 1, 14, 1, 5, 19, 2, 16], [0, 0, 0, 0, 2, 2, 2, 3]
-    ),
+    arg1,
+    arg2,
 )
