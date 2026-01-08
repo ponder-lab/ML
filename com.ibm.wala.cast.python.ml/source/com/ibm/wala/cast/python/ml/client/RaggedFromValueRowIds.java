@@ -150,7 +150,7 @@ public class RaggedFromValueRowIds extends TensorGenerator {
       }
     }
 
-    LOGGER.info("Possible value rowids for " + this.getSource() + ": " + ret + ".");
+    LOGGER.info(() -> "Possible value rowids for " + this.getSource() + ": " + ret + ".");
     return ret;
   }
 
@@ -187,9 +187,12 @@ public class RaggedFromValueRowIds extends TensorGenerator {
 
         nrowsArgs = singleton(max + 1);
       }
-      LOGGER.info("Inferred nrows for " + this.getSource() + ": " + nrowsArgs + ".");
+      final Set<Long> finalNrowsArgs = nrowsArgs;
+      LOGGER.info(() -> "Inferred nrows for " + this.getSource() + ": " + finalNrowsArgs + ".");
     } else {
-      LOGGER.info("Found nrows arguments for " + this.getSource() + ": " + nrowsArgs + ".");
+      final Set<Long> finalNrowsArgs = nrowsArgs;
+      LOGGER.info(
+          () -> "Found nrows arguments for " + this.getSource() + ": " + finalNrowsArgs + ".");
     }
 
     // For now, if nrows is missing, we might assume unknown or handle it if we can deduce from
@@ -223,7 +226,9 @@ public class RaggedFromValueRowIds extends TensorGenerator {
       if (!valuesPts.isEmpty()) valuesShapes = this.getShapesOfValue(builder, valuesPts);
     }
 
-    LOGGER.info("Possible values shapes for " + this.getSource() + ": " + valuesShapes + ".");
+    final Set<List<Dimension<?>>> finalValuesShapes = valuesShapes;
+    LOGGER.info(
+        () -> "Possible values shapes for " + this.getSource() + ": " + finalValuesShapes + ".");
 
     if (valuesShapes.isEmpty()) {
       for (Dimension<?> rowDim : possibleRowDims) {
@@ -232,7 +237,8 @@ public class RaggedFromValueRowIds extends TensorGenerator {
         shape.add(null); // Ragged dimension
         ret.add(shape);
       }
-      LOGGER.info("Determined default ragged shapes for " + this.getSource() + ": " + ret + ".");
+      LOGGER.info(
+          () -> "Determined default ragged shapes for " + this.getSource() + ": " + ret + ".");
       return ret;
     }
 
@@ -250,7 +256,7 @@ public class RaggedFromValueRowIds extends TensorGenerator {
       }
     }
 
-    LOGGER.info("Determined final ragged shapes for " + this.getSource() + ": " + ret + ".");
+    LOGGER.info(() -> "Determined final ragged shapes for " + this.getSource() + ": " + ret + ".");
     return ret;
   }
 
@@ -277,7 +283,7 @@ public class RaggedFromValueRowIds extends TensorGenerator {
     int valuesValNum = this.getValuesArgumentValueNumber(builder);
     if (valuesValNum > 0) {
       EnumSet<DType> ret = this.getDTypes(builder, valuesValNum);
-      LOGGER.info("Inferred dtypes from values for " + this.getSource() + ": " + ret + ".");
+      LOGGER.info(() -> "Inferred dtypes from values for " + this.getSource() + ": " + ret + ".");
       return ret;
     }
     return EnumSet.noneOf(DType.class);
