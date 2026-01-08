@@ -3,16 +3,28 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.ml.client.RaggedFromValueRowIds.Parameters.NROWS;
 import static com.ibm.wala.cast.python.ml.client.RaggedFromValueRowIds.Parameters.VALUES;
 import static com.ibm.wala.cast.python.ml.client.RaggedFromValueRowIds.Parameters.VALUE_ROWIDS;
+import static com.ibm.wala.cast.python.types.PythonTypes.Root;
+import static com.ibm.wala.cast.python.types.PythonTypes.list;
+import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
+import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 
+import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.classLoader.IField;
+import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.types.FieldReference;
+import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
@@ -61,7 +73,75 @@ public class RaggedFromValueRowIds extends TensorGenerator {
   }
 
   protected Set<Long> getPossibleValueRowidsArguments(PropagationCallGraphBuilder builder) {
-    return this.getPossibleLongArguments(builder, this.getValueRowidsArgumentValueNumber(builder));
+    int valueNumber = this.getValueRowidsArgumentValueNumber(builder);
+    if (valueNumber < 0) return emptySet();
+
+    Set<Long> ret = HashSetFactory.make();
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+    PointerKey pointerKey =
+        pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
+    OrdinalSet<InstanceKey> pointsToSet = pointerAnalysis.getPointsToSet(pointerKey);
+
+    if (pointsToSet == null || pointsToSet.isEmpty())
+      throw new IllegalArgumentException(
+          "Empty points-to set in source: " + this.getSource() + ".");
+
+    for (InstanceKey instanceKey : pointsToSet) {
+      if (instanceKey instanceof ConstantKey) {
+        ConstantKey<?> constantKey = (ConstantKey<?>) instanceKey;
+        Object value = constantKey.getValue();
+        if (value instanceof Long) {
+          ret.add((Long) value);
+        } else if (value instanceof Integer) {
+          ret.add(((Integer) value).longValue());
+        }
+      } else if (instanceKey instanceof AllocationSiteInNode) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(instanceKey);
+        TypeReference reference = asin.getConcreteType().getReference();
+
+        if (reference.equals(list) || reference.equals(tuple)) {
+          OrdinalSet<InstanceKey> objectCatalogPointsToSet =
+              pointerAnalysis.getPointsToSet(
+                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                      .getPointerKeyForObjectCatalog(asin));
+
+          for (InstanceKey catalogIK : objectCatalogPointsToSet) {
+            ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
+            Object constantKeyValue = constantKey.getValue();
+            Integer fieldIndex = null;
+            if (constantKeyValue instanceof Integer) {
+              fieldIndex = (Integer) constantKeyValue;
+            } else if (constantKeyValue instanceof String) {
+              fieldIndex = Integer.parseInt((String) constantKeyValue);
+            }
+
+            if (fieldIndex != null) {
+              FieldReference subscript =
+                  FieldReference.findOrCreate(
+                      Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+
+              IField f = builder.getClassHierarchy().resolveField(subscript);
+              PointerKey pointerKeyForInstanceField =
+                  builder.getPointerKeyForInstanceField(asin, f);
+              OrdinalSet<InstanceKey> instanceFieldPointsToSet =
+                  pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
+
+              for (InstanceKey valIK : instanceFieldPointsToSet) {
+                if (valIK instanceof ConstantKey) {
+                  Object val = ((ConstantKey<?>) valIK).getValue();
+                  if (val instanceof Long) {
+                    ret.add((Long) val);
+                  } else if (val instanceof Integer) {
+                    ret.add(((Integer) val).longValue());
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    return ret;
   }
 
   protected int getNrowsParameterPosition() {
