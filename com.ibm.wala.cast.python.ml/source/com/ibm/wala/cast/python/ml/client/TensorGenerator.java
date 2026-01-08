@@ -664,19 +664,44 @@ public abstract class TensorGenerator {
   }
 
   protected int getArgumentValueNumber(
-      PropagationCallGraphBuilder builder, int paramPos, boolean optional) {
+      PropagationCallGraphBuilder builder, int paramPos, String paramName, boolean optional) {
     Set<Integer> numArgs = this.getNumberOfPossiblePositionalArguments(builder);
 
-    if (!numArgs.stream().anyMatch(n -> n >= paramPos + 1))
+    if (!numArgs.stream().anyMatch(n -> n >= paramPos + 1)
+        && (paramName == null || !isKeywordArgumentPresent(builder, paramName)))
       if (optional) return -1;
       else
         throw new IllegalStateException(
             "Cannot determine value number for parameter at position "
                 + paramPos
+                + (paramName == null ? "" : " or name " + paramName)
                 + " of "
                 + this.getSignature());
 
     return this.getArgumentValueNumber(paramPos);
+  }
+
+  protected boolean isKeywordArgumentPresent(PropagationCallGraphBuilder builder, String paramName) {
+    CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
+    CallSiteReference siteReference = cs.getCallSiteRefs()[0];
+
+    for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode()); it.hasNext(); ) {
+      CGNode caller = it.next();
+      SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(siteReference);
+
+      for (SSAAbstractInvokeInstruction callInstr : calls) {
+        PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
+        if (pyCallInstr.getKeywords().contains(paramName)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  protected int getArgumentValueNumber(
+      PropagationCallGraphBuilder builder, int paramPos, boolean optional) {
+    return getArgumentValueNumber(builder, paramPos, null, optional);
   }
 
   protected int getArgumentValueNumber(PropagationCallGraphBuilder builder, int paramPos) {
