@@ -259,6 +259,16 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String RAGGED_RANGE_SIGNATURE = "tf.ragged.range()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/RaggedTensor#from_value_rowids. */
+  public static final MethodReference FROM_VALUE_ROWIDS =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/from_value_rowids")),
+          AstMethodReference.fnSelector);
+
+  private static final String FROM_VALUE_ROWIDS_SIGNATURE = "tf.RaggedTensor.from_value_rowids()";
+
   public static final MethodReference MULTIPLY =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
@@ -314,6 +324,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(INPUT.getDeclaringClass(), INPUT_SIGNATURE),
           Map.entry(RAGGED_CONSTANT.getDeclaringClass(), RAGGED_CONSTANT_SIGNATURE),
           Map.entry(RAGGED_RANGE.getDeclaringClass(), RAGGED_RANGE_SIGNATURE),
+          Map.entry(FROM_VALUE_ROWIDS.getDeclaringClass(), FROM_VALUE_ROWIDS_SIGNATURE),
           Map.entry(MULTIPLY.getDeclaringClass(), MULTIPLY_SIGNATURE),
           Map.entry(ADD.getDeclaringClass(), ADD_SIGNATURE),
           Map.entry(SUBTRACT.getDeclaringClass(), SUBTRACT_SIGNATURE),
