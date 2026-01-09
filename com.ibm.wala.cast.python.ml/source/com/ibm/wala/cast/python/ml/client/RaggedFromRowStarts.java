@@ -78,7 +78,7 @@ public class RaggedFromRowStarts extends TensorGenerator {
           Dimension<?> firstDim = shape.get(0);
           if (firstDim instanceof NumericDim) {
             int len = ((NumericDim) firstDim).value();
-            possibleRowDims.add(new NumericDim(len - 1));
+            possibleRowDims.add(new NumericDim(len));
           } else {
             possibleRowDims.add(null);
           }
