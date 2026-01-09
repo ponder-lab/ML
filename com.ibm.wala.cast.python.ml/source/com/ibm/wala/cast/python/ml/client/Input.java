@@ -1,23 +1,30 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
 import static java.util.Collections.emptySet;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
+import com.ibm.wala.classLoader.CallSiteReference;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -57,15 +64,21 @@ public class Input extends Ones {
   protected EnumSet<DType> getDTypes(PropagationCallGraphBuilder builder) {
     int valNum = getArgumentValueNumber(builder, this.getDTypeParameterPosition(), "dtype", true);
 
+    OrdinalSet<InstanceKey> pointsToSet = null;
+
     if (valNum > 0) {
       PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
       PointerKey pk = pa.getHeapModel().getPointerKeyForLocal(this.getNode(), valNum);
-      OrdinalSet<InstanceKey> pointsToSet = pa.getPointsToSet(pk);
+      pointsToSet = pa.getPointsToSet(pk);
+    }
 
-      if (pointsToSet != null && !pointsToSet.isEmpty()) {
-        LOGGER.info("Found possible dtypes: " + pointsToSet + " for source: " + source + ".");
-        return getDTypesFromDTypeArgument(builder, pointsToSet);
-      }
+    if (pointsToSet == null || pointsToSet.isEmpty()) {
+      pointsToSet = getKeywordArgumentPointsToSet(builder, "dtype");
+    }
+
+    if (pointsToSet != null && !pointsToSet.isEmpty()) {
+      LOGGER.info("Found possible dtypes: " + pointsToSet + " for source: " + source + ".");
+      return getDTypesFromDTypeArgument(builder, pointsToSet);
     }
 
     return getDefaultDTypes(builder);
@@ -78,21 +91,24 @@ public class Input extends Ones {
     int shapeValNum =
         getArgumentValueNumber(builder, this.getShapeParameterPosition(), "shape", true);
 
-    Set<List<Dimension<?>>> shapes;
+    OrdinalSet<InstanceKey> shapePts = null;
 
     if (shapeValNum > 0) {
       PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
       PointerKey pk = pa.getHeapModel().getPointerKeyForLocal(this.getNode(), shapeValNum);
-      OrdinalSet<InstanceKey> shapePts = pa.getPointsToSet(pk);
+      shapePts = pa.getPointsToSet(pk);
+    }
 
-      if (shapePts != null && !shapePts.isEmpty()) {
-        LOGGER.info(
-            "Found possible shape points-to set: " + shapePts + " for source: " + source + ".");
-        shapes = getShapesFromShapeArgument(builder, shapePts);
-      } else {
-        LOGGER.info("No shapes found for source: " + source + "; using default shapes.");
-        shapes = getDefaultShapes(builder);
-      }
+    if (shapePts == null || shapePts.isEmpty()) {
+      shapePts = getKeywordArgumentPointsToSet(builder, "shape");
+    }
+
+    Set<List<Dimension<?>>> shapes;
+
+    if (shapePts != null && !shapePts.isEmpty()) {
+      LOGGER.info(
+          "Found possible shape points-to set: " + shapePts + " for source: " + source + ".");
+      shapes = getShapesFromShapeArgument(builder, shapePts);
     } else {
       LOGGER.info("No shapes found for source: " + source + "; using default shapes.");
       shapes = getDefaultShapes(builder);
@@ -109,6 +125,12 @@ public class Input extends Ones {
       PointerKey pk = pa.getHeapModel().getPointerKeyForLocal(this.getNode(), batchSizeValNum);
       OrdinalSet<InstanceKey> pts = pa.getPointsToSet(pk);
       batchSizes.addAll(getPossibleLongArguments(pts));
+    }
+
+    // Also check for `batch_size` keyword (fallback).
+    OrdinalSet<InstanceKey> batchSizePts = getKeywordArgumentPointsToSet(builder, "batch_size");
+    if (batchSizePts != null && !batchSizePts.isEmpty()) {
+      batchSizes.addAll(getPossibleLongArguments(batchSizePts));
     }
 
     if (batchSizes.isEmpty()) batchSizes.add(null);
@@ -147,6 +169,12 @@ public class Input extends Ones {
       String kw = unimplementedKeywords[i];
 
       int valNum = getArgumentValueNumber(builder, pos, kw, true);
+      // Check fallback if valNum points to nothing useful, though here we just check presence.
+      // If valNum > 0, we assume it's present.
+      // We also check keyword presence explicitly as fallback if valNum didn't catch it
+      // (though getArgumentValueNumber should catch it).
+      // However, the original code threw error if keyword was present.
+      // getArgumentValueNumber handles both.
       if (valNum > 0) throw new UnimplementedError("Unimplemented argument: " + kw);
     }
   }
@@ -154,6 +182,39 @@ public class Input extends Ones {
   @Override
   protected int getDTypeParameterPosition() {
     return DTYPE_PARAMETER_POSITION;
+  }
+
+  private OrdinalSet<InstanceKey> getKeywordArgumentPointsToSet(
+      PropagationCallGraphBuilder builder, String keyword) {
+    OrdinalSet<InstanceKey> result = null;
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+
+    CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
+
+    if (cs == null || cs.getCallSiteRefs().length == 0) return null;
+
+    CallSiteReference siteReference = cs.getCallSiteRefs()[0];
+
+    for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode());
+        it.hasNext(); ) {
+      CGNode caller = it.next();
+      SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(siteReference);
+
+      for (SSAAbstractInvokeInstruction call : calls)
+        if (call instanceof PythonInvokeInstruction) {
+          PythonInvokeInstruction pyCall = (PythonInvokeInstruction) call;
+          int use = pyCall.getUse(keyword);
+
+          if (use != -1) {
+            PointerKey pk = pa.getHeapModel().getPointerKeyForLocal(caller, use);
+            OrdinalSet<InstanceKey> pts = pa.getPointsToSet(pk);
+
+            if (result == null) result = pts;
+            else result = OrdinalSet.unify(result, pts);
+          }
+        }
+    }
+    return result;
   }
 
   private static Set<Long> getPossibleLongArguments(OrdinalSet<InstanceKey> pointsToSet) {

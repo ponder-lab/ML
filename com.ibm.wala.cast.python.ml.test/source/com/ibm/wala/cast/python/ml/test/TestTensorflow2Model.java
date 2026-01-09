@@ -178,6 +178,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_5_5_INT32 =
       new TensorType(INT_32, asList(new NumericDim(5), new NumericDim(5)));
 
+  private static final TensorType TENSOR_5_NONE_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(5), null));
+
   private static final TensorType TENSOR_2_3_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(3), new NumericDim(3)));
 
@@ -2179,6 +2182,28 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             3, Set.of(TENSOR_2_NONE_INT32),
             4, Set.of(TENSOR_2_NONE_INT32),
             5, Set.of(TENSOR_3_NONE_INT32)));
+  }
+
+  @Test
+  public void testRaggedKeywordArgsMixed()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_mixed_new.py",
+        "test_ragged_mixed_args_new",
+        3,
+        3,
+        Map.of(
+            // rt1: positional values, keyword value_rowids. inferred nrows=3.
+            2,
+            Set.of(TENSOR_3_NONE_INT32),
+
+            // rt2: positional values, keyword value_rowids, keyword nrows=5.
+            3,
+            Set.of(TENSOR_5_NONE_INT32),
+
+            // rt3: positional values, positional value_rowids, keyword nrows=3.
+            4,
+            Set.of(TENSOR_3_NONE_INT32)));
   }
 
   @Test
