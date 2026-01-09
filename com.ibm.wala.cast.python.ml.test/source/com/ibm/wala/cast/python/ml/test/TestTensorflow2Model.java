@@ -5198,6 +5198,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
+  public void testRaggedFromRowSplits()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_from_row_splits.py",
+        "test_ragged_from_row_splits",
+        3,
+        3,
+        Map.of(
+            2, Set.of(TENSOR_5_NONE_INT32),
+            3, Set.of(TENSOR_5_NONE_INT32),
+            4, Set.of(TENSOR_5_NONE_INT32)));
+  }
+
+  @Test
   public void testRaggedRange1() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_ragged_range1.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_NONE_INT32)));
   }
