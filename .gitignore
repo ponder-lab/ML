@@ -68,3 +68,5 @@ temp.dt
 
 # Log output
 *.log
+
+bin/
