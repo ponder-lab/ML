@@ -1,0 +1,18 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: 25.9.0
+    hooks:
+      - id: black
+        args: ["--fast"]
+  - repo: local
+    hooks:
+      - id: spotless-apply
+        name: Spotless Apply
+        entry: mvn spotless:apply
+        language: system
+        pass_filenames: false
+      - id: mvn-compile
+        name: Maven Compile
+        entry: mvn compile
+        language: system
+        pass_filenames: false
