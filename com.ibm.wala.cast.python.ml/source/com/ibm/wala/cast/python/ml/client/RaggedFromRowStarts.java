@@ -6,9 +6,11 @@ import static java.util.Collections.emptySet;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -45,19 +47,19 @@ public class RaggedFromRowStarts extends RaggedTensorFromValues {
     return ROW_STARTS.ordinal();
   }
 
-  protected int getRowStartsArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(
-        builder, this.getRowStartsParameterPosition(), ROW_STARTS_PARAM, true);
+  protected OrdinalSet<InstanceKey> getRowStartsPointsToSet(PropagationCallGraphBuilder builder) {
+    return this.getArgumentPointsToSet(
+        builder, this.getRowStartsParameterPosition(), ROW_STARTS_PARAM);
   }
 
   @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     // 1. Determine `nrows` from `row_starts`.
     // The number of rows is len(row_starts).
-    int rowStartsValNum = this.getRowStartsArgumentValueNumber(builder);
+    OrdinalSet<InstanceKey> rowStartsPts = this.getRowStartsPointsToSet(builder);
     Set<List<Dimension<?>>> rowStartsShapes = emptySet();
-    if (rowStartsValNum > 0) {
-      rowStartsShapes = this.getShapes(builder, rowStartsValNum);
+    if (rowStartsPts != null && !rowStartsPts.isEmpty()) {
+      rowStartsShapes = this.getShapesOfValue(builder, rowStartsPts);
     }
 
     Set<Dimension<?>> possibleRowDims = HashSetFactory.make();
@@ -71,8 +73,6 @@ public class RaggedFromRowStarts extends RaggedTensorFromValues {
           } else {
             possibleRowDims.add(null);
           }
-        } else {
-          possibleRowDims.add(null);
         }
       }
     } else {
