@@ -2,6 +2,10 @@ import tensorflow as tf
 
 
 def add(a, b):
+    assert a.shape == (5, None)
+    assert a.dtype == tf.int32
+    assert b.shape == (5, None)
+    assert b.dtype == tf.int32
     return a + b
 
 
