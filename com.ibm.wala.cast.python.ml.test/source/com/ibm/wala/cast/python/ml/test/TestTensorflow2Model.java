@@ -2216,8 +2216,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         Map.of(
             // rt: positional values, positional value_rowids, positional nrows=3.
-            2,
-            Set.of(TENSOR_3_NONE_INT32)));
+            2, Set.of(TENSOR_3_NONE_INT32)));
   }
 
   @Test
