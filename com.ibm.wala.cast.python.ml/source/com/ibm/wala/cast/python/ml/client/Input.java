@@ -62,7 +62,7 @@ public class Input extends Ones {
 
   @Override
   protected EnumSet<DType> getDTypes(PropagationCallGraphBuilder builder) {
-    int valNum = getArgumentValueNumber(builder, this.getDTypeParameterPosition(), "dtype", true);
+    int valNum = getArgumentValueNumber(builder, this.getDTypeParameterPosition(), true);
 
     OrdinalSet<InstanceKey> pointsToSet = null;
 
@@ -72,9 +72,8 @@ public class Input extends Ones {
       pointsToSet = pa.getPointsToSet(pk);
     }
 
-    if (pointsToSet == null || pointsToSet.isEmpty()) {
+    if (pointsToSet == null || pointsToSet.isEmpty())
       pointsToSet = getKeywordArgumentPointsToSet(builder, "dtype");
-    }
 
     if (pointsToSet != null && !pointsToSet.isEmpty()) {
       LOGGER.info("Found possible dtypes: " + pointsToSet + " for source: " + source + ".");
@@ -88,8 +87,7 @@ public class Input extends Ones {
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     checkUnimplementedParameters(builder);
 
-    int shapeValNum =
-        getArgumentValueNumber(builder, this.getShapeParameterPosition(), "shape", true);
+    int shapeValNum = getArgumentValueNumber(builder, this.getShapeParameterPosition(), true);
 
     OrdinalSet<InstanceKey> shapePts = null;
 
@@ -99,9 +97,8 @@ public class Input extends Ones {
       shapePts = pa.getPointsToSet(pk);
     }
 
-    if (shapePts == null || shapePts.isEmpty()) {
+    if (shapePts == null || shapePts.isEmpty())
       shapePts = getKeywordArgumentPointsToSet(builder, "shape");
-    }
 
     Set<List<Dimension<?>>> shapes;
 
@@ -115,8 +112,7 @@ public class Input extends Ones {
     }
 
     // Handle `batch_size`.
-    int batchSizeValNum =
-        getArgumentValueNumber(builder, BATCH_SIZE_PARAMETER_POSITION, "batch_size", true);
+    int batchSizeValNum = getArgumentValueNumber(builder, BATCH_SIZE_PARAMETER_POSITION, true);
 
     Set<Long> batchSizes = new HashSet<>();
 
@@ -127,11 +123,11 @@ public class Input extends Ones {
       batchSizes.addAll(getPossibleLongArguments(pts));
     }
 
-    // Also check for `batch_size` keyword (fallback).
+    // Also check for `batch_size` keyword.
     OrdinalSet<InstanceKey> batchSizePts = getKeywordArgumentPointsToSet(builder, "batch_size");
-    if (batchSizePts != null && !batchSizePts.isEmpty()) {
+
+    if (batchSizePts != null && !batchSizePts.isEmpty())
       batchSizes.addAll(getPossibleLongArguments(batchSizePts));
-    }
 
     if (batchSizes.isEmpty()) batchSizes.add(null);
     else LOGGER.info("Found possible batch sizes: " + batchSizes + " for source: " + source + ".");
@@ -162,20 +158,17 @@ public class Input extends Ones {
       TYPE_SPEC_PARAMETER_POSITION
     };
 
+    for (int pos : unimplementedPositionalArgs) {
+      int valNum = getArgumentValueNumber(builder, pos, true);
+      if (valNum > 0)
+        throw new UnimplementedError("Unimplemented positional argument at position " + pos);
+    }
+
     String[] unimplementedKeywords = {"sparse", "tensor", "ragged", "type_spec"};
-
-    for (int i = 0; i < unimplementedPositionalArgs.length; i++) {
-      int pos = unimplementedPositionalArgs[i];
-      String kw = unimplementedKeywords[i];
-
-      int valNum = getArgumentValueNumber(builder, pos, kw, true);
-      // Check fallback if valNum points to nothing useful, though here we just check presence.
-      // If valNum > 0, we assume it's present.
-      // We also check keyword presence explicitly as fallback if valNum didn't catch it
-      // (though getArgumentValueNumber should catch it).
-      // However, the original code threw error if keyword was present.
-      // getArgumentValueNumber handles both.
-      if (valNum > 0) throw new UnimplementedError("Unimplemented argument: " + kw);
+    for (String kw : unimplementedKeywords) {
+      OrdinalSet<InstanceKey> pts = getKeywordArgumentPointsToSet(builder, kw);
+      if (pts != null && !pts.isEmpty())
+        throw new UnimplementedError("Unimplemented keyword argument: " + kw);
     }
   }
 
