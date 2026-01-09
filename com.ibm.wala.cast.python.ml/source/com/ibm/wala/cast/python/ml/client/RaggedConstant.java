@@ -44,7 +44,7 @@ import java.util.stream.StreamSupport;
  *     href="https://www.tensorflow.org/api_docs/python/tf/ragged/constant">tf.ragged.constant</a>.
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class RaggedConstant extends ZerosLike {
+public class RaggedConstant extends Constant {
 
   private static final Logger LOGGER = getLogger(RaggedConstant.class.getName());
 
@@ -59,6 +59,11 @@ public class RaggedConstant extends ZerosLike {
 
   public RaggedConstant(PointsToSetVariable source) {
     super(source);
+  }
+
+  @Override
+  protected int getShapeParameterPosition() {
+    return -1;
   }
 
   private static Set<Integer> getPossibleInnerListLengths(
