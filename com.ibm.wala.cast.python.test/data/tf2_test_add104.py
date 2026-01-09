@@ -5,6 +5,8 @@ def add(a, b):
     return a + b
 
 
-c = add(
-    tf.random.normal([4], 0, 1, tf.float32), tf.random.normal([4], 2, 1, tf.float32)
-)
+arg1 = tf.random.normal([4], 0, 1, tf.float32)
+assert arg1.shape == (4,)
+assert arg1.dtype == tf.float32
+
+c = add(arg1, tf.random.normal([4], 2, 1, tf.float32))
