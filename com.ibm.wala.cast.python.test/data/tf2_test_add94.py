@@ -3,6 +3,10 @@ from tensorflow.python.ops.ragged.ragged_tensor import RaggedTensor
 
 
 def add(a, b):
+    assert a.shape.as_list() == [5, None]
+    assert a.dtype == tf.int32
+    assert b.shape.as_list() == [5, None]
+    assert b.dtype == tf.int32
     return a + b
 
 
