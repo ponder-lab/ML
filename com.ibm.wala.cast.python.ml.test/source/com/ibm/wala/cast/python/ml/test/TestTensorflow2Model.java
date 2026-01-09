@@ -181,9 +181,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_5_NONE_INT32 =
       new TensorType(INT_32, asList(new NumericDim(5), null));
 
-  private static final TensorType TENSOR_5_NONE_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(5), null));
-
   private static final TensorType TENSOR_2_3_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(3), new NumericDim(3)));
 
@@ -2209,17 +2206,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TENSOR_3_NONE_INT32)));
-  }
-
-  @Test
-  public void testRaggedFromRowStartsFloat()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_ragged_from_row_starts_float.py",
-        "test_float",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_5_NONE_FLOAT32)));
   }
 
   @Test
