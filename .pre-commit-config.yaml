@@ -11,8 +11,3 @@ repos:
         entry: mvn spotless:apply
         language: system
         pass_filenames: false
-      - id: mvn-compile
-        name: Maven Compile
-        entry: mvn compile
-        language: system
-        pass_filenames: false
