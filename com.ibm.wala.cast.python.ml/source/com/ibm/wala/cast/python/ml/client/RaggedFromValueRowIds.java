@@ -12,7 +12,6 @@ import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
-import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.classLoader.IField;
@@ -27,8 +26,6 @@ import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
-import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -40,11 +37,9 @@ import java.util.logging.Logger;
  *     href="https://www.tensorflow.org/api_docs/python/tf/RaggedTensor#from_value_rowids">tf.RaggedTensor.from_value_rowids</a>.
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class RaggedFromValueRowIds extends TensorGenerator {
+public class RaggedFromValueRowIds extends RaggedTensorFromValues {
 
   private static final Logger LOGGER = Logger.getLogger(RaggedFromValueRowIds.class.getName());
-
-  private static final String VALUES_PARAM = "values";
 
   private static final String VALUE_ROWIDS_PARAM = "value_rowids";
 
@@ -62,13 +57,9 @@ public class RaggedFromValueRowIds extends TensorGenerator {
     super(source);
   }
 
+  @Override
   protected int getValuesParameterPosition() {
     return VALUES.ordinal();
-  }
-
-  protected int getValuesArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(
-        builder, this.getValuesParameterPosition(), VALUES_PARAM, true);
   }
 
   protected int getValueRowidsParameterPosition() {
@@ -169,8 +160,6 @@ public class RaggedFromValueRowIds extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
-    Set<List<Dimension<?>>> ret = HashSetFactory.make();
-
     // 1. Determine `nrows`.
     Set<Long> nrowsArgs = this.getPossibleNrowsArguments(builder);
 
@@ -230,34 +219,7 @@ public class RaggedFromValueRowIds extends TensorGenerator {
     LOGGER.info(
         () -> "Possible values shapes for " + this.getSource() + ": " + finalValuesShapes + ".");
 
-    if (valuesShapes.isEmpty()) {
-      for (Dimension<?> rowDim : possibleRowDims) {
-        List<Dimension<?>> shape = new ArrayList<>();
-        shape.add(rowDim);
-        shape.add(null); // Ragged dimension
-        ret.add(shape);
-      }
-      LOGGER.info(
-          () -> "Determined default ragged shapes for " + this.getSource() + ": " + ret + ".");
-      return ret;
-    }
-
-    // 3. Construct result shape: [nrows, (ragged)] + values.shape[1:]
-    for (Dimension<?> rowDim : possibleRowDims) {
-      for (List<Dimension<?>> valShape : valuesShapes) {
-        List<Dimension<?>> shape = new ArrayList<>();
-        shape.add(rowDim);
-        shape.add(null); // Ragged dimension
-
-        if (valShape.size() > 1) {
-          shape.addAll(valShape.subList(1, valShape.size()));
-        }
-        ret.add(shape);
-      }
-    }
-
-    LOGGER.info(() -> "Determined final ragged shapes for " + this.getSource() + ": " + ret + ".");
-    return ret;
+    return constructRaggedShape(possibleRowDims, valuesShapes);
   }
 
   @Override
@@ -275,17 +237,5 @@ public class RaggedFromValueRowIds extends TensorGenerator {
   @Override
   protected int getDTypeParameterPosition() {
     return -1; // No explicit dtype argument
-  }
-
-  @Override
-  protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    // Infer from values
-    int valuesValNum = this.getValuesArgumentValueNumber(builder);
-    if (valuesValNum > 0) {
-      EnumSet<DType> ret = this.getDTypes(builder, valuesValNum);
-      LOGGER.info(() -> "Inferred dtypes from values for " + this.getSource() + ": " + ret + ".");
-      return ret;
-    }
-    return EnumSet.noneOf(DType.class);
   }
 }
