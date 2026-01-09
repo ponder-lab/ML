@@ -2165,47 +2165,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedFromRowStartsPos()
+  public void testRaggedFromRowStartsFull()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_ragged_from_row_starts_pos.py",
-        "test_pos",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_5_NONE_INT32)));
-  }
-
-  @Test
-  public void testRaggedFromRowStartsKw()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_ragged_from_row_starts_kw.py",
-        "test_kw",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_5_NONE_INT32)));
-  }
-
-  @Test
-  public void testRaggedFromRowStartsMixed()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_ragged_from_row_starts_mixed.py",
-        "test_mixed",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_5_NONE_INT32)));
-  }
-
-  @Test
-  public void testRaggedFromRowStartsNameVal()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_ragged_from_row_starts_name_val.py",
-        "test_name_val",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_3_NONE_INT32)));
+        "tf2_test_ragged_from_row_starts_full.py",
+        "test_ragged_from_row_starts_full",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_5_NONE_INT32),
+            3, Set.of(TENSOR_5_NONE_INT32),
+            4, Set.of(TENSOR_5_NONE_INT32),
+            5, Set.of(TENSOR_3_NONE_INT32)));
   }
 
   @Test
