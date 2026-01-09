@@ -2207,6 +2207,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
+  public void testRaggedNrowsPositional()
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_nrows_positional.py",
+        "test_ragged_nrows_positional",
+        1,
+        1,
+        Map.of(
+            // rt: positional values, positional value_rowids, positional nrows=3.
+            2,
+            Set.of(TENSOR_3_NONE_INT32)));
+  }
+
+  @Test
   public void testAdd100()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
