@@ -43,12 +43,12 @@ Build and install to your local Maven repo: `mvn install`
 
 ## Code Style
 
-Please run the following commands from the root project directory before committing any changes to ensure code style consistency and that the project compiles:
+Please run the following commands from the project root directory before committing any changes to ensure code style consistency and that the project compiles:
 
 ```bash
+mvn compile
 mvn spotless:apply
 black --fast .
-mvn compile
 ```
 
 ## Python Testing
