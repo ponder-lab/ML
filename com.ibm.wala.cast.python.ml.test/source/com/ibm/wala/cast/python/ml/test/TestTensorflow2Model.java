@@ -2223,6 +2223,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
+  public void testRaggedFromRowStartsFloatPos()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_from_row_starts_float_pos.py",
+        "test_float_pos",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_5_NONE_FLOAT32)));
+  }
+
+  @Test
   public void testRaggedKeywordArgs()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
