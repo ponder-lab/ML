@@ -15,7 +15,7 @@ public class ZerosLike extends Constant {
    * The shape argument is not explicitly provided to zeros_like(); rather, the shape is inferred
    * from the `input` argument.
    */
-  private static final int SHAPE_PARAMETER_POSITION = -1;
+  private static final int SHAPE_PARAMETER_POSITION = UNDEFINED_PARAMETER_POSITION;
 
   public ZerosLike(PointsToSetVariable source) {
     super(source);

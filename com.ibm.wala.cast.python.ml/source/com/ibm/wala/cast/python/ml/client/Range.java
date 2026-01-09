@@ -221,6 +221,7 @@ public class Range extends TensorGenerator {
     // TODO: We need a value number for the dtype argument. Also, that value number can differ
     // depending on the version of the `range` function being called.
 
-    return -1; // Positional dtype argument for range() is not yet implemented.
+    return UNDEFINED_PARAMETER_POSITION; // Positional dtype argument for range() is not yet
+    // implemented.
   }
 }

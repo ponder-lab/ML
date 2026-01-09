@@ -83,8 +83,8 @@ public class ConvertToTensor extends ZerosLike {
   /**
    * Returns the value number for the dtype hint argument in the function call.
    *
-   * @return The value number for the dtype hint argument in the function call or -1 if the dtype
-   *     hint argument is not supported.
+   * @return The value number for the dtype hint argument in the function call or {@link
+   *     TensorGenerator#UNDEFINED_PARAMETER_POSITION} if the dtype hint argument is not supported.
    */
   protected int getDTypeHintArgumentValueNumber() {
     return this.getArgumentValueNumber(DTYPE_HINT_PARAMETER_POSITION);

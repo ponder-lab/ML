@@ -25,7 +25,7 @@ public class Fill extends Constant {
    * The dtype argument is not explicitly provided to fill(); rather, the dtype is inferred from the
    * `value` argument.
    */
-  private static final int VALUE_NUMBER_FOR_DTYPE_ARGUMENT = -1;
+  private static final int VALUE_NUMBER_FOR_DTYPE_ARGUMENT = UNDEFINED_PARAMETER_POSITION;
 
   public Fill(PointsToSetVariable source) {
     super(source);

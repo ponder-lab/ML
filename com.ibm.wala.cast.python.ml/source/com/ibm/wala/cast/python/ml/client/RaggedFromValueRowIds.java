@@ -231,11 +231,11 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
 
   @Override
   protected int getShapeParameterPosition() {
-    return -1; // No explicit shape argument
+    return UNDEFINED_PARAMETER_POSITION; // No explicit shape argument
   }
 
   @Override
   protected int getDTypeParameterPosition() {
-    return -1; // No explicit dtype argument
+    return UNDEFINED_PARAMETER_POSITION; // No explicit dtype argument
   }
 }

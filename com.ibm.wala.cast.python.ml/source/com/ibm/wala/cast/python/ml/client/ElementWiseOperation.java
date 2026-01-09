@@ -39,7 +39,7 @@ public class ElementWiseOperation extends ZerosLike {
    *     href="https://www.tensorflow.org/api_docs/python/tf/math/multiply#returns">tf.math.multiply
    *     - Returns</a>.
    */
-  protected static final int DTYPE_PARAMETER_POSITION = -1;
+  protected static final int DTYPE_PARAMETER_POSITION = UNDEFINED_PARAMETER_POSITION;
 
   @Override
   protected int getDTypeParameterPosition() {

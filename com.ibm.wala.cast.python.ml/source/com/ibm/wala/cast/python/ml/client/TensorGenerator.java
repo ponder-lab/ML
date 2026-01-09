@@ -54,6 +54,8 @@ import java.util.logging.Logger;
 
 public abstract class TensorGenerator {
 
+  protected static final int UNDEFINED_PARAMETER_POSITION = -1;
+
   private static final Logger LOGGER = Logger.getLogger(TensorGenerator.class.getName());
 
   private static final MethodReference IMPORT =
@@ -656,7 +658,7 @@ public abstract class TensorGenerator {
   }
 
   protected int getArgumentValueNumber(int parameterPosition) {
-    if (parameterPosition < 0) return -1; // No such argument.
+    if (parameterPosition < 0) return UNDEFINED_PARAMETER_POSITION; // No such argument.
 
     return this.getNode().getMethod().isStatic()
         ? this.getNode().getIR().getParameter(parameterPosition)

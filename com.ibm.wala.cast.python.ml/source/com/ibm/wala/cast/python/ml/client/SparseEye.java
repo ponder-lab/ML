@@ -21,7 +21,7 @@ import java.util.stream.StreamSupport;
 
 public class SparseEye extends Ones {
 
-  private static final int SHAPE_PARAMETER_POSITION = -1;
+  private static final int SHAPE_PARAMETER_POSITION = UNDEFINED_PARAMETER_POSITION;
 
   protected enum Parameters {
     NUM_ROWS,

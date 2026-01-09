@@ -63,7 +63,7 @@ public class RaggedConstant extends Constant {
 
   @Override
   protected int getShapeParameterPosition() {
-    return -1;
+    return UNDEFINED_PARAMETER_POSITION;
   }
 
   private static Set<Integer> getPossibleInnerListLengths(

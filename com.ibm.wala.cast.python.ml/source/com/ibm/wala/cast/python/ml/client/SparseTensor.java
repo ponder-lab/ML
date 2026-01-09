@@ -17,7 +17,7 @@ public class SparseTensor extends Ones {
    * The SparseTensor constructor does not have an explicit 'dtype' argument. The dtype is inferred
    * from the 'values' argument.
    */
-  private static final int DTYPE_PARAMETER_POSITION = -1;
+  private static final int DTYPE_PARAMETER_POSITION = UNDEFINED_PARAMETER_POSITION;
 
   @SuppressWarnings("unused")
   private static final int INDICES_PARAMETER_POSITION = 0;
