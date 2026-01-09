@@ -4,6 +4,8 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_ROW_LENGTHS;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_ROW_LIMITS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_ROW_SPLITS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_ROW_STARTS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_VALUE_ROWIDS;
@@ -73,6 +75,10 @@ public class TensorGeneratorFactory {
       return new RaggedFromRowStarts(source);
     else if (calledFunction.equals(FROM_ROW_SPLITS.getDeclaringClass()))
       return new RaggedFromRowSplits(source);
+    else if (calledFunction.equals(FROM_ROW_LENGTHS.getDeclaringClass()))
+      return new RaggedFromRowLengths(source);
+    else if (calledFunction.equals(FROM_ROW_LIMITS.getDeclaringClass()))
+      return new RaggedFromRowLimits(source);
     else if (calledFunction.equals(MULTIPLY.getDeclaringClass())
         || calledFunction.equals(
             com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD.getDeclaringClass())

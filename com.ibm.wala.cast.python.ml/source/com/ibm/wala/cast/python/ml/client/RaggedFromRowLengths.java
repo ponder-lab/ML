@@ -1,0 +1,103 @@
+package com.ibm.wala.cast.python.ml.client;
+
+import static com.ibm.wala.cast.python.ml.client.RaggedFromRowLengths.Parameters.ROW_LENGTHS;
+import static com.ibm.wala.cast.python.ml.client.RaggedFromRowLengths.Parameters.VALUES;
+import static java.util.Collections.emptySet;
+
+import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.List;
+import java.util.Set;
+import java.util.logging.Logger;
+
+/**
+ * A representation of the `tf.RaggedTensor.from_row_lengths` API in TensorFlow.
+ *
+ * @see <a
+ *     href="https://www.tensorflow.org/api_docs/python/tf/RaggedTensor#from_row_lengths">tf.RaggedTensor.from_row_lengths</a>.
+ */
+public class RaggedFromRowLengths extends RaggedTensorFromValues {
+
+  private static final Logger LOGGER = Logger.getLogger(RaggedFromRowLengths.class.getName());
+
+  private static final String ROW_LENGTHS_PARAM = "row_lengths";
+
+  protected enum Parameters {
+    VALUES,
+    ROW_LENGTHS,
+    NAME,
+    VALIDATE
+  }
+
+  public RaggedFromRowLengths(PointsToSetVariable source) {
+    super(source);
+  }
+
+  @Override
+  protected int getValuesParameterPosition() {
+    return VALUES.ordinal();
+  }
+
+  protected int getRowLengthsParameterPosition() {
+    return ROW_LENGTHS.ordinal();
+  }
+
+  protected OrdinalSet<InstanceKey> getRowLengthsPointsToSet(PropagationCallGraphBuilder builder) {
+    return this.getArgumentPointsToSet(
+        builder, this.getRowLengthsParameterPosition(), ROW_LENGTHS_PARAM);
+  }
+
+  @Override
+  protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+    // 1. Determine `nrows` from `row_lengths`.
+    // The number of rows is len(row_lengths).
+    OrdinalSet<InstanceKey> rowLengthsPts = this.getRowLengthsPointsToSet(builder);
+    Set<List<Dimension<?>>> rowLengthsShapes = emptySet();
+    if (rowLengthsPts != null && !rowLengthsPts.isEmpty()) {
+      rowLengthsShapes = this.getShapesOfValue(builder, rowLengthsPts);
+    }
+
+    Set<Dimension<?>> possibleRowDims = HashSetFactory.make();
+    if (!rowLengthsShapes.isEmpty()) {
+      for (List<Dimension<?>> shape : rowLengthsShapes) {
+        if (!shape.isEmpty()) {
+          possibleRowDims.add(shape.get(0));
+        }
+      }
+    } else {
+      possibleRowDims.add(null);
+    }
+
+    final Set<Dimension<?>> finalPossibleRowDims = possibleRowDims;
+    LOGGER.info(() -> "Inferred nrows for " + this.getSource() + ": " + finalPossibleRowDims + ".");
+
+    // 2. Determine shape of `values`.
+    OrdinalSet<InstanceKey> valuesPts =
+        this.getArgumentPointsToSet(builder, getValuesParameterPosition(), VALUES_PARAM);
+    Set<List<Dimension<?>>> valuesShapes = emptySet();
+    if (valuesPts != null && !valuesPts.isEmpty()) {
+      valuesShapes = this.getShapesOfValue(builder, valuesPts);
+    }
+
+    return constructRaggedShape(possibleRowDims, valuesShapes);
+  }
+
+  @Override
+  protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    return emptySet();
+  }
+
+  @Override
+  protected int getShapeParameterPosition() {
+    return UNDEFINED_PARAMETER_POSITION;
+  }
+
+  @Override
+  protected int getDTypeParameterPosition() {
+    return UNDEFINED_PARAMETER_POSITION;
+  }
+}

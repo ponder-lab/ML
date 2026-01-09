@@ -289,6 +289,26 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String FROM_ROW_SPLITS_SIGNATURE = "tf.RaggedTensor.from_row_splits()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/RaggedTensor#from_row_lengths. */
+  public static final MethodReference FROM_ROW_LENGTHS =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/from_row_lengths")),
+          AstMethodReference.fnSelector);
+
+  private static final String FROM_ROW_LENGTHS_SIGNATURE = "tf.RaggedTensor.from_row_lengths()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/RaggedTensor#from_row_limits. */
+  public static final MethodReference FROM_ROW_LIMITS =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/from_row_limits")),
+          AstMethodReference.fnSelector);
+
+  private static final String FROM_ROW_LIMITS_SIGNATURE = "tf.RaggedTensor.from_row_limits()";
+
   public static final MethodReference MULTIPLY =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
@@ -347,6 +367,8 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(FROM_VALUE_ROWIDS.getDeclaringClass(), FROM_VALUE_ROWIDS_SIGNATURE),
           Map.entry(FROM_ROW_STARTS.getDeclaringClass(), FROM_ROW_STARTS_SIGNATURE),
           Map.entry(FROM_ROW_SPLITS.getDeclaringClass(), FROM_ROW_SPLITS_SIGNATURE),
+          Map.entry(FROM_ROW_LENGTHS.getDeclaringClass(), FROM_ROW_LENGTHS_SIGNATURE),
+          Map.entry(FROM_ROW_LIMITS.getDeclaringClass(), FROM_ROW_LIMITS_SIGNATURE),
           Map.entry(MULTIPLY.getDeclaringClass(), MULTIPLY_SIGNATURE),
           Map.entry(ADD.getDeclaringClass(), ADD_SIGNATURE),
           Map.entry(SUBTRACT.getDeclaringClass(), SUBTRACT_SIGNATURE),
