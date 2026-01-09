@@ -2155,6 +2155,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
+  public void testRaggedFromRowStartsFull()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_from_row_starts_full.py",
+        "test_ragged_from_row_starts_full",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_4_NONE_INT32),
+            3, Set.of(TENSOR_4_NONE_INT32),
+            4, Set.of(TENSOR_4_NONE_INT32),
+            5, Set.of(TENSOR_2_NONE_INT32)));
+  }
+
+  @Test
   public void testRaggedKeywordArgs()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
