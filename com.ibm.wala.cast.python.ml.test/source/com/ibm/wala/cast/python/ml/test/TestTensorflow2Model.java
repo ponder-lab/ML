@@ -5322,6 +5322,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_sparse_tensor.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_4_INT32)));
   }
 
+  @Test
+  public void testInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_input.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_NONE_32_FLOAT32)));
+  }
+
   private void test(
       String filename,
       String functionName,
