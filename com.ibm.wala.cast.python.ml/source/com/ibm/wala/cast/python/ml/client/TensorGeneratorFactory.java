@@ -80,6 +80,9 @@ public class TensorGeneratorFactory {
       return new RaggedFromRowLengths(source);
     else if (calledFunction.equals(FROM_NESTED_ROW_LENGTHS.getDeclaringClass()))
       return new RaggedFromNestedRowLengths(source);
+    else if (calledFunction.equals(
+        com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_ROW_SPLITS
+            .getDeclaringClass())) return new RaggedFromNestedRowSplits(source);
     else if (calledFunction.equals(FROM_ROW_LIMITS.getDeclaringClass()))
       return new RaggedFromRowLimits(source);
     else if (calledFunction.equals(MULTIPLY.getDeclaringClass())
