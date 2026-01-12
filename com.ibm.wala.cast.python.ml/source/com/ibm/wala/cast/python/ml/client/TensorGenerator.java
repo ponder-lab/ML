@@ -147,7 +147,8 @@ public abstract class TensorGenerator {
                       + this.getSource().getPointerKey()
                       + ".");
 
-              Dimension<Integer> dimension = new NumericDim(shapeValue.intValue());
+              Dimension<Integer> dimension =
+                  (shapeValue != null) ? new NumericDim(shapeValue.intValue()) : null;
 
               LOGGER.fine("Adding dimension: " + dimension + ".");
               tensorDimensions.add(dimension);
