@@ -189,8 +189,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
 
     // Handle case where we didn't find any shapes (e.g. points to sets empty)
     if (ret.isEmpty()) {
-      // Default fallback
-      return getDefaultShapes(builder);
+      throw new IllegalStateException("Could not calculate shapes for RaggedFromNestedRowLengths");
     }
 
     LOGGER.info("Final calculated shapes: " + ret);
