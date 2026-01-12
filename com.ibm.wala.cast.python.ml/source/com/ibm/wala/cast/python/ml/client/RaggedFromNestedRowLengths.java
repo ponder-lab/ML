@@ -5,24 +5,31 @@ import static com.ibm.wala.cast.python.ml.client.RaggedFromNestedRowLengths.Para
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
+import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.core.util.strings.Atom;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -38,6 +45,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
   private static final Logger LOGGER = Logger.getLogger(RaggedFromNestedRowLengths.class.getName());
 
   private static final String NESTED_ROW_LENGTHS_PARAM = "nested_row_lengths";
+  private static final String FLAT_VALUES_PARAM = "flat_values";
 
   protected enum Parameters {
     VALUES,
@@ -55,6 +63,12 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
     return VALUES.ordinal();
   }
 
+  @Override
+  protected int getValuesArgumentValueNumber(PropagationCallGraphBuilder builder) {
+    return this.getArgumentValueNumber(
+        builder, this.getValuesParameterPosition(), FLAT_VALUES_PARAM, true);
+  }
+
   protected int getNestedRowLengthsParameterPosition() {
     return NESTED_ROW_LENGTHS.ordinal();
   }
@@ -66,12 +80,72 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
   }
 
   @Override
+  protected OrdinalSet<InstanceKey> getArgumentPointsToSet(
+      PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+
+    OrdinalSet<InstanceKey> combinedPts = OrdinalSet.empty();
+    boolean found = false;
+
+    // Analyze callers to find arguments passed (keyword or positional)
+    CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
+    if (cs != null) {
+      CallSiteReference siteReference = cs.getCallSiteRefs()[0];
+      for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode());
+          it.hasNext(); ) {
+        CGNode caller = it.next();
+        SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(siteReference);
+        for (SSAAbstractInvokeInstruction callInstr : calls) {
+          if (callInstr instanceof PythonInvokeInstruction) {
+            PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
+            int argValNum = -1;
+
+            // 1. Try keyword
+            if (paramName != null) {
+              argValNum = pyCallInstr.getUse(paramName);
+              if (argValNum != -1) {
+                LOGGER.info(
+                    "Found keyword argument " + paramName + " with value number " + argValNum);
+              }
+            }
+
+            // 2. Try positional if keyword not found
+            if (argValNum == -1 && paramPos >= 0) {
+              int numPosParams = pyCallInstr.getNumberOfPositionalParameters();
+              if (paramPos + 1 < numPosParams) {
+                argValNum = pyCallInstr.getUse(paramPos + 1);
+              }
+            }
+
+            if (argValNum != -1) {
+              PointerKey argPk =
+                  builder
+                      .getPointerAnalysis()
+                      .getHeapModel()
+                      .getPointerKeyForLocal(caller, argValNum);
+              OrdinalSet<InstanceKey> argPts = builder.getPointerAnalysis().getPointsToSet(argPk);
+              if (argPts != null) {
+                combinedPts = OrdinalSet.unify(combinedPts, argPts);
+                found = true;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (found) {
+      return combinedPts;
+    }
+
+    return OrdinalSet.empty();
+  }
+
+  @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     LOGGER.info("Calculating shapes for RaggedFromNestedRowLengths.");
     // 1. Determine `nrows` and number of ragged dimensions from `nested_row_lengths`.
     // The number of rows is len(nested_row_lengths[0]).
     OrdinalSet<InstanceKey> nestedRowLengthsPts = this.getNestedRowLengthsPointsToSet(builder);
-    Set<List<Dimension<?>>> nestedRowLengthsShapes = emptySet();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     Set<Dimension<?>> possibleRowDims = HashSetFactory.make();
@@ -96,6 +170,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
 
             // Get the first element of nested_row_lengths to determine nrows.
             if (k > 0) {
+              boolean foundRowDim = false;
               FieldReference subscript =
                   FieldReference.findOrCreate(
                       com.ibm.wala.cast.python.types.PythonTypes.Root,
@@ -105,14 +180,20 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
                 OrdinalSet<InstanceKey> firstElemPts = pointerAnalysis.getPointsToSet(pk);
-                Set<List<Dimension<?>>> shapesOfFirstElem =
-                    this.getShapesOfValue(builder, firstElemPts);
-                for (List<Dimension<?>> shape : shapesOfFirstElem) {
-                  if (!shape.isEmpty()) {
-                    LOGGER.info("Found row dimension from first element: " + shape.get(0));
-                    possibleRowDims.add(shape.get(0));
+                if (firstElemPts != null && !firstElemPts.isEmpty()) {
+                  Set<List<Dimension<?>>> shapesOfFirstElem =
+                      this.getShapesOfValue(builder, firstElemPts);
+                  for (List<Dimension<?>> shape : shapesOfFirstElem) {
+                    if (!shape.isEmpty()) {
+                      LOGGER.info("Found row dimension from first element: " + shape.get(0));
+                      possibleRowDims.add(shape.get(0));
+                      foundRowDim = true;
+                    }
                   }
                 }
+              }
+              if (!foundRowDim) {
+                possibleRowDims.add(null);
               }
             } else {
               // Should not happen for valid input? Or maybe 0 ragged dims?
@@ -121,20 +202,23 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
           }
         }
       }
-    } else {
-      throw new IllegalStateException("No points-to set found for nested_row_lengths.");
+    }
+
+    if (possibleK.isEmpty()) {
+      possibleK.add(null);
+    }
+    if (possibleRowDims.isEmpty()) {
+      possibleRowDims.add(null);
     }
 
     // 2. Determine shape of `values`.
     OrdinalSet<InstanceKey> valuesPts =
-        this.getArgumentPointsToSet(builder, getValuesParameterPosition(), VALUES_PARAM);
+        this.getArgumentPointsToSet(builder, getValuesParameterPosition(), FLAT_VALUES_PARAM);
     Set<List<Dimension<?>>> valuesShapes = emptySet();
     if (valuesPts != null && !valuesPts.isEmpty()) {
       valuesShapes = this.getShapesOfValue(builder, valuesPts);
       LOGGER.info("Found value shapes: " + valuesShapes);
     } else {
-      // Assume values can be anything if not known? Or handle empty?
-      // If values points to empty, maybe it's just unknown.
       valuesShapes = new java.util.HashSet<>();
       valuesShapes.add(emptyList());
       LOGGER.info("No value shapes found, assuming empty list.");
@@ -143,35 +227,15 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
     for (Integer k : possibleK) {
-      if (k == null) continue; // Skip if unknown K? Or assume something?
+      if (k == null) continue;
 
       for (Dimension<?> rowDim : possibleRowDims) {
-        // If rowDim is null, it means we don't know the number of rows.
-        // If K is 0, then we just have values? No, from_nested_row_lengths implies at least list of
-        // lists?
-        // Actually, if nested_row_lengths is empty list, it's identity?
-        // TF docs say: "Returns a RaggedTensor with this.ragged_rank = nested_row_lengths.length"
-
         for (List<Dimension<?>> valShape : valuesShapes) {
           List<Dimension<?>> shape = new ArrayList<>();
           // First dimension is nrows (length of first list in nested_row_lengths)
           shape.add(rowDim);
 
           // Then K ragged dimensions (represented as null)
-          // Wait, the first list in nested_row_lengths describes the splits for the FIRST ragged
-          // dimension.
-          // The output tensor has shape [nrows, (ragged), ..., (ragged), values.shape[1:]]
-          // The number of ragged dimensions added is K.
-          // So we add K nulls?
-          // Let's verify with the test case: (4, None, None, None).
-          // nested_row_lengths has 2 lists. K=2.
-          // Result has 4 dimensions.
-          // [nrows, null, null, values_dim_1] ?
-          // In test: values is (None, None). values.shape[1:] is (None).
-          // So [4, null, null, null].
-          // That matches.
-          // So we add K nulls.
-
           for (int i = 0; i < k; i++) {
             shape.add(null);
           }
