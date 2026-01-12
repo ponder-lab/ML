@@ -63,7 +63,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
     return NESTED_ROW_LENGTHS.ordinal();
   }
 
-  protected OrdinalSet<InstanceKey> getNestedRowLengthsPointsToSet(
+  protected OrdinalSet<InstanceKey> getNestedStructurePointsToSet(
       PropagationCallGraphBuilder builder) {
     return this.getArgumentPointsToSet(
         builder,
@@ -71,12 +71,16 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
         NESTED_ROW_LENGTHS.name().toLowerCase());
   }
 
+  protected Dimension<?> computeRowDim(Dimension<?> dim) {
+    return dim;
+  }
+
   @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     LOGGER.info("Calculating shapes for RaggedFromNestedRowLengths.");
     // 1. Determine `nrows` and number of ragged dimensions from `nested_row_lengths`.
     // The number of rows is len(nested_row_lengths[0]).
-    OrdinalSet<InstanceKey> nestedRowLengthsPts = this.getNestedRowLengthsPointsToSet(builder);
+    OrdinalSet<InstanceKey> nestedRowLengthsPts = this.getNestedStructurePointsToSet(builder);
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     Set<Dimension<?>> possibleRowDims = HashSetFactory.make();
@@ -116,8 +120,9 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
                       this.getShapesOfValue(builder, firstElemPts);
                   for (List<Dimension<?>> shape : shapesOfFirstElem) {
                     if (!shape.isEmpty()) {
-                      LOGGER.info("Found row dimension from first element: " + shape.get(0));
-                      possibleRowDims.add(shape.get(0));
+                      Dimension<?> dim = shape.get(0);
+                      LOGGER.info("Found row dimension from first element: " + dim);
+                      possibleRowDims.add(computeRowDim(dim));
                       foundRowDim = true;
                     }
                   }
