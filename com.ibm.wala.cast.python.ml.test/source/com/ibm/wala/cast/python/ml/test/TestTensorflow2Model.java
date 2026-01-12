@@ -95,6 +95,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_4_NONE_NONE_INT32 =
       new TensorType(INT_32, asList(new NumericDim(4), null, null));
 
+  private static final TensorType TENSOR_2_NONE_NONE_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(2), null, null));
+
   private static final TensorType TENSOR_2_2_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(2)));
 
@@ -5400,7 +5403,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "test_ragged_from_nested_row_splits_positional",
         1,
         1,
-        Map.of(2, Set.of(new TensorType("int32", asList(new NumericDim(2), null, null)))));
+        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
   }
 
   @Test
@@ -5411,7 +5414,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "test_ragged_from_nested_row_splits_keyword",
         1,
         1,
-        Map.of(2, Set.of(new TensorType("int32", asList(new NumericDim(2), null, null)))));
+        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
   }
 
   @Test
@@ -5422,7 +5425,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "test_ragged_from_nested_row_splits_mixed",
         1,
         1,
-        Map.of(2, Set.of(new TensorType("int32", asList(new NumericDim(2), null, null)))));
+        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
   }
 
   private void test(
