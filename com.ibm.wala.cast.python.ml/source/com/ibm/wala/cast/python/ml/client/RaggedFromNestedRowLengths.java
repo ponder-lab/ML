@@ -122,9 +122,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
         }
       }
     } else {
-      LOGGER.warning("No points-to set found for nested_row_lengths.");
-      possibleRowDims.add(null);
-      possibleK.add(null);
+      throw new IllegalStateException("No points-to set found for nested_row_lengths.");
     }
 
     // 2. Determine shape of `values`.
