@@ -67,6 +67,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
 
   @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+    LOGGER.info("Calculating shapes for RaggedFromNestedRowLengths.");
     // 1. Determine `nrows` and number of ragged dimensions from `nested_row_lengths`.
     // The number of rows is len(nested_row_lengths[0]).
     OrdinalSet<InstanceKey> nestedRowLengthsPts = this.getNestedRowLengthsPointsToSet(builder);
@@ -77,6 +78,8 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
     Set<Integer> possibleK = HashSetFactory.make(); // Number of ragged dimensions.
 
     if (nestedRowLengthsPts != null && !nestedRowLengthsPts.isEmpty()) {
+      LOGGER.info(
+          "Found " + nestedRowLengthsPts.size() + " points-to set(s) for nested_row_lengths.");
       for (InstanceKey ik : nestedRowLengthsPts) {
         if (ik instanceof AllocationSiteInNode) {
           AllocationSiteInNode asin = getAllocationSiteInNode(ik);
@@ -88,6 +91,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
                     ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                         .getPointerKeyForObjectCatalog(asin));
             int k = objectCatalogPointsToSet.size();
+            LOGGER.info("Found nested_row_lengths list/tuple with length (K): " + k);
             possibleK.add(k);
 
             // Get the first element of nested_row_lengths to determine nrows.
@@ -105,6 +109,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
                     this.getShapesOfValue(builder, firstElemPts);
                 for (List<Dimension<?>> shape : shapesOfFirstElem) {
                   if (!shape.isEmpty()) {
+                    LOGGER.info("Found row dimension from first element: " + shape.get(0));
                     possibleRowDims.add(shape.get(0));
                   }
                 }
@@ -117,6 +122,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
         }
       }
     } else {
+      LOGGER.warning("No points-to set found for nested_row_lengths.");
       possibleRowDims.add(null);
       possibleK.add(null);
     }
@@ -127,11 +133,13 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
     Set<List<Dimension<?>>> valuesShapes = emptySet();
     if (valuesPts != null && !valuesPts.isEmpty()) {
       valuesShapes = this.getShapesOfValue(builder, valuesPts);
+      LOGGER.info("Found value shapes: " + valuesShapes);
     } else {
       // Assume values can be anything if not known? Or handle empty?
       // If values points to empty, maybe it's just unknown.
       valuesShapes = new java.util.HashSet<>();
       valuesShapes.add(emptyList());
+      LOGGER.info("No value shapes found, assuming empty list.");
     }
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
@@ -185,6 +193,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
       return getDefaultShapes(builder);
     }
 
+    LOGGER.info("Final calculated shapes: " + ret);
     return ret;
   }
 
