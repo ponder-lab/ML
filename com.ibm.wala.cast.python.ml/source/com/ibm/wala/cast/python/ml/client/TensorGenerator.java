@@ -660,29 +660,40 @@ public abstract class TensorGenerator {
 
   protected OrdinalSet<InstanceKey> getArgumentPointsToSet(
       PropagationCallGraphBuilder builder, int paramPos, String paramName) {
-    // 1. Try positional parameter in callee
-    int valNum = getArgumentValueNumber(paramPos);
-    if (valNum > 0) {
-      PointerKey pk =
-          builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(getNode(), valNum);
-      OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
-      if (pts != null && !pts.isEmpty()) {
-        return pts;
-      }
-    }
-
-    // 2. Try argument from callers (keyword or positional)
-    OrdinalSet<InstanceKey> combinedPts = OrdinalSet.empty();
-    boolean found = false;
-
+    // 1. Try argument from callers (keyword or positional) - This is more precise for
+    // context-sensitive nodes
     CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
     if (cs != null) {
       CallSiteReference siteReference = cs.getCallSiteRefs()[0];
+      com.ibm.wala.classLoader.IMethod callerMethod = cs.getMethods()[0];
+
+      OrdinalSet<InstanceKey> combinedPts = OrdinalSet.empty();
+      boolean found = false;
+
       for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode());
           it.hasNext(); ) {
         CGNode caller = it.next();
+
+        // Only consider the caller that matches the context
+        if (!caller.getMethod().equals(callerMethod)) {
+          continue;
+        }
+
         SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(siteReference);
         for (SSAAbstractInvokeInstruction callInstr : calls) {
+          // Verify this specific call instruction actually targets our node in this context
+          boolean targetsThisNode = false;
+          for (CGNode target : builder.getCallGraph().getPossibleTargets(caller, siteReference)) {
+            if (target.equals(this.getNode())) {
+              targetsThisNode = true;
+              break;
+            }
+          }
+
+          if (!targetsThisNode) {
+            continue;
+          }
+
           if (callInstr instanceof PythonInvokeInstruction) {
             PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
             int argValNum = -1;
@@ -705,7 +716,7 @@ public abstract class TensorGenerator {
                       .getHeapModel()
                       .getPointerKeyForLocal(caller, argValNum);
               OrdinalSet<InstanceKey> argPts = builder.getPointerAnalysis().getPointsToSet(argPk);
-              if (argPts != null) {
+              if (argPts != null && !argPts.isEmpty()) {
                 combinedPts = OrdinalSet.unify(combinedPts, argPts);
                 found = true;
               }
@@ -713,10 +724,20 @@ public abstract class TensorGenerator {
           }
         }
       }
+      if (found) {
+        return combinedPts;
+      }
     }
 
-    if (found) {
-      return combinedPts;
+    // 2. Fallback: Try positional parameter in callee
+    int valNum = getArgumentValueNumber(paramPos);
+    if (valNum > 0) {
+      PointerKey pk =
+          builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(getNode(), valNum);
+      OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
+      if (pts != null && !pts.isEmpty()) {
+        return pts;
+      }
     }
 
     return OrdinalSet.empty();
