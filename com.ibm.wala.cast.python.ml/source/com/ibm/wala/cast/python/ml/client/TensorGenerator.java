@@ -38,9 +38,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
-import com.ibm.wala.types.Descriptor;
 import com.ibm.wala.types.FieldReference;
-import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
@@ -57,12 +55,6 @@ public abstract class TensorGenerator {
   protected static final int UNDEFINED_PARAMETER_POSITION = -1;
 
   private static final Logger LOGGER = Logger.getLogger(TensorGenerator.class.getName());
-
-  private static final MethodReference IMPORT =
-      MethodReference.findOrCreate(
-          TENSORFLOW,
-          findOrCreateAsciiAtom("import"),
-          Descriptor.findOrCreate(null, TENSORFLOW.getName()));
 
   protected PointsToSetVariable source;
 
