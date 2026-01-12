@@ -92,6 +92,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_NONE_NONE_STRING =
       new TensorType(STRING, asList(null, null));
 
+  private static final TensorType TENSOR_4_NONE_NONE_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(4), null, null));
+
   private static final TensorType TENSOR_2_2_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(2)));
 
@@ -5354,6 +5357,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testInput2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_input2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_NONE_NONE_STRING)));
+  }
+
+  @Test
+  public void testRaggedFromNestedRowLengths()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_from_nested_row_lengths.py",
+        "test_ragged_from_nested_row_lengths",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_NONE_NONE_INT32)));
   }
 
   private void test(
