@@ -5,31 +5,24 @@ import static com.ibm.wala.cast.python.ml.client.RaggedFromNestedRowLengths.Para
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
-import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
-import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
-import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.core.util.strings.Atom;
-import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
-import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
-import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -76,67 +69,6 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
         builder,
         this.getNestedRowLengthsParameterPosition(),
         NESTED_ROW_LENGTHS.name().toLowerCase());
-  }
-
-  @Override
-  protected OrdinalSet<InstanceKey> getArgumentPointsToSet(
-      PropagationCallGraphBuilder builder, int paramPos, String paramName) {
-
-    OrdinalSet<InstanceKey> combinedPts = OrdinalSet.empty();
-    boolean found = false;
-
-    // Analyze callers to find arguments passed (keyword or positional)
-    CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
-    if (cs != null) {
-      CallSiteReference siteReference = cs.getCallSiteRefs()[0];
-      for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode());
-          it.hasNext(); ) {
-        CGNode caller = it.next();
-        SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(siteReference);
-        for (SSAAbstractInvokeInstruction callInstr : calls) {
-          if (callInstr instanceof PythonInvokeInstruction) {
-            PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
-            int argValNum = -1;
-
-            // 1. Try keyword
-            if (paramName != null) {
-              argValNum = pyCallInstr.getUse(paramName);
-              if (argValNum != -1) {
-                LOGGER.info(
-                    "Found keyword argument " + paramName + " with value number " + argValNum);
-              }
-            }
-
-            // 2. Try positional if keyword not found
-            if (argValNum == -1 && paramPos >= 0) {
-              int numPosParams = pyCallInstr.getNumberOfPositionalParameters();
-              if (paramPos + 1 < numPosParams) {
-                argValNum = pyCallInstr.getUse(paramPos + 1);
-              }
-            }
-
-            if (argValNum != -1) {
-              PointerKey argPk =
-                  builder
-                      .getPointerAnalysis()
-                      .getHeapModel()
-                      .getPointerKeyForLocal(caller, argValNum);
-              OrdinalSet<InstanceKey> argPts = builder.getPointerAnalysis().getPointsToSet(argPk);
-              if (argPts != null) {
-                combinedPts = OrdinalSet.unify(combinedPts, argPts);
-                found = true;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    if (found) {
-      return combinedPts;
-    }
-
-    return OrdinalSet.empty();
   }
 
   @Override

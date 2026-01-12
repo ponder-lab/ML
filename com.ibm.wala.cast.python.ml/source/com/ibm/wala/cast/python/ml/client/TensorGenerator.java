@@ -671,42 +671,52 @@ public abstract class TensorGenerator {
       }
     }
 
-    // 2. Try keyword argument from callers
-    if (paramName != null) {
-      OrdinalSet<InstanceKey> combinedPts = OrdinalSet.empty();
-      boolean found = false;
+    // 2. Try argument from callers (keyword or positional)
+    OrdinalSet<InstanceKey> combinedPts = OrdinalSet.empty();
+    boolean found = false;
 
-      CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
-      if (cs != null) {
-        CallSiteReference siteReference = cs.getCallSiteRefs()[0];
-        for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode());
-            it.hasNext(); ) {
-          CGNode caller = it.next();
-          SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(siteReference);
-          for (SSAAbstractInvokeInstruction callInstr : calls) {
-            if (callInstr instanceof PythonInvokeInstruction) {
-              PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
-              int argValNum = pyCallInstr.getUse(paramName);
-              if (argValNum != -1) {
-                PointerKey argPk =
-                    builder
-                        .getPointerAnalysis()
-                        .getHeapModel()
-                        .getPointerKeyForLocal(caller, argValNum);
-                OrdinalSet<InstanceKey> argPts = builder.getPointerAnalysis().getPointsToSet(argPk);
-                if (argPts != null) {
-                  combinedPts = OrdinalSet.unify(combinedPts, argPts);
-                  found = true;
-                }
+    CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
+    if (cs != null) {
+      CallSiteReference siteReference = cs.getCallSiteRefs()[0];
+      for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode());
+          it.hasNext(); ) {
+        CGNode caller = it.next();
+        SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(siteReference);
+        for (SSAAbstractInvokeInstruction callInstr : calls) {
+          if (callInstr instanceof PythonInvokeInstruction) {
+            PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
+            int argValNum = -1;
+
+            if (paramName != null) {
+              argValNum = pyCallInstr.getUse(paramName);
+            }
+
+            if (argValNum == -1 && paramPos >= 0) {
+              int numPosParams = pyCallInstr.getNumberOfPositionalParameters();
+              if (paramPos + 1 < numPosParams) {
+                argValNum = pyCallInstr.getUse(paramPos + 1);
+              }
+            }
+
+            if (argValNum != -1) {
+              PointerKey argPk =
+                  builder
+                      .getPointerAnalysis()
+                      .getHeapModel()
+                      .getPointerKeyForLocal(caller, argValNum);
+              OrdinalSet<InstanceKey> argPts = builder.getPointerAnalysis().getPointsToSet(argPk);
+              if (argPts != null) {
+                combinedPts = OrdinalSet.unify(combinedPts, argPts);
+                found = true;
               }
             }
           }
         }
       }
+    }
 
-      if (found) {
-        return combinedPts;
-      }
+    if (found) {
+      return combinedPts;
     }
 
     return OrdinalSet.empty();
