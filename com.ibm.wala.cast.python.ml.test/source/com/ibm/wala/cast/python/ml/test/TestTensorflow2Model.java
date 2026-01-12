@@ -24,6 +24,7 @@ import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
 import com.ibm.wala.cast.python.ml.client.NonBroadcastableShapesException;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -68,6 +69,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final String INT_32 = INT32.name().toLowerCase();
 
+  private static final String STRING = DType.STRING.name().toLowerCase();
+
   private static final TensorType MNIST_INPUT = mnistInput();
 
   private static final TensorType SCALAR_TENSOR_OF_INT32 = new TensorType(INT_32, emptyList());
@@ -85,6 +88,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_NONE_32_FLOAT32 =
       new TensorType(FLOAT_32, asList(null, new NumericDim(32)));
+
+  private static final TensorType TENSOR_NONE_NONE_STRING =
+      new TensorType(STRING, asList(null, null));
 
   private static final TensorType TENSOR_2_2_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(2)));
@@ -5326,6 +5332,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testInput()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_input.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_NONE_32_FLOAT32)));
+  }
+
+  @Test
+  public void testInput2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_input2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_NONE_NONE_STRING)));
   }
 
   private void test(
