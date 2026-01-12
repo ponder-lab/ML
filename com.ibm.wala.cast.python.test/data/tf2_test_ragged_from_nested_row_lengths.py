@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 
-def f(a):
+def test_ragged_from_nested_row_lengths(a):
     pass
 
 
@@ -16,4 +16,4 @@ arg = tf.RaggedTensor.from_nested_row_lengths(x, nested_row_lengths)
 assert arg.shape == (4, None, None)
 assert arg.dtype == tf.int32
 
-f(arg)
+test_ragged_from_nested_row_lengths(arg)
