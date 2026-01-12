@@ -1,7 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.RaggedFromNestedRowLengths.Parameters.FLAT_VALUES;
 import static com.ibm.wala.cast.python.ml.client.RaggedFromNestedRowLengths.Parameters.NESTED_ROW_LENGTHS;
-import static com.ibm.wala.cast.python.ml.client.RaggedFromNestedRowLengths.Parameters.VALUES;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
@@ -48,7 +48,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
   private static final String FLAT_VALUES_PARAM = "flat_values";
 
   protected enum Parameters {
-    VALUES,
+    FLAT_VALUES,
     NESTED_ROW_LENGTHS,
     NAME,
     VALIDATE
@@ -60,7 +60,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
 
   @Override
   protected int getValuesParameterPosition() {
-    return VALUES.ordinal();
+    return FLAT_VALUES.ordinal();
   }
 
   @Override
