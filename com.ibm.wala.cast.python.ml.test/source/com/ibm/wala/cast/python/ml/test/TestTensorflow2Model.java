@@ -91,6 +91,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_NONE_32_FLOAT32 =
       new TensorType(FLOAT_32, asList(null, new NumericDim(32)));
 
+  private static final TensorType TENSOR_NONE_2_FLOAT32 =
+      new TensorType(FLOAT_32, asList(null, new NumericDim(2)));
+
   private static final TensorType TENSOR_NONE_NONE_STRING =
       new TensorType(STRING, asList(null, null));
 
@@ -5729,7 +5732,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testVariablePositionalShape()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
 
-    test("tf2_test_variable_positional_shape.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
+    test(
+        "tf2_test_variable_positional_shape.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_2_FLOAT32)));
   }
 
   @Test

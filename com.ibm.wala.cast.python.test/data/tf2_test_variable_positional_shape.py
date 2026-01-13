@@ -6,12 +6,12 @@ def f(v):
 
 
 # initial_value, trainable, validate_shape, caching_device, name, variable_def, dtype, import_scope, constraint, synchronization, aggregation, shape
-# Note: This runtime call might fail due to shape mismatch checks in TensorFlow,
-# but the static analysis should prioritize the explicit 'shape' argument [2, 2].
+# explicit shape has unknown dimension [None, 2], initial_value is [2, 2].
+# TensorFlow preserves the None dimension.
 v1 = tf.Variable(
-    [1.0, 2.0, 3.0, 4.0],
+    [[1.0, 2.0], [3.0, 4.0]],
     True,
-    False,
+    True,
     None,
     "v1",
     None,
@@ -20,8 +20,11 @@ v1 = tf.Variable(
     None,
     tf.VariableSynchronization.AUTO,
     tf.VariableAggregation.NONE,
-    [2, 2],
+    [None, 2],
 )
+assert isinstance(v1, tf.Variable)
+# Verify that the explicit shape argument was respected (it overrides the fully defined shape of initial_value)
+assert v1.shape.as_list() == [None, 2]
+assert v1.dtype == tf.float32
 
-# If analysis works, it reports [2, 2].
 f(v1)
