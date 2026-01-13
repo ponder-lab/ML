@@ -18,6 +18,7 @@ import java.util.logging.Logger;
  */
 public class RaggedFromNestedRowSplits extends RaggedFromNestedRowLengths {
 
+  @SuppressWarnings("unused")
   private static final Logger LOGGER = Logger.getLogger(RaggedFromNestedRowSplits.class.getName());
 
   protected enum Parameters {
