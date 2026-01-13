@@ -7,7 +7,7 @@ def f(v):
 
 # initial_value, trainable, validate_shape, caching_device, name, variable_def, dtype, import_scope, constraint, synchronization, aggregation, shape
 v1 = tf.Variable(
-    [1, 2],
+    [1.0, 2.0, 3.0],
     True,
     True,
     None,
@@ -18,10 +18,10 @@ v1 = tf.Variable(
     None,
     tf.VariableSynchronization.AUTO,
     tf.VariableAggregation.NONE,
-    [2],
+    [3],
 )
 assert isinstance(v1, tf.Variable)
-assert v1.shape.as_list() == [2]
+assert v1.shape.as_list() == [3]
 assert v1.dtype == tf.float32
 
 f(v1)
