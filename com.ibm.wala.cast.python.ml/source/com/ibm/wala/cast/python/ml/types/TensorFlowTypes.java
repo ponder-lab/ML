@@ -239,6 +239,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String POISSON_SIGNATURE = "tf.random.poisson()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/Variable. */
+  public static final MethodReference VARIABLE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/Variable")),
+          AstMethodReference.fnSelector);
+
+  private static final String VARIABLE_SIGNATURE = "tf.Variable()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/ragged/constant. */
   public static final MethodReference RAGGED_CONSTANT =
       MethodReference.findOrCreate(
@@ -394,6 +403,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(UNIFORM.getDeclaringClass(), UNIFORM_SIGNATURE),
           Map.entry(GAMMA.getDeclaringClass(), GAMMA_SIGNATURE),
           Map.entry(POISSON.getDeclaringClass(), POISSON_SIGNATURE),
+          Map.entry(VARIABLE.getDeclaringClass(), VARIABLE_SIGNATURE),
           Map.entry(INPUT.getDeclaringClass(), INPUT_SIGNATURE),
           Map.entry(RAGGED_CONSTANT.getDeclaringClass(), RAGGED_CONSTANT_SIGNATURE),
           Map.entry(RAGGED_RANGE.getDeclaringClass(), RAGGED_RANGE_SIGNATURE),

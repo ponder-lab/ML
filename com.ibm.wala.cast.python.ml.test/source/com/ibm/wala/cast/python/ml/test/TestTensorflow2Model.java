@@ -69,6 +69,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final String INT_32 = INT32.name().toLowerCase();
 
+  private static final String INT_64 = DType.INT64.name().toLowerCase();
+
   private static final String STRING = DType.STRING.name().toLowerCase();
 
   private static final TensorType MNIST_INPUT = mnistInput();
@@ -244,6 +246,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_2_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2)));
+
+  private static final TensorType TENSOR_2_INT64 =
+      new TensorType(INT_64, asList(new NumericDim(2)));
 
   private static final TensorType TENSOR_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3)));
@@ -5689,6 +5694,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TENSOR_4_NONE_INT32)));
+  }
+
+  @Test
+  public void testVariablePositional()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_variable_positional.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+  }
+
+  @Test
+  public void testVariableKeyword()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_variable_keyword.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+    test("tf2_test_variable_keyword.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+  }
+
+  @Test
+  public void testVariableMixed()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_variable_mixed.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT64)));
   }
 
   private void test(
