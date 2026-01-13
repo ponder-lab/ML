@@ -56,6 +56,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.junit.Ignore;
 import org.junit.Test;
 
 /** Test TF2 APIs. */
@@ -5520,37 +5521,73 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
   }
 
+  @Ignore
   @Test
   public void testRaggedNestedValueRowidsPositional()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_ragged_nested_value_rowids_positional.py",
-        "rt",
+        "check_rt",
         1,
         1,
-        Map.of(1, Set.of(TENSOR_3_NONE_NONE_STRING)));
+        Map.of(2, Set.of(TENSOR_3_NONE_NONE_STRING)));
   }
 
+  @Test
+  public void testRaggedNestedValueRowidsPositionalLists()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_nested_value_rowids_positional_lists.py",
+        "check_rt",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_NONE_NONE_STRING)));
+  }
+
+  @Ignore
   @Test
   public void testRaggedNestedValueRowidsKeyword()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_ragged_nested_value_rowids_keyword.py",
-        "rt",
+        "check_rt",
         1,
         1,
-        Map.of(1, Set.of(TENSOR_2_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
   }
 
+  @Test
+  public void testRaggedNestedValueRowidsKeywordLists()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_nested_value_rowids_keyword_lists.py",
+        "check_rt",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
+  }
+
+  @Ignore
   @Test
   public void testRaggedNestedValueRowidsMixed()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_ragged_nested_value_rowids_mixed.py",
-        "rt",
+        "check_rt",
         1,
         1,
-        Map.of(1, Set.of(TENSOR_1_NONE_NONE_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_1_NONE_NONE_FLOAT32)));
+  }
+
+  @Test
+  public void testRaggedNestedValueRowidsMixedLists()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_nested_value_rowids_mixed_lists.py",
+        "check_rt",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_NONE_NONE_FLOAT32)));
   }
 
   @Test

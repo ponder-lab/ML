@@ -5,10 +5,10 @@ def check_rt(rt):
     pass
 
 
-flat_values = tf.constant([1.0, 2.0], dtype=tf.float32)
+flat_values = [1.0, 2.0]
 nested_value_rowids = [
-    tf.constant([0], dtype=tf.int64),
-    tf.constant([0, 0], dtype=tf.int64),
+    [0],
+    [0, 0],
 ]
 
 rt = tf.RaggedTensor.from_nested_value_rowids(

@@ -12,6 +12,7 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.classLoader.IField;
@@ -28,6 +29,7 @@ import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -262,6 +264,18 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
     }
 
     return ret;
+  }
+
+  @Override
+  protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> valuesPts =
+        this.getArgumentPointsToSet(
+            builder, getValuesParameterPosition(), FLAT_VALUES.name().toLowerCase());
+
+    if (valuesPts != null && !valuesPts.isEmpty()) {
+      return getDTypesOfValue(builder, valuesPts);
+    }
+    return EnumSet.noneOf(DType.class);
   }
 
   @Override
