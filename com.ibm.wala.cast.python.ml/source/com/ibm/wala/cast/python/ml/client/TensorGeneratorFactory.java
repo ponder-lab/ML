@@ -5,6 +5,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSO
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_ROW_LENGTHS;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_VALUE_ROWIDS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_ROW_LENGTHS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_ROW_LIMITS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_ROW_SPLITS;
@@ -83,6 +84,8 @@ public class TensorGeneratorFactory {
     else if (calledFunction.equals(
         com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_ROW_SPLITS
             .getDeclaringClass())) return new RaggedFromNestedRowSplits(source);
+    else if (calledFunction.equals(FROM_NESTED_VALUE_ROWIDS.getDeclaringClass()))
+      return new RaggedFromNestedValueRowIds(source);
     else if (calledFunction.equals(FROM_ROW_LIMITS.getDeclaringClass()))
       return new RaggedFromRowLimits(source);
     else if (calledFunction.equals(MULTIPLY.getDeclaringClass())

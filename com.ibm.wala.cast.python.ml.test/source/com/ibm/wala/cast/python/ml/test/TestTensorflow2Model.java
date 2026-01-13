@@ -98,6 +98,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_3_NONE_NONE_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3), null, null));
 
+  private static final TensorType TENSOR_4_NONE_NONE_NONE_STRING =
+      new TensorType(STRING, asList(new NumericDim(4), null, null, null));
+
+  private static final TensorType TENSOR_3_NONE_NONE_STRING =
+      new TensorType(STRING, asList(new NumericDim(3), null, null));
+
+  private static final TensorType TENSOR_1_NONE_NONE_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(1), null, null));
+
   private static final TensorType TENSOR_2_NONE_NONE_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), null, null));
 
@@ -2114,28 +2123,68 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_3_NONE_NONE_INT32), 3, Set.of(TENSOR_3_NONE_NONE_INT32)));
   }
 
-  @Test
+  /**
+   * Should not throw an {@link IllegalStateException} once https://github.com/wala/ML/issues/340 is
+   * fixed.
+   */
+  @Test(expected = IllegalStateException.class)
   public void testAdd84()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add84.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add84.py",
+        "add",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_4_NONE_NONE_NONE_STRING), 3, Set.of(TENSOR_4_NONE_NONE_NONE_STRING)));
   }
 
-  @Test
+  /**
+   * Should not throw an {@link IllegalStateException} once https://github.com/wala/ML/issues/340 is
+   * fixed.
+   */
+  @Test(expected = IllegalStateException.class)
   public void testAdd85()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add85.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add85.py",
+        "add",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_4_NONE_NONE_NONE_STRING), 3, Set.of(TENSOR_4_NONE_NONE_NONE_STRING)));
   }
 
-  @Test
+  /**
+   * Should not throw an {@link IllegalStateException} once https://github.com/wala/ML/issues/340 is
+   * fixed.
+   */
+  @Test(expected = IllegalStateException.class)
   public void testAdd86()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add86.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add86.py",
+        "add",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_4_NONE_NONE_NONE_STRING), 3, Set.of(TENSOR_4_NONE_NONE_NONE_STRING)));
   }
 
-  @Test
+  /**
+   * Should not throw an {@link IllegalStateException} once https://github.com/wala/ML/issues/340 is
+   * fixed.
+   */
+  @Test(expected = IllegalStateException.class)
   public void testAdd87()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add87.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add87.py",
+        "add",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_4_NONE_NONE_NONE_STRING), 3, Set.of(TENSOR_4_NONE_NONE_NONE_STRING)));
   }
 
   @Test
@@ -5469,6 +5518,99 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
+  }
+
+  @Test
+  public void testRaggedNestedValueRowidsPositional()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_nested_value_rowids_positional.py",
+        "rt",
+        1,
+        1,
+        Map.of(1, Set.of(TENSOR_3_NONE_NONE_STRING)));
+  }
+
+  @Test
+  public void testRaggedNestedValueRowidsKeyword()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_nested_value_rowids_keyword.py",
+        "rt",
+        1,
+        1,
+        Map.of(1, Set.of(TENSOR_2_NONE_NONE_INT32)));
+  }
+
+  @Test
+  public void testRaggedNestedValueRowidsMixed()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_nested_value_rowids_mixed.py",
+        "rt",
+        1,
+        1,
+        Map.of(1, Set.of(TENSOR_1_NONE_NONE_FLOAT32)));
+  }
+
+  @Test
+  public void testRaggedFromNestedValueRowIdsComplete()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    // check_case_1: [4, None], int32
+    test(
+        "tf2_test_ragged_nested_value_rowids_complete.py",
+        "check_case_1",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_NONE_INT32)));
+
+    // check_case_2: [4, None], int32
+    test(
+        "tf2_test_ragged_nested_value_rowids_complete.py",
+        "check_case_2",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_NONE_INT32)));
+
+    // check_case_3: [4, None], int32
+    test(
+        "tf2_test_ragged_nested_value_rowids_complete.py",
+        "check_case_3",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_NONE_INT32)));
+
+    // check_case_4: [4, None], int32
+    test(
+        "tf2_test_ragged_nested_value_rowids_complete.py",
+        "check_case_4",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_NONE_INT32)));
+
+    // check_case_5: [2, None, None], int32
+    test(
+        "tf2_test_ragged_nested_value_rowids_complete.py",
+        "check_case_5",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
+
+    // check_case_6: [2, None], float32
+    test(
+        "tf2_test_ragged_nested_value_rowids_complete.py",
+        "check_case_6",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_NONE_FLOAT32)));
+
+    // check_case_7: [4, None], int32
+    test(
+        "tf2_test_ragged_nested_value_rowids_complete.py",
+        "check_case_7",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_NONE_INT32)));
   }
 
   private void test(
