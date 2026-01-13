@@ -260,7 +260,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
     }
 
     if (ret.isEmpty()) {
-      LOGGER.info("Could not calculate shapes for RaggedFromNestedValueRowIds");
+      throw new IllegalStateException("Could not calculate shapes for RaggedFromNestedValueRowIds");
     }
 
     return ret;
@@ -275,7 +275,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
     if (valuesPts != null && !valuesPts.isEmpty()) {
       return getDTypesOfValue(builder, valuesPts);
     }
-    return EnumSet.noneOf(DType.class);
+    throw new IllegalStateException("Could not determine dtypes for RaggedFromNestedValueRowIds");
   }
 
   @Override

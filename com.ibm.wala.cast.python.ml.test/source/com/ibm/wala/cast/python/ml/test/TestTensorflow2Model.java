@@ -5521,8 +5521,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
   }
 
-  @Ignore
-  @Test
+  /**
+   * Should not throw an {@link IllegalStateException} once https://github.com/wala/ML/issues/340 is
+   * fixed.
+   */
+  @Test(expected = IllegalStateException.class)
   public void testRaggedNestedValueRowidsPositional()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
