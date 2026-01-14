@@ -5845,7 +5845,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         emptyMap());
   }
 
-  private void test(
+  protected void test(
       String filename,
       String functionName,
       int expectedNumberOfTensorParameters,
@@ -5862,7 +5862,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         expectedTensorParameterValueNumberToTypes);
   }
 
-  private void test(
+  protected void test(
       String[] projectFilenames,
       String filename,
       String functionName,
@@ -6045,7 +6045,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * @param string A colon-separated list of paths.
    * @return {@link List} of {@link File}s constructed by parsing the given {@link String}.
    */
-  private List<File> getPathFiles(String string) {
+  protected List<File> getPathFiles(String string) {
     if (string == null || string.isEmpty() || string.isBlank()) return emptyList();
 
     return Arrays.asList(string.split(":")).stream()
