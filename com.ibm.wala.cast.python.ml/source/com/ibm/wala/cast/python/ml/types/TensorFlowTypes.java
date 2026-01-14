@@ -383,6 +383,14 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String DIVIDE_SIGNATURE = "tf.divide()";
 
+  public static final MethodReference MODEL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/keras/models/Model")),
+          AstMethodReference.fnSelector);
+
+  private static final String MODEL_SIGNATURE = "tf.keras.Model()";
+
   /** A mapping from a {@link TypeReference} to its associated TensorFlow signature. */
   public static final Map<TypeReference, String> TYPE_REFERENCE_TO_SIGNATURE =
       Map.ofEntries(

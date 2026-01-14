@@ -13,6 +13,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_ROW_STARTS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_VALUE_ROWIDS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MULTIPLY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONES;
@@ -99,6 +100,7 @@ public class TensorGeneratorFactory {
             com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIVIDE.getDeclaringClass()))
       return new ElementWiseOperation(source);
     else if (calledFunction.equals(SPARSE_ADD.getDeclaringClass())) return new SparseAdd(source);
+    else if (calledFunction.equals(MODEL.getDeclaringClass())) return new Model(source);
     else
       throw new IllegalArgumentException(
           "Unknown call: " + calledFunction + " for source: " + source + ".");
