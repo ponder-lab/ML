@@ -427,7 +427,8 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(MULTIPLY.getDeclaringClass(), MULTIPLY_SIGNATURE),
           Map.entry(ADD.getDeclaringClass(), ADD_SIGNATURE),
           Map.entry(SUBTRACT.getDeclaringClass(), SUBTRACT_SIGNATURE),
-          Map.entry(DIVIDE.getDeclaringClass(), DIVIDE_SIGNATURE));
+          Map.entry(DIVIDE.getDeclaringClass(), DIVIDE_SIGNATURE),
+          Map.entry(MODEL.getDeclaringClass(), MODEL_SIGNATURE));
 
   /**
    * Represents the TensorFlow float32 data type.
