@@ -391,6 +391,16 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String MODEL_SIGNATURE = "tf.keras.Model()";
 
+  public static final MethodReference READ_DATA_SETS =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/examples/tutorials/mnist/read_data_sets")),
+          AstMethodReference.fnSelector);
+
+  private static final String READ_DATA_SETS_SIGNATURE =
+      "tf.contrib.learn.datasets.mnist.read_data_sets()";
+
   /** A mapping from a {@link TypeReference} to its associated TensorFlow signature. */
   public static final Map<TypeReference, String> TYPE_REFERENCE_TO_SIGNATURE =
       Map.ofEntries(
@@ -428,7 +438,8 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(ADD.getDeclaringClass(), ADD_SIGNATURE),
           Map.entry(SUBTRACT.getDeclaringClass(), SUBTRACT_SIGNATURE),
           Map.entry(DIVIDE.getDeclaringClass(), DIVIDE_SIGNATURE),
-          Map.entry(MODEL.getDeclaringClass(), MODEL_SIGNATURE));
+          Map.entry(MODEL.getDeclaringClass(), MODEL_SIGNATURE),
+          Map.entry(READ_DATA_SETS.getDeclaringClass(), READ_DATA_SETS_SIGNATURE));
 
   /**
    * Represents the TensorFlow float32 data type.
