@@ -1,10 +1,13 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIVIDE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_ROW_LENGTHS;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_ROW_SPLITS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_VALUE_ROWIDS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_ROW_LENGTHS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_ROW_LIMITS;
@@ -26,6 +29,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.READ_DATA_SETS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SUBTRACT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VARIABLE;
@@ -85,20 +89,16 @@ public class TensorGeneratorFactory {
       return new RaggedFromRowLengths(source);
     else if (calledFunction.equals(FROM_NESTED_ROW_LENGTHS.getDeclaringClass()))
       return new RaggedFromNestedRowLengths(source);
-    else if (calledFunction.equals(
-        com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_ROW_SPLITS
-            .getDeclaringClass())) return new RaggedFromNestedRowSplits(source);
+    else if (calledFunction.equals(FROM_NESTED_ROW_SPLITS.getDeclaringClass()))
+      return new RaggedFromNestedRowSplits(source);
     else if (calledFunction.equals(FROM_NESTED_VALUE_ROWIDS.getDeclaringClass()))
       return new RaggedFromNestedValueRowIds(source);
     else if (calledFunction.equals(FROM_ROW_LIMITS.getDeclaringClass()))
       return new RaggedFromRowLimits(source);
     else if (calledFunction.equals(MULTIPLY.getDeclaringClass())
-        || calledFunction.equals(
-            com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD.getDeclaringClass())
-        || calledFunction.equals(
-            com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SUBTRACT.getDeclaringClass())
-        || calledFunction.equals(
-            com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIVIDE.getDeclaringClass()))
+        || calledFunction.equals(ADD.getDeclaringClass())
+        || calledFunction.equals(SUBTRACT.getDeclaringClass())
+        || calledFunction.equals(DIVIDE.getDeclaringClass()))
       return new ElementWiseOperation(source);
     else if (calledFunction.equals(SPARSE_ADD.getDeclaringClass())) return new SparseAdd(source);
     else if (calledFunction.equals(MODEL.getDeclaringClass())) return new Model(source);
