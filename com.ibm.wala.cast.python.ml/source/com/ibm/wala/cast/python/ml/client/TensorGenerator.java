@@ -139,7 +139,7 @@ public abstract class TensorGenerator {
               Object instanceFieldValue = instanceFieldConstant.getValue();
 
               // We have a shape value.
-              Long shapeValue = (Long) instanceFieldValue;
+              Number shapeValue = (Number) instanceFieldValue;
               LOGGER.fine(
                   "Found shape value: "
                       + shapeValue
