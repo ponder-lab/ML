@@ -267,13 +267,13 @@ public class TensorType implements Iterable<Dimension<?>> {
 
   public JsonElement toJsonSchema() {
     JsonObject cellType = null;
-    if (this.cellType != null) {
+    if (this.getCellType() != null) {
       cellType = new JsonObject();
-      cellType.addProperty("description", "Elements of type " + this.cellType);
+      cellType.addProperty("description", "Elements of type " + this.getCellType());
     }
 
     JsonElement inner = cellType;
-    for (Dimension<?> dim : this.dims) {
+    for (Dimension<?> dim : this.getDims()) {
       inner = dim.toJsonSchema(inner);
     }
     return inner;
@@ -281,23 +281,23 @@ public class TensorType implements Iterable<Dimension<?>> {
 
   public String toMDString() {
     final String dimString =
-        dims.stream().map(Dimension::toMDString).collect(Collectors.joining(" ; "));
+        getDims().stream().map(Dimension::toMDString).collect(Collectors.joining(" ; "));
 
-    return "[ " + dimString + " **of** _" + cellType + "_ ]";
+    return "[ " + dimString + " **of** _" + getCellType() + "_ ]";
   }
 
   public String toCString(boolean useMarkdown) {
     final String dimString =
-        dims.stream()
+        getDims().stream()
             .map(x -> x.toCString(useMarkdown))
             .map(x -> "[" + x + "]")
             .collect(Collectors.joining());
 
     final String ctypeString;
     if (useMarkdown) {
-      ctypeString = "_" + cellType + "_";
+      ctypeString = "_" + getCellType() + "_";
     } else {
-      ctypeString = cellType;
+      ctypeString = getCellType();
     }
 
     return ctypeString + dimString;
@@ -305,15 +305,15 @@ public class TensorType implements Iterable<Dimension<?>> {
 
   @Override
   public String toString() {
-    return "{" + dims.toString() + " of " + cellType + "}";
+    return "{" + getDims().toString() + " of " + getCellType() + "}";
   }
 
   @Override
   public int hashCode() {
     final int prime = 31;
     int result = 1;
-    result = prime * result + ((cellType == null) ? 0 : cellType.hashCode());
-    result = prime * result + ((dims == null) ? 0 : dims.hashCode());
+    result = prime * result + ((getCellType() == null) ? 0 : getCellType().hashCode());
+    result = prime * result + ((getDims() == null) ? 0 : getDims().hashCode());
     return result;
   }
 
@@ -323,12 +323,12 @@ public class TensorType implements Iterable<Dimension<?>> {
     if (obj == null) return false;
     if (getClass() != obj.getClass()) return false;
     TensorType other = (TensorType) obj;
-    if (cellType == null) {
-      if (other.cellType != null) return false;
-    } else if (!cellType.equals(other.cellType)) return false;
-    if (dims == null) {
-      if (other.dims != null) return false;
-    } else if (!dims.equals(other.dims)) return false;
+    if (getCellType() == null) {
+      if (other.getCellType() != null) return false;
+    } else if (!getCellType().equals(other.getCellType())) return false;
+    if (getDims() == null) {
+      if (other.getDims() != null) return false;
+    } else if (!getDims().equals(other.getDims())) return false;
     return true;
   }
 
@@ -388,7 +388,7 @@ public class TensorType implements Iterable<Dimension<?>> {
 
   @Override
   public Iterator<Dimension<?>> iterator() {
-    return dims.iterator();
+    return getDims().iterator();
   }
 
   public int symbolicDims() {
@@ -412,5 +412,23 @@ public class TensorType implements Iterable<Dimension<?>> {
       }
     }
     return size;
+  }
+
+  /**
+   * Returns the dimensions of the tensor.
+   *
+   * @return The dimensions of the tensor.
+   */
+  public List<Dimension<?>> getDims() {
+    return dims;
+  }
+
+  /**
+   * Returns the cell type of the tensor.
+   *
+   * @return The cell type of the tensor.
+   */
+  public String getCellType() {
+    return cellType;
   }
 }
