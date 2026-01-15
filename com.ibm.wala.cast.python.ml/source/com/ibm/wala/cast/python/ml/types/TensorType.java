@@ -10,6 +10,8 @@
  */
 package com.ibm.wala.cast.python.ml.types;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
+
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -337,7 +339,10 @@ public class TensorType implements Iterable<Dimension<?>> {
     Dimension<Integer> x = new NumericDim(28);
     Dimension<Integer> y = new NumericDim(28);
     Dimension<List<Dimension<?>>> vec = new CompoundDim(Arrays.asList(x, y));
-    return new TensorType("pixel", Arrays.asList(batch, vec));
+
+    String name = FLOAT32.name().toLowerCase();
+
+    return new TensorType(name, Arrays.asList(batch, vec));
   }
 
   public static TensorType shapeArg(CGNode node, int literalVn) throws IOException {
