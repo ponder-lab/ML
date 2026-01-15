@@ -277,6 +277,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_3_4_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3), new NumericDim(4)));
 
+  private static final TensorType TENSOR_1_28_28_1_FLOAT32 =
+      new TensorType(
+          FLOAT_32,
+          asList(new NumericDim(1), new NumericDim(28), new NumericDim(28), new NumericDim(1)));
+
   @Test
   public void testValueIndex()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -5002,13 +5007,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    */
   @Test(expected = IllegalArgumentException.class)
   public void testReshape4() throws ClassHierarchyException, CancelException, IOException {
-    Dimension<String> batch = new SymbolicDim("?");
-    Dimension<Integer> x = new NumericDim(28);
-    Dimension<Integer> y = new NumericDim(28);
-    Dimension<Integer> z = new NumericDim(1);
-    TensorType expectedType = new TensorType("pixel", asList(batch, x, y, z));
-
-    test("tf2_test_reshape4.py", "f", 1, 1, Map.of(2, Set.of(expectedType)));
+    test("tf2_test_reshape4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_28_28_1_FLOAT32)));
   }
 
   /**
