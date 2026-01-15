@@ -1,8 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
-
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
@@ -41,14 +40,16 @@ public class ReadDataSets extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    // read_data_sets returns a container object, not a single tensor.
-    // The analysis of its fields (train.images, etc.) would need to be handled separately.
-    return Collections.emptySet();
+    TensorType mnistInput = TensorType.mnistInput();
+    List<Dimension<?>> dims = mnistInput.getDims();
+    return Collections.singleton(dims);
   }
 
   @Override
   protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    // Default dtype for MNIST images is float32.
-    return EnumSet.of(FLOAT32);
+    TensorType mnistInput = TensorType.mnistInput();
+    String cellType = mnistInput.getCellType().toUpperCase();
+    DType dType = DType.valueOf(cellType);
+    return EnumSet.of(dType);
   }
 }
