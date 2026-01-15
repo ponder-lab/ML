@@ -63,7 +63,7 @@ public class Ones extends TensorGenerator {
       Object value = constantKey.getValue();
 
       if (value == null) return Optional.empty();
-      return Optional.of(((Long) value).intValue());
+      return Optional.of(((Number) value).intValue());
     }
 
     throw new IllegalArgumentException(
