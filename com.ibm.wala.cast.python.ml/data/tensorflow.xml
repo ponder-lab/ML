@@ -408,6 +408,11 @@
         </method>
       </class>
     </package>
+    <package name="tensorflow/python/framework/ops">
+      <class name="Tensor" allocatable="true" />
+      <class name="convert_to_tensor" allocatable="true" />
+      <class name="ndarray" allocatable="true" />
+    </package>
     <package name="tensorflow/functions">
       <class name="AdamOptimizer" allocatable="true">
         <method name="do" descriptor="()LRoot;">
@@ -458,7 +463,7 @@
       </class>
       <class name="ones" allocatable="true">
         <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/array_ops/ones" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self shape dtype name">
@@ -823,8 +828,14 @@
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self model">
           <new def="x" class="Ltensorflow/estimator/train/train" />
           <putfield class="LRoot" field="train" fieldType="LRoot" ref="self" value="x" />
+          <putfield class="LRoot" field="evaluate" fieldType="LRoot" ref="self" value="x" />
           <putfield class="LRoot" field="$callback" fieldType="LRoot" ref="x" value="model" />
           <return value="arg0" />
+        </method>
+      </class>
+      <class name="EstimatorSpec" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self mode predictions loss train_op eval_metric_ops export_outputs">
+          <return value="eval_metric_ops" />
         </method>
       </class>
       <class name="numpy_input_fn" allocatable="true">
@@ -1163,7 +1174,8 @@
         <method name="do" descriptor="()LRoot;" numArgs="3">
           <getfield class="LRoot" field="$callback" fieldType="LRoot" ref="arg0" def="xx" />
           <getfield class="LRoot" field="data" fieldType="LRoot" ref="arg1" def="data" />
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="xx" arg1="data" arg2="3" numArgs="3" def="v" />
+          <getfield class="LRoot" field="labels" fieldType="LRoot" ref="arg1" def="labels" />
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="xx" arg1="data" arg2="labels" numArgs="3" def="v" />
           <return value="v" />
         </method>
       </class>
@@ -1198,17 +1210,17 @@
     <package name="tensorflow/examples/tutorials/mnist">
       <class name="read_data_sets" allocatable="true">
         <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/examples/tutorials/mnist/dataset" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
         <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self train_dir fake_data one_hot dtype reshape validation_size seed source_url">
-          <new def="test" class="Lobject" />
+          <new def="test" class="Ldict" />
           <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
           <putfield class="LRoot" field="images" fieldType="LRoot" ref="test" value="x" />
           <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="y" />
-          <new def="training" class="Lobject" />
+          <new def="training" class="Ldict" />
           <putfield class="LRoot" field="images" fieldType="LRoot" ref="training" value="y" />
-          <new def="data" class="Lobject" />
+          <new def="data" class="Ldict" />
           <putfield class="LRoot" field="test" fieldType="LRoot" ref="data" value="test" />
           <putfield class="LRoot" field="train" fieldType="LRoot" ref="data" value="training" />
           <return value="data" />

@@ -1,10 +1,13 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FIELD_REFERENCE_TO_DTYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NDARRAY_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
@@ -350,6 +353,12 @@ public abstract class TensorGenerator {
               ret.add(shape);
             }
           }
+        } else if (reference.equals(TENSOR_TYPE)
+            || reference.equals(CONVERT_TO_TENSOR_TYPE)
+            || reference.equals(NDARRAY_TYPE)) {
+          // Already a tensor, do nothing. Shapes will flow via the dataflow graph.
+          LOGGER.fine(
+              "Encountered" + reference.getName() + ". Shape will flow via dataflow graph.");
         } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
       } else throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
 
@@ -619,6 +628,12 @@ public abstract class TensorGenerator {
             EnumSet<DType> dTypesOfField = getDTypesOfValue(builder, instanceFieldPointsToSet);
             ret.addAll(dTypesOfField);
           }
+        } else if (reference.equals(TENSOR_TYPE)
+            || reference.equals(CONVERT_TO_TENSOR_TYPE)
+            || reference.equals(NDARRAY_TYPE)) {
+          // Already a tensor, do nothing. DTypes will flow via the dataflow graph.
+          LOGGER.fine(
+              "Encountered" + reference.getName() + ". DType will flow via dataflow graph.");
         } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
       } else
         // TODO: More cases.

@@ -15,6 +15,7 @@ import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.CompoundDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
 import com.ibm.wala.cast.util.SourceBuffer;
@@ -32,8 +33,10 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.graph.Graph;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.eclipse.lsp4j.DiagnosticSeverity;
@@ -313,11 +316,36 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               int csz = reshapeTo.concreteSize();
               if (rhs != null && rhs.state != null) {
                 for (TensorType t : rhs.state) {
+                  TensorType newType = reshapeTo;
+                  // If there is exactly one dynamic dimension (symbolic), try to resolve it by
+                  // comparing the total size of the input tensor with the concrete size of the
+                  // target shape.
+                  if (ssz == 1 && t.concreteSize() != -1 && csz != -1) {
+                    int totalSize = t.concreteSize();
+                    if (csz > 0 && totalSize % csz == 0) {
+                      int missingDim = totalSize / csz;
+                      List<Dimension<?>> newDims = new ArrayList<>();
+                      for (Dimension<?> d : reshapeTo.getDims()) {
+                        if (d instanceof SymbolicDim) {
+                          newDims.add(new NumericDim(missingDim));
+                        } else {
+                          newDims.add(d);
+                        }
+                      }
+                      // Use the source tensor's cell type to ensure precision in the reshaped type.
+                      newType = new TensorType(t.getCellType(), newDims);
+                    } else {
+                      newType = new TensorType(t.getCellType(), reshapeTo.getDims());
+                    }
+                  } else {
+                    newType = new TensorType(t.getCellType(), reshapeTo.getDims());
+                  }
+
                   // Process the reshape normally regardless of whether there is a shape mismatch so
                   // that tensor type propagation continues. The shape may be inaccurate, but users
                   // can inspect the error messages to find out about it. See
                   // https://github.com/wala/ML/issues/195.
-                  changed |= lhs.state.add(reshapeTo);
+                  changed |= lhs.state.add(newType);
 
                   if (t.symbolicDims() != ssz || t.concreteSize() != csz) {
                     Position pos = getTargetPos(v.getPointerKey());

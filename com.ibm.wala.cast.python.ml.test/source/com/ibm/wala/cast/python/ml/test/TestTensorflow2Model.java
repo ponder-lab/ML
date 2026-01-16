@@ -26,9 +26,7 @@ import com.ibm.wala.cast.python.ml.client.NonBroadcastableShapesException;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
-import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
-import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.core.util.io.FileProvider;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -281,6 +279,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       new TensorType(
           FLOAT_32,
           asList(new NumericDim(1), new NumericDim(28), new NumericDim(28), new NumericDim(1)));
+
+  private static final TensorType TENSOR_6_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(6)));
+
+  private static final TensorType TENSOR_6_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(6)));
 
   @Test
   public void testValueIndex()
@@ -1222,13 +1226,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
-   * is fixed.
+   * Should not throw an {@link AssertionError} once https://github.com/wala/ML/issues/340 is fixed.
    */
-  @Test(expected = IllegalArgumentException.class)
+  @Test(expected = AssertionError.class)
   public void testAdd2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add2.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_add2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
   /**
@@ -1248,13 +1251,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
-   * is fixed.
+   * Should not throw an {@link AssertionError} once https://github.com/wala/ML/issues/340 is fixed.
    */
-  @Test(expected = IllegalArgumentException.class)
+  @Test(expected = AssertionError.class)
   public void testAdd5()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add5.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_add5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
   /**
@@ -4964,67 +4966,34 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("decorated_function_test.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
-  /**
-   * Test https://github.com/wala/ML/issues/195.
-   *
-   * <p>Should not throw an {@link IllegalArgumentException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
-  @Test(expected = IllegalArgumentException.class)
+  /** Test https://github.com/wala/ML/issues/195. */
+  @Test
   public void testReshape() throws ClassHierarchyException, CancelException, IOException {
-    Dimension<Integer> x = new NumericDim(6);
-    TensorType expectedType = new TensorType("pixel", asList(x));
-
-    test("tf2_test_reshape.py", "f", 1, 1, Map.of(2, Set.of(expectedType)));
+    test("tf2_test_reshape.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_6_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/195. */
   @Test
   public void testReshape2() throws ClassHierarchyException, CancelException, IOException {
-    Dimension<String> batch = new SymbolicDim("?");
-    Dimension<Integer> x = new NumericDim(28);
-    Dimension<Integer> y = new NumericDim(28);
-    Dimension<Integer> z = new NumericDim(1);
-    TensorType expectedType = new TensorType("pixel", asList(batch, x, y, z));
-
-    test("tf2_test_reshape2.py", "f", 1, 1, Map.of(2, Set.of(expectedType)));
+    test("tf2_test_reshape2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_28_28_1_FLOAT32)));
   }
 
   /** Test https://github.com/wala/ML/issues/195. */
   @Test
   public void testReshape3() throws ClassHierarchyException, CancelException, IOException {
-    Dimension<Integer> x = new NumericDim(6);
-    TensorType expectedType = new TensorType("pixel", asList(x));
-
-    test("tf2_test_reshape3.py", "f", 1, 1, Map.of(2, Set.of(expectedType)));
+    test("tf2_test_reshape3.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_6_INT32)));
   }
 
-  /**
-   * Test https://github.com/wala/ML/issues/195.
-   *
-   * <p>Should not throw an {@link IllegalArgumentException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
-  @Test(expected = IllegalArgumentException.class)
+  /** Test https://github.com/wala/ML/issues/195. */
+  @Test
   public void testReshape4() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_reshape4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_28_28_1_FLOAT32)));
   }
 
-  /**
-   * Test https://github.com/wala/ML/issues/195.
-   *
-   * <p>Should not throw an {@link IllegalArgumentException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
-  @Test(expected = IllegalArgumentException.class)
+  /** Test https://github.com/wala/ML/issues/195. */
+  @Test
   public void testReshape5() throws ClassHierarchyException, CancelException, IOException {
-    Dimension<String> batch = new SymbolicDim("?");
-    Dimension<Integer> x = new NumericDim(28);
-    Dimension<Integer> y = new NumericDim(28);
-    Dimension<Integer> z = new NumericDim(1);
-    TensorType expectedType = new TensorType("pixel", asList(batch, x, y, z));
-
-    test("tf2_test_reshape5.py", "f", 1, 1, Map.of(2, Set.of(expectedType)));
+    test("tf2_test_reshape5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_28_28_1_FLOAT32)));
   }
 
   @Test

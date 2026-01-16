@@ -101,6 +101,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               TypeName.string2TypeName("Ltensorflow/functions/set_shape")),
           AstMethodReference.fnSelector);
 
+  private static final MethodReference convert_to_tensor =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/convert_to_tensor")),
+          AstMethodReference.fnSelector);
+
   private static final MethodReference ENUMERATE =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
@@ -709,6 +716,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       throw new RuntimeException("Error while processing reshape calls.", e);
     }
 
+    handlePassThroughOp(builder, dataflow, convert_to_tensor, 1);
+
     Set<PointsToSetVariable> conv2ds = getKeysDefinedByCall(conv2d, builder);
 
     Set<PointsToSetVariable> conv3ds = getKeysDefinedByCall(conv3d, builder);
@@ -767,6 +776,26 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       if (!system.isImplicit(from)) dataflow.addEdge(system.findOrCreatePointsToSet(from), to);
     }
     return reshapeTypes;
+  }
+
+  private void handlePassThroughOp(
+      PropagationCallGraphBuilder builder,
+      Graph<PointsToSetVariable> dataflow,
+      MethodReference op,
+      int inputOperand) {
+    Set<PointsToSetVariable> lvals = getKeysDefinedByCall(op, builder);
+    for (PointsToSetVariable to : lvals) {
+      assert to.getPointerKey() instanceof LocalPointerKey;
+      int toVn = ((LocalPointerKey) to.getPointerKey()).getValueNumber();
+      CGNode srcNode = ((LocalPointerKey) to.getPointerKey()).getNode();
+      int srcVn = srcNode.getDU().getDef(toVn).getUse(inputOperand);
+      PointerKey from =
+          builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(srcNode, srcVn);
+
+      final PropagationSystem system = builder.getPropagationSystem();
+
+      if (!system.isImplicit(from)) dataflow.addEdge(system.findOrCreatePointsToSet(from), to);
+    }
   }
 
   public Map<PointerKey, AnalysisError> getErrors() {

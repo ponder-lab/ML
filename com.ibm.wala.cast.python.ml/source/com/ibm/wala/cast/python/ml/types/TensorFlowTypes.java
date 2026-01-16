@@ -71,6 +71,19 @@ public class TensorFlowTypes extends PythonTypes {
   public static final TypeReference D_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/dtypes/DType"));
 
+  public static final TypeReference TENSOR_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/python/framework/ops/Tensor"));
+
+  public static final TypeReference CONVERT_TO_TENSOR_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader,
+          TypeName.findOrCreate("Ltensorflow/python/framework/ops/convert_to_tensor"));
+
+  public static final TypeReference NDARRAY_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/python/framework/ops/ndarray"));
+
   /** https://www.tensorflow.org/api_docs/python/tf/ones. */
   public static final MethodReference ONES =
       MethodReference.findOrCreate(
