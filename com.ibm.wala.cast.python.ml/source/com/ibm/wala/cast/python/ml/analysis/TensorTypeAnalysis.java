@@ -320,7 +320,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                   // If there is exactly one dynamic dimension (symbolic), try to resolve it by
                   // comparing the total size of the input tensor with the concrete size of the
                   // target shape.
-                  if (ssz == 1 && t.concreteSize() != -1 && csz != -1) {
+                  if (ssz == 1 && t.symbolicDims() == 0 && t.concreteSize() != -1 && csz != -1) {
                     int totalSize = t.concreteSize();
                     if (csz > 0 && totalSize % csz == 0) {
                       int missingDim = totalSize / csz;

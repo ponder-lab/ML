@@ -414,9 +414,18 @@ public class TensorFlowTypes extends PythonTypes {
   private static final String READ_DATA_SETS_SIGNATURE =
       "tf.contrib.learn.datasets.mnist.read_data_sets()";
 
+  public static final MethodReference RESHAPE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/reshape")),
+          AstMethodReference.fnSelector);
+
+  private static final String RESHAPE_SIGNATURE = "tf.reshape()";
+
   /** A mapping from a {@link TypeReference} to its associated TensorFlow signature. */
   public static final Map<TypeReference, String> TYPE_REFERENCE_TO_SIGNATURE =
       Map.ofEntries(
+          Map.entry(RESHAPE.getDeclaringClass(), RESHAPE_SIGNATURE),
           Map.entry(CONSTANT.getDeclaringClass(), CONSTANT_SIGNATURE),
           Map.entry(RANGE.getDeclaringClass(), RANGE_SIGNATURE),
           Map.entry(NORMAL.getDeclaringClass(), NORMAL_SIGNATURE),

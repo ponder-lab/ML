@@ -25,6 +25,7 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
@@ -75,6 +76,9 @@ public abstract class TensorGenerator {
     for (List<Dimension<?>> dimensionList : shapes)
       for (DType dtype : dTypes) ret.add(new TensorType(dtype.name().toLowerCase(), dimensionList));
 
+    System.err.println(
+        "DEBUG: Generator " + this.getClass().getSimpleName() + " produced types: " + ret);
+
     return ret;
   }
 
@@ -110,7 +114,7 @@ public abstract class TensorGenerator {
         // We expect the object catalog to contain a list of integers. Each element in the array
         // corresponds to the set of possible dimensions for that index.
         @SuppressWarnings({"unchecked", "rawtypes"})
-        Set<Dimension<Integer>>[] possibleDimensions = new Set[objectCatalogPointsToSet.size()];
+        Set<Dimension<?>>[] possibleDimensions = new Set[objectCatalogPointsToSet.size()];
 
         for (InstanceKey catalogIK : objectCatalogPointsToSet) {
           ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
@@ -133,7 +137,7 @@ public abstract class TensorGenerator {
 
           // If the instance field points to a constant, we can use it as the shape.
           // TODO: Is it possible to also do it for (simple) expressions?
-          Set<Dimension<Integer>> tensorDimensions = HashSetFactory.make();
+          Set<Dimension<?>> tensorDimensions = HashSetFactory.make();
 
           for (InstanceKey instanceFieldIK : instanceFieldPointsToSet) {
             if (instanceFieldIK instanceof ConstantKey) {
@@ -143,6 +147,7 @@ public abstract class TensorGenerator {
 
               // We have a shape value.
               Number shapeValue = (Number) instanceFieldValue;
+              System.err.println("DEBUG: TensorGenerator shapeValue: " + shapeValue);
               LOGGER.fine(
                   "Found shape value: "
                       + shapeValue
@@ -150,8 +155,13 @@ public abstract class TensorGenerator {
                       + this.getSource().getPointerKey()
                       + ".");
 
-              Dimension<Integer> dimension =
-                  (shapeValue != null) ? new NumericDim(shapeValue.intValue()) : null;
+              Dimension<?> dimension =
+                  (shapeValue != null)
+                      ? (shapeValue.intValue() == -1
+                          ? new SymbolicDim("?")
+                          : new NumericDim(shapeValue.intValue()))
+                      : new SymbolicDim("?");
+              System.err.println("DEBUG: Created dimension: " + dimension);
 
               LOGGER.fine("Adding dimension: " + dimension + ".");
               tensorDimensions.add(dimension);
@@ -191,15 +201,14 @@ public abstract class TensorGenerator {
         }
 
         for (int i = 0; i < possibleDimensions.length; i++)
-          for (Dimension<Integer> iDim : possibleDimensions[i]) {
+          for (Dimension<?> iDim : possibleDimensions[i]) {
             @SuppressWarnings({"unchecked", "rawtypes"})
-            Dimension<Integer>[] dimensions = new Dimension[possibleDimensions.length];
+            Dimension<?>[] dimensions = new Dimension[possibleDimensions.length];
 
             dimensions[i] = iDim;
 
             for (int j = 0; j < possibleDimensions.length; j++)
-              if (i != j)
-                for (Dimension<Integer> jDim : possibleDimensions[j]) dimensions[j] = jDim;
+              if (i != j) for (Dimension<?> jDim : possibleDimensions[j]) dimensions[j] = jDim;
 
             ret.add(asList(dimensions));
           }
@@ -359,7 +368,9 @@ public abstract class TensorGenerator {
           // Already a tensor, do nothing. Shapes will flow via the dataflow graph.
           LOGGER.fine(
               "Encountered" + reference.getName() + ". Shape will flow via dataflow graph.");
-        } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
+        } else {
+          LOGGER.warning("Unknown type reference: " + reference + ".");
+        }
       } else throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
 
     return ret;
@@ -464,13 +475,14 @@ public abstract class TensorGenerator {
                 + " from string: "
                 + value
                 + ".");
-      } else
-        throw new IllegalStateException(
+      } else {
+        LOGGER.warning(
             "Expected a "
                 + TensorFlowTypes.D_TYPE
                 + " for the dtype, but got: "
                 + typeReference
                 + ".");
+      }
     }
 
     return ret;
@@ -634,7 +646,9 @@ public abstract class TensorGenerator {
           // Already a tensor, do nothing. DTypes will flow via the dataflow graph.
           LOGGER.fine(
               "Encountered" + reference.getName() + ". DType will flow via dataflow graph.");
-        } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
+        } else {
+          LOGGER.warning("Unknown type reference: " + reference + ".");
+        }
       } else
         // TODO: More cases.
         throw new IllegalStateException(

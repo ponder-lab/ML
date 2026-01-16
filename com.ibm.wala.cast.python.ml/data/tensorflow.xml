@@ -456,8 +456,7 @@
       <class name="reshape" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/reshape -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self tensor shape name">
-          <new def="z" class="Ltensorflow/functions/convert_to_tensor" />
-          <call class="Ltensorflow/functions/convert_to_tensor" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="tensor" numArgs="2" def="x" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
@@ -778,7 +777,7 @@
       </class>
       <class name="placeholder" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="dtype shape name">
-          <new def="x" class="Lobject" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>

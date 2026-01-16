@@ -347,28 +347,58 @@ public class TensorType implements Iterable<Dimension<?>> {
 
   public static TensorType shapeArg(CGNode node, int literalVn) throws IOException {
     logger.fine(() -> node.getIR().toString());
-    ArrayList<Dimension<?>> r = new ArrayList<>();
+    java.util.TreeMap<Integer, Dimension<?>> dims = new java.util.TreeMap<>();
     DefUse du = node.getDU();
     SymbolTable S = node.getIR().getSymbolTable();
     for (Iterator<SSAInstruction> uses = du.getUses(literalVn); uses.hasNext(); ) {
       SSAInstruction use = uses.next();
       int val, ref;
+      Integer index = null;
+
       if (use instanceof SSAPutInstruction) {
-        val = ((SSAPutInstruction) use).getVal();
-        ref = ((SSAPutInstruction) use).getRef();
+        SSAPutInstruction put = (SSAPutInstruction) use;
+        if (put.isStatic()) continue;
+        val = put.getVal();
+        ref = put.getRef();
+        try {
+          index = Integer.parseInt(put.getDeclaredField().getName().toString());
+        } catch (NumberFormatException e) {
+          // ignore
+        }
       } else if (use instanceof PythonPropertyWrite) {
         val = ((PythonPropertyWrite) use).getValue();
         ref = ((PythonPropertyWrite) use).getObjectRef();
+        int indexVn = ((PythonPropertyWrite) use).getMemberRef();
+        if (S.isNumberConstant(indexVn)) {
+          index = ((Number) S.getConstantValue(indexVn)).intValue();
+        } else if (S.isStringConstant(indexVn)) {
+          try {
+            index = Integer.parseInt(S.getStringValue(indexVn));
+          } catch (NumberFormatException e) {
+            // ignore
+          }
+        }
       } else {
         continue;
       }
+
       if (ref != literalVn) {
         continue;
       }
+
+      if (index == null) {
+        // If we can't determine the index, we can't reliably build the shape.
+        // But maybe we should just skip this write?
+        // Previous behavior just added it.
+        // Let's log and skip.
+        logger.warning("Could not determine index for shape arg write: " + use);
+        continue;
+      }
+
       if (S.isNumberConstant(val)) {
         int v = ((Number) S.getConstantValue(val)).intValue();
         logger.fine("value: " + v);
-        r.add(v >= 0 ? new NumericDim((Integer) v) : new SymbolicDim("?"));
+        dims.put(index, v >= 0 ? new NumericDim((Integer) v) : new SymbolicDim("?"));
       } else {
         if (du.getDef(val) != null && node.getMethod() instanceof AstMethod) {
           Position p =
@@ -381,14 +411,14 @@ public class TensorType implements Iterable<Dimension<?>> {
           System.err.println(expr);
           Integer ival = PythonInterpreter.interpretAsInt(expr);
           if (ival != null) {
-            r.add(new NumericDim(ival));
+            dims.put(index, new NumericDim(ival));
             continue;
           }
         }
-        r.add(new SymbolicDim("?"));
+        dims.put(index, new SymbolicDim("?"));
       }
     }
-    return new TensorType("pixel", r);
+    return new TensorType(FLOAT32.name().toLowerCase(), new ArrayList<>(dims.values()));
   }
 
   @Override

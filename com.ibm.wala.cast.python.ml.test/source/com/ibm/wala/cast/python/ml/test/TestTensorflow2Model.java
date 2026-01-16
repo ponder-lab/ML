@@ -27,6 +27,7 @@ import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.core.util.io.FileProvider;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -87,31 +88,35 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(2)));
 
   private static final TensorType TENSOR_NONE_32_FLOAT32 =
-      new TensorType(FLOAT_32, asList(null, new NumericDim(32)));
+      new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(32)));
 
   private static final TensorType TENSOR_NONE_2_FLOAT32 =
-      new TensorType(FLOAT_32, asList(null, new NumericDim(2)));
+      new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(2)));
 
   private static final TensorType TENSOR_NONE_NONE_STRING =
-      new TensorType(STRING, asList(null, null));
+      new TensorType(STRING, asList(new SymbolicDim("?"), new SymbolicDim("?")));
 
   private static final TensorType TENSOR_4_NONE_NONE_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(4), null, null));
+      new TensorType(INT_32, asList(new NumericDim(4), new SymbolicDim("?"), new SymbolicDim("?")));
 
   private static final TensorType TENSOR_3_NONE_NONE_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(3), null, null));
+      new TensorType(INT_32, asList(new NumericDim(3), new SymbolicDim("?"), new SymbolicDim("?")));
 
   private static final TensorType TENSOR_4_NONE_NONE_NONE_STRING =
-      new TensorType(STRING, asList(new NumericDim(4), null, null, null));
+      new TensorType(
+          STRING,
+          asList(
+              new NumericDim(4), new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?")));
 
   private static final TensorType TENSOR_3_NONE_NONE_STRING =
-      new TensorType(STRING, asList(new NumericDim(3), null, null));
+      new TensorType(STRING, asList(new NumericDim(3), new SymbolicDim("?"), new SymbolicDim("?")));
 
   private static final TensorType TENSOR_1_NONE_NONE_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(1), null, null));
+      new TensorType(
+          FLOAT_32, asList(new NumericDim(1), new SymbolicDim("?"), new SymbolicDim("?")));
 
   private static final TensorType TENSOR_2_NONE_NONE_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(2), null, null));
+      new TensorType(INT_32, asList(new NumericDim(2), new SymbolicDim("?"), new SymbolicDim("?")));
 
   private static final TensorType TENSOR_2_2_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(2)));
@@ -129,57 +134,65 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       new TensorType(INT_32, asList(new NumericDim(3), new NumericDim(3)));
 
   private static final TensorType TENSOR_0_NONE_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(0), null));
+      new TensorType(FLOAT_32, asList(new NumericDim(0), new SymbolicDim("?")));
 
   private static final TensorType TENSOR_0_NONE_3_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(0), null, new NumericDim(3)));
+      new TensorType(FLOAT_32, asList(new NumericDim(0), new SymbolicDim("?"), new NumericDim(3)));
 
   @SuppressWarnings("unused")
   private static final TensorType TENSOR_1_NONE_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(1), null));
+      new TensorType(INT_32, asList(new NumericDim(1), new SymbolicDim("?")));
 
   private static final TensorType TENSOR_1_NONE_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(1), null));
+      new TensorType(FLOAT_32, asList(new NumericDim(1), new SymbolicDim("?")));
 
   private static final TensorType TENSOR_2_NONE_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(2), null));
+      new TensorType(INT_32, asList(new NumericDim(2), new SymbolicDim("?")));
 
   private static final TensorType TENSOR_2_NONE_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(2), null));
+      new TensorType(FLOAT_32, asList(new NumericDim(2), new SymbolicDim("?")));
 
   private static final TensorType TENSOR_2_NONE_2_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(2), null, new NumericDim(2)));
+      new TensorType(FLOAT_32, asList(new NumericDim(2), new SymbolicDim("?"), new NumericDim(2)));
 
   private static final TensorType TENSOR_2_NONE_2_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(2), null, new NumericDim(2)));
+      new TensorType(INT_32, asList(new NumericDim(2), new SymbolicDim("?"), new NumericDim(2)));
 
   private static final TensorType TENSOR_2_NONE_2_3_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(2), null, new NumericDim(2), new NumericDim(3)));
+      new TensorType(
+          INT_32,
+          asList(new NumericDim(2), new SymbolicDim("?"), new NumericDim(2), new NumericDim(3)));
 
   private static final TensorType TENSOR_2_NONE_2_2_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(2), null, new NumericDim(2), new NumericDim(2)));
+      new TensorType(
+          INT_32,
+          asList(new NumericDim(2), new SymbolicDim("?"), new NumericDim(2), new NumericDim(2)));
 
   @SuppressWarnings("unused")
   private static final TensorType TENSOR_2_NONE_NONE_NONE_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(2), null));
+      new TensorType(INT_32, asList(new NumericDim(2), new SymbolicDim("?")));
 
   private static final TensorType TENSOR_2_NONE_NONE_NONE_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(2), null, null, null));
+      new TensorType(
+          FLOAT_32,
+          asList(
+              new NumericDim(2), new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?")));
 
   private static final TensorType TENSOR_3_NONE_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(3), null));
+      new TensorType(INT_32, asList(new NumericDim(3), new SymbolicDim("?")));
 
   private static final TensorType TENSOR_3_NONE_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(3), null));
+      new TensorType(FLOAT_32, asList(new NumericDim(3), new SymbolicDim("?")));
 
   private static final TensorType TENSOR_4_NONE_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(4), null));
+      new TensorType(INT_32, asList(new NumericDim(4), new SymbolicDim("?")));
 
   private static final TensorType TENSOR_3_NONE_NONE_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(3), null, null));
+      new TensorType(
+          FLOAT_32, asList(new NumericDim(3), new SymbolicDim("?"), new SymbolicDim("?")));
 
   private static final TensorType TENSOR_3_NONE_1_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(3), null, new NumericDim(1)));
+      new TensorType(FLOAT_32, asList(new NumericDim(3), new SymbolicDim("?"), new NumericDim(1)));
 
   private static final TensorType TENSOR_2_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(3)));
@@ -206,7 +219,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       new TensorType(INT_32, asList(new NumericDim(5), new NumericDim(5)));
 
   private static final TensorType TENSOR_5_NONE_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(5), null));
+      new TensorType(INT_32, asList(new NumericDim(5), new SymbolicDim("?")));
 
   private static final TensorType TENSOR_2_3_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(3), new NumericDim(3)));
@@ -1777,7 +1790,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     TensorType t1 = new TensorType(FLOAT_32, asList(new NumericDim(16), new NumericDim(32)));
     TensorType t2 =
         new TensorType(FLOAT_32, asList(new NumericDim(5), new NumericDim(10), new NumericDim(10)));
-    TensorType t3 = new TensorType(FLOAT_32, asList(null, new NumericDim(5)));
+    TensorType t3 = new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new NumericDim(5)));
 
     test(
         "tf2_test_input_batch_size.py",
@@ -1806,7 +1819,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     TensorType t2 =
         new TensorType(FLOAT_32, asList(new NumericDim(16), new NumericDim(5), new NumericDim(5)));
     // input3: shape=(None, 20), dtype=int32
-    TensorType t3 = new TensorType(INT_32, asList(null, new NumericDim(20)));
+    TensorType t3 = new TensorType(INT_32, asList(new SymbolicDim("?"), new NumericDim(20)));
 
     test(
         "tf2_test_input_mixed_args.py",
@@ -4975,7 +4988,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /** Test https://github.com/wala/ML/issues/195. */
   @Test
   public void testReshape2() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_reshape2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_28_28_1_FLOAT32)));
+    TensorType expectedType =
+        new TensorType(
+            FLOAT_32,
+            asList(
+                new com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim("?"),
+                new NumericDim(28),
+                new NumericDim(28),
+                new NumericDim(1)));
+
+    test("tf2_test_reshape2.py", "f", 1, 1, Map.of(2, Set.of(expectedType)));
   }
 
   /** Test https://github.com/wala/ML/issues/195. */

@@ -7,6 +7,7 @@ import static java.util.logging.Logger.getLogger;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -140,7 +141,7 @@ public class Input extends Ones {
 
         // Prepend batch size.
         if (batchSize != null) newShape.add(new NumericDim(batchSize.intValue()));
-        else newShape.add(null);
+        else newShape.add(new SymbolicDim("?"));
 
         newShape.addAll(shape);
         newShapes.add(newShape);
