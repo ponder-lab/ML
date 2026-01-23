@@ -25,7 +25,6 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
-import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
@@ -113,7 +112,7 @@ public abstract class TensorGenerator {
         // We expect the object catalog to contain a list of integers. Each element in the array
         // corresponds to the set of possible dimensions for that index.
         @SuppressWarnings({"unchecked", "rawtypes"})
-        Set<Dimension<?>>[] possibleDimensions = new Set[objectCatalogPointsToSet.size()];
+        Set<Dimension<Integer>>[] possibleDimensions = new Set[objectCatalogPointsToSet.size()];
 
         for (InstanceKey catalogIK : objectCatalogPointsToSet) {
           ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
@@ -136,7 +135,7 @@ public abstract class TensorGenerator {
 
           // If the instance field points to a constant, we can use it as the shape.
           // TODO: Is it possible to also do it for (simple) expressions?
-          Set<Dimension<?>> tensorDimensions = HashSetFactory.make();
+          Set<Dimension<Integer>> tensorDimensions = HashSetFactory.make();
 
           for (InstanceKey instanceFieldIK : instanceFieldPointsToSet) {
             if (instanceFieldIK instanceof ConstantKey) {
@@ -153,13 +152,8 @@ public abstract class TensorGenerator {
                       + this.getSource().getPointerKey()
                       + ".");
 
-              Dimension<?> dimension =
-                  (shapeValue != null)
-                      ? (shapeValue.intValue() == -1
-                          ? new SymbolicDim("?")
-                          : new NumericDim(shapeValue.intValue()))
-                      : new SymbolicDim("?");
-              System.err.println("DEBUG: Created dimension: " + dimension);
+              Dimension<Integer> dimension =
+                  (shapeValue != null) ? new NumericDim(shapeValue.intValue()) : null;
 
               LOGGER.fine("Adding dimension: " + dimension + ".");
               tensorDimensions.add(dimension);
@@ -199,14 +193,15 @@ public abstract class TensorGenerator {
         }
 
         for (int i = 0; i < possibleDimensions.length; i++)
-          for (Dimension<?> iDim : possibleDimensions[i]) {
+          for (Dimension<Integer> iDim : possibleDimensions[i]) {
             @SuppressWarnings({"unchecked", "rawtypes"})
-            Dimension<?>[] dimensions = new Dimension[possibleDimensions.length];
+            Dimension<Integer>[] dimensions = new Dimension[possibleDimensions.length];
 
             dimensions[i] = iDim;
 
             for (int j = 0; j < possibleDimensions.length; j++)
-              if (i != j) for (Dimension<?> jDim : possibleDimensions[j]) dimensions[j] = jDim;
+              if (i != j)
+                for (Dimension<Integer> jDim : possibleDimensions[j]) dimensions[j] = jDim;
 
             ret.add(asList(dimensions));
           }
