@@ -357,13 +357,11 @@ public abstract class TensorGenerator {
           }
         } else if (reference.equals(TENSOR_TYPE)
             || reference.equals(CONVERT_TO_TENSOR_TYPE)
-            || reference.equals(NDARRAY_TYPE)) {
+            || reference.equals(NDARRAY_TYPE))
           // Already a tensor, do nothing. Shapes will flow via the dataflow graph.
           LOGGER.fine(
               "Encountered" + reference.getName() + ". Shape will flow via dataflow graph.");
-        } else {
-          LOGGER.warning("Unknown type reference: " + reference + ".");
-        }
+        else throw new IllegalStateException("Unknown type reference: " + reference + ".");
       } else throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
 
     return ret;
@@ -468,14 +466,13 @@ public abstract class TensorGenerator {
                 + " from string: "
                 + value
                 + ".");
-      } else {
-        LOGGER.warning(
+      } else
+        throw new IllegalStateException(
             "Expected a "
                 + TensorFlowTypes.D_TYPE
                 + " for the dtype, but got: "
                 + typeReference
                 + ".");
-      }
     }
 
     return ret;
@@ -635,13 +632,11 @@ public abstract class TensorGenerator {
           }
         } else if (reference.equals(TENSOR_TYPE)
             || reference.equals(CONVERT_TO_TENSOR_TYPE)
-            || reference.equals(NDARRAY_TYPE)) {
+            || reference.equals(NDARRAY_TYPE))
           // Already a tensor, do nothing. DTypes will flow via the dataflow graph.
           LOGGER.fine(
               "Encountered" + reference.getName() + ". DType will flow via dataflow graph.");
-        } else {
-          LOGGER.warning("Unknown type reference: " + reference + ".");
-        }
+        else throw new IllegalStateException("Unknown type reference: " + reference + ".");
       } else
         // TODO: More cases.
         throw new IllegalStateException(

@@ -31,6 +31,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -339,15 +341,12 @@ public class TensorType implements Iterable<Dimension<?>> {
     Dimension<Integer> x = new NumericDim(28);
     Dimension<Integer> y = new NumericDim(28);
     Dimension<List<Dimension<?>>> vec = new CompoundDim(Arrays.asList(x, y));
-
-    String name = FLOAT32.name().toLowerCase();
-
-    return new TensorType(name, Arrays.asList(batch, vec));
+    return new TensorType(FLOAT32.name().toLowerCase(), Arrays.asList(batch, vec));
   }
 
   public static TensorType shapeArg(CGNode node, int literalVn) throws IOException {
     logger.fine(() -> node.getIR().toString());
-    java.util.TreeMap<Integer, Dimension<?>> dims = new java.util.TreeMap<>();
+    Map<Integer, Dimension<?>> dims = new TreeMap<>();
     DefUse du = node.getDU();
     SymbolTable S = node.getIR().getSymbolTable();
     for (Iterator<SSAInstruction> uses = du.getUses(literalVn); uses.hasNext(); ) {
