@@ -76,8 +76,7 @@ public abstract class TensorGenerator {
     for (List<Dimension<?>> dimensionList : shapes)
       for (DType dtype : dTypes) ret.add(new TensorType(dtype.name().toLowerCase(), dimensionList));
 
-    System.err.println(
-        "DEBUG: Generator " + this.getClass().getSimpleName() + " produced types: " + ret);
+    LOGGER.fine(() -> "Generator " + this.getClass().getSimpleName() + " produced types: " + ret);
 
     return ret;
   }
@@ -147,7 +146,6 @@ public abstract class TensorGenerator {
 
               // We have a shape value.
               Number shapeValue = (Number) instanceFieldValue;
-              System.err.println("DEBUG: TensorGenerator shapeValue: " + shapeValue);
               LOGGER.fine(
                   "Found shape value: "
                       + shapeValue
