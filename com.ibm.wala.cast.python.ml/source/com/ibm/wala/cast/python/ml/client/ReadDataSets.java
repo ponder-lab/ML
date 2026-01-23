@@ -1,5 +1,8 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.ReadDataSets.Parameters.DTYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorType.mnistInput;
+
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -12,6 +15,8 @@ import java.util.Set;
 
 /** A representation of the `read_data_sets()` function in TensorFlow. */
 public class ReadDataSets extends TensorGenerator {
+
+  private static final TensorType MNIST_INPUT = mnistInput();
 
   protected enum Parameters {
     TRAIN_DIR,
@@ -35,20 +40,18 @@ public class ReadDataSets extends TensorGenerator {
 
   @Override
   protected int getDTypeParameterPosition() {
-    return Parameters.DTYPE.ordinal();
+    return DTYPE.ordinal();
   }
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    TensorType mnistInput = TensorType.mnistInput();
-    List<Dimension<?>> dims = mnistInput.getDims();
+    List<Dimension<?>> dims = MNIST_INPUT.getDims();
     return Collections.singleton(dims);
   }
 
   @Override
   protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    TensorType mnistInput = TensorType.mnistInput();
-    String cellType = mnistInput.getCellType().toUpperCase();
+    String cellType = MNIST_INPUT.getCellType().toUpperCase();
     DType dType = DType.valueOf(cellType);
     return EnumSet.of(dType);
   }
