@@ -89,11 +89,10 @@ public abstract class TensorGenerator {
    */
   protected Set<List<Dimension<?>>> getShapesFromShapeArgument(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
-    if (pointsToSet == null || !pointsToSet.iterator().hasNext()) {
+    if (pointsToSet == null || !pointsToSet.iterator().hasNext())
       // TODO: The shape argument could be a tensor, in which case the points-to set would be empty.
-      LOGGER.warning("Empty points-to set for shape argument in source: " + this.getSource() + ".");
-      return HashSetFactory.make();
-    }
+      throw new IllegalArgumentException(
+          "Empty points-to set for shape argument in source: " + this.getSource() + ".");
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
@@ -286,11 +285,9 @@ public abstract class TensorGenerator {
         pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
     OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
 
-    if (valuePointsToSet.isEmpty()) {
-      LOGGER.warning(
+    if (valuePointsToSet.isEmpty())
+      throw new IllegalArgumentException(
           "Empty points-to set for value number: " + valueNumber + " in: " + this.getNode() + ".");
-      return HashSetFactory.make();
-    }
 
     // FIXME: Just use the value number directly?
     return getShapesOfValue(builder, valuePointsToSet);
@@ -305,10 +302,9 @@ public abstract class TensorGenerator {
    */
   protected Set<List<Dimension<?>>> getShapesOfValue(
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
-    if (valuePointsToSet == null || valuePointsToSet.isEmpty()) {
-      LOGGER.warning("Empty points-to set for value in source: " + this.getSource() + ".");
-      return HashSetFactory.make();
-    }
+    if (valuePointsToSet == null || valuePointsToSet.isEmpty())
+      throw new IllegalArgumentException(
+          "Empty points-to set for value in source: " + this.getSource() + ".");
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
@@ -449,7 +445,7 @@ public abstract class TensorGenerator {
             }
         }
 
-        if (!found) LOGGER.warning("Unknown dtype: " + instanceKey + ".");
+        if (!found) throw new IllegalStateException("Unknown dtype: " + instanceKey + ".");
       } else if (instanceKey instanceof ConstantKey
           && ((ConstantKey<?>) instanceKey).getValue() instanceof String) {
         String value = (String) ((ConstantKey<?>) instanceKey).getValue();
@@ -458,28 +454,25 @@ public abstract class TensorGenerator {
         try {
           dtype = DType.valueOf(value.toUpperCase()); // Validate the dtype string.
         } catch (IllegalArgumentException | NullPointerException e) {
-          LOGGER.warning("Unknown dtype string: " + value + ".");
+          throw new IllegalStateException("Unknown dtype string: " + value + ".", e);
         }
 
-        if (dtype != null) {
-          ret.add(dtype);
-          LOGGER.info(
-              "Found dtype: "
-                  + dtype
-                  + " for source: "
-                  + this.getSource()
-                  + " from string: "
-                  + value
-                  + ".");
-        }
-      } else {
-        LOGGER.warning(
+        ret.add(dtype);
+        LOGGER.info(
+            "Found dtype: "
+                + dtype
+                + " for source: "
+                + this.getSource()
+                + " from string: "
+                + value
+                + ".");
+      } else
+        throw new IllegalStateException(
             "Expected a "
                 + TensorFlowTypes.D_TYPE
                 + " for the dtype, but got: "
                 + typeReference
                 + ".");
-      }
     }
 
     return ret;
@@ -523,12 +516,9 @@ public abstract class TensorGenerator {
 
     // If the argument dtype is not specified.
     if (pointsToSet == null || pointsToSet.isEmpty()) return getDefaultDTypes(builder);
-    else {
+    else
       // The dtype points-to set is non-empty, meaning that the dtype was explicitly set.
-      EnumSet<DType> dTypes = getDTypesFromDTypeArgument(builder, pointsToSet);
-      if (dTypes.isEmpty()) return getDefaultDTypes(builder);
-      return dTypes;
-    }
+      return getDTypesFromDTypeArgument(builder, pointsToSet);
   }
 
   /**
@@ -545,11 +535,9 @@ public abstract class TensorGenerator {
         pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
     OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
 
-    if (valuePointsToSet == null || valuePointsToSet.isEmpty()) {
-      LOGGER.warning(
+    if (valuePointsToSet == null || valuePointsToSet.isEmpty())
+      throw new IllegalArgumentException(
           "Empty points-to set for value number: " + valueNumber + " in: " + this.getNode() + ".");
-      return EnumSet.noneOf(DType.class);
-    }
 
     return getDTypesOfValue(builder, valuePointsToSet);
   }
@@ -564,10 +552,9 @@ public abstract class TensorGenerator {
    */
   protected EnumSet<DType> getDTypesOfValue(
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
-    if (valuePointsToSet == null || valuePointsToSet.isEmpty()) {
-      LOGGER.warning("Empty points-to set for value in source: " + this.getSource() + ".");
-      return EnumSet.noneOf(DType.class);
-    }
+    if (valuePointsToSet == null || valuePointsToSet.isEmpty())
+      throw new IllegalArgumentException(
+          "Empty points-to set for value in source: " + this.getSource() + ".");
 
     EnumSet<DType> ret = EnumSet.noneOf(DType.class);
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
