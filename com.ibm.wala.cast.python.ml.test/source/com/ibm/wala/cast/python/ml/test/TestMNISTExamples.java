@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.test;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
+
 import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
@@ -62,11 +64,20 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
               cgBuilder.getPointerAnalysis(),
               CG);
 
-          String in = "[{[D:Symbolic,n, D:Compound,[D:Constant,28, D:Constant,28]] of float32}]";
-          String out = "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of float32}]";
+          String in =
+              "[{[D:Symbolic,n, D:Compound,[D:Constant,28, D:Constant,28]] of "
+                  + FLOAT32.name().toLowerCase()
+                  + "}]";
+          String out =
+              "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of "
+                  + FLOAT32.name().toLowerCase()
+                  + "}]";
           checkTensorOp(cgBuilder, CG, result, "reshape", in, out);
 
-          in = "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of float32}]";
+          in =
+              "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of "
+                  + FLOAT32.name().toLowerCase()
+                  + "}]";
           checkTensorOp(cgBuilder, CG, result, "conv2d", in, null);
         });
   }
@@ -92,11 +103,17 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
               cgBuilder.getPointerAnalysis(),
               CG);
 
-          String in = "[{[D:Symbolic,?, D:Constant,784] of float32}]";
-          String out = "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of float32}]";
+          String in = "[{[D:Symbolic,?, D:Constant,784] of " + FLOAT32.name().toLowerCase() + "}]";
+          String out =
+              "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of "
+                  + FLOAT32.name().toLowerCase()
+                  + "}]";
           checkTensorOp(cgBuilder, CG, result, "reshape", in, out);
 
-          in = "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of float32}]";
+          in =
+              "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of "
+                  + FLOAT32.name().toLowerCase()
+                  + "}]";
           checkTensorOp(cgBuilder, CG, result, "conv2d", in, null);
 
           /*
@@ -226,8 +243,11 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
     checkTensorOps(
         Ex5URL,
         (PropagationCallGraphBuilder cgBuilder, CallGraph CG, TensorTypeAnalysis result) -> {
-          String in = "[{[D:Symbolic,?, D:Constant,784] of float32}]";
-          String out = "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of float32}]";
+          String in = "[{[D:Symbolic,?, D:Constant,784] of " + FLOAT32.name().toLowerCase() + "}]";
+          String out =
+              "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of "
+                  + FLOAT32.name().toLowerCase()
+                  + "}]";
           checkTensorOp(cgBuilder, CG, result, "reshape", in, out);
 
           TypeReference feedDictClass =
