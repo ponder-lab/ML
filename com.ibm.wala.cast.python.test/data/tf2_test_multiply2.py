@@ -7,4 +7,8 @@ def f(a):
     pass
 
 
-f(tf.math.multiply(7, 6))
+arg = tf.math.multiply(7, 6)
+assert arg.shape == ()
+assert arg.dtype == tf.int32
+
+f(arg)
