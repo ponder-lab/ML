@@ -62,9 +62,8 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
   }
 
   @Override
-  protected int getValuesArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(
-        builder, this.getValuesParameterPosition(), FLAT_VALUES.name().toLowerCase(), true);
+  protected String getValuesParameterName() {
+    return FLAT_VALUES.name().toLowerCase();
   }
 
   protected int getNestedValueRowIdsParameterPosition() {
@@ -224,7 +223,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
     // Values shape
     OrdinalSet<InstanceKey> valuesPts =
         this.getArgumentPointsToSet(
-            builder, getValuesParameterPosition(), FLAT_VALUES.name().toLowerCase());
+            builder, getValuesParameterPosition(), getValuesParameterName());
     Set<List<Dimension<?>>> valuesShapes = emptySet();
     if (valuesPts != null && !valuesPts.isEmpty()) {
       valuesShapes = this.getShapesOfValue(builder, valuesPts);
@@ -269,7 +268,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> valuesPts =
         this.getArgumentPointsToSet(
-            builder, getValuesParameterPosition(), FLAT_VALUES.name().toLowerCase());
+            builder, getValuesParameterPosition(), getValuesParameterName());
 
     if (valuesPts != null && !valuesPts.isEmpty()) {
       return getDTypesOfValue(builder, valuesPts);

@@ -54,9 +54,8 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
   }
 
   @Override
-  protected int getValuesArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(
-        builder, this.getValuesParameterPosition(), FLAT_VALUES.name().toLowerCase(), true);
+  protected String getValuesParameterName() {
+    return FLAT_VALUES.name().toLowerCase();
   }
 
   protected int getNestedRowLengthsParameterPosition() {
@@ -150,7 +149,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
     // 2. Determine shape of `values`.
     OrdinalSet<InstanceKey> valuesPts =
         this.getArgumentPointsToSet(
-            builder, getValuesParameterPosition(), FLAT_VALUES.name().toLowerCase());
+            builder, getValuesParameterPosition(), getValuesParameterName());
     Set<List<Dimension<?>>> valuesShapes = emptySet();
     if (valuesPts != null && !valuesPts.isEmpty()) {
       valuesShapes = this.getShapesOfValue(builder, valuesPts);

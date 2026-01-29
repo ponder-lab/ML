@@ -25,8 +25,6 @@ public class RaggedFromRowStarts extends RaggedTensorFromValues {
 
   private static final Logger LOGGER = Logger.getLogger(RaggedFromRowStarts.class.getName());
 
-  private static final String ROW_STARTS_PARAM = "row_starts";
-
   protected enum Parameters {
     VALUES,
     ROW_STARTS,
@@ -43,13 +41,18 @@ public class RaggedFromRowStarts extends RaggedTensorFromValues {
     return VALUES.ordinal();
   }
 
+  @Override
+  protected String getValuesParameterName() {
+    return VALUES.name().toLowerCase();
+  }
+
   protected int getRowStartsParameterPosition() {
     return ROW_STARTS.ordinal();
   }
 
   protected OrdinalSet<InstanceKey> getRowStartsPointsToSet(PropagationCallGraphBuilder builder) {
     return this.getArgumentPointsToSet(
-        builder, this.getRowStartsParameterPosition(), ROW_STARTS_PARAM);
+        builder, this.getRowStartsParameterPosition(), ROW_STARTS.name().toLowerCase());
   }
 
   @Override

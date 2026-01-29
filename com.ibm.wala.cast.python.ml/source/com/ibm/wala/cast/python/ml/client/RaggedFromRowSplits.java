@@ -25,8 +25,6 @@ public class RaggedFromRowSplits extends RaggedTensorFromValues {
 
   private static final Logger LOGGER = Logger.getLogger(RaggedFromRowSplits.class.getName());
 
-  private static final String ROW_SPLITS_PARAM = "row_splits";
-
   protected enum Parameters {
     VALUES,
     ROW_SPLITS,
@@ -43,13 +41,18 @@ public class RaggedFromRowSplits extends RaggedTensorFromValues {
     return VALUES.ordinal();
   }
 
+  @Override
+  protected String getValuesParameterName() {
+    return VALUES.name().toLowerCase();
+  }
+
   protected int getRowSplitsParameterPosition() {
     return ROW_SPLITS.ordinal();
   }
 
   protected OrdinalSet<InstanceKey> getRowSplitsPointsToSet(PropagationCallGraphBuilder builder) {
     return this.getArgumentPointsToSet(
-        builder, this.getRowSplitsParameterPosition(), ROW_SPLITS_PARAM);
+        builder, this.getRowSplitsParameterPosition(), ROW_SPLITS.name().toLowerCase());
   }
 
   @Override
@@ -84,7 +87,8 @@ public class RaggedFromRowSplits extends RaggedTensorFromValues {
 
     // 2. Determine shape of `values`.
     OrdinalSet<InstanceKey> valuesPts =
-        this.getArgumentPointsToSet(builder, getValuesParameterPosition(), VALUES_PARAM);
+        this.getArgumentPointsToSet(
+            builder, getValuesParameterPosition(), getValuesParameterName());
     Set<List<Dimension<?>>> valuesShapes = emptySet();
     if (valuesPts != null && !valuesPts.isEmpty()) {
       valuesShapes = this.getShapesOfValue(builder, valuesPts);

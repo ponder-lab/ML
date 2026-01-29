@@ -24,8 +24,6 @@ public class RaggedFromRowLengths extends RaggedTensorFromValues {
 
   private static final Logger LOGGER = Logger.getLogger(RaggedFromRowLengths.class.getName());
 
-  private static final String ROW_LENGTHS_PARAM = "row_lengths";
-
   protected enum Parameters {
     VALUES,
     ROW_LENGTHS,
@@ -42,13 +40,18 @@ public class RaggedFromRowLengths extends RaggedTensorFromValues {
     return VALUES.ordinal();
   }
 
+  @Override
+  protected String getValuesParameterName() {
+    return VALUES.name().toLowerCase();
+  }
+
   protected int getRowLengthsParameterPosition() {
     return ROW_LENGTHS.ordinal();
   }
 
   protected OrdinalSet<InstanceKey> getRowLengthsPointsToSet(PropagationCallGraphBuilder builder) {
     return this.getArgumentPointsToSet(
-        builder, this.getRowLengthsParameterPosition(), ROW_LENGTHS_PARAM);
+        builder, this.getRowLengthsParameterPosition(), ROW_LENGTHS.name().toLowerCase());
   }
 
   @Override
@@ -77,7 +80,8 @@ public class RaggedFromRowLengths extends RaggedTensorFromValues {
 
     // 2. Determine shape of `values`.
     OrdinalSet<InstanceKey> valuesPts =
-        this.getArgumentPointsToSet(builder, getValuesParameterPosition(), VALUES_PARAM);
+        this.getArgumentPointsToSet(
+            builder, getValuesParameterPosition(), getValuesParameterName());
     Set<List<Dimension<?>>> valuesShapes = emptySet();
     if (valuesPts != null && !valuesPts.isEmpty()) {
       valuesShapes = this.getShapesOfValue(builder, valuesPts);

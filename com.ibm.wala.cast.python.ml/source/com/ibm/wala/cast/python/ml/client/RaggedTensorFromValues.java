@@ -20,17 +20,17 @@ public abstract class RaggedTensorFromValues extends TensorGenerator {
 
   private static final Logger LOGGER = Logger.getLogger(RaggedTensorFromValues.class.getName());
 
-  protected static final String VALUES_PARAM = "values";
-
   public RaggedTensorFromValues(PointsToSetVariable source) {
     super(source);
   }
 
   protected abstract int getValuesParameterPosition();
 
+  protected abstract String getValuesParameterName();
+
   protected int getValuesArgumentValueNumber(PropagationCallGraphBuilder builder) {
     return this.getArgumentValueNumber(
-        builder, this.getValuesParameterPosition(), VALUES_PARAM, true);
+        builder, this.getValuesParameterPosition(), getValuesParameterName(), true);
   }
 
   @Override
