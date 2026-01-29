@@ -70,3 +70,9 @@ temp.dt
 *.log
 
 bin/
+
+# gemini-cli settings
+.gemini/
+
+# GitHub App credentials
+gha-creds-*.json
