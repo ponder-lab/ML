@@ -36,6 +36,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VARIABLE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS_LIKE;
 import static com.ibm.wala.cast.python.util.Util.getFunction;
+import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.types.TypeReference;
@@ -48,7 +49,7 @@ import java.util.logging.Logger;
  */
 public class TensorGeneratorFactory {
 
-  private static final Logger LOGGER = Logger.getLogger(TensorGeneratorFactory.class.getName());
+  private static final Logger LOGGER = getLogger(TensorGeneratorFactory.class.getName());
 
   public static TensorGenerator getGenerator(PointsToSetVariable source) {
     TypeReference calledFunction = getFunction(source);

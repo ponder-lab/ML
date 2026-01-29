@@ -41,12 +41,6 @@ public class OneHot extends Ones {
   }
 
   @Override
-  protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    throw new UnsupportedOperationException(
-        "Shapes are derived from mandatory numeric arguments and must be provided explicitly.");
-  }
-
-  @Override
   protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // If dtype is not provided, it will attempt to assume the data type of on_value or off_value,
     // if one or both are passed in. If none of on_value, off_value, or dtype are provided, dtype
