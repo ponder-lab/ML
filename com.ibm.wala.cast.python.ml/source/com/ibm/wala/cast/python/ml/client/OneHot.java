@@ -55,14 +55,14 @@ public class OneHot extends Ones {
         ret.add(FLOAT32);
       else if (numArgs == ON_VALUE.ordinal() + 1) {
         // Only on_value may be provided.
-        ret.addAll(this.getDTypes(builder, this.getOnValueArgumentValueNumber()));
+        ret.addAll(this.getDTypes(builder, this.getOnValueArgumentValueNumber(builder)));
 
         // If on_value has no known dtypes, default to float32.
         if (ret.isEmpty()) ret.add(FLOAT32);
       } else if (numArgs >= ON_VALUE.ordinal() + 1) {
         // Either on_value and off_value may be provided.
-        ret.addAll(this.getDTypes(builder, this.getOnValueArgumentValueNumber()));
-        ret.addAll(this.getDTypes(builder, this.getOffValueArgumentValueNumber()));
+        ret.addAll(this.getDTypes(builder, this.getOnValueArgumentValueNumber(builder)));
+        ret.addAll(this.getDTypes(builder, this.getOffValueArgumentValueNumber(builder)));
 
         // If neither on_value nor off_value have known dtypes, default to float32.
         if (ret.isEmpty()) ret.add(FLOAT32);
@@ -98,23 +98,27 @@ public class OneHot extends Ones {
     return OFF_VALUE.ordinal();
   }
 
-  protected int getOnValueArgumentValueNumber() {
-    return this.getArgumentValueNumber(this.getOnValueParameterPosition());
+  protected int getOnValueArgumentValueNumber(PropagationCallGraphBuilder builder) {
+    return this.getArgumentValueNumber(
+        builder, this.getOnValueParameterPosition(), ON_VALUE.name().toLowerCase(), true);
   }
 
-  protected int getOffValueArgumentValueNumber() {
-    return this.getArgumentValueNumber(this.getOffValueParameterPosition());
+  protected int getOffValueArgumentValueNumber(PropagationCallGraphBuilder builder) {
+    return this.getArgumentValueNumber(
+        builder, this.getOffValueParameterPosition(), OFF_VALUE.name().toLowerCase(), true);
   }
 
-  protected int getIndicesArgumentValueNumber() {
-    return this.getArgumentValueNumber(this.getIndicesParameterPosition());
+  protected int getIndicesArgumentValueNumber(PropagationCallGraphBuilder builder) {
+    return this.getArgumentValueNumber(
+        builder, this.getIndicesParameterPosition(), INDICES.name().toLowerCase(), true);
   }
 
   @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
-    Set<List<Dimension<?>>> indices = this.getShapes(builder, this.getIndicesArgumentValueNumber());
-    int depthArgumentValueNumber = this.getDepthArgumentValueNumber();
+    Set<List<Dimension<?>>> indices =
+        this.getShapes(builder, this.getIndicesArgumentValueNumber(builder));
+    int depthArgumentValueNumber = this.getDepthArgumentValueNumber(builder);
 
     if (depthArgumentValueNumber <= 0)
       throw new IllegalStateException(
@@ -172,7 +176,7 @@ public class OneHot extends Ones {
         // Axis argument not provided.
         ret.add(AXIS_END);
       else { // Axis argument may be provided.
-        int axisArgumentValueNumber = this.getAxisArgumentValueNumber();
+        int axisArgumentValueNumber = this.getAxisArgumentValueNumber(builder);
 
         PointerKey pointerKey =
             pointerAnalysis
@@ -193,13 +197,13 @@ public class OneHot extends Ones {
     return ret;
   }
 
-  private int getDepthArgumentValueNumber() {
-    // TODO: Handle keyword arguments.
-    return this.getArgumentValueNumber(this.getDepthParameterPosition());
+  private int getDepthArgumentValueNumber(PropagationCallGraphBuilder builder) {
+    return this.getArgumentValueNumber(
+        builder, this.getDepthParameterPosition(), DEPTH.name().toLowerCase(), true);
   }
 
-  private int getAxisArgumentValueNumber() {
-    // TODO: Handle keyword arguments.
-    return this.getArgumentValueNumber(this.getAxisParameterPosition());
+  private int getAxisArgumentValueNumber(PropagationCallGraphBuilder builder) {
+    return this.getArgumentValueNumber(
+        builder, this.getAxisParameterPosition(), AXIS.name().toLowerCase(), true);
   }
 }
