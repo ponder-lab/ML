@@ -13,18 +13,15 @@ import java.util.Set;
  */
 public class SparseTensor extends Ones {
 
-  /**
-   * The SparseTensor constructor does not have an explicit 'dtype' argument. The dtype is inferred
-   * from the 'values' argument.
-   */
-  private static final int DTYPE_PARAMETER_POSITION = UNDEFINED_PARAMETER_POSITION;
+  protected enum Parameters {
+    INDICES,
+    VALUES,
+    DENSE_SHAPE;
 
-  @SuppressWarnings("unused")
-  private static final int INDICES_PARAMETER_POSITION = 0;
-
-  private static final int VALUES_PARAMETER_POSITION = 1;
-
-  private static final int DENSE_SHAPE_PARAMETER_POSITION = 2;
+    public String getParameterName() {
+      return name().toLowerCase();
+    }
+  }
 
   public SparseTensor(PointsToSetVariable source) {
     super(source);
@@ -33,20 +30,54 @@ public class SparseTensor extends Ones {
   /** The dtype is inferred from the 'values' argument. */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    // TODO: Handle keyword arguments.
-    int valuesValNum = this.getArgumentValueNumber(VALUES_PARAMETER_POSITION);
+    int valuesValNum =
+        this.getArgumentValueNumber(
+            builder, this.getValuesParameterPosition(), this.getValuesParameterName(), false);
     return getDTypes(builder, valuesValNum);
+  }
+
+  protected int getIndicesParameterPosition() {
+    return Parameters.INDICES.ordinal();
+  }
+
+  protected String getIndicesParameterName() {
+    return Parameters.INDICES.getParameterName();
+  }
+
+  protected int getValuesParameterPosition() {
+    return Parameters.VALUES.ordinal();
+  }
+
+  protected String getValuesParameterName() {
+    return Parameters.VALUES.getParameterName();
+  }
+
+  protected int getDenseShapeParameterPosition() {
+    return Parameters.DENSE_SHAPE.ordinal();
+  }
+
+  protected String getDenseShapeParameterName() {
+    return Parameters.DENSE_SHAPE.getParameterName();
   }
 
   @Override
   protected int getShapeParameterPosition() {
-    // TODO: Handle keyword arguments.
-    return DENSE_SHAPE_PARAMETER_POSITION;
+    return this.getDenseShapeParameterPosition();
+  }
+
+  @Override
+  protected String getShapeParameterName() {
+    return this.getDenseShapeParameterName();
   }
 
   /** No explicit dtype argument. Dtype is inferred from 'values'. */
   @Override
   protected int getDTypeParameterPosition() {
-    return DTYPE_PARAMETER_POSITION;
+    return UNDEFINED_PARAMETER_POSITION;
+  }
+
+  @Override
+  protected String getDTypeParameterName() {
+    return null;
   }
 }

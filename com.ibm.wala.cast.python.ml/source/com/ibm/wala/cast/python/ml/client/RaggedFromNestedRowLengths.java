@@ -41,7 +41,11 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
     FLAT_VALUES,
     NESTED_ROW_LENGTHS,
     NAME,
-    VALIDATE
+    VALIDATE;
+
+    public String getParameterName() {
+      return name().toLowerCase();
+    }
   }
 
   public RaggedFromNestedRowLengths(PointsToSetVariable source) {
@@ -55,19 +59,21 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
 
   @Override
   protected String getValuesParameterName() {
-    return FLAT_VALUES.name().toLowerCase();
+    return FLAT_VALUES.getParameterName();
   }
 
   protected int getNestedRowLengthsParameterPosition() {
     return NESTED_ROW_LENGTHS.ordinal();
   }
 
+  protected String getNestedRowLengthsParameterName() {
+    return NESTED_ROW_LENGTHS.getParameterName();
+  }
+
   protected OrdinalSet<InstanceKey> getNestedStructurePointsToSet(
       PropagationCallGraphBuilder builder) {
     return this.getArgumentPointsToSet(
-        builder,
-        this.getNestedRowLengthsParameterPosition(),
-        NESTED_ROW_LENGTHS.name().toLowerCase());
+        builder, this.getNestedRowLengthsParameterPosition(), getNestedRowLengthsParameterName());
   }
 
   protected Dimension<?> computeRowDim(Dimension<?> dim) {

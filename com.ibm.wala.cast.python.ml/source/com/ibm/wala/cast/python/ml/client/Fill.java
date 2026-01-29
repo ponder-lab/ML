@@ -17,9 +17,15 @@ import java.util.Set;
  */
 public class Fill extends Constant {
 
-  private static final int SHAPE_PARAMETER_POSITION = 0;
+  protected enum Parameters {
+    DIMS,
+    VALUE,
+    NAME;
 
-  private static final int VALUE_PARAMETER_POSITION = 1;
+    public String getParameterName() {
+      return name().toLowerCase();
+    }
+  }
 
   /**
    * The dtype argument is not explicitly provided to fill(); rather, the dtype is inferred from the
@@ -38,12 +44,22 @@ public class Fill extends Constant {
 
   @Override
   protected int getValueParameterPosition() {
-    return VALUE_PARAMETER_POSITION;
+    return Parameters.VALUE.ordinal();
+  }
+
+  @Override
+  protected String getValueParameterName() {
+    return Parameters.VALUE.getParameterName();
   }
 
   @Override
   protected int getShapeParameterPosition() {
-    return SHAPE_PARAMETER_POSITION;
+    return Parameters.DIMS.ordinal();
+  }
+
+  @Override
+  protected String getShapeParameterName() {
+    return Parameters.DIMS.getParameterName();
   }
 
   @Override

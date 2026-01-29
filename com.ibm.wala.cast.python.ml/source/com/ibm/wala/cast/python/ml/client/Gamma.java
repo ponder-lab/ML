@@ -1,9 +1,5 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.ml.client.Gamma.Parameters.ALPHA;
-import static com.ibm.wala.cast.python.ml.client.Gamma.Parameters.BETA;
-import static com.ibm.wala.cast.python.ml.client.Gamma.Parameters.DTYPE;
-
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
@@ -27,7 +23,11 @@ public class Gamma extends Ones {
     BETA,
     DTYPE,
     SEED,
-    NAME
+    NAME;
+
+    public String getParameterName() {
+      return name().toLowerCase();
+    }
   }
 
   public Gamma(PointsToSetVariable source) {
@@ -36,27 +36,52 @@ public class Gamma extends Ones {
 
   @Override
   protected int getDTypeParameterPosition() {
-    return DTYPE.ordinal();
+    return Parameters.DTYPE.ordinal();
+  }
+
+  protected String getDTypeParameterName() {
+    return Parameters.DTYPE.getParameterName();
+  }
+
+  @Override
+  protected int getShapeParameterPosition() {
+    return Parameters.SHAPE.ordinal();
+  }
+
+  protected String getShapeParameterName() {
+    return Parameters.SHAPE.getParameterName();
   }
 
   protected int getAlphaParameterPosition() {
-    return ALPHA.ordinal();
+    return Parameters.ALPHA.ordinal();
+  }
+
+  protected String getAlphaParameterName() {
+    return Parameters.ALPHA.getParameterName();
   }
 
   protected int getBetaParameterPosition() {
-    return BETA.ordinal();
+    return Parameters.BETA.ordinal();
+  }
+
+  protected String getBetaParameterName() {
+    return Parameters.BETA.getParameterName();
   }
 
   protected int getAlphaParameterValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(builder, this.getAlphaParameterPosition());
+    return this.getArgumentValueNumber(
+        builder, this.getAlphaParameterPosition(), getAlphaParameterName(), false);
   }
 
   protected int getBetaParameterValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(builder, this.getBetaParameterPosition(), true);
+    return this.getArgumentValueNumber(
+        builder, this.getBetaParameterPosition(), getBetaParameterName(), true);
   }
 
   @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+    // ...
+
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     Set<List<Dimension<?>>> shapes = super.getShapes(builder);
 

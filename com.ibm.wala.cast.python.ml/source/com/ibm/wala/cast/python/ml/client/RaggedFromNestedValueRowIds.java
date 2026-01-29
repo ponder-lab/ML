@@ -49,7 +49,11 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
     NESTED_VALUE_ROWIDS,
     NESTED_NROWS,
     NAME,
-    VALIDATE
+    VALIDATE;
+
+    public String getParameterName() {
+      return name().toLowerCase();
+    }
   }
 
   public RaggedFromNestedValueRowIds(PointsToSetVariable source) {
@@ -63,15 +67,23 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
 
   @Override
   protected String getValuesParameterName() {
-    return FLAT_VALUES.name().toLowerCase();
+    return FLAT_VALUES.getParameterName();
   }
 
   protected int getNestedValueRowIdsParameterPosition() {
     return NESTED_VALUE_ROWIDS.ordinal();
   }
 
+  protected String getNestedValueRowidsParameterName() {
+    return NESTED_VALUE_ROWIDS.getParameterName();
+  }
+
   protected int getNestedNrowsParameterPosition() {
     return NESTED_NROWS.ordinal();
+  }
+
+  protected String getNestedNrowsParameterName() {
+    return NESTED_NROWS.getParameterName();
   }
 
   @Override
@@ -85,7 +97,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
     // Check `nested_nrows` first.
     OrdinalSet<InstanceKey> nestedNrowsPts =
         this.getArgumentPointsToSet(
-            builder, this.getNestedNrowsParameterPosition(), NESTED_NROWS.name().toLowerCase());
+            builder, this.getNestedNrowsParameterPosition(), getNestedNrowsParameterName());
 
     if (nestedNrowsPts != null && !nestedNrowsPts.isEmpty()) {
       for (InstanceKey ik : nestedNrowsPts) {
@@ -118,7 +130,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
         this.getArgumentPointsToSet(
             builder,
             this.getNestedValueRowIdsParameterPosition(),
-            NESTED_VALUE_ROWIDS.name().toLowerCase());
+            getNestedValueRowidsParameterName());
 
     Set<Dimension<?>> possibleRowDims = HashSetFactory.make();
     Set<Integer> possibleK = HashSetFactory.make();

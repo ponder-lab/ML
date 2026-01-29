@@ -25,9 +25,15 @@ public class Ones extends TensorGenerator {
 
   private static final Logger LOGGER = getLogger(Ones.class.getName());
 
-  private static final int SHAPE_PARAMETER_POSITION = 0;
+  protected enum Parameters {
+    SHAPE,
+    DTYPE,
+    NAME;
 
-  private static final int DTYPE_PARAMETER_POSITION = 1;
+    public String getParameterName() {
+      return name().toLowerCase();
+    }
+  }
 
   public Ones(PointsToSetVariable source) {
     super(source);
@@ -49,12 +55,20 @@ public class Ones extends TensorGenerator {
 
   @Override
   protected int getShapeParameterPosition() {
-    return SHAPE_PARAMETER_POSITION;
+    return Parameters.SHAPE.ordinal();
+  }
+
+  protected String getShapeParameterName() {
+    return Parameters.SHAPE.getParameterName();
   }
 
   @Override
   protected int getDTypeParameterPosition() {
-    return DTYPE_PARAMETER_POSITION;
+    return Parameters.DTYPE.ordinal();
+  }
+
+  protected String getDTypeParameterName() {
+    return Parameters.DTYPE.getParameterName();
   }
 
   protected static Optional<Integer> getIntValueFromInstanceKey(InstanceKey instanceKey) {

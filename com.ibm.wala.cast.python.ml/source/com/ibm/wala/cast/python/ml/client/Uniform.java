@@ -11,7 +11,18 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Uniform extends Ones {
 
-  private static final int DTYPE_PARAMETER_POSITION = 3;
+  protected enum Parameters {
+    SHAPE,
+    MINVAL,
+    MAXVAL,
+    DTYPE,
+    SEED,
+    NAME;
+
+    public String getParameterName() {
+      return name().toLowerCase();
+    }
+  }
 
   public Uniform(PointsToSetVariable source) {
     super(source);
@@ -19,6 +30,19 @@ public class Uniform extends Ones {
 
   @Override
   protected int getDTypeParameterPosition() {
-    return DTYPE_PARAMETER_POSITION;
+    return Parameters.DTYPE.ordinal();
+  }
+
+  protected String getDTypeParameterName() {
+    return Parameters.DTYPE.getParameterName();
+  }
+
+  @Override
+  protected int getShapeParameterPosition() {
+    return Parameters.SHAPE.ordinal();
+  }
+
+  protected String getShapeParameterName() {
+    return Parameters.SHAPE.getParameterName();
   }
 }

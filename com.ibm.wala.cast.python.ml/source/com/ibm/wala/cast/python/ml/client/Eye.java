@@ -1,7 +1,5 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.ml.client.Eye.Parameters.BATCH_SHAPE;
-import static com.ibm.wala.cast.python.ml.client.Eye.Parameters.DTYPE;
 import static java.util.Collections.emptySet;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -21,20 +19,28 @@ public class Eye extends SparseEye {
     NUM_COLUMNS,
     BATCH_SHAPE,
     DTYPE,
-    NAME
+    NAME;
+
+    public String getParameterName() {
+      return name().toLowerCase();
+    }
   }
 
   public Eye(PointsToSetVariable source) {
     super(source);
   }
 
-  protected int getBatchShapesArgumentValueNumber() {
-    // TOOD: Handle keyword arguments.
-    return this.getArgumentValueNumber(this.getBatchShapeParameterPosition());
+  protected int getBatchShapesArgumentValueNumber(PropagationCallGraphBuilder builder) {
+    return this.getArgumentValueNumber(
+        builder, this.getBatchShapeParameterPosition(), this.getBatchShapeParameterName(), true);
   }
 
   protected int getBatchShapeParameterPosition() {
-    return BATCH_SHAPE.ordinal();
+    return Parameters.BATCH_SHAPE.ordinal();
+  }
+
+  protected String getBatchShapeParameterName() {
+    return Parameters.BATCH_SHAPE.getParameterName();
   }
 
   @Override
@@ -50,16 +56,17 @@ public class Eye extends SparseEye {
   }
 
   private Set<List<Dimension<?>>> getBatchShapes(PropagationCallGraphBuilder builder) {
-    // TODO Handle keyword arguments.
     Set<Integer> possibleNumArgs = this.getNumberOfPossiblePositionalArguments(builder);
 
-    if (possibleNumArgs.contains(this.getBatchShapeParameterPosition() + 1)) {
+    if (possibleNumArgs.contains(this.getBatchShapeParameterPosition() + 1)
+        || isKeywordArgumentPresent(builder, this.getBatchShapeParameterName())) {
       PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
+      int argValNum = this.getBatchShapesArgumentValueNumber(builder);
+      if (argValNum <= 0) return emptySet();
+
       PointerKey pointerKey =
-          pointerAnalysis
-              .getHeapModel()
-              .getPointerKeyForLocal(this.getNode(), this.getBatchShapesArgumentValueNumber());
+          pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), argValNum);
 
       OrdinalSet<InstanceKey> pts = pointerAnalysis.getPointsToSet(pointerKey);
 
@@ -78,6 +85,10 @@ public class Eye extends SparseEye {
 
   @Override
   protected int getDTypeParameterPosition() {
-    return DTYPE.ordinal();
+    return Parameters.DTYPE.ordinal();
+  }
+
+  protected String getDTypeParameterName() {
+    return Parameters.DTYPE.getParameterName();
   }
 }

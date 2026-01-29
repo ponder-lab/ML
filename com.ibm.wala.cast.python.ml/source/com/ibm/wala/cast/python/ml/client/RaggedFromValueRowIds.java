@@ -46,7 +46,11 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
     VALUE_ROWIDS,
     NROWS,
     NAME,
-    VALIDATE
+    VALIDATE;
+
+    public String getParameterName() {
+      return name().toLowerCase();
+    }
   }
 
   public RaggedFromValueRowIds(PointsToSetVariable source) {
@@ -60,16 +64,20 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
 
   @Override
   protected String getValuesParameterName() {
-    return VALUES.name().toLowerCase();
+    return VALUES.getParameterName();
   }
 
   protected int getValueRowidsParameterPosition() {
     return VALUE_ROWIDS.ordinal();
   }
 
+  protected String getValueRowidsParameterName() {
+    return VALUE_ROWIDS.getParameterName();
+  }
+
   protected int getValueRowidsArgumentValueNumber(PropagationCallGraphBuilder builder) {
     return this.getArgumentValueNumber(
-        builder, this.getValueRowidsParameterPosition(), VALUE_ROWIDS.name().toLowerCase(), true);
+        builder, this.getValueRowidsParameterPosition(), getValueRowidsParameterName(), true);
   }
 
   protected Set<Long> getPossibleValueRowidsArguments(PropagationCallGraphBuilder builder) {
@@ -150,9 +158,13 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
     return NROWS.ordinal();
   }
 
+  protected String getNrowsParameterName() {
+    return NROWS.getParameterName();
+  }
+
   protected int getNrowsArgumentValueNumber(PropagationCallGraphBuilder builder) {
     return this.getArgumentValueNumber(
-        builder, this.getNrowsParameterPosition(), NROWS.name().toLowerCase(), true);
+        builder, this.getNrowsParameterPosition(), getNrowsParameterName(), true);
   }
 
   protected Set<Long> getPossibleNrowsArguments(PropagationCallGraphBuilder builder) {

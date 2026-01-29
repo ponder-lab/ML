@@ -15,11 +15,17 @@ import java.util.Set;
  */
 public class Constant extends TensorGenerator {
 
-  private static final int VALUE_PARAMETER_POSITION = 0;
+  protected enum Parameters {
+    VALUE,
+    DTYPE,
+    SHAPE,
+    NAME,
+    VERIFY_SHAPE;
 
-  private static final int DTYPE_PARAMETER_POSITION = 1;
-
-  private static final int SHAPE_PARAMETER_POSITION = 2;
+    public String getParameterName() {
+      return name().toLowerCase();
+    }
+  }
 
   public Constant(PointsToSetVariable source) {
     super(source);
@@ -49,16 +55,28 @@ public class Constant extends TensorGenerator {
   }
 
   protected int getValueParameterPosition() {
-    return VALUE_PARAMETER_POSITION;
+    return Parameters.VALUE.ordinal();
+  }
+
+  protected String getValueParameterName() {
+    return Parameters.VALUE.getParameterName();
   }
 
   @Override
   protected int getShapeParameterPosition() {
-    return SHAPE_PARAMETER_POSITION;
+    return Parameters.SHAPE.ordinal();
+  }
+
+  protected String getShapeParameterName() {
+    return Parameters.SHAPE.getParameterName();
   }
 
   @Override
   protected int getDTypeParameterPosition() {
-    return DTYPE_PARAMETER_POSITION;
+    return Parameters.DTYPE.ordinal();
+  }
+
+  protected String getDTypeParameterName() {
+    return Parameters.DTYPE.getParameterName();
   }
 }

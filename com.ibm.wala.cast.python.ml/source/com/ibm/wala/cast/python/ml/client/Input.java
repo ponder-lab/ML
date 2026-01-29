@@ -1,29 +1,22 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
 import static java.util.Collections.emptySet;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
-import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
-import com.ibm.wala.classLoader.CallSiteReference;
-import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
-import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
-import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -38,17 +31,20 @@ public class Input extends Ones {
 
   private static final Logger LOGGER = getLogger(Input.class.getName());
 
-  private static final int BATCH_SIZE_PARAMETER_POSITION = 1;
+  protected enum Parameters {
+    SHAPE,
+    BATCH_SIZE,
+    NAME,
+    DTYPE,
+    SPARSE,
+    TENSOR,
+    RAGGED,
+    TYPE_SPEC;
 
-  private static final int DTYPE_PARAMETER_POSITION = 3;
-
-  private static final int SPARSE_PARAMETER_POSITION = 4;
-
-  private static final int TENSOR_PARAMETER_POSITION = 5;
-
-  private static final int RAGGED_PARAMETER_POSITION = 6;
-
-  private static final int TYPE_SPEC_PARAMETER_POSITION = 7;
+    public String getParameterName() {
+      return name().toLowerCase();
+    }
+  }
 
   public Input(PointsToSetVariable source) {
     super(source);
@@ -61,7 +57,9 @@ public class Input extends Ones {
 
   @Override
   protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
-    int valNum = getArgumentValueNumber(builder, this.getDTypeParameterPosition(), true);
+    int valNum =
+        this.getArgumentValueNumber(
+            builder, this.getDTypeParameterPosition(), this.getDTypeParameterName(), true);
 
     OrdinalSet<InstanceKey> pointsToSet = null;
 
@@ -70,9 +68,6 @@ public class Input extends Ones {
       PointerKey pk = pa.getHeapModel().getPointerKeyForLocal(this.getNode(), valNum);
       pointsToSet = pa.getPointsToSet(pk);
     }
-
-    if (pointsToSet == null || pointsToSet.isEmpty())
-      pointsToSet = getKeywordArgumentPointsToSet(builder, "dtype");
 
     if (pointsToSet != null && !pointsToSet.isEmpty()) {
       LOGGER.info("Found possible dtypes: " + pointsToSet + " for source: " + source + ".");
@@ -86,7 +81,9 @@ public class Input extends Ones {
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     checkUnimplementedParameters(builder);
 
-    int shapeValNum = getArgumentValueNumber(builder, this.getShapeParameterPosition(), true);
+    int shapeValNum =
+        this.getArgumentValueNumber(
+            builder, this.getShapeParameterPosition(), this.getShapeParameterName(), true);
 
     OrdinalSet<InstanceKey> shapePts = null;
 
@@ -95,9 +92,6 @@ public class Input extends Ones {
       PointerKey pk = pa.getHeapModel().getPointerKeyForLocal(this.getNode(), shapeValNum);
       shapePts = pa.getPointsToSet(pk);
     }
-
-    if (shapePts == null || shapePts.isEmpty())
-      shapePts = getKeywordArgumentPointsToSet(builder, "shape");
 
     Set<List<Dimension<?>>> shapes;
 
@@ -111,7 +105,9 @@ public class Input extends Ones {
     }
 
     // Handle `batch_size`.
-    int batchSizeValNum = getArgumentValueNumber(builder, BATCH_SIZE_PARAMETER_POSITION, true);
+    int batchSizeValNum =
+        this.getArgumentValueNumber(
+            builder, this.getBatchSizeParameterPosition(), this.getBatchSizeParameterName(), true);
 
     Set<Long> batchSizes = new HashSet<>();
 
@@ -121,12 +117,6 @@ public class Input extends Ones {
       OrdinalSet<InstanceKey> pts = pa.getPointsToSet(pk);
       batchSizes.addAll(getPossibleLongArguments(pts));
     }
-
-    // Also check for `batch_size` keyword.
-    OrdinalSet<InstanceKey> batchSizePts = getKeywordArgumentPointsToSet(builder, "batch_size");
-
-    if (batchSizePts != null && !batchSizePts.isEmpty())
-      batchSizes.addAll(getPossibleLongArguments(batchSizePts));
 
     if (batchSizes.isEmpty()) batchSizes.add(null);
     else LOGGER.info("Found possible batch sizes: " + batchSizes + " for source: " + source + ".");
@@ -150,63 +140,42 @@ public class Input extends Ones {
   }
 
   private void checkUnimplementedParameters(PropagationCallGraphBuilder builder) {
-    int[] unimplementedPositionalArgs = {
-      SPARSE_PARAMETER_POSITION,
-      TENSOR_PARAMETER_POSITION,
-      RAGGED_PARAMETER_POSITION,
-      TYPE_SPEC_PARAMETER_POSITION
+    Parameters[] unimplementedParameters = {
+      Parameters.SPARSE, Parameters.TENSOR, Parameters.RAGGED, Parameters.TYPE_SPEC
     };
 
-    for (int pos : unimplementedPositionalArgs) {
-      int valNum = getArgumentValueNumber(builder, pos, true);
+    for (Parameters p : unimplementedParameters) {
+      int valNum = this.getArgumentValueNumber(builder, p.ordinal(), p.getParameterName(), true);
       if (valNum > 0)
-        throw new UnimplementedError("Unimplemented positional argument at position " + pos);
-    }
-
-    String[] unimplementedKeywords = {"sparse", "tensor", "ragged", "type_spec"};
-    for (String kw : unimplementedKeywords) {
-      OrdinalSet<InstanceKey> pts = getKeywordArgumentPointsToSet(builder, kw);
-      if (pts != null && !pts.isEmpty())
-        throw new UnimplementedError("Unimplemented keyword argument: " + kw);
+        throw new UnimplementedError(
+            "Unimplemented parameter " + p.getParameterName() + " at position " + p.ordinal());
     }
   }
 
   @Override
-  protected int getDTypeParameterPosition() {
-    return DTYPE_PARAMETER_POSITION;
+  protected int getShapeParameterPosition() {
+    return Parameters.SHAPE.ordinal();
   }
 
-  private OrdinalSet<InstanceKey> getKeywordArgumentPointsToSet(
-      PropagationCallGraphBuilder builder, String keyword) {
-    OrdinalSet<InstanceKey> result = null;
-    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+  protected String getShapeParameterName() {
+    return Parameters.SHAPE.getParameterName();
+  }
 
-    CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
+  protected int getBatchSizeParameterPosition() {
+    return Parameters.BATCH_SIZE.ordinal();
+  }
 
-    if (cs == null || cs.getCallSiteRefs().length == 0) return null;
+  protected String getBatchSizeParameterName() {
+    return Parameters.BATCH_SIZE.getParameterName();
+  }
 
-    CallSiteReference siteReference = cs.getCallSiteRefs()[0];
+  @Override
+  protected int getDTypeParameterPosition() {
+    return Parameters.DTYPE.ordinal();
+  }
 
-    for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode());
-        it.hasNext(); ) {
-      CGNode caller = it.next();
-      SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(siteReference);
-
-      for (SSAAbstractInvokeInstruction call : calls)
-        if (call instanceof PythonInvokeInstruction) {
-          PythonInvokeInstruction pyCall = (PythonInvokeInstruction) call;
-          int use = pyCall.getUse(keyword);
-
-          if (use != -1) {
-            PointerKey pk = pa.getHeapModel().getPointerKeyForLocal(caller, use);
-            OrdinalSet<InstanceKey> pts = pa.getPointsToSet(pk);
-
-            if (result == null) result = pts;
-            else result = OrdinalSet.unify(result, pts);
-          }
-        }
-    }
-    return result;
+  protected String getDTypeParameterName() {
+    return Parameters.DTYPE.getParameterName();
   }
 
   private static Set<Long> getPossibleLongArguments(OrdinalSet<InstanceKey> pointsToSet) {

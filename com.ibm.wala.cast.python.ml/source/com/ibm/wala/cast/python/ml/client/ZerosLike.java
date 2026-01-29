@@ -11,18 +11,47 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class ZerosLike extends Constant {
 
-  /**
-   * The shape argument is not explicitly provided to zeros_like(); rather, the shape is inferred
-   * from the `input` argument.
-   */
-  private static final int SHAPE_PARAMETER_POSITION = UNDEFINED_PARAMETER_POSITION;
+  protected enum Parameters {
+    INPUT,
+    DTYPE,
+    NAME,
+    LAYOUT,
+    SHAPE;
+
+    public String getParameterName() {
+      return name().toLowerCase();
+    }
+  }
 
   public ZerosLike(PointsToSetVariable source) {
     super(source);
   }
 
+  protected int getInputParameterPosition() {
+    return Parameters.INPUT.ordinal();
+  }
+
+  protected String getInputParameterName() {
+    return Parameters.INPUT.getParameterName();
+  }
+
+  @Override
+  protected int getValueParameterPosition() {
+    return this.getInputParameterPosition();
+  }
+
+  @Override
+  protected String getValueParameterName() {
+    return this.getInputParameterName();
+  }
+
   @Override
   protected int getShapeParameterPosition() {
-    return SHAPE_PARAMETER_POSITION;
+    return UNDEFINED_PARAMETER_POSITION;
+  }
+
+  @Override
+  protected String getShapeParameterName() {
+    return null;
   }
 }

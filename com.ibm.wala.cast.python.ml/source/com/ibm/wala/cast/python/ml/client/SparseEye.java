@@ -1,9 +1,5 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.ml.client.SparseEye.Parameters.DTYPE;
-import static com.ibm.wala.cast.python.ml.client.SparseEye.Parameters.NUM_COLUMNS;
-import static com.ibm.wala.cast.python.ml.client.SparseEye.Parameters.NUM_ROWS;
-
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -27,7 +23,11 @@ public class SparseEye extends Ones {
     NUM_ROWS,
     NUM_COLUMNS,
     DTYPE,
-    NAME
+    NAME;
+
+    public String getParameterName() {
+      return name().toLowerCase();
+    }
   }
 
   public SparseEye(PointsToSetVariable source) {
@@ -35,7 +35,7 @@ public class SparseEye extends Ones {
   }
 
   private Set<Optional<Integer>> getPossiblePositionalArgumentValues(
-      PropagationCallGraphBuilder builder, int paramPosition) {
+      PropagationCallGraphBuilder builder, int paramPosition, String paramName) {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
     Set<Integer> possibleNumArgs = this.getNumberOfPossiblePositionalArguments(builder);
 
@@ -43,13 +43,14 @@ public class SparseEye extends Ones {
         .filter(numArgs -> numArgs >= paramPosition + 1)
         .map(
             _ -> {
+              int argValNum = this.getArgumentValueNumber(builder, paramPosition, paramName, true);
+              if (argValNum <= 0) return null;
+
               PointerKey pointerKey =
-                  pointerAnalysis
-                      .getHeapModel()
-                      .getPointerKeyForLocal(
-                          this.getNode(), this.getArgumentValueNumber(paramPosition));
+                  pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), argValNum);
               return pointerAnalysis.getPointsToSet(pointerKey);
             })
+        .filter(pts -> pts != null)
         .flatMap(pts -> StreamSupport.stream(pts.spliterator(), false))
         .map(SparseEye::getIntValueFromInstanceKey)
         .collect(Collectors.toSet());
@@ -100,9 +101,9 @@ public class SparseEye extends Ones {
   }
 
   private Set<Optional<Integer>> getNumberOfRows(PropagationCallGraphBuilder builder) {
-    // TODO Handle keyword arguments.
     Set<Optional<Integer>> values =
-        this.getPossiblePositionalArgumentValues(builder, this.getNumRowsParameterPosition());
+        this.getPossiblePositionalArgumentValues(
+            builder, this.getNumRowsParameterPosition(), this.getNumRowsParameterName());
 
     if (values == null || values.isEmpty())
       throw new IllegalStateException("The num_rows parameter is required for tf.eye().");
@@ -111,8 +112,8 @@ public class SparseEye extends Ones {
   }
 
   private Set<Optional<Integer>> getNumberOfColumns(PropagationCallGraphBuilder builder) {
-    // TODO Handle keyword arguments.
-    return this.getPossiblePositionalArgumentValues(builder, this.getNumColumnsParameterPosition());
+    return this.getPossiblePositionalArgumentValues(
+        builder, this.getNumColumnsParameterPosition(), this.getNumColumnsParameterName());
   }
 
   @Override
@@ -121,7 +122,11 @@ public class SparseEye extends Ones {
   }
 
   protected int getNumRowsParameterPosition() {
-    return NUM_ROWS.ordinal();
+    return Parameters.NUM_ROWS.ordinal();
+  }
+
+  protected String getNumRowsParameterName() {
+    return Parameters.NUM_ROWS.getParameterName();
   }
 
   protected int getNumRowsArgumentValueNumber() {
@@ -129,15 +134,24 @@ public class SparseEye extends Ones {
   }
 
   protected int getNumColumnsParameterPosition() {
-    return NUM_COLUMNS.ordinal();
+    return Parameters.NUM_COLUMNS.ordinal();
+  }
+
+  protected String getNumColumnsParameterName() {
+    return Parameters.NUM_COLUMNS.getParameterName();
   }
 
   @Override
   protected int getDTypeParameterPosition() {
-    return DTYPE.ordinal();
+    return Parameters.DTYPE.ordinal();
+  }
+
+  protected String getDTypeParameterName() {
+    return Parameters.DTYPE.getParameterName();
   }
 
   protected int getNumColumnsArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(this.getNumColumnsParameterPosition());
+    return this.getArgumentValueNumber(
+        builder, this.getNumColumnsParameterPosition(), this.getNumColumnsParameterName(), true);
   }
 }

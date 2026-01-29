@@ -33,7 +33,11 @@ public class OneHot extends Ones {
     ON_VALUE,
     OFF_VALUE,
     AXIS,
-    DTYPE
+    DTYPE;
+
+    public String getParameterName() {
+      return name().toLowerCase();
+    }
   }
 
   public OneHot(PointsToSetVariable source) {
@@ -78,39 +82,63 @@ public class OneHot extends Ones {
     return DTYPE.ordinal();
   }
 
+  protected String getDTypeParameterName() {
+    return DTYPE.getParameterName();
+  }
+
   protected int getIndicesParameterPosition() {
     return INDICES.ordinal();
+  }
+
+  protected String getIndicesParameterName() {
+    return INDICES.getParameterName();
   }
 
   protected int getDepthParameterPosition() {
     return DEPTH.ordinal();
   }
 
+  protected String getDepthParameterName() {
+    return DEPTH.getParameterName();
+  }
+
   protected int getAxisParameterPosition() {
     return AXIS.ordinal();
+  }
+
+  protected String getAxisParameterName() {
+    return AXIS.getParameterName();
   }
 
   protected int getOnValueParameterPosition() {
     return ON_VALUE.ordinal();
   }
 
+  protected String getOnValueParameterName() {
+    return ON_VALUE.getParameterName();
+  }
+
   protected int getOffValueParameterPosition() {
     return OFF_VALUE.ordinal();
   }
 
+  protected String getOffValueParameterName() {
+    return OFF_VALUE.getParameterName();
+  }
+
   protected int getOnValueArgumentValueNumber(PropagationCallGraphBuilder builder) {
     return this.getArgumentValueNumber(
-        builder, this.getOnValueParameterPosition(), ON_VALUE.name().toLowerCase(), true);
+        builder, this.getOnValueParameterPosition(), getOnValueParameterName(), true);
   }
 
   protected int getOffValueArgumentValueNumber(PropagationCallGraphBuilder builder) {
     return this.getArgumentValueNumber(
-        builder, this.getOffValueParameterPosition(), OFF_VALUE.name().toLowerCase(), true);
+        builder, this.getOffValueParameterPosition(), getOffValueParameterName(), true);
   }
 
   protected int getIndicesArgumentValueNumber(PropagationCallGraphBuilder builder) {
     return this.getArgumentValueNumber(
-        builder, this.getIndicesParameterPosition(), INDICES.name().toLowerCase(), true);
+        builder, this.getIndicesParameterPosition(), getIndicesParameterName(), true);
   }
 
   @Override
@@ -199,11 +227,11 @@ public class OneHot extends Ones {
 
   private int getDepthArgumentValueNumber(PropagationCallGraphBuilder builder) {
     return this.getArgumentValueNumber(
-        builder, this.getDepthParameterPosition(), DEPTH.name().toLowerCase(), true);
+        builder, this.getDepthParameterPosition(), getDepthParameterName(), true);
   }
 
   private int getAxisArgumentValueNumber(PropagationCallGraphBuilder builder) {
     return this.getArgumentValueNumber(
-        builder, this.getAxisParameterPosition(), AXIS.name().toLowerCase(), true);
+        builder, this.getAxisParameterPosition(), getAxisParameterName(), true);
   }
 }

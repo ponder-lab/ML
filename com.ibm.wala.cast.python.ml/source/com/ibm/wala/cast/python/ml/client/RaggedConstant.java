@@ -1,7 +1,5 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.ml.client.RaggedConstant.Parameters.INNER_SHAPE;
-import static com.ibm.wala.cast.python.ml.client.RaggedConstant.Parameters.RAGGED_RANK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
@@ -54,16 +52,53 @@ public class RaggedConstant extends Constant {
     RAGGED_RANK,
     INNER_SHAPE,
     NAME,
-    ROW_SPLITS_DTYPE
+    ROW_SPLITS_DTYPE;
+
+    public String getParameterName() {
+      return name().toLowerCase();
+    }
   }
 
   public RaggedConstant(PointsToSetVariable source) {
     super(source);
   }
 
+  protected int getPylistParameterPosition() {
+    return Parameters.PYLIST.ordinal();
+  }
+
+  protected String getPylistParameterName() {
+    return Parameters.PYLIST.getParameterName();
+  }
+
+  @Override
+  protected int getValueParameterPosition() {
+    return this.getPylistParameterPosition();
+  }
+
+  @Override
+  protected String getValueParameterName() {
+    return this.getPylistParameterName();
+  }
+
   @Override
   protected int getShapeParameterPosition() {
     return UNDEFINED_PARAMETER_POSITION;
+  }
+
+  @Override
+  protected String getShapeParameterName() {
+    return null;
+  }
+
+  @Override
+  protected int getDTypeParameterPosition() {
+    return Parameters.DTYPE.ordinal();
+  }
+
+  @Override
+  protected String getDTypeParameterName() {
+    return Parameters.DTYPE.getParameterName();
   }
 
   private static Set<Integer> getPossibleInnerListLengths(
@@ -99,10 +134,10 @@ public class RaggedConstant extends Constant {
 
         IField f = builder.getClassHierarchy().resolveField(subscript);
 
-        PointerKey pointerKeyForInstanceField = builder.getPointerKeyForInstanceField(asin, f);
+        PointerKey pointerKey = builder.getPointerKeyForInstanceField(asin, f);
 
         OrdinalSet<InstanceKey> instanceFieldPointsToSet =
-            pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
+            pointerAnalysis.getPointsToSet(pointerKey);
 
         boolean containsAllListsOrTuples =
             StreamSupport.stream(instanceFieldPointsToSet.spliterator(), false)
@@ -176,10 +211,10 @@ public class RaggedConstant extends Constant {
 
           IField f = builder.getClassHierarchy().resolveField(subscript);
 
-          PointerKey pointerKeyForInstanceField = builder.getPointerKeyForInstanceField(asin, f);
+          PointerKey pointerKey = builder.getPointerKeyForInstanceField(asin, f);
 
           OrdinalSet<InstanceKey> instanceFieldPointsToSet =
-              pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
+              pointerAnalysis.getPointsToSet(pointerKey);
 
           for (InstanceKey fieldIK : instanceFieldPointsToSet)
             if (containsScalars(builder, fieldIK)) return true;
@@ -218,10 +253,10 @@ public class RaggedConstant extends Constant {
 
         IField f = builder.getClassHierarchy().resolveField(subscript);
 
-        PointerKey pointerKeyForInstanceField = builder.getPointerKeyForInstanceField(asin, f);
+        PointerKey pointerKey = builder.getPointerKeyForInstanceField(asin, f);
 
         OrdinalSet<InstanceKey> instanceFieldPointsToSet =
-            pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
+            pointerAnalysis.getPointsToSet(pointerKey);
 
         if (instanceFieldPointsToSet.isEmpty())
           // An empty list at this field.
@@ -266,10 +301,10 @@ public class RaggedConstant extends Constant {
 
           IField f = builder.getClassHierarchy().resolveField(subscript);
 
-          PointerKey pointerKeyForInstanceField = builder.getPointerKeyForInstanceField(asin, f);
+          PointerKey pointerKey = builder.getPointerKeyForInstanceField(asin, f);
 
           OrdinalSet<InstanceKey> instanceFieldPointsToSet =
-              pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
+              pointerAnalysis.getPointsToSet(pointerKey);
 
           for (InstanceKey fieldIK : instanceFieldPointsToSet) {
             int depthOfField = getMaximumDepthOfScalars(builder, fieldIK);
@@ -424,21 +459,29 @@ public class RaggedConstant extends Constant {
   }
 
   protected int getRaggedRankParameterPosition() {
-    return RAGGED_RANK.ordinal();
+    return Parameters.RAGGED_RANK.ordinal();
+  }
+
+  protected String getRaggedRankParameterName() {
+    return Parameters.RAGGED_RANK.getParameterName();
   }
 
   protected int getRaggedRankArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    // TODO: Handle keyword arguments.
-    return this.getArgumentValueNumber(builder, this.getRaggedRankParameterPosition(), true);
+    return this.getArgumentValueNumber(
+        builder, this.getRaggedRankParameterPosition(), getRaggedRankParameterName(), true);
   }
 
   protected int getInnerShapeParameterPosition() {
-    return INNER_SHAPE.ordinal();
+    return Parameters.INNER_SHAPE.ordinal();
+  }
+
+  protected String getInnerShapeParameterName() {
+    return Parameters.INNER_SHAPE.getParameterName();
   }
 
   protected int getInnerShapeArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    // TODO: Handle keyword arguments.
-    return this.getArgumentValueNumber(builder, this.getInnerShapeParameterPosition(), true);
+    return this.getArgumentValueNumber(
+        builder, this.getInnerShapeParameterPosition(), getInnerShapeParameterName(), true);
   }
 
   protected Set<List<Dimension<?>>> getPossibleInnerShapeArguments(
@@ -446,7 +489,11 @@ public class RaggedConstant extends Constant {
     int valueNumber = this.getInnerShapeArgumentValueNumber(builder);
 
     if (valueNumber >= 0) {
-      PointerKey pointerKey = builder.getPointerKeyForLocal(this.getNode(), valueNumber);
+      PointerKey pointerKey =
+          builder
+              .getPointerAnalysis()
+              .getHeapModel()
+              .getPointerKeyForLocal(this.getNode(), valueNumber);
       OrdinalSet<InstanceKey> pointsToSet = builder.getPointerAnalysis().getPointsToSet(pointerKey);
       return this.getShapesFromShapeArgument(builder, pointsToSet);
     } else return emptySet();

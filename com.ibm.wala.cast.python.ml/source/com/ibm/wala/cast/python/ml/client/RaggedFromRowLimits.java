@@ -28,7 +28,11 @@ public class RaggedFromRowLimits extends RaggedTensorFromValues {
     VALUES,
     ROW_LIMITS,
     NAME,
-    VALIDATE
+    VALIDATE;
+
+    public String getParameterName() {
+      return name().toLowerCase();
+    }
   }
 
   public RaggedFromRowLimits(PointsToSetVariable source) {
@@ -42,16 +46,20 @@ public class RaggedFromRowLimits extends RaggedTensorFromValues {
 
   @Override
   protected String getValuesParameterName() {
-    return VALUES.name().toLowerCase();
+    return VALUES.getParameterName();
   }
 
   protected int getRowLimitsParameterPosition() {
     return ROW_LIMITS.ordinal();
   }
 
+  protected String getRowLimitsParameterName() {
+    return ROW_LIMITS.getParameterName();
+  }
+
   protected OrdinalSet<InstanceKey> getRowLimitsPointsToSet(PropagationCallGraphBuilder builder) {
     return this.getArgumentPointsToSet(
-        builder, this.getRowLimitsParameterPosition(), ROW_LIMITS.name().toLowerCase());
+        builder, this.getRowLimitsParameterPosition(), getRowLimitsParameterName());
   }
 
   @Override

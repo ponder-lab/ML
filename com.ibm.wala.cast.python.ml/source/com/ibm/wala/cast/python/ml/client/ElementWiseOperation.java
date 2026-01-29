@@ -1,7 +1,5 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.ml.client.ElementWiseOperation.Parameters.X;
-import static com.ibm.wala.cast.python.ml.client.ElementWiseOperation.Parameters.Y;
 import static com.ibm.wala.cast.python.ml.util.TensorShapeUtil.areBroadcastable;
 import static com.ibm.wala.cast.python.ml.util.TensorShapeUtil.getBroadcastedShapes;
 import static java.util.logging.Logger.getLogger;
@@ -28,22 +26,11 @@ public class ElementWiseOperation extends ZerosLike {
   protected enum Parameters {
     X,
     Y,
-    NAME
-  }
+    NAME;
 
-  /**
-   * The dtype argument is not explicitly provided to element-wise operations; rather, the dtype is
-   * inferred from the `x` argument.
-   *
-   * @see <a
-   *     href="https://www.tensorflow.org/api_docs/python/tf/math/multiply#returns">tf.math.multiply
-   *     - Returns</a>.
-   */
-  protected static final int DTYPE_PARAMETER_POSITION = UNDEFINED_PARAMETER_POSITION;
-
-  @Override
-  protected int getDTypeParameterPosition() {
-    return DTYPE_PARAMETER_POSITION;
+    public String getParameterName() {
+      return name().toLowerCase();
+    }
   }
 
   public ElementWiseOperation(PointsToSetVariable source) {
@@ -51,21 +38,29 @@ public class ElementWiseOperation extends ZerosLike {
   }
 
   protected int getXParameterPosition() {
-    return X.ordinal();
+    return Parameters.X.ordinal();
+  }
+
+  protected String getXParameterName() {
+    return Parameters.X.getParameterName();
   }
 
   protected int getXArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    // TODO: Handle keyword arguments.
-    return this.getArgumentValueNumber(builder, this.getXParameterPosition());
+    return this.getArgumentValueNumber(
+        builder, this.getXParameterPosition(), getXParameterName(), false);
   }
 
   protected int getYParameterPosition() {
-    return Y.ordinal();
+    return Parameters.Y.ordinal();
+  }
+
+  protected String getYParameterName() {
+    return Parameters.Y.getParameterName();
   }
 
   protected int getYArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    // TODO: Handle keyword arguments.
-    return this.getArgumentValueNumber(builder, this.getYParameterPosition());
+    return this.getArgumentValueNumber(
+        builder, this.getYParameterPosition(), getYParameterName(), false);
   }
 
   @Override
@@ -84,5 +79,16 @@ public class ElementWiseOperation extends ZerosLike {
         else throw new NonBroadcastableShapesException(this, xShape, yShape);
 
     return ret;
+  }
+
+  /** No explicit dtype argument. Dtype is inferred from 'x'. */
+  @Override
+  protected int getDTypeParameterPosition() {
+    return UNDEFINED_PARAMETER_POSITION;
+  }
+
+  @Override
+  protected String getDTypeParameterName() {
+    return null;
   }
 }

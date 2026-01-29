@@ -1,8 +1,5 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.ml.client.Poisson.Parameters.DTYPE;
-import static com.ibm.wala.cast.python.ml.client.Poisson.Parameters.LAM;
-
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
@@ -25,7 +22,11 @@ public class Poisson extends Ones {
     LAM,
     DTYPE,
     SEED,
-    NAME
+    NAME;
+
+    public String getParameterName() {
+      return name().toLowerCase();
+    }
   }
 
   public Poisson(PointsToSetVariable source) {
@@ -34,19 +35,38 @@ public class Poisson extends Ones {
 
   @Override
   protected int getDTypeParameterPosition() {
-    return DTYPE.ordinal();
+    return Parameters.DTYPE.ordinal();
+  }
+
+  protected String getDTypeParameterName() {
+    return Parameters.DTYPE.getParameterName();
+  }
+
+  @Override
+  protected int getShapeParameterPosition() {
+    return Parameters.SHAPE.ordinal();
+  }
+
+  protected String getShapeParameterName() {
+    return Parameters.SHAPE.getParameterName();
   }
 
   protected int getLamParameterPosition() {
-    return LAM.ordinal();
+    return Parameters.LAM.ordinal();
+  }
+
+  protected String getLamParameterName() {
+    return Parameters.LAM.getParameterName();
   }
 
   protected int getLamParameterValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(builder, this.getLamParameterPosition());
+    return this.getArgumentValueNumber(
+        builder, this.getLamParameterPosition(), getLamParameterName(), false);
   }
 
   @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+    // ...
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     Set<List<Dimension<?>>> shapes = super.getShapes(builder);
 

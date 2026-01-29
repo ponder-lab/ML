@@ -29,7 +29,11 @@ public class RaggedFromRowStarts extends RaggedTensorFromValues {
     VALUES,
     ROW_STARTS,
     NAME,
-    VALIDATE
+    VALIDATE;
+
+    public String getParameterName() {
+      return name().toLowerCase();
+    }
   }
 
   public RaggedFromRowStarts(PointsToSetVariable source) {
@@ -43,16 +47,20 @@ public class RaggedFromRowStarts extends RaggedTensorFromValues {
 
   @Override
   protected String getValuesParameterName() {
-    return VALUES.name().toLowerCase();
+    return VALUES.getParameterName();
   }
 
   protected int getRowStartsParameterPosition() {
     return ROW_STARTS.ordinal();
   }
 
+  protected String getRowStartsParameterName() {
+    return ROW_STARTS.getParameterName();
+  }
+
   protected OrdinalSet<InstanceKey> getRowStartsPointsToSet(PropagationCallGraphBuilder builder) {
     return this.getArgumentPointsToSet(
-        builder, this.getRowStartsParameterPosition(), ROW_STARTS.name().toLowerCase());
+        builder, this.getRowStartsParameterPosition(), getRowStartsParameterName());
   }
 
   @Override

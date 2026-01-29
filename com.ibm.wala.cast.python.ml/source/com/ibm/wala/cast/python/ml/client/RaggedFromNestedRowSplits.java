@@ -25,20 +25,26 @@ public class RaggedFromNestedRowSplits extends RaggedFromNestedRowLengths {
     FLAT_VALUES,
     NESTED_ROW_SPLITS,
     NAME,
-    VALIDATE
+    VALIDATE;
+
+    public String getParameterName() {
+      return name().toLowerCase();
+    }
   }
 
   public RaggedFromNestedRowSplits(PointsToSetVariable source) {
     super(source);
   }
 
+  protected String getNestedRowSplitsParameterName() {
+    return NESTED_ROW_SPLITS.getParameterName();
+  }
+
   @Override
   protected OrdinalSet<InstanceKey> getNestedStructurePointsToSet(
       PropagationCallGraphBuilder builder) {
     return this.getArgumentPointsToSet(
-        builder,
-        this.getNestedRowLengthsParameterPosition(),
-        NESTED_ROW_SPLITS.name().toLowerCase());
+        builder, this.getNestedRowLengthsParameterPosition(), getNestedRowSplitsParameterName());
   }
 
   @Override
