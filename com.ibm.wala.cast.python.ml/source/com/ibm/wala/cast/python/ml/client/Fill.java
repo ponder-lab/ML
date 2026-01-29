@@ -25,6 +25,10 @@ public class Fill extends Constant {
     public String getParameterName() {
       return name().toLowerCase();
     }
+
+    public int getParameterIndex() {
+      return ordinal();
+    }
   }
 
   /**
@@ -44,7 +48,7 @@ public class Fill extends Constant {
 
   @Override
   protected int getValueParameterPosition() {
-    return Parameters.VALUE.ordinal();
+    return Parameters.VALUE.getParameterIndex();
   }
 
   @Override
@@ -54,7 +58,7 @@ public class Fill extends Constant {
 
   @Override
   protected int getShapeParameterPosition() {
-    return Parameters.DIMS.ordinal();
+    return Parameters.DIMS.getParameterIndex();
   }
 
   @Override

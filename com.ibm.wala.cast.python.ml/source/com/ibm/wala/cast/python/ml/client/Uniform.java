@@ -22,6 +22,10 @@ public class Uniform extends Ones {
     public String getParameterName() {
       return name().toLowerCase();
     }
+
+    public int getParameterIndex() {
+      return ordinal();
+    }
   }
 
   public Uniform(PointsToSetVariable source) {
@@ -30,7 +34,7 @@ public class Uniform extends Ones {
 
   @Override
   protected int getDTypeParameterPosition() {
-    return Parameters.DTYPE.ordinal();
+    return Parameters.DTYPE.getParameterIndex();
   }
 
   protected String getDTypeParameterName() {
@@ -39,7 +43,7 @@ public class Uniform extends Ones {
 
   @Override
   protected int getShapeParameterPosition() {
-    return Parameters.SHAPE.ordinal();
+    return Parameters.SHAPE.getParameterIndex();
   }
 
   protected String getShapeParameterName() {

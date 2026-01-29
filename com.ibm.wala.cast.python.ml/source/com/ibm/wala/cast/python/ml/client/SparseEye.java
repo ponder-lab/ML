@@ -28,6 +28,10 @@ public class SparseEye extends Ones {
     public String getParameterName() {
       return name().toLowerCase();
     }
+
+    public int getParameterIndex() {
+      return ordinal();
+    }
   }
 
   public SparseEye(PointsToSetVariable source) {
@@ -122,7 +126,7 @@ public class SparseEye extends Ones {
   }
 
   protected int getNumRowsParameterPosition() {
-    return Parameters.NUM_ROWS.ordinal();
+    return Parameters.NUM_ROWS.getParameterIndex();
   }
 
   protected String getNumRowsParameterName() {
@@ -134,7 +138,7 @@ public class SparseEye extends Ones {
   }
 
   protected int getNumColumnsParameterPosition() {
-    return Parameters.NUM_COLUMNS.ordinal();
+    return Parameters.NUM_COLUMNS.getParameterIndex();
   }
 
   protected String getNumColumnsParameterName() {
@@ -143,7 +147,7 @@ public class SparseEye extends Ones {
 
   @Override
   protected int getDTypeParameterPosition() {
-    return Parameters.DTYPE.ordinal();
+    return Parameters.DTYPE.getParameterIndex();
   }
 
   protected String getDTypeParameterName() {

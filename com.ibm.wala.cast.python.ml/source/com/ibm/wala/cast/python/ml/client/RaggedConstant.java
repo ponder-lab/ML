@@ -57,6 +57,10 @@ public class RaggedConstant extends Constant {
     public String getParameterName() {
       return name().toLowerCase();
     }
+
+    public int getParameterIndex() {
+      return ordinal();
+    }
   }
 
   public RaggedConstant(PointsToSetVariable source) {
@@ -64,7 +68,7 @@ public class RaggedConstant extends Constant {
   }
 
   protected int getPylistParameterPosition() {
-    return Parameters.PYLIST.ordinal();
+    return Parameters.PYLIST.getParameterIndex();
   }
 
   protected String getPylistParameterName() {
@@ -93,12 +97,38 @@ public class RaggedConstant extends Constant {
 
   @Override
   protected int getDTypeParameterPosition() {
-    return Parameters.DTYPE.ordinal();
+    return Parameters.DTYPE.getParameterIndex();
   }
 
   @Override
   protected String getDTypeParameterName() {
     return Parameters.DTYPE.getParameterName();
+  }
+
+  protected int getRaggedRankParameterPosition() {
+    return Parameters.RAGGED_RANK.getParameterIndex();
+  }
+
+  protected String getRaggedRankParameterName() {
+    return Parameters.RAGGED_RANK.getParameterName();
+  }
+
+  protected int getRaggedRankArgumentValueNumber(PropagationCallGraphBuilder builder) {
+    return this.getArgumentValueNumber(
+        builder, this.getRaggedRankParameterPosition(), getRaggedRankParameterName(), true);
+  }
+
+  protected int getInnerShapeParameterPosition() {
+    return Parameters.INNER_SHAPE.getParameterIndex();
+  }
+
+  protected String getInnerShapeParameterName() {
+    return Parameters.INNER_SHAPE.getParameterName();
+  }
+
+  protected int getInnerShapeArgumentValueNumber(PropagationCallGraphBuilder builder) {
+    return this.getArgumentValueNumber(
+        builder, this.getInnerShapeParameterPosition(), getInnerShapeParameterName(), true);
   }
 
   private static Set<Integer> getPossibleInnerListLengths(
@@ -456,32 +486,6 @@ public class RaggedConstant extends Constant {
 
   protected Set<Long> getPossibleRaggedRankArguments(PropagationCallGraphBuilder builder) {
     return this.getPossibleLongArguments(builder, this.getRaggedRankArgumentValueNumber(builder));
-  }
-
-  protected int getRaggedRankParameterPosition() {
-    return Parameters.RAGGED_RANK.ordinal();
-  }
-
-  protected String getRaggedRankParameterName() {
-    return Parameters.RAGGED_RANK.getParameterName();
-  }
-
-  protected int getRaggedRankArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(
-        builder, this.getRaggedRankParameterPosition(), getRaggedRankParameterName(), true);
-  }
-
-  protected int getInnerShapeParameterPosition() {
-    return Parameters.INNER_SHAPE.ordinal();
-  }
-
-  protected String getInnerShapeParameterName() {
-    return Parameters.INNER_SHAPE.getParameterName();
-  }
-
-  protected int getInnerShapeArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(
-        builder, this.getInnerShapeParameterPosition(), getInnerShapeParameterName(), true);
   }
 
   protected Set<List<Dimension<?>>> getPossibleInnerShapeArguments(

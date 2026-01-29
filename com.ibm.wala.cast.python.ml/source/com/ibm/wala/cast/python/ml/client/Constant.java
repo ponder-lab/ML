@@ -25,6 +25,10 @@ public class Constant extends TensorGenerator {
     public String getParameterName() {
       return name().toLowerCase();
     }
+
+    public int getParameterIndex() {
+      return ordinal();
+    }
   }
 
   public Constant(PointsToSetVariable source) {
@@ -55,7 +59,7 @@ public class Constant extends TensorGenerator {
   }
 
   protected int getValueParameterPosition() {
-    return Parameters.VALUE.ordinal();
+    return Parameters.VALUE.getParameterIndex();
   }
 
   protected String getValueParameterName() {
@@ -64,7 +68,7 @@ public class Constant extends TensorGenerator {
 
   @Override
   protected int getShapeParameterPosition() {
-    return Parameters.SHAPE.ordinal();
+    return Parameters.SHAPE.getParameterIndex();
   }
 
   protected String getShapeParameterName() {
@@ -73,7 +77,7 @@ public class Constant extends TensorGenerator {
 
   @Override
   protected int getDTypeParameterPosition() {
-    return Parameters.DTYPE.ordinal();
+    return Parameters.DTYPE.getParameterIndex();
   }
 
   protected String getDTypeParameterName() {

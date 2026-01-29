@@ -31,6 +31,10 @@ public class ElementWiseOperation extends ZerosLike {
     public String getParameterName() {
       return name().toLowerCase();
     }
+
+    public int getParameterIndex() {
+      return ordinal();
+    }
   }
 
   public ElementWiseOperation(PointsToSetVariable source) {
@@ -38,7 +42,7 @@ public class ElementWiseOperation extends ZerosLike {
   }
 
   protected int getXParameterPosition() {
-    return Parameters.X.ordinal();
+    return Parameters.X.getParameterIndex();
   }
 
   protected String getXParameterName() {
@@ -51,7 +55,7 @@ public class ElementWiseOperation extends ZerosLike {
   }
 
   protected int getYParameterPosition() {
-    return Parameters.Y.ordinal();
+    return Parameters.Y.getParameterIndex();
   }
 
   protected String getYParameterName() {

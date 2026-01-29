@@ -21,6 +21,10 @@ public class ZerosLike extends Constant {
     public String getParameterName() {
       return name().toLowerCase();
     }
+
+    public int getParameterIndex() {
+      return ordinal();
+    }
   }
 
   public ZerosLike(PointsToSetVariable source) {
@@ -28,7 +32,7 @@ public class ZerosLike extends Constant {
   }
 
   protected int getInputParameterPosition() {
-    return Parameters.INPUT.ordinal();
+    return Parameters.INPUT.getParameterIndex();
   }
 
   protected String getInputParameterName() {
