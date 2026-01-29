@@ -22,7 +22,6 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -61,7 +60,7 @@ public class Input extends Ones {
   }
 
   @Override
-  protected EnumSet<DType> getDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
     int valNum = getArgumentValueNumber(builder, this.getDTypeParameterPosition(), true);
 
     OrdinalSet<InstanceKey> pointsToSet = null;

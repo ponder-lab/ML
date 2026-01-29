@@ -81,7 +81,7 @@ public class SparseAdd extends ElementWiseOperation {
   }
 
   @Override
-  protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     int xArgValueNum = this.getXArgumentValueNumber(builder);
     OrdinalSet<InstanceKey> pointsToSet = getPointsToSet(builder, xArgValueNum);
 
@@ -106,7 +106,7 @@ public class SparseAdd extends ElementWiseOperation {
       return super.getDefaultDTypes(builder);
     }
 
-    EnumSet<DType> ret = EnumSet.noneOf(DType.class);
+    Set<DType> ret = EnumSet.noneOf(DType.class);
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey ik : pointsToSet) {

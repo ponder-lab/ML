@@ -8,6 +8,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
+import java.util.Set;
 
 /**
  * A representation of the `tf.convert_to_tensor()` API in TensorFlow.
@@ -38,7 +39,7 @@ public class ConvertToTensor extends ZerosLike {
   }
 
   @Override
-  protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // If the dtype argument is not specified, then the type is inferred from the type of value,
     // unless dtype_hint is provided.
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
@@ -54,7 +55,7 @@ public class ConvertToTensor extends ZerosLike {
       pointsToSet = pointerAnalysis.getPointsToSet(pointerKey);
     }
 
-    EnumSet<DType> defaultDTypes = super.getDefaultDTypes(builder);
+    Set<DType> defaultDTypes = super.getDefaultDTypes(builder);
 
     // If the argument dtype hint is not specified.
     if (pointsToSet == null || pointsToSet.isEmpty()) return defaultDTypes;
@@ -63,10 +64,10 @@ public class ConvertToTensor extends ZerosLike {
       // If the conversion to dtype_hint is not possible, this argument has no effect.
 
       // Get the dtypes from the points-to set.
-      EnumSet<DType> dTypesFromDTypeHintArgument = getDTypesFromDTypeArgument(builder, pointsToSet);
+      Set<DType> dTypesFromDTypeHintArgument = getDTypesFromDTypeArgument(builder, pointsToSet);
 
       // for each possible dtype from dtype hint, check if it is compatible with default dtypes.
-      EnumSet<DType> compatibleDTypes = EnumSet.noneOf(DType.class);
+      Set<DType> compatibleDTypes = EnumSet.noneOf(DType.class);
 
       for (DType dTypeFromDTypeHint : dTypesFromDTypeHintArgument)
         for (DType defaultDType : defaultDTypes)

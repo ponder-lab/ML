@@ -4,7 +4,6 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
@@ -40,7 +39,7 @@ public class Constant extends TensorGenerator {
    * of value.
    */
   @Override
-  protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // TODO: Handle keyword arguments.
     return getDTypes(builder, this.getValueArgumentValueNumber());
   }

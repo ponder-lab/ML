@@ -67,7 +67,7 @@ public abstract class TensorGenerator {
 
   public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     Set<List<Dimension<?>>> shapes = getShapes(builder);
-    EnumSet<DType> dTypes = getDTypes(builder);
+    Set<DType> dTypes = getDTypes(builder);
 
     Set<TensorType> ret = HashSetFactory.make();
 
@@ -375,13 +375,13 @@ public abstract class TensorGenerator {
    *     type literals.
    * @return A set of possible dtypes of the tensor returned by this generator.
    */
-  protected EnumSet<DType> getDTypesFromDTypeArgument(
+  protected Set<DType> getDTypesFromDTypeArgument(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
     if (pointsToSet == null || !pointsToSet.iterator().hasNext())
       throw new IllegalArgumentException(
           "Empty points-to set for dtype argument in source: " + this.getSource() + ".");
 
-    EnumSet<DType> ret = EnumSet.noneOf(DType.class);
+    Set<DType> ret = EnumSet.noneOf(DType.class);
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey instanceKey : pointsToSet) {
@@ -486,7 +486,7 @@ public abstract class TensorGenerator {
    * @return The set of possible dtypes of the tensor returned by this generator when an explicit
    *     dtype isn't provided as an argument.
    */
-  protected abstract EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder);
+  protected abstract Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder);
 
   /**
    * Returns the value number for the dtype argument in the function call.
@@ -500,7 +500,7 @@ public abstract class TensorGenerator {
 
   protected abstract int getDTypeParameterPosition();
 
-  protected EnumSet<DType> getDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     int valNum = this.getDTypeArgumentValueNumber();
@@ -529,7 +529,7 @@ public abstract class TensorGenerator {
    * @param valueNumber The value number of the argument from which to infer the dtype.
    * @return A set of possible dtypes of the tensor returned by this generator.
    */
-  protected EnumSet<DType> getDTypes(PropagationCallGraphBuilder builder, int valueNumber) {
+  protected Set<DType> getDTypes(PropagationCallGraphBuilder builder, int valueNumber) {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
     PointerKey valuePK =
         pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
@@ -550,13 +550,13 @@ public abstract class TensorGenerator {
    * @param pointsToSet The points-to set of the value from which the dtype will be derived.
    * @return A set of possible dtypes of the tensor returned by this generator.
    */
-  protected EnumSet<DType> getDTypesOfValue(
+  protected Set<DType> getDTypesOfValue(
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
     if (valuePointsToSet == null || valuePointsToSet.isEmpty())
       throw new IllegalArgumentException(
           "Empty points-to set for value in source: " + this.getSource() + ".");
 
-    EnumSet<DType> ret = EnumSet.noneOf(DType.class);
+    Set<DType> ret = EnumSet.noneOf(DType.class);
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey valueIK : valuePointsToSet)
@@ -627,7 +627,7 @@ public abstract class TensorGenerator {
                 pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
             LOGGER.fine("Points-to set for instance field: " + instanceFieldPointsToSet + ".");
 
-            EnumSet<DType> dTypesOfField = getDTypesOfValue(builder, instanceFieldPointsToSet);
+            Set<DType> dTypesOfField = getDTypesOfValue(builder, instanceFieldPointsToSet);
             ret.addAll(dTypesOfField);
           }
         } else if (reference.equals(TENSOR_TYPE)

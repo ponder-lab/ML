@@ -462,7 +462,7 @@ public class RaggedConstant extends Constant {
    *     description in ragged_factory_ops.py" GitHub issue</a>.
    */
   @Override
-  protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     int valueNumber = this.getValueArgumentValueNumber();

@@ -56,7 +56,7 @@ public class Variable extends TensorGenerator {
   }
 
   @Override
-  protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // If explicit dtype is missing, try inferring from initial_value
     OrdinalSet<InstanceKey> initialValuePts =
         this.getArgumentPointsToSet(
@@ -84,7 +84,7 @@ public class Variable extends TensorGenerator {
   }
 
   @Override
-  protected EnumSet<DType> getDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
     // First try explicit dtype argument
     OrdinalSet<InstanceKey> dtypePts =
         this.getArgumentPointsToSet(builder, DTYPE.ordinal(), DTYPE.name().toLowerCase());

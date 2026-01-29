@@ -34,11 +34,11 @@ public abstract class RaggedTensorFromValues extends TensorGenerator {
   }
 
   @Override
-  protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // Infer from values
     int valuesValNum = this.getValuesArgumentValueNumber(builder);
     if (valuesValNum > 0) {
-      EnumSet<DType> ret = this.getDTypes(builder, valuesValNum);
+      Set<DType> ret = this.getDTypes(builder, valuesValNum);
       LOGGER.info(() -> "Inferred dtypes from values for " + this.getSource() + ": " + ret + ".");
       return ret;
     }

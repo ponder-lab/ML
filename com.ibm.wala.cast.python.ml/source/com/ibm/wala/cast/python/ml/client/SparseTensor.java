@@ -3,7 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
-import java.util.EnumSet;
+import java.util.Set;
 
 /**
  * A generator for tensors created by the `tf.sparse.SparseTensor` constructor.
@@ -32,7 +32,7 @@ public class SparseTensor extends Ones {
 
   /** The dtype is inferred from the 'values' argument. */
   @Override
-  protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // TODO: Handle keyword arguments.
     int valuesValNum = this.getArgumentValueNumber(VALUES_PARAMETER_POSITION);
     return getDTypes(builder, valuesValNum);
