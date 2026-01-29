@@ -57,4 +57,12 @@ black --fast .
 - Always add `assert` statements in Python test files for tensor `shape` and `dtype`.
 - Ensure that `assert` statements in Python test files match the expectations defined in the corresponding JUnit test cases.
 
+## Java Testing
+
+- Always run `mvn test` to ensure all Java tests pass before committing changes.
+- Add JUnit test cases for any new functionality or bug fixes implemented in the Java codebase.
+- Ensure that all new and existing JUnit test cases pass successfully before committing changes.
+- Use descriptive names for JUnit test methods that clearly indicate the purpose of the test.
+- If you change any of the summary files (e.g., `tensorflow.xml`), ensure that you add or update JUnit test cases to cover the changes made. Also, you must run `mvn clean` to ensure that the changes are correctly reflected in the build for summary (XML) files.
+
 [SO post]: https://stackoverflow.com/questions/4955635/how-to-add-local-jar-files-to-a-maven-project#answer-4955635
