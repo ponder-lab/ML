@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.client.ReadDataSets.Parameters.DTYPE;
+import static com.ibm.wala.cast.python.ml.client.ReadDataSets.Parameters.RESHAPE;
 import static com.ibm.wala.cast.python.ml.types.TensorType.mnistInput;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -14,7 +15,7 @@ import java.util.List;
 import java.util.Set;
 
 /** A representation of the `read_data_sets()` function in TensorFlow. */
-public class ReadDataSets extends TensorGenerator {
+public class ReadDataSets extends Ones {
 
   private static final TensorType MNIST_INPUT = mnistInput();
 
@@ -35,7 +36,7 @@ public class ReadDataSets extends TensorGenerator {
 
   @Override
   protected int getShapeParameterPosition() {
-    return UNDEFINED_PARAMETER_POSITION;
+    return RESHAPE.ordinal();
   }
 
   @Override
