@@ -654,9 +654,12 @@ public abstract class TensorGenerator {
   protected int getArgumentValueNumber(int parameterPosition) {
     if (parameterPosition < 0) return UNDEFINED_PARAMETER_POSITION; // No such argument.
 
-    return this.getNode().getMethod().isStatic()
-        ? this.getNode().getIR().getParameter(parameterPosition)
-        : this.getNode().getIR().getParameter(parameterPosition + 1);
+    int index = this.getNode().getMethod().isStatic() ? parameterPosition : parameterPosition + 1;
+
+    if (index >= this.getNode().getIR().getNumberOfParameters())
+      return UNDEFINED_PARAMETER_POSITION;
+
+    return this.getNode().getIR().getParameter(index);
   }
 
   protected OrdinalSet<InstanceKey> getArgumentPointsToSet(

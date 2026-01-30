@@ -5260,7 +5260,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /** FIXME: Handle keyword arguments properly so that this test passes. */
-  @Test(expected = IllegalStateException.class)
+  @Test(expected = IllegalArgumentException.class)
   public void testGamma4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_gamma4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_30_3_2_FLOAT32)));

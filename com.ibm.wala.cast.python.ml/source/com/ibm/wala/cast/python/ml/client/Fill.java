@@ -67,6 +67,16 @@ public class Fill extends Constant {
   }
 
   @Override
+  protected int getDTypeParameterPosition() {
+    return UNDEFINED_PARAMETER_POSITION;
+  }
+
+  @Override
+  protected String getDTypeParameterName() {
+    return null;
+  }
+
+  @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     throw new UnsupportedOperationException("Shape is mandatory and must be provided explicitly.");
   }

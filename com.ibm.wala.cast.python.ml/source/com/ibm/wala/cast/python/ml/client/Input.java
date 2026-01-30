@@ -128,8 +128,9 @@ public class Input extends Ones {
     };
 
     for (Parameters p : unimplementedParameters) {
-      int valNum = this.getArgumentValueNumber(builder, p.getIndex(), p.getName(), true);
-      if (valNum > 0)
+      if (this.getNumberOfPossiblePositionalArguments(builder).stream()
+              .anyMatch(n -> n >= p.getIndex() + 1)
+          || this.isKeywordArgumentPresent(builder, p.getName()))
         throw new UnimplementedError(
             "Unimplemented parameter " + p.getName() + " at position " + p.getIndex());
     }
