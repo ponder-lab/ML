@@ -241,8 +241,20 @@ public abstract class TensorGenerator {
     return this.getArgumentValueNumber(this.getShapeParameterPosition());
   }
 
+  /**
+   * Returns the position of the shape parameter in the TensorFlow function.
+   *
+   * @return The position of the shape parameter in the TensorFlow function or a number less than 0
+   *     if there is no shape parameter.
+   */
   protected abstract int getShapeParameterPosition();
 
+  /**
+   * Returns the name of the shape parameter in the TensorFlow function.
+   *
+   * @return The name of the shape parameter in the TensorFlow function or <code>null</code> if
+   *     there is no shape parameter.
+   */
   protected abstract String getShapeParameterName();
 
   /**
@@ -253,13 +265,14 @@ public abstract class TensorGenerator {
    */
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> pointsToSet =
-        this.getArgumentPointsToSet(builder, getShapeParameterPosition(), getShapeParameterName());
+        this.getArgumentPointsToSet(
+            builder, this.getShapeParameterPosition(), this.getShapeParameterName());
 
     // If the argument shape is not specified.
     if (pointsToSet == null || pointsToSet.isEmpty()) return getDefaultShapes(builder);
     else
       // The shape points-to set is non-empty, meaning that the shape was explicitly set.
-      return getShapesFromShapeArgument(builder, pointsToSet);
+      return this.getShapesFromShapeArgument(builder, pointsToSet);
   }
 
   /**

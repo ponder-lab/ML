@@ -5259,7 +5259,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_gamma3.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_7_5_2_FLOAT32)));
   }
 
-  /** FIXME: Handle keyword arguments properly so that this test passes. */
+  /**
+   * FIXME: Should not throw an {@link IllegalArgumentException} once
+   * https://github.com/wala/ML/issues/340 is fixed.
+   */
   @Test(expected = IllegalArgumentException.class)
   public void testGamma4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {

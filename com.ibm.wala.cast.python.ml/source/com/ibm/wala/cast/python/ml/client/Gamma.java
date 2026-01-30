@@ -1,9 +1,11 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -76,18 +78,16 @@ public class Gamma extends Ones {
 
   protected int getAlphaParameterValueNumber(PropagationCallGraphBuilder builder) {
     return this.getArgumentValueNumber(
-        builder, this.getAlphaParameterPosition(), getAlphaParameterName(), false);
+        builder, this.getAlphaParameterPosition(), this.getAlphaParameterName(), false);
   }
 
   protected int getBetaParameterValueNumber(PropagationCallGraphBuilder builder) {
     return this.getArgumentValueNumber(
-        builder, this.getBetaParameterPosition(), getBetaParameterName(), true);
+        builder, this.getBetaParameterPosition(), this.getBetaParameterName(), true);
   }
 
   @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
-    // ...
-
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     Set<List<Dimension<?>>> shapes = super.getShapes(builder);
 
@@ -95,8 +95,10 @@ public class Gamma extends Ones {
       throw new IllegalStateException("Cannot determine shape for mandatory shape parameter.");
 
     // Get the shape of the alpha parameter.
-    Set<List<Dimension<?>>> alphaShapes =
-        this.getShapes(builder, this.getAlphaParameterValueNumber(builder));
+    OrdinalSet<InstanceKey> alphaPointsToSet =
+        this.getArgumentPointsToSet(
+            builder, this.getAlphaParameterPosition(), this.getAlphaParameterName());
+    Set<List<Dimension<?>>> alphaShapes = this.getShapesOfValue(builder, alphaPointsToSet);
 
     if (alphaShapes.isEmpty())
       throw new IllegalStateException("Cannot determine shape for mandatory alpha parameter.");
@@ -118,8 +120,10 @@ public class Gamma extends Ones {
       shapes.forEach(
           shape -> {
             // Get the shape of the beta parameter, which is optional.
-            Set<List<Dimension<?>>> betaShapes =
-                this.getShapes(builder, this.getBetaParameterValueNumber(builder));
+            OrdinalSet<InstanceKey> betaPointsToSet =
+                this.getArgumentPointsToSet(
+                    builder, this.getBetaParameterPosition(), this.getBetaParameterName());
+            Set<List<Dimension<?>>> betaShapes = this.getShapesOfValue(builder, betaPointsToSet);
 
             alphaShapes.forEach(
                 aShape -> {
