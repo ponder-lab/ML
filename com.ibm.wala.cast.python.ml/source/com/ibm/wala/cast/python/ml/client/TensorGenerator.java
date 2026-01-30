@@ -353,9 +353,7 @@ public abstract class TensorGenerator {
           // Already a tensor, do nothing. Shapes will flow via the dataflow graph.
           LOGGER.fine(
               "Encountered" + reference.getName() + ". Shape will flow via dataflow graph.");
-        else {
-          LOGGER.warning("Unknown type reference: " + reference + ".");
-        }
+        else throw new IllegalStateException("Unknown type reference: " + reference + ".");
       } else throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
 
     return ret;
