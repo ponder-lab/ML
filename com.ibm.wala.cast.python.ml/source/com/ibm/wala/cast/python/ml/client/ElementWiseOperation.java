@@ -32,7 +32,7 @@ public class ElementWiseOperation extends ZerosLike {
       return name().toLowerCase();
     }
 
-    public int getParameterIndex() {
+    public int getIndex() {
       return ordinal();
     }
   }
@@ -42,7 +42,7 @@ public class ElementWiseOperation extends ZerosLike {
   }
 
   protected int getXParameterPosition() {
-    return Parameters.X.getParameterIndex();
+    return Parameters.X.getIndex();
   }
 
   protected String getXParameterName() {
@@ -55,7 +55,7 @@ public class ElementWiseOperation extends ZerosLike {
   }
 
   protected int getYParameterPosition() {
-    return Parameters.Y.getParameterIndex();
+    return Parameters.Y.getIndex();
   }
 
   protected String getYParameterName() {

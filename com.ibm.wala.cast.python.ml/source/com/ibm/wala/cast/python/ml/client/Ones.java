@@ -34,7 +34,7 @@ public class Ones extends TensorGenerator {
       return name().toLowerCase();
     }
 
-    public int getParameterIndex() {
+    public int getIndex() {
       return ordinal();
     }
   }
@@ -59,7 +59,7 @@ public class Ones extends TensorGenerator {
 
   @Override
   protected int getShapeParameterPosition() {
-    return Parameters.SHAPE.getParameterIndex();
+    return Parameters.SHAPE.getIndex();
   }
 
   protected String getShapeParameterName() {
@@ -68,7 +68,7 @@ public class Ones extends TensorGenerator {
 
   @Override
   protected int getDTypeParameterPosition() {
-    return Parameters.DTYPE.getParameterIndex();
+    return Parameters.DTYPE.getIndex();
   }
 
   protected String getDTypeParameterName() {

@@ -22,7 +22,7 @@ public class SparseTensor extends Ones {
       return name().toLowerCase();
     }
 
-    public int getParameterIndex() {
+    public int getIndex() {
       return ordinal();
     }
   }
@@ -41,7 +41,7 @@ public class SparseTensor extends Ones {
   }
 
   protected int getIndicesParameterPosition() {
-    return Parameters.INDICES.getParameterIndex();
+    return Parameters.INDICES.getIndex();
   }
 
   protected String getIndicesParameterName() {
@@ -49,7 +49,7 @@ public class SparseTensor extends Ones {
   }
 
   protected int getValuesParameterPosition() {
-    return Parameters.VALUES.getParameterIndex();
+    return Parameters.VALUES.getIndex();
   }
 
   protected String getValuesParameterName() {
@@ -57,7 +57,7 @@ public class SparseTensor extends Ones {
   }
 
   protected int getDenseShapeParameterPosition() {
-    return Parameters.DENSE_SHAPE.getParameterIndex();
+    return Parameters.DENSE_SHAPE.getIndex();
   }
 
   protected String getDenseShapeParameterName() {

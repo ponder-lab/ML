@@ -45,7 +45,7 @@ public class Input extends Ones {
       return name().toLowerCase();
     }
 
-    public int getParameterIndex() {
+    public int getIndex() {
       return ordinal();
     }
   }
@@ -149,20 +149,16 @@ public class Input extends Ones {
     };
 
     for (Parameters p : unimplementedParameters) {
-      int valNum =
-          this.getArgumentValueNumber(builder, p.getParameterIndex(), p.getParameterName(), true);
+      int valNum = this.getArgumentValueNumber(builder, p.getIndex(), p.getParameterName(), true);
       if (valNum > 0)
         throw new UnimplementedError(
-            "Unimplemented parameter "
-                + p.getParameterName()
-                + " at position "
-                + p.getParameterIndex());
+            "Unimplemented parameter " + p.getParameterName() + " at position " + p.getIndex());
     }
   }
 
   @Override
   protected int getShapeParameterPosition() {
-    return Parameters.SHAPE.getParameterIndex();
+    return Parameters.SHAPE.getIndex();
   }
 
   protected String getShapeParameterName() {
@@ -170,7 +166,7 @@ public class Input extends Ones {
   }
 
   protected int getBatchSizeParameterPosition() {
-    return Parameters.BATCH_SIZE.getParameterIndex();
+    return Parameters.BATCH_SIZE.getIndex();
   }
 
   protected String getBatchSizeParameterName() {
@@ -179,7 +175,7 @@ public class Input extends Ones {
 
   @Override
   protected int getDTypeParameterPosition() {
-    return Parameters.DTYPE.getParameterIndex();
+    return Parameters.DTYPE.getIndex();
   }
 
   protected String getDTypeParameterName() {

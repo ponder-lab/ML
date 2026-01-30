@@ -22,7 +22,7 @@ public class ZerosLike extends Constant {
       return name().toLowerCase();
     }
 
-    public int getParameterIndex() {
+    public int getIndex() {
       return ordinal();
     }
   }
@@ -32,7 +32,7 @@ public class ZerosLike extends Constant {
   }
 
   protected int getInputParameterPosition() {
-    return Parameters.INPUT.getParameterIndex();
+    return Parameters.INPUT.getIndex();
   }
 
   protected String getInputParameterName() {

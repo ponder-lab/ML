@@ -23,7 +23,7 @@ public class Uniform extends Ones {
       return name().toLowerCase();
     }
 
-    public int getParameterIndex() {
+    public int getIndex() {
       return ordinal();
     }
   }
@@ -34,7 +34,7 @@ public class Uniform extends Ones {
 
   @Override
   protected int getDTypeParameterPosition() {
-    return Parameters.DTYPE.getParameterIndex();
+    return Parameters.DTYPE.getIndex();
   }
 
   protected String getDTypeParameterName() {
@@ -43,7 +43,7 @@ public class Uniform extends Ones {
 
   @Override
   protected int getShapeParameterPosition() {
-    return Parameters.SHAPE.getParameterIndex();
+    return Parameters.SHAPE.getIndex();
   }
 
   protected String getShapeParameterName() {

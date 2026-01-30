@@ -29,7 +29,7 @@ public class Gamma extends Ones {
       return name().toLowerCase();
     }
 
-    public int getParameterIndex() {
+    public int getIndex() {
       return ordinal();
     }
   }
@@ -40,7 +40,7 @@ public class Gamma extends Ones {
 
   @Override
   protected int getDTypeParameterPosition() {
-    return Parameters.DTYPE.getParameterIndex();
+    return Parameters.DTYPE.getIndex();
   }
 
   protected String getDTypeParameterName() {
@@ -49,7 +49,7 @@ public class Gamma extends Ones {
 
   @Override
   protected int getShapeParameterPosition() {
-    return Parameters.SHAPE.getParameterIndex();
+    return Parameters.SHAPE.getIndex();
   }
 
   protected String getShapeParameterName() {
@@ -57,7 +57,7 @@ public class Gamma extends Ones {
   }
 
   protected int getAlphaParameterPosition() {
-    return Parameters.ALPHA.getParameterIndex();
+    return Parameters.ALPHA.getIndex();
   }
 
   protected String getAlphaParameterName() {
@@ -65,7 +65,7 @@ public class Gamma extends Ones {
   }
 
   protected int getBetaParameterPosition() {
-    return Parameters.BETA.getParameterIndex();
+    return Parameters.BETA.getIndex();
   }
 
   protected String getBetaParameterName() {

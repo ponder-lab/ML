@@ -58,7 +58,7 @@ public class RaggedConstant extends Constant {
       return name().toLowerCase();
     }
 
-    public int getParameterIndex() {
+    public int getIndex() {
       return ordinal();
     }
   }
@@ -68,7 +68,7 @@ public class RaggedConstant extends Constant {
   }
 
   protected int getPylistParameterPosition() {
-    return Parameters.PYLIST.getParameterIndex();
+    return Parameters.PYLIST.getIndex();
   }
 
   protected String getPylistParameterName() {
@@ -97,7 +97,7 @@ public class RaggedConstant extends Constant {
 
   @Override
   protected int getDTypeParameterPosition() {
-    return Parameters.DTYPE.getParameterIndex();
+    return Parameters.DTYPE.getIndex();
   }
 
   @Override
@@ -106,7 +106,7 @@ public class RaggedConstant extends Constant {
   }
 
   protected int getRaggedRankParameterPosition() {
-    return Parameters.RAGGED_RANK.getParameterIndex();
+    return Parameters.RAGGED_RANK.getIndex();
   }
 
   protected String getRaggedRankParameterName() {
@@ -119,7 +119,7 @@ public class RaggedConstant extends Constant {
   }
 
   protected int getInnerShapeParameterPosition() {
-    return Parameters.INNER_SHAPE.getParameterIndex();
+    return Parameters.INNER_SHAPE.getIndex();
   }
 
   protected String getInnerShapeParameterName() {

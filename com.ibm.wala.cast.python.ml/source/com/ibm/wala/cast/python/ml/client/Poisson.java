@@ -28,7 +28,7 @@ public class Poisson extends Ones {
       return name().toLowerCase();
     }
 
-    public int getParameterIndex() {
+    public int getIndex() {
       return ordinal();
     }
   }
@@ -39,7 +39,7 @@ public class Poisson extends Ones {
 
   @Override
   protected int getDTypeParameterPosition() {
-    return Parameters.DTYPE.getParameterIndex();
+    return Parameters.DTYPE.getIndex();
   }
 
   protected String getDTypeParameterName() {
@@ -48,7 +48,7 @@ public class Poisson extends Ones {
 
   @Override
   protected int getShapeParameterPosition() {
-    return Parameters.SHAPE.getParameterIndex();
+    return Parameters.SHAPE.getIndex();
   }
 
   protected String getShapeParameterName() {
@@ -56,7 +56,7 @@ public class Poisson extends Ones {
   }
 
   protected int getLamParameterPosition() {
-    return Parameters.LAM.getParameterIndex();
+    return Parameters.LAM.getIndex();
   }
 
   protected String getLamParameterName() {

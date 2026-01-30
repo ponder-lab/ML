@@ -29,7 +29,7 @@ public class SparseEye extends Ones {
       return name().toLowerCase();
     }
 
-    public int getParameterIndex() {
+    public int getIndex() {
       return ordinal();
     }
   }
@@ -126,7 +126,7 @@ public class SparseEye extends Ones {
   }
 
   protected int getNumRowsParameterPosition() {
-    return Parameters.NUM_ROWS.getParameterIndex();
+    return Parameters.NUM_ROWS.getIndex();
   }
 
   protected String getNumRowsParameterName() {
@@ -138,7 +138,7 @@ public class SparseEye extends Ones {
   }
 
   protected int getNumColumnsParameterPosition() {
-    return Parameters.NUM_COLUMNS.getParameterIndex();
+    return Parameters.NUM_COLUMNS.getIndex();
   }
 
   protected String getNumColumnsParameterName() {
@@ -147,7 +147,7 @@ public class SparseEye extends Ones {
 
   @Override
   protected int getDTypeParameterPosition() {
-    return Parameters.DTYPE.getParameterIndex();
+    return Parameters.DTYPE.getIndex();
   }
 
   protected String getDTypeParameterName() {

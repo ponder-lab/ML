@@ -25,7 +25,7 @@ public class Eye extends SparseEye {
       return name().toLowerCase();
     }
 
-    public int getParameterIndex() {
+    public int getIndex() {
       return ordinal();
     }
   }
@@ -40,7 +40,7 @@ public class Eye extends SparseEye {
   }
 
   protected int getBatchShapeParameterPosition() {
-    return Parameters.BATCH_SHAPE.getParameterIndex();
+    return Parameters.BATCH_SHAPE.getIndex();
   }
 
   protected String getBatchShapeParameterName() {
@@ -89,7 +89,7 @@ public class Eye extends SparseEye {
 
   @Override
   protected int getDTypeParameterPosition() {
-    return Parameters.DTYPE.getParameterIndex();
+    return Parameters.DTYPE.getIndex();
   }
 
   protected String getDTypeParameterName() {
