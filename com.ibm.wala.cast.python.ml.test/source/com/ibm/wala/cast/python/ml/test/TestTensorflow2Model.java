@@ -5285,6 +5285,28 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_gamma6.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_30_3_2_FLOAT32)));
   }
 
+  /**
+   * FIXME: Should not throw an {@link IllegalArgumentException} once
+   * https://github.com/wala/ML/issues/340 is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
+  public void testGammaMixed()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_gamma_mixed.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_30_3_2_FLOAT32)));
+  }
+
+  @Test
+  public void testFillKw()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_fill_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_INT32)));
+  }
+
+  @Test
+  public void testFillMixed()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_fill_mixed.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
   @Test
   public void testPoisson()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -5610,10 +5632,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Should not throw an {@link IllegalStateException} once https://github.com/wala/ML/issues/340 is
-   * fixed.
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
    */
-  @Test(expected = IllegalStateException.class)
+  @Test(expected = IllegalArgumentException.class)
   public void testRaggedNestedValueRowidsKeyword()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -5647,10 +5669,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Should not throw an {@link IllegalStateException} once https://github.com/wala/ML/issues/340 is
-   * fixed.
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
    */
-  @Test(expected = IllegalStateException.class)
+  @Test(expected = IllegalArgumentException.class)
   public void testRaggedNestedValueRowidsMixed()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
