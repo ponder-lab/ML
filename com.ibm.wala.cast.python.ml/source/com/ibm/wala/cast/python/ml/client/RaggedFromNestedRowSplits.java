@@ -1,7 +1,5 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.ml.client.RaggedFromNestedRowSplits.Parameters.NESTED_ROW_SPLITS;
-
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -30,6 +28,10 @@ public class RaggedFromNestedRowSplits extends RaggedFromNestedRowLengths {
     public String getName() {
       return name().toLowerCase();
     }
+
+    public int getIndex() {
+      return ordinal();
+    }
   }
 
   public RaggedFromNestedRowSplits(PointsToSetVariable source) {
@@ -37,7 +39,7 @@ public class RaggedFromNestedRowSplits extends RaggedFromNestedRowLengths {
   }
 
   protected String getNestedRowSplitsParameterName() {
-    return NESTED_ROW_SPLITS.getName();
+    return Parameters.NESTED_ROW_SPLITS.getName();
   }
 
   @Override

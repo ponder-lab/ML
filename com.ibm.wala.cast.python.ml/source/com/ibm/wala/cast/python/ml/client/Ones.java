@@ -62,6 +62,7 @@ public class Ones extends TensorGenerator {
     return Parameters.SHAPE.getIndex();
   }
 
+  @Override
   protected String getShapeParameterName() {
     return Parameters.SHAPE.getName();
   }
@@ -71,6 +72,7 @@ public class Ones extends TensorGenerator {
     return Parameters.DTYPE.getIndex();
   }
 
+  @Override
   protected String getDTypeParameterName() {
     return Parameters.DTYPE.getName();
   }

@@ -1,8 +1,5 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.ml.client.RaggedFromValueRowIds.Parameters.NROWS;
-import static com.ibm.wala.cast.python.ml.client.RaggedFromValueRowIds.Parameters.VALUES;
-import static com.ibm.wala.cast.python.ml.client.RaggedFromValueRowIds.Parameters.VALUE_ROWIDS;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
@@ -51,6 +48,10 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
     public String getName() {
       return name().toLowerCase();
     }
+
+    public int getIndex() {
+      return ordinal();
+    }
   }
 
   public RaggedFromValueRowIds(PointsToSetVariable source) {
@@ -59,40 +60,33 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
 
   @Override
   protected int getValuesParameterPosition() {
-    return VALUES.ordinal();
+    return Parameters.VALUES.getIndex();
   }
 
   @Override
   protected String getValuesParameterName() {
-    return VALUES.getName();
+    return Parameters.VALUES.getName();
   }
 
   protected int getValueRowidsParameterPosition() {
-    return VALUE_ROWIDS.ordinal();
+    return Parameters.VALUE_ROWIDS.getIndex();
   }
 
   protected String getValueRowidsParameterName() {
-    return VALUE_ROWIDS.getName();
-  }
-
-  protected int getValueRowidsArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(
-        builder, this.getValueRowidsParameterPosition(), getValueRowidsParameterName(), true);
+    return Parameters.VALUE_ROWIDS.getName();
   }
 
   protected Set<Long> getPossibleValueRowidsArguments(PropagationCallGraphBuilder builder) {
-    int valueNumber = this.getValueRowidsArgumentValueNumber(builder);
-    if (valueNumber < 0) return emptySet();
-
-    Set<Long> ret = HashSetFactory.make();
-    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
-    PointerKey pointerKey =
-        pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
-    OrdinalSet<InstanceKey> pointsToSet = pointerAnalysis.getPointsToSet(pointerKey);
+    OrdinalSet<InstanceKey> pointsToSet =
+        this.getArgumentPointsToSet(
+            builder, this.getValueRowidsParameterPosition(), getValueRowidsParameterName());
 
     if (pointsToSet == null || pointsToSet.isEmpty())
       throw new IllegalArgumentException(
           "Empty points-to set in source: " + this.getSource() + ".");
+
+    Set<Long> ret = HashSetFactory.make();
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey instanceKey : pointsToSet) {
       if (instanceKey instanceof ConstantKey) {
@@ -155,20 +149,18 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
   }
 
   protected int getNrowsParameterPosition() {
-    return NROWS.ordinal();
+    return Parameters.NROWS.getIndex();
   }
 
   protected String getNrowsParameterName() {
-    return NROWS.getName();
-  }
-
-  protected int getNrowsArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(
-        builder, this.getNrowsParameterPosition(), getNrowsParameterName(), true);
+    return Parameters.NROWS.getName();
   }
 
   protected Set<Long> getPossibleNrowsArguments(PropagationCallGraphBuilder builder) {
-    return this.getPossibleLongArguments(builder, this.getNrowsArgumentValueNumber(builder));
+    OrdinalSet<InstanceKey> pointsToSet =
+        this.getArgumentPointsToSet(
+            builder, this.getNrowsParameterPosition(), getNrowsParameterName());
+    return this.getPossibleLongArguments(pointsToSet);
   }
 
   @Override
@@ -248,7 +240,17 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
   }
 
   @Override
+  protected String getShapeParameterName() {
+    return null;
+  }
+
+  @Override
   protected int getDTypeParameterPosition() {
     return UNDEFINED_PARAMETER_POSITION; // No explicit dtype argument
+  }
+
+  @Override
+  protected String getDTypeParameterName() {
+    return null;
   }
 }

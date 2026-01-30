@@ -43,6 +43,7 @@ public class Gamma extends Ones {
     return Parameters.DTYPE.getIndex();
   }
 
+  @Override
   protected String getDTypeParameterName() {
     return Parameters.DTYPE.getName();
   }
@@ -52,6 +53,7 @@ public class Gamma extends Ones {
     return Parameters.SHAPE.getIndex();
   }
 
+  @Override
   protected String getShapeParameterName() {
     return Parameters.SHAPE.getName();
   }

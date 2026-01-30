@@ -243,6 +243,8 @@ public abstract class TensorGenerator {
 
   protected abstract int getShapeParameterPosition();
 
+  protected abstract String getShapeParameterName();
+
   /**
    * Returns the possible shapes of the tensor returned by this generator.
    *
@@ -250,18 +252,8 @@ public abstract class TensorGenerator {
    * @return a set of shapes, where each shape is represented as a list of dimensions
    */
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
-    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
-
-    // Get the shape from the explicit argument.
-    // FIXME: Handle keyword arguments.
-    int shapeArgValueNum = this.getShapeArgumentValueNumber();
-    OrdinalSet<InstanceKey> pointsToSet = null;
-
-    if (shapeArgValueNum > 0) {
-      PointerKey pointerKey =
-          pointerAnalysis.getHeapModel().getPointerKeyForLocal(getNode(), shapeArgValueNum);
-      pointsToSet = pointerAnalysis.getPointsToSet(pointerKey);
-    }
+    OrdinalSet<InstanceKey> pointsToSet =
+        this.getArgumentPointsToSet(builder, getShapeParameterPosition(), getShapeParameterName());
 
     // If the argument shape is not specified.
     if (pointsToSet == null || pointsToSet.isEmpty()) return getDefaultShapes(builder);
@@ -500,19 +492,11 @@ public abstract class TensorGenerator {
 
   protected abstract int getDTypeParameterPosition();
 
+  protected abstract String getDTypeParameterName();
+
   protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
-    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
-
-    int valNum = this.getDTypeArgumentValueNumber();
-    OrdinalSet<InstanceKey> pointsToSet = null;
-
-    if (valNum > 0) {
-      // The dtype is in an explicit argument.
-      // FIXME: Handle keyword arguments.
-      PointerKey pointerKey =
-          pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valNum);
-      pointsToSet = pointerAnalysis.getPointsToSet(pointerKey);
-    }
+    OrdinalSet<InstanceKey> pointsToSet =
+        this.getArgumentPointsToSet(builder, getDTypeParameterPosition(), getDTypeParameterName());
 
     // If the argument dtype is not specified.
     if (pointsToSet == null || pointsToSet.isEmpty()) return getDefaultDTypes(builder);
@@ -781,6 +765,8 @@ public abstract class TensorGenerator {
   protected boolean isKeywordArgumentPresent(
       PropagationCallGraphBuilder builder, String paramName) {
     CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
+    if (cs == null || cs.getCallSiteRefs().length == 0) return false;
+
     CallSiteReference siteReference = cs.getCallSiteRefs()[0];
 
     for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode());
@@ -789,9 +775,11 @@ public abstract class TensorGenerator {
       SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(siteReference);
 
       for (SSAAbstractInvokeInstruction callInstr : calls) {
-        PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
-        if (pyCallInstr.getKeywords().contains(paramName)) {
-          return true;
+        if (callInstr instanceof PythonInvokeInstruction) {
+          PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
+          if (pyCallInstr.getKeywords().contains(paramName)) {
+            return true;
+          }
         }
       }
     }
@@ -819,6 +807,8 @@ public abstract class TensorGenerator {
     Set<Integer> ret = HashSetFactory.make();
 
     CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
+    if (cs == null || cs.getCallSiteRefs().length == 0) return ret;
+
     CallSiteReference siteReference = cs.getCallSiteRefs()[0];
     LOGGER.fine(() -> "Analyzing call site: " + siteReference + ".");
 
@@ -833,13 +823,15 @@ public abstract class TensorGenerator {
       for (SSAAbstractInvokeInstruction callInstr : calls) {
         LOGGER.finest(() -> "Call instruction: " + callInstr + ".");
 
-        PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
-        int numberOfPositionalParameters =
-            pyCallInstr.getNumberOfPositionalParameters() - 1; // Exclude the function name.
-        LOGGER.finer(
-            () -> "Number of positional parameters: " + numberOfPositionalParameters + ".");
+        if (callInstr instanceof PythonInvokeInstruction) {
+          PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
+          int numberOfPositionalParameters =
+              pyCallInstr.getNumberOfPositionalParameters() - 1; // Exclude the function name.
+          LOGGER.finer(
+              () -> "Number of positional parameters: " + numberOfPositionalParameters + ".");
 
-        ret.add(numberOfPositionalParameters);
+          ret.add(numberOfPositionalParameters);
+        }
       }
     }
 
@@ -847,28 +839,17 @@ public abstract class TensorGenerator {
   }
 
   /**
-   * Returns the possible long arguments for the given value number. If the argument is `None`, then
-   * a null value will be contained within the returned set.
+   * Returns the possible long arguments for the given points-to set. If the argument is `None`,
+   * then a null value will be contained within the returned set.
    *
-   * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
-   * @param valueNumber The value number of the argument.
+   * @param pointsToSet The points-to set of the argument.
    * @return A set of possible long arguments. If the argument is `None`, then a null value will be
    *     contained within the returned set.
    */
-  protected Set<Long> getPossibleLongArguments(
-      PropagationCallGraphBuilder builder, int valueNumber) {
+  protected Set<Long> getPossibleLongArguments(OrdinalSet<InstanceKey> pointsToSet) {
     Set<Long> ret = HashSetFactory.make();
 
-    if (valueNumber >= 0) {
-      PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
-      PointerKey pointerKey =
-          pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
-      OrdinalSet<InstanceKey> pointsToSet = pointerAnalysis.getPointsToSet(pointerKey);
-
-      if (pointsToSet == null || pointsToSet.isEmpty())
-        throw new IllegalArgumentException(
-            "Empty points-to set in source: " + this.getSource() + ".");
-
+    if (pointsToSet != null && !pointsToSet.isEmpty()) {
       for (InstanceKey instanceKey : pointsToSet)
         if (instanceKey instanceof ConstantKey) {
           ConstantKey<?> constantKey = (ConstantKey<?>) instanceKey;
@@ -877,15 +858,17 @@ public abstract class TensorGenerator {
           if (constantKeyValue instanceof Long) {
             Long value = (Long) constantKeyValue;
             ret.add(value);
+          } else if (constantKeyValue instanceof Integer) {
+            ret.add(((Integer) constantKeyValue).longValue());
           } else if (constantKeyValue == null)
             // The argument may be `None`.
             ret.add(null);
           else
             throw new IllegalStateException(
-                "Expected a long, but found: " + constantKeyValue + ".");
+                "Expected a long or integer, but found: " + constantKeyValue.getClass() + ".");
         } else
           throw new IllegalStateException(
-              "Expected a constant key, but found: " + instanceKey + ".");
+              "Expected a constant key, but found: " + instanceKey.getClass() + ".");
     }
 
     return ret;

@@ -217,11 +217,22 @@ public class Range extends TensorGenerator {
   }
 
   @Override
+  protected String getShapeParameterName() {
+    throw new UnsupportedOperationException(
+        "Range does not have a shape argument. Its shape is derived from the numeric arguments.");
+  }
+
+  @Override
   protected int getDTypeParameterPosition() {
     // TODO: We need a value number for the dtype argument. Also, that value number can differ
     // depending on the version of the `range` function being called.
 
     return UNDEFINED_PARAMETER_POSITION; // Positional dtype argument for range() is not yet
     // implemented.
+  }
+
+  @Override
+  protected String getDTypeParameterName() {
+    return null;
   }
 }

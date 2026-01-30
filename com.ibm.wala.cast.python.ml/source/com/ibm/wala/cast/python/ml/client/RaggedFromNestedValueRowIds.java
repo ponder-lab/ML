@@ -299,7 +299,17 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
   }
 
   @Override
+  protected String getShapeParameterName() {
+    return null;
+  }
+
+  @Override
   protected int getDTypeParameterPosition() {
     return UNDEFINED_PARAMETER_POSITION;
+  }
+
+  @Override
+  protected String getDTypeParameterName() {
+    return null;
   }
 }

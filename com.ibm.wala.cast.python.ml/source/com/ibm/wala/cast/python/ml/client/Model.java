@@ -32,8 +32,18 @@ public class Model extends TensorGenerator {
   }
 
   @Override
+  protected String getShapeParameterName() {
+    return null;
+  }
+
+  @Override
   protected int getDTypeParameterPosition() {
     return UNDEFINED_PARAMETER_POSITION;
+  }
+
+  @Override
+  protected String getDTypeParameterName() {
+    return null;
   }
 
   @Override

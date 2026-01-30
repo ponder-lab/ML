@@ -1,7 +1,5 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.ml.client.RaggedFromRowLengths.Parameters.ROW_LENGTHS;
-import static com.ibm.wala.cast.python.ml.client.RaggedFromRowLengths.Parameters.VALUES;
 import static java.util.Collections.emptySet;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -33,6 +31,10 @@ public class RaggedFromRowLengths extends RaggedTensorFromValues {
     public String getName() {
       return name().toLowerCase();
     }
+
+    public int getIndex() {
+      return ordinal();
+    }
   }
 
   public RaggedFromRowLengths(PointsToSetVariable source) {
@@ -41,20 +43,20 @@ public class RaggedFromRowLengths extends RaggedTensorFromValues {
 
   @Override
   protected int getValuesParameterPosition() {
-    return VALUES.ordinal();
+    return Parameters.VALUES.getIndex();
   }
 
   @Override
   protected String getValuesParameterName() {
-    return VALUES.getName();
+    return Parameters.VALUES.getName();
   }
 
   protected int getRowLengthsParameterPosition() {
-    return ROW_LENGTHS.ordinal();
+    return Parameters.ROW_LENGTHS.getIndex();
   }
 
   protected String getRowLengthsParameterName() {
-    return ROW_LENGTHS.getName();
+    return Parameters.ROW_LENGTHS.getName();
   }
 
   protected OrdinalSet<InstanceKey> getRowLengthsPointsToSet(PropagationCallGraphBuilder builder) {
@@ -109,7 +111,17 @@ public class RaggedFromRowLengths extends RaggedTensorFromValues {
   }
 
   @Override
+  protected String getShapeParameterName() {
+    return null;
+  }
+
+  @Override
   protected int getDTypeParameterPosition() {
     return UNDEFINED_PARAMETER_POSITION;
+  }
+
+  @Override
+  protected String getDTypeParameterName() {
+    return null;
   }
 }

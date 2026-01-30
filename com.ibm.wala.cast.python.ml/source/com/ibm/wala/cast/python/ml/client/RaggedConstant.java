@@ -485,20 +485,19 @@ public class RaggedConstant extends Constant {
   }
 
   protected Set<Long> getPossibleRaggedRankArguments(PropagationCallGraphBuilder builder) {
-    return this.getPossibleLongArguments(builder, this.getRaggedRankArgumentValueNumber(builder));
+    OrdinalSet<InstanceKey> pointsToSet =
+        this.getArgumentPointsToSet(
+            builder, this.getRaggedRankParameterPosition(), getRaggedRankParameterName());
+    return this.getPossibleLongArguments(pointsToSet);
   }
 
   protected Set<List<Dimension<?>>> getPossibleInnerShapeArguments(
       PropagationCallGraphBuilder builder) {
-    int valueNumber = this.getInnerShapeArgumentValueNumber(builder);
+    OrdinalSet<InstanceKey> pointsToSet =
+        this.getArgumentPointsToSet(
+            builder, this.getInnerShapeParameterPosition(), getInnerShapeParameterName());
 
-    if (valueNumber >= 0) {
-      PointerKey pointerKey =
-          builder
-              .getPointerAnalysis()
-              .getHeapModel()
-              .getPointerKeyForLocal(this.getNode(), valueNumber);
-      OrdinalSet<InstanceKey> pointsToSet = builder.getPointerAnalysis().getPointsToSet(pointerKey);
+    if (pointsToSet != null && !pointsToSet.isEmpty()) {
       return this.getShapesFromShapeArgument(builder, pointsToSet);
     } else return emptySet();
   }

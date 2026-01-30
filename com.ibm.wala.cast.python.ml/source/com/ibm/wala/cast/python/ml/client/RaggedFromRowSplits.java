@@ -120,7 +120,17 @@ public class RaggedFromRowSplits extends RaggedTensorFromValues {
   }
 
   @Override
+  protected String getShapeParameterName() {
+    return null;
+  }
+
+  @Override
   protected int getDTypeParameterPosition() {
     return UNDEFINED_PARAMETER_POSITION; // No explicit dtype argument
+  }
+
+  @Override
+  protected String getDTypeParameterName() {
+    return null;
   }
 }

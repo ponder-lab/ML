@@ -1,8 +1,5 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.ml.client.Variable.Parameters.DTYPE;
-import static com.ibm.wala.cast.python.ml.client.Variable.Parameters.INITIAL_VALUE;
-import static com.ibm.wala.cast.python.ml.client.Variable.Parameters.SHAPE;
 import static java.util.Collections.emptySet;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -34,7 +31,15 @@ public class Variable extends TensorGenerator {
     CONSTRAINT,
     SYNCHRONIZATION,
     AGGREGATION,
-    SHAPE
+    SHAPE;
+
+    public String getName() {
+      return name().toLowerCase();
+    }
+
+    public int getIndex() {
+      return ordinal();
+    }
   }
 
   public Variable(PointsToSetVariable source) {
@@ -46,7 +51,7 @@ public class Variable extends TensorGenerator {
     // If explicit shape is missing, try inferring from initial_value
     OrdinalSet<InstanceKey> initialValuePts =
         this.getArgumentPointsToSet(
-            builder, INITIAL_VALUE.ordinal(), INITIAL_VALUE.name().toLowerCase());
+            builder, Parameters.INITIAL_VALUE.getIndex(), Parameters.INITIAL_VALUE.getName());
 
     if (initialValuePts != null && !initialValuePts.isEmpty()) {
       return getShapesOfValue(builder, initialValuePts);
@@ -60,7 +65,7 @@ public class Variable extends TensorGenerator {
     // If explicit dtype is missing, try inferring from initial_value
     OrdinalSet<InstanceKey> initialValuePts =
         this.getArgumentPointsToSet(
-            builder, INITIAL_VALUE.ordinal(), INITIAL_VALUE.name().toLowerCase());
+            builder, Parameters.INITIAL_VALUE.getIndex(), Parameters.INITIAL_VALUE.getName());
 
     if (initialValuePts != null && !initialValuePts.isEmpty()) {
       return getDTypesOfValue(builder, initialValuePts);
@@ -73,7 +78,8 @@ public class Variable extends TensorGenerator {
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     // First try explicit shape argument
     OrdinalSet<InstanceKey> shapePts =
-        this.getArgumentPointsToSet(builder, SHAPE.ordinal(), SHAPE.name().toLowerCase());
+        this.getArgumentPointsToSet(
+            builder, Parameters.SHAPE.getIndex(), Parameters.SHAPE.getName());
 
     if (shapePts != null && !shapePts.isEmpty()) {
       return getShapesFromShapeArgument(builder, shapePts);
@@ -87,7 +93,8 @@ public class Variable extends TensorGenerator {
   protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
     // First try explicit dtype argument
     OrdinalSet<InstanceKey> dtypePts =
-        this.getArgumentPointsToSet(builder, DTYPE.ordinal(), DTYPE.name().toLowerCase());
+        this.getArgumentPointsToSet(
+            builder, Parameters.DTYPE.getIndex(), Parameters.DTYPE.getName());
 
     if (dtypePts != null && !dtypePts.isEmpty()) {
       return getDTypesFromDTypeArgument(builder, dtypePts);
@@ -99,11 +106,21 @@ public class Variable extends TensorGenerator {
 
   @Override
   protected int getShapeParameterPosition() {
-    return SHAPE.ordinal();
+    return Parameters.SHAPE.getIndex();
+  }
+
+  @Override
+  protected String getShapeParameterName() {
+    return Parameters.SHAPE.getName();
   }
 
   @Override
   protected int getDTypeParameterPosition() {
-    return DTYPE.ordinal();
+    return Parameters.DTYPE.getIndex();
+  }
+
+  @Override
+  protected String getDTypeParameterName() {
+    return Parameters.DTYPE.getName();
   }
 }

@@ -8,8 +8,6 @@ import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
-import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
-import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
@@ -61,17 +59,9 @@ public class Input extends Ones {
 
   @Override
   protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
-    int valNum =
-        this.getArgumentValueNumber(
-            builder, this.getDTypeParameterPosition(), this.getDTypeParameterName(), true);
-
-    OrdinalSet<InstanceKey> pointsToSet = null;
-
-    if (valNum > 0) {
-      PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
-      PointerKey pk = pa.getHeapModel().getPointerKeyForLocal(this.getNode(), valNum);
-      pointsToSet = pa.getPointsToSet(pk);
-    }
+    OrdinalSet<InstanceKey> pointsToSet =
+        this.getArgumentPointsToSet(
+            builder, this.getDTypeParameterPosition(), this.getDTypeParameterName());
 
     if (pointsToSet != null && !pointsToSet.isEmpty()) {
       LOGGER.info("Found possible dtypes: " + pointsToSet + " for source: " + source + ".");
@@ -85,17 +75,9 @@ public class Input extends Ones {
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     checkUnimplementedParameters(builder);
 
-    int shapeValNum =
-        this.getArgumentValueNumber(
-            builder, this.getShapeParameterPosition(), this.getShapeParameterName(), true);
-
-    OrdinalSet<InstanceKey> shapePts = null;
-
-    if (shapeValNum > 0) {
-      PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
-      PointerKey pk = pa.getHeapModel().getPointerKeyForLocal(this.getNode(), shapeValNum);
-      shapePts = pa.getPointsToSet(pk);
-    }
+    OrdinalSet<InstanceKey> shapePts =
+        this.getArgumentPointsToSet(
+            builder, this.getShapeParameterPosition(), this.getShapeParameterName());
 
     Set<List<Dimension<?>>> shapes;
 
@@ -109,17 +91,14 @@ public class Input extends Ones {
     }
 
     // Handle `batch_size`.
-    int batchSizeValNum =
-        this.getArgumentValueNumber(
-            builder, this.getBatchSizeParameterPosition(), this.getBatchSizeParameterName(), true);
+    OrdinalSet<InstanceKey> batchSizePts =
+        this.getArgumentPointsToSet(
+            builder, this.getBatchSizeParameterPosition(), this.getBatchSizeParameterName());
 
     Set<Long> batchSizes = new HashSet<>();
 
-    if (batchSizeValNum > 0) {
-      PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
-      PointerKey pk = pa.getHeapModel().getPointerKeyForLocal(this.getNode(), batchSizeValNum);
-      OrdinalSet<InstanceKey> pts = pa.getPointsToSet(pk);
-      batchSizes.addAll(getPossibleLongArguments(pts));
+    if (batchSizePts != null && !batchSizePts.isEmpty()) {
+      batchSizes.addAll(getPossibleLongArguments(batchSizePts));
     }
 
     if (batchSizes.isEmpty()) batchSizes.add(null);
@@ -182,7 +161,8 @@ public class Input extends Ones {
     return Parameters.DTYPE.getName();
   }
 
-  private static Set<Long> getPossibleLongArguments(OrdinalSet<InstanceKey> pointsToSet) {
+  @Override
+  protected Set<Long> getPossibleLongArguments(OrdinalSet<InstanceKey> pointsToSet) {
     Set<Long> ret = HashSetFactory.make();
 
     if (pointsToSet == null) return ret;
