@@ -51,7 +51,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
     NAME,
     VALIDATE;
 
-    public String getParameterName() {
+    public String getName() {
       return name().toLowerCase();
     }
   }
@@ -67,7 +67,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
 
   @Override
   protected String getValuesParameterName() {
-    return FLAT_VALUES.getParameterName();
+    return FLAT_VALUES.getName();
   }
 
   protected int getNestedValueRowIdsParameterPosition() {
@@ -75,7 +75,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
   }
 
   protected String getNestedValueRowidsParameterName() {
-    return NESTED_VALUE_ROWIDS.getParameterName();
+    return NESTED_VALUE_ROWIDS.getName();
   }
 
   protected int getNestedNrowsParameterPosition() {
@@ -83,7 +83,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
   }
 
   protected String getNestedNrowsParameterName() {
-    return NESTED_NROWS.getParameterName();
+    return NESTED_NROWS.getName();
   }
 
   @Override

@@ -24,7 +24,7 @@ public class Poisson extends Ones {
     SEED,
     NAME;
 
-    public String getParameterName() {
+    public String getName() {
       return name().toLowerCase();
     }
 
@@ -43,7 +43,7 @@ public class Poisson extends Ones {
   }
 
   protected String getDTypeParameterName() {
-    return Parameters.DTYPE.getParameterName();
+    return Parameters.DTYPE.getName();
   }
 
   @Override
@@ -52,7 +52,7 @@ public class Poisson extends Ones {
   }
 
   protected String getShapeParameterName() {
-    return Parameters.SHAPE.getParameterName();
+    return Parameters.SHAPE.getName();
   }
 
   protected int getLamParameterPosition() {
@@ -60,7 +60,7 @@ public class Poisson extends Ones {
   }
 
   protected String getLamParameterName() {
-    return Parameters.LAM.getParameterName();
+    return Parameters.LAM.getName();
   }
 
   protected int getLamParameterValueNumber(PropagationCallGraphBuilder builder) {

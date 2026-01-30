@@ -19,7 +19,7 @@ public class Uniform extends Ones {
     SEED,
     NAME;
 
-    public String getParameterName() {
+    public String getName() {
       return name().toLowerCase();
     }
 
@@ -38,7 +38,7 @@ public class Uniform extends Ones {
   }
 
   protected String getDTypeParameterName() {
-    return Parameters.DTYPE.getParameterName();
+    return Parameters.DTYPE.getName();
   }
 
   @Override
@@ -47,6 +47,6 @@ public class Uniform extends Ones {
   }
 
   protected String getShapeParameterName() {
-    return Parameters.SHAPE.getParameterName();
+    return Parameters.SHAPE.getName();
   }
 }

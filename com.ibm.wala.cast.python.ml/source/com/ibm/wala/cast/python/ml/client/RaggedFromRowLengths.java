@@ -30,7 +30,7 @@ public class RaggedFromRowLengths extends RaggedTensorFromValues {
     NAME,
     VALIDATE;
 
-    public String getParameterName() {
+    public String getName() {
       return name().toLowerCase();
     }
   }
@@ -46,7 +46,7 @@ public class RaggedFromRowLengths extends RaggedTensorFromValues {
 
   @Override
   protected String getValuesParameterName() {
-    return VALUES.getParameterName();
+    return VALUES.getName();
   }
 
   protected int getRowLengthsParameterPosition() {
@@ -54,7 +54,7 @@ public class RaggedFromRowLengths extends RaggedTensorFromValues {
   }
 
   protected String getRowLengthsParameterName() {
-    return ROW_LENGTHS.getParameterName();
+    return ROW_LENGTHS.getName();
   }
 
   protected OrdinalSet<InstanceKey> getRowLengthsPointsToSet(PropagationCallGraphBuilder builder) {

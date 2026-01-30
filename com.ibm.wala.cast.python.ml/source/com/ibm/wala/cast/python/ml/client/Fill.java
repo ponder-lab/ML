@@ -22,7 +22,7 @@ public class Fill extends Constant {
     VALUE,
     NAME;
 
-    public String getParameterName() {
+    public String getName() {
       return name().toLowerCase();
     }
 
@@ -53,7 +53,7 @@ public class Fill extends Constant {
 
   @Override
   protected String getValueParameterName() {
-    return Parameters.VALUE.getParameterName();
+    return Parameters.VALUE.getName();
   }
 
   @Override
@@ -63,7 +63,7 @@ public class Fill extends Constant {
 
   @Override
   protected String getShapeParameterName() {
-    return Parameters.DIMS.getParameterName();
+    return Parameters.DIMS.getName();
   }
 
   @Override

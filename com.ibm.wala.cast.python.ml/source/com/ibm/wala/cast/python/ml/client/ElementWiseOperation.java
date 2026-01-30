@@ -28,7 +28,7 @@ public class ElementWiseOperation extends ZerosLike {
     Y,
     NAME;
 
-    public String getParameterName() {
+    public String getName() {
       return name().toLowerCase();
     }
 
@@ -46,7 +46,7 @@ public class ElementWiseOperation extends ZerosLike {
   }
 
   protected String getXParameterName() {
-    return Parameters.X.getParameterName();
+    return Parameters.X.getName();
   }
 
   protected int getXArgumentValueNumber(PropagationCallGraphBuilder builder) {
@@ -59,7 +59,7 @@ public class ElementWiseOperation extends ZerosLike {
   }
 
   protected String getYParameterName() {
-    return Parameters.Y.getParameterName();
+    return Parameters.Y.getName();
   }
 
   protected int getYArgumentValueNumber(PropagationCallGraphBuilder builder) {

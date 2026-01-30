@@ -18,7 +18,7 @@ public class ZerosLike extends Constant {
     LAYOUT,
     SHAPE;
 
-    public String getParameterName() {
+    public String getName() {
       return name().toLowerCase();
     }
 
@@ -36,7 +36,7 @@ public class ZerosLike extends Constant {
   }
 
   protected String getInputParameterName() {
-    return Parameters.INPUT.getParameterName();
+    return Parameters.INPUT.getName();
   }
 
   @Override

@@ -30,7 +30,7 @@ public class Ones extends TensorGenerator {
     DTYPE,
     NAME;
 
-    public String getParameterName() {
+    public String getName() {
       return name().toLowerCase();
     }
 
@@ -63,7 +63,7 @@ public class Ones extends TensorGenerator {
   }
 
   protected String getShapeParameterName() {
-    return Parameters.SHAPE.getParameterName();
+    return Parameters.SHAPE.getName();
   }
 
   @Override
@@ -72,7 +72,7 @@ public class Ones extends TensorGenerator {
   }
 
   protected String getDTypeParameterName() {
-    return Parameters.DTYPE.getParameterName();
+    return Parameters.DTYPE.getName();
   }
 
   protected static Optional<Integer> getIntValueFromInstanceKey(InstanceKey instanceKey) {

@@ -25,7 +25,7 @@ public class Gamma extends Ones {
     SEED,
     NAME;
 
-    public String getParameterName() {
+    public String getName() {
       return name().toLowerCase();
     }
 
@@ -44,7 +44,7 @@ public class Gamma extends Ones {
   }
 
   protected String getDTypeParameterName() {
-    return Parameters.DTYPE.getParameterName();
+    return Parameters.DTYPE.getName();
   }
 
   @Override
@@ -53,7 +53,7 @@ public class Gamma extends Ones {
   }
 
   protected String getShapeParameterName() {
-    return Parameters.SHAPE.getParameterName();
+    return Parameters.SHAPE.getName();
   }
 
   protected int getAlphaParameterPosition() {
@@ -61,7 +61,7 @@ public class Gamma extends Ones {
   }
 
   protected String getAlphaParameterName() {
-    return Parameters.ALPHA.getParameterName();
+    return Parameters.ALPHA.getName();
   }
 
   protected int getBetaParameterPosition() {
@@ -69,7 +69,7 @@ public class Gamma extends Ones {
   }
 
   protected String getBetaParameterName() {
-    return Parameters.BETA.getParameterName();
+    return Parameters.BETA.getName();
   }
 
   protected int getAlphaParameterValueNumber(PropagationCallGraphBuilder builder) {

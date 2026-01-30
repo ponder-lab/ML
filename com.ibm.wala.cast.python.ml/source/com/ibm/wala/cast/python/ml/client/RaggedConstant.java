@@ -54,7 +54,7 @@ public class RaggedConstant extends Constant {
     NAME,
     ROW_SPLITS_DTYPE;
 
-    public String getParameterName() {
+    public String getName() {
       return name().toLowerCase();
     }
 
@@ -72,7 +72,7 @@ public class RaggedConstant extends Constant {
   }
 
   protected String getPylistParameterName() {
-    return Parameters.PYLIST.getParameterName();
+    return Parameters.PYLIST.getName();
   }
 
   @Override
@@ -102,7 +102,7 @@ public class RaggedConstant extends Constant {
 
   @Override
   protected String getDTypeParameterName() {
-    return Parameters.DTYPE.getParameterName();
+    return Parameters.DTYPE.getName();
   }
 
   protected int getRaggedRankParameterPosition() {
@@ -110,7 +110,7 @@ public class RaggedConstant extends Constant {
   }
 
   protected String getRaggedRankParameterName() {
-    return Parameters.RAGGED_RANK.getParameterName();
+    return Parameters.RAGGED_RANK.getName();
   }
 
   protected int getRaggedRankArgumentValueNumber(PropagationCallGraphBuilder builder) {
@@ -123,7 +123,7 @@ public class RaggedConstant extends Constant {
   }
 
   protected String getInnerShapeParameterName() {
-    return Parameters.INNER_SHAPE.getParameterName();
+    return Parameters.INNER_SHAPE.getName();
   }
 
   protected int getInnerShapeArgumentValueNumber(PropagationCallGraphBuilder builder) {

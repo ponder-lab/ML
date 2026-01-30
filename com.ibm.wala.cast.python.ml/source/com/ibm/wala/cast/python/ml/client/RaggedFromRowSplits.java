@@ -31,7 +31,7 @@ public class RaggedFromRowSplits extends RaggedTensorFromValues {
     NAME,
     VALIDATE;
 
-    public String getParameterName() {
+    public String getName() {
       return name().toLowerCase();
     }
   }
@@ -47,7 +47,7 @@ public class RaggedFromRowSplits extends RaggedTensorFromValues {
 
   @Override
   protected String getValuesParameterName() {
-    return VALUES.getParameterName();
+    return VALUES.getName();
   }
 
   protected int getRowSplitsParameterPosition() {
@@ -55,7 +55,7 @@ public class RaggedFromRowSplits extends RaggedTensorFromValues {
   }
 
   protected String getRowSplitsParameterName() {
-    return ROW_SPLITS.getParameterName();
+    return ROW_SPLITS.getName();
   }
 
   protected OrdinalSet<InstanceKey> getRowSplitsPointsToSet(PropagationCallGraphBuilder builder) {

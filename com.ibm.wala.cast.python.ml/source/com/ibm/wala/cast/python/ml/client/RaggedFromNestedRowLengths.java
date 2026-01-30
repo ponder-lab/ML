@@ -43,7 +43,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
     NAME,
     VALIDATE;
 
-    public String getParameterName() {
+    public String getName() {
       return name().toLowerCase();
     }
   }
@@ -59,7 +59,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
 
   @Override
   protected String getValuesParameterName() {
-    return FLAT_VALUES.getParameterName();
+    return FLAT_VALUES.getName();
   }
 
   protected int getNestedRowLengthsParameterPosition() {
@@ -67,7 +67,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
   }
 
   protected String getNestedRowLengthsParameterName() {
-    return NESTED_ROW_LENGTHS.getParameterName();
+    return NESTED_ROW_LENGTHS.getName();
   }
 
   protected OrdinalSet<InstanceKey> getNestedStructurePointsToSet(

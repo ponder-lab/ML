@@ -22,7 +22,7 @@ public class Constant extends TensorGenerator {
     NAME,
     VERIFY_SHAPE;
 
-    public String getParameterName() {
+    public String getName() {
       return name().toLowerCase();
     }
 
@@ -63,7 +63,7 @@ public class Constant extends TensorGenerator {
   }
 
   protected String getValueParameterName() {
-    return Parameters.VALUE.getParameterName();
+    return Parameters.VALUE.getName();
   }
 
   @Override
@@ -72,7 +72,7 @@ public class Constant extends TensorGenerator {
   }
 
   protected String getShapeParameterName() {
-    return Parameters.SHAPE.getParameterName();
+    return Parameters.SHAPE.getName();
   }
 
   @Override
@@ -81,6 +81,6 @@ public class Constant extends TensorGenerator {
   }
 
   protected String getDTypeParameterName() {
-    return Parameters.DTYPE.getParameterName();
+    return Parameters.DTYPE.getName();
   }
 }

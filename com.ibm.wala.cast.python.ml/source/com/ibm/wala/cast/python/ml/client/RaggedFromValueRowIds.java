@@ -48,7 +48,7 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
     NAME,
     VALIDATE;
 
-    public String getParameterName() {
+    public String getName() {
       return name().toLowerCase();
     }
   }
@@ -64,7 +64,7 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
 
   @Override
   protected String getValuesParameterName() {
-    return VALUES.getParameterName();
+    return VALUES.getName();
   }
 
   protected int getValueRowidsParameterPosition() {
@@ -72,7 +72,7 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
   }
 
   protected String getValueRowidsParameterName() {
-    return VALUE_ROWIDS.getParameterName();
+    return VALUE_ROWIDS.getName();
   }
 
   protected int getValueRowidsArgumentValueNumber(PropagationCallGraphBuilder builder) {
@@ -159,7 +159,7 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
   }
 
   protected String getNrowsParameterName() {
-    return NROWS.getParameterName();
+    return NROWS.getName();
   }
 
   protected int getNrowsArgumentValueNumber(PropagationCallGraphBuilder builder) {

@@ -41,7 +41,7 @@ public class Input extends Ones {
     RAGGED,
     TYPE_SPEC;
 
-    public String getParameterName() {
+    public String getName() {
       return name().toLowerCase();
     }
 
@@ -149,10 +149,10 @@ public class Input extends Ones {
     };
 
     for (Parameters p : unimplementedParameters) {
-      int valNum = this.getArgumentValueNumber(builder, p.getIndex(), p.getParameterName(), true);
+      int valNum = this.getArgumentValueNumber(builder, p.getIndex(), p.getName(), true);
       if (valNum > 0)
         throw new UnimplementedError(
-            "Unimplemented parameter " + p.getParameterName() + " at position " + p.getIndex());
+            "Unimplemented parameter " + p.getName() + " at position " + p.getIndex());
     }
   }
 
@@ -162,7 +162,7 @@ public class Input extends Ones {
   }
 
   protected String getShapeParameterName() {
-    return Parameters.SHAPE.getParameterName();
+    return Parameters.SHAPE.getName();
   }
 
   protected int getBatchSizeParameterPosition() {
@@ -170,7 +170,7 @@ public class Input extends Ones {
   }
 
   protected String getBatchSizeParameterName() {
-    return Parameters.BATCH_SIZE.getParameterName();
+    return Parameters.BATCH_SIZE.getName();
   }
 
   @Override
@@ -179,7 +179,7 @@ public class Input extends Ones {
   }
 
   protected String getDTypeParameterName() {
-    return Parameters.DTYPE.getParameterName();
+    return Parameters.DTYPE.getName();
   }
 
   private static Set<Long> getPossibleLongArguments(OrdinalSet<InstanceKey> pointsToSet) {

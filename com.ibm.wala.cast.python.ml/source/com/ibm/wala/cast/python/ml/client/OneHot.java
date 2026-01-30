@@ -35,7 +35,7 @@ public class OneHot extends Ones {
     AXIS,
     DTYPE;
 
-    public String getParameterName() {
+    public String getName() {
       return name().toLowerCase();
     }
   }
@@ -83,7 +83,7 @@ public class OneHot extends Ones {
   }
 
   protected String getDTypeParameterName() {
-    return DTYPE.getParameterName();
+    return DTYPE.getName();
   }
 
   protected int getIndicesParameterPosition() {
@@ -91,7 +91,7 @@ public class OneHot extends Ones {
   }
 
   protected String getIndicesParameterName() {
-    return INDICES.getParameterName();
+    return INDICES.getName();
   }
 
   protected int getDepthParameterPosition() {
@@ -99,7 +99,7 @@ public class OneHot extends Ones {
   }
 
   protected String getDepthParameterName() {
-    return DEPTH.getParameterName();
+    return DEPTH.getName();
   }
 
   protected int getAxisParameterPosition() {
@@ -107,7 +107,7 @@ public class OneHot extends Ones {
   }
 
   protected String getAxisParameterName() {
-    return AXIS.getParameterName();
+    return AXIS.getName();
   }
 
   protected int getOnValueParameterPosition() {
@@ -115,7 +115,7 @@ public class OneHot extends Ones {
   }
 
   protected String getOnValueParameterName() {
-    return ON_VALUE.getParameterName();
+    return ON_VALUE.getName();
   }
 
   protected int getOffValueParameterPosition() {
@@ -123,7 +123,7 @@ public class OneHot extends Ones {
   }
 
   protected String getOffValueParameterName() {
-    return OFF_VALUE.getParameterName();
+    return OFF_VALUE.getName();
   }
 
   protected int getOnValueArgumentValueNumber(PropagationCallGraphBuilder builder) {

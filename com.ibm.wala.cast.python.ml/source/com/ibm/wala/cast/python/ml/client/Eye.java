@@ -21,7 +21,7 @@ public class Eye extends SparseEye {
     DTYPE,
     NAME;
 
-    public String getParameterName() {
+    public String getName() {
       return name().toLowerCase();
     }
 
@@ -44,7 +44,7 @@ public class Eye extends SparseEye {
   }
 
   protected String getBatchShapeParameterName() {
-    return Parameters.BATCH_SHAPE.getParameterName();
+    return Parameters.BATCH_SHAPE.getName();
   }
 
   @Override
@@ -93,6 +93,6 @@ public class Eye extends SparseEye {
   }
 
   protected String getDTypeParameterName() {
-    return Parameters.DTYPE.getParameterName();
+    return Parameters.DTYPE.getName();
   }
 }

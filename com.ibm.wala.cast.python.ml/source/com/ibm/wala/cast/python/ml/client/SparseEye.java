@@ -25,7 +25,7 @@ public class SparseEye extends Ones {
     DTYPE,
     NAME;
 
-    public String getParameterName() {
+    public String getName() {
       return name().toLowerCase();
     }
 
@@ -130,7 +130,7 @@ public class SparseEye extends Ones {
   }
 
   protected String getNumRowsParameterName() {
-    return Parameters.NUM_ROWS.getParameterName();
+    return Parameters.NUM_ROWS.getName();
   }
 
   protected int getNumRowsArgumentValueNumber() {
@@ -142,7 +142,7 @@ public class SparseEye extends Ones {
   }
 
   protected String getNumColumnsParameterName() {
-    return Parameters.NUM_COLUMNS.getParameterName();
+    return Parameters.NUM_COLUMNS.getName();
   }
 
   @Override
@@ -151,7 +151,7 @@ public class SparseEye extends Ones {
   }
 
   protected String getDTypeParameterName() {
-    return Parameters.DTYPE.getParameterName();
+    return Parameters.DTYPE.getName();
   }
 
   protected int getNumColumnsArgumentValueNumber(PropagationCallGraphBuilder builder) {

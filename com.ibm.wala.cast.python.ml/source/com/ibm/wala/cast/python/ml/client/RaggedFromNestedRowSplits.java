@@ -27,7 +27,7 @@ public class RaggedFromNestedRowSplits extends RaggedFromNestedRowLengths {
     NAME,
     VALIDATE;
 
-    public String getParameterName() {
+    public String getName() {
       return name().toLowerCase();
     }
   }
@@ -37,7 +37,7 @@ public class RaggedFromNestedRowSplits extends RaggedFromNestedRowLengths {
   }
 
   protected String getNestedRowSplitsParameterName() {
-    return NESTED_ROW_SPLITS.getParameterName();
+    return NESTED_ROW_SPLITS.getName();
   }
 
   @Override
