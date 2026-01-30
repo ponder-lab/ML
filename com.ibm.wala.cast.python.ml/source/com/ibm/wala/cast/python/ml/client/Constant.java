@@ -2,8 +2,10 @@ package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.List;
 import java.util.Set;
 
@@ -38,8 +40,10 @@ public class Constant extends TensorGenerator {
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     // If the shape argument is not specified, then the shape is inferred from the shape of value.
-    // TODO: Handle keyword arguments.
-    return this.getShapes(builder, this.getValueArgumentValueNumber());
+    OrdinalSet<InstanceKey> pointsToSet =
+        this.getArgumentPointsToSet(
+            builder, this.getValueParameterPosition(), this.getValueParameterName());
+    return this.getShapesOfValue(builder, pointsToSet);
   }
 
   /**
@@ -50,8 +54,10 @@ public class Constant extends TensorGenerator {
    */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    // TODO: Handle keyword arguments.
-    return getDTypes(builder, this.getValueArgumentValueNumber());
+    OrdinalSet<InstanceKey> pointsToSet =
+        this.getArgumentPointsToSet(
+            builder, this.getValueParameterPosition(), this.getValueParameterName());
+    return this.getDTypesOfValue(builder, pointsToSet);
   }
 
   protected int getValueArgumentValueNumber() {
