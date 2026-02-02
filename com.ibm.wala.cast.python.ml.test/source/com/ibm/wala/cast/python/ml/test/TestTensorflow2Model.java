@@ -2458,6 +2458,46 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             4, Set.of(TENSOR_4_NONE_INT32)));
   }
 
+  @Test(expected = IllegalStateException.class)
+  public void testStrictnessFailure()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_strictness_failure.py", "test_strictness", 1, 1, Map.of());
+  }
+
+  @Test
+  public void testNoneDType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_none_dtype.py", "test_none_dtype", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+  }
+
+  @Test
+  public void testRaggedKeywordArgsNested()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_keyword_args_nested.py",
+        "test_keywords",
+        3,
+        3,
+        Map.of(
+            2, Set.of(new TensorType("int32", asList(new NumericDim(2), null, null))),
+            3, Set.of(new TensorType("int32", asList(new NumericDim(2), null, null))),
+            4, Set.of(new TensorType("int32", asList(new NumericDim(2), null, null)))));
+  }
+
+  @Test
+  public void testRaggedKeywordArgsAdditional()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_keyword_args_more.py",
+        "test_keywords",
+        3,
+        3,
+        Map.of(
+            2, Set.of(TENSOR_5_NONE_INT32),
+            3, Set.of(TENSOR_4_NONE_INT32),
+            4, Set.of(TENSOR_4_NONE_INT32)));
+  }
+
   @Test
   public void testRaggedKeywordArgs()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
