@@ -6,7 +6,6 @@ import static java.util.logging.Logger.getLogger;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
-import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
@@ -160,31 +159,5 @@ public class Input extends Ones {
 
   protected String getDTypeParameterName() {
     return Parameters.DTYPE.getName();
-  }
-
-  @Override
-  protected Set<Long> getPossibleLongValues(OrdinalSet<InstanceKey> pointsToSet) {
-    Set<Long> ret = HashSetFactory.make();
-
-    if (pointsToSet == null) return ret;
-
-    for (InstanceKey instanceKey : pointsToSet)
-      if (instanceKey instanceof ConstantKey) {
-        ConstantKey<?> constantKey = (ConstantKey<?>) instanceKey;
-        Object constantKeyValue = constantKey.getValue();
-
-        if (constantKeyValue instanceof Long) ret.add((Long) constantKeyValue);
-        else if (constantKeyValue instanceof Integer)
-          ret.add(((Integer) constantKeyValue).longValue());
-        else if (constantKeyValue == null) ret.add(null);
-        else
-          throw new IllegalStateException(
-              "Expected Long or Integer constant for batch size, but got: "
-                  + constantKeyValue.getClass());
-      } else
-        throw new IllegalStateException(
-            "Expected ConstantKey for batch size, but got: " + instanceKey.getClass());
-
-    return ret;
   }
 }

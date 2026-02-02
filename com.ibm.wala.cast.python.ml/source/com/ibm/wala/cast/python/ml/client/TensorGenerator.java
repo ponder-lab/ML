@@ -889,16 +889,19 @@ public abstract class TensorGenerator {
    * @return A set of possible double values.
    */
   protected static Set<Double> getPossibleDoubleValues(OrdinalSet<InstanceKey> pts) {
-    Set<Double> vals = HashSetFactory.make();
-    if (pts != null) {
-      for (InstanceKey ik : pts) {
-        if (ik instanceof ConstantKey) {
-          Object val = ((ConstantKey<?>) ik).getValue();
-          if (val instanceof Number) vals.add(((Number) val).doubleValue());
-        }
+    Set<Double> ret = HashSetFactory.make();
+
+    for (Object val : getConstantValues(pts, true)) {
+      if (val instanceof Number) {
+        ret.add(((Number) val).doubleValue());
+      } else if (val == null) {
+        ret.add(null);
+      } else {
+        throw new IllegalStateException("Expected a number but found: " + val.getClass() + ".");
       }
     }
-    return vals;
+
+    return ret;
   }
 
   /**
@@ -912,26 +915,41 @@ public abstract class TensorGenerator {
   protected Set<Long> getPossibleLongValues(OrdinalSet<InstanceKey> pointsToSet) {
     Set<Long> ret = HashSetFactory.make();
 
-    if (pointsToSet != null && !pointsToSet.isEmpty()) {
-      for (InstanceKey instanceKey : pointsToSet)
-        if (instanceKey instanceof ConstantKey) {
-          ConstantKey<?> constantKey = (ConstantKey<?>) instanceKey;
-          Object constantKeyValue = constantKey.getValue();
+    for (Object val : getConstantValues(pointsToSet, true)) {
+      if (val instanceof Number) {
+        ret.add(((Number) val).longValue());
+      } else if (val == null) {
+        ret.add(null);
+      } else {
+        throw new IllegalStateException("Expected a number but found: " + val.getClass() + ".");
+      }
+    }
 
-          if (constantKeyValue instanceof Long) {
-            Long value = (Long) constantKeyValue;
-            ret.add(value);
-          } else if (constantKeyValue instanceof Integer) {
-            ret.add(((Integer) constantKeyValue).longValue());
-          } else if (constantKeyValue == null)
-            // The argument may be `None`.
-            ret.add(null);
-          else
-            throw new IllegalStateException(
-                "Expected a long or integer, but found: " + constantKeyValue.getClass() + ".");
-        } else
+    return ret;
+  }
+
+  /**
+   * Returns a set of constant values derived from the given points-to set.
+   *
+   * @param pts The points-to set to analyze.
+   * @param requireConstants If true, throws an exception if a non-constant key is encountered.
+   * @return A set of constant values (which may contain nulls).
+   * @throws IllegalStateException If {@code requireConstants} is true and a non-constant key is
+   *     found.
+   */
+  protected static Set<Object> getConstantValues(
+      OrdinalSet<InstanceKey> pts, boolean requireConstants) {
+    Set<Object> ret = HashSetFactory.make();
+
+    if (pts != null) {
+      for (InstanceKey ik : pts) {
+        if (ik instanceof ConstantKey) {
+          ret.add(((ConstantKey<?>) ik).getValue());
+        } else if (requireConstants) {
           throw new IllegalStateException(
-              "Expected a constant key, but found: " + instanceKey.getClass() + ".");
+              "Expected a constant key but found: " + ik.getClass() + ".");
+        }
+      }
     }
 
     return ret;
