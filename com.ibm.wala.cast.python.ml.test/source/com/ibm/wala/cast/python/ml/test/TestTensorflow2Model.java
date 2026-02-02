@@ -74,9 +74,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType MNIST_INPUT = mnistInput();
 
-  private static final TensorType TENSOR_1_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(1)));
-
   private static final TensorType SCALAR_TENSOR_OF_INT32 = new TensorType(INT_32, emptyList());
 
   private static final TensorType SCALAR_TENSOR_OF_FLOAT32 = new TensorType(FLOAT_32, emptyList());
@@ -277,6 +274,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_4_INT32 =
       new TensorType(INT_32, asList(new NumericDim(4)));
+
+  private static final TensorType TENSOR_1_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(1)));
 
   private static final TensorType TENSOR_3_4_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3), new NumericDim(4)));
