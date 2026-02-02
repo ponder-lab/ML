@@ -912,7 +912,7 @@ public abstract class TensorGenerator {
    * @return A set of possible long values. If the value is `None`, then a null value will be
    *     contained within the returned set.
    */
-  protected Set<Long> getPossibleLongValues(OrdinalSet<InstanceKey> pointsToSet) {
+  protected static Set<Long> getPossibleLongValues(OrdinalSet<InstanceKey> pointsToSet) {
     Set<Long> ret = HashSetFactory.make();
 
     for (Object val : getConstantValues(pointsToSet, true)) {
