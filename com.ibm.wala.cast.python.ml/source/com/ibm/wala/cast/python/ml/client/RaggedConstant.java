@@ -488,7 +488,7 @@ public class RaggedConstant extends Constant {
     OrdinalSet<InstanceKey> pointsToSet =
         this.getArgumentPointsToSet(
             builder, this.getRaggedRankParameterPosition(), getRaggedRankParameterName());
-    return this.getPossibleLongArguments(pointsToSet);
+    return this.getPossibleLongValues(pointsToSet);
   }
 
   protected Set<List<Dimension<?>>> getPossibleInnerShapeArguments(

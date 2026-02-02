@@ -98,76 +98,48 @@ public class Range extends TensorGenerator {
     // 2. Fallback for non-CS or if CS failed
 
     if (ret.isEmpty()) {
-
       for (Integer numOfPoisitionArguments : getNumberOfPossiblePositionalArguments(builder)) {
-
         OrdinalSet<InstanceKey> startPts =
             this.getArgumentPointsToSet(
                 builder, getStartParameterPosition(), getStartParameterName());
-
         OrdinalSet<InstanceKey> limitPts =
             this.getArgumentPointsToSet(
                 builder, getLimitParameterPosition(), getLimitParameterName());
-
         OrdinalSet<InstanceKey> deltaPts =
             this.getArgumentPointsToSet(
                 builder, getDeltaParameterPosition(), getDeltaParameterName());
 
         if (numOfPoisitionArguments == 0) {
-
           // All keywords.
-
           // Note: tf.range(start=5) is valid (behaves as range(limit=5)).
-
           // Note: tf.range(limit=5) is invalid.
-
           if (!this.isKeywordArgumentPresent(builder, getStartParameterName())) {
-
             throw new IllegalStateException(
                 "Expected at least 'start' keyword when 0 positional arguments are provided for"
                     + " range().");
           }
 
           if (!this.isKeywordArgumentPresent(builder, getLimitParameterName())) {
-
             // tf.range(start=5) -> limit=5, start=0.
-
             limitPts = startPts;
-
             startPts = OrdinalSet.empty();
           }
-
         } else if (numOfPoisitionArguments == 1) {
-
           // 1. tf.range(limit) -> start=0, delta=1
-
           // OR tf.range(start, limit=X) -> start=pos0, limit=X
-
           if (!this.isKeywordArgumentPresent(builder, getLimitParameterName())) {
-
             limitPts = this.getArgumentPointsToSet(builder, getStartParameterPosition(), null);
-
             startPts = OrdinalSet.empty();
           }
-
           // Note: if limit keyword is present, startPts already contains pos 0 and limitPts already
-
           // contains the keyword. Correct.
-
         } else if (numOfPoisitionArguments == 2) {
-
           // 2. tf.range(start, limit, delta=1)
-
           // No special handling needed; arguments are retrieved by getArgumentPointsToSet.
-
         } else if (numOfPoisitionArguments >= 3) {
-
           // 3. tf.range(start, limit, delta)
-
           // No special handling needed; arguments are retrieved by getArgumentPointsToSet.
-
         } else {
-
           throw new IllegalStateException(
               "Invalid argument combination for range(): "
                   + numOfPoisitionArguments
@@ -176,21 +148,16 @@ public class Range extends TensorGenerator {
         }
 
         Set<Double> starts = getPossibleDoubleValues(startPts);
-
         if (starts.isEmpty()) starts.add(0.0);
 
         Set<Double> limits = getPossibleDoubleValues(limitPts);
 
         Set<Double> deltas = getPossibleDoubleValues(deltaPts);
-
         if (deltas.isEmpty()) deltas.add(1.0);
 
         for (Double s : starts) {
-
           for (Double l : limits) {
-
             for (Double d : deltas) {
-
               ret.add(List.of(new NumericDim((int) Math.ceil((l - s) / d))));
             }
           }
@@ -201,6 +168,14 @@ public class Range extends TensorGenerator {
     return ret;
   }
 
+  /**
+   * Processes a call to the range function.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param caller The {@link CGNode} calling the function.
+   * @param pyCallInstr The {@link PythonInvokeInstruction} calling the function.
+   * @return A set of shapes, where each shape is represented as a list of dimensions.
+   */
   private static Set<List<Dimension<?>>> processCall(
       PropagationCallGraphBuilder builder, CGNode caller, PythonInvokeInstruction pyCallInstr) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
@@ -257,7 +232,7 @@ public class Range extends TensorGenerator {
   }
 
   @Override
-  protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     return EnumSet.of(DType.INT32);
   }
 

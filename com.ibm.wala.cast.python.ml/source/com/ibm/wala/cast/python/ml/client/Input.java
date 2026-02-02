@@ -98,7 +98,7 @@ public class Input extends Ones {
     Set<Long> batchSizes = new HashSet<>();
 
     if (batchSizePts != null && !batchSizePts.isEmpty()) {
-      batchSizes.addAll(getPossibleLongArguments(batchSizePts));
+      batchSizes.addAll(getPossibleLongValues(batchSizePts));
     }
 
     if (batchSizes.isEmpty()) batchSizes.add(null);
@@ -163,7 +163,7 @@ public class Input extends Ones {
   }
 
   @Override
-  protected Set<Long> getPossibleLongArguments(OrdinalSet<InstanceKey> pointsToSet) {
+  protected Set<Long> getPossibleLongValues(OrdinalSet<InstanceKey> pointsToSet) {
     Set<Long> ret = HashSetFactory.make();
 
     if (pointsToSet == null) return ret;

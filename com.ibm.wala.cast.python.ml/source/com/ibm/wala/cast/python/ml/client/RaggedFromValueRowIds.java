@@ -160,7 +160,7 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
     OrdinalSet<InstanceKey> pointsToSet =
         this.getArgumentPointsToSet(
             builder, this.getNrowsParameterPosition(), getNrowsParameterName());
-    return this.getPossibleLongArguments(pointsToSet);
+    return this.getPossibleLongValues(pointsToSet);
   }
 
   @Override

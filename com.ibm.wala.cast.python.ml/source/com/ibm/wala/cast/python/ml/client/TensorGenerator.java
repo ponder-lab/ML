@@ -855,12 +855,12 @@ public abstract class TensorGenerator {
   }
 
   /**
-   * Returns the possible double arguments for the given value number.
+   * Returns the possible double values for the given value number.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param caller The {@link CGNode} calling the function.
    * @param vn The value number of the argument.
-   * @return A set of possible double arguments.
+   * @return A set of possible double values.
    */
   protected static Set<Double> getPossibleDoubleValues(
       PropagationCallGraphBuilder builder, CGNode caller, int vn) {
@@ -883,10 +883,10 @@ public abstract class TensorGenerator {
   }
 
   /**
-   * Returns the possible double arguments for the given points-to set.
+   * Returns the possible double values for the given points-to set.
    *
    * @param pts The points-to set of the argument.
-   * @return A set of possible double arguments.
+   * @return A set of possible double values.
    */
   protected static Set<Double> getPossibleDoubleValues(OrdinalSet<InstanceKey> pts) {
     Set<Double> vals = HashSetFactory.make();
@@ -902,14 +902,14 @@ public abstract class TensorGenerator {
   }
 
   /**
-   * Returns the possible long arguments for the given points-to set. If the argument is `None`,
-   * then a null value will be contained within the returned set.
+   * Returns the possible long values for the given points-to set. If the value is `None`, then a
+   * null value will be contained within the returned set.
    *
-   * @param pointsToSet The points-to set of the argument.
-   * @return A set of possible long arguments. If the argument is `None`, then a null value will be
+   * @param pointsToSet The points-to set of the value.
+   * @return A set of possible long values. If the value is `None`, then a null value will be
    *     contained within the returned set.
    */
-  protected Set<Long> getPossibleLongArguments(OrdinalSet<InstanceKey> pointsToSet) {
+  protected Set<Long> getPossibleLongValues(OrdinalSet<InstanceKey> pointsToSet) {
     Set<Long> ret = HashSetFactory.make();
 
     if (pointsToSet != null && !pointsToSet.isEmpty()) {
