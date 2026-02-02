@@ -104,18 +104,19 @@ public class Range extends TensorGenerator {
             this.getArgumentPointsToSet(builder, 2, Parameters.DELTA.getName());
 
         if (numOfPoisitionArguments == 0) {
-          // All keywords. We expect 'start' and 'limit' to be present if 0 positional arguments.
-          // Note: tf.range(limit=5) is invalid. Must be tf.range(start=0, limit=5).
-          if (!isKeywordArgumentPresent(builder, Parameters.START.getName())
-              || !isKeywordArgumentPresent(builder, Parameters.LIMIT.getName())) {
-            // Throw exception only if this is the only path (no other counts).
-            // But getNumberOfPossiblePositionalArguments returns ALL possible counts.
-            // If 0 is one of them, and it's invalid, we should probably ignore it?
-            // But if it's the ONLY one, we must throw.
-            // For safety, we throw if we are processing this case.
+          // All keywords.
+          // Note: tf.range(start=5) is valid (behaves as range(limit=5)).
+          // Note: tf.range(limit=5) is invalid.
+          if (!isKeywordArgumentPresent(builder, Parameters.START.getName())) {
             throw new IllegalStateException(
-                "Expected 'start' and 'limit' keywords when 0 positional arguments are provided for"
-                    + " range(), but got missing args.");
+                "Expected at least 'start' keyword when 0 positional arguments are provided for"
+                    + " range().");
+          }
+
+          if (!isKeywordArgumentPresent(builder, Parameters.LIMIT.getName())) {
+            // tf.range(start=5) -> limit=5, start=0.
+            limitPts = startPts;
+            startPts = OrdinalSet.empty();
           }
         } else if (numOfPoisitionArguments == 1) {
           // 1. tf.range(limit) -> start=0, delta=1
@@ -125,10 +126,8 @@ public class Range extends TensorGenerator {
           }
         } else if (numOfPoisitionArguments == 2) {
           // 2. tf.range(start, limit, delta=1)
-          // start=pos0, limit=pos1
         } else if (numOfPoisitionArguments >= 3) {
           // 3. tf.range(start, limit, delta)
-          // start=pos0, limit=pos1, delta=pos2
         } else {
           throw new IllegalStateException(
               "Expected either 1, 2, or >= 3 positional arguments (or 0 with keywords) for range(),"
@@ -181,6 +180,14 @@ public class Range extends TensorGenerator {
       if (deltaVN == -1) deltaVN = pyCallInstr.getUse(3);
     }
 
+    // Special case for keyword-only: tf.range(start=5) -> limit=5, start=0.
+    if (numPosArgs == 1) { // only function object
+      if (limitVN == -1 && startVN != -1) {
+        limitVN = startVN;
+        startVN = -1;
+      }
+    }
+
     Set<Double> starts = getPossibleDoubleValues(builder, caller, startVN);
     if (starts.isEmpty()) starts.add(0.0);
     Set<Double> limits = getPossibleDoubleValues(builder, caller, limitVN);
@@ -198,9 +205,22 @@ public class Range extends TensorGenerator {
 
   private Set<Double> getPossibleDoubleValues(
       PropagationCallGraphBuilder builder, CGNode caller, int vn) {
-    if (vn == -1) return HashSetFactory.make();
+    Set<Double> vals = HashSetFactory.make();
+    if (vn == -1) return vals;
+
+    // 1. Try symbol table (for literal constants)
+    if (caller.getIR().getSymbolTable().isConstant(vn)) {
+      Object val = caller.getIR().getSymbolTable().getConstantValue(vn);
+      if (val instanceof Number) {
+        vals.add(((Number) val).doubleValue());
+      }
+    }
+
+    // 2. Try points-to analysis
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, vn);
-    return getPossibleDoubleValues(builder.getPointerAnalysis().getPointsToSet(pk));
+    vals.addAll(getPossibleDoubleValues(builder.getPointerAnalysis().getPointsToSet(pk)));
+
+    return vals;
   }
 
   private Set<Double> getPossibleDoubleValues(OrdinalSet<InstanceKey> pts) {
