@@ -862,7 +862,7 @@ public abstract class TensorGenerator {
    * @param vn The value number of the argument.
    * @return A set of possible double arguments.
    */
-  protected Set<Double> getPossibleDoubleValues(
+  protected static Set<Double> getPossibleDoubleValues(
       PropagationCallGraphBuilder builder, CGNode caller, int vn) {
     Set<Double> vals = HashSetFactory.make();
     if (vn == -1) return vals;
@@ -888,7 +888,7 @@ public abstract class TensorGenerator {
    * @param pts The points-to set of the argument.
    * @return A set of possible double arguments.
    */
-  protected Set<Double> getPossibleDoubleValues(OrdinalSet<InstanceKey> pts) {
+  protected static Set<Double> getPossibleDoubleValues(OrdinalSet<InstanceKey> pts) {
     Set<Double> vals = HashSetFactory.make();
     if (pts != null) {
       for (InstanceKey ik : pts) {

@@ -82,10 +82,13 @@ public class Range extends TensorGenerator {
           if (!caller.getMethod().equals(callerMethod)) continue;
 
           SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(siteReference);
+
           for (SSAAbstractInvokeInstruction callInstr : calls) {
+
             if (callInstr.getCallSite().equals(siteReference)
                 && callInstr instanceof PythonInvokeInstruction) {
-              ret.addAll(processCall(builder, caller, (PythonInvokeInstruction) callInstr, this));
+
+              ret.addAll(processCall(builder, caller, (PythonInvokeInstruction) callInstr));
             }
           }
         }
@@ -93,49 +96,78 @@ public class Range extends TensorGenerator {
     }
 
     // 2. Fallback for non-CS or if CS failed
+
     if (ret.isEmpty()) {
+
       for (Integer numOfPoisitionArguments : getNumberOfPossiblePositionalArguments(builder)) {
+
         OrdinalSet<InstanceKey> startPts =
             this.getArgumentPointsToSet(
                 builder, getStartParameterPosition(), getStartParameterName());
+
         OrdinalSet<InstanceKey> limitPts =
             this.getArgumentPointsToSet(
                 builder, getLimitParameterPosition(), getLimitParameterName());
+
         OrdinalSet<InstanceKey> deltaPts =
             this.getArgumentPointsToSet(
                 builder, getDeltaParameterPosition(), getDeltaParameterName());
 
         if (numOfPoisitionArguments == 0) {
+
           // All keywords.
+
           // Note: tf.range(start=5) is valid (behaves as range(limit=5)).
+
           // Note: tf.range(limit=5) is invalid.
+
           if (!this.isKeywordArgumentPresent(builder, getStartParameterName())) {
+
             throw new IllegalStateException(
                 "Expected at least 'start' keyword when 0 positional arguments are provided for"
                     + " range().");
           }
 
           if (!this.isKeywordArgumentPresent(builder, getLimitParameterName())) {
+
             // tf.range(start=5) -> limit=5, start=0.
+
             limitPts = startPts;
+
             startPts = OrdinalSet.empty();
           }
+
         } else if (numOfPoisitionArguments == 1) {
+
           // 1. tf.range(limit) -> start=0, delta=1
+
           // OR tf.range(start, limit=X) -> start=pos0, limit=X
+
           if (!this.isKeywordArgumentPresent(builder, getLimitParameterName())) {
+
             limitPts = this.getArgumentPointsToSet(builder, getStartParameterPosition(), null);
+
             startPts = OrdinalSet.empty();
           }
+
           // Note: if limit keyword is present, startPts already contains pos 0 and limitPts already
+
           // contains the keyword. Correct.
+
         } else if (numOfPoisitionArguments == 2) {
+
           // 2. tf.range(start, limit, delta=1)
+
           // No special handling needed; arguments are retrieved by getArgumentPointsToSet.
+
         } else if (numOfPoisitionArguments >= 3) {
+
           // 3. tf.range(start, limit, delta)
+
           // No special handling needed; arguments are retrieved by getArgumentPointsToSet.
+
         } else {
+
           throw new IllegalStateException(
               "Invalid argument combination for range(): "
                   + numOfPoisitionArguments
@@ -143,17 +175,22 @@ public class Range extends TensorGenerator {
                   + " positional arguments with valid keywords.");
         }
 
-        Set<Double> starts = this.getPossibleDoubleValues(startPts);
+        Set<Double> starts = getPossibleDoubleValues(startPts);
+
         if (starts.isEmpty()) starts.add(0.0);
 
-        Set<Double> limits = this.getPossibleDoubleValues(limitPts);
+        Set<Double> limits = getPossibleDoubleValues(limitPts);
 
-        Set<Double> deltas = this.getPossibleDoubleValues(deltaPts);
+        Set<Double> deltas = getPossibleDoubleValues(deltaPts);
+
         if (deltas.isEmpty()) deltas.add(1.0);
 
         for (Double s : starts) {
+
           for (Double l : limits) {
+
             for (Double d : deltas) {
+
               ret.add(List.of(new NumericDim((int) Math.ceil((l - s) / d))));
             }
           }
@@ -165,10 +202,7 @@ public class Range extends TensorGenerator {
   }
 
   private static Set<List<Dimension<?>>> processCall(
-      PropagationCallGraphBuilder builder,
-      CGNode caller,
-      PythonInvokeInstruction pyCallInstr,
-      Range generator) {
+      PropagationCallGraphBuilder builder, CGNode caller, PythonInvokeInstruction pyCallInstr) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
     int numPosArgs = pyCallInstr.getNumberOfPositionalParameters();
@@ -204,12 +238,12 @@ public class Range extends TensorGenerator {
       }
     }
 
-    Set<Double> starts = generator.getPossibleDoubleValues(builder, caller, startVN);
+    Set<Double> starts = getPossibleDoubleValues(builder, caller, startVN);
     if (starts.isEmpty()) starts.add(0.0);
 
-    Set<Double> limits = generator.getPossibleDoubleValues(builder, caller, limitVN);
+    Set<Double> limits = getPossibleDoubleValues(builder, caller, limitVN);
 
-    Set<Double> deltas = generator.getPossibleDoubleValues(builder, caller, deltaVN);
+    Set<Double> deltas = getPossibleDoubleValues(builder, caller, deltaVN);
     if (deltas.isEmpty()) deltas.add(1.0);
 
     for (Double s : starts) {
