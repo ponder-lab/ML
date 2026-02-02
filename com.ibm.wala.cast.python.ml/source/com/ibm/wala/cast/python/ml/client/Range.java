@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
+import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -55,7 +56,7 @@ public class Range extends TensorGenerator {
   }
 
   @SuppressWarnings("unused")
-  private static final Logger LOGGER = Logger.getLogger(Range.class.getName());
+  private static final Logger LOGGER = getLogger(Range.class.getName());
 
   public Range(PointsToSetVariable source) {
     super(source);
@@ -162,7 +163,7 @@ public class Range extends TensorGenerator {
     return ret;
   }
 
-  private Set<List<Dimension<?>>> processCall(
+  private static Set<List<Dimension<?>>> processCall(
       PropagationCallGraphBuilder builder, CGNode caller, PythonInvokeInstruction pyCallInstr) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
@@ -215,7 +216,7 @@ public class Range extends TensorGenerator {
     return ret;
   }
 
-  private Set<Double> getPossibleDoubleValues(
+  private static Set<Double> getPossibleDoubleValues(
       PropagationCallGraphBuilder builder, CGNode caller, int vn) {
     Set<Double> vals = HashSetFactory.make();
     if (vn == -1) return vals;
@@ -235,7 +236,7 @@ public class Range extends TensorGenerator {
     return vals;
   }
 
-  private Set<Double> getPossibleDoubleValues(OrdinalSet<InstanceKey> pts) {
+  private static Set<Double> getPossibleDoubleValues(OrdinalSet<InstanceKey> pts) {
     Set<Double> vals = HashSetFactory.make();
     if (pts != null) {
       for (InstanceKey ik : pts) {
