@@ -98,14 +98,11 @@ public class Range extends TensorGenerator {
     if (ret.isEmpty()) {
       for (Integer numOfPoisitionArguments : getNumberOfPossiblePositionalArguments(builder)) {
         OrdinalSet<InstanceKey> startPts =
-            this.getArgumentPointsToSet(
-                builder, Parameters.START.getIndex(), Parameters.START.getName());
+            this.getArgumentPointsToSet(builder, getStartPosition(), Parameters.START.getName());
         OrdinalSet<InstanceKey> limitPts =
-            this.getArgumentPointsToSet(
-                builder, Parameters.LIMIT.getIndex(), Parameters.LIMIT.getName());
+            this.getArgumentPointsToSet(builder, getLimitPosition(), Parameters.LIMIT.getName());
         OrdinalSet<InstanceKey> deltaPts =
-            this.getArgumentPointsToSet(
-                builder, Parameters.DELTA.getIndex(), Parameters.DELTA.getName());
+            this.getArgumentPointsToSet(builder, getDeltaPosition(), Parameters.DELTA.getName());
 
         if (numOfPoisitionArguments == 0) {
           // All keywords.
@@ -126,7 +123,7 @@ public class Range extends TensorGenerator {
           // 1. tf.range(limit) -> start=0, delta=1
           // OR tf.range(start, limit=X) -> start=pos0, limit=X
           if (!isKeywordArgumentPresent(builder, Parameters.LIMIT.getName())) {
-            limitPts = this.getArgumentPointsToSet(builder, Parameters.START.getIndex(), null);
+            limitPts = this.getArgumentPointsToSet(builder, getStartPosition(), null);
             startPts = OrdinalSet.empty();
           }
           // Note: if limit keyword is present, startPts already contains pos 0 and limitPts already
@@ -271,6 +268,18 @@ public class Range extends TensorGenerator {
   @Override
   protected String getShapeParameterName() {
     return null;
+  }
+
+  protected int getStartPosition() {
+    return Parameters.START.getIndex();
+  }
+
+  protected int getLimitPosition() {
+    return Parameters.LIMIT.getIndex();
+  }
+
+  protected int getDeltaPosition() {
+    return Parameters.DELTA.getIndex();
   }
 
   @Override
