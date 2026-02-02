@@ -11,9 +11,7 @@ import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.Context;
-import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
-import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
@@ -166,15 +164,15 @@ public class Range extends TensorGenerator {
     return ret;
   }
 
-  private static Set<List<Dimension<?>>> processCall(
+  private Set<List<Dimension<?>>> processCall(
       PropagationCallGraphBuilder builder, CGNode caller, PythonInvokeInstruction pyCallInstr) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
     int numPosArgs = pyCallInstr.getNumberOfPositionalParameters();
 
-    int startVN = pyCallInstr.getUse(getStartParameterName());
-    int limitVN = pyCallInstr.getUse(getLimitParameterName());
-    int deltaVN = pyCallInstr.getUse(getDeltaParameterName());
+    int startVN = pyCallInstr.getUse(this.getStartParameterName());
+    int limitVN = pyCallInstr.getUse(this.getLimitParameterName());
+    int deltaVN = pyCallInstr.getUse(this.getDeltaParameterName());
 
     // Assign positional parameters based on presence of keywords and count.
     // Index 0 is the function object.
@@ -219,39 +217,6 @@ public class Range extends TensorGenerator {
     return ret;
   }
 
-  private static Set<Double> getPossibleDoubleValues(
-      PropagationCallGraphBuilder builder, CGNode caller, int vn) {
-    Set<Double> vals = HashSetFactory.make();
-    if (vn == -1) return vals;
-
-    // 1. Try symbol table (for literal constants)
-    if (caller.getIR().getSymbolTable().isConstant(vn)) {
-      Object val = caller.getIR().getSymbolTable().getConstantValue(vn);
-      if (val instanceof Number) {
-        vals.add(((Number) val).doubleValue());
-      }
-    }
-
-    // 2. Try points-to analysis
-    PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, vn);
-    vals.addAll(getPossibleDoubleValues(builder.getPointerAnalysis().getPointsToSet(pk)));
-
-    return vals;
-  }
-
-  private static Set<Double> getPossibleDoubleValues(OrdinalSet<InstanceKey> pts) {
-    Set<Double> vals = HashSetFactory.make();
-    if (pts != null) {
-      for (InstanceKey ik : pts) {
-        if (ik instanceof ConstantKey) {
-          Object val = ((ConstantKey<?>) ik).getValue();
-          if (val instanceof Number) vals.add(((Number) val).doubleValue());
-        }
-      }
-    }
-    return vals;
-  }
-
   @Override
   protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     return EnumSet.of(DType.INT32);
@@ -273,15 +238,30 @@ public class Range extends TensorGenerator {
     return null;
   }
 
-  protected static int getStartParameterPosition() {
+  /**
+   * Returns the position of the start parameter.
+   *
+   * @return the position of the start parameter
+   */
+  protected int getStartParameterPosition() {
     return Parameters.START.getIndex();
   }
 
-  protected static int getLimitParameterPosition() {
+  /**
+   * Returns the position of the limit parameter.
+   *
+   * @return the position of the limit parameter
+   */
+  protected int getLimitParameterPosition() {
     return Parameters.LIMIT.getIndex();
   }
 
-  protected static int getDeltaParameterPosition() {
+  /**
+   * Returns the position of the delta parameter.
+   *
+   * @return the position of the delta parameter
+   */
+  protected int getDeltaParameterPosition() {
     return Parameters.DELTA.getIndex();
   }
 
@@ -290,15 +270,30 @@ public class Range extends TensorGenerator {
     return Parameters.DTYPE.getIndex();
   }
 
-  protected static String getStartParameterName() {
+  /**
+   * Returns the name of the start parameter.
+   *
+   * @return the name of the start parameter
+   */
+  protected String getStartParameterName() {
     return Parameters.START.getName();
   }
 
-  protected static String getLimitParameterName() {
+  /**
+   * Returns the name of the limit parameter.
+   *
+   * @return the name of the limit parameter
+   */
+  protected String getLimitParameterName() {
     return Parameters.LIMIT.getName();
   }
 
-  protected static String getDeltaParameterName() {
+  /**
+   * Returns the name of the delta parameter.
+   *
+   * @return the name of the delta parameter
+   */
+  protected String getDeltaParameterName() {
     return Parameters.DELTA.getName();
   }
 

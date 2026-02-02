@@ -855,6 +855,53 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Returns the possible double arguments for the given value number.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param caller The {@link CGNode} calling the function.
+   * @param vn The value number of the argument.
+   * @return A set of possible double arguments.
+   */
+  protected Set<Double> getPossibleDoubleValues(
+      PropagationCallGraphBuilder builder, CGNode caller, int vn) {
+    Set<Double> vals = HashSetFactory.make();
+    if (vn == -1) return vals;
+
+    // 1. Try symbol table (for literal constants)
+    if (caller.getIR().getSymbolTable().isConstant(vn)) {
+      Object val = caller.getIR().getSymbolTable().getConstantValue(vn);
+      if (val instanceof Number) {
+        vals.add(((Number) val).doubleValue());
+      }
+    }
+
+    // 2. Try points-to analysis
+    PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, vn);
+    vals.addAll(getPossibleDoubleValues(builder.getPointerAnalysis().getPointsToSet(pk)));
+
+    return vals;
+  }
+
+  /**
+   * Returns the possible double arguments for the given points-to set.
+   *
+   * @param pts The points-to set of the argument.
+   * @return A set of possible double arguments.
+   */
+  protected Set<Double> getPossibleDoubleValues(OrdinalSet<InstanceKey> pts) {
+    Set<Double> vals = HashSetFactory.make();
+    if (pts != null) {
+      for (InstanceKey ik : pts) {
+        if (ik instanceof ConstantKey) {
+          Object val = ((ConstantKey<?>) ik).getValue();
+          if (val instanceof Number) vals.add(((Number) val).doubleValue());
+        }
+      }
+    }
+    return vals;
+  }
+
+  /**
    * Returns the possible long arguments for the given points-to set. If the argument is `None`,
    * then a null value will be contained within the returned set.
    *
