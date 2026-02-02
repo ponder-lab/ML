@@ -98,11 +98,14 @@ public class Range extends TensorGenerator {
     if (ret.isEmpty()) {
       for (Integer numOfPoisitionArguments : getNumberOfPossiblePositionalArguments(builder)) {
         OrdinalSet<InstanceKey> startPts =
-            this.getArgumentPointsToSet(builder, 0, Parameters.START.getName());
+            this.getArgumentPointsToSet(
+                builder, Parameters.START.getIndex(), Parameters.START.getName());
         OrdinalSet<InstanceKey> limitPts =
-            this.getArgumentPointsToSet(builder, 1, Parameters.LIMIT.getName());
+            this.getArgumentPointsToSet(
+                builder, Parameters.LIMIT.getIndex(), Parameters.LIMIT.getName());
         OrdinalSet<InstanceKey> deltaPts =
-            this.getArgumentPointsToSet(builder, 2, Parameters.DELTA.getName());
+            this.getArgumentPointsToSet(
+                builder, Parameters.DELTA.getIndex(), Parameters.DELTA.getName());
 
         if (numOfPoisitionArguments == 0) {
           // All keywords.
@@ -123,7 +126,7 @@ public class Range extends TensorGenerator {
           // 1. tf.range(limit) -> start=0, delta=1
           // OR tf.range(start, limit=X) -> start=pos0, limit=X
           if (!isKeywordArgumentPresent(builder, Parameters.LIMIT.getName())) {
-            limitPts = this.getArgumentPointsToSet(builder, 0, null);
+            limitPts = this.getArgumentPointsToSet(builder, Parameters.START.getIndex(), null);
             startPts = OrdinalSet.empty();
           }
           // Note: if limit keyword is present, startPts already contains pos 0 and limitPts already
