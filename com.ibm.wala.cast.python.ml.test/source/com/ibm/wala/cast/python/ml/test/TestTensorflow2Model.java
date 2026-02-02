@@ -272,6 +272,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_5_INT32 =
       new TensorType(INT_32, asList(new NumericDim(5)));
 
+  private static final TensorType TENSOR_4_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(4)));
+
   private static final TensorType TENSOR_3_4_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3), new NumericDim(4)));
 
@@ -5305,6 +5308,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testFillMixed()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_fill_mixed.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  @Test
+  public void testRangeStartLimitKw()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_range_start_limit_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_INT32)));
   }
 
   @Test
