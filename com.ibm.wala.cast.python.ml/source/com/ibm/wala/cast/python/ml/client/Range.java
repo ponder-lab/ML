@@ -206,7 +206,9 @@ public class Range extends TensorGenerator {
 
     Set<Double> starts = generator.getPossibleDoubleValues(builder, caller, startVN);
     if (starts.isEmpty()) starts.add(0.0);
+
     Set<Double> limits = generator.getPossibleDoubleValues(builder, caller, limitVN);
+
     Set<Double> deltas = generator.getPossibleDoubleValues(builder, caller, deltaVN);
     if (deltas.isEmpty()) deltas.add(1.0);
 
