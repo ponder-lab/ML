@@ -108,13 +108,13 @@ public class Range extends TensorGenerator {
           // All keywords.
           // Note: tf.range(start=5) is valid (behaves as range(limit=5)).
           // Note: tf.range(limit=5) is invalid.
-          if (!isKeywordArgumentPresent(builder, getStartName())) {
+          if (!this.isKeywordArgumentPresent(builder, getStartName())) {
             throw new IllegalStateException(
                 "Expected at least 'start' keyword when 0 positional arguments are provided for"
                     + " range().");
           }
 
-          if (!isKeywordArgumentPresent(builder, getLimitName())) {
+          if (!this.isKeywordArgumentPresent(builder, getLimitName())) {
             // tf.range(start=5) -> limit=5, start=0.
             limitPts = startPts;
             startPts = OrdinalSet.empty();
@@ -122,7 +122,7 @@ public class Range extends TensorGenerator {
         } else if (numOfPoisitionArguments == 1) {
           // 1. tf.range(limit) -> start=0, delta=1
           // OR tf.range(start, limit=X) -> start=pos0, limit=X
-          if (!isKeywordArgumentPresent(builder, getLimitName())) {
+          if (!this.isKeywordArgumentPresent(builder, getLimitName())) {
             limitPts = this.getArgumentPointsToSet(builder, getStartPosition(), null);
             startPts = OrdinalSet.empty();
           }
