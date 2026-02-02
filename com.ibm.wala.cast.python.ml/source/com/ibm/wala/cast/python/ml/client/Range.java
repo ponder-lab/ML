@@ -98,23 +98,23 @@ public class Range extends TensorGenerator {
     if (ret.isEmpty()) {
       for (Integer numOfPoisitionArguments : getNumberOfPossiblePositionalArguments(builder)) {
         OrdinalSet<InstanceKey> startPts =
-            this.getArgumentPointsToSet(builder, getStartPosition(), Parameters.START.getName());
+            this.getArgumentPointsToSet(builder, getStartPosition(), getStartName());
         OrdinalSet<InstanceKey> limitPts =
-            this.getArgumentPointsToSet(builder, getLimitPosition(), Parameters.LIMIT.getName());
+            this.getArgumentPointsToSet(builder, getLimitPosition(), getLimitName());
         OrdinalSet<InstanceKey> deltaPts =
-            this.getArgumentPointsToSet(builder, getDeltaPosition(), Parameters.DELTA.getName());
+            this.getArgumentPointsToSet(builder, getDeltaPosition(), getDeltaName());
 
         if (numOfPoisitionArguments == 0) {
           // All keywords.
           // Note: tf.range(start=5) is valid (behaves as range(limit=5)).
           // Note: tf.range(limit=5) is invalid.
-          if (!isKeywordArgumentPresent(builder, Parameters.START.getName())) {
+          if (!isKeywordArgumentPresent(builder, getStartName())) {
             throw new IllegalStateException(
                 "Expected at least 'start' keyword when 0 positional arguments are provided for"
                     + " range().");
           }
 
-          if (!isKeywordArgumentPresent(builder, Parameters.LIMIT.getName())) {
+          if (!isKeywordArgumentPresent(builder, getLimitName())) {
             // tf.range(start=5) -> limit=5, start=0.
             limitPts = startPts;
             startPts = OrdinalSet.empty();
@@ -122,7 +122,7 @@ public class Range extends TensorGenerator {
         } else if (numOfPoisitionArguments == 1) {
           // 1. tf.range(limit) -> start=0, delta=1
           // OR tf.range(start, limit=X) -> start=pos0, limit=X
-          if (!isKeywordArgumentPresent(builder, Parameters.LIMIT.getName())) {
+          if (!isKeywordArgumentPresent(builder, getLimitName())) {
             limitPts = this.getArgumentPointsToSet(builder, getStartPosition(), null);
             startPts = OrdinalSet.empty();
           }
@@ -169,9 +169,9 @@ public class Range extends TensorGenerator {
 
     int numPosArgs = pyCallInstr.getNumberOfPositionalParameters();
 
-    int startVN = pyCallInstr.getUse(Parameters.START.getName());
-    int limitVN = pyCallInstr.getUse(Parameters.LIMIT.getName());
-    int deltaVN = pyCallInstr.getUse(Parameters.DELTA.getName());
+    int startVN = pyCallInstr.getUse(getStartName());
+    int limitVN = pyCallInstr.getUse(getLimitName());
+    int deltaVN = pyCallInstr.getUse(getDeltaName());
 
     // Assign positional parameters based on presence of keywords and count.
     // Index 0 is the function object.
@@ -270,21 +270,33 @@ public class Range extends TensorGenerator {
     return null;
   }
 
-  protected int getStartPosition() {
+  protected static int getStartPosition() {
     return Parameters.START.getIndex();
   }
 
-  protected int getLimitPosition() {
+  protected static int getLimitPosition() {
     return Parameters.LIMIT.getIndex();
   }
 
-  protected int getDeltaPosition() {
+  protected static int getDeltaPosition() {
     return Parameters.DELTA.getIndex();
   }
 
   @Override
   protected int getDTypeParameterPosition() {
     return Parameters.DTYPE.getIndex();
+  }
+
+  protected static String getStartName() {
+    return Parameters.START.getName();
+  }
+
+  protected static String getLimitName() {
+    return Parameters.LIMIT.getName();
+  }
+
+  protected static String getDeltaName() {
+    return Parameters.DELTA.getName();
   }
 
   @Override
