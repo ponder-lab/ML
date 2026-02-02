@@ -120,20 +120,23 @@ public class Range extends TensorGenerator {
           }
         } else if (numOfPoisitionArguments == 1) {
           // 1. tf.range(limit) -> start=0, delta=1
+          // OR tf.range(start, limit=X) -> start=pos0, limit=X
           if (!isKeywordArgumentPresent(builder, Parameters.LIMIT.getName())) {
             limitPts = this.getArgumentPointsToSet(builder, 0, null);
             startPts = OrdinalSet.empty();
           }
+          // Note: if limit keyword is present, startPts already contains pos 0 and limitPts already
+          // contains the keyword. Correct.
         } else if (numOfPoisitionArguments == 2) {
           // 2. tf.range(start, limit, delta=1)
         } else if (numOfPoisitionArguments >= 3) {
           // 3. tf.range(start, limit, delta)
         } else {
           throw new IllegalStateException(
-              "Expected either 1, 2, or >= 3 positional arguments (or 0 with keywords) for range(),"
-                  + " but got: "
+              "Invalid argument combination for range(): "
                   + numOfPoisitionArguments
-                  + ".");
+                  + " positional arguments. Expected 1, 2, or >=3 positional arguments, or 0"
+                  + " positional arguments with valid keywords.");
         }
 
         Set<Double> starts = getPossibleDoubleValues(startPts);
@@ -168,13 +171,20 @@ public class Range extends TensorGenerator {
     int limitVN = pyCallInstr.getUse(Parameters.LIMIT.getName());
     int deltaVN = pyCallInstr.getUse(Parameters.DELTA.getName());
 
-    // Positional assignment (index 0 is the function object)
-    if (numPosArgs == 2) { // range(limit)
-      if (limitVN == -1) limitVN = pyCallInstr.getUse(1);
-    } else if (numPosArgs == 3) { // range(start, limit)
+    // Assign positional parameters based on presence of keywords and count.
+    // Index 0 is the function object.
+    if (numPosArgs == 2) { // 1 positional arg
+      if (limitVN == -1) {
+        // tf.range(X) -> limit=X
+        limitVN = pyCallInstr.getUse(1);
+      } else {
+        // tf.range(X, limit=Y) -> start=X, limit=Y
+        if (startVN == -1) startVN = pyCallInstr.getUse(1);
+      }
+    } else if (numPosArgs == 3) { // 2 positional args
       if (startVN == -1) startVN = pyCallInstr.getUse(1);
       if (limitVN == -1) limitVN = pyCallInstr.getUse(2);
-    } else if (numPosArgs >= 4) { // range(start, limit, delta)
+    } else if (numPosArgs >= 4) { // 3+ positional args
       if (startVN == -1) startVN = pyCallInstr.getUse(1);
       if (limitVN == -1) limitVN = pyCallInstr.getUse(2);
       if (deltaVN == -1) deltaVN = pyCallInstr.getUse(3);
