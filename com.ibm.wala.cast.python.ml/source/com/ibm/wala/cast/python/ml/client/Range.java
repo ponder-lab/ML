@@ -86,7 +86,7 @@ public class Range extends TensorGenerator {
           for (SSAAbstractInvokeInstruction callInstr : calls) {
             if (callInstr.getCallSite().equals(siteReference)
                 && callInstr instanceof PythonInvokeInstruction) {
-              processCall(builder, caller, (PythonInvokeInstruction) callInstr, ret);
+              ret.addAll(processCall(builder, caller, (PythonInvokeInstruction) callInstr));
             }
           }
         }
@@ -162,11 +162,10 @@ public class Range extends TensorGenerator {
     return ret;
   }
 
-  private void processCall(
-      PropagationCallGraphBuilder builder,
-      CGNode caller,
-      PythonInvokeInstruction pyCallInstr,
-      Set<List<Dimension<?>>> ret) {
+  private Set<List<Dimension<?>>> processCall(
+      PropagationCallGraphBuilder builder, CGNode caller, PythonInvokeInstruction pyCallInstr) {
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+
     int numPosArgs = pyCallInstr.getNumberOfPositionalParameters();
 
     int startVN = pyCallInstr.getUse(Parameters.START.getName());
@@ -213,6 +212,7 @@ public class Range extends TensorGenerator {
         }
       }
     }
+    return ret;
   }
 
   private Set<Double> getPossibleDoubleValues(
