@@ -169,11 +169,14 @@ public class Range extends TensorGenerator {
   }
 
   /**
-   * Computes the possible shapes of the tensor produced by a call to the {@code range} function.
+   * Computes the possible shapes of the tensor produced by a specific call to the {@code range}
+   * function.
    *
-   * <p>This method analyzes the {@code start}, {@code limit}, and {@code delta} arguments to
-   * determine the size of the resulting 1D tensor. It handles both positional and keyword arguments
-   * as extracted from the {@link PythonInvokeInstruction}.
+   * <p>This method analyzes the {@code start}, {@code limit}, and {@code delta} arguments from a
+   * concrete {@link PythonInvokeInstruction} to determine the size of the resulting 1D tensor. It
+   * is primarily used during context-sensitive analysis when the exact call instruction is known,
+   * allowing for more precise argument resolution compared to the general {@link #getShapes}
+   * fallback.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param caller The {@link CGNode} calling the function.
