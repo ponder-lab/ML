@@ -98,23 +98,26 @@ public class Range extends TensorGenerator {
     if (ret.isEmpty()) {
       for (Integer numOfPoisitionArguments : getNumberOfPossiblePositionalArguments(builder)) {
         OrdinalSet<InstanceKey> startPts =
-            this.getArgumentPointsToSet(builder, getStartPosition(), getStartName());
+            this.getArgumentPointsToSet(
+                builder, getStartParameterPosition(), getStartParameterName());
         OrdinalSet<InstanceKey> limitPts =
-            this.getArgumentPointsToSet(builder, getLimitPosition(), getLimitName());
+            this.getArgumentPointsToSet(
+                builder, getLimitParameterPosition(), getLimitParameterName());
         OrdinalSet<InstanceKey> deltaPts =
-            this.getArgumentPointsToSet(builder, getDeltaPosition(), getDeltaName());
+            this.getArgumentPointsToSet(
+                builder, getDeltaParameterPosition(), getDeltaParameterName());
 
         if (numOfPoisitionArguments == 0) {
           // All keywords.
           // Note: tf.range(start=5) is valid (behaves as range(limit=5)).
           // Note: tf.range(limit=5) is invalid.
-          if (!this.isKeywordArgumentPresent(builder, getStartName())) {
+          if (!this.isKeywordArgumentPresent(builder, getStartParameterName())) {
             throw new IllegalStateException(
                 "Expected at least 'start' keyword when 0 positional arguments are provided for"
                     + " range().");
           }
 
-          if (!this.isKeywordArgumentPresent(builder, getLimitName())) {
+          if (!this.isKeywordArgumentPresent(builder, getLimitParameterName())) {
             // tf.range(start=5) -> limit=5, start=0.
             limitPts = startPts;
             startPts = OrdinalSet.empty();
@@ -122,8 +125,8 @@ public class Range extends TensorGenerator {
         } else if (numOfPoisitionArguments == 1) {
           // 1. tf.range(limit) -> start=0, delta=1
           // OR tf.range(start, limit=X) -> start=pos0, limit=X
-          if (!this.isKeywordArgumentPresent(builder, getLimitName())) {
-            limitPts = this.getArgumentPointsToSet(builder, getStartPosition(), null);
+          if (!this.isKeywordArgumentPresent(builder, getLimitParameterName())) {
+            limitPts = this.getArgumentPointsToSet(builder, getStartParameterPosition(), null);
             startPts = OrdinalSet.empty();
           }
           // Note: if limit keyword is present, startPts already contains pos 0 and limitPts already
@@ -169,9 +172,9 @@ public class Range extends TensorGenerator {
 
     int numPosArgs = pyCallInstr.getNumberOfPositionalParameters();
 
-    int startVN = pyCallInstr.getUse(getStartName());
-    int limitVN = pyCallInstr.getUse(getLimitName());
-    int deltaVN = pyCallInstr.getUse(getDeltaName());
+    int startVN = pyCallInstr.getUse(getStartParameterName());
+    int limitVN = pyCallInstr.getUse(getLimitParameterName());
+    int deltaVN = pyCallInstr.getUse(getDeltaParameterName());
 
     // Assign positional parameters based on presence of keywords and count.
     // Index 0 is the function object.
@@ -270,15 +273,15 @@ public class Range extends TensorGenerator {
     return null;
   }
 
-  protected static int getStartPosition() {
+  protected static int getStartParameterPosition() {
     return Parameters.START.getIndex();
   }
 
-  protected static int getLimitPosition() {
+  protected static int getLimitParameterPosition() {
     return Parameters.LIMIT.getIndex();
   }
 
-  protected static int getDeltaPosition() {
+  protected static int getDeltaParameterPosition() {
     return Parameters.DELTA.getIndex();
   }
 
@@ -287,15 +290,15 @@ public class Range extends TensorGenerator {
     return Parameters.DTYPE.getIndex();
   }
 
-  protected static String getStartName() {
+  protected static String getStartParameterName() {
     return Parameters.START.getName();
   }
 
-  protected static String getLimitName() {
+  protected static String getLimitParameterName() {
     return Parameters.LIMIT.getName();
   }
 
-  protected static String getDeltaName() {
+  protected static String getDeltaParameterName() {
     return Parameters.DELTA.getName();
   }
 
