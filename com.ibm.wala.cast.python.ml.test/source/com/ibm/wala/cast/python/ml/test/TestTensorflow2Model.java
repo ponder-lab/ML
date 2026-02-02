@@ -74,7 +74,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType MNIST_INPUT = mnistInput();
 
-  private static final TensorType SCALAR_TENSOR_OF_INT32_1 =
+  private static final TensorType TENSOR_1_INT32 =
       new TensorType(INT_32, asList(new NumericDim(1)));
 
   private static final TensorType SCALAR_TENSOR_OF_INT32 = new TensorType(INT_32, emptyList());
@@ -5328,8 +5328,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testRange1PosDeltaKw()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_range_1_pos_delta_kw.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32_1)));
+
+    test("tf2_test_range_1_pos_delta_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_INT32)));
   }
 
   @Test
