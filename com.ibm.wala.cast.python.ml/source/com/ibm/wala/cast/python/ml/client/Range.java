@@ -85,7 +85,7 @@ public class Range extends TensorGenerator {
           for (SSAAbstractInvokeInstruction callInstr : calls) {
             if (callInstr.getCallSite().equals(siteReference)
                 && callInstr instanceof PythonInvokeInstruction) {
-              ret.addAll(processCall(builder, caller, (PythonInvokeInstruction) callInstr));
+              ret.addAll(processCall(builder, caller, (PythonInvokeInstruction) callInstr, this));
             }
           }
         }
@@ -143,12 +143,12 @@ public class Range extends TensorGenerator {
                   + " positional arguments with valid keywords.");
         }
 
-        Set<Double> starts = getPossibleDoubleValues(startPts);
+        Set<Double> starts = this.getPossibleDoubleValues(startPts);
         if (starts.isEmpty()) starts.add(0.0);
 
-        Set<Double> limits = getPossibleDoubleValues(limitPts);
+        Set<Double> limits = this.getPossibleDoubleValues(limitPts);
 
-        Set<Double> deltas = getPossibleDoubleValues(deltaPts);
+        Set<Double> deltas = this.getPossibleDoubleValues(deltaPts);
         if (deltas.isEmpty()) deltas.add(1.0);
 
         for (Double s : starts) {
@@ -164,15 +164,18 @@ public class Range extends TensorGenerator {
     return ret;
   }
 
-  private Set<List<Dimension<?>>> processCall(
-      PropagationCallGraphBuilder builder, CGNode caller, PythonInvokeInstruction pyCallInstr) {
+  private static Set<List<Dimension<?>>> processCall(
+      PropagationCallGraphBuilder builder,
+      CGNode caller,
+      PythonInvokeInstruction pyCallInstr,
+      Range generator) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
     int numPosArgs = pyCallInstr.getNumberOfPositionalParameters();
 
-    int startVN = pyCallInstr.getUse(this.getStartParameterName());
-    int limitVN = pyCallInstr.getUse(this.getLimitParameterName());
-    int deltaVN = pyCallInstr.getUse(this.getDeltaParameterName());
+    int startVN = pyCallInstr.getUse(getStartParameterName());
+    int limitVN = pyCallInstr.getUse(getLimitParameterName());
+    int deltaVN = pyCallInstr.getUse(getDeltaParameterName());
 
     // Assign positional parameters based on presence of keywords and count.
     // Index 0 is the function object.
@@ -201,10 +204,10 @@ public class Range extends TensorGenerator {
       }
     }
 
-    Set<Double> starts = getPossibleDoubleValues(builder, caller, startVN);
+    Set<Double> starts = generator.getPossibleDoubleValues(builder, caller, startVN);
     if (starts.isEmpty()) starts.add(0.0);
-    Set<Double> limits = getPossibleDoubleValues(builder, caller, limitVN);
-    Set<Double> deltas = getPossibleDoubleValues(builder, caller, deltaVN);
+    Set<Double> limits = generator.getPossibleDoubleValues(builder, caller, limitVN);
+    Set<Double> deltas = generator.getPossibleDoubleValues(builder, caller, deltaVN);
     if (deltas.isEmpty()) deltas.add(1.0);
 
     for (Double s : starts) {
@@ -243,7 +246,7 @@ public class Range extends TensorGenerator {
    *
    * @return the position of the start parameter
    */
-  protected int getStartParameterPosition() {
+  protected static int getStartParameterPosition() {
     return Parameters.START.getIndex();
   }
 
@@ -252,7 +255,7 @@ public class Range extends TensorGenerator {
    *
    * @return the position of the limit parameter
    */
-  protected int getLimitParameterPosition() {
+  protected static int getLimitParameterPosition() {
     return Parameters.LIMIT.getIndex();
   }
 
@@ -261,7 +264,7 @@ public class Range extends TensorGenerator {
    *
    * @return the position of the delta parameter
    */
-  protected int getDeltaParameterPosition() {
+  protected static int getDeltaParameterPosition() {
     return Parameters.DELTA.getIndex();
   }
 
@@ -275,7 +278,7 @@ public class Range extends TensorGenerator {
    *
    * @return the name of the start parameter
    */
-  protected String getStartParameterName() {
+  protected static String getStartParameterName() {
     return Parameters.START.getName();
   }
 
@@ -284,7 +287,7 @@ public class Range extends TensorGenerator {
    *
    * @return the name of the limit parameter
    */
-  protected String getLimitParameterName() {
+  protected static String getLimitParameterName() {
     return Parameters.LIMIT.getName();
   }
 
@@ -293,7 +296,7 @@ public class Range extends TensorGenerator {
    *
    * @return the name of the delta parameter
    */
-  protected String getDeltaParameterName() {
+  protected static String getDeltaParameterName() {
     return Parameters.DELTA.getName();
   }
 
