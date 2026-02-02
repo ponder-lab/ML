@@ -129,8 +129,10 @@ public class Range extends TensorGenerator {
           // contains the keyword. Correct.
         } else if (numOfPoisitionArguments == 2) {
           // 2. tf.range(start, limit, delta=1)
+          // No special handling needed; arguments are retrieved by getArgumentPointsToSet.
         } else if (numOfPoisitionArguments >= 3) {
           // 3. tf.range(start, limit, delta)
+          // No special handling needed; arguments are retrieved by getArgumentPointsToSet.
         } else {
           throw new IllegalStateException(
               "Invalid argument combination for range(): "
