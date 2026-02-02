@@ -5308,12 +5308,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRangeLimitKw()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_range_limit_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
-  }
-
-  @Test
   public void testRangeKw()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_range_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));

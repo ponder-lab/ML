@@ -26,7 +26,16 @@ import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
 
-/** A representation of the TensorFlow range operation. */
+/**
+ * A representation of the TensorFlow range operation.
+ *
+ * <p>This class is used to generate a tensor that contains a sequence of numbers, similar to the
+ * range function in Python.
+ *
+ * @see <a href="https://www.tensorflow.org/api_docs/python/tf/range">TensorFlow range
+ *     documentation</a>.
+ * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
+ */
 public class Range extends TensorGenerator {
 
   protected enum Parameters {
@@ -94,15 +103,45 @@ public class Range extends TensorGenerator {
         OrdinalSet<InstanceKey> deltaPts =
             this.getArgumentPointsToSet(builder, 2, Parameters.DELTA.getName());
 
-        if (numOfPoisitionArguments == 1
-            && !isKeywordArgumentPresent(builder, Parameters.LIMIT.getName())) {
-          limitPts = this.getArgumentPointsToSet(builder, 0, null);
-          startPts = OrdinalSet.empty();
+        if (numOfPoisitionArguments == 0) {
+          // All keywords. We expect 'start' and 'limit' to be present if 0 positional arguments.
+          // Note: tf.range(limit=5) is invalid. Must be tf.range(start=0, limit=5).
+          if (!isKeywordArgumentPresent(builder, Parameters.START.getName())
+              || !isKeywordArgumentPresent(builder, Parameters.LIMIT.getName())) {
+            // Throw exception only if this is the only path (no other counts).
+            // But getNumberOfPossiblePositionalArguments returns ALL possible counts.
+            // If 0 is one of them, and it's invalid, we should probably ignore it?
+            // But if it's the ONLY one, we must throw.
+            // For safety, we throw if we are processing this case.
+            throw new IllegalStateException(
+                "Expected 'start' and 'limit' keywords when 0 positional arguments are provided for"
+                    + " range(), but got missing args.");
+          }
+        } else if (numOfPoisitionArguments == 1) {
+          // 1. tf.range(limit) -> start=0, delta=1
+          if (!isKeywordArgumentPresent(builder, Parameters.LIMIT.getName())) {
+            limitPts = this.getArgumentPointsToSet(builder, 0, null);
+            startPts = OrdinalSet.empty();
+          }
+        } else if (numOfPoisitionArguments == 2) {
+          // 2. tf.range(start, limit, delta=1)
+          // start=pos0, limit=pos1
+        } else if (numOfPoisitionArguments >= 3) {
+          // 3. tf.range(start, limit, delta)
+          // start=pos0, limit=pos1, delta=pos2
+        } else {
+          throw new IllegalStateException(
+              "Expected either 1, 2, or >= 3 positional arguments (or 0 with keywords) for range(),"
+                  + " but got: "
+                  + numOfPoisitionArguments
+                  + ".");
         }
 
         Set<Double> starts = getPossibleDoubleValues(startPts);
         if (starts.isEmpty()) starts.add(0.0);
+
         Set<Double> limits = getPossibleDoubleValues(limitPts);
+
         Set<Double> deltas = getPossibleDoubleValues(deltaPts);
         if (deltas.isEmpty()) deltas.add(1.0);
 
@@ -184,7 +223,8 @@ public class Range extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    throw new UnsupportedOperationException("Shapes derived from arguments.");
+    throw new UnsupportedOperationException(
+        "Shapes for range() are derived from mandatory numeric arguments.");
   }
 
   @Override
