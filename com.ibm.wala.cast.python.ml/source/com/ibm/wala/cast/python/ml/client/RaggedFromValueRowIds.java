@@ -207,17 +207,11 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
     }
 
     // 2. Determine shape of `values`.
-    int valuesValNum = this.getValuesArgumentValueNumber(builder);
+    OrdinalSet<InstanceKey> valuesPts = this.getValuesPointsToSet(builder);
     // If we can't determine values shape, we just return [nrows, null] at least.
     Set<List<Dimension<?>>> valuesShapes = emptySet();
-    if (valuesValNum > 0) {
-      PointerKey valuesPK =
-          builder
-              .getPointerAnalysis()
-              .getHeapModel()
-              .getPointerKeyForLocal(this.getNode(), valuesValNum);
-      OrdinalSet<InstanceKey> valuesPts = builder.getPointerAnalysis().getPointsToSet(valuesPK);
-      if (!valuesPts.isEmpty()) valuesShapes = this.getShapesOfValue(builder, valuesPts);
+    if (valuesPts != null && !valuesPts.isEmpty()) {
+      valuesShapes = this.getShapesOfValue(builder, valuesPts);
     }
 
     final Set<List<Dimension<?>>> finalValuesShapes = valuesShapes;

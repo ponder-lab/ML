@@ -96,10 +96,10 @@ public class RaggedFromRowStarts extends RaggedTensorFromValues {
     LOGGER.info(() -> "Inferred nrows for " + this.getSource() + ": " + finalPossibleRowDims + ".");
 
     // 2. Determine shape of `values`.
-    int valuesValNum = this.getValuesArgumentValueNumber(builder);
+    OrdinalSet<InstanceKey> valuesPts = this.getValuesPointsToSet(builder);
     Set<List<Dimension<?>>> valuesShapes = emptySet();
-    if (valuesValNum > 0) {
-      valuesShapes = this.getShapes(builder, valuesValNum);
+    if (valuesPts != null && !valuesPts.isEmpty()) {
+      valuesShapes = this.getShapesOfValue(builder, valuesPts);
     }
 
     final Set<List<Dimension<?>>> finalValuesShapes = valuesShapes;

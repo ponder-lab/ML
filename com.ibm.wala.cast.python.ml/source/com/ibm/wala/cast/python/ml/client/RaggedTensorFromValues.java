@@ -2,9 +2,11 @@ package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -28,17 +30,17 @@ public abstract class RaggedTensorFromValues extends TensorGenerator {
 
   protected abstract String getValuesParameterName();
 
-  protected int getValuesArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(
-        builder, this.getValuesParameterPosition(), getValuesParameterName(), true);
+  protected OrdinalSet<InstanceKey> getValuesPointsToSet(PropagationCallGraphBuilder builder) {
+    return this.getArgumentPointsToSet(
+        builder, this.getValuesParameterPosition(), getValuesParameterName());
   }
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // Infer from values
-    int valuesValNum = this.getValuesArgumentValueNumber(builder);
-    if (valuesValNum > 0) {
-      Set<DType> ret = this.getDTypes(builder, valuesValNum);
+    OrdinalSet<InstanceKey> valuesPts = getValuesPointsToSet(builder);
+    if (valuesPts != null && !valuesPts.isEmpty()) {
+      Set<DType> ret = this.getDTypesOfValue(builder, valuesPts);
       LOGGER.info(() -> "Inferred dtypes from values for " + this.getSource() + ": " + ret + ".");
       return ret;
     }
