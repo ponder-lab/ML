@@ -747,7 +747,7 @@ public abstract class TensorGenerator {
     }
 
     // 2. Fallback: Try positional parameter in callee
-    int valNum = getArgumentValueNumber(paramPos);
+    int valNum = getArgumentValueNumber(builder, paramPos, paramName, true);
     if (valNum > 0) {
       PointerKey pk =
           builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(getNode(), valNum);
@@ -765,7 +765,7 @@ public abstract class TensorGenerator {
     Set<Integer> numArgs = this.getNumberOfPossiblePositionalArguments(builder);
 
     if (!numArgs.stream().anyMatch(n -> n >= paramPos + 1)
-        && (paramName == null || !isKeywordArgumentPresent(builder, paramName)))
+        && (paramName == null || !this.isKeywordArgumentPresent(builder, paramName)))
       if (optional) return -1;
       else
         throw new IllegalStateException(
@@ -804,7 +804,7 @@ public abstract class TensorGenerator {
 
   protected int getArgumentValueNumber(
       PropagationCallGraphBuilder builder, int paramPos, boolean optional) {
-    return getArgumentValueNumber(builder, paramPos, null, optional);
+    return this.getArgumentValueNumber(builder, paramPos, null, optional);
   }
 
   protected int getArgumentValueNumber(PropagationCallGraphBuilder builder, int paramPos) {

@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 
-def test(x1, x2, x3):
+def test(x1, x2, x3, x4, x5):
     pass
 
 
@@ -22,4 +22,13 @@ x3 = tf.ragged.range(starts=0, limits=5, deltas=1)
 assert x3.shape.as_list() == [1, None]
 assert x3.dtype == tf.int32
 
-test(x1, x2, x3)
+# Mixed positional and keyword
+x4 = tf.ragged.range(0, limits=5)
+assert x4.shape.as_list() == [1, None]
+assert x4.dtype == tf.int32
+
+x5 = tf.ragged.range(0, 5, deltas=1)
+assert x5.shape.as_list() == [1, None]
+assert x5.dtype == tf.int32
+
+test(x1, x2, x3, x4, x5)

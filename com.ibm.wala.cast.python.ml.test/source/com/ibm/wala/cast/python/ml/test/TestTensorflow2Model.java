@@ -5559,11 +5559,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test(
         "tf2_test_ragged_constant_keyword.py",
         "test",
-        2,
-        2,
+        3,
+        3,
         Map.of(
             2, Set.of(TENSOR_2_NONE_INT32),
-            3, Set.of(TENSOR_2_NONE_INT32)));
+            3, Set.of(TENSOR_2_NONE_INT32),
+            4, Set.of(TENSOR_2_NONE_INT32)));
   }
 
   @Test
@@ -5621,12 +5622,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test(
         "tf2_test_ragged_range_keyword.py",
         "test",
-        3,
-        3,
+        5,
+        5,
         Map.of(
             2, Set.of(TENSOR_1_NONE_INT32),
             3, Set.of(TENSOR_1_NONE_INT32),
-            4, Set.of(TENSOR_1_NONE_INT32)));
+            4, Set.of(TENSOR_1_NONE_INT32),
+            5, Set.of(TENSOR_1_NONE_INT32),
+            6, Set.of(TENSOR_1_NONE_INT32)));
   }
 
   @Test

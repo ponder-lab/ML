@@ -98,7 +98,7 @@ public class Range extends TensorGenerator {
     // 2. Fallback for non-CS or if CS failed
 
     if (ret.isEmpty()) {
-      for (Integer numOfPoisitionArguments : getNumberOfPossiblePositionalArguments(builder)) {
+      for (Integer numOfPoisitionArguments : this.getNumberOfPossiblePositionalArguments(builder)) {
         OrdinalSet<InstanceKey> startPts =
             this.getArgumentPointsToSet(
                 builder, getStartParameterPosition(), getStartParameterName());
@@ -128,7 +128,9 @@ public class Range extends TensorGenerator {
           // 1. tf.range(limit) -> start=0, delta=1
           // OR tf.range(start, limit=X) -> start=pos0, limit=X
           if (!this.isKeywordArgumentPresent(builder, getLimitParameterName())) {
-            limitPts = this.getArgumentPointsToSet(builder, getStartParameterPosition(), null);
+            limitPts =
+                this.getArgumentPointsToSet(
+                    builder, getStartParameterPosition(), getLimitParameterName());
             startPts = OrdinalSet.empty();
           }
           // Note: if limit keyword is present, startPts already contains pos 0 and limitPts already
@@ -196,27 +198,27 @@ public class Range extends TensorGenerator {
     // Assign positional parameters based on presence of keywords and count.
     // Index 0 is the function object.
     if (numPosArgs == 2) { // 1 positional arg
-      if (limitVN == -1) {
+      if (limitVN == UNDEFINED_PARAMETER_POSITION) {
         // tf.range(X) -> limit=X
         limitVN = pyCallInstr.getUse(1);
       } else {
         // tf.range(X, limit=Y) -> start=X, limit=Y
-        if (startVN == -1) startVN = pyCallInstr.getUse(1);
+        if (startVN == UNDEFINED_PARAMETER_POSITION) startVN = pyCallInstr.getUse(1);
       }
     } else if (numPosArgs == 3) { // 2 positional args
-      if (startVN == -1) startVN = pyCallInstr.getUse(1);
-      if (limitVN == -1) limitVN = pyCallInstr.getUse(2);
+      if (startVN == UNDEFINED_PARAMETER_POSITION) startVN = pyCallInstr.getUse(1);
+      if (limitVN == UNDEFINED_PARAMETER_POSITION) limitVN = pyCallInstr.getUse(2);
     } else if (numPosArgs >= 4) { // 3+ positional args
-      if (startVN == -1) startVN = pyCallInstr.getUse(1);
-      if (limitVN == -1) limitVN = pyCallInstr.getUse(2);
-      if (deltaVN == -1) deltaVN = pyCallInstr.getUse(3);
+      if (startVN == UNDEFINED_PARAMETER_POSITION) startVN = pyCallInstr.getUse(1);
+      if (limitVN == UNDEFINED_PARAMETER_POSITION) limitVN = pyCallInstr.getUse(2);
+      if (deltaVN == UNDEFINED_PARAMETER_POSITION) deltaVN = pyCallInstr.getUse(3);
     }
 
     // Special case for keyword-only: tf.range(start=5) -> limit=5, start=0.
     if (numPosArgs == 1) { // only function object
-      if (limitVN == -1 && startVN != -1) {
+      if (limitVN == UNDEFINED_PARAMETER_POSITION && startVN != UNDEFINED_PARAMETER_POSITION) {
         limitVN = startVN;
-        startVN = -1;
+        startVN = UNDEFINED_PARAMETER_POSITION;
       }
     }
 

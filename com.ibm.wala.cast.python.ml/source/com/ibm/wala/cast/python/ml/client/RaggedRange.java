@@ -55,16 +55,22 @@ public class RaggedRange extends Range {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
-    for (Integer numPosArgs : getNumberOfPossiblePositionalArguments(builder)) {
+    for (Integer numPosArgs : this.getNumberOfPossiblePositionalArguments(builder)) {
       OrdinalSet<InstanceKey> startPts = OrdinalSet.empty();
       OrdinalSet<InstanceKey> limitPts = OrdinalSet.empty();
       OrdinalSet<InstanceKey> deltaPts = OrdinalSet.empty();
 
       if (numPosArgs == 0) {
         // Keyword only
-        startPts = getArgumentPointsToSet(builder, -1, Parameters.STARTS.getName());
-        limitPts = getArgumentPointsToSet(builder, -1, Parameters.LIMITS.getName());
-        deltaPts = getArgumentPointsToSet(builder, -1, Parameters.DELTAS.getName());
+        startPts =
+            this.getArgumentPointsToSet(
+                builder, UNDEFINED_PARAMETER_POSITION, Parameters.STARTS.getName());
+        limitPts =
+            this.getArgumentPointsToSet(
+                builder, UNDEFINED_PARAMETER_POSITION, Parameters.LIMITS.getName());
+        deltaPts =
+            this.getArgumentPointsToSet(
+                builder, UNDEFINED_PARAMETER_POSITION, Parameters.DELTAS.getName());
 
         if (limitPts.isEmpty() && !startPts.isEmpty()) {
           // tf.ragged.range(starts=5) -> limits=5
@@ -73,36 +79,58 @@ public class RaggedRange extends Range {
         }
       } else if (numPosArgs == 1) {
         // range(limits) or range(starts, limits=X)
-        if (!isKeywordArgumentPresent(builder, Parameters.LIMITS.getName())) {
-          limitPts = getArgumentPointsToSet(builder, 0, null);
+        if (!this.isKeywordArgumentPresent(builder, Parameters.LIMITS.getName())) {
+          limitPts =
+              this.getArgumentPointsToSet(
+                  builder, Parameters.STARTS.getIndex(), Parameters.LIMITS.getName());
         } else {
-          startPts = getArgumentPointsToSet(builder, 0, null);
-          limitPts = getArgumentPointsToSet(builder, -1, Parameters.LIMITS.getName());
+          startPts =
+              this.getArgumentPointsToSet(
+                  builder, Parameters.STARTS.getIndex(), Parameters.STARTS.getName());
+          limitPts =
+              this.getArgumentPointsToSet(
+                  builder, UNDEFINED_PARAMETER_POSITION, Parameters.LIMITS.getName());
         }
       } else if (numPosArgs == 2) {
         // range(starts, limits)
-        startPts = getArgumentPointsToSet(builder, 0, null);
-        limitPts = getArgumentPointsToSet(builder, 1, null);
+        startPts =
+            this.getArgumentPointsToSet(
+                builder, Parameters.STARTS.getIndex(), Parameters.STARTS.getName());
+        limitPts =
+            this.getArgumentPointsToSet(
+                builder, Parameters.LIMITS.getIndex(), Parameters.LIMITS.getName());
       } else if (numPosArgs >= 3) {
         // range(starts, limits, deltas)
-        startPts = getArgumentPointsToSet(builder, 0, null);
-        limitPts = getArgumentPointsToSet(builder, 1, null);
-        deltaPts = getArgumentPointsToSet(builder, 2, null);
+        startPts =
+            this.getArgumentPointsToSet(
+                builder, Parameters.STARTS.getIndex(), Parameters.STARTS.getName());
+        limitPts =
+            this.getArgumentPointsToSet(
+                builder, Parameters.LIMITS.getIndex(), Parameters.LIMITS.getName());
+        deltaPts =
+            this.getArgumentPointsToSet(
+                builder, Parameters.DELTAS.getIndex(), Parameters.DELTAS.getName());
       }
 
       // Retrieve keyword args if not already set by positional (and not empty from initialization)
       if (startPts.isEmpty())
         startPts =
             OrdinalSet.unify(
-                startPts, getArgumentPointsToSet(builder, -1, Parameters.STARTS.getName()));
+                startPts,
+                this.getArgumentPointsToSet(
+                    builder, UNDEFINED_PARAMETER_POSITION, Parameters.STARTS.getName()));
       if (limitPts.isEmpty())
         limitPts =
             OrdinalSet.unify(
-                limitPts, getArgumentPointsToSet(builder, -1, Parameters.LIMITS.getName()));
+                limitPts,
+                this.getArgumentPointsToSet(
+                    builder, UNDEFINED_PARAMETER_POSITION, Parameters.LIMITS.getName()));
       if (deltaPts.isEmpty())
         deltaPts =
             OrdinalSet.unify(
-                deltaPts, getArgumentPointsToSet(builder, -1, Parameters.DELTAS.getName()));
+                deltaPts,
+                this.getArgumentPointsToSet(
+                    builder, UNDEFINED_PARAMETER_POSITION, Parameters.DELTAS.getName()));
 
       // Check for vectors
       boolean hasVector = false;

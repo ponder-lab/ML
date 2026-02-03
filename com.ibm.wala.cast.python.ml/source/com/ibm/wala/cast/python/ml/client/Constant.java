@@ -61,7 +61,7 @@ public class Constant extends TensorGenerator {
   }
 
   protected int getValueArgumentValueNumber() {
-    return getArgumentValueNumber(this.getValueParameterPosition());
+    return this.getArgumentValueNumber(this.getValueParameterPosition());
   }
 
   protected int getValueParameterPosition() {
