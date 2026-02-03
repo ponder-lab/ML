@@ -49,30 +49,21 @@ public class OneHot extends Ones {
     // If dtype is not provided, it will attempt to assume the data type of on_value or off_value,
     // if one or both are passed in. If none of on_value, off_value, or dtype are provided, dtype
     // will default to the value tf.float32.
-    // TODO: Handle keyword arguments.
     EnumSet<DType> ret = EnumSet.noneOf(DType.class);
-    Set<Integer> possiblePositionalArguments = this.getNumberOfPossiblePositionalArguments(builder);
 
-    for (int numArgs : possiblePositionalArguments)
-      if (numArgs == DEPTH.ordinal() + 1)
-        // Neither on_value nor off_value is provided. Default to float32.
-        ret.add(FLOAT32);
-      else if (numArgs == ON_VALUE.ordinal() + 1) {
-        // Only on_value may be provided.
-        ret.addAll(this.getDTypes(builder, this.getOnValueArgumentValueNumber(builder)));
+    int onValNum = this.getOnValueArgumentValueNumber(builder);
+    if (onValNum > 0) {
+      ret.addAll(this.getDTypes(builder, onValNum));
+    }
 
-        // If on_value has no known dtypes, default to float32.
-        if (ret.isEmpty()) ret.add(FLOAT32);
-      } else if (numArgs >= ON_VALUE.ordinal() + 1) {
-        // Either on_value and off_value may be provided.
-        ret.addAll(this.getDTypes(builder, this.getOnValueArgumentValueNumber(builder)));
-        ret.addAll(this.getDTypes(builder, this.getOffValueArgumentValueNumber(builder)));
+    int offValNum = this.getOffValueArgumentValueNumber(builder);
+    if (offValNum > 0) {
+      ret.addAll(this.getDTypes(builder, offValNum));
+    }
 
-        // If neither on_value nor off_value have known dtypes, default to float32.
-        if (ret.isEmpty()) ret.add(FLOAT32);
-      } else
-        throw new IllegalStateException(
-            "Unexpected number of positional arguments: " + numArgs + ".");
+    if (ret.isEmpty()) {
+      ret.add(FLOAT32);
+    }
 
     return ret;
   }
@@ -198,28 +189,25 @@ public class OneHot extends Ones {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
     Set<Integer> ret = HashSetFactory.make();
 
-    // TODO: Handle keyword arguments.
-    for (int numArgs : this.getNumberOfPossiblePositionalArguments(builder)) {
-      if (numArgs <= Parameters.AXIS.ordinal())
-        // Axis argument not provided.
+    int axisArgumentValueNumber = this.getAxisArgumentValueNumber(builder);
+
+    if (axisArgumentValueNumber <= 0) {
+      // Axis argument not provided; default to AXIS_END.
+      ret.add(AXIS_END);
+    } else {
+      PointerKey pointerKey =
+          pointerAnalysis
+              .getHeapModel()
+              .getPointerKeyForLocal(this.getNode(), axisArgumentValueNumber);
+
+      OrdinalSet<InstanceKey> pointsToSet = pointerAnalysis.getPointsToSet(pointerKey);
+
+      if (pointsToSet == null || pointsToSet.isEmpty())
+        // No axis argument value found; default to AXIS_END.
         ret.add(AXIS_END);
-      else { // Axis argument may be provided.
-        int axisArgumentValueNumber = this.getAxisArgumentValueNumber(builder);
-
-        PointerKey pointerKey =
-            pointerAnalysis
-                .getHeapModel()
-                .getPointerKeyForLocal(this.getNode(), axisArgumentValueNumber);
-
-        OrdinalSet<InstanceKey> pointsToSet = pointerAnalysis.getPointsToSet(pointerKey);
-
-        if (pointsToSet == null || pointsToSet.isEmpty())
-          // No axis argument value found; default to AXIS_END.
-          ret.add(AXIS_END);
-        else
-          for (InstanceKey instanceKey : pointsToSet)
-            ret.add(getIntValueFromInstanceKey(instanceKey).orElse(AXIS_END));
-      }
+      else
+        for (InstanceKey instanceKey : pointsToSet)
+          ret.add(getIntValueFromInstanceKey(instanceKey).orElse(AXIS_END));
     }
 
     return ret;
