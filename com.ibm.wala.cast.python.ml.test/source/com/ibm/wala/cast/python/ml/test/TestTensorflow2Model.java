@@ -5238,15 +5238,26 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_one_hot18.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_5_3_FLOAT32)));
   }
 
-  /**
-   * FIXME: Should not throw an {@link IllegalArgumentException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testOneHot19()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_one_hot19.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_2_3_INT32)));
     test("tf2_test_one_hot19.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_5_3_FLOAT32)));
+  }
+
+  @Test
+  public void testOneHotKeyword()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_one_hot_keyword.py",
+        "test",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_3_3_FLOAT32),
+            3, Set.of(TENSOR_3_3_INT32),
+            4, Set.of(TENSOR_3_3_FLOAT32),
+            5, Set.of(TENSOR_3_3_FLOAT32)));
   }
 
   @Test

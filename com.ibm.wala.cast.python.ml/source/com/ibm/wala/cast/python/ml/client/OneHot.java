@@ -12,8 +12,6 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
-import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
-import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
@@ -51,14 +49,18 @@ public class OneHot extends Ones {
     // will default to the value tf.float32.
     EnumSet<DType> ret = EnumSet.noneOf(DType.class);
 
-    int onValNum = this.getOnValueArgumentValueNumber(builder);
-    if (onValNum > 0) {
-      ret.addAll(this.getDTypes(builder, onValNum));
+    OrdinalSet<InstanceKey> onValPTS =
+        this.getArgumentPointsToSet(
+            builder, this.getOnValueParameterPosition(), getOnValueParameterName());
+    if (onValPTS != null && !onValPTS.isEmpty()) {
+      ret.addAll(this.getDTypesOfValue(builder, onValPTS));
     }
 
-    int offValNum = this.getOffValueArgumentValueNumber(builder);
-    if (offValNum > 0) {
-      ret.addAll(this.getDTypes(builder, offValNum));
+    OrdinalSet<InstanceKey> offValPTS =
+        this.getArgumentPointsToSet(
+            builder, this.getOffValueParameterPosition(), getOffValueParameterName());
+    if (offValPTS != null && !offValPTS.isEmpty()) {
+      ret.addAll(this.getDTypesOfValue(builder, offValPTS));
     }
 
     if (ret.isEmpty()) {
@@ -135,22 +137,20 @@ public class OneHot extends Ones {
   @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
-    Set<List<Dimension<?>>> indices =
-        this.getShapes(builder, this.getIndicesArgumentValueNumber(builder));
-    int depthArgumentValueNumber = this.getDepthArgumentValueNumber(builder);
 
-    if (depthArgumentValueNumber <= 0)
-      throw new IllegalStateException(
-          "No depth argument value found for OneHot tensor generation.");
+    OrdinalSet<InstanceKey> indicesPTS =
+        this.getArgumentPointsToSet(
+            builder, this.getIndicesParameterPosition(), getIndicesParameterName());
 
-    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+    if (indicesPTS == null || indicesPTS.isEmpty())
+      throw new IllegalArgumentException(
+          "Empty points-to set for INDICES argument in OneHot: " + this.getNode());
 
-    PointerKey depthPointerKey =
-        pointerAnalysis
-            .getHeapModel()
-            .getPointerKeyForLocal(this.getNode(), depthArgumentValueNumber);
+    Set<List<Dimension<?>>> indices = this.getShapesOfValue(builder, indicesPTS);
 
-    OrdinalSet<InstanceKey> depthPTS = pointerAnalysis.getPointsToSet(depthPointerKey);
+    OrdinalSet<InstanceKey> depthPTS =
+        this.getArgumentPointsToSet(
+            builder, this.getDepthParameterPosition(), getDepthParameterName());
 
     if (depthPTS == null || depthPTS.isEmpty())
       throw new IllegalStateException(
@@ -186,40 +186,19 @@ public class OneHot extends Ones {
   }
 
   private Set<Integer> getPossibleAxes(PropagationCallGraphBuilder builder) {
-    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
     Set<Integer> ret = HashSetFactory.make();
 
-    int axisArgumentValueNumber = this.getAxisArgumentValueNumber(builder);
+    OrdinalSet<InstanceKey> axisPTS =
+        this.getArgumentPointsToSet(
+            builder, this.getAxisParameterPosition(), getAxisParameterName());
 
-    if (axisArgumentValueNumber <= 0) {
-      // Axis argument not provided; default to AXIS_END.
+    if (axisPTS == null || axisPTS.isEmpty()) {
       ret.add(AXIS_END);
     } else {
-      PointerKey pointerKey =
-          pointerAnalysis
-              .getHeapModel()
-              .getPointerKeyForLocal(this.getNode(), axisArgumentValueNumber);
-
-      OrdinalSet<InstanceKey> pointsToSet = pointerAnalysis.getPointsToSet(pointerKey);
-
-      if (pointsToSet == null || pointsToSet.isEmpty())
-        // No axis argument value found; default to AXIS_END.
-        ret.add(AXIS_END);
-      else
-        for (InstanceKey instanceKey : pointsToSet)
-          ret.add(getIntValueFromInstanceKey(instanceKey).orElse(AXIS_END));
+      for (InstanceKey instanceKey : axisPTS)
+        ret.add(getIntValueFromInstanceKey(instanceKey).orElse(AXIS_END));
     }
 
     return ret;
-  }
-
-  private int getDepthArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(
-        builder, this.getDepthParameterPosition(), getDepthParameterName(), true);
-  }
-
-  private int getAxisArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(
-        builder, this.getAxisParameterPosition(), getAxisParameterName(), true);
   }
 }
