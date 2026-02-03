@@ -2476,12 +2476,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test(
         "tf2_test_ragged_keyword_args_nested.py",
         "test_keywords",
-        3,
-        3,
+        4,
+        4,
         Map.of(
             2, Set.of(TENSOR_2_NONE_NONE_INT32),
             3, Set.of(TENSOR_2_NONE_NONE_INT32),
-            4, Set.of(TENSOR_2_NONE_NONE_INT32)));
+            4, Set.of(TENSOR_2_NONE_NONE_INT32),
+            5, Set.of(TENSOR_2_NONE_NONE_INT32)));
   }
 
   @Test
@@ -2490,12 +2491,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test(
         "tf2_test_ragged_keyword_args_more.py",
         "test_keywords",
-        3,
-        3,
+        4,
+        4,
         Map.of(
             2, Set.of(TENSOR_5_NONE_INT32),
             3, Set.of(TENSOR_4_NONE_INT32),
-            4, Set.of(TENSOR_4_NONE_INT32)));
+            4, Set.of(TENSOR_4_NONE_INT32),
+            5, Set.of(TENSOR_5_NONE_INT32)));
   }
 
   @Test
@@ -5552,6 +5554,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
+  public void testRaggedConstantKeyword()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_constant_keyword.py",
+        "test",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_2_NONE_INT32),
+            3, Set.of(TENSOR_2_NONE_INT32)));
+  }
+
+  @Test
   public void testRaggedFromRowSplits()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -5598,6 +5613,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testRaggedRange7() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_ragged_range7.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_NONE_INT32)));
+  }
+
+  @Test
+  public void testRaggedRangeKeyword()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_range_keyword.py",
+        "test",
+        3,
+        3,
+        Map.of(
+            2, Set.of(TENSOR_1_NONE_INT32),
+            3, Set.of(TENSOR_1_NONE_INT32),
+            4, Set.of(TENSOR_1_NONE_INT32)));
   }
 
   @Test

@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.python.ops.ragged.ragged_tensor import RaggedTensor
 
 
-def test_keywords(rt_splits, rt_lengths, rt_rowids):
+def test_keywords(rt_splits, rt_lengths, rt_rowids, rt_mixed):
     pass
 
 
@@ -39,4 +39,11 @@ rt_rowids = RaggedTensor.from_nested_value_rowids(
 assert rt_rowids.shape.as_list() == [2, None, None]
 assert rt_rowids.dtype == tf.int32
 
-test_keywords(rt_splits, rt_lengths, rt_rowids)
+# Mixed positional (flat_values) and keyword (nested_row_splits)
+rt_mixed = RaggedTensor.from_nested_row_splits(
+    [3, 1, 4, 1, 5, 9, 2, 6], nested_row_splits=[[0, 3, 4], [0, 2, 2, 5, 8]]
+)
+assert rt_mixed.shape.as_list() == [2, None, None]
+assert rt_mixed.dtype == tf.int32
+
+test_keywords(rt_splits, rt_lengths, rt_rowids, rt_mixed)

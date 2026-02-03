@@ -27,8 +27,24 @@ import java.util.logging.Logger;
  */
 public class RaggedRange extends Range {
 
-  @SuppressWarnings("unused")
   private static final Logger LOGGER = Logger.getLogger(RaggedRange.class.getName());
+
+  protected enum Parameters {
+    STARTS,
+    LIMITS,
+    DELTAS,
+    DTYPE,
+    NAME,
+    ROW_SPLITS_DTYPE;
+
+    public String getName() {
+      return name().toLowerCase();
+    }
+
+    public int getIndex() {
+      return ordinal();
+    }
+  }
 
   public RaggedRange(PointsToSetVariable source) {
     super(source);
@@ -39,39 +55,63 @@ public class RaggedRange extends Range {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
-    for (Integer numArgs : getNumberOfPossiblePositionalArguments(builder)) {
-      int startArgIdx = -1;
-      int limitArgIdx = -1;
-      int deltaArgIdx = -1;
+    for (Integer numPosArgs : getNumberOfPossiblePositionalArguments(builder)) {
+      OrdinalSet<InstanceKey> startPts = OrdinalSet.empty();
+      OrdinalSet<InstanceKey> limitPts = OrdinalSet.empty();
+      OrdinalSet<InstanceKey> deltaPts = OrdinalSet.empty();
 
-      if (numArgs == 1) {
-        // tf.ragged.range(limit) -> starts=0, limits=arg0, deltas=1
-        limitArgIdx = 0;
-      } else if (numArgs == 2) {
-        // tf.ragged.range(start, limit) -> starts=arg0, limits=arg1, deltas=1
-        startArgIdx = 0;
-        limitArgIdx = 1;
-      } else if (numArgs >= 3) {
-        // tf.ragged.range(start, limit, delta)
-        startArgIdx = 0;
-        limitArgIdx = 1;
-        deltaArgIdx = 2;
-      } else {
-        continue;
+      if (numPosArgs == 0) {
+        // Keyword only
+        startPts = getArgumentPointsToSet(builder, -1, Parameters.STARTS.getName());
+        limitPts = getArgumentPointsToSet(builder, -1, Parameters.LIMITS.getName());
+        deltaPts = getArgumentPointsToSet(builder, -1, Parameters.DELTAS.getName());
+
+        if (limitPts.isEmpty() && !startPts.isEmpty()) {
+          // tf.ragged.range(starts=5) -> limits=5
+          limitPts = startPts;
+          startPts = OrdinalSet.empty();
+        }
+      } else if (numPosArgs == 1) {
+        // range(limits) or range(starts, limits=X)
+        if (!isKeywordArgumentPresent(builder, Parameters.LIMITS.getName())) {
+          limitPts = getArgumentPointsToSet(builder, 0, null);
+        } else {
+          startPts = getArgumentPointsToSet(builder, 0, null);
+          limitPts = getArgumentPointsToSet(builder, -1, Parameters.LIMITS.getName());
+        }
+      } else if (numPosArgs == 2) {
+        // range(starts, limits)
+        startPts = getArgumentPointsToSet(builder, 0, null);
+        limitPts = getArgumentPointsToSet(builder, 1, null);
+      } else if (numPosArgs >= 3) {
+        // range(starts, limits, deltas)
+        startPts = getArgumentPointsToSet(builder, 0, null);
+        limitPts = getArgumentPointsToSet(builder, 1, null);
+        deltaPts = getArgumentPointsToSet(builder, 2, null);
       }
 
-      OrdinalSet<InstanceKey> startPTS = getPointsToSet(builder, startArgIdx);
-      OrdinalSet<InstanceKey> limitPTS = getPointsToSet(builder, limitArgIdx);
-      OrdinalSet<InstanceKey> deltaPTS = getPointsToSet(builder, deltaArgIdx);
+      // Retrieve keyword args if not already set by positional (and not empty from initialization)
+      if (startPts.isEmpty())
+        startPts =
+            OrdinalSet.unify(
+                startPts, getArgumentPointsToSet(builder, -1, Parameters.STARTS.getName()));
+      if (limitPts.isEmpty())
+        limitPts =
+            OrdinalSet.unify(
+                limitPts, getArgumentPointsToSet(builder, -1, Parameters.LIMITS.getName()));
+      if (deltaPts.isEmpty())
+        deltaPts =
+            OrdinalSet.unify(
+                deltaPts, getArgumentPointsToSet(builder, -1, Parameters.DELTAS.getName()));
 
       // Check for vectors
       boolean hasVector = false;
       Integer vectorLength = null;
 
       List<OrdinalSet<InstanceKey>> allSets = new ArrayList<>();
-      if (startArgIdx != -1) allSets.add(startPTS);
-      if (limitArgIdx != -1) allSets.add(limitPTS);
-      if (deltaArgIdx != -1) allSets.add(deltaPTS);
+      allSets.add(startPts);
+      allSets.add(limitPts);
+      allSets.add(deltaPts);
 
       for (OrdinalSet<InstanceKey> pts : allSets) {
         if (pts != null) {
@@ -109,17 +149,5 @@ public class RaggedRange extends Range {
       }
     }
     return ret;
-  }
-
-  private OrdinalSet<InstanceKey> getPointsToSet(PropagationCallGraphBuilder builder, int argIdx) {
-    if (argIdx == -1) return null;
-    int vn =
-        this.getNode().getMethod().isStatic()
-            ? this.getNode().getIR().getParameter(argIdx)
-            : this.getNode().getIR().getParameter(argIdx + 1);
-    return builder
-        .getPointerAnalysis()
-        .getPointsToSet(
-            builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(this.getNode(), vn));
   }
 }

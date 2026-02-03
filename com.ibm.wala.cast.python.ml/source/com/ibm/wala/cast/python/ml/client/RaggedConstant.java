@@ -513,12 +513,9 @@ public class RaggedConstant extends Constant {
    */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
-
-    int valueNumber = this.getValueArgumentValueNumber();
-    PointerKey valuePK =
-        pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
-    OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
+    OrdinalSet<InstanceKey> valuePointsToSet =
+        this.getArgumentPointsToSet(
+            builder, this.getValueParameterPosition(), this.getValueParameterName());
 
     if (valuePointsToSet == null || valuePointsToSet.isEmpty())
       throw new IllegalArgumentException(
