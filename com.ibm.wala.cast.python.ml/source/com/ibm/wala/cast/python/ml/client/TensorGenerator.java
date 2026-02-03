@@ -675,6 +675,14 @@ public abstract class TensorGenerator {
     return this.getNode().getIR().getParameter(index);
   }
 
+  /**
+   * Returns the points-to set of the argument at the specified position or with the specified name.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param paramPos The position of the argument in the function call.
+   * @param paramName The name of the argument in the function call.
+   * @return The points-to set of the argument at the specified position or with the specified name.
+   */
   protected OrdinalSet<InstanceKey> getArgumentPointsToSet(
       PropagationCallGraphBuilder builder, int paramPos, String paramName) {
     // 1. Try argument from callers (keyword or positional) - This is more precise for
@@ -747,7 +755,7 @@ public abstract class TensorGenerator {
     }
 
     // 2. Fallback: Try positional parameter in callee
-    int valNum = getArgumentValueNumber(builder, paramPos, paramName, true);
+    int valNum = this.getArgumentValueNumber(builder, paramPos, paramName, true);
     if (valNum > 0) {
       PointerKey pk =
           builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(getNode(), valNum);
@@ -760,6 +768,17 @@ public abstract class TensorGenerator {
     return OrdinalSet.empty();
   }
 
+  /**
+   * Returns the value number for the argument at the specified position or with the specified name.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param paramPos The position of the argument in the function call.
+   * @param paramName The name of the argument in the function call.
+   * @param optional Whether the argument is optional.
+   * @return The value number for the argument at the specified position or with the specified name
+   *     or -1 if the argument is optional and not present.
+   * @throws IllegalStateException If the argument is mandatory and not present.
+   */
   protected int getArgumentValueNumber(
       PropagationCallGraphBuilder builder, int paramPos, String paramName, boolean optional) {
     Set<Integer> numArgs = this.getNumberOfPossiblePositionalArguments(builder);
@@ -778,6 +797,13 @@ public abstract class TensorGenerator {
     return this.getArgumentValueNumber(paramPos);
   }
 
+  /**
+   * Returns whether the keyword argument with the specified name is present in the function call.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param paramName The name of the keyword argument.
+   * @return {@code true} if the keyword argument is present, {@code false} otherwise.
+   */
   protected boolean isKeywordArgumentPresent(
       PropagationCallGraphBuilder builder, String paramName) {
     CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
@@ -802,11 +828,29 @@ public abstract class TensorGenerator {
     return false;
   }
 
+  /**
+   * Returns the value number for the argument at the specified position.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param paramPos The position of the argument in the function call.
+   * @param optional Whether the argument is optional.
+   * @return The value number for the argument at the specified position or -1 if the argument is
+   *     optional and not present.
+   * @throws IllegalStateException If the argument is mandatory and not present.
+   */
   protected int getArgumentValueNumber(
       PropagationCallGraphBuilder builder, int paramPos, boolean optional) {
     return this.getArgumentValueNumber(builder, paramPos, null, optional);
   }
 
+  /**
+   * Returns the value number for the argument at the specified position.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param paramPos The position of the argument in the function call.
+   * @return The value number for the argument at the specified position.
+   * @throws IllegalStateException If the argument is mandatory and not present.
+   */
   protected int getArgumentValueNumber(PropagationCallGraphBuilder builder, int paramPos) {
     return this.getArgumentValueNumber(builder, paramPos, false);
   }
