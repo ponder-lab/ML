@@ -29,6 +29,7 @@ import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
+import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.classLoader.NewSiteReference;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -689,66 +690,71 @@ public abstract class TensorGenerator {
     // context-sensitive nodes
     CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
     if (cs != null) {
-      CallSiteReference siteReference = cs.getCallSiteRefs()[0];
-      com.ibm.wala.classLoader.IMethod callerMethod = cs.getMethods()[0];
-
       OrdinalSet<InstanceKey> combinedPts = OrdinalSet.empty();
       boolean found = false;
 
-      for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode());
-          it.hasNext(); ) {
-        CGNode caller = it.next();
+      for (int i = 0; i < cs.getCallSiteRefs().length; i++) {
+        CallSiteReference siteReference = cs.getCallSiteRefs()[i];
+        IMethod callerMethod = cs.getMethods()[i];
 
-        // Only consider the caller that matches the context
-        if (!caller.getMethod().equals(callerMethod)) {
-          continue;
-        }
+        for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode());
+            it.hasNext(); ) {
+          CGNode caller = it.next();
 
-        SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(siteReference);
-        for (SSAAbstractInvokeInstruction callInstr : calls) {
-          // Verify this specific call instruction actually targets our node in this context
-          boolean targetsThisNode = false;
-          for (CGNode target : builder.getCallGraph().getPossibleTargets(caller, siteReference)) {
-            if (target.equals(this.getNode())) {
-              targetsThisNode = true;
-              break;
-            }
-          }
-
-          if (!targetsThisNode) {
+          // Only consider the caller that matches the context
+          if (!caller.getMethod().equals(callerMethod)) {
             continue;
           }
 
-          if (callInstr instanceof PythonInvokeInstruction) {
-            PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
-            int argValNum = -1;
-
-            if (paramName != null) {
-              argValNum = pyCallInstr.getUse(paramName);
-            }
-
-            if (argValNum == -1 && paramPos >= 0) {
-              int numPosParams = pyCallInstr.getNumberOfPositionalParameters();
-              if (paramPos + 1 < numPosParams) {
-                argValNum = pyCallInstr.getUse(paramPos + 1);
+          SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(siteReference);
+          for (SSAAbstractInvokeInstruction callInstr : calls) {
+            // Verify this specific call instruction actually targets our node in this context
+            boolean targetsThisNode = false;
+            for (CGNode target : builder.getCallGraph().getPossibleTargets(caller, siteReference)) {
+              if (target.equals(this.getNode())) {
+                targetsThisNode = true;
+                break;
               }
             }
 
-            if (argValNum != -1) {
-              PointerKey argPk =
-                  builder
-                      .getPointerAnalysis()
-                      .getHeapModel()
-                      .getPointerKeyForLocal(caller, argValNum);
-              OrdinalSet<InstanceKey> argPts = builder.getPointerAnalysis().getPointsToSet(argPk);
-              if (argPts != null && !argPts.isEmpty()) {
-                combinedPts = OrdinalSet.unify(combinedPts, argPts);
-                found = true;
+            if (!targetsThisNode) {
+              continue;
+            }
+
+            if (callInstr instanceof PythonInvokeInstruction) {
+              PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
+              int argValNum = -1;
+
+              if (paramName != null) {
+                argValNum = pyCallInstr.getUse(paramName);
+              }
+
+              if (argValNum == -1 && paramPos >= 0) {
+                int numPosParams =
+                    pyCallInstr.getNumberOfPositionalParameters() - 1; // Exclude function.
+                if (paramPos < numPosParams) {
+                  argValNum =
+                      pyCallInstr.getUse(paramPos + 1); // Positional arguments start at index 1.
+                }
+              }
+
+              if (argValNum != -1) {
+                PointerKey argPk =
+                    builder
+                        .getPointerAnalysis()
+                        .getHeapModel()
+                        .getPointerKeyForLocal(caller, argValNum);
+                OrdinalSet<InstanceKey> argPts = builder.getPointerAnalysis().getPointsToSet(argPk);
+                if (argPts != null && !argPts.isEmpty()) {
+                  combinedPts = OrdinalSet.unify(combinedPts, argPts);
+                  found = true;
+                }
               }
             }
           }
         }
       }
+
       if (found) {
         return combinedPts;
       }
@@ -783,8 +789,11 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, int paramPos, String paramName, boolean optional) {
     Set<Integer> numArgs = this.getNumberOfPossiblePositionalArguments(builder);
 
-    if (!numArgs.stream().anyMatch(n -> n >= paramPos + 1)
-        && (paramName == null || !this.isKeywordArgumentPresent(builder, paramName)))
+    boolean keywordPresent =
+        (paramName != null && this.isKeywordArgumentPresent(builder, paramName));
+    boolean positionalPresent = numArgs.stream().anyMatch(n -> n > paramPos);
+
+    if (!positionalPresent && !keywordPresent)
       if (optional) return -1;
       else
         throw new IllegalStateException(

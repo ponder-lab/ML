@@ -23,8 +23,43 @@ import java.util.Set;
 
 public class SparseAdd extends ElementWiseOperation {
 
+  protected enum Parameters {
+    A,
+    B,
+    THRESHOLD,
+    NAME;
+
+    public String getName() {
+      return name().toLowerCase();
+    }
+
+    public int getIndex() {
+      return ordinal();
+    }
+  }
+
   public SparseAdd(PointsToSetVariable source) {
     super(source);
+  }
+
+  @Override
+  protected int getXParameterPosition() {
+    return Parameters.A.getIndex();
+  }
+
+  @Override
+  protected String getXParameterName() {
+    return Parameters.A.getName();
+  }
+
+  @Override
+  protected int getYParameterPosition() {
+    return Parameters.B.getIndex();
+  }
+
+  @Override
+  protected String getYParameterName() {
+    return Parameters.B.getName();
   }
 
   @Override

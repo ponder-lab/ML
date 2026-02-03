@@ -28,6 +28,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.READ_DATA_SETS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_EYE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_FROM_DENSE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SUBTRACT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL;
@@ -102,6 +103,8 @@ public class TensorGeneratorFactory {
         || calledFunction.equals(DIVIDE.getDeclaringClass()))
       return new ElementWiseOperation(source);
     else if (calledFunction.equals(SPARSE_ADD.getDeclaringClass())) return new SparseAdd(source);
+    else if (calledFunction.equals(SPARSE_FROM_DENSE.getDeclaringClass()))
+      return new SparseFromDense(source);
     else if (calledFunction.equals(MODEL.getDeclaringClass())) return new Model(source);
     else if (calledFunction.equals(READ_DATA_SETS.getDeclaringClass()))
       return new ReadDataSets(source);

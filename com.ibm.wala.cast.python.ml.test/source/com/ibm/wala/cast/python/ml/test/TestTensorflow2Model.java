@@ -5960,6 +5960,86 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_model_init.py", "check_subclass", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
+  @Test
+  public void testConvertToTensorKeyword()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_convert_to_tensor_keyword.py",
+        "test",
+        3,
+        3,
+        Map.of(
+            2, Set.of(TENSOR_3_FLOAT32),
+            3, Set.of(TENSOR_2_2_INT32),
+            4, Set.of(TENSOR_2_FLOAT32)));
+  }
+
+  @Test
+  public void testEyeKeyword()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_eye_keyword.py",
+        "test",
+        3,
+        3,
+        Map.of(
+            2, Set.of(TENSOR_2_3_INT32),
+            3, Set.of(TENSOR_3_3_FLOAT32),
+            4, Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  @Test
+  public void testGammaKeyword()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gamma_keyword.py",
+        "test",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_2_FLOAT64),
+            3, Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  @Test
+  public void testPoissonKeyword()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_poisson_keyword.py",
+        "test",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_2_FLOAT64),
+            3, Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  @Test
+  public void testSparseAddKeyword()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sparse_add_keyword.py",
+        "test",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_2_2_INT32),
+            3, Set.of(TENSOR_2_2_INT32)));
+  }
+
+  @Test
+  public void testSparseEyeKeyword()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sparse_eye_keyword.py",
+        "test",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_2_3_INT32),
+            3, Set.of(TENSOR_3_3_FLOAT32)));
+  }
+
   private void test(
       String filename,
       String functionName,

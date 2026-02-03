@@ -19,42 +19,87 @@ import java.util.Set;
  *     href="https://www.tensorflow.org/api_docs/python/tf/convert_to_tensor">tf.convert_to_tensor
  *     API</a>.
  */
-public class ConvertToTensor extends ZerosLike {
+public class ConvertToTensor extends Constant {
 
-  /**
-   * Optional element type for the returned tensor, used when <code>dtype</code> is <code>None
-   * </code>.
-   *
-   * <p>Need to consider this when inferring default dtypes.
-   *
-   * @see <a href="https://www.tensorflow.org/api_docs/python/tf/convert_to_tensor#dtype_hint">
-   *     <code>dtype_hint</code> parameter</a>.
-   */
-  private static final int DTYPE_HINT_PARAMETER_POSITION = 2;
+  protected enum Parameters {
+    VALUE,
+    DTYPE,
+    /**
+     * Optional element type for the returned tensor, used when <code>dtype</code> is <code>None
+     * </code>.
+     *
+     * <p>Need to consider this when inferring default dtypes.
+     *
+     * @see <a href="https://www.tensorflow.org/api_docs/python/tf/convert_to_tensor#dtype_hint">
+     *     <code>dtype_hint</code> parameter</a>.
+     */
+    DTYPE_HINT,
+    NAME,
+    AS_REF,
+    PREFERRED_DTYPE;
+
+    public String getName() {
+      return name().toLowerCase();
+    }
+
+    public int getIndex() {
+      return ordinal();
+    }
+  }
 
   public ConvertToTensor(PointsToSetVariable source) {
     super(source);
   }
 
   @Override
+  protected int getValueParameterPosition() {
+    return Parameters.VALUE.getIndex();
+  }
+
+  @Override
+  protected String getValueParameterName() {
+    return Parameters.VALUE.getName();
+  }
+
+  @Override
+  protected int getDTypeParameterPosition() {
+    return Parameters.DTYPE.getIndex();
+  }
+
+  @Override
+  protected String getDTypeParameterName() {
+    return Parameters.DTYPE.getName();
+  }
+
+  @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+
     // If the dtype argument is not specified, then the type is inferred from the type of value,
+
     // unless dtype_hint is provided.
+
     OrdinalSet<InstanceKey> pointsToSet =
-        this.getArgumentPointsToSet(builder, DTYPE_HINT_PARAMETER_POSITION, "dtype_hint");
+        this.getArgumentPointsToSet(
+            builder, Parameters.DTYPE_HINT.getIndex(), Parameters.DTYPE_HINT.getName());
 
     Set<DType> defaultDTypes = super.getDefaultDTypes(builder);
 
     // If the argument dtype hint is not specified.
+
     if (pointsToSet == null || pointsToSet.isEmpty()) return defaultDTypes;
     else {
+
       // The dtype points-to set is non-empty, meaning that the dtype hint was explicitly set.
+
       // If the conversion to dtype_hint is not possible, this argument has no effect.
 
       // Get the dtypes from the points-to set.
-      Set<DType> dTypesFromDTypeHintArgument = getDTypesFromDTypeArgument(builder, pointsToSet);
+
+      Set<DType> dTypesFromDTypeHintArgument =
+          this.getDTypesFromDTypeArgument(builder, pointsToSet);
 
       // for each possible dtype from dtype hint, check if it is compatible with default dtypes.
+
       Set<DType> compatibleDTypes = EnumSet.noneOf(DType.class);
 
       for (DType dTypeFromDTypeHint : dTypesFromDTypeHintArgument)
@@ -64,8 +109,22 @@ public class ConvertToTensor extends ZerosLike {
 
       if (!compatibleDTypes.isEmpty()) return compatibleDTypes;
       else
+
         // No compatible dtypes found, return the default dtypes.
+
         return defaultDTypes;
     }
+  }
+
+  @Override
+  protected int getShapeParameterPosition() {
+
+    return UNDEFINED_PARAMETER_POSITION;
+  }
+
+  @Override
+  protected String getShapeParameterName() {
+
+    return null;
   }
 }

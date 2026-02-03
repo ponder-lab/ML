@@ -234,6 +234,16 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String SPARSE_ADD_SIGNATURE = "tf.sparse.add()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/sparse/from_dense. */
+  public static final MethodReference SPARSE_FROM_DENSE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/sparse_from_dense")),
+          AstMethodReference.fnSelector);
+
+  private static final String SPARSE_FROM_DENSE_SIGNATURE = "tf.sparse.from_dense()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/gamma. */
   public static final MethodReference GAMMA =
       MethodReference.findOrCreate(
@@ -437,6 +447,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(SPARSE_TENSOR.getDeclaringClass(), SPARSE_TENSOR_SIGNATURE),
           Map.entry(SPARSE_EYE.getDeclaringClass(), SPARSE_EYE_SIGNATURE),
           Map.entry(SPARSE_ADD.getDeclaringClass(), SPARSE_ADD_SIGNATURE),
+          Map.entry(SPARSE_FROM_DENSE.getDeclaringClass(), SPARSE_FROM_DENSE_SIGNATURE),
           Map.entry(ONES.getDeclaringClass(), ONES_SIGNATURE),
           Map.entry(ZEROS.getDeclaringClass(), ZEROS_SIGNATURE),
           Map.entry(ONE_HOT.getDeclaringClass(), ONE_HOT_SIGNATURE),

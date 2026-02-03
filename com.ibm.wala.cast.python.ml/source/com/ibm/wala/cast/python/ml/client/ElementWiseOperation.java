@@ -65,18 +65,32 @@ public class ElementWiseOperation extends ZerosLike {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
     OrdinalSet<InstanceKey> xPTS =
-        this.getArgumentPointsToSet(builder, this.getXParameterPosition(), getXParameterName());
+        this.getArgumentPointsToSet(
+            builder, this.getXParameterPosition(), this.getXParameterName());
+
     if (xPTS == null || xPTS.isEmpty())
       throw new IllegalArgumentException(
-          "Mandatory argument 'x' missing for ElementWiseOperation: " + this.getNode());
+          "Mandatory argument '"
+              + this.getXParameterName()
+              + "' missing for "
+              + ElementWiseOperation.class.getName()
+              + ": "
+              + this.getNode());
 
     Set<List<Dimension<?>>> xShapes = this.getShapesOfValue(builder, xPTS);
 
     OrdinalSet<InstanceKey> yPTS =
-        this.getArgumentPointsToSet(builder, this.getYParameterPosition(), getYParameterName());
+        this.getArgumentPointsToSet(
+            builder, this.getYParameterPosition(), this.getYParameterName());
+
     if (yPTS == null || yPTS.isEmpty())
       throw new IllegalArgumentException(
-          "Mandatory argument 'y' missing for ElementWiseOperation: " + this.getNode());
+          "Mandatory argument '"
+              + this.getYParameterName()
+              + "' missing for "
+              + ElementWiseOperation.class.getName()
+              + ": "
+              + this.getNode());
 
     Set<List<Dimension<?>>> yShapes = this.getShapesOfValue(builder, yPTS);
 
