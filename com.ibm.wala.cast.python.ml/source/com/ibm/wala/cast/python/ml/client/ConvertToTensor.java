@@ -2,8 +2,6 @@ package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
-import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
-import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.intset.OrdinalSet;
@@ -42,18 +40,8 @@ public class ConvertToTensor extends ZerosLike {
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // If the dtype argument is not specified, then the type is inferred from the type of value,
     // unless dtype_hint is provided.
-    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
-
-    int valNum = this.getDTypeHintArgumentValueNumber();
-    OrdinalSet<InstanceKey> pointsToSet = null;
-
-    if (valNum > 0) {
-      // The dtype hint is in an explicit argument.
-      // FIXME: Handle keyword arguments.
-      PointerKey pointerKey =
-          pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valNum);
-      pointsToSet = pointerAnalysis.getPointsToSet(pointerKey);
-    }
+    OrdinalSet<InstanceKey> pointsToSet =
+        this.getArgumentPointsToSet(builder, DTYPE_HINT_PARAMETER_POSITION, "dtype_hint");
 
     Set<DType> defaultDTypes = super.getDefaultDTypes(builder);
 
@@ -79,15 +67,5 @@ public class ConvertToTensor extends ZerosLike {
         // No compatible dtypes found, return the default dtypes.
         return defaultDTypes;
     }
-  }
-
-  /**
-   * Returns the value number for the dtype hint argument in the function call.
-   *
-   * @return The value number for the dtype hint argument in the function call or {@link
-   *     TensorGenerator#UNDEFINED_PARAMETER_POSITION} if the dtype hint argument is not supported.
-   */
-  protected int getDTypeHintArgumentValueNumber() {
-    return this.getArgumentValueNumber(DTYPE_HINT_PARAMETER_POSITION);
   }
 }

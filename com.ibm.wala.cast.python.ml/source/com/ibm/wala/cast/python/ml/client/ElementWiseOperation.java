@@ -5,9 +5,11 @@ import static com.ibm.wala.cast.python.ml.util.TensorShapeUtil.getBroadcastedSha
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -49,11 +51,6 @@ public class ElementWiseOperation extends ZerosLike {
     return Parameters.X.getName();
   }
 
-  protected int getXArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(
-        builder, this.getXParameterPosition(), getXParameterName(), false);
-  }
-
   protected int getYParameterPosition() {
     return Parameters.Y.getIndex();
   }
@@ -62,20 +59,26 @@ public class ElementWiseOperation extends ZerosLike {
     return Parameters.Y.getName();
   }
 
-  protected int getYArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(
-        builder, this.getYParameterPosition(), getYParameterName(), false);
-  }
-
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     // The resulting shape is the broadcasted shape of the shapes of x and y.
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
-    Set<List<Dimension<?>>> xShapes =
-        this.getShapes(builder, this.getXArgumentValueNumber(builder));
-    Set<List<Dimension<?>>> yShapes =
-        this.getShapes(builder, this.getYArgumentValueNumber(builder));
+    OrdinalSet<InstanceKey> xPTS =
+        this.getArgumentPointsToSet(builder, this.getXParameterPosition(), getXParameterName());
+    if (xPTS == null || xPTS.isEmpty())
+      throw new IllegalArgumentException(
+          "Mandatory argument 'x' missing for ElementWiseOperation: " + this.getNode());
+
+    Set<List<Dimension<?>>> xShapes = this.getShapesOfValue(builder, xPTS);
+
+    OrdinalSet<InstanceKey> yPTS =
+        this.getArgumentPointsToSet(builder, this.getYParameterPosition(), getYParameterName());
+    if (yPTS == null || yPTS.isEmpty())
+      throw new IllegalArgumentException(
+          "Mandatory argument 'y' missing for ElementWiseOperation: " + this.getNode());
+
+    Set<List<Dimension<?>>> yShapes = this.getShapesOfValue(builder, yPTS);
 
     for (List<Dimension<?>> xShape : xShapes)
       for (List<Dimension<?>> yShape : yShapes)

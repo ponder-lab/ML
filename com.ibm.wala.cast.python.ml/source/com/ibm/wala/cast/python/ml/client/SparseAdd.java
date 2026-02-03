@@ -27,21 +27,12 @@ public class SparseAdd extends ElementWiseOperation {
     super(source);
   }
 
-  private OrdinalSet<InstanceKey> getPointsToSet(
-      PropagationCallGraphBuilder builder, int valueNumber) {
-    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
-    PointerKey valuePK =
-        pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
-    return pointerAnalysis.getPointsToSet(valuePK);
-  }
-
   @Override
-  protected Set<List<Dimension<?>>> getShapes(
-      PropagationCallGraphBuilder builder, int argumentValueNumber) {
+  protected Set<List<Dimension<?>>> getShapesOfValue(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
 
-    OrdinalSet<InstanceKey> pointsToSet = getPointsToSet(builder, argumentValueNumber);
-    if (pointsToSet == null || pointsToSet.isEmpty()) {
-      return super.getShapes(builder, argumentValueNumber);
+    if (valuePointsToSet == null || valuePointsToSet.isEmpty()) {
+      return super.getShapesOfValue(builder, valuePointsToSet);
     }
 
     TypeReference sparseTensorType =
@@ -50,7 +41,7 @@ public class SparseAdd extends ElementWiseOperation {
             TypeName.string2TypeName("Ltensorflow/python/framework/sparse_tensor/SparseTensor"));
 
     boolean hasSparseTensor = false;
-    for (InstanceKey ik : pointsToSet) {
+    for (InstanceKey ik : valuePointsToSet) {
       if (ik.getConcreteType().getReference().equals(sparseTensorType)) {
         hasSparseTensor = true;
         break;
@@ -58,13 +49,13 @@ public class SparseAdd extends ElementWiseOperation {
     }
 
     if (!hasSparseTensor) {
-      return super.getShapes(builder, argumentValueNumber);
+      return super.getShapesOfValue(builder, valuePointsToSet);
     }
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
-    for (InstanceKey ik : pointsToSet) {
+    for (InstanceKey ik : valuePointsToSet) {
       if (ik.getConcreteType().getReference().equals(sparseTensorType)) {
         FieldReference denseShapeFieldRef =
             FieldReference.findOrCreate(Root, findOrCreateAsciiAtom("dense_shape"), Root);
@@ -82,8 +73,8 @@ public class SparseAdd extends ElementWiseOperation {
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    int xArgValueNum = this.getXArgumentValueNumber(builder);
-    OrdinalSet<InstanceKey> pointsToSet = getPointsToSet(builder, xArgValueNum);
+    OrdinalSet<InstanceKey> pointsToSet =
+        this.getArgumentPointsToSet(builder, this.getXParameterPosition(), getXParameterName());
 
     if (pointsToSet == null || pointsToSet.isEmpty()) {
       return super.getDefaultDTypes(builder);

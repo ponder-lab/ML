@@ -3,11 +3,10 @@ package com.ibm.wala.cast.python.ml.client;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
-import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
-import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -38,24 +37,13 @@ public class SparseEye extends Ones {
     super(source);
   }
 
-  private Set<Optional<Integer>> getPossiblePositionalArgumentValues(
+  private Set<Optional<Integer>> getPossibleArgumentValues(
       PropagationCallGraphBuilder builder, int paramPosition, String paramName) {
-    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
-    Set<Integer> possibleNumArgs = this.getNumberOfPossiblePositionalArguments(builder);
+    OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPosition, paramName);
 
-    return possibleNumArgs.stream()
-        .filter(numArgs -> numArgs >= paramPosition + 1)
-        .map(
-            _ -> {
-              int argValNum = this.getArgumentValueNumber(builder, paramPosition, paramName, true);
-              if (argValNum <= 0) return null;
+    if (pts == null || pts.isEmpty()) return HashSetFactory.make();
 
-              PointerKey pointerKey =
-                  pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), argValNum);
-              return pointerAnalysis.getPointsToSet(pointerKey);
-            })
-        .filter(pts -> pts != null)
-        .flatMap(pts -> StreamSupport.stream(pts.spliterator(), false))
+    return StreamSupport.stream(pts.spliterator(), false)
         .map(SparseEye::getIntValueFromInstanceKey)
         .collect(Collectors.toSet());
   }
@@ -106,7 +94,7 @@ public class SparseEye extends Ones {
 
   private Set<Optional<Integer>> getNumberOfRows(PropagationCallGraphBuilder builder) {
     Set<Optional<Integer>> values =
-        this.getPossiblePositionalArgumentValues(
+        this.getPossibleArgumentValues(
             builder, this.getNumRowsParameterPosition(), this.getNumRowsParameterName());
 
     if (values == null || values.isEmpty())
@@ -116,7 +104,7 @@ public class SparseEye extends Ones {
   }
 
   private Set<Optional<Integer>> getNumberOfColumns(PropagationCallGraphBuilder builder) {
-    return this.getPossiblePositionalArgumentValues(
+    return this.getPossibleArgumentValues(
         builder, this.getNumColumnsParameterPosition(), this.getNumColumnsParameterName());
   }
 

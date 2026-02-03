@@ -76,16 +76,6 @@ public class Gamma extends Ones {
     return Parameters.BETA.getName();
   }
 
-  protected int getAlphaParameterValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(
-        builder, this.getAlphaParameterPosition(), this.getAlphaParameterName(), false);
-  }
-
-  protected int getBetaParameterValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(
-        builder, this.getBetaParameterPosition(), this.getBetaParameterName(), true);
-  }
-
   @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
@@ -101,10 +91,14 @@ public class Gamma extends Ones {
     Set<List<Dimension<?>>> alphaShapes = this.getShapesOfValue(builder, alphaPointsToSet);
 
     if (alphaShapes.isEmpty())
-      throw new IllegalStateException("Cannot determine shape for mandatory alpha parameter.");
+      throw new IllegalArgumentException("Cannot determine shape for mandatory alpha parameter.");
+
+    OrdinalSet<InstanceKey> betaPointsToSet =
+        this.getArgumentPointsToSet(
+            builder, this.getBetaParameterPosition(), this.getBetaParameterName());
 
     // If there is no beta parameter.
-    if (this.getBetaParameterValueNumber(builder) < 0)
+    if (betaPointsToSet == null || betaPointsToSet.isEmpty())
       // return shape `tf.concat([shape, tf.shape(alpha)], axis=0)`.
       shapes.forEach(
           shape -> {
@@ -120,9 +114,6 @@ public class Gamma extends Ones {
       shapes.forEach(
           shape -> {
             // Get the shape of the beta parameter, which is optional.
-            OrdinalSet<InstanceKey> betaPointsToSet =
-                this.getArgumentPointsToSet(
-                    builder, this.getBetaParameterPosition(), this.getBetaParameterName());
             Set<List<Dimension<?>>> betaShapes = this.getShapesOfValue(builder, betaPointsToSet);
 
             alphaShapes.forEach(

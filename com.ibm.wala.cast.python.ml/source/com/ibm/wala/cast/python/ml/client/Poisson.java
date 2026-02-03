@@ -1,9 +1,11 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -65,14 +67,8 @@ public class Poisson extends Ones {
     return Parameters.LAM.getName();
   }
 
-  protected int getLamParameterValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(
-        builder, this.getLamParameterPosition(), getLamParameterName(), false);
-  }
-
   @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
-    // ...
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     Set<List<Dimension<?>>> shapes = super.getShapes(builder);
 
@@ -81,8 +77,14 @@ public class Poisson extends Ones {
           "Cannot determine shape for " + this.getSignature() + " call.");
 
     // Get the shape of the lam parameter.
-    Set<List<Dimension<?>>> lamShapes =
-        this.getShapes(builder, this.getLamParameterValueNumber(builder));
+    OrdinalSet<InstanceKey> lamPTS =
+        this.getArgumentPointsToSet(builder, this.getLamParameterPosition(), getLamParameterName());
+
+    if (lamPTS == null || lamPTS.isEmpty())
+      throw new IllegalArgumentException(
+          "Mandatory 'lam' argument missing for Poisson: " + this.getNode());
+
+    Set<List<Dimension<?>>> lamShapes = this.getShapesOfValue(builder, lamPTS);
 
     // return shape `tf.concat([shape, tf.shape(lam)], axis=0)`.
     shapes.forEach(

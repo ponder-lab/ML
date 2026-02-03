@@ -4,8 +4,6 @@ import static java.util.Collections.emptySet;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
-import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
-import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.intset.OrdinalSet;
@@ -34,11 +32,6 @@ public class Eye extends SparseEye {
     super(source);
   }
 
-  protected int getBatchShapesArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    return this.getArgumentValueNumber(
-        builder, this.getBatchShapeParameterPosition(), this.getBatchShapeParameterName(), true);
-  }
-
   protected int getBatchShapeParameterPosition() {
     return Parameters.BATCH_SHAPE.getIndex();
   }
@@ -60,31 +53,19 @@ public class Eye extends SparseEye {
   }
 
   private Set<List<Dimension<?>>> getBatchShapes(PropagationCallGraphBuilder builder) {
-    Set<Integer> possibleNumArgs = this.getNumberOfPossiblePositionalArguments(builder);
+    OrdinalSet<InstanceKey> pts =
+        this.getArgumentPointsToSet(
+            builder, this.getBatchShapeParameterPosition(), this.getBatchShapeParameterName());
 
-    if (possibleNumArgs.contains(this.getBatchShapeParameterPosition() + 1)
-        || isKeywordArgumentPresent(builder, this.getBatchShapeParameterName())) {
-      PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+    if (pts == null || pts.isEmpty()) return emptySet();
 
-      int argValNum = this.getBatchShapesArgumentValueNumber(builder);
-      if (argValNum <= 0) return emptySet();
+    Set<List<Dimension<?>>> shapesFromShapeArgument = this.getShapesFromShapeArgument(builder, pts);
 
-      PointerKey pointerKey =
-          pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), argValNum);
+    if (shapesFromShapeArgument == null || shapesFromShapeArgument.isEmpty())
+      throw new IllegalStateException(
+          "Batch shape argument for tf.eye() should be a list of dimensions.");
 
-      OrdinalSet<InstanceKey> pts = pointerAnalysis.getPointsToSet(pointerKey);
-
-      Set<List<Dimension<?>>> shapesFromShapeArgument =
-          this.getShapesFromShapeArgument(builder, pts);
-
-      if (shapesFromShapeArgument == null || shapesFromShapeArgument.isEmpty())
-        throw new IllegalStateException(
-            "Batch shape argument for tf.eye() should be a list of dimensions.");
-
-      return shapesFromShapeArgument;
-    }
-
-    return emptySet();
+    return shapesFromShapeArgument;
   }
 
   @Override
