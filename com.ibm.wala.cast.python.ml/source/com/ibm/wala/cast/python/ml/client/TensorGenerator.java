@@ -6,10 +6,12 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FIELD_REFERENCE_TO_DTYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NDARRAY_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VARIABLES_VARIABLE;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
@@ -416,10 +418,32 @@ public abstract class TensorGenerator {
           PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
           OrdinalSet<InstanceKey> valuePts = pointerAnalysis.getPointsToSet(pk);
           ikShapes.addAll(this.getShapesOfValue(builder, valuePts));
+        } else if (reference.equals(VARIABLES_VARIABLE)) {
+          FieldReference shapeField =
+              FieldReference.findOrCreate(VARIABLES_VARIABLE, findOrCreateAsciiAtom("shape"), Root);
+          IField f = builder.getClassHierarchy().resolveField(shapeField);
+          PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+          OrdinalSet<InstanceKey> shapePts = pointerAnalysis.getPointsToSet(pk);
+
+          if (shapePts != null && !shapePts.isEmpty()) {
+            ikShapes.addAll(this.getShapesFromShapeArgument(builder, shapePts));
+          } else {
+            // Fallback to initial_value.
+            FieldReference valField =
+                FieldReference.findOrCreate(
+                    VARIABLES_VARIABLE, findOrCreateAsciiAtom("initial_value"), Root);
+            f = builder.getClassHierarchy().resolveField(valField);
+            pk = builder.getPointerKeyForInstanceField(asin, f);
+            OrdinalSet<InstanceKey> valPts = pointerAnalysis.getPointsToSet(pk);
+            if (valPts != null && !valPts.isEmpty()) {
+              ikShapes.addAll(this.getShapesOfValue(builder, valPts));
+            }
+          }
         } else if (reference.equals(TENSOR_TYPE)
             || reference.equals(CONVERT_TO_TENSOR_TYPE)
-            || reference.equals(NDARRAY_TYPE)) {
-          // Already a tensor, do nothing. Shapes will flow via the dataflow graph.
+            || reference.equals(NDARRAY_TYPE)
+            || reference.equals(MODEL.getDeclaringClass())) {
+          // Already a tensor or a model, do nothing. Shapes will flow via the dataflow graph.
           LOGGER.fine(
               "Encountered " + reference.getName() + ". Shape will flow via dataflow graph.");
         } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
@@ -708,10 +732,32 @@ public abstract class TensorGenerator {
           PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
           OrdinalSet<InstanceKey> valuePts = pointerAnalysis.getPointsToSet(pk);
           ikDTypes.addAll(this.getDTypesOfValue(builder, valuePts));
+        } else if (reference.equals(VARIABLES_VARIABLE)) {
+          FieldReference dtypeField =
+              FieldReference.findOrCreate(VARIABLES_VARIABLE, findOrCreateAsciiAtom("dtype"), Root);
+          IField f = builder.getClassHierarchy().resolveField(dtypeField);
+          PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+          OrdinalSet<InstanceKey> dtypePts = pointerAnalysis.getPointsToSet(pk);
+
+          if (dtypePts != null && !dtypePts.isEmpty()) {
+            ikDTypes.addAll(this.getDTypesFromDTypeArgument(builder, dtypePts));
+          } else {
+            // Fallback to initial_value.
+            FieldReference valField =
+                FieldReference.findOrCreate(
+                    VARIABLES_VARIABLE, findOrCreateAsciiAtom("initial_value"), Root);
+            f = builder.getClassHierarchy().resolveField(valField);
+            pk = builder.getPointerKeyForInstanceField(asin, f);
+            OrdinalSet<InstanceKey> valPts = pointerAnalysis.getPointsToSet(pk);
+            if (valPts != null && !valPts.isEmpty()) {
+              ikDTypes.addAll(this.getDTypesOfValue(builder, valPts));
+            }
+          }
         } else if (reference.equals(TENSOR_TYPE)
             || reference.equals(CONVERT_TO_TENSOR_TYPE)
-            || reference.equals(NDARRAY_TYPE)) {
-          // Already a tensor, do nothing. DTypes will flow via the dataflow graph.
+            || reference.equals(NDARRAY_TYPE)
+            || reference.equals(MODEL.getDeclaringClass())) {
+          // Already a tensor or a model, do nothing. DTypes will flow via the dataflow graph.
           LOGGER.fine(
               "Encountered " + reference.getName() + ". DType will flow via dataflow graph.");
         } else throw new IllegalStateException("Unknown type reference: " + reference + ".");

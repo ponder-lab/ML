@@ -9,20 +9,13 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * A generator for tensors created by the <code>tf.keras.Model()</code> function in TensorFlow.
+ * A generator for tensors created by <code>tf.data.Dataset</code> transformations.
  *
- * @see <a href="https://www.tensorflow.org/api_docs/python/tf/keras/Model">tf.keras.Model</a>.
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class Model extends TensorGenerator {
+public class DatasetGenerator extends TensorGenerator {
 
-  protected enum Parameters {
-    INPUTS,
-    OUTPUTS,
-    NAME
-  }
-
-  public Model(PointsToSetVariable source) {
+  public DatasetGenerator(PointsToSetVariable source) {
     super(source);
   }
 
@@ -49,12 +42,12 @@ public class Model extends TensorGenerator {
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     throw new IllegalArgumentException(
-        "Shape is mandatory and must be provided explicitly for tf.keras.Model.");
+        "Modeling for tf.data.Dataset transformation " + this.getSource() + " is missing.");
   }
 
   @Override
   protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     throw new IllegalArgumentException(
-        "DType is mandatory and must be provided explicitly for tf.keras.Model.");
+        "Modeling for tf.data.Dataset transformation " + this.getSource() + " is missing.");
   }
 }

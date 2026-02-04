@@ -110,6 +110,22 @@ public class TensorFlowTypes extends PythonTypes {
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/python/ops/variables/Variable"));
 
+  public static final TypeReference DATASET_SHUFFLE_TYPE =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/shuffle"));
+
+  public static final TypeReference DATASET_BATCH_TYPE =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/batch"));
+
+  public static final TypeReference DATASET_MAP_TYPE =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/map"));
+
+  public static final TypeReference DATASET_RANGE_TYPE =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/range"));
+
+  public static final TypeReference DATASET_FROM_TENSOR_SLICES_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/data/from_tensor_slices"));
+
   /** https://www.tensorflow.org/api_docs/python/tf/ones. */
   public static final MethodReference ONES =
       MethodReference.findOrCreate(
@@ -440,6 +456,22 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String MODEL_SIGNATURE = "tf.keras.Model()";
 
+  public static final MethodReference TENSOR =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/Tensor")),
+          AstMethodReference.fnSelector);
+
+  private static final String TENSOR_SIGNATURE = "tf.Tensor()";
+
+  public static final MethodReference NDARRAY =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/ndarray")),
+          AstMethodReference.fnSelector);
+
+  private static final String NDARRAY_SIGNATURE = "tf.ndarray()";
+
   public static final MethodReference READ_DATA_SETS =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
@@ -457,6 +489,22 @@ public class TensorFlowTypes extends PythonTypes {
           AstMethodReference.fnSelector);
 
   private static final String RESHAPE_SIGNATURE = "tf.reshape()";
+
+  public static final MethodReference DATASET_BATCH =
+      MethodReference.findOrCreate(DATASET, AstMethodReference.fnSelector);
+
+  public static final MethodReference DATASET_SHUFFLE =
+      MethodReference.findOrCreate(DATASET, AstMethodReference.fnSelector);
+
+  public static final MethodReference DATASET_MAP =
+      MethodReference.findOrCreate(DATASET, AstMethodReference.fnSelector);
+
+  public static final MethodReference DATASET_FROM_TENSOR_SLICES =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/data/Dataset/from_tensor_slices")),
+          AstMethodReference.fnSelector);
 
   /** A mapping from a {@link TypeReference} to its associated TensorFlow signature. */
   public static final Map<TypeReference, String> TYPE_REFERENCE_TO_SIGNATURE =
@@ -498,6 +546,8 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(SUBTRACT.getDeclaringClass(), SUBTRACT_SIGNATURE),
           Map.entry(DIVIDE.getDeclaringClass(), DIVIDE_SIGNATURE),
           Map.entry(MODEL.getDeclaringClass(), MODEL_SIGNATURE),
+          Map.entry(TENSOR.getDeclaringClass(), TENSOR_SIGNATURE),
+          Map.entry(NDARRAY.getDeclaringClass(), NDARRAY_SIGNATURE),
           Map.entry(READ_DATA_SETS.getDeclaringClass(), READ_DATA_SETS_SIGNATURE));
 
   /**

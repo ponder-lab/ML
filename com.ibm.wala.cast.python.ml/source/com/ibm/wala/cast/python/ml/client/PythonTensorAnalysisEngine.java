@@ -745,9 +745,6 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     logger.fine("Getting tensor types for source: " + source + ".");
 
     TensorGenerator generator = TensorGeneratorFactory.getGenerator(source);
-    if (generator == null) {
-      return java.util.Collections.emptySet();
-    }
     logger.fine("Using tensor generator: " + generator + ".");
 
     Set<TensorType> tensorTypes = generator.getTensorTypes(builder);

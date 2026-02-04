@@ -3,6 +3,11 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_BATCH_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FROM_TENSOR_SLICES_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_MAP_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_RANGE_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SHUFFLE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIVIDE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
@@ -18,6 +23,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MULTIPLY;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NDARRAY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONES;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONE_HOT;
@@ -31,6 +37,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_FROM_DENSE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SUBTRACT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VARIABLE;
@@ -55,11 +62,6 @@ public class TensorGeneratorFactory {
   public static TensorGenerator getGenerator(PointsToSetVariable source) {
     TypeReference calledFunction = getFunction(source);
     LOGGER.info("Getting tensor generator for call to: " + calledFunction.getName() + ".");
-
-    if (calledFunction.getName().toString().startsWith("Lscript ")) {
-      LOGGER.info("Ignoring call to script: " + calledFunction.getName() + ".");
-      return null;
-    }
 
     if (calledFunction.equals(ONES.getDeclaringClass())) return new Ones(source);
     else if (calledFunction.equals(CONSTANT.getDeclaringClass())) return new Constant(source);
@@ -111,11 +113,26 @@ public class TensorGeneratorFactory {
     else if (calledFunction.equals(SPARSE_FROM_DENSE.getDeclaringClass()))
       return new SparseFromDense(source);
     else if (calledFunction.equals(MODEL.getDeclaringClass())) return new Model(source);
+    else if (calledFunction.equals(TENSOR.getDeclaringClass())
+        || calledFunction.equals(NDARRAY.getDeclaringClass())) return new TensorCall(source);
+    else if (calledFunction.equals(DATASET_BATCH_TYPE)
+        || calledFunction.equals(DATASET_SHUFFLE_TYPE)
+        || calledFunction.equals(DATASET_MAP_TYPE)
+        || calledFunction.equals(DATASET_RANGE_TYPE)
+        || calledFunction.equals(DATASET_FROM_TENSOR_SLICES_TYPE))
+      return new DatasetGenerator(source);
     else if (calledFunction.equals(READ_DATA_SETS.getDeclaringClass()))
       return new ReadDataSets(source);
     else {
-      LOGGER.warning("Unknown call: " + calledFunction + " for source: " + source + ".");
-      return null;
+      if (calledFunction.getName().toString().startsWith("Lscript ")) {
+        throw new IllegalArgumentException(
+            "Encountered a tensor source in a script: "
+                + calledFunction
+                + ". This usually means a function call was not resolved to a summarized"
+                + " function.");
+      }
+      throw new IllegalArgumentException(
+          "Unknown call: " + calledFunction + " for source: " + source + ".");
     }
   }
 }
