@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.google.common.collect.Sets.newHashSet;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT_OP_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.types.AstMethodReference.fnReference;
 
@@ -33,6 +34,7 @@ import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
@@ -141,6 +143,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           // We potentially have a function call that generates a tensor.
           SSAAbstractInvokeInstruction ni = (SSAAbstractInvokeInstruction) inst;
           processInstruction(ni, du, localPointerKeyNode, src, vn, sources, pointerAnalysis);
+        } else if (inst instanceof SSANewInstruction) {
+          SSANewInstruction newInstruction = (SSANewInstruction) inst;
+          if (newInstruction.getConcreteType().equals(CONSTANT_OP_CONSTANT)) {
+            sources.add(src);
+            logger.info("Added dataflow source from constant allocation: " + src + ".");
+          }
         } else if (inst instanceof EachElementGetInstruction) {
           // We are potentially pulling a tensor out of a tensor iterable.
           EachElementGetInstruction eachElementGetInstruction = (EachElementGetInstruction) inst;

@@ -1240,11 +1240,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_add2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
-  /**
-   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
-   * is fixed.
-   */
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testAdd3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_add3.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
@@ -1265,11 +1261,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_add5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
-  /**
-   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
-   * is fixed.
-   */
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testAdd6()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_add6.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
@@ -2915,11 +2907,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_gradient2.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
   }
 
-  /**
-   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
-   * is fixed.
-   */
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testMultiply()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_multiply.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
