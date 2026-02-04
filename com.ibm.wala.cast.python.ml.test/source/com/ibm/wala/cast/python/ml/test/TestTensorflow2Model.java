@@ -5343,7 +5343,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * FIXME: Should not throw an {@link IllegalArgumentException} once
    * https://github.com/wala/ML/issues/340 is fixed.
    */
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testGammaMixed()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_gamma_mixed.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_30_3_2_FLOAT32)));

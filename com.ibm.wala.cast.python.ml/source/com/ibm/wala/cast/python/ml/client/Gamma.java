@@ -111,38 +111,33 @@ public class Gamma extends Ones {
           });
     else { // There is a beta parameter.
       // return shape `tf.concat([shape, tf.shape(alpha + beta)], axis=0)`.
+      Set<List<Dimension<?>>> betaShapes = this.getShapesOfValue(builder, betaPointsToSet);
+
       shapes.forEach(
           shape -> {
-            // Get the shape of the beta parameter, which is optional.
-            Set<List<Dimension<?>>> betaShapes = this.getShapesOfValue(builder, betaPointsToSet);
-
             alphaShapes.forEach(
                 aShape -> {
                   betaShapes.forEach(
                       bShape -> {
                         List<Dimension<?>> newShape = new ArrayList<>(shape);
-                        // Here we assume that alphaShape and betaShape are compatible for
-                        // broadcasting.
-                        // In a complete implementation, we would need to handle broadcasting rules
-                        // properly.
-                        int maxLength = Math.max(aShape.size(), bShape.size());
 
-                        for (int i = 0; i < maxLength; i++) {
-                          Dimension<?> dim;
+                        // Right-aligned broadcasting
+                        int aLen = aShape.size();
+                        int bLen = bShape.size();
+                        int maxLen = Math.max(aLen, bLen);
 
-                          if (i < aShape.size() && i < bShape.size())
-                            // Both shapes have this dimension, take the maximum.
-                            dim = Dimension.max(aShape.get(i), bShape.get(i));
-                          else if (i < aShape.size())
-                            // Only alpha shape has this dimension.
-                            dim = aShape.get(i);
-                          else
-                            // Only beta shape has this dimension.
-                            dim = bShape.get(i);
+                        List<Dimension<?>> broadcastShape = new ArrayList<>();
+                        for (int i = 0; i < maxLen; i++) {
+                          // Get dimensions from right to left
+                          Dimension<?> aDim = (i < aLen) ? aShape.get(aLen - 1 - i) : null;
+                          Dimension<?> bDim = (i < bLen) ? bShape.get(bLen - 1 - i) : null;
 
-                          newShape.add(dim);
+                          if (aDim == null) broadcastShape.add(0, bDim);
+                          else if (bDim == null) broadcastShape.add(0, aDim);
+                          else broadcastShape.add(0, Dimension.max(aDim, bDim));
                         }
 
+                        newShape.addAll(broadcastShape);
                         ret.add(newShape);
                       });
                 });
