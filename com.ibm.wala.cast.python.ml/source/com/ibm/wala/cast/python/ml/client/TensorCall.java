@@ -6,7 +6,6 @@ import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.intset.OrdinalSet;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -35,7 +34,8 @@ public class TensorCall extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    return Collections.emptySet();
+    throw new IllegalArgumentException(
+        "Modeling for internal tensor constructor " + this.getSource() + " is missing.");
   }
 
   @Override

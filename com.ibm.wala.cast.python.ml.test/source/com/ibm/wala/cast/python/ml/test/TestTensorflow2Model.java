@@ -5075,20 +5075,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
-   * is fixed.
+   * `tf.convert_to_tensor` with a `tf.constant` value. Fixed by handling `CONSTANT_OP_CONSTANT`.
    */
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testConvertToTensor5()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_convert_to_tensor5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   /**
-   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
-   * is fixed.
+   * `tf.convert_to_tensor` with a `tf.constant` value. Fixed by handling `CONSTANT_OP_CONSTANT`.
    */
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testConvertToTensor6()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_convert_to_tensor6.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
@@ -5238,12 +5236,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_one_hot18.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_5_3_FLOAT32)));
   }
 
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testOneHot19()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    // FIXME: The indices argument comes from a tf.constant() return value, which is currently
-    // empty.
-    // See https://github.com/wala/ML/issues/340
+    // Fixed by handling `CONSTANT_OP_CONSTANT`.
     test("tf2_test_one_hot19.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_2_3_INT32)));
     test("tf2_test_one_hot19.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_5_3_FLOAT32)));
   }
