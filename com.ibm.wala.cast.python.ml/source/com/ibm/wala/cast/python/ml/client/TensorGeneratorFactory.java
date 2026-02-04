@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_BATCH_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FROM_TENSOR_SLICES_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_MAP_TYPE;
@@ -119,8 +120,8 @@ public class TensorGeneratorFactory {
         || calledFunction.equals(DATASET_SHUFFLE_TYPE)
         || calledFunction.equals(DATASET_MAP_TYPE)
         || calledFunction.equals(DATASET_RANGE_TYPE)
-        || calledFunction.equals(DATASET_FROM_TENSOR_SLICES_TYPE))
-      return new DatasetGenerator(source);
+        || calledFunction.equals(DATASET_FROM_TENSOR_SLICES_TYPE)
+        || calledFunction.equals(DATASET)) return new DatasetGenerator(source);
     else if (calledFunction.equals(READ_DATA_SETS.getDeclaringClass()))
       return new ReadDataSets(source);
     else {
