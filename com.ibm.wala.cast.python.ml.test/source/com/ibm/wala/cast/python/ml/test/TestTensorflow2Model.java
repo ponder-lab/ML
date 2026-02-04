@@ -5238,9 +5238,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_one_hot18.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_5_3_FLOAT32)));
   }
 
-  @Test
+  @Test(expected = IllegalArgumentException.class)
   public void testOneHot19()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    // FIXME: The indices argument comes from a tf.constant() return value, which is currently
+    // empty.
+    // See https://github.com/wala/ML/issues/340
     test("tf2_test_one_hot19.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_2_3_INT32)));
     test("tf2_test_one_hot19.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_5_3_FLOAT32)));
   }

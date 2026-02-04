@@ -144,7 +144,12 @@ public class OneHot extends Ones {
 
     if (indicesPTS == null || indicesPTS.isEmpty())
       throw new IllegalArgumentException(
-          "Empty points-to set for INDICES argument in OneHot: " + this.getNode());
+          "Empty points-to set for "
+              + INDICES.name()
+              + " argument in "
+              + OneHot.class.getName()
+              + ": "
+              + this.getNode());
 
     Set<List<Dimension<?>>> indices = this.getShapesOfValue(builder, indicesPTS);
 
