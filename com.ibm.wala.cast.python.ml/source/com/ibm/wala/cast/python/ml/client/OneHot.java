@@ -191,18 +191,23 @@ public class OneHot extends Ones {
   }
 
   private Set<Integer> getPossibleAxes(PropagationCallGraphBuilder builder) {
+    int valNum =
+        this.getArgumentValueNumber(
+            builder, this.getAxisParameterPosition(), this.getAxisParameterName(), true);
+    if (valNum <= 0) return Set.of(AXIS_END);
+
     Set<Integer> ret = HashSetFactory.make();
 
     OrdinalSet<InstanceKey> axisPTS =
         this.getArgumentPointsToSet(
-            builder, this.getAxisParameterPosition(), getAxisParameterName());
+            builder, this.getAxisParameterPosition(), this.getAxisParameterName());
 
-    if (axisPTS == null || axisPTS.isEmpty()) {
-      ret.add(AXIS_END);
-    } else {
-      for (InstanceKey instanceKey : axisPTS)
-        ret.add(getIntValueFromInstanceKey(instanceKey).orElse(AXIS_END));
-    }
+    if (axisPTS == null || axisPTS.isEmpty())
+      // Fallback to default.
+      return ret;
+
+    for (InstanceKey instanceKey : axisPTS)
+      ret.add(getIntValueFromInstanceKey(instanceKey).orElse(AXIS_END));
 
     return ret;
   }

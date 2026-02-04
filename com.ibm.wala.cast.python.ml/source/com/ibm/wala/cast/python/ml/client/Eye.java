@@ -53,11 +53,21 @@ public class Eye extends SparseEye {
   }
 
   private Set<List<Dimension<?>>> getBatchShapes(PropagationCallGraphBuilder builder) {
+    int valNum =
+        this.getArgumentValueNumber(
+            builder,
+            this.getBatchShapeParameterPosition(),
+            this.getBatchShapeParameterName(),
+            true);
+    if (valNum <= 0) return emptySet();
+
     OrdinalSet<InstanceKey> pts =
         this.getArgumentPointsToSet(
             builder, this.getBatchShapeParameterPosition(), this.getBatchShapeParameterName());
 
-    if (pts == null || pts.isEmpty()) return emptySet();
+    if (pts == null || pts.isEmpty())
+      // Fallback to default (empty).
+      return emptySet();
 
     Set<List<Dimension<?>>> shapesFromShapeArgument = this.getShapesFromShapeArgument(builder, pts);
 

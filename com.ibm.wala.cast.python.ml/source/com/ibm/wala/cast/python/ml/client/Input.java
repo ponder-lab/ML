@@ -13,7 +13,6 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -58,50 +57,79 @@ public class Input extends Ones {
 
   @Override
   protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
+    int valNum =
+        this.getArgumentValueNumber(
+            builder, this.getDTypeParameterPosition(), this.getDTypeParameterName(), true);
+    if (valNum <= 0) return this.getDefaultDTypes(builder);
+
     OrdinalSet<InstanceKey> pointsToSet =
         this.getArgumentPointsToSet(
             builder, this.getDTypeParameterPosition(), this.getDTypeParameterName());
 
-    if (pointsToSet != null && !pointsToSet.isEmpty()) {
-      LOGGER.info("Found possible dtypes: " + pointsToSet + " for source: " + source + ".");
-      return getDTypesFromDTypeArgument(builder, pointsToSet);
-    }
+    if (pointsToSet == null || pointsToSet.isEmpty())
+      // Fallback to default.
+      return this.getDefaultDTypes(builder);
 
-    return getDefaultDTypes(builder);
+    LOGGER.info("Found possible dtypes: " + pointsToSet + " for source: " + this.getSource() + ".");
+    return this.getDTypesFromDTypeArgument(builder, pointsToSet);
   }
 
   @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
-    checkUnimplementedParameters(builder);
+    this.checkUnimplementedParameters(builder);
 
-    OrdinalSet<InstanceKey> shapePts =
-        this.getArgumentPointsToSet(
-            builder, this.getShapeParameterPosition(), this.getShapeParameterName());
-
+    int shapeValNum =
+        this.getArgumentValueNumber(
+            builder, this.getShapeParameterPosition(), this.getShapeParameterName(), true);
     Set<List<Dimension<?>>> shapes;
 
-    if (shapePts != null && !shapePts.isEmpty()) {
-      LOGGER.info(
-          "Found possible shape points-to set: " + shapePts + " for source: " + source + ".");
-      shapes = getShapesFromShapeArgument(builder, shapePts);
+    if (shapeValNum > 0) {
+      OrdinalSet<InstanceKey> shapePts =
+          this.getArgumentPointsToSet(
+              builder, this.getShapeParameterPosition(), this.getShapeParameterName());
+
+      if (shapePts == null || shapePts.isEmpty()) {
+        LOGGER.info("No shapes found for source: " + this.getSource() + "; using default shapes.");
+        shapes = this.getDefaultShapes(builder);
+      } else {
+        LOGGER.info(
+            "Found possible shape points-to set: "
+                + shapePts
+                + " for source: "
+                + this.getSource()
+                + ".");
+        shapes = this.getShapesFromShapeArgument(builder, shapePts);
+      }
     } else {
-      LOGGER.info("No shapes found for source: " + source + "; using default shapes.");
-      shapes = getDefaultShapes(builder);
+      LOGGER.info("No shapes found for source: " + this.getSource() + "; using default shapes.");
+      shapes = this.getDefaultShapes(builder);
     }
 
     // Handle `batch_size`.
-    OrdinalSet<InstanceKey> batchSizePts =
-        this.getArgumentPointsToSet(
-            builder, this.getBatchSizeParameterPosition(), this.getBatchSizeParameterName());
+    int batchSizeValNum =
+        this.getArgumentValueNumber(
+            builder, this.getBatchSizeParameterPosition(), this.getBatchSizeParameterName(), true);
+    Set<Long> batchSizes = new java.util.HashSet<>();
 
-    Set<Long> batchSizes = new HashSet<>();
+    if (batchSizeValNum > 0) {
+      OrdinalSet<InstanceKey> batchSizePts =
+          this.getArgumentPointsToSet(
+              builder, this.getBatchSizeParameterPosition(), this.getBatchSizeParameterName());
 
-    if (batchSizePts != null && !batchSizePts.isEmpty()) {
-      batchSizes.addAll(getPossibleLongValues(batchSizePts));
+      if (batchSizePts == null || batchSizePts.isEmpty()) {
+        LOGGER.info(
+            "Empty points-to set for batch_size argument in source: "
+                + this.getSource()
+                + "; assuming unknown.");
+      } else {
+        batchSizes.addAll(TensorGenerator.getPossibleLongValues(batchSizePts));
+      }
     }
 
     if (batchSizes.isEmpty()) batchSizes.add(null);
-    else LOGGER.info("Found possible batch sizes: " + batchSizes + " for source: " + source + ".");
+    else
+      LOGGER.info(
+          "Found possible batch sizes: " + batchSizes + " for source: " + this.getSource() + ".");
 
     Set<List<Dimension<?>>> newShapes = HashSetFactory.make();
 

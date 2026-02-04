@@ -49,59 +49,83 @@ public class Variable extends TensorGenerator {
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     // If explicit shape is missing, try inferring from initial_value
+    int valNum =
+        this.getArgumentValueNumber(
+            builder, Parameters.INITIAL_VALUE.getIndex(), Parameters.INITIAL_VALUE.getName(), true);
+    if (valNum <= 0) return emptySet();
+
     OrdinalSet<InstanceKey> initialValuePts =
         this.getArgumentPointsToSet(
             builder, Parameters.INITIAL_VALUE.getIndex(), Parameters.INITIAL_VALUE.getName());
 
-    if (initialValuePts != null && !initialValuePts.isEmpty()) {
-      return getShapesOfValue(builder, initialValuePts);
-    }
+    if (initialValuePts == null || initialValuePts.isEmpty())
+      // Fallback to default (empty).
+      return emptySet();
 
-    return emptySet();
+    return this.getShapesOfValue(builder, initialValuePts);
   }
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // If explicit dtype is missing, try inferring from initial_value
+    int valNum =
+        this.getArgumentValueNumber(
+            builder, Parameters.INITIAL_VALUE.getIndex(), Parameters.INITIAL_VALUE.getName(), true);
+    if (valNum <= 0) return EnumSet.noneOf(DType.class);
+
     OrdinalSet<InstanceKey> initialValuePts =
         this.getArgumentPointsToSet(
             builder, Parameters.INITIAL_VALUE.getIndex(), Parameters.INITIAL_VALUE.getName());
 
-    if (initialValuePts != null && !initialValuePts.isEmpty()) {
-      return getDTypesOfValue(builder, initialValuePts);
-    }
+    if (initialValuePts == null || initialValuePts.isEmpty())
+      // Fallback to default (empty).
+      return EnumSet.noneOf(DType.class);
 
-    return EnumSet.noneOf(DType.class);
+    return this.getDTypesOfValue(builder, initialValuePts);
   }
 
   @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     // First try explicit shape argument
-    OrdinalSet<InstanceKey> shapePts =
-        this.getArgumentPointsToSet(
-            builder, Parameters.SHAPE.getIndex(), Parameters.SHAPE.getName());
+    int valNum =
+        this.getArgumentValueNumber(
+            builder, Parameters.SHAPE.getIndex(), Parameters.SHAPE.getName(), true);
+    if (valNum > 0) {
+      OrdinalSet<InstanceKey> shapePts =
+          this.getArgumentPointsToSet(
+              builder, Parameters.SHAPE.getIndex(), Parameters.SHAPE.getName());
 
-    if (shapePts != null && !shapePts.isEmpty()) {
-      return getShapesFromShapeArgument(builder, shapePts);
+      if (shapePts == null || shapePts.isEmpty())
+        // Fallback to default.
+        return this.getDefaultShapes(builder);
+
+      return this.getShapesFromShapeArgument(builder, shapePts);
     }
 
     // Fallback to default (infer from initial_value)
-    return getDefaultShapes(builder);
+    return this.getDefaultShapes(builder);
   }
 
   @Override
   protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
     // First try explicit dtype argument
-    OrdinalSet<InstanceKey> dtypePts =
-        this.getArgumentPointsToSet(
-            builder, Parameters.DTYPE.getIndex(), Parameters.DTYPE.getName());
+    int valNum =
+        this.getArgumentValueNumber(
+            builder, Parameters.DTYPE.getIndex(), Parameters.DTYPE.getName(), true);
+    if (valNum > 0) {
+      OrdinalSet<InstanceKey> dtypePts =
+          this.getArgumentPointsToSet(
+              builder, Parameters.DTYPE.getIndex(), Parameters.DTYPE.getName());
 
-    if (dtypePts != null && !dtypePts.isEmpty()) {
-      return getDTypesFromDTypeArgument(builder, dtypePts);
+      if (dtypePts == null || dtypePts.isEmpty())
+        // Fallback to default.
+        return this.getDefaultDTypes(builder);
+
+      return this.getDTypesFromDTypeArgument(builder, dtypePts);
     }
 
     // Fallback to default (infer from initial_value)
-    return getDefaultDTypes(builder);
+    return this.getDefaultDTypes(builder);
   }
 
   @Override

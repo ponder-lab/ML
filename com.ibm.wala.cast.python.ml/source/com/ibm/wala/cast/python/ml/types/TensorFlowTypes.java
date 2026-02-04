@@ -84,6 +84,32 @@ public class TensorFlowTypes extends PythonTypes {
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/python/framework/ops/ndarray"));
 
+  public static final TypeReference CONSTANT_OP_CONSTANT =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/python/framework/constant_op/constant"));
+
+  public static final TypeReference LINALG_OPS_EYE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/python/ops/linalg_ops/eye"));
+
+  public static final TypeReference ARRAY_OPS_ZEROS =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/python/ops/array_ops/zeros"));
+
+  public static final TypeReference RAGGED_MATH_OPS_RANGE =
+      TypeReference.findOrCreate(
+          pythonLoader,
+          TypeName.findOrCreate("Ltensorflow/python/ops/ragged/ragged_math_ops/range"));
+
+  public static final TypeReference RAGGED_FACTORY_OPS_CONSTANT =
+      TypeReference.findOrCreate(
+          pythonLoader,
+          TypeName.findOrCreate("Ltensorflow/python/ops/ragged/ragged_factory_ops/constant"));
+
+  public static final TypeReference VARIABLES_VARIABLE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/python/ops/variables/Variable"));
+
   /** https://www.tensorflow.org/api_docs/python/tf/ones. */
   public static final MethodReference ONES =
       MethodReference.findOrCreate(

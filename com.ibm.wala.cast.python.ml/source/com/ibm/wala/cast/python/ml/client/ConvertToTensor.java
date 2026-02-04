@@ -78,16 +78,23 @@ public class ConvertToTensor extends Constant {
 
     // unless dtype_hint is provided.
 
+    int valNum =
+        this.getArgumentValueNumber(
+            builder, Parameters.DTYPE_HINT.getIndex(), Parameters.DTYPE_HINT.getName(), true);
+    Set<DType> defaultDTypes = super.getDefaultDTypes(builder);
+
+    if (valNum <= 0) return defaultDTypes;
+
     OrdinalSet<InstanceKey> pointsToSet =
         this.getArgumentPointsToSet(
             builder, Parameters.DTYPE_HINT.getIndex(), Parameters.DTYPE_HINT.getName());
 
-    Set<DType> defaultDTypes = super.getDefaultDTypes(builder);
+    if (pointsToSet == null || pointsToSet.isEmpty()) {
+      // If the argument dtype hint is not specified.
+      return defaultDTypes;
+    } else {
 
-    // If the argument dtype hint is not specified.
-
-    if (pointsToSet == null || pointsToSet.isEmpty()) return defaultDTypes;
-    else {
+      // The dtype points-to set is non-empty, meaning that the dtype hint was explicitly set.
 
       // The dtype points-to set is non-empty, meaning that the dtype hint was explicitly set.
 

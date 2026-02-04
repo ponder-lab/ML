@@ -39,9 +39,14 @@ public class SparseEye extends Ones {
 
   private Set<Optional<Integer>> getPossibleArgumentValues(
       PropagationCallGraphBuilder builder, int paramPosition, String paramName) {
+    int valNum = this.getArgumentValueNumber(builder, paramPosition, paramName, true);
+    if (valNum <= 0) return HashSetFactory.make();
+
     OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPosition, paramName);
 
-    if (pts == null || pts.isEmpty()) return HashSetFactory.make();
+    if (pts == null || pts.isEmpty())
+      // Fallback to default (empty).
+      return HashSetFactory.make();
 
     return StreamSupport.stream(pts.spliterator(), false)
         .map(SparseEye::getIntValueFromInstanceKey)

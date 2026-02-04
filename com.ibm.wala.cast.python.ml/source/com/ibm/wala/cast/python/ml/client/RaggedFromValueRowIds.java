@@ -157,10 +157,20 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
   }
 
   protected Set<Long> getPossibleNrowsArguments(PropagationCallGraphBuilder builder) {
+    int valNum =
+        this.getArgumentValueNumber(
+            builder, this.getNrowsParameterPosition(), this.getNrowsParameterName(), true);
+    if (valNum <= 0) return HashSetFactory.make();
+
     OrdinalSet<InstanceKey> pointsToSet =
         this.getArgumentPointsToSet(
-            builder, this.getNrowsParameterPosition(), getNrowsParameterName());
-    return getPossibleLongValues(pointsToSet);
+            builder, this.getNrowsParameterPosition(), this.getNrowsParameterName());
+
+    if (pointsToSet == null || pointsToSet.isEmpty())
+      // Fallback to inference.
+      return HashSetFactory.make();
+
+    return TensorGenerator.getPossibleLongValues(pointsToSet);
   }
 
   @Override

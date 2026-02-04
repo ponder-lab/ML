@@ -56,6 +56,11 @@ public class TensorGeneratorFactory {
     TypeReference calledFunction = getFunction(source);
     LOGGER.info("Getting tensor generator for call to: " + calledFunction.getName() + ".");
 
+    if (calledFunction.getName().toString().startsWith("Lscript ")) {
+      LOGGER.info("Ignoring call to script: " + calledFunction.getName() + ".");
+      return null;
+    }
+
     if (calledFunction.equals(ONES.getDeclaringClass())) return new Ones(source);
     else if (calledFunction.equals(CONSTANT.getDeclaringClass())) return new Constant(source);
     else if (calledFunction.equals(RANGE.getDeclaringClass())) return new Range(source);
@@ -108,8 +113,9 @@ public class TensorGeneratorFactory {
     else if (calledFunction.equals(MODEL.getDeclaringClass())) return new Model(source);
     else if (calledFunction.equals(READ_DATA_SETS.getDeclaringClass()))
       return new ReadDataSets(source);
-    else
-      throw new IllegalArgumentException(
-          "Unknown call: " + calledFunction + " for source: " + source + ".");
+    else {
+      LOGGER.warning("Unknown call: " + calledFunction + " for source: " + source + ".");
+      return null;
+    }
   }
 }
