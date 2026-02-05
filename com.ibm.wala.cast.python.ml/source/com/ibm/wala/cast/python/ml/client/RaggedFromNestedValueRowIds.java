@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.ml.client.RaggedFromNestedValueRowIds.Parameters.FLAT_VALUES;
 import static com.ibm.wala.cast.python.ml.client.RaggedFromNestedValueRowIds.Parameters.NESTED_NROWS;
 import static com.ibm.wala.cast.python.ml.client.RaggedFromNestedValueRowIds.Parameters.NESTED_VALUE_ROWIDS;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT_OP_CONSTANT;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
@@ -58,6 +59,64 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
 
   public RaggedFromNestedValueRowIds(PointsToSetVariable source) {
     super(source);
+  }
+
+  private Long getMax(PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> pts) {
+    Long max = null;
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+
+    for (InstanceKey ik : pts) {
+      if (ik instanceof ConstantKey) {
+        Object val = ((ConstantKey<?>) ik).getValue();
+        long lVal = -1;
+        if (val instanceof Integer) lVal = ((Integer) val).longValue();
+        else if (val instanceof Long) lVal = (Long) val;
+
+        if (val instanceof Integer || val instanceof Long) {
+          if (max == null || lVal > max) max = lVal;
+        }
+      } else if (ik instanceof AllocationSiteInNode) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        TypeReference ref = asin.getConcreteType().getReference();
+
+        if (ref.equals(list) || ref.equals(tuple)) {
+          OrdinalSet<InstanceKey> objectCatalog =
+              pointerAnalysis.getPointsToSet(
+                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                      .getPointerKeyForObjectCatalog(asin));
+
+          for (InstanceKey catKey : objectCatalog) {
+            ConstantKey<?> ck = (ConstantKey<?>) catKey;
+            Object idxObj = ck.getValue();
+            String idxStr = idxObj.toString();
+
+            FieldReference innerSub =
+                FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(idxStr), Root);
+            IField innerF = builder.getClassHierarchy().resolveField(innerSub);
+            if (innerF != null) {
+              PointerKey valPk = builder.getPointerKeyForInstanceField(asin, innerF);
+              OrdinalSet<InstanceKey> valPts = pointerAnalysis.getPointsToSet(valPk);
+              Long innerMax = getMax(builder, valPts);
+              if (innerMax != null) {
+                if (max == null || innerMax > max) max = innerMax;
+              }
+            }
+          }
+        } else if (ref.equals(CONSTANT_OP_CONSTANT)) {
+          FieldReference valueField =
+              FieldReference.findOrCreate(
+                  CONSTANT_OP_CONSTANT, findOrCreateAsciiAtom("value"), Root);
+          IField f = builder.getClassHierarchy().resolveField(valueField);
+          PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+          OrdinalSet<InstanceKey> valuePts = pointerAnalysis.getPointsToSet(pk);
+          Long innerMax = getMax(builder, valuePts);
+          if (innerMax != null) {
+            if (max == null || innerMax > max) max = innerMax;
+          }
+        }
+      }
+    }
+    return max;
   }
 
   @Override
@@ -160,55 +219,10 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
                   PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
                   OrdinalSet<InstanceKey> firstElemPts = pointerAnalysis.getPointsToSet(pk);
 
-                  Long max = null;
-                  boolean foundAny = false;
+                  Long max = getMax(builder, firstElemPts);
 
-                  for (InstanceKey innerIk : firstElemPts) {
-                    if (innerIk instanceof AllocationSiteInNode) {
-                      AllocationSiteInNode innerAsin = getAllocationSiteInNode(innerIk);
-                      TypeReference innerRef = innerAsin.getConcreteType().getReference();
-                      if (innerRef.equals(list) || innerRef.equals(tuple)) {
-                        OrdinalSet<InstanceKey> innerObjectCatalog =
-                            pointerAnalysis.getPointsToSet(
-                                ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                                    .getPointerKeyForObjectCatalog(innerAsin));
-
-                        for (InstanceKey catKey : innerObjectCatalog) {
-                          ConstantKey<?> ck = (ConstantKey<?>) catKey;
-                          Object idxObj = ck.getValue();
-                          String idxStr = idxObj.toString();
-
-                          FieldReference innerSub =
-                              FieldReference.findOrCreate(
-                                  Root, findOrCreateAsciiAtom(idxStr), Root);
-                          IField innerF = builder.getClassHierarchy().resolveField(innerSub);
-                          if (innerF != null) {
-                            PointerKey valPk =
-                                builder.getPointerKeyForInstanceField(innerAsin, innerF);
-                            OrdinalSet<InstanceKey> valPts = pointerAnalysis.getPointsToSet(valPk);
-                            for (InstanceKey valKey : valPts) {
-                              if (valKey instanceof ConstantKey) {
-                                Object val = ((ConstantKey<?>) valKey).getValue();
-                                long lVal = -1;
-                                if (val instanceof Integer) lVal = ((Integer) val).longValue();
-                                else if (val instanceof Long) lVal = (Long) val;
-
-                                if (val instanceof Integer || val instanceof Long) {
-                                  if (max == null || lVal > max) max = lVal;
-                                  foundAny = true;
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
                   if (max != null) {
                     possibleRowDims.add(new NumericDim(max.intValue() + 1));
-                  } else if (!foundAny) {
-                    // Empty list of rowids?
-                    possibleRowDims.add(new NumericDim(0));
                   } else {
                     possibleRowDims.add(null);
                   }
