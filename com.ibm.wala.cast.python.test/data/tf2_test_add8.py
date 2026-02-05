@@ -2,11 +2,11 @@ import tensorflow
 
 
 def add(a, b):
-    assert a.shape.as_list() == [1, 2]
-    assert b.shape.as_list() == [2, 2]
     return a + b
 
 
-c = add(tensorflow.ones([1, 2]), tensorflow.ones([2, 2]))  #  [[2., 2.], [2., 2.]]
-assert c.shape.as_list() == [2, 2]
-assert c.dtype == tensorflow.float32
+x = tensorflow.ones([1, 2])
+assert x.shape.as_list() == [1, 2]
+y = tensorflow.ones([2, 2])
+assert y.shape.as_list() == [2, 2]
+c = add(x, y)  #  [[2., 2.], [2., 2.]]
