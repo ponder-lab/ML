@@ -5,7 +5,6 @@ import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
-import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
@@ -13,8 +12,6 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.types.FieldReference;
-import com.ibm.wala.types.TypeName;
-import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
@@ -70,14 +67,9 @@ public class SparseAdd extends ElementWiseOperation {
       return super.getShapesOfValue(builder, valuePointsToSet);
     }
 
-    TypeReference sparseTensorType =
-        TypeReference.findOrCreate(
-            PythonTypes.pythonLoader,
-            TypeName.string2TypeName("Ltensorflow/python/framework/sparse_tensor/SparseTensor"));
-
     boolean hasSparseTensor = false;
     for (InstanceKey ik : valuePointsToSet) {
-      if (ik.getConcreteType().getReference().equals(sparseTensorType)) {
+      if (ik.getConcreteType().getReference().equals(TensorFlowTypes.SPARSE_TENSOR_TYPE)) {
         hasSparseTensor = true;
         break;
       }
@@ -91,7 +83,7 @@ public class SparseAdd extends ElementWiseOperation {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey ik : valuePointsToSet) {
-      if (ik.getConcreteType().getReference().equals(sparseTensorType)) {
+      if (ik.getConcreteType().getReference().equals(TensorFlowTypes.SPARSE_TENSOR_TYPE)) {
         FieldReference denseShapeFieldRef =
             FieldReference.findOrCreate(Root, findOrCreateAsciiAtom("dense_shape"), Root);
 
@@ -115,14 +107,9 @@ public class SparseAdd extends ElementWiseOperation {
       return super.getDefaultDTypes(builder);
     }
 
-    TypeReference sparseTensorType =
-        TypeReference.findOrCreate(
-            PythonTypes.pythonLoader,
-            TypeName.string2TypeName("Ltensorflow/python/framework/sparse_tensor/SparseTensor"));
-
     boolean hasSparseTensor = false;
     for (InstanceKey ik : pointsToSet) {
-      if (ik.getConcreteType().getReference().equals(sparseTensorType)) {
+      if (ik.getConcreteType().getReference().equals(TensorFlowTypes.SPARSE_TENSOR_TYPE)) {
         hasSparseTensor = true;
         break;
       }
@@ -136,7 +123,7 @@ public class SparseAdd extends ElementWiseOperation {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey ik : pointsToSet) {
-      if (ik.getConcreteType().getReference().equals(sparseTensorType)) {
+      if (ik.getConcreteType().getReference().equals(TensorFlowTypes.SPARSE_TENSOR_TYPE)) {
         FieldReference valuesFieldRef =
             FieldReference.findOrCreate(Root, findOrCreateAsciiAtom("values"), Root);
 

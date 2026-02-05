@@ -88,6 +88,11 @@ public class TensorFlowTypes extends PythonTypes {
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/python/framework/constant_op/constant"));
 
+  public static final TypeReference SPARSE_TENSOR_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader,
+          TypeName.findOrCreate("Ltensorflow/python/framework/sparse_tensor/SparseTensor"));
+
   public static final TypeReference LINALG_OPS_EYE =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/python/ops/linalg_ops/eye"));
