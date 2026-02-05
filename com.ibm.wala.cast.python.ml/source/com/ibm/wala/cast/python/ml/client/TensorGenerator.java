@@ -57,6 +57,13 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.logging.Logger;
 
+/**
+ * An abstract generator for {@link TensorType}s.
+ *
+ * <p>TODO: Revisit caching of shapes and dtypes.
+ *
+ * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
+ */
 public abstract class TensorGenerator {
 
   protected static final int UNDEFINED_PARAMETER_POSITION = -1;
