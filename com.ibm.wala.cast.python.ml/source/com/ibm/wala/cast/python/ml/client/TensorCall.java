@@ -34,7 +34,7 @@ public class TensorCall extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    throw new IllegalArgumentException(
+    throw new UnsupportedOperationException(
         "Modeling for internal tensor constructor " + this.getSource() + " is missing.");
   }
 
