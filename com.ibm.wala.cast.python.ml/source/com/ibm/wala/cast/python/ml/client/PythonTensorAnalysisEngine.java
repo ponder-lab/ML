@@ -131,6 +131,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     CallGraph callGraph = builder.getCallGraph();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
+    // Identify sources from tf.constant allocations. Iterating the CallGraph is more robust for
+    // finding these synthetic allocations than iterating the dataflow graph.
     for (CGNode node : callGraph) {
       if (node.getMethod()
           .getReference()
@@ -140,6 +142,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           for (SSAInstruction inst : node.getIR().getInstructions()) {
             if (inst instanceof SSANewInstruction) {
               SSANewInstruction newInstruction = (SSANewInstruction) inst;
+              // Handle inlined tf.constant.
               if (newInstruction.getConcreteType().equals(CONSTANT_OP_CONSTANT)) {
                 PointerKey key =
                     pointerAnalysis
