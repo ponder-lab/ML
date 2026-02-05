@@ -1,9 +1,9 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR_TYPE;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
-import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.classLoader.IField;
@@ -70,7 +70,7 @@ public class SparseAdd extends ElementWiseOperation {
 
     boolean hasSparseTensor = false;
     for (InstanceKey ik : valuePointsToSet) {
-      if (ik.getConcreteType().getReference().equals(TensorFlowTypes.SPARSE_TENSOR_TYPE)) {
+      if (ik.getConcreteType().getReference().equals(SPARSE_TENSOR_TYPE)) {
         hasSparseTensor = true;
         break;
       }
@@ -84,7 +84,7 @@ public class SparseAdd extends ElementWiseOperation {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey ik : valuePointsToSet) {
-      if (ik.getConcreteType().getReference().equals(TensorFlowTypes.SPARSE_TENSOR_TYPE)) {
+      if (ik.getConcreteType().getReference().equals(SPARSE_TENSOR_TYPE)) {
         FieldReference denseShapeFieldRef =
             FieldReference.findOrCreate(Root, findOrCreateAsciiAtom("dense_shape"), Root);
 
@@ -110,7 +110,7 @@ public class SparseAdd extends ElementWiseOperation {
 
     boolean hasSparseTensor = false;
     for (InstanceKey ik : pointsToSet) {
-      if (ik.getConcreteType().getReference().equals(TensorFlowTypes.SPARSE_TENSOR_TYPE)) {
+      if (ik.getConcreteType().getReference().equals(SPARSE_TENSOR_TYPE)) {
         hasSparseTensor = true;
         break;
       }
@@ -124,7 +124,7 @@ public class SparseAdd extends ElementWiseOperation {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey ik : pointsToSet) {
-      if (ik.getConcreteType().getReference().equals(TensorFlowTypes.SPARSE_TENSOR_TYPE)) {
+      if (ik.getConcreteType().getReference().equals(SPARSE_TENSOR_TYPE)) {
         FieldReference valuesFieldRef =
             FieldReference.findOrCreate(Root, findOrCreateAsciiAtom("values"), Root);
 
