@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.TensorCall.Parameters.DTYPE;
+
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -39,21 +41,18 @@ public class TensorCall extends TensorGenerator {
   }
 
   @Override
-  protected java.util.EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    throw new IllegalArgumentException(
+  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    throw new UnsupportedOperationException(
         "DType is mandatory and must be provided explicitly for tf.Tensor/tf.ndarray.");
   }
 
   @Override
   protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
-    int valNum =
-        this.getArgumentValueNumber(
-            builder, Parameters.DTYPE.getIndex(), Parameters.DTYPE.getName(), true);
+    int valNum = this.getArgumentValueNumber(builder, DTYPE.getIndex(), DTYPE.getName(), true);
     if (valNum <= 0) return this.getDefaultDTypes(builder);
 
     OrdinalSet<InstanceKey> pointsToSet =
-        this.getArgumentPointsToSet(
-            builder, Parameters.DTYPE.getIndex(), Parameters.DTYPE.getName());
+        this.getArgumentPointsToSet(builder, DTYPE.getIndex(), DTYPE.getName());
 
     if (pointsToSet == null || pointsToSet.isEmpty()) return this.getDefaultDTypes(builder);
 
@@ -72,11 +71,11 @@ public class TensorCall extends TensorGenerator {
 
   @Override
   protected int getDTypeParameterPosition() {
-    return Parameters.DTYPE.getIndex();
+    return DTYPE.getIndex();
   }
 
   @Override
   protected String getDTypeParameterName() {
-    return Parameters.DTYPE.getName();
+    return DTYPE.getName();
   }
 }
