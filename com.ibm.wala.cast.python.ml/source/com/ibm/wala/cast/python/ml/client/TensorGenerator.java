@@ -67,14 +67,12 @@ public abstract class TensorGenerator {
 
   protected PointsToSetVariable source;
 
-  protected final Map<InstanceKey, Set<List<Dimension<?>>>> shapeCache;
+  protected final Map<InstanceKey, Set<List<Dimension<?>>>> shapeCache = HashMapFactory.make();
 
-  protected final Map<InstanceKey, Set<DType>> dtypeCache;
+  protected final Map<InstanceKey, Set<DType>> dtypeCache = HashMapFactory.make();
 
   public TensorGenerator(PointsToSetVariable source) {
     this.source = source;
-    this.shapeCache = HashMapFactory.make();
-    this.dtypeCache = HashMapFactory.make();
   }
 
   public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
