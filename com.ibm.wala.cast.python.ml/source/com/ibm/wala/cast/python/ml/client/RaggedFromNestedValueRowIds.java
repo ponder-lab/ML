@@ -78,6 +78,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
 
     for (InstanceKey ik : pts) {
       if (ik instanceof ConstantKey) {
+        // Direct constant value.
         Object val = ((ConstantKey<?>) ik).getValue();
         long lVal = -1;
         if (val instanceof Integer) lVal = ((Integer) val).longValue();
@@ -91,6 +92,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
         TypeReference ref = asin.getConcreteType().getReference();
 
         if (ref.equals(list) || ref.equals(tuple)) {
+          // Collection: recurse into all elements.
           OrdinalSet<InstanceKey> objectCatalog =
               pointerAnalysis.getPointsToSet(
                   ((AstPointerKeyFactory) builder.getPointerKeyFactory())
@@ -114,6 +116,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
             }
           }
         } else if (ref.equals(CONSTANT_OP_CONSTANT)) {
+          // Inlined tf.constant: recurse into the 'value' field.
           FieldReference valueField =
               FieldReference.findOrCreate(
                   CONSTANT_OP_CONSTANT, findOrCreateAsciiAtom("value"), Root);
