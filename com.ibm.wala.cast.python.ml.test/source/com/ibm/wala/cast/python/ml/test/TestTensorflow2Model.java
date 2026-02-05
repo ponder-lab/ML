@@ -5969,10 +5969,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testPoissonKeyword()
+  public void testPoisson5()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_poisson_keyword.py",
+        "tf2_test_poisson5.py",
         "test",
         2,
         2,
