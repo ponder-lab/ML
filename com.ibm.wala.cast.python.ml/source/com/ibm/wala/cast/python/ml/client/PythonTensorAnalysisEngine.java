@@ -125,6 +125,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
   private final Map<PointerKey, AnalysisError> errorLog = HashMapFactory.make();
 
+  /**
+   * Identifies the dataflow sources for tensor analysis.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} containing analysis information.
+   * @param dataflow The dataflow graph of {@link PointsToSetVariable}s.
+   * @return A {@link Set} of {@link PointsToSetVariable}s that are considered tensor dataflow
+   *     sources.
+   */
   private static Set<PointsToSetVariable> getDataflowSources(
       PropagationCallGraphBuilder builder, Graph<PointsToSetVariable> dataflow) {
     Set<PointsToSetVariable> sources = HashSetFactory.make();
