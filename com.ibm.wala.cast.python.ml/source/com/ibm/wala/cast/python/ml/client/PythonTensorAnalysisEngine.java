@@ -129,7 +129,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * Identifies the dataflow sources for tensor analysis.
    *
    * @param builder The {@link PropagationCallGraphBuilder} containing analysis information.
-   * @param dataflow The dataflow graph of {@link PointsToSetVariable}s.
+   * @param dataflow The graph of {@link PointsToSetVariable}s representing the pointer analysis
+   *     system's constraint graph, where nodes are variables (points-to sets) and edges represent
+   *     data flow.
    * @return A {@link Set} of {@link PointsToSetVariable}s that are considered tensor dataflow
    *     sources.
    */
