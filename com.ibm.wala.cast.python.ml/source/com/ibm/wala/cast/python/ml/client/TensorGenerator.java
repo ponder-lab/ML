@@ -317,9 +317,7 @@ public abstract class TensorGenerator {
             builder, this.getShapeParameterPosition(), this.getShapeParameterName());
 
     // If the argument shape is not specified.
-    if (pointsToSet == null || pointsToSet.isEmpty())
-      throw new IllegalArgumentException(
-          "Empty points-to set for shape argument in source: " + this.getSource() + ".");
+    if (pointsToSet == null || pointsToSet.isEmpty()) return getDefaultShapes(builder);
     else
       // The shape points-to set is non-empty, meaning that the shape was explicitly set.
       return this.getShapesFromShapeArgument(builder, pointsToSet);
@@ -608,9 +606,7 @@ public abstract class TensorGenerator {
             builder, this.getDTypeParameterPosition(), this.getDTypeParameterName());
 
     // If the argument dtype is not specified.
-    if (pointsToSet == null || pointsToSet.isEmpty())
-      throw new IllegalArgumentException(
-          "Empty points-to set for dtype argument in source: " + this.getSource() + ".");
+    if (pointsToSet == null || pointsToSet.isEmpty()) return getDefaultDTypes(builder);
     else
       // The dtype points-to set is non-empty, meaning that the dtype was explicitly set.
       return this.getDTypesFromDTypeArgument(builder, pointsToSet);
