@@ -101,7 +101,7 @@ public abstract class TensorGenerator {
     }
   }
 
-  /** Clears the shape and dtype caches. */
+  /** Clears the {@link #shapeCache} and {@link #dtypeCache}. */
   private void clearCaches() {
     this.shapeCache.clear();
     this.dtypeCache.clear();
