@@ -78,7 +78,8 @@ public class Poisson extends Ones {
 
     // Get the shape of the lam parameter.
     OrdinalSet<InstanceKey> lamPTS =
-        this.getArgumentPointsToSet(builder, this.getLamParameterPosition(), getLamParameterName());
+        this.getArgumentPointsToSet(
+            builder, this.getLamParameterPosition(), this.getLamParameterName());
 
     if (lamPTS == null || lamPTS.isEmpty())
       throw new IllegalStateException(
