@@ -115,7 +115,6 @@ public abstract class TensorGenerator {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey instanceKey : pointsToSet) {
-      Set<List<Dimension<?>>> ikShapes = HashSetFactory.make();
       AllocationSiteInNode asin = getAllocationSiteInNode(instanceKey);
       if (asin == null) continue;
       TypeReference reference = asin.getConcreteType().getReference();
@@ -221,7 +220,7 @@ public abstract class TensorGenerator {
               if (i != j)
                 for (Dimension<Integer> jDim : possibleDimensions[j]) dimensions[j] = jDim;
 
-            ikShapes.add(asList(dimensions));
+            ret.add(asList(dimensions));
           }
       } else if (reference.equals(CONSTANT_OP_CONSTANT)) {
         FieldReference valueField =
@@ -229,12 +228,10 @@ public abstract class TensorGenerator {
         IField f = builder.getClassHierarchy().resolveField(valueField);
         PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
         OrdinalSet<InstanceKey> valuePts = pointerAnalysis.getPointsToSet(pk);
-        ikShapes.addAll(this.getShapesFromShapeArgument(builder, valuePts));
+        ret.addAll(this.getShapesFromShapeArgument(builder, valuePts));
       } else
         throw new IllegalStateException(
             "Expected a " + list + " or " + tuple + " for the shape, but got: " + reference + ".");
-
-      ret.addAll(ikShapes);
     }
 
     return ret;
@@ -347,8 +344,7 @@ public abstract class TensorGenerator {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey valueIK : valuePointsToSet) {
-      Set<List<Dimension<?>>> ikShapes = HashSetFactory.make();
-      if (valueIK instanceof ConstantKey) ikShapes.add(emptyList()); // Scalar value.
+      if (valueIK instanceof ConstantKey) ret.add(emptyList()); // Scalar value.
       else if (valueIK instanceof AllocationSiteInNode) {
         AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
         TypeReference reference = asin.getConcreteType().getReference();
@@ -390,7 +386,7 @@ public abstract class TensorGenerator {
               shape.add(new NumericDim(objectCatalogPointsToSet.size()));
               shape.addAll(shapeList);
 
-              ikShapes.add(shape);
+              ret.add(shape);
             }
           }
         } else if (reference.equals(CONSTANT_OP_CONSTANT)) {
@@ -400,7 +396,7 @@ public abstract class TensorGenerator {
           IField f = builder.getClassHierarchy().resolveField(valueField);
           PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
           OrdinalSet<InstanceKey> valuePts = pointerAnalysis.getPointsToSet(pk);
-          ikShapes.addAll(this.getShapesOfValue(builder, valuePts));
+          ret.addAll(this.getShapesOfValue(builder, valuePts));
         } else if (reference.equals(VARIABLES_VARIABLE)) {
           FieldReference shapeField =
               FieldReference.findOrCreate(VARIABLES_VARIABLE, findOrCreateAsciiAtom("shape"), Root);
@@ -409,7 +405,7 @@ public abstract class TensorGenerator {
           OrdinalSet<InstanceKey> shapePts = pointerAnalysis.getPointsToSet(pk);
 
           if (shapePts != null && !shapePts.isEmpty()) {
-            ikShapes.addAll(this.getShapesFromShapeArgument(builder, shapePts));
+            ret.addAll(this.getShapesFromShapeArgument(builder, shapePts));
           } else {
             // Fallback to initial_value.
             FieldReference valField =
@@ -419,7 +415,7 @@ public abstract class TensorGenerator {
             pk = builder.getPointerKeyForInstanceField(asin, f);
             OrdinalSet<InstanceKey> valPts = pointerAnalysis.getPointsToSet(pk);
             if (valPts != null && !valPts.isEmpty()) {
-              ikShapes.addAll(this.getShapesOfValue(builder, valPts));
+              ret.addAll(this.getShapesOfValue(builder, valPts));
             }
           }
         } else if (reference.equals(TENSOR_TYPE)
@@ -431,8 +427,6 @@ public abstract class TensorGenerator {
               "Encountered " + reference.getName() + ". Shape will flow via dataflow graph.");
         } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
       } else throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
-
-      ret.addAll(ikShapes);
     }
 
     return ret;
