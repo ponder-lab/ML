@@ -623,12 +623,11 @@ public abstract class TensorGenerator {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey valueIK : valuePointsToSet) {
-      Set<DType> ikDTypes = EnumSet.noneOf(DType.class);
       if (valueIK instanceof ConstantKey) { // It's a scalar value.
         ConstantKey<?> constantKey = (ConstantKey<?>) valueIK;
         Object value = constantKey.getValue();
         if (value instanceof Float || value instanceof Double) {
-          ikDTypes.add(FLOAT32);
+          ret.add(FLOAT32);
           LOGGER.info(
               "Inferred dtype: "
                   + FLOAT32
@@ -638,7 +637,7 @@ public abstract class TensorGenerator {
                   + value
                   + ".");
         } else if (value instanceof Integer || value instanceof Long) {
-          ikDTypes.add(INT32);
+          ret.add(INT32);
           LOGGER.info(
               "Inferred dtype: "
                   + INT32
@@ -648,7 +647,7 @@ public abstract class TensorGenerator {
                   + value
                   + ".");
         } else if (value instanceof String) {
-          ikDTypes.add(STRING);
+          ret.add(STRING);
           LOGGER.info(
               "Inferred dtype: "
                   + STRING
@@ -691,7 +690,7 @@ public abstract class TensorGenerator {
                 pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
             LOGGER.fine("Points-to set for instance field: " + instanceFieldPointsToSet + ".");
 
-            ikDTypes.addAll(this.getDTypesOfValue(builder, instanceFieldPointsToSet));
+            ret.addAll(this.getDTypesOfValue(builder, instanceFieldPointsToSet));
           }
         } else if (reference.equals(CONSTANT_OP_CONSTANT)) {
           FieldReference valueField =
@@ -700,7 +699,7 @@ public abstract class TensorGenerator {
           IField f = builder.getClassHierarchy().resolveField(valueField);
           PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
           OrdinalSet<InstanceKey> valuePts = pointerAnalysis.getPointsToSet(pk);
-          ikDTypes.addAll(this.getDTypesOfValue(builder, valuePts));
+          ret.addAll(this.getDTypesOfValue(builder, valuePts));
         } else if (reference.equals(VARIABLES_VARIABLE)) {
           FieldReference dtypeField =
               FieldReference.findOrCreate(VARIABLES_VARIABLE, findOrCreateAsciiAtom("dtype"), Root);
@@ -709,7 +708,7 @@ public abstract class TensorGenerator {
           OrdinalSet<InstanceKey> dtypePts = pointerAnalysis.getPointsToSet(pk);
 
           if (dtypePts != null && !dtypePts.isEmpty()) {
-            ikDTypes.addAll(this.getDTypesFromDTypeArgument(builder, dtypePts));
+            ret.addAll(this.getDTypesFromDTypeArgument(builder, dtypePts));
           } else {
             // Fallback to initial_value.
             FieldReference valField =
@@ -719,7 +718,7 @@ public abstract class TensorGenerator {
             pk = builder.getPointerKeyForInstanceField(asin, f);
             OrdinalSet<InstanceKey> valPts = pointerAnalysis.getPointsToSet(pk);
             if (valPts != null && !valPts.isEmpty()) {
-              ikDTypes.addAll(this.getDTypesOfValue(builder, valPts));
+              ret.addAll(this.getDTypesOfValue(builder, valPts));
             }
           }
         } else if (reference.equals(TENSOR_TYPE)
@@ -731,8 +730,6 @@ public abstract class TensorGenerator {
               "Encountered " + reference.getName() + ". DType will flow via dataflow graph.");
         } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
       } else throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
-
-      ret.addAll(ikDTypes);
     }
 
     return ret;
