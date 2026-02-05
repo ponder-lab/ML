@@ -61,6 +61,17 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
     super(source);
   }
 
+  /**
+   * Recursively finds the maximum long value from a points-to set of {@link InstanceKey}s.
+   *
+   * <p>Handles {@link ConstantKey}s, {@link AllocationSiteInNode}s representing lists or tuples (by
+   * recursing into their elements), and inlined {@code tf.constant} objects (by recursing into
+   * their {@code value} field).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} for the analysis.
+   * @param pts The points-to set of {@link InstanceKey}s to examine.
+   * @return The maximum long value found, or {@code null} if no numeric values were found.
+   */
   private Long getMax(PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> pts) {
     Long max = null;
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
