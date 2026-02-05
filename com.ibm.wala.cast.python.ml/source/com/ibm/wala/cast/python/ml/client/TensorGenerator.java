@@ -54,6 +54,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -66,9 +67,9 @@ public abstract class TensorGenerator {
 
   protected PointsToSetVariable source;
 
-  protected final java.util.Map<InstanceKey, Set<List<Dimension<?>>>> shapeCache;
+  protected final Map<InstanceKey, Set<List<Dimension<?>>>> shapeCache;
 
-  protected final java.util.Map<InstanceKey, Set<DType>> dtypeCache;
+  protected final Map<InstanceKey, Set<DType>> dtypeCache;
 
   public TensorGenerator(PointsToSetVariable source) {
     this.source = source;
