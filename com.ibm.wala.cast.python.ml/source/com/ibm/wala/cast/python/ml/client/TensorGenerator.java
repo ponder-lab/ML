@@ -47,14 +47,12 @@ import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
-import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -67,10 +65,6 @@ public abstract class TensorGenerator {
 
   protected PointsToSetVariable source;
 
-  protected final Map<InstanceKey, Set<List<Dimension<?>>>> shapeCache = HashMapFactory.make();
-
-  protected final Map<InstanceKey, Set<DType>> dtypeCache = HashMapFactory.make();
-
   public TensorGenerator(PointsToSetVariable source) {
     this.source = source;
   }
@@ -82,29 +76,18 @@ public abstract class TensorGenerator {
    * @return A set of possible {@link TensorType}s.
    */
   public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
-    try {
-      Set<List<Dimension<?>>> shapes = this.getShapes(builder);
-      Set<DType> dTypes = this.getDTypes(builder);
+    Set<List<Dimension<?>>> shapes = this.getShapes(builder);
+    Set<DType> dTypes = this.getDTypes(builder);
 
-      Set<TensorType> ret = HashSetFactory.make();
+    Set<TensorType> ret = HashSetFactory.make();
 
-      // Create a tensor type for each possible shape and dtype combination.
-      for (List<Dimension<?>> dimensionList : shapes)
-        for (DType dtype : dTypes)
-          ret.add(new TensorType(dtype.name().toLowerCase(), dimensionList));
+    // Create a tensor type for each possible shape and dtype combination.
+    for (List<Dimension<?>> dimensionList : shapes)
+      for (DType dtype : dTypes) ret.add(new TensorType(dtype.name().toLowerCase(), dimensionList));
 
-      LOGGER.fine(() -> "Generator " + this.getClass().getSimpleName() + " produced types: " + ret);
+    LOGGER.fine(() -> "Generator " + this.getClass().getSimpleName() + " produced types: " + ret);
 
-      return ret;
-    } finally {
-      this.clearCaches();
-    }
-  }
-
-  /** Clears the {@link #shapeCache} and {@link #dtypeCache}. */
-  private void clearCaches() {
-    this.shapeCache.clear();
-    this.dtypeCache.clear();
+    return ret;
   }
 
   /**
@@ -125,11 +108,6 @@ public abstract class TensorGenerator {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey instanceKey : pointsToSet) {
-      if (this.shapeCache.containsKey(instanceKey)) {
-        ret.addAll(this.shapeCache.get(instanceKey));
-        continue;
-      }
-
       Set<List<Dimension<?>>> ikShapes = HashSetFactory.make();
       AllocationSiteInNode asin = getAllocationSiteInNode(instanceKey);
       if (asin == null) continue;
@@ -249,7 +227,6 @@ public abstract class TensorGenerator {
         throw new IllegalStateException(
             "Expected a " + list + " or " + tuple + " for the shape, but got: " + reference + ".");
 
-      this.shapeCache.put(instanceKey, ikShapes);
       ret.addAll(ikShapes);
     }
 
@@ -363,11 +340,6 @@ public abstract class TensorGenerator {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey valueIK : valuePointsToSet) {
-      if (this.shapeCache.containsKey(valueIK)) {
-        ret.addAll(this.shapeCache.get(valueIK));
-        continue;
-      }
-
       Set<List<Dimension<?>>> ikShapes = HashSetFactory.make();
       if (valueIK instanceof ConstantKey) ikShapes.add(emptyList()); // Scalar value.
       else if (valueIK instanceof AllocationSiteInNode) {
@@ -453,7 +425,6 @@ public abstract class TensorGenerator {
         } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
       } else throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
 
-      this.shapeCache.put(valueIK, ikShapes);
       ret.addAll(ikShapes);
     }
 
@@ -651,11 +622,6 @@ public abstract class TensorGenerator {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey valueIK : valuePointsToSet) {
-      if (this.dtypeCache.containsKey(valueIK)) {
-        ret.addAll(this.dtypeCache.get(valueIK));
-        continue;
-      }
-
       Set<DType> ikDTypes = EnumSet.noneOf(DType.class);
       if (valueIK instanceof ConstantKey) { // It's a scalar value.
         ConstantKey<?> constantKey = (ConstantKey<?>) valueIK;
@@ -765,7 +731,6 @@ public abstract class TensorGenerator {
         } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
       } else throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
 
-      this.dtypeCache.put(valueIK, ikDTypes);
       ret.addAll(ikDTypes);
     }
 
