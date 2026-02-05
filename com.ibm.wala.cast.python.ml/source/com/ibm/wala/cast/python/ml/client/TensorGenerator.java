@@ -149,7 +149,7 @@ public abstract class TensorGenerator {
 
         for (InstanceKey catalogIK : objectCatalogPointsToSet) {
           ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
-          Integer fieldIndex = TensorGenerator.getFieldIndex(constantKey);
+          Integer fieldIndex = getFieldIndex(constantKey);
 
           FieldReference subscript =
               FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
