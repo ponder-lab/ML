@@ -81,7 +81,7 @@ public class Poisson extends Ones {
         this.getArgumentPointsToSet(builder, this.getLamParameterPosition(), getLamParameterName());
 
     if (lamPTS == null || lamPTS.isEmpty())
-      throw new IllegalArgumentException(
+      throw new IllegalStateException(
           "Mandatory 'lam' argument missing for Poisson: " + this.getNode());
 
     Set<List<Dimension<?>>> lamShapes = this.getShapesOfValue(builder, lamPTS);
