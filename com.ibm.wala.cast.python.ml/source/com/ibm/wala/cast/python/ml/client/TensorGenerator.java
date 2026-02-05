@@ -75,6 +75,12 @@ public abstract class TensorGenerator {
     this.source = source;
   }
 
+  /**
+   * Returns a set of possible {@link TensorType}s that this generator can produce.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} for the analysis.
+   * @return A set of possible {@link TensorType}s.
+   */
   public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     try {
       Set<List<Dimension<?>>> shapes = this.getShapes(builder);
