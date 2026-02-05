@@ -143,7 +143,7 @@ public class OneHot extends Ones {
             builder, this.getIndicesParameterPosition(), getIndicesParameterName());
 
     if (indicesPTS == null || indicesPTS.isEmpty())
-      throw new IllegalArgumentException(
+      throw new IllegalStateException(
           "Empty points-to set for "
               + INDICES.name()
               + " argument in "
