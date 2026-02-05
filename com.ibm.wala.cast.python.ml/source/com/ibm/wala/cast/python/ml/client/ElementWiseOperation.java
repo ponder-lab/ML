@@ -69,7 +69,7 @@ public class ElementWiseOperation extends ZerosLike {
             builder, this.getXParameterPosition(), this.getXParameterName());
 
     if (xPTS == null || xPTS.isEmpty())
-      throw new IllegalArgumentException(
+      throw new IllegalStateException(
           "Mandatory argument '"
               + this.getXParameterName()
               + "' missing for "
@@ -84,7 +84,7 @@ public class ElementWiseOperation extends ZerosLike {
             builder, this.getYParameterPosition(), this.getYParameterName());
 
     if (yPTS == null || yPTS.isEmpty())
-      throw new IllegalArgumentException(
+      throw new IllegalStateException(
           "Mandatory argument '"
               + this.getYParameterName()
               + "' missing for "

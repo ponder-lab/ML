@@ -48,13 +48,13 @@ public class Model extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    throw new IllegalArgumentException(
+    throw new UnsupportedOperationException(
         "Shape is mandatory and must be provided explicitly for tf.keras.Model.");
   }
 
   @Override
   protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    throw new IllegalArgumentException(
+    throw new UnsupportedOperationException(
         "DType is mandatory and must be provided explicitly for tf.keras.Model.");
   }
 }

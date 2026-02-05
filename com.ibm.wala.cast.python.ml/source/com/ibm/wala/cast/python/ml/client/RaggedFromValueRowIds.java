@@ -170,7 +170,7 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
       // Fallback to inference.
       return HashSetFactory.make();
 
-    return TensorGenerator.getPossibleLongValues(pointsToSet);
+    return getPossibleLongValues(pointsToSet);
   }
 
   @Override

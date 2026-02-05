@@ -41,13 +41,13 @@ public class DatasetGenerator extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    throw new IllegalArgumentException(
+    throw new UnsupportedOperationException(
         "Modeling for tf.data.Dataset transformation " + this.getSource() + " is missing.");
   }
 
   @Override
   protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    throw new IllegalArgumentException(
+    throw new UnsupportedOperationException(
         "Modeling for tf.data.Dataset transformation " + this.getSource() + " is missing.");
   }
 }

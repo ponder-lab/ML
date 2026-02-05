@@ -122,7 +122,7 @@ public class Input extends Ones {
                 + this.getSource()
                 + "; assuming unknown.");
       } else {
-        batchSizes.addAll(TensorGenerator.getPossibleLongValues(batchSizePts));
+        batchSizes.addAll(getPossibleLongValues(batchSizePts));
       }
     }
 

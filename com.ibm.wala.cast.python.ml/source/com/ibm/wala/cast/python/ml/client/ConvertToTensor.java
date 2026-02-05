@@ -96,8 +96,6 @@ public class ConvertToTensor extends Constant {
 
       // The dtype points-to set is non-empty, meaning that the dtype hint was explicitly set.
 
-      // The dtype points-to set is non-empty, meaning that the dtype hint was explicitly set.
-
       // If the conversion to dtype_hint is not possible, this argument has no effect.
 
       // Get the dtypes from the points-to set.
