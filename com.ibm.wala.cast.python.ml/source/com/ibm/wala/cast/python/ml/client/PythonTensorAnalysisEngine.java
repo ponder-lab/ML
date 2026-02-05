@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.google.common.collect.Sets.newHashSet;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT_OP_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.types.AstMethodReference.fnReference;
@@ -125,10 +126,38 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   private final Map<PointerKey, AnalysisError> errorLog = HashMapFactory.make();
 
   private static Set<PointsToSetVariable> getDataflowSources(
-      Graph<PointsToSetVariable> dataflow,
-      CallGraph callGraph,
-      PointerAnalysis<InstanceKey> pointerAnalysis) {
+      PropagationCallGraphBuilder builder, Graph<PointsToSetVariable> dataflow) {
     Set<PointsToSetVariable> sources = HashSetFactory.make();
+    CallGraph callGraph = builder.getCallGraph();
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+
+    for (CGNode node : callGraph) {
+      if (node.getMethod()
+          .getReference()
+          .getDeclaringClass()
+          .equals(CONSTANT.getDeclaringClass())) {
+        if (node.getIR() != null) {
+          for (SSAInstruction inst : node.getIR().getInstructions()) {
+            if (inst instanceof SSANewInstruction) {
+              SSANewInstruction newInstruction = (SSANewInstruction) inst;
+              if (newInstruction.getConcreteType().equals(CONSTANT_OP_CONSTANT)) {
+                PointerKey key =
+                    pointerAnalysis
+                        .getHeapModel()
+                        .getPointerKeyForLocal(node, newInstruction.getDef());
+                if (!builder.getPropagationSystem().isImplicit(key)) {
+                  PointsToSetVariable ptv =
+                      builder.getPropagationSystem().findOrCreatePointsToSet(key);
+                  sources.add(ptv);
+                  logger.info("Added dataflow source from constant allocation: " + ptv + ".");
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     for (PointsToSetVariable src : dataflow) {
       PointerKey k = src.getPointerKey();
 
@@ -143,12 +172,6 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           // We potentially have a function call that generates a tensor.
           SSAAbstractInvokeInstruction ni = (SSAAbstractInvokeInstruction) inst;
           processInstruction(ni, du, localPointerKeyNode, src, vn, sources, pointerAnalysis);
-        } else if (inst instanceof SSANewInstruction) {
-          SSANewInstruction newInstruction = (SSANewInstruction) inst;
-          if (newInstruction.getConcreteType().equals(CONSTANT_OP_CONSTANT)) {
-            sources.add(src);
-            logger.info("Added dataflow source from constant allocation: " + src + ".");
-          }
         } else if (inst instanceof EachElementGetInstruction) {
           // We are potentially pulling a tensor out of a tensor iterable.
           EachElementGetInstruction eachElementGetInstruction = (EachElementGetInstruction) inst;
@@ -679,8 +702,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         SlowSparseNumberedGraph.duplicate(
             builder.getPropagationSystem().getFlowGraphIncludingImplicitConstraints());
 
-    Set<PointsToSetVariable> sources =
-        getDataflowSources(dataflow, builder.getCallGraph(), builder.getPointerAnalysis());
+    Set<PointsToSetVariable> sources = getDataflowSources(builder, dataflow);
 
     Map<PointsToSetVariable, Set<TensorType>> init = HashMapFactory.make();
 
