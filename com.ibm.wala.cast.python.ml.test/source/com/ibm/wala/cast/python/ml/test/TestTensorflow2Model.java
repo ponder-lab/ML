@@ -2891,31 +2891,31 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testReduceMeanKwargs()
+  public void testReduceMean4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_reduce_mean_kwargs.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
   }
 
   @Test
-  public void testReduceMeanKwargs2()
+  public void testReduceMean5()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_reduce_mean_kwargs.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
   }
 
   @Test
-  public void testReduceMeanKwargs3()
+  public void testReduceMean6()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_reduce_mean_kwargs.py", "h", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
   @Test
-  public void testReduceMeanKwargs4()
+  public void testReduceMean7()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_reduce_mean_kwargs.py", "i", 1, 1, Map.of(2, Set.of(TENSOR_2_1_FLOAT32)));
   }
 
   @Test
-  public void testReduceMeanKwargs5()
+  public void testReduceMean8()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_reduce_mean_kwargs.py", "j", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }

@@ -204,19 +204,9 @@ public class ReduceMean extends TensorGenerator {
 
   @Override
   protected int getDTypeParameterPosition() {
-    // reduce_mean usually preserves type for float, but might change for int?
-    // tf.reduce_mean: "The reduced dimensions are removed... The dtype is the same as input_tensor
-    // if it is floating point; otherwise it is checked."
-    // Actually, documentation says: "If input_tensor has integral data type, the output tensor will
-    // have the same data type but with values cast to float32 (or float64 if input is int64)."
-    // Wait, let me check the docs.
-    // "If input_tensor is integer, result is float32." seems common for mean.
-    // Let's check TestTensorflow2Model expectation.
-    // SCALAR_TENSOR_OF_FLOAT32 for f (input float32).
-    // reduce_mean on ints produces what?
-    // tf2_test_reduce_mean.py uses tf.float32.
-
-    // I should implement getDTypes to handle this promotion if needed.
+    // tf.reduce_mean does not have a 'dtype' parameter that allows specifying the output type
+    // directly.
+    // The output type is derived from the input type (integers are cast to float32/float64).
     return UNDEFINED_PARAMETER_POSITION;
   }
 
