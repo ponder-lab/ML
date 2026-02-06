@@ -1649,20 +1649,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
-   * is fixed.
+   * Should not throw an {@link IllegalStateException} once https://github.com/wala/ML/issues/340 is
+   * fixed.
    */
-  @Test(expected = IllegalArgumentException.class)
+  @Test(expected = IllegalStateException.class)
   public void testAdd43()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_add43.py", "add", 2, 3, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
   }
 
   /**
-   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
-   * is fixed.
+   * Should not throw an {@link IllegalStateException} once https://github.com/wala/ML/issues/340 is
+   * fixed.
    */
-  @Test(expected = IllegalArgumentException.class)
+  @Test(expected = IllegalStateException.class)
   public void testAdd44()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_add44.py", "add", 2, 3, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
