@@ -46,26 +46,10 @@ public class ReduceMean extends TensorGenerator {
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     // If no axis is specified, it reduces all dimensions to a scalar (unless keepdims=True).
     // Default keepdims is False.
-    // So default shape is scalar ().
-    // However, if keepdims is True (default argument isn't verified here, this method is called
-    // when shape args are missing?)
-    // No, getDefaultShapes is abstract but getShapes calls it if "argument shape is not specified".
-    // But reduce_mean doesn't have a "shape" argument. It has "axis".
-    // The base TensorGenerator assumes a "shape" argument exists for generators that create tensors
-    // from scratch.
-    // But reduce_mean TRANSFORMS a tensor.
 
-    // We should override getShapes(builder) to implement the reduction logic.
-    // But getShapes is final? No, protected.
-
-    // Wait, TensorGenerator.getTensorTypes calls getShapes(builder).
-    // getShapes(builder) gets the "shape" argument.
-    // ReduceMean doesn't have a "shape" argument.
-    // So getShapes(builder) will call getDefaultShapes(builder).
-
-    // So in getDefaultShapes(builder), we must implement the reduction logic!
-
-    int inputValNum = this.getArgumentValueNumber(builder, Parameters.INPUT_TENSOR.getIndex());
+    int inputValNum =
+        this.getArgumentValueNumber(
+            builder, Parameters.INPUT_TENSOR.getIndex(), Parameters.INPUT_TENSOR.getName(), false);
     Set<List<Dimension<?>>> inputShapes = this.getShapes(builder, inputValNum);
 
     OrdinalSet<InstanceKey> axisPts =
@@ -161,6 +145,17 @@ public class ReduceMean extends TensorGenerator {
 
       // Case 2: Axis specified
       for (Set<Integer> axes : axisValues) {
+        // Validate axes for this rank
+        boolean validAxes = true;
+        for (Integer a : axes) {
+          int normalizedAxis = a < 0 ? a + rank : a;
+          if (normalizedAxis < 0 || normalizedAxis >= rank) {
+            validAxes = false;
+            break;
+          }
+        }
+        if (!validAxes) continue;
+
         for (boolean keep : keepDimsValues) {
           List<Dimension<?>> newShape = new ArrayList<>();
           for (int i = 0; i < rank; i++) {
@@ -244,7 +239,9 @@ public class ReduceMean extends TensorGenerator {
     // No dtype arg.
     // So it's determined by input.
 
-    int inputValNum = this.getArgumentValueNumber(builder, Parameters.INPUT_TENSOR.getIndex());
+    int inputValNum =
+        this.getArgumentValueNumber(
+            builder, Parameters.INPUT_TENSOR.getIndex(), Parameters.INPUT_TENSOR.getName(), false);
     Set<DType> inputTypes = this.getDTypes(builder, inputValNum);
     Set<DType> ret = new HashSet<>();
     for (DType t : inputTypes) {
