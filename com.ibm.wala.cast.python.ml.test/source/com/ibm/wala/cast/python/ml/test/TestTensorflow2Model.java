@@ -2949,11 +2949,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_multiply6.py", "f", 1, 1);
   }
 
-  /**
-   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
-   * is fixed.
-   */
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testMultiply7()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_multiply7.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
