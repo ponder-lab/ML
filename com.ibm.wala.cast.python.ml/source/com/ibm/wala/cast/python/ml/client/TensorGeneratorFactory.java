@@ -33,6 +33,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.READ_DATA_SETS;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MEAN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_FROM_DENSE;
@@ -124,6 +125,7 @@ public class TensorGeneratorFactory {
         || calledFunction.equals(DATASET)) return new DatasetGenerator(source);
     else if (calledFunction.equals(READ_DATA_SETS.getDeclaringClass()))
       return new ReadDataSets(source);
+    else if (calledFunction.equals(REDUCE_MEAN.getDeclaringClass())) return new ReduceMean(source);
     else {
       if (calledFunction.getName().toString().startsWith("Lscript ")) {
         throw new IllegalArgumentException(

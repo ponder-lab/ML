@@ -453,6 +453,14 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String DIVIDE_SIGNATURE = "tf.divide()";
 
+  public static final MethodReference REDUCE_MEAN =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/reduce_mean")),
+          AstMethodReference.fnSelector);
+
+  private static final String REDUCE_MEAN_SIGNATURE = "tf.reduce_mean()";
+
   public static final MethodReference MODEL =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
@@ -550,6 +558,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(ADD.getDeclaringClass(), ADD_SIGNATURE),
           Map.entry(SUBTRACT.getDeclaringClass(), SUBTRACT_SIGNATURE),
           Map.entry(DIVIDE.getDeclaringClass(), DIVIDE_SIGNATURE),
+          Map.entry(REDUCE_MEAN.getDeclaringClass(), REDUCE_MEAN_SIGNATURE),
           Map.entry(MODEL.getDeclaringClass(), MODEL_SIGNATURE),
           Map.entry(TENSOR.getDeclaringClass(), TENSOR_SIGNATURE),
           Map.entry(NDARRAY.getDeclaringClass(), NDARRAY_SIGNATURE),
