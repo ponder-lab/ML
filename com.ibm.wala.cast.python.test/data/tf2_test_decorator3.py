@@ -9,3 +9,6 @@ def returned(a):
 
 a = tf.constant([1.0, 1.0])
 b = returned(a)
+
+assert a.shape == (2,)
+assert a.dtype == tf.float32

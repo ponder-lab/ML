@@ -5,4 +5,8 @@ def add(a, b):
     return a + b
 
 
-c = add(tf.convert_to_tensor(1), tf.convert_to_tensor(2))
+arg = tf.convert_to_tensor(1)
+assert arg.shape == ()
+assert arg.dtype == tf.int32
+
+c = add(arg, tf.convert_to_tensor(2))
