@@ -1,8 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARGMAX;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CAST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT_OP_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
@@ -45,7 +43,6 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.READ_DATA_SETS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MEAN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_SUM;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RESHAPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SOFTMAX_CROSS_ENTROPY_WITH_LOGITS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_EYE;
@@ -89,7 +86,6 @@ public class TensorGeneratorFactory {
       return new TruncatedNormal(source);
     else if (calledFunction.equals(ZEROS.getDeclaringClass())) return new Zeros(source);
     else if (calledFunction.equals(ZEROS_LIKE.getDeclaringClass())) return new ZerosLike(source);
-    else if (calledFunction.equals(RESHAPE.getDeclaringClass())) return new Reshape(source);
     else if (calledFunction.equals(FILL.getDeclaringClass())) return new Fill(source);
     else if (calledFunction.equals(CONVERT_TO_TENSOR.getDeclaringClass()))
       return new ConvertToTensor(source);
@@ -143,10 +139,8 @@ public class TensorGeneratorFactory {
       return new ReadDataSets(source);
     else if (calledFunction.equals(REDUCE_MEAN.getDeclaringClass())) return new ReduceMean(source);
     else if (calledFunction.equals(PLACEHOLDER.getDeclaringClass())) return new Placeholder(source);
-    else if (calledFunction.equals(ARGMAX.getDeclaringClass())) return new ArgMax(source);
     else if (calledFunction.equals(EQUAL.getDeclaringClass()))
       return new ElementWiseOperation(source);
-    else if (calledFunction.equals(CAST.getDeclaringClass())) return new Cast(source);
     else if (calledFunction.equals(SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass())
         || calledFunction.equals(SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass()))
       return new SoftmaxCrossEntropy(source);
