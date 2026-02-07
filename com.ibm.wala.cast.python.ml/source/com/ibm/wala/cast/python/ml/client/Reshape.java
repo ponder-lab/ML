@@ -1,7 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
-import static java.util.Collections.emptySet;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -13,6 +12,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -67,13 +67,16 @@ public class Reshape extends ZerosLike {
   }
 
   @Override
-  public Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
-    return emptySet();
-  }
-
-  @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    return emptySet();
+    Set<DType> types =
+        this.getDTypesOfValue(
+            builder,
+            this.getArgumentPointsToSet(
+                builder, this.getValueParameterPosition(), this.getValueParameterName()));
+    if (!types.isEmpty()) {
+      return types;
+    }
+    return EnumSet.of(FLOAT32);
   }
 
   @Override
@@ -102,13 +105,17 @@ public class Reshape extends ZerosLike {
         for (List<Dimension<?>> inputShape : inputShapes) {
           TensorType inputType = new TensorType(FLOAT32.name().toLowerCase(), inputShape);
 
-          if (ssz == 1
-              && inputType.symbolicDims() == 0
-              && inputType.concreteSize() != -1
-              && csz != -1) {
+          if (ssz == 1 && inputType.symbolicDims() == 0 && inputType.concreteSize() != -1) {
             int totalSize = inputType.concreteSize();
-            if (csz > 0 && totalSize % csz == 0) {
-              int missingDim = totalSize / csz;
+            int partialSize = 1;
+            for (Dimension<?> d : reshapeTo) {
+              if (d instanceof NumericDim) {
+                partialSize *= ((NumericDim) d).value();
+              }
+            }
+
+            if (partialSize > 0 && totalSize % partialSize == 0) {
+              int missingDim = totalSize / partialSize;
               List<Dimension<?>> newDims = new ArrayList<>();
               for (Dimension<?> d : reshapeTo) {
                 if (d instanceof SymbolicDim) {
