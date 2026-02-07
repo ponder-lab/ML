@@ -428,7 +428,9 @@ public class TensorType implements Iterable<Dimension<?>> {
   public int symbolicDims() {
     int sz = 0;
     for (Dimension<?> d : this) {
-      sz += d.symbolicDims();
+      if (d != null) {
+        sz += d.symbolicDims();
+      }
     }
     return sz;
   }
@@ -436,12 +438,14 @@ public class TensorType implements Iterable<Dimension<?>> {
   public int concreteSize() {
     int size = -1;
     for (Dimension<?> x : this) {
-      final int xs = x.concreteSize();
-      if (xs >= 0) {
-        if (size >= 0) {
-          size *= xs;
-        } else {
-          size = xs;
+      if (x != null) {
+        final int xs = x.concreteSize();
+        if (xs >= 0) {
+          if (size >= 0) {
+            size *= xs;
+          } else {
+            size = xs;
+          }
         }
       }
     }

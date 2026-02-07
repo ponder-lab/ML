@@ -1,7 +1,10 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARGMAX;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CAST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT_OP_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_BATCH_TYPE;
@@ -9,9 +12,12 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FROM_TEN
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_MAP_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_RANGE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SHUFFLE_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DENSE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIVIDE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLATTEN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_ROW_LENGTHS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_ROW_SPLITS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_VALUE_ROWIDS;
@@ -22,21 +28,29 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_ROW_STARTS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_VALUE_ROWIDS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MATMUL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MAX_POOL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MULTIPLY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NDARRAY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONES;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONE_HOT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.PLACEHOLDER;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.POISSON;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.READ_DATA_SETS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MEAN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_SUM;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RESHAPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SOFTMAX_CROSS_ENTROPY_WITH_LOGITS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_FROM_DENSE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SUBTRACT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR;
@@ -66,7 +80,8 @@ public class TensorGeneratorFactory {
     LOGGER.info("Getting tensor generator for call to: " + calledFunction.getName() + ".");
 
     if (calledFunction.equals(ONES.getDeclaringClass())) return new Ones(source);
-    else if (calledFunction.equals(CONSTANT.getDeclaringClass())) return new Constant(source);
+    else if (calledFunction.equals(CONSTANT.getDeclaringClass())
+        || calledFunction.equals(CONSTANT_OP_CONSTANT)) return new Constant(source);
     else if (calledFunction.equals(RANGE.getDeclaringClass())) return new Range(source);
     else if (calledFunction.equals(UNIFORM.getDeclaringClass())) return new Uniform(source);
     else if (calledFunction.equals(NORMAL.getDeclaringClass())) return new Normal(source);
@@ -74,6 +89,7 @@ public class TensorGeneratorFactory {
       return new TruncatedNormal(source);
     else if (calledFunction.equals(ZEROS.getDeclaringClass())) return new Zeros(source);
     else if (calledFunction.equals(ZEROS_LIKE.getDeclaringClass())) return new ZerosLike(source);
+    else if (calledFunction.equals(RESHAPE.getDeclaringClass())) return new Reshape(source);
     else if (calledFunction.equals(FILL.getDeclaringClass())) return new Fill(source);
     else if (calledFunction.equals(CONVERT_TO_TENSOR.getDeclaringClass()))
       return new ConvertToTensor(source);
@@ -126,6 +142,21 @@ public class TensorGeneratorFactory {
     else if (calledFunction.equals(READ_DATA_SETS.getDeclaringClass()))
       return new ReadDataSets(source);
     else if (calledFunction.equals(REDUCE_MEAN.getDeclaringClass())) return new ReduceMean(source);
+    else if (calledFunction.equals(PLACEHOLDER.getDeclaringClass())) return new Placeholder(source);
+    else if (calledFunction.equals(ARGMAX.getDeclaringClass())) return new ArgMax(source);
+    else if (calledFunction.equals(EQUAL.getDeclaringClass()))
+      return new ElementWiseOperation(source);
+    else if (calledFunction.equals(CAST.getDeclaringClass())) return new Cast(source);
+    else if (calledFunction.equals(SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass())
+        || calledFunction.equals(SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass()))
+      return new SoftmaxCrossEntropy(source);
+    else if (calledFunction.equals(LOG.getDeclaringClass()))
+      return new ElementWiseOperation(source);
+    else if (calledFunction.equals(REDUCE_SUM.getDeclaringClass())) return new ReduceSum(source);
+    else if (calledFunction.equals(MATMUL.getDeclaringClass())) return new MatMul(source);
+    else if (calledFunction.equals(DENSE.getDeclaringClass())) return new Dense(source);
+    else if (calledFunction.equals(FLATTEN.getDeclaringClass())) return new Flatten(source);
+    else if (calledFunction.equals(MAX_POOL.getDeclaringClass())) return new MaxPool(source);
     else {
       if (calledFunction.getName().toString().startsWith("Lscript ")) {
         throw new IllegalArgumentException(

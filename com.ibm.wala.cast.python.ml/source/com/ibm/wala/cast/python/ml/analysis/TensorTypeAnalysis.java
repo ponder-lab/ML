@@ -268,8 +268,10 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               if (rhs != null && rhs.state != null) {
                 for (TensorType t : rhs.state) {
                   int dims = 0;
-                  for (@SuppressWarnings("unused") Dimension<?> d : t) {
-                    dims++;
+                  for (Dimension<?> d : t) {
+                    if (d != null) {
+                      dims++;
+                    }
                   }
                   if (dims == dimensions + 2) {
                     changed |= lhs.state.add(t);
@@ -320,10 +322,17 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                   // If there is exactly one dynamic dimension (symbolic), try to resolve it by
                   // comparing the total size of the input tensor with the concrete size of the
                   // target shape.
-                  if (ssz == 1 && t.symbolicDims() == 0 && t.concreteSize() != -1 && csz != -1) {
+                  if (ssz == 1 && t.symbolicDims() == 0 && t.concreteSize() != -1) {
                     int totalSize = t.concreteSize();
-                    if (csz > 0 && totalSize % csz == 0) {
-                      int missingDim = totalSize / csz;
+                    int partialSize = 1;
+                    for (Dimension<?> d : reshapeTo.getDims()) {
+                      if (d instanceof NumericDim) {
+                        partialSize *= ((NumericDim) d).value();
+                      }
+                    }
+
+                    if (partialSize > 0 && totalSize % partialSize == 0) {
+                      int missingDim = totalSize / partialSize;
                       List<Dimension<?>> newDims = new ArrayList<>();
                       for (Dimension<?> d : reshapeTo.getDims()) {
                         if (d instanceof SymbolicDim) {
@@ -486,6 +495,10 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> conv3ds,
       Map<PointerKey, AnalysisError> errorLog) {
     super(createProblem(G, reshapeTypes, set_shapes, conv2ds, conv3ds, errorLog));
+    System.err.println("TensorTypeAnalysis reshapeNodes size: " + reshapeTypes.size());
+    for (PointsToSetVariable v : reshapeTypes.keySet()) {
+      System.err.println("reshapeNode: " + v.getPointerKey());
+    }
     this.init = init;
   }
 

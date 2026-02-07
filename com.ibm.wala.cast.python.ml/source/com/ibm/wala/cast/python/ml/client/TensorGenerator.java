@@ -50,6 +50,7 @@ import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
@@ -129,7 +130,7 @@ public abstract class TensorGenerator {
         // We expect the object catalog to contain a list of integers. Each element in the array
         // corresponds to the set of possible dimensions for that index.
         @SuppressWarnings({"unchecked", "rawtypes"})
-        Set<Dimension<Integer>>[] possibleDimensions = new Set[objectCatalogPointsToSet.size()];
+        Set<Dimension<?>>[] possibleDimensions = new Set[objectCatalogPointsToSet.size()];
 
         for (InstanceKey catalogIK : objectCatalogPointsToSet) {
           ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
@@ -152,7 +153,7 @@ public abstract class TensorGenerator {
 
           // If the instance field points to a constant, we can use it as the shape.
           // TODO: Is it possible to also do it for (simple) expressions?
-          Set<Dimension<Integer>> tensorDimensions = HashSetFactory.make();
+          Set<Dimension<?>> tensorDimensions = HashSetFactory.make();
 
           for (InstanceKey instanceFieldIK : instanceFieldPointsToSet) {
             if (instanceFieldIK instanceof ConstantKey) {
@@ -161,7 +162,8 @@ public abstract class TensorGenerator {
               Object instanceFieldValue = instanceFieldConstant.getValue();
 
               // We have a shape value.
-              Number shapeValue = (Number) instanceFieldValue;
+              Number shapeValue =
+                  (instanceFieldValue instanceof Number) ? (Number) instanceFieldValue : null;
               LOGGER.fine(
                   "Found shape value: "
                       + shapeValue
@@ -169,8 +171,17 @@ public abstract class TensorGenerator {
                       + this.getSource().getPointerKey()
                       + ".");
 
-              Dimension<Integer> dimension =
-                  (shapeValue != null) ? new NumericDim(shapeValue.intValue()) : null;
+              Dimension<?> dimension = null;
+              if (shapeValue != null) {
+                int val = shapeValue.intValue();
+                if (val < 0) {
+                  dimension = new TensorType.SymbolicDim("?");
+                } else {
+                  dimension = new NumericDim(val);
+                }
+              } else {
+                dimension = new TensorType.SymbolicDim("?");
+              }
 
               LOGGER.fine("Adding dimension: " + dimension + ".");
               tensorDimensions.add(dimension);
@@ -209,19 +220,25 @@ public abstract class TensorGenerator {
                   + ".");
         }
 
-        for (int i = 0; i < possibleDimensions.length; i++)
-          for (Dimension<Integer> iDim : possibleDimensions[i]) {
+        for (int i = 0; i < possibleDimensions.length; i++) {
+          if (possibleDimensions[i] == null) continue;
+          for (Dimension<?> iDim : possibleDimensions[i]) {
             @SuppressWarnings({"unchecked", "rawtypes"})
-            Dimension<Integer>[] dimensions = new Dimension[possibleDimensions.length];
+            Dimension<?>[] dimensions = new Dimension[possibleDimensions.length];
 
             dimensions[i] = iDim;
 
             for (int j = 0; j < possibleDimensions.length; j++)
-              if (i != j)
-                for (Dimension<Integer> jDim : possibleDimensions[j]) dimensions[j] = jDim;
+              if (i != j) {
+                if (possibleDimensions[j] != null && !possibleDimensions[j].isEmpty()) {
+                  for (Dimension<?> jDim : possibleDimensions[j]) dimensions[j] = jDim;
+                }
+              }
 
             ret.add(asList(dimensions));
           }
+        }
+
       } else if (reference.equals(CONSTANT_OP_CONSTANT)) {
         FieldReference valueField =
             FieldReference.findOrCreate(CONSTANT_OP_CONSTANT, findOrCreateAsciiAtom("value"), Root);
@@ -319,9 +336,11 @@ public abstract class TensorGenerator {
         pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
     OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
 
-    if (valuePointsToSet.isEmpty())
-      throw new IllegalArgumentException(
+    if (valuePointsToSet.isEmpty()) {
+      LOGGER.warning(
           "Empty points-to set for value number: " + valueNumber + " in: " + this.getNode() + ".");
+      return Collections.emptySet();
+    }
 
     // FIXME: Just use the value number directly?
     return this.getShapesOfValue(builder, valuePointsToSet);
@@ -421,7 +440,13 @@ public abstract class TensorGenerator {
         } else if (reference.equals(TENSOR_TYPE)
             || reference.equals(CONVERT_TO_TENSOR_TYPE)
             || reference.equals(NDARRAY_TYPE)
-            || reference.equals(MODEL.getDeclaringClass())) {
+            || reference.equals(MODEL.getDeclaringClass())
+            || reference.getName().toString().startsWith("Ltensorflow/functions/")
+            || reference.getName().toString().startsWith("Ltensorflow/math/")
+            || reference
+                .getName()
+                .toString()
+                .startsWith("Ltensorflow/python/ops/variables/Variable")) {
           // Already a tensor or a model, do nothing. Shapes will flow via the dataflow graph.
           LOGGER.fine(
               "Encountered " + reference.getName() + ". Shape will flow via dataflow graph.");
@@ -598,9 +623,11 @@ public abstract class TensorGenerator {
         pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
     OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
 
-    if (valuePointsToSet == null || valuePointsToSet.isEmpty())
-      throw new IllegalArgumentException(
+    if (valuePointsToSet == null || valuePointsToSet.isEmpty()) {
+      LOGGER.warning(
           "Empty points-to set for value number: " + valueNumber + " in: " + this.getNode() + ".");
+      return Collections.emptySet();
+    }
 
     return this.getDTypesOfValue(builder, valuePointsToSet);
   }

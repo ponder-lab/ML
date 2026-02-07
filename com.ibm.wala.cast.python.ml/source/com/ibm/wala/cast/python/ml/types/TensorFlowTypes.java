@@ -495,6 +495,141 @@ public class TensorFlowTypes extends PythonTypes {
   private static final String READ_DATA_SETS_SIGNATURE =
       "tf.contrib.learn.datasets.mnist.read_data_sets()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/placeholder. */
+  public static final MethodReference PLACEHOLDER =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/placeholder")),
+          AstMethodReference.fnSelector);
+
+  private static final String PLACEHOLDER_SIGNATURE = "tf.placeholder()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/argmax. */
+  public static final MethodReference ARGMAX =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/argmax")),
+          AstMethodReference.fnSelector);
+
+  private static final String ARGMAX_SIGNATURE = "tf.argmax()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/equal. */
+  public static final MethodReference EQUAL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/equal")),
+          AstMethodReference.fnSelector);
+
+  private static final String EQUAL_SIGNATURE = "tf.equal()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/cast. */
+  public static final MethodReference CAST =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/cast")),
+          AstMethodReference.fnSelector);
+
+  private static final String CAST_SIGNATURE = "tf.cast()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/nn/softmax_cross_entropy_with_logits. */
+  public static final MethodReference SOFTMAX_CROSS_ENTROPY_WITH_LOGITS =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/softmax_cross_entropy_with_logits")),
+          AstMethodReference.fnSelector);
+
+  private static final String SOFTMAX_CROSS_ENTROPY_WITH_LOGITS_SIGNATURE =
+      "tf.nn.softmax_cross_entropy_with_logits()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/nn/sparse_softmax_cross_entropy_with_logits. */
+  public static final MethodReference SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName(
+                  "Ltensorflow/functions/sparse_softmax_cross_entropy_with_logits")),
+          AstMethodReference.fnSelector);
+
+  private static final String SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS_SIGNATURE =
+      "tf.nn.sparse_softmax_cross_entropy_with_logits()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/log. */
+  public static final MethodReference LOG =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/log")),
+          AstMethodReference.fnSelector);
+
+  private static final String LOG_SIGNATURE = "tf.log()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/reduce_sum. */
+  public static final MethodReference REDUCE_SUM =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/reduce_sum")),
+          AstMethodReference.fnSelector);
+
+  private static final String REDUCE_SUM_SIGNATURE = "tf.reduce_sum()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/matmul. */
+  public static final MethodReference MATMUL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/matmul")),
+          AstMethodReference.fnSelector);
+
+  private static final String MATMUL_SIGNATURE = "tf.matmul()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/layers/dense. */
+  public static final MethodReference DENSE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/dense")),
+          AstMethodReference.fnSelector);
+
+  private static final String DENSE_SIGNATURE = "tf.layers.dense()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/layers/flatten. */
+  public static final MethodReference FLATTEN =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/flatten")),
+          AstMethodReference.fnSelector);
+
+  private static final String FLATTEN_SIGNATURE = "tf.layers.flatten()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/nn/max_pool. */
+  public static final MethodReference MAX_POOL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/max_pool")),
+          AstMethodReference.fnSelector);
+
+  private static final String MAX_POOL_SIGNATURE = "tf.nn.max_pool()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/train/AdamOptimizer. */
+  public static final MethodReference ADAM_OPTIMIZER =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/AdamOptimizer")),
+          AstMethodReference.fnSelector);
+
+  private static final String ADAM_OPTIMIZER_SIGNATURE = "tf.train.AdamOptimizer()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/train/GradientDescentOptimizer. */
+  public static final MethodReference GRADIENT_DESCENT_OPTIMIZER =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/GradientDescentOptimizer")),
+          AstMethodReference.fnSelector);
+
+  private static final String GRADIENT_DESCENT_OPTIMIZER_SIGNATURE =
+      "tf.train.GradientDescentOptimizer()";
+
   public static final MethodReference RESHAPE =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
@@ -562,7 +697,27 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(MODEL.getDeclaringClass(), MODEL_SIGNATURE),
           Map.entry(TENSOR.getDeclaringClass(), TENSOR_SIGNATURE),
           Map.entry(NDARRAY.getDeclaringClass(), NDARRAY_SIGNATURE),
-          Map.entry(READ_DATA_SETS.getDeclaringClass(), READ_DATA_SETS_SIGNATURE));
+          Map.entry(READ_DATA_SETS.getDeclaringClass(), READ_DATA_SETS_SIGNATURE),
+          Map.entry(PLACEHOLDER.getDeclaringClass(), PLACEHOLDER_SIGNATURE),
+          Map.entry(ARGMAX.getDeclaringClass(), ARGMAX_SIGNATURE),
+          Map.entry(EQUAL.getDeclaringClass(), EQUAL_SIGNATURE),
+          Map.entry(CAST.getDeclaringClass(), CAST_SIGNATURE),
+          Map.entry(
+              SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass(),
+              SOFTMAX_CROSS_ENTROPY_WITH_LOGITS_SIGNATURE),
+          Map.entry(
+              SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass(),
+              SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS_SIGNATURE),
+          Map.entry(LOG.getDeclaringClass(), LOG_SIGNATURE),
+          Map.entry(REDUCE_SUM.getDeclaringClass(), REDUCE_SUM_SIGNATURE),
+          Map.entry(MATMUL.getDeclaringClass(), MATMUL_SIGNATURE),
+          Map.entry(DENSE.getDeclaringClass(), DENSE_SIGNATURE),
+          Map.entry(FLATTEN.getDeclaringClass(), FLATTEN_SIGNATURE),
+          Map.entry(MAX_POOL.getDeclaringClass(), MAX_POOL_SIGNATURE),
+          Map.entry(ADAM_OPTIMIZER.getDeclaringClass(), ADAM_OPTIMIZER_SIGNATURE),
+          Map.entry(
+              GRADIENT_DESCENT_OPTIMIZER.getDeclaringClass(),
+              GRADIENT_DESCENT_OPTIMIZER_SIGNATURE));
 
   /**
    * Represents the TensorFlow float32 data type.

@@ -278,11 +278,16 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // don't consider exceptions as a data source.
     if (instruction.getException() != vn) {
       if (instruction
-          .getCallSite()
-          .getDeclaredTarget()
-          .getName()
-          .toString()
-          .equals(TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME)) {
+              .getCallSite()
+              .getDeclaredTarget()
+              .getName()
+              .toString()
+              .equals(TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME)
+          || instruction
+              .getCallSite()
+              .getDeclaredTarget()
+              .getDeclaringClass()
+              .equals(CONSTANT.getDeclaringClass())) {
         sources.add(src);
         logger.info("Added dataflow source from tensor generator: " + src + ".");
         ret = true;
