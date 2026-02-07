@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
+import static java.util.Collections.emptySet;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -12,7 +13,6 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -67,10 +67,13 @@ public class Reshape extends ZerosLike {
   }
 
   @Override
+  public Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
+    return emptySet();
+  }
+
+  @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    LOGGER.info(
-        "No dtype specified for source: " + source + ". Using default dtype of: " + FLOAT32 + " .");
-    return EnumSet.of(FLOAT32);
+    return emptySet();
   }
 
   @Override
