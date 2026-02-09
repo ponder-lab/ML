@@ -5250,7 +5250,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_one_hot18.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_5_3_FLOAT32)));
   }
 
-  @Test
+  /**
+   * FIXME: Should not throw an {@link IllegalStateException} once
+   * https://github.com/wala/ML/issues/340 is fixed.
+   */
+  @Test(expected = IllegalStateException.class)
   public void testOneHot19()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     // Fixed by handling `CONSTANT_OP_CONSTANT`.

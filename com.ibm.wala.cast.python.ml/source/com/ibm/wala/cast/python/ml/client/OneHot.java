@@ -145,7 +145,7 @@ public class OneHot extends Ones {
     if (indicesPTS == null || indicesPTS.isEmpty())
       throw new IllegalStateException(
           "Empty points-to set for "
-              + INDICES.name()
+              + INDICES.name().toLowerCase()
               + " argument in "
               + OneHot.class.getName()
               + ": "
@@ -159,7 +159,7 @@ public class OneHot extends Ones {
 
     if (depthPTS == null || depthPTS.isEmpty())
       throw new IllegalStateException(
-          "No depth argument value found for OneHot tensor generation.");
+          "No depth argument value found for " + OneHot.class.getName() + " tensor generation.");
 
     Set<Integer> possibleAxes = this.getPossibleAxes(builder);
 
@@ -170,7 +170,11 @@ public class OneHot extends Ones {
                 .orElseThrow(
                     () ->
                         new IllegalStateException(
-                            "Depth argument value for OneHot is not an integer: " + depthIK + "."));
+                            "Depth argument value for "
+                                + OneHot.class.getName()
+                                + " is not an integer: "
+                                + depthIK
+                                + "."));
 
         // For each shape in indices, append the depth as a new dimension.
         for (List<Dimension<?>> shape : indices) {
@@ -185,7 +189,11 @@ public class OneHot extends Ones {
       }
 
     assert ret.size() >= indices.size()
-        : "Number of OneHot shapes should be at least the number of indices shapes.";
+        : "Number of "
+            + OneHot.class.getName()
+            + " shapes should be at least the number of "
+            + INDICES.name().toLowerCase()
+            + " shapes.";
 
     return ret;
   }
