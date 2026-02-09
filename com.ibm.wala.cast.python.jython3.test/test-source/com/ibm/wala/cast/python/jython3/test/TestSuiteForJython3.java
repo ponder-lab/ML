@@ -1,15 +1,20 @@
 package com.ibm.wala.cast.python.jython3.test;
 
 import com.ibm.wala.cast.python.test.TestAssign;
+import com.ibm.wala.cast.python.test.TestCallables;
 import com.ibm.wala.cast.python.test.TestCalls;
 import com.ibm.wala.cast.python.test.TestClasses;
 import com.ibm.wala.cast.python.test.TestCollections;
+import com.ibm.wala.cast.python.test.TestCompare;
 import com.ibm.wala.cast.python.test.TestComprehension;
+import com.ibm.wala.cast.python.test.TestConstants;
 import com.ibm.wala.cast.python.test.TestFor;
 import com.ibm.wala.cast.python.test.TestLambda;
 import com.ibm.wala.cast.python.test.TestLibrary;
 import com.ibm.wala.cast.python.test.TestMulti;
 import com.ibm.wala.cast.python.test.TestPrimitives;
+import com.ibm.wala.cast.python.test.TestPrint;
+import com.ibm.wala.cast.python.test.TestPythonModRefAnalysis;
 import com.ibm.wala.cast.python.test.TestSlice;
 import com.ibm.wala.cast.python.test.TestSource;
 import com.ibm.wala.cast.python.test.TestTry;
@@ -19,15 +24,20 @@ import org.junit.runners.Suite;
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
   TestAssign.class,
+  TestCallables.class,
   TestCalls.class,
   TestClasses.class,
   TestCollections.class,
+  TestCompare.class,
   TestComprehension.class,
+  TestConstants.class,
   TestFor.class,
   TestLambda.class,
   TestLibrary.class,
   TestMulti.class,
   TestPrimitives.class,
+  TestPrint.class,
+  TestPythonModRefAnalysis.class,
   TestSlice.class,
   TestSource.class,
   TestTry.class

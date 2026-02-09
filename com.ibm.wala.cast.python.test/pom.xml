@@ -78,6 +78,5 @@
       </plugin>
     </plugins>
     <sourceDirectory>source</sourceDirectory>
-    <testSourceDirectory>source</testSourceDirectory>
   </build>
 </project>
