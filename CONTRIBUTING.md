@@ -69,8 +69,8 @@ black --fast .
 
 - `com.ibm.wala.cast.python.test`: Contains the shared JUnit test classes. This module is configured as a test library and does not execute tests directly.
 - Environment-specific modules:
-  - `com.ibm.wala.cast.python.jython.test`: Executes tests in the Jython 2 environment via `TestSuiteForJython2`.
-  - `com.ibm.wala.cast.python.jython3.test`: Executes tests in the Jython 3 environment via `TestSuiteForJython3`.
+	- `com.ibm.wala.cast.python.jython.test`: Executes tests in the Jython 2 environment via `TestSuiteForJython2`.
+	- `com.ibm.wala.cast.python.jython3.test`: Executes tests in the Jython 3 environment via `TestSuiteForJython3`.
 - When adding new JUnit tests, create the test class in `com.ibm.wala.cast.python.test/source` and ensure it is explicitly added to the appropriate test suites in the environment-specific modules to guarantee execution and avoid redundancy.
 
 [SO post]: https://stackoverflow.com/questions/4955635/how-to-add-local-jar-files-to-a-maven-project#answer-4955635
