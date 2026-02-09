@@ -65,10 +65,6 @@ public class Eye extends SparseEye {
         this.getArgumentPointsToSet(
             builder, this.getBatchShapeParameterPosition(), this.getBatchShapeParameterName());
 
-    if (pts == null || pts.isEmpty())
-      // Fallback to default (empty).
-      return emptySet();
-
     Set<List<Dimension<?>>> shapesFromShapeArgument = this.getShapesFromShapeArgument(builder, pts);
 
     if (shapesFromShapeArgument == null || shapesFromShapeArgument.isEmpty())
