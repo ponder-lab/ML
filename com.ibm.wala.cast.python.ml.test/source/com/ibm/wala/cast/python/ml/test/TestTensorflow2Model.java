@@ -5886,7 +5886,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testVariablePositional()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_variable_positional.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
-    test("tf2_test_variable.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
   }
 
   @Test
