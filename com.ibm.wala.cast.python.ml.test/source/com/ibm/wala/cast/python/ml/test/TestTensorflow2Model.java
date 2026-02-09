@@ -1770,7 +1770,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testInput4()
+  public void testInputWithBatchSize()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     TensorType t1 = new TensorType(FLOAT_32, asList(new NumericDim(16), new NumericDim(32)));
     TensorType t2 =
@@ -1778,7 +1778,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     TensorType t3 = new TensorType(FLOAT_32, asList(null, new NumericDim(5)));
 
     test(
-        "tf2_test_input4.py",
+        "tf2_test_input_batch_size.py",
         "check_input",
         3,
         3,
@@ -1786,17 +1786,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testInput3()
+  public void testInputInt32()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     TensorType t1 = new TensorType(INT_32, asList(new NumericDim(32), new NumericDim(10)));
     TensorType t2 =
         new TensorType(INT_32, asList(new NumericDim(8), new NumericDim(5), new NumericDim(5)));
 
-    test("tf2_test_input3.py", "check_input", 2, 2, Map.of(2, Set.of(t1), 3, Set.of(t2)));
+    test("tf2_test_input_int32.py", "check_input", 2, 2, Map.of(2, Set.of(t1), 3, Set.of(t2)));
   }
 
   @Test
-  public void testInput5()
+  public void testInputMixedArgs()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     // input1: shape=(32, 10), dtype=int32
     TensorType t1 = new TensorType(INT_32, asList(new NumericDim(32), new NumericDim(10)));
@@ -1807,7 +1807,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     TensorType t3 = new TensorType(INT_32, asList(null, new NumericDim(20)));
 
     test(
-        "tf2_test_input5.py",
+        "tf2_test_input_mixed_args.py",
         "check_input",
         3,
         3,
@@ -2400,10 +2400,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedFromRowStarts()
+  public void testRaggedFromRowStartsFull()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_ragged_from_row_starts.py",
+        "tf2_test_ragged_from_row_starts_full.py",
         "test_ragged_from_row_starts_full",
         4,
         4,
@@ -2463,10 +2463,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedTensorKeywordArgs()
+  public void testRaggedKeywordArgsNested()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_ragged_tensor_keyword_args.py",
+        "tf2_test_ragged_keyword_args_nested.py",
         "test_keywords",
         4,
         4,
@@ -2478,10 +2478,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedTensorKeywordArgs2()
+  public void testRaggedKeywordArgsAdditional()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_ragged_tensor_keyword_args2.py",
+        "tf2_test_ragged_keyword_args_more.py",
         "test_keywords",
         4,
         4,
@@ -2493,10 +2493,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedFromValueRowIds2()
+  public void testRaggedKeywordArgs()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_ragged_from_value_rowids2.py",
+        "tf2_test_ragged_keyword_args.py",
         "test_keywords",
         4,
         4,
@@ -2508,10 +2508,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedFromValueRowIds3()
+  public void testRaggedKeywordArgsV2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_ragged_from_value_rowids3.py",
+        "tf2_test_ragged_keyword_args_v2.py",
         "test_keywords",
         4,
         4,
@@ -2523,10 +2523,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedFromValueRowIds4()
+  public void testRaggedKeywordArgsMixed()
       throws ClassHierarchyException, CancelException, IOException {
     test(
-        "tf2_test_ragged_from_value_rowids4.py",
+        "tf2_test_ragged_mixed_new.py",
         "test_ragged_mixed_args_new",
         3,
         3,
@@ -2545,9 +2545,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedNrows() throws ClassHierarchyException, CancelException, IOException {
+  public void testRaggedNrowsPositional()
+      throws ClassHierarchyException, CancelException, IOException {
     test(
-        "tf2_test_ragged_nrows.py",
+        "tf2_test_ragged_nrows_positional.py",
         "test_ragged_nrows_positional",
         1,
         1,
@@ -5345,64 +5346,64 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testGamma8()
+  public void testGammaMixed()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_gamma8.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_30_3_2_FLOAT32)));
+    test("tf2_test_gamma_mixed.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_30_3_2_FLOAT32)));
   }
 
   @Test
-  public void testFill()
+  public void testFillKw()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_fill.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_INT32)));
+    test("tf2_test_fill_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_INT32)));
   }
 
   @Test
-  public void testFill2()
+  public void testFillMixed()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_fill2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+    test("tf2_test_fill_mixed.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
   }
 
   @Test
-  public void testRange8()
+  public void testRangeStartLimitKw()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_range8.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_INT32)));
+    test("tf2_test_range_start_limit_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_INT32)));
   }
 
   @Test
-  public void testRange11()
+  public void testRange1PosLimitDeltaKw()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_range11.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+    test("tf2_test_range_1_pos_limit_delta_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
   }
 
   @Test
-  public void testRange10()
+  public void testRange1PosDeltaKw()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
 
-    test("tf2_test_range10.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_INT32)));
+    test("tf2_test_range_1_pos_delta_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_INT32)));
   }
 
   @Test
-  public void testRange9()
+  public void testRangeStartDeltaKw()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_range9.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+    test("tf2_test_range_start_delta_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
   }
 
   @Test
-  public void testRange7()
+  public void testRangeStartKw()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_range7.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
+    test("tf2_test_range_start_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
   @Test
-  public void testRange5()
+  public void testRangeKw()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_range5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+    test("tf2_test_range_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
   }
 
   @Test
-  public void testRange6()
+  public void testRangeMixed()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_range6.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+    test("tf2_test_range_mixed.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
   }
 
   @Test
@@ -5561,10 +5562,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedConstant19()
+  public void testRaggedConstantKeyword()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_ragged_constant19.py",
+        "tf2_test_ragged_constant_keyword.py",
         "test",
         3,
         3,
@@ -5624,10 +5625,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedRange8()
+  public void testRaggedRangeKeyword()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_ragged_range8.py",
+        "tf2_test_ragged_range_keyword.py",
         "test",
         5,
         5,
@@ -5668,10 +5669,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedFromNestedRowLengths2()
+  public void testRaggedFromNestedRowLengthsKeyword()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_ragged_from_nested_row_lengths2.py",
+        "tf2_test_ragged_from_nested_row_lengths_keyword.py",
         "test_ragged_from_nested_row_lengths_keyword",
         1,
         1,
@@ -5679,10 +5680,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedFromNestedRowLengths3()
+  public void testRaggedFromNestedRowLengthsKeyword2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_ragged_from_nested_row_lengths3.py",
+        "tf2_test_ragged_from_nested_row_lengths_keyword2.py",
         "test_ragged_from_nested_row_lengths_keyword2",
         1,
         1,
@@ -5690,32 +5691,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedFromNestedRowSplits()
+  public void testRaggedFromNestedRowSplitsPositional()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_ragged_from_nested_row_splits.py",
-        "test_ragged_from_nested_row_splits_keyword",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
-  }
-
-  @Test
-  public void testRaggedFromNestedRowSplits2()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_ragged_from_nested_row_splits2.py",
-        "test_ragged_from_nested_row_splits_mixed",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
-  }
-
-  @Test
-  public void testRaggedFromNestedRowSplits3()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_ragged_from_nested_row_splits3.py",
+        "tf2_test_ragged_from_nested_row_splits_positional.py",
         "test_ragged_from_nested_row_splits_positional",
         1,
         1,
@@ -5723,10 +5702,32 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedNestedValueRowids()
+  public void testRaggedFromNestedRowSplitsKeyword()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_ragged_nested_value_rowids.py",
+        "tf2_test_ragged_from_nested_row_splits_keyword.py",
+        "test_ragged_from_nested_row_splits_keyword",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
+  }
+
+  @Test
+  public void testRaggedFromNestedRowSplitsMixed()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_from_nested_row_splits_mixed.py",
+        "test_ragged_from_nested_row_splits_mixed",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
+  }
+
+  @Test
+  public void testRaggedNestedValueRowidsPositional()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_nested_value_rowids_positional.py",
         "check_rt",
         1,
         1,
@@ -5734,10 +5735,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedNestedValueRowids2()
+  public void testRaggedNestedValueRowidsPositionalLists()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_ragged_nested_value_rowids2.py",
+        "tf2_test_ragged_nested_value_rowids_positional_lists.py",
         "check_rt",
         1,
         1,
@@ -5745,10 +5746,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedNestedValueRowids3()
+  public void testRaggedNestedValueRowidsPositionalTuples()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_ragged_nested_value_rowids3.py",
+        "tf2_test_ragged_nested_value_rowids_positional_tuples.py",
         "check_rt",
         1,
         1,
@@ -5756,10 +5757,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedNestedValueRowids4()
+  public void testRaggedNestedValueRowidsKeyword()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_ragged_nested_value_rowids4.py",
+        "tf2_test_ragged_nested_value_rowids_keyword.py",
         "check_rt",
         1,
         1,
@@ -5767,10 +5768,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedNestedValueRowids5()
+  public void testRaggedNestedValueRowidsKeywordLists()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_ragged_nested_value_rowids5.py",
+        "tf2_test_ragged_nested_value_rowids_keyword_lists.py",
         "check_rt",
         1,
         1,
@@ -5778,10 +5779,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedNestedValueRowids6()
+  public void testRaggedNestedValueRowidsKeywordTuples()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_ragged_nested_value_rowids6.py",
+        "tf2_test_ragged_nested_value_rowids_keyword_tuples.py",
         "check_rt",
         1,
         1,
@@ -5789,10 +5790,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedNestedValueRowids7()
+  public void testRaggedNestedValueRowidsMixed()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_ragged_nested_value_rowids7.py",
+        "tf2_test_ragged_nested_value_rowids_mixed.py",
         "check_rt",
         1,
         1,
@@ -5800,10 +5801,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedNestedValueRowids8()
+  public void testRaggedNestedValueRowidsMixedLists()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_ragged_nested_value_rowids8.py",
+        "tf2_test_ragged_nested_value_rowids_mixed_lists.py",
         "check_rt",
         1,
         1,
@@ -5811,10 +5812,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedNestedValueRowids9()
+  public void testRaggedNestedValueRowidsMixedTuples()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_ragged_nested_value_rowids9.py",
+        "tf2_test_ragged_nested_value_rowids_mixed_tuples.py",
         "check_rt",
         1,
         1,
@@ -5822,11 +5823,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testRaggedNestedValueRowids10()
+  public void testRaggedFromNestedValueRowIdsComplete()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     // check_case_1: [4, None], int32
     test(
-        "tf2_test_ragged_nested_value_rowids10.py",
+        "tf2_test_ragged_nested_value_rowids_complete.py",
         "check_case_1",
         1,
         1,
@@ -5834,7 +5835,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
     // check_case_2: [4, None], int32
     test(
-        "tf2_test_ragged_nested_value_rowids10.py",
+        "tf2_test_ragged_nested_value_rowids_complete.py",
         "check_case_2",
         1,
         1,
@@ -5842,7 +5843,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
     // check_case_3: [4, None], int32
     test(
-        "tf2_test_ragged_nested_value_rowids10.py",
+        "tf2_test_ragged_nested_value_rowids_complete.py",
         "check_case_3",
         1,
         1,
@@ -5850,7 +5851,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
     // check_case_4: [4, None], int32
     test(
-        "tf2_test_ragged_nested_value_rowids10.py",
+        "tf2_test_ragged_nested_value_rowids_complete.py",
         "check_case_4",
         1,
         1,
@@ -5858,7 +5859,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
     // check_case_5: [2, None, None], int32
     test(
-        "tf2_test_ragged_nested_value_rowids10.py",
+        "tf2_test_ragged_nested_value_rowids_complete.py",
         "check_case_5",
         1,
         1,
@@ -5866,7 +5867,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
     // check_case_6: [2, None], float32
     test(
-        "tf2_test_ragged_nested_value_rowids10.py",
+        "tf2_test_ragged_nested_value_rowids_complete.py",
         "check_case_6",
         1,
         1,
@@ -5874,7 +5875,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
     // check_case_7: [4, None], int32
     test(
-        "tf2_test_ragged_nested_value_rowids10.py",
+        "tf2_test_ragged_nested_value_rowids_complete.py",
         "check_case_7",
         1,
         1,
@@ -5882,43 +5883,49 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testVariable()
+  public void testVariablePositional()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_variable.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+    test("tf2_test_variable_positional.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
     test("tf2_test_variable.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
   }
 
   @Test
-  public void testVariable2()
+  public void testVariableKeyword()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_variable2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT64)));
+    test("tf2_test_variable_keyword.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+    test("tf2_test_variable_keyword.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
   }
 
   @Test
-  public void testVariable3()
+  public void testVariableMixed()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_variable3.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+    test("tf2_test_variable_mixed.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT64)));
   }
 
   @Test
-  public void testVariable4()
+  public void testVariablePositionalComplex()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
 
-    test("tf2_test_variable4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+    test("tf2_test_variable_positional_complex.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
   }
 
   @Test
-  public void testVariable5()
+  public void testVariablePositionalShape()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
 
-    test("tf2_test_variable5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_NONE_2_FLOAT32)));
+    test(
+        "tf2_test_variable_positional_shape.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_2_FLOAT32)));
   }
 
   @Test
-  public void testVariable6()
+  public void testVariablePositionalDType()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
 
-    test("tf2_test_variable6.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT64)));
+    test("tf2_test_variable_positional_dtype.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT64)));
   }
 
   /**
