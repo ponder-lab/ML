@@ -15,6 +15,7 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Logger;
 
 /**
  * A representation of the `tf.ragged.range` operation.
@@ -25,6 +26,9 @@ import java.util.Set;
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
 public class RaggedRange extends Range {
+
+  @SuppressWarnings("unused")
+  private static final Logger LOGGER = Logger.getLogger(RaggedRange.class.getName());
 
   protected enum Parameters {
     STARTS,
