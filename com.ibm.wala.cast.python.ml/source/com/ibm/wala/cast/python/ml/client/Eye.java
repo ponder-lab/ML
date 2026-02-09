@@ -32,6 +32,11 @@ public class Eye extends SparseEye {
     super(source);
   }
 
+  protected int getBatchShapesArgumentValueNumber(PropagationCallGraphBuilder builder) {
+    return this.getArgumentValueNumber(
+        builder, this.getBatchShapeParameterPosition(), this.getBatchShapeParameterName(), true);
+  }
+
   protected int getBatchShapeParameterPosition() {
     return Parameters.BATCH_SHAPE.getIndex();
   }
@@ -53,12 +58,7 @@ public class Eye extends SparseEye {
   }
 
   private Set<List<Dimension<?>>> getBatchShapes(PropagationCallGraphBuilder builder) {
-    int valNum =
-        this.getArgumentValueNumber(
-            builder,
-            this.getBatchShapeParameterPosition(),
-            this.getBatchShapeParameterName(),
-            true);
+    int valNum = this.getBatchShapesArgumentValueNumber(builder);
     if (valNum <= 0) return emptySet();
 
     OrdinalSet<InstanceKey> pts =
