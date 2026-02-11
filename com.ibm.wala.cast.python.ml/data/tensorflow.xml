@@ -8,49 +8,6 @@
         <new def="x" class="Ltensorflow" />
         <new def="train" class="Lobject" />
         <putfield class="LRoot" field="train" fieldType="LRoot" ref="x" value="train" />
-        <new def="nn" class="Lobject" />
-        <putfield class="LRoot" field="nn" fieldType="LRoot" ref="x" value="nn" />
-        <new def="layers" class="Lobject" />
-        <putfield class="LRoot" field="layers" fieldType="LRoot" ref="x" value="layers" />
-        <new def="losses" class="Lobject" />
-        <putfield class="LRoot" field="losses" fieldType="LRoot" ref="x" value="losses" />
-        <new def="random" class="Lobject" />
-        <putfield class="LRoot" field="random" fieldType="LRoot" ref="x" value="random" />
-        <new def="math" class="Lobject" />
-        <putfield class="LRoot" field="math" fieldType="LRoot" ref="x" value="math" />
-        <new def="sparse" class="Lobject" />
-        <putfield class="LRoot" field="sparse" fieldType="LRoot" ref="x" value="sparse" />
-        <new def="linalg" class="Lobject" />
-        <putfield class="LRoot" field="linalg" fieldType="LRoot" ref="x" value="linalg" />
-        <new def="keras" class="Lobject" />
-        <putfield class="LRoot" field="keras" fieldType="LRoot" ref="x" value="keras" />
-        <putfield class="LRoot" field="layers" fieldType="LRoot" ref="keras" value="layers" />
-        <new def="models" class="Lobject" />
-        <putfield class="LRoot" field="models" fieldType="LRoot" ref="keras" value="models" />
-        <new def="preprocessing" class="Lobject" />
-        <putfield class="LRoot" field="preprocessing" fieldType="LRoot" ref="keras" value="preprocessing" />
-        <new def="image" class="Lobject" />
-        <putfield class="LRoot" field="image" fieldType="LRoot" ref="preprocessing" value="image" />
-        <new def="app" class="Lobject" />
-        <putfield class="LRoot" field="app" fieldType="LRoot" ref="x" value="app" />
-        <new def="run" class="Ltensorflow/app/run" />
-        <putfield class="LRoot" field="run" fieldType="LRoot" ref="app" value="run" />
-        <new def="estimator" class="Lobject" />
-        <putfield class="LRoot" field="estimator" fieldType="LRoot" ref="x" value="estimator" />
-        <new def="inputs" class="Lobject" />
-        <putfield class="LRoot" field="inputs" fieldType="LRoot" ref="estimator" value="inputs" />
-        <new def="numpy_input_fn" class="Ltensorflow/estimator/numpy_input_fn" />
-        <putfield class="LRoot" field="numpy_input_fn" fieldType="LRoot" ref="inputs" value="numpy_input_fn" />
-        <new def="Estimator" class="Ltensorflow/estimator/Estimator" />
-        <putfield class="LRoot" field="Estimator" fieldType="LRoot" ref="estimator" value="Estimator" />
-        <new def="data" class="Lobject" />
-        <putfield class="LRoot" field="data" fieldType="LRoot" ref="x" value="data" />
-        <new def="Dataset" class="Ltensorflow/data/Dataset" />
-        <putfield class="LRoot" field="Dataset" fieldType="LRoot" ref="data" value="Dataset" />
-        <new def="distribute" class="Lobject" />
-        <putfield class="LRoot" field="distribute" fieldType="LRoot" ref="x" value="distribute" />
-        <new def="MirroredStrategy" class="Ltensorflow/distribute/MirroredStrategy" />
-        <putfield class="LRoot" field="MirroredStrategy" fieldType="LRoot" ref="distribute" value="MirroredStrategy" />
         <new def="function" class="Ltensorflow/class/function" />
         <putfield class="LRoot" field="function" fieldType="LRoot" ref="x" value="function" />
         <new def="AdamOptimizer" class="Ltensorflow/functions/AdamOptimizer" />
@@ -65,79 +22,106 @@
         <new def="FixedLenFeature" class="Ltensorflow/functions/FixedLenFeature" />
         <putfield class="LRoot" field="FixedLenFeature" fieldType="LRoot" ref="x" value="FixedLenFeature" />
         <new def="pass_through" class="Ltensorflow/functions/pass_through" />
-        <new def="cast" class="Ltensorflow/functions/cast" />
-        <putfield class="LRoot" field="cast" fieldType="LRoot" ref="x" value="cast" />
+        <putfield class="LRoot" field="cast" fieldType="LRoot" ref="x" value="pass_through" />
         <putfield class="LRoot" field="decode_raw" fieldType="LRoot" ref="x" value="pass_through" />
-        <new def="log" class="Ltensorflow/math/log" />
-        <putfield class="LRoot" field="log" fieldType="LRoot" ref="x" value="log" />
-        <putfield class="LRoot" field="log" fieldType="LRoot" ref="math" value="log" />
-        <new def="reduce_sum" class="Ltensorflow/math/reduce_sum" />
-        <putfield class="LRoot" field="reduce_sum" fieldType="LRoot" ref="x" value="reduce_sum" />
-        <putfield class="LRoot" field="reduce_sum" fieldType="LRoot" ref="math" value="reduce_sum" />
-        <new def="argmax" class="Ltensorflow/math/argmax" />
-        <putfield class="LRoot" field="argmax" fieldType="LRoot" ref="x" value="argmax" />
-        <putfield class="LRoot" field="argmax" fieldType="LRoot" ref="math" value="argmax" />
-        <new def="equal" class="Ltensorflow/math/equal" />
-        <putfield class="LRoot" field="equal" fieldType="LRoot" ref="x" value="equal" />
-        <putfield class="LRoot" field="equal" fieldType="LRoot" ref="math" value="equal" />
-        <new def="matmul" class="Ltensorflow/functions/matmul" />
-        <putfield class="LRoot" field="matmul" fieldType="LRoot" ref="x" value="matmul" />
-        <new def="dense" class="Ltensorflow/functions/dense" />
-        <putfield class="LRoot" field="dense" fieldType="LRoot" ref="layers" value="dense" />
-        <new def="flatten" class="Ltensorflow/functions/flatten" />
-        <putfield class="LRoot" field="flatten" fieldType="LRoot" ref="layers" value="flatten" />
-        <new def="dropout_val" class="Ltensorflow/functions/pass_through" />
-        <putfield class="LRoot" field="dropout" fieldType="LRoot" ref="layers" value="dropout_val" />
-        <putfield class="LRoot" field="dropout" fieldType="LRoot" ref="nn" value="dropout_val" />
+        <new def="estimator" class="Lobject" />
+        <putfield class="LRoot" field="estimator" fieldType="LRoot" ref="x" value="estimator" />
+        <new def="data" class="Lobject" />
+        <putfield class="LRoot" field="data" fieldType="LRoot" ref="x" value="data" />
+        <new def="distribute" class="Lobject" />
+        <putfield class="LRoot" field="distribute" fieldType="LRoot" ref="x" value="distribute" />
+        <new def="nn" class="Lobject" />
+        <putfield class="LRoot" field="nn" fieldType="LRoot" ref="x" value="nn" />
+        <new def="math" class="Lobject" />
+        <putfield class="LRoot" field="math" fieldType="LRoot" ref="x" value="math" />
+        <new def="random" class="Lobject" />
+        <putfield class="LRoot" field="random" fieldType="LRoot" ref="x" value="random" />
+        <new def="sparse" class="Lobject" />
+        <putfield class="LRoot" field="sparse" fieldType="LRoot" ref="x" value="sparse" />
+        <new def="linalg" class="Lobject" />
+        <putfield class="LRoot" field="linalg" fieldType="LRoot" ref="x" value="linalg" />
+        <new def="keras" class="Lobject" />
+        <putfield class="LRoot" field="keras" fieldType="LRoot" ref="x" value="keras" />
+        <new def="layers" class="Lobject" />
+        <putfield class="LRoot" field="layers" fieldType="LRoot" ref="x" value="layers" />
+        <putfield class="LRoot" field="layers" fieldType="LRoot" ref="keras" value="layers" />
+        <new def="models" class="Lobject" />
+        <putfield class="LRoot" field="models" fieldType="LRoot" ref="keras" value="models" />
+        <new def="preprocessing" class="Lobject" />
+        <putfield class="LRoot" field="preprocessing" fieldType="LRoot" ref="keras" value="preprocessing" />
+        <new def="image" class="Lobject" />
+        <putfield class="LRoot" field="image" fieldType="LRoot" ref="preprocessing" value="image" />
+        <new def="app" class="Lobject" />
+        <putfield class="LRoot" field="app" fieldType="LRoot" ref="x" value="app" />
+        <new def="run" class="Ltensorflow/app/run" />
+        <putfield class="LRoot" field="run" fieldType="LRoot" ref="app" value="run" />
+        <new def="Estimator" class="Ltensorflow/estimator/Estimator" />
+        <putfield class="LRoot" field="Estimator" fieldType="LRoot" ref="estimator" value="Estimator" />
+        <new def="GradientTape" class="Ltensorflow/GradientTape" />
+        <putfield class="LRoot" field="GradientTape" fieldType="LRoot" ref="x" value="GradientTape" />
+        <new def="Dataset" class="Ltensorflow/data/Dataset" />
+        <putfield class="LRoot" field="Dataset" fieldType="LRoot" ref="data" value="Dataset" />
+        <new def="MirroredStrategy" class="Ltensorflow/distribute/MirroredStrategy" />
+        <putfield class="LRoot" field="MirroredStrategy" fieldType="LRoot" ref="distribute" value="MirroredStrategy" />
+        <new def="inputs" class="Lobject" />
+        <putfield class="LRoot" field="inputs" fieldType="LRoot" ref="estimator" value="inputs" />
+        <new def="numpy_input_fn" class="Ltensorflow/estimator/numpy_input_fn" />
+        <putfield class="LRoot" field="numpy_input_fn" fieldType="LRoot" ref="inputs" value="numpy_input_fn" />
+        <new def="from_tensor_slices" class="Ltensorflow/data/Dataset/from_tensor_slices" />
+        <putfield class="LRoot" field="from_tensor_slices" fieldType="LRoot" ref="Dataset" value="from_tensor_slices" />
+        <new def="sample_from_datasets" class="Ltensorflow/data/Dataset/sample_from_datasets" />
+        <putfield class="LRoot" field="sample_from_datasets" fieldType="LRoot" ref="Dataset" value="sample_from_datasets" />
+        <new def="list_files" class="Ltensorflow/data/Dataset/list_files" />
+        <putfield class="LRoot" field="list_files" fieldType="LRoot" ref="Dataset" value="list_files" />
+        <new def="choose_from_datasets" class="Ltensorflow/data/Dataset/choose_from_datasets" />
+        <putfield class="LRoot" field="choose_from_datasets" fieldType="LRoot" ref="Dataset" value="choose_from_datasets" />
+        <new def="from_generator" class="Ltensorflow/data/Dataset/from_generator" />
+        <putfield class="LRoot" field="from_generator" fieldType="LRoot" ref="Dataset" value="from_generator" />
+        <new def="zip" class="Ltensorflow/data/Dataset/zip" />
+        <putfield class="LRoot" field="zip" fieldType="LRoot" ref="Dataset" value="zip" />
+        <new def="dsrange" class="Ltensorflow/data/Dataset/range" />
+        <putfield class="LRoot" field="range" fieldType="LRoot" ref="Dataset" value="dsrange" />
+        <new def="dsrandom" class="Ltensorflow/data/Dataset/random" />
+        <putfield class="LRoot" field="random" fieldType="LRoot" ref="Dataset" value="dsrandom" />
+        <new def="from_tensors" class="Ltensorflow/data/Dataset/from_tensors" />
+        <putfield class="LRoot" field="from_tensors" fieldType="LRoot" ref="Dataset" value="from_tensors" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/reshape -->
+        <new def="reshape" class="Ltensorflow/functions/reshape" />
+        <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="x" value="reshape" />
         <new def="conv2d" class="Ltensorflow/functions/conv2d" />
         <putfield class="LRoot" field="conv2d" fieldType="LRoot" ref="x" value="conv2d" />
         <putfield class="LRoot" field="conv2d" fieldType="LRoot" ref="nn" value="conv2d" />
         <putfield class="LRoot" field="conv2d" fieldType="LRoot" ref="layers" value="conv2d" />
-        <new def="max_pool" class="Ltensorflow/functions/max_pool" />
-        <putfield class="LRoot" field="max_pool" fieldType="LRoot" ref="nn" value="max_pool" />
-        <putfield class="LRoot" field="max_pooling2d" fieldType="LRoot" ref="nn" value="max_pool" />
-        <putfield class="LRoot" field="max_pooling2d" fieldType="LRoot" ref="layers" value="max_pool" />
+        <new def="conv3d" class="Ltensorflow/functions/conv3d" />
+        <putfield class="LRoot" field="conv3d" fieldType="LRoot" ref="nn" value="conv3d" />
+        <new def="softmax" class="Ltensorflow/functions/softmax" />
+        <putfield class="LRoot" field="softmax" fieldType="LRoot" ref="nn" value="softmax" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/relu -->
         <putfield class="LRoot" field="relu" fieldType="LRoot" ref="nn" value="pass_through" />
+        <new def="sparse_softmax_cross_entropy_with_logits" class="Ltensorflow/functions/sparse_softmax_cross_entropy_with_logits" />
+        <putfield class="LRoot" field="sparse_softmax_cross_entropy_with_logits" fieldType="LRoot" ref="nn" value="sparse_softmax_cross_entropy_with_logits" />
         <new def="sigmoid" class="Ltensorflow/math/sigmoid" />
         <putfield class="LRoot" field="sigmoid" fieldType="LRoot" ref="nn" value="sigmoid" />
         <putfield class="LRoot" field="sigmoid" fieldType="LRoot" ref="math" value="sigmoid" />
-        <new def="softmax" class="Ltensorflow/functions/softmax" />
-        <putfield class="LRoot" field="softmax" fieldType="LRoot" ref="nn" value="softmax" />
-        <new def="softmax_cross_entropy_with_logits" class="Ltensorflow/functions/softmax_cross_entropy_with_logits" />
-        <putfield class="LRoot" field="softmax_cross_entropy_with_logits" fieldType="LRoot" ref="nn" value="softmax_cross_entropy_with_logits" />
-        <putfield class="LRoot" field="softmax_cross_entropy_with_logits_v2" fieldType="LRoot" ref="nn" value="softmax_cross_entropy_with_logits" />
-        <new def="sparse_softmax_cross_entropy_with_logits_val" class="Ltensorflow/functions/sparse_softmax_cross_entropy_with_logits" />
-        <putfield class="LRoot" field="sparse_softmax_cross_entropy_with_logits" fieldType="LRoot" ref="nn" value="sparse_softmax_cross_entropy_with_logits_val" />
-        <putfield class="LRoot" field="sparse_softmax_cross_entropy" fieldType="LRoot" ref="losses" value="sparse_softmax_cross_entropy_with_logits_val" />
-        <new def="uniform" class="Ltensorflow/functions/uniform" />
-        <putfield class="LRoot" field="uniform" fieldType="LRoot" ref="random" value="uniform" />
-        <new def="gamma" class="Ltensorflow/functions/gamma" />
-        <putfield class="LRoot" field="gamma" fieldType="LRoot" ref="random" value="gamma" />
-        <new def="normal" class="Ltensorflow/functions/normal" />
-        <putfield class="LRoot" field="normal" fieldType="LRoot" ref="random" value="normal" />
-        <new def="poisson" class="Ltensorflow/functions/poisson" />
-        <putfield class="LRoot" field="poisson" fieldType="LRoot" ref="random" value="poisson" />
-        <new def="truncated_normal" class="Ltensorflow/functions/truncated_normal" />
-        <putfield class="LRoot" field="truncated_normal" fieldType="LRoot" ref="random" value="truncated_normal" />
-        <putfield class="LRoot" field="identity" fieldType="LRoot" ref="x" value="pass_through" />
-        <new def="Graph_val" class="Ltensorflow/Graph" />
-        <putfield class="LRoot" field="Graph" fieldType="LRoot" ref="x" value="Graph_val" />
-        <new def="get_default_graph" class="Ltensorflow/functions/get_default_graph" />
-        <putfield class="LRoot" field="get_default_graph" fieldType="LRoot" ref="x" value="get_default_graph" />
-        <new def="Session_val" class="Ltensorflow/Session" />
-        <putfield class="LRoot" field="Session" fieldType="LRoot" ref="x" value="Session_val" />
-        <new def="GradientDescentOptimizer" class="Ltensorflow/functions/GradientDescentOptimizer" />
-        <putfield class="LRoot" field="GradientDescentOptimizer" fieldType="LRoot" ref="train" value="GradientDescentOptimizer" />
+        <new def="add" class="Ltensorflow/math/add" />
+        <putfield class="LRoot" field="add" fieldType="LRoot" ref="x" value="add" />
+        <putfield class="LRoot" field="add" fieldType="LRoot" ref="math" value="add" />
+        <new def="multiply" class="Ltensorflow/math/multiply" />
+        <putfield class="LRoot" field="multiply" fieldType="LRoot" ref="x" value="multiply" />
+        <putfield class="LRoot" field="multiply" fieldType="LRoot" ref="math" value="multiply" />
+        <new def="reduce_mean" class="Ltensorflow/math/reduce_mean" />
+        <putfield class="LRoot" field="reduce_mean" fieldType="LRoot" ref="x" value="reduce_mean" />
+        <putfield class="LRoot" field="reduce_mean" fieldType="LRoot" ref="math" value="reduce_mean" />
         <new def="placeholder" class="Ltensorflow/functions/placeholder" />
         <putfield class="LRoot" field="placeholder" fieldType="LRoot" ref="x" value="placeholder" />
         <new def="examples" class="Lobject" />
         <putfield class="LRoot" field="examples" fieldType="LRoot" ref="x" value="examples" />
         <new def="tutorials" class="Lobject" />
         <putfield class="LRoot" field="tutorials" fieldType="LRoot" ref="examples" value="tutorials" />
-        <new def="mnist_mod" class="Ltensorflow/examples/tutorials/mnist" />
-        <putfield class="LRoot" field="mnist" fieldType="LRoot" ref="tutorials" value="mnist_mod" />
-        <new def="id" class="Lobject" />
-        <putfield class="LRoot" field="input_data" fieldType="LRoot" ref="mnist_mod" value="id" />
+        <new def="mnist" class="Lobject" />
+        <putfield class="LRoot" field="mnist" fieldType="LRoot" ref="tutorials" value="mnist" />
+        <new def="id" class="Ltensorflow/examples/tutorials/mnist/input_data" />
+        <putfield class="LRoot" field="input_data" fieldType="LRoot" ref="mnist" value="id" />
         <new def="rds" class="Ltensorflow/examples/tutorials/mnist/read_data_sets" />
         <putfield class="LRoot" field="read_data_sets" fieldType="LRoot" ref="id" value="rds" />
         <new def="python" class="Lobject" />
@@ -170,26 +154,6 @@
         <putfield class="LRoot" field="sparse_tensor" fieldType="LRoot" ref="framework" value="sparse_tensor" />
         <new def="constant_op" class="Lobject" />
         <putfield class="LRoot" field="constant_op" fieldType="LRoot" ref="framework" value="constant_op" />
-        <putfield class="LRoot" field="random_uniform" fieldType="LRoot" ref="random_ops" value="uniform" />
-        <putfield class="LRoot" field="random_gamma" fieldType="LRoot" ref="random_ops" value="gamma" />
-        <putfield class="LRoot" field="random_normal" fieldType="LRoot" ref="random_ops" value="normal" />
-        <putfield class="LRoot" field="random_poisson_v2" fieldType="LRoot" ref="random_ops" value="poisson" />
-        <putfield class="LRoot" field="truncated_normal" fieldType="LRoot" ref="random_ops" value="truncated_normal" />
-        <new def="zeros" class="Ltensorflow/functions/zeros" />
-        <putfield class="LRoot" field="zeros" fieldType="LRoot" ref="x" value="zeros" />
-        <putfield class="LRoot" field="zeros" fieldType="LRoot" ref="array_ops" value="zeros" />
-        <new def="zeros_like" class="Ltensorflow/functions/zeros_like" />
-        <putfield class="LRoot" field="zeros_like" fieldType="LRoot" ref="x" value="zeros_like" />
-        <putfield class="LRoot" field="zeros_like" fieldType="LRoot" ref="array_ops" value="zeros_like" />
-        <new def="ones" class="Ltensorflow/functions/ones" />
-        <putfield class="LRoot" field="ones" fieldType="LRoot" ref="x" value="ones" />
-        <putfield class="LRoot" field="ones" fieldType="LRoot" ref="array_ops" value="ones" />
-        <new def="constant" class="Ltensorflow/functions/constant" />
-        <putfield class="LRoot" field="constant" fieldType="LRoot" ref="x" value="constant" />
-        <putfield class="LRoot" field="constant" fieldType="LRoot" ref="constant_op" value="constant" />
-        <new def="reshape" class="Ltensorflow/functions/reshape" />
-        <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="x" value="reshape" />
-        <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="array_ops" value="reshape" />
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes -->
         <new def="dtypes" class="Lobject" />
         <putfield class="LRoot" field="dtypes" fieldType="LRoot" ref="framework" value="dtypes" />
@@ -202,7 +166,125 @@
         <new def="ndarray" class="Ltensorflow/functions/ndarray" />
         <putfield class="LRoot" field="ndarray" fieldType="LRoot" ref="numpy" value="ndarray" />
         <new def="Input" class="Ltensorflow/keras/layers/Input" />
+        <putfield class="LRoot" field="Input" fieldType="LRoot" ref="keras" value="Input" />
         <putfield class="LRoot" field="Input" fieldType="LRoot" ref="layers" value="Input" />
+        <new def="Dense" class="Ltensorflow/keras/layers/Dense" />
+        <putfield class="LRoot" field="Dense" fieldType="LRoot" ref="layers" value="Dense" />
+        <new def="Model" class="Ltensorflow/keras/models/Model" />
+        <putfield class="LRoot" field="Model" fieldType="LRoot" ref="keras" value="Model" />
+        <putfield class="LRoot" field="Model" fieldType="LRoot" ref="models" value="Model" />
+        <new def="ImageDataGenerator" class="Ltensorflow/keras/preprocessing/image/ImageDataGenerator" />
+        <putfield class="LRoot" field="ImageDataGenerator" fieldType="LRoot" ref="image" value="ImageDataGenerator" />
+        <new def="Variable" class="Ltensorflow/functions/Variable" />
+        <putfield class="LRoot" field="Variable" fieldType="LRoot" ref="x" value="Variable" />
+        <putfield class="LRoot" field="Variable" fieldType="LRoot" ref="variables" value="Variable" />
+        <new def="ones" class="Ltensorflow/functions/ones" />
+        <putfield class="LRoot" field="ones" fieldType="LRoot" ref="x" value="ones" />
+        <putfield class="LRoot" field="ones" fieldType="LRoot" ref="array_ops" value="ones" />
+        <new def="zeros" class="Ltensorflow/functions/zeros" />
+        <putfield class="LRoot" field="zeros" fieldType="LRoot" ref="x" value="zeros" />
+        <putfield class="LRoot" field="zeros" fieldType="LRoot" ref="array_ops" value="zeros" />
+        <new def="fill" class="Ltensorflow/functions/fill" />
+        <putfield class="LRoot" field="fill" fieldType="LRoot" ref="x" value="fill" />
+        <putfield class="LRoot" field="fill" fieldType="LRoot" ref="array_ops" value="fill" />
+        <new def="zeros_like" class="Ltensorflow/functions/zeros_like" />
+        <putfield class="LRoot" field="zeros_like" fieldType="LRoot" ref="x" value="zeros_like" />
+        <putfield class="LRoot" field="zeros_like" fieldType="LRoot" ref="array_ops" value="zeros_like" />
+        <new def="one_hot" class="Ltensorflow/functions/one_hot" />
+        <putfield class="LRoot" field="one_hot" fieldType="LRoot" ref="x" value="one_hot" />
+        <putfield class="LRoot" field="one_hot" fieldType="LRoot" ref="array_ops" value="one_hot" />
+        <new def="uniform" class="Ltensorflow/functions/uniform" />
+        <putfield class="LRoot" field="uniform" fieldType="LRoot" ref="random" value="uniform" />
+        <putfield class="LRoot" field="random_uniform" fieldType="LRoot" ref="random_ops" value="uniform" />
+        <new def="gamma" class="Ltensorflow/functions/gamma" />
+        <putfield class="LRoot" field="gamma" fieldType="LRoot" ref="random" value="gamma" />
+        <putfield class="LRoot" field="random_gamma" fieldType="LRoot" ref="random_ops" value="gamma" />
+        <new def="normal" class="Ltensorflow/functions/normal" />
+        <putfield class="LRoot" field="normal" fieldType="LRoot" ref="random" value="normal" />
+        <putfield class="LRoot" field="random_normal" fieldType="LRoot" ref="random_ops" value="normal" />
+        <new def="poisson" class="Ltensorflow/functions/poisson" />
+        <putfield class="LRoot" field="poisson" fieldType="LRoot" ref="random" value="poisson" />
+        <putfield class="LRoot" field="random_poisson_v2" fieldType="LRoot" ref="random_ops" value="poisson" />
+        <new def="truncated_normal" class="Ltensorflow/functions/truncated_normal" />
+        <putfield class="LRoot" field="truncated_normal" fieldType="LRoot" ref="random" value="truncated_normal" />
+        <putfield class="LRoot" field="truncated_normal" fieldType="LRoot" ref="random_ops" value="truncated_normal" />
+        <new def="range" class="Ltensorflow/functions/range" />
+        <putfield class="LRoot" field="range" fieldType="LRoot" ref="x" value="range" />
+        <putfield class="LRoot" field="range" fieldType="LRoot" ref="math_ops" value="range" />
+        <new def="ragged_range" class="Ltensorflow/functions/ragged_range" />
+        <putfield class="LRoot" field="range" fieldType="LRoot" ref="ragged" value="ragged_range" />
+        <putfield class="LRoot" field="range" fieldType="LRoot" ref="ragged_math_ops" value="ragged_range" />
+        <new def="eye" class="Ltensorflow/functions/eye" />
+        <putfield class="LRoot" field="eye" fieldType="LRoot" ref="x" value="eye" />
+        <putfield class="LRoot" field="eye" fieldType="LRoot" ref="linalg" value="eye" />
+        <putfield class="LRoot" field="eye" fieldType="LRoot" ref="linalg_ops" value="eye" />
+        <new def="constant" class="Ltensorflow/functions/constant" />
+        <putfield class="LRoot" field="constant" fieldType="LRoot" ref="x" value="constant" />
+        <putfield class="LRoot" field="constant" fieldType="LRoot" ref="constant_op" value="constant" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes#float32 -->
+        <new def="float32" class="Ltensorflow/dtypes/DType" />
+        <putfield class="LRoot" field="float32" fieldType="LRoot" ref="x" value="float32" />
+        <putfield class="LRoot" field="float32" fieldType="LRoot" ref="dtypes" value="float32" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes#float64 -->
+        <new def="float64" class="Ltensorflow/dtypes/DType" />
+        <putfield class="LRoot" field="float64" fieldType="LRoot" ref="x" value="float64" />
+        <putfield class="LRoot" field="float64" fieldType="LRoot" ref="dtypes" value="float64" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes#int32 -->
+        <new def="int32" class="Ltensorflow/dtypes/DType" />
+        <putfield class="LRoot" field="int32" fieldType="LRoot" ref="x" value="int32" />
+        <putfield class="LRoot" field="int32" fieldType="LRoot" ref="dtypes" value="int32" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes#int64 -->
+        <new def="int64" class="Ltensorflow/dtypes/DType" />
+        <putfield class="LRoot" field="int64" fieldType="LRoot" ref="x" value="int64" />
+        <putfield class="LRoot" field="int64" fieldType="LRoot" ref="dtypes" value="int64" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes#string -->
+        <new def="string" class="Ltensorflow/dtypes/DType" />
+        <putfield class="LRoot" field="string" fieldType="LRoot" ref="x" value="string" />
+        <putfield class="LRoot" field="string" fieldType="LRoot" ref="dtypes" value="string" />
+        <new def="ragged_constant" class="Ltensorflow/functions/ragged_constant" />
+        <putfield class="LRoot" field="constant" fieldType="LRoot" ref="ragged" value="ragged_constant" />
+        <putfield class="LRoot" field="constant" fieldType="LRoot" ref="ragged_factory_ops" value="ragged_constant" />
+        <new def="SparseTensor" class="Ltensorflow/functions/SparseTensor" />
+        <putfield class="LRoot" field="SparseTensor" fieldType="LRoot" ref="x" value="SparseTensor" />
+        <putfield class="LRoot" field="SparseTensor" fieldType="LRoot" ref="sparse" value="SparseTensor" />
+        <putfield class="LRoot" field="SparseTensor" fieldType="LRoot" ref="sparse_tensor" value="SparseTensor" />
+        <new def="sparse_eye" class="Ltensorflow/functions/sparse_eye" />
+        <putfield class="LRoot" field="eye" fieldType="LRoot" ref="sparse" value="sparse_eye" />
+        <putfield class="LRoot" field="sparse_eye" fieldType="LRoot" ref="sparse_ops" value="sparse_eye" />
+        <new def="sparse_add" class="Ltensorflow/functions/sparse_add" />
+        <putfield class="LRoot" field="add" fieldType="LRoot" ref="sparse" value="sparse_add" />
+        <putfield class="LRoot" field="sparse_add" fieldType="LRoot" ref="sparse_ops" value="sparse_add" />
+        <new def="convert_to_tensor" class="Ltensorflow/functions/convert_to_tensor" />
+        <putfield class="LRoot" field="convert_to_tensor" fieldType="LRoot" ref="x" value="convert_to_tensor" />
+        <putfield class="LRoot" field="convert_to_tensor" fieldType="LRoot" ref="ops" value="convert_to_tensor" />
+        <new def="Tensor" class="Ltensorflow/functions/Tensor" />
+        <putfield class="LRoot" field="Tensor" fieldType="LRoot" ref="x" value="Tensor" />
+        <putfield class="LRoot" field="Tensor" fieldType="LRoot" ref="ops" value="Tensor" />
+        <new def="RaggedTensor" class="Lobject" />
+        <putfield class="LRoot" field="RaggedTensor" fieldType="LRoot" ref="x" value="RaggedTensor" />
+        <putfield class="LRoot" field="RaggedTensor" fieldType="LRoot" ref="ragged_tensor" value="RaggedTensor" />
+        <new def="from_nested_row_lengths" class="Ltensorflow/functions/from_nested_row_lengths" />
+        <putfield class="LRoot" field="from_nested_row_lengths" fieldType="LRoot" ref="RaggedTensor" value="from_nested_row_lengths" />
+        <new def="from_nested_row_splits" class="Ltensorflow/functions/from_nested_row_splits" />
+        <putfield class="LRoot" field="from_nested_row_splits" fieldType="LRoot" ref="RaggedTensor" value="from_nested_row_splits" />
+        <new def="from_nested_value_rowids" class="Ltensorflow/functions/from_nested_value_rowids" />
+        <putfield class="LRoot" field="from_nested_value_rowids" fieldType="LRoot" ref="RaggedTensor" value="from_nested_value_rowids" />
+        <new def="from_row_lengths" class="Ltensorflow/functions/from_row_lengths" />
+        <putfield class="LRoot" field="from_row_lengths" fieldType="LRoot" ref="RaggedTensor" value="from_row_lengths" />
+        <new def="from_row_limits" class="Ltensorflow/functions/from_row_limits" />
+        <putfield class="LRoot" field="from_row_limits" fieldType="LRoot" ref="RaggedTensor" value="from_row_limits" />
+        <new def="from_row_splits" class="Ltensorflow/functions/from_row_splits" />
+        <putfield class="LRoot" field="from_row_splits" fieldType="LRoot" ref="RaggedTensor" value="from_row_splits" />
+        <new def="from_row_starts" class="Ltensorflow/functions/from_row_starts" />
+        <putfield class="LRoot" field="from_row_starts" fieldType="LRoot" ref="RaggedTensor" value="from_row_starts" />
+        <new def="from_value_rowids" class="Ltensorflow/functions/from_value_rowids" />
+        <putfield class="LRoot" field="from_value_rowids" fieldType="LRoot" ref="RaggedTensor" value="from_value_rowids" />
+        <new def="autograph" class="Lobject" />
+        <putfield class="LRoot" field="autograph" fieldType="LRoot" ref="x" value="autograph" />
+        <putfield class="LRoot" field="experimental" fieldType="LRoot" ref="autograph" value="experimental" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/autograph/experimental/do_not_convert -->
+        <new def="do_not_convert" class="Ltensorflow/class/do_not_convert" />
+        <putfield class="LRoot" field="do_not_convert" fieldType="LRoot" ref="experimental" value="do_not_convert" />
         <return value="x" />
       </method>
     </class>
@@ -289,16 +371,6 @@
       </class>
     </package>
     <package name="tensorflow/math">
-      <class name="log" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="xx" />
-          <return value="xx" />
-        </method>
-      </class>
       <class name="sigmoid" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/sigmoid -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
@@ -331,43 +403,8 @@
       </class>
       <class name="reduce_mean" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/reduce_mean -->
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="y" />
-          <return value="y" />
-        </method>
-      </class>
-      <class name="reduce_sum" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="xx" />
-          <return value="xx" />
-        </method>
-      </class>
-      <class name="argmax" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input axis name dimension">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="xx" />
-          <return value="xx" />
-        </method>
-      </class>
-      <class name="equal" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x y name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="xx" />
-          <return value="xx" />
+          <return value="input_tensor" />
         </method>
       </class>
     </package>
@@ -416,10 +453,11 @@
           <return value="self" />
         </method>
       </class>
-      <class name="reshape">
+      <class name="reshape" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/reshape -->
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self tensor shape name">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self input name">
+          <new def="z" class="Ltensorflow/functions/convert_to_tensor" />
+          <call class="Ltensorflow/functions/convert_to_tensor" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="input" numArgs="2" def="x" />
           <return value="x" />
         </method>
       </class>
@@ -430,8 +468,6 @@
         </method>
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self shape dtype name">
           <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="self" numArgs="1" def="x" />
-          <putfield class="Ltensorflow/python/framework/ops/Tensor" field="dtype" fieldType="LRoot" ref="x" value="dtype" />
-          <putfield class="Ltensorflow/python/framework/ops/Tensor" field="shape" fieldType="LRoot" ref="x" value="shape" />
           <return value="x" />
         </method>
       </class>
@@ -442,16 +478,16 @@
         </method>
         <method name="do" descriptor="()LRoot;" numArgs="13" paramNames="self initial_value trainable validate_shape caching_device name variable_def dtype import_scope constraint synchronization aggregation shape">
           <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <putfield class="Ltensorflow/python/ops/variables/Variable" field="initial_value" fieldType="LRoot" ref="x" value="initial_value" />
-          <putfield class="Ltensorflow/python/ops/variables/Variable" field="shape" fieldType="LRoot" ref="x" value="shape" />
-          <putfield class="Ltensorflow/python/ops/variables/Variable" field="dtype" fieldType="LRoot" ref="x" value="dtype" />
           <return value="x" />
         </method>
       </class>
       <class name="constant" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self value dtype shape name">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
           <new def="x" class="Ltensorflow/python/framework/constant_op/constant" />
-          <putfield class="Ltensorflow/python/framework/constant_op/constant" field="value" fieldType="LRoot" ref="x" value="value" />
+          <return value="x" />
+        </method>
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="value dtype shape name">
+          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
           <return value="x" />
         </method>
       </class>
@@ -460,10 +496,8 @@
           <new def="x" class="Ltensorflow/python/ops/array_ops/zeros" />
           <return value="x" />
         </method>
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self shape dtype name">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="shape dtype name">
           <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <putfield class="Ltensorflow/python/ops/array_ops/zeros" field="dtype" fieldType="LRoot" ref="x" value="dtype" />
-          <putfield class="Ltensorflow/python/ops/array_ops/zeros" field="shape" fieldType="LRoot" ref="x" value="shape" />
           <return value="x" />
         </method>
       </class>
@@ -523,10 +557,8 @@
           <new def="x" class="Ltensorflow/python/ops/array_ops/zeros_like" />
           <return value="x" />
         </method>
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self input dtype name">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="input dtype name">
           <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <putfield class="Ltensorflow/python/ops/array_ops/zeros_like" field="input" fieldType="LRoot" ref="x" value="input" />
-          <putfield class="Ltensorflow/python/ops/array_ops/zeros_like" field="dtype" fieldType="LRoot" ref="x" value="dtype" />
           <return value="x" />
         </method>
       </class>
@@ -535,7 +567,7 @@
           <new def="x" class="Ltensorflow/python/ops/array_ops/one_hot" />
           <return value="x" />
         </method>
-        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self indices depth on_value off_value axis dtype name">
+        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="indices depth on_value off_value axis dtype name">
           <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
           <return value="x" />
         </method>
@@ -570,15 +602,8 @@
           <return value="x" />
         </method>
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self op value_index dtype">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="self" numArgs="1" def="x" />
-          <putfield class="Ltensorflow/python/framework/ops/Tensor" field="dtype" fieldType="LRoot" ref="x" value="dtype" />
+          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
           <return value="x" />
-        </method>
-        <method name="eval" descriptor="()LRoot;" numArgs="3" paramNames="self feed_dict session">
-          <return value="self" />
-        </method>
-        <method name="set_shape" descriptor="()LRoot;" numArgs="2" paramNames="self shape">
-          <return value="self" />
         </method>
       </class>
       <class name="ndarray" allocatable="true">
@@ -586,9 +611,8 @@
           <new def="x" class="Ltensorflow/python/framework/ops/ndarray" />
           <return value="x" />
         </method>
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self op value_index dtype">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="self" numArgs="1" def="x" />
-          <putfield class="Ltensorflow/python/framework/ops/ndarray" field="dtype" fieldType="LRoot" ref="x" value="dtype" />
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="op value_index dtype">
+          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
           <return value="x" />
         </method>
       </class>
@@ -627,10 +651,8 @@
           <new def="x" class="Ltensorflow/python/ops/random_ops/uniform" />
           <return value="x" />
         </method>
-        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self shape minval maxval dtype seed name">
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="shape minval maxval dtype seed name">
           <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <putfield class="Ltensorflow/python/ops/random_ops/uniform" field="shape" fieldType="LRoot" ref="x" value="shape" />
-          <putfield class="Ltensorflow/python/ops/random_ops/uniform" field="dtype" fieldType="LRoot" ref="x" value="dtype" />
           <return value="x" />
         </method>
       </class>
@@ -639,10 +661,8 @@
           <new def="x" class="Ltensorflow/python/ops/random_ops/gamma" />
           <return value="x" />
         </method>
-        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self shape alpha beta dtype seed name">
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="shape alpha beta dtype seed name">
           <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <putfield class="Ltensorflow/python/ops/random_ops/gamma" field="shape" fieldType="LRoot" ref="x" value="shape" />
-          <putfield class="Ltensorflow/python/ops/random_ops/gamma" field="dtype" fieldType="LRoot" ref="x" value="dtype" />
           <return value="x" />
         </method>
       </class>
@@ -651,10 +671,8 @@
           <new def="x" class="Ltensorflow/python/ops/random_ops/normal" />
           <return value="x" />
         </method>
-        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self shape mean stddev dtype seed name">
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="shape mean stddev dtype seed name">
           <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <putfield class="Ltensorflow/python/ops/random_ops/normal" field="shape" fieldType="LRoot" ref="x" value="shape" />
-          <putfield class="Ltensorflow/python/ops/random_ops/normal" field="dtype" fieldType="LRoot" ref="x" value="dtype" />
           <return value="x" />
         </method>
       </class>
@@ -663,10 +681,8 @@
           <new def="x" class="Ltensorflow/python/ops/random_ops/poisson" />
           <return value="x" />
         </method>
-        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self shape lam dtype seed name">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="shape lam dtype seed name">
           <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <putfield class="Ltensorflow/python/ops/random_ops/poisson" field="shape" fieldType="LRoot" ref="x" value="shape" />
-          <putfield class="Ltensorflow/python/ops/random_ops/poisson" field="dtype" fieldType="LRoot" ref="x" value="dtype" />
           <return value="x" />
         </method>
       </class>
@@ -675,10 +691,8 @@
           <new def="x" class="Ltensorflow/python/ops/random_ops/truncated_normal" />
           <return value="x" />
         </method>
-        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self shape mean stddev dtype seed name">
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="shape mean stddev dtype seed name">
           <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <putfield class="Ltensorflow/python/ops/random_ops/truncated_normal" field="shape" fieldType="LRoot" ref="x" value="shape" />
-          <putfield class="Ltensorflow/python/ops/random_ops/truncated_normal" field="dtype" fieldType="LRoot" ref="x" value="dtype" />
           <return value="x" />
         </method>
       </class>
@@ -763,14 +777,8 @@
         </method>
       </class>
       <class name="placeholder" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="dtype shape name">
           <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self dtype shape name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <putfield class="Ltensorflow/python/framework/ops/Tensor" field="dtype" fieldType="LRoot" ref="x" value="dtype" />
-          <putfield class="Ltensorflow/python/framework/ops/Tensor" field="shape" fieldType="LRoot" ref="x" value="shape" />
           <return value="x" />
         </method>
       </class>
@@ -793,8 +801,8 @@
         </method>
       </class>
       <class name="conv2d" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="10" paramNames="self inputs filters kernel_size strides padding data_format dilation_rate activation use_bias">
-          <return value="inputs" />
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x y">
+          <return value="x" />
         </method>
       </class>
       <class name="conv3d" allocatable="true">
@@ -810,87 +818,8 @@
       </class>
       <class name="sparse_softmax_cross_entropy_with_logits" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/sparse_softmax_cross_entropy_with_logits -->
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self labels logits name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <return value="x" />
-        </method>
-      </class>
-      <class name="softmax_cross_entropy_with_logits" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self labels logits dim name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <return value="x" />
-        </method>
-      </class>
-      <class name="cast" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="y" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="y" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x dtype name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="y" />
-          <return value="y" />
-        </method>
-      </class>
-      <class name="matmul" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="10" paramNames="self a b transpose_a transpose_b adjoint_a adjoint_b a_is_sparse b_is_sparse name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <return value="x" />
-        </method>
-      </class>
-      <class name="dense" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="16" paramNames="self inputs units activation use_bias kernel_initializer bias_initializer kernel_regularizer bias_regularizer activity_regularizer kernel_constraint bias_constraint trainable name reuse">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <return value="x" />
-        </method>
-      </class>
-      <class name="flatten" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self inputs">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <return value="x" />
-        </method>
-      </class>
-      <class name="max_pool" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self value ksize strides padding data_format name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <return value="x" />
-        </method>
-      </class>
-      <class name="get_default_graph" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
-          <new def="x" class="Ltensorflow/Graph" />
-          <return value="x" />
-        </method>
-      </class>
-      <class name="GradientDescentOptimizer" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self learning_rate name">
-          <new def="opt" class="Lobject" />
-          <new def="minimize" class="Ltensorflow/functions/minimize" />
-          <putfield class="LRoot" field="minimize" fieldType="LRoot" ref="opt" value="minimize" />
-          <return value="opt" />
+          <return value="labels" />
         </method>
       </class>
     </package>
@@ -912,8 +841,8 @@
       <class name="numpy_input_fn" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self x y batch_size shuffle">
           <new def="xx" class="Lobject" />
-          <putfield class="LRoot" field="data" fieldType="LRoot" ref="xx" value="arg1" />
-          <putfield class="LRoot" field="labels" fieldType="LRoot" ref="xx" value="arg2" />
+          <putfield class="LRoot" field="data" fieldType="LRoot" ref="xx" value="2" />
+          <putfield class="LRoot" field="labels" fieldType="LRoot" ref="xx" value="3" />
           <return value="xx" />
         </method>
       </class>
@@ -1029,34 +958,9 @@
           <return value="sources" />
         </method>
       </class>
-      <class name="Graph" allocatable="true" />
-      <class name="Session" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self target graph config">
-          <return value="self" />
-        </method>
-        <method name="run" descriptor="()LRoot;" numArgs="6" paramNames="self fetches feed_dict options run_metadata">
-          <return value="fetches" />
-        </method>
-        <method name="__enter__" descriptor="()LRoot;" numArgs="1" paramNames="self">
-          <return value="self" />
-        </method>
-        <method name="__exit__" descriptor="()LRoot;" numArgs="4" paramNames="self type value traceback">
-          <return value="self" />
-        </method>
-      </class>
     </package>
     <package name="tensorflow/data">
       <class name="Dataset" allocatable="true">
-        <method name="from_tensors" descriptor="()LRoot;" numArgs="1" paramNames="tensors">
-          <new def="x" class="Ltensorflow/data/Dataset" />
-          <putfield class="Ltensorflow/data/Dataset" field="tensors" fieldType="LRoot" ref="x" value="tensors" />
-          <return value="x" />
-        </method>
-        <method name="from_tensor_slices" descriptor="()LRoot;" numArgs="1" paramNames="tensors">
-          <new def="x" class="Ltensorflow/data/Dataset" />
-          <putfield class="Ltensorflow/data/Dataset" field="tensors" fieldType="LRoot" ref="x" value="tensors" />
-          <return value="x" />
-        </method>
         <!-- "read_dataset" means that this function reads a tensor iterable. -->
         <method name="read_dataset" descriptor="()LRoot;">
           <new def="shuffle" class="Ltensorflow/data/shuffle" />
@@ -1096,7 +1000,6 @@
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. This method (shuffle) doesn't really return a "new" dataset but rather a modified version of the receiver. But, the receiver isn't available without a trampoline AFAIK. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <putfield class="Ltensorflow/data/Dataset" field="input_dataset" fieldType="LRoot" ref="xx" value="self" />
           <return value="xx" />
         </method>
       </class>
@@ -1106,8 +1009,6 @@
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <putfield class="Ltensorflow/data/Dataset" field="input_dataset" fieldType="LRoot" ref="xx" value="self" />
-          <putfield class="Ltensorflow/data/Dataset" field="batch_size" fieldType="LRoot" ref="xx" value="batch_size" />
           <return value="xx" />
         </method>
       </class>
@@ -1153,7 +1054,6 @@
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <putfield class="Ltensorflow/data/Dataset" field="input_dataset" fieldType="LRoot" ref="xx" value="self" />
           <return value="xx" />
         </method>
       </class>
@@ -1207,7 +1107,6 @@
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="tensors name">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <putfield class="Ltensorflow/data/Dataset" field="tensors" fieldType="LRoot" ref="xx" value="tensors" />
           <return value="xx" />
         </method>
       </class>
@@ -1272,10 +1171,10 @@
     </package>
     <package name="tensorflow/estimator/train">
       <class name="train" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self input_fn hooks steps max_steps saving_listeners">
-          <getfield class="LRoot" field="$callback" fieldType="LRoot" ref="self" def="xx" />
-          <getfield class="LRoot" field="data" fieldType="LRoot" ref="input_fn" def="data" />
-          <getfield class="LRoot" field="labels" fieldType="LRoot" ref="input_fn" def="labels" />
+        <method name="do" descriptor="()LRoot;" numArgs="3">
+          <getfield class="LRoot" field="$callback" fieldType="LRoot" ref="arg0" def="xx" />
+          <getfield class="LRoot" field="data" fieldType="LRoot" ref="arg1" def="data" />
+          <getfield class="LRoot" field="labels" fieldType="LRoot" ref="arg1" def="labels" />
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="xx" arg1="data" arg2="labels" numArgs="3" def="v" />
           <return value="v" />
         </method>
@@ -1308,19 +1207,6 @@
         </method>
       </class>
     </package>
-    <package name="tensorflow/contrib/learn/datasets/base">
-      <class name="Datasets" allocatable="true">
-        <method name="next_batch" descriptor="()LRoot;" numArgs="2" paramNames="self batch_size">
-          <new def="z" class="Ltensorflow/examples/tutorials/mnist/read_data_sets" />
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="z" numArgs="1" def="xs" />
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="z" numArgs="1" def="ys" />
-          <new def="res" class="Llist" />
-          <putfield class="LRoot" field="0" fieldType="LRoot" ref="res" value="xs" />
-          <putfield class="LRoot" field="1" fieldType="LRoot" ref="res" value="ys" />
-          <return value="res" />
-        </method>
-      </class>
-    </package>
     <package name="tensorflow/examples/tutorials/mnist">
       <class name="read_data_sets" allocatable="true">
         <method name="read_data" descriptor="()LRoot;" numArgs="1">
@@ -1328,22 +1214,15 @@
           <return value="x" />
         </method>
         <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self train_dir fake_data one_hot dtype reshape validation_size seed source_url">
-          <new def="test" class="Ltensorflow/contrib/learn/datasets/base/Datasets" />
+          <new def="test" class="Ldict" />
           <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
           <putfield class="LRoot" field="images" fieldType="LRoot" ref="test" value="x" />
-          <putfield class="LRoot" field="labels" fieldType="LRoot" ref="test" value="x" />
-          <new def="training" class="Ltensorflow/contrib/learn/datasets/base/Datasets" />
           <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="y" />
+          <new def="training" class="Ldict" />
           <putfield class="LRoot" field="images" fieldType="LRoot" ref="training" value="y" />
-          <putfield class="LRoot" field="labels" fieldType="LRoot" ref="training" value="y" />
-          <new def="validation" class="Ltensorflow/contrib/learn/datasets/base/Datasets" />
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="z" />
-          <putfield class="LRoot" field="images" fieldType="LRoot" ref="validation" value="z" />
-          <putfield class="LRoot" field="labels" fieldType="LRoot" ref="validation" value="z" />
-          <new def="data" class="Lobject" />
+          <new def="data" class="Ldict" />
           <putfield class="LRoot" field="test" fieldType="LRoot" ref="data" value="test" />
           <putfield class="LRoot" field="train" fieldType="LRoot" ref="data" value="training" />
-          <putfield class="LRoot" field="validation" fieldType="LRoot" ref="data" value="validation" />
           <return value="data" />
         </method>
       </class>
@@ -1366,12 +1245,6 @@
           <putfield class="Ltensorflow/examples/tutorials/mnist/input_data" field="read_data_sets" fieldType="LRoot" ref="x" value="y" />
         </method>
       </class>
-    </package>
-    <package name="tensorflow/python/framework/constant_op">
-      <class name="constant" allocatable="true" />
-    </package>
-    <package name="tensorflow/python/ops/linalg_ops">
-      <class name="eye" allocatable="true" />
     </package>
   </classloader>
 </summary-spec>

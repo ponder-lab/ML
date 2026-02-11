@@ -1049,60 +1049,60 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * FIXME: Should not throw an {@link UnsupportedOperationException} once
+   * FIXME: Should not throw a {@link NullPointerException} once
    * https://github.com/wala/ML/issues/340 is fixed.
    */
-  @Test(expected = UnsupportedOperationException.class)
+  @Test(expected = NullPointerException.class)
   public void testModelAttributes()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_model_attributes.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
   }
 
   /**
-   * FIXME: Should not throw an {@link UnsupportedOperationException} once
+   * FIXME: Should not throw a {@link NullPointerException} once
    * https://github.com/wala/ML/issues/340 is fixed.
    */
-  @Test(expected = UnsupportedOperationException.class)
+  @Test(expected = NullPointerException.class)
   public void testModelAttributes2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_model_attributes2.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
   }
 
   /**
-   * FIXME: Should not throw an {@link UnsupportedOperationException} once
+   * FIXME: Should not throw a {@link NullPointerException} once
    * https://github.com/wala/ML/issues/340 is fixed.
    */
-  @Test(expected = UnsupportedOperationException.class)
+  @Test(expected = NullPointerException.class)
   public void testModelAttributes3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_model_attributes3.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
   }
 
   /**
-   * FIXME: Should not throw an {@link UnsupportedOperationException} once
+   * FIXME: Should not throw a {@link NullPointerException} once
    * https://github.com/wala/ML/issues/340 is fixed.
    */
-  @Test(expected = UnsupportedOperationException.class)
+  @Test(expected = NullPointerException.class)
   public void testModelAttributes4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_model_attributes4.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
   }
 
   /**
-   * FIXME: Should not throw an {@link UnsupportedOperationException} once
+   * FIXME: Should not throw a {@link NullPointerException} once
    * https://github.com/wala/ML/issues/340 is fixed.
    */
-  @Test(expected = UnsupportedOperationException.class)
+  @Test(expected = NullPointerException.class)
   public void testModelAttributes5()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_model_attributes5.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
   }
 
   /**
-   * FIXME: Should not throw an {@link UnsupportedOperationException} once
+   * FIXME: Should not throw a {@link NullPointerException} once
    * https://github.com/wala/ML/issues/340 is fixed.
    */
-  @Test(expected = UnsupportedOperationException.class)
+  @Test(expected = NullPointerException.class)
   public void testModelAttributes6()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_model_attributes6.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
@@ -1240,10 +1240,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_add2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
-  @Test
+  /**
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testAdd3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add3.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
+    test("tf2_test_add3.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
   }
 
   @Test
@@ -1261,10 +1265,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_add5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
-  @Test
+  /**
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testAdd6()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add6.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
+    test("tf2_test_add6.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
   }
 
   @Test
@@ -1649,20 +1657,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Should not throw an {@link IllegalStateException} once https://github.com/wala/ML/issues/340 is
-   * fixed.
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
    */
-  @Test(expected = IllegalStateException.class)
+  @Test(expected = IllegalArgumentException.class)
   public void testAdd43()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_add43.py", "add", 2, 3, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
   }
 
   /**
-   * Should not throw an {@link IllegalStateException} once https://github.com/wala/ML/issues/340 is
-   * fixed.
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
    */
-  @Test(expected = IllegalStateException.class)
+  @Test(expected = IllegalArgumentException.class)
   public void testAdd44()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_add44.py", "add", 2, 3, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));

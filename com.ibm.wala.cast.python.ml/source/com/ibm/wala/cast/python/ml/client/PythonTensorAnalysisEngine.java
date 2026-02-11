@@ -1,8 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.google.common.collect.Sets.newHashSet;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT_OP_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.types.AstMethodReference.fnReference;
 
@@ -35,7 +33,6 @@ import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
-import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
@@ -140,36 +137,6 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     Set<PointsToSetVariable> sources = HashSetFactory.make();
     CallGraph callGraph = builder.getCallGraph();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
-
-    // Identify sources from tf.constant allocations. Iterating the CallGraph is more robust for
-    // finding these synthetic allocations than iterating the dataflow graph.
-    for (CGNode node : callGraph) {
-      if (node.getMethod()
-          .getReference()
-          .getDeclaringClass()
-          .equals(CONSTANT.getDeclaringClass())) {
-        if (node.getIR() != null) {
-          for (SSAInstruction inst : node.getIR().getInstructions()) {
-            if (inst instanceof SSANewInstruction) {
-              SSANewInstruction newInstruction = (SSANewInstruction) inst;
-              // Handle inlined tf.constant.
-              if (newInstruction.getConcreteType().equals(CONSTANT_OP_CONSTANT)) {
-                PointerKey key =
-                    pointerAnalysis
-                        .getHeapModel()
-                        .getPointerKeyForLocal(node, newInstruction.getDef());
-                if (!builder.getPropagationSystem().isImplicit(key)) {
-                  PointsToSetVariable ptv =
-                      builder.getPropagationSystem().findOrCreatePointsToSet(key);
-                  sources.add(ptv);
-                  logger.info("Added dataflow source from constant allocation: " + ptv + ".");
-                }
-              }
-            }
-          }
-        }
-      }
-    }
 
     for (PointsToSetVariable src : dataflow) {
       PointerKey k = src.getPointerKey();
@@ -278,16 +245,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // don't consider exceptions as a data source.
     if (instruction.getException() != vn) {
       if (instruction
-              .getCallSite()
-              .getDeclaredTarget()
-              .getName()
-              .toString()
-              .equals(TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME)
-          || instruction
-              .getCallSite()
-              .getDeclaredTarget()
-              .getDeclaringClass()
-              .equals(CONSTANT.getDeclaringClass())) {
+          .getCallSite()
+          .getDeclaredTarget()
+          .getName()
+          .toString()
+          .equals(TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME)) {
         sources.add(src);
         logger.info("Added dataflow source from tensor generator: " + src + ".");
         ret = true;

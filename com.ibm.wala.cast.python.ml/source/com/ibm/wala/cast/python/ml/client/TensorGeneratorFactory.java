@@ -2,7 +2,6 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT_OP_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_BATCH_TYPE;
@@ -77,8 +76,7 @@ public class TensorGeneratorFactory {
     LOGGER.info("Getting tensor generator for call to: " + calledFunction.getName() + ".");
 
     if (calledFunction.equals(ONES.getDeclaringClass())) return new Ones(source);
-    else if (calledFunction.equals(CONSTANT.getDeclaringClass())
-        || calledFunction.equals(CONSTANT_OP_CONSTANT)) return new Constant(source);
+    else if (calledFunction.equals(CONSTANT.getDeclaringClass())) return new Constant(source);
     else if (calledFunction.equals(RANGE.getDeclaringClass())) return new Range(source);
     else if (calledFunction.equals(UNIFORM.getDeclaringClass())) return new Uniform(source);
     else if (calledFunction.equals(NORMAL.getDeclaringClass())) return new Normal(source);
@@ -151,16 +149,8 @@ public class TensorGeneratorFactory {
     else if (calledFunction.equals(DENSE.getDeclaringClass())) return new Dense(source);
     else if (calledFunction.equals(FLATTEN.getDeclaringClass())) return new Flatten(source);
     else if (calledFunction.equals(MAX_POOL.getDeclaringClass())) return new MaxPool(source);
-    else {
-      if (calledFunction.getName().toString().startsWith("Lscript ")) {
-        throw new IllegalArgumentException(
-            "Encountered a tensor source in a script: "
-                + calledFunction
-                + ". This usually means a function call was not resolved to a summarized"
-                + " function.");
-      }
+    else
       throw new IllegalArgumentException(
           "Unknown call: " + calledFunction + " for source: " + source + ".");
-    }
   }
 }
