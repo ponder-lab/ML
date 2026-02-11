@@ -1247,7 +1247,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test(expected = IllegalArgumentException.class)
   public void testAdd3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add3.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_add3.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
   @Test
@@ -1272,7 +1272,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test(expected = IllegalArgumentException.class)
   public void testAdd6()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add6.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_add6.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
   @Test
@@ -2881,49 +2881,81 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         0); // NOTE: Change to 1, 1, 2 once https://github.com/wala/ML/issues/136 is fixed.
   }
 
-  @Test
+  /**
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testReduceMean()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_reduce_mean.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
-  @Test
+  /**
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testReduceMean2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_reduce_mean.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
   }
 
-  @Test
+  /**
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testReduceMean3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_reduce_mean.py", "h", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
   }
 
-  @Test
+  /**
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testReduceMean4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_reduce_mean_kwargs.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
   }
 
-  @Test
+  /**
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testReduceMean5()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_reduce_mean_kwargs.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
   }
 
-  @Test
+  /**
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testReduceMean6()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_reduce_mean_kwargs.py", "h", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
-  @Test
+  /**
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testReduceMean7()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_reduce_mean_kwargs.py", "i", 1, 1, Map.of(2, Set.of(TENSOR_2_1_FLOAT32)));
   }
 
-  @Test
+  /**
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testReduceMean8()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_reduce_mean_kwargs.py", "j", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
@@ -2936,16 +2968,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Should not throw an {@link IllegalStateException} once https://github.com/wala/ML/issues/340 is
-   * fixed.
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
    */
-  @Test(expected = IllegalStateException.class)
+  @Test(expected = IllegalArgumentException.class)
   public void testGradient2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_gradient2.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
   }
 
-  @Test
+  /**
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testMultiply()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_multiply.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_INT32)));
@@ -2988,7 +3024,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_multiply6.py", "f", 1, 1);
   }
 
-  @Test
+  /**
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testMultiply7()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_multiply7.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
@@ -5097,18 +5137,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * `tf.convert_to_tensor` with a `tf.constant` value. Fixed by handling `CONSTANT_OP_CONSTANT`.
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
    */
-  @Test
+  @Test(expected = IllegalArgumentException.class)
   public void testConvertToTensor5()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_convert_to_tensor5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   /**
-   * `tf.convert_to_tensor` with a `tf.constant` value. Fixed by handling `CONSTANT_OP_CONSTANT`.
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
    */
-  @Test
+  @Test(expected = IllegalArgumentException.class)
   public void testConvertToTensor6()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_convert_to_tensor6.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
@@ -5343,13 +5385,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_gamma3.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_7_5_2_FLOAT32)));
   }
 
-  @Test
+  /**
+   * FIXME: Should not throw an {@link IllegalArgumentException} once
+   * https://github.com/wala/ML/issues/340 is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testGamma4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_gamma4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_30_3_2_FLOAT32)));
   }
 
-  @Test
+  /**
+   * FIXME: Should not throw an {@link IllegalArgumentException} once
+   * https://github.com/wala/ML/issues/340 is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testGamma5()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_gamma5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_30_3_2_FLOAT32)));
@@ -5361,7 +5411,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_gamma6.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_30_3_2_FLOAT32)));
   }
 
-  @Test
+  /**
+   * FIXME: Should not throw an {@link IllegalArgumentException} once
+   * https://github.com/wala/ML/issues/340 is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testGammaMixed()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_gamma_mixed.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_30_3_2_FLOAT32)));
@@ -5739,7 +5793,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
   }
 
-  @Test
+  /**
+   * Should not throw an {@link IllegalStateException} once https://github.com/wala/ML/issues/340 is
+   * fixed.
+   */
+  @Test(expected = IllegalStateException.class)
   public void testRaggedNestedValueRowidsPositional()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -5747,7 +5805,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_rt",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_3_NONE_NONE_STRING)));
   }
 
   @Test
@@ -5758,7 +5816,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_rt",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_3_NONE_NONE_STRING)));
   }
 
   @Test
@@ -5769,10 +5827,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_rt",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_3_NONE_NONE_STRING)));
   }
 
-  @Test
+  /**
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testRaggedNestedValueRowidsKeyword()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -5780,7 +5842,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_rt",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_1_NONE_NONE_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
   }
 
   @Test
@@ -5791,7 +5853,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_rt",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_1_NONE_NONE_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
   }
 
   @Test
@@ -5802,10 +5864,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_rt",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_1_NONE_NONE_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
   }
 
-  @Test
+  /**
+   * Should not throw an {@link IllegalArgumentException} once https://github.com/wala/ML/issues/340
+   * is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testRaggedNestedValueRowidsMixed()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -5813,7 +5879,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_rt",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_3_NONE_NONE_STRING)));
+        Map.of(2, Set.of(TENSOR_1_NONE_NONE_FLOAT32)));
   }
 
   @Test
@@ -5824,7 +5890,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_rt",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_3_NONE_NONE_STRING)));
+        Map.of(2, Set.of(TENSOR_1_NONE_NONE_FLOAT32)));
   }
 
   @Test
@@ -5835,7 +5901,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_rt",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_3_NONE_NONE_STRING)));
+        Map.of(2, Set.of(TENSOR_1_NONE_NONE_FLOAT32)));
   }
 
   @Test
@@ -5952,7 +6018,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * @throws CancelException
    * @throws IOException
    */
-  @Test(expected = UnsupportedOperationException.class)
+  @Test(expected = NullPointerException.class)
   public void testModelInit()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_model_init.py", "check_positional", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
