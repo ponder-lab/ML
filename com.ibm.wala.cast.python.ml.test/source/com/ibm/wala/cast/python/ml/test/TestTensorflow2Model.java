@@ -1682,6 +1682,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_add42.py", "func2", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
+  @Test
+  public void testZerosLikeTensor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_zeros_like_tensor.py", "func2", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
   /**
    * FIXME: Should not throw an {@link IllegalArgumentException} once
    * https://github.com/wala/ML/issues/340 is fixed.
