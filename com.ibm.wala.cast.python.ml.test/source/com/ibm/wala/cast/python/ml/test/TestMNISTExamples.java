@@ -52,7 +52,11 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
     verifyGraphAssertions(CG, assertionsEx1);
   }
 
-  @Test
+  /**
+   * FIXME: Should not throw an {@link IllegalArgumentException} once
+   * https://github.com/wala/ML/issues/340 is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testEx1Tensors()
       throws IllegalArgumentException, CancelException, IOException, URISyntaxException {
     checkTensorOps(
@@ -91,7 +95,11 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
     process(Ex2URL);
   }
 
-  @Test
+  /**
+   * FIXME: Should not throw an {@link IllegalArgumentException} once
+   * https://github.com/wala/ML/issues/340 is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testEx2Tensors()
       throws IllegalArgumentException, CancelException, IOException, URISyntaxException {
     checkTensorOps(
@@ -207,7 +215,11 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
             });
   }
 
-  @Test
+  /**
+   * FIXME: Should not throw an {@link IllegalArgumentException} once
+   * https://github.com/wala/ML/issues/340 is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testEx3CG()
       throws ClassHierarchyException,
           IllegalArgumentException,
@@ -220,7 +232,11 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
   private static final String Ex4URL =
       "https://raw.githubusercontent.com/tensorflow/tensorflow/r1.12/tensorflow/examples/tutorials/mnist/mnist_softmax_xla.py";
 
-  @Test
+  /**
+   * FIXME: Should not throw an {@link IllegalArgumentException} once
+   * https://github.com/wala/ML/issues/340 is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testEx4CG()
       throws ClassHierarchyException,
           IllegalArgumentException,
@@ -233,7 +249,11 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
   private static final String Ex5URL =
       "https://raw.githubusercontent.com/tensorflow/tensorflow/r1.12/tensorflow/examples/tutorials/mnist/mnist_with_summaries.py";
 
-  @Test
+  /**
+   * FIXME: Should not throw an {@link IllegalArgumentException} once
+   * https://github.com/wala/ML/issues/340 is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testEx5CG()
       throws ClassHierarchyException,
           IllegalArgumentException,

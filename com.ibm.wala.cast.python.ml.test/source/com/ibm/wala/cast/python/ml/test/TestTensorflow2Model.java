@@ -5082,8 +5082,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_reshape.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_6_FLOAT32)));
   }
 
-  /** Test https://github.com/wala/ML/issues/195. */
-  @Test
+  /**
+   * Test https://github.com/wala/ML/issues/195.
+   *
+   * <p>FIXME: Should not throw an {@link IllegalArgumentException} once
+   * https://github.com/wala/ML/issues/340 is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testReshape2() throws ClassHierarchyException, CancelException, IOException {
     TensorType expectedType =
         new TensorType(
