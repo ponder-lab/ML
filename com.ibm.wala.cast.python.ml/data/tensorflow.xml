@@ -444,9 +444,172 @@
       </class>
     </package>
     <package name="tensorflow/python/framework/ops">
-      <class name="Tensor" allocatable="true" />
-      <class name="convert_to_tensor" allocatable="true" />
-      <class name="ndarray" allocatable="true" />
+      <class name="Tensor" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="x" />
+        </method>
+      </class>
+      <class name="convert_to_tensor" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/framework/ops/convert_to_tensor" />
+          <return value="x" />
+        </method>
+      </class>
+      <class name="ndarray" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/framework/ops/ndarray" />
+          <return value="x" />
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/python/framework/constant_op">
+      <class name="constant" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/framework/constant_op/constant" />
+          <return value="x" />
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/python/ops/array_ops">
+      <class name="zeros" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/array_ops/zeros" />
+          <return value="x" />
+        </method>
+      </class>
+      <class name="zeros_like" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/array_ops/zeros_like" />
+          <return value="x" />
+        </method>
+      </class>
+      <class name="fill" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/array_ops/fill" />
+          <return value="x" />
+        </method>
+      </class>
+      <class name="one_hot" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/array_ops/one_hot" />
+          <return value="x" />
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/python/ops/variables">
+      <class name="Variable" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/variables/Variable" />
+          <return value="x" />
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/python/ops/random_ops">
+      <class name="uniform" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/random_ops/uniform" />
+          <return value="x" />
+        </method>
+      </class>
+      <class name="normal" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/random_ops/normal" />
+          <return value="x" />
+        </method>
+      </class>
+      <class name="gamma" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/random_ops/gamma" />
+          <return value="x" />
+        </method>
+      </class>
+      <class name="poisson" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/random_ops/poisson" />
+          <return value="x" />
+        </method>
+      </class>
+      <class name="truncated_normal" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/random_ops/truncated_normal" />
+          <return value="x" />
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/python/ops/linalg_ops">
+      <class name="eye" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/linalg_ops/eye" />
+          <return value="x" />
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/python/ops/ragged/ragged_factory_ops">
+      <class name="constant" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/ragged/ragged_factory_ops/constant" />
+          <return value="x" />
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/python/ops/ragged/ragged_math_ops">
+      <class name="range" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/ragged/ragged_math_ops/range" />
+          <return value="x" />
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/python/ops/ragged/ragged_tensor">
+      <class name="from_value_rowids" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/ragged/ragged_tensor/from_value_rowids" />
+          <return value="x" />
+        </method>
+      </class>
+      <class name="from_row_starts" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/ragged/ragged_tensor/from_row_starts" />
+          <return value="x" />
+        </method>
+      </class>
+      <class name="from_row_splits" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/ragged/ragged_tensor/from_row_splits" />
+          <return value="x" />
+        </method>
+      </class>
+      <class name="from_row_lengths" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/ragged/ragged_tensor/from_row_lengths" />
+          <return value="x" />
+        </method>
+      </class>
+      <class name="from_row_limits" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/ragged/ragged_tensor/from_row_limits" />
+          <return value="x" />
+        </method>
+      </class>
+      <class name="from_nested_row_lengths" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/ragged/ragged_tensor/from_nested_row_lengths" />
+          <return value="x" />
+        </method>
+      </class>
+      <class name="from_nested_row_splits" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/ragged/ragged_tensor/from_nested_row_splits" />
+          <return value="x" />
+        </method>
+      </class>
+      <class name="from_nested_value_rowids" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/ragged/ragged_tensor/from_nested_value_rowids" />
+          <return value="x" />
+        </method>
+      </class>
     </package>
     <package name="tensorflow/functions">
       <class name="AdamOptimizer" allocatable="true">
