@@ -352,7 +352,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * FIXME: Should not throw an {@link UnsupportedOperationException} once
    * https://github.com/wala/ML/issues/340 is fixed.
    */
-  @Test(expected = UnsupportedOperationException.class)
+  @Test
   public void testFunction()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_function.py", "func2", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
@@ -362,7 +362,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * FIXME: Should not throw an {@link UnsupportedOperationException} once
    * https://github.com/wala/ML/issues/352 is fixed.
    */
-  @Test(expected = UnsupportedOperationException.class)
+  @Test
   public void testFunction2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_function2.py", "func2", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
@@ -372,7 +372,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * FIXME: Should not throw an {@link UnsupportedOperationException} once
    * https://github.com/wala/ML/issues/352 is fixed.
    */
-  @Test(expected = UnsupportedOperationException.class)
+  @Test
   public void testFunction3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_function3.py", "func2", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
@@ -382,7 +382,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * FIXME: Should not throw an {@link UnsupportedOperationException} once
    * https://github.com/wala/ML/issues/352 is fixed.
    */
-  @Test(expected = UnsupportedOperationException.class)
+  @Test
   public void testFunction4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_function4.py", "func2", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
@@ -1656,7 +1656,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * FIXME: Should not throw an {@link UnsupportedOperationException} once
    * https://github.com/wala/ML/issues/352 is fixed.
    */
-  @Test(expected = UnsupportedOperationException.class)
+  @Test
   public void testAdd40()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_add40.py", "func2", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
@@ -1666,7 +1666,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * FIXME: Should not throw an {@link UnsupportedOperationException} once
    * https://github.com/wala/ML/issues/352 is fixed.
    */
-  @Test(expected = UnsupportedOperationException.class)
+  @Test
   public void testAdd41()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_add41.py", "func2", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
@@ -1676,7 +1676,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * FIXME: Should not throw an {@link UnsupportedOperationException} once
    * https://github.com/wala/ML/issues/352 is fixed.
    */
-  @Test(expected = UnsupportedOperationException.class)
+  @Test
   public void testAdd42()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_add42.py", "func2", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
@@ -1692,7 +1692,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * FIXME: Should not throw an {@link IllegalArgumentException} once
    * https://github.com/wala/ML/issues/340 is fixed.
    */
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testAdd43()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_add43.py", "add", 2, 3, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
@@ -1702,7 +1702,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * FIXME: Should not throw an {@link IllegalArgumentException} once
    * https://github.com/wala/ML/issues/340 is fixed.
    */
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testAdd44()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_add44.py", "add", 2, 3, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
@@ -1712,7 +1712,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * FIXME: Should not throw an {@link UnsupportedOperationException} once
    * https://github.com/wala/ML/issues/352 is fixed.
    */
-  @Test(expected = UnsupportedOperationException.class)
+  @Test
   public void testAdd45()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -1727,7 +1727,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * FIXME: Should not throw an {@link UnsupportedOperationException} once
    * https://github.com/wala/ML/issues/352 is fixed.
    */
-  @Test(expected = UnsupportedOperationException.class)
+  @Test
   public void testAdd46()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(

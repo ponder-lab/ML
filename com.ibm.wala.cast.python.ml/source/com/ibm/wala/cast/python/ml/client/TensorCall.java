@@ -1,6 +1,8 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.client.TensorCall.Parameters.DTYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NDARRAY;
+import static com.ibm.wala.cast.python.util.Util.getFunction;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -8,6 +10,7 @@ import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -36,8 +39,16 @@ public class TensorCall extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    throw new UnsupportedOperationException(
-        "Modeling for internal tensor constructor " + this.getSource() + " is missing.");
+    if (getFunction(source).equals(NDARRAY.getDeclaringClass())) {
+      return Collections.emptySet();
+    }
+
+    OrdinalSet<InstanceKey> opPointsToSet =
+        this.getArgumentPointsToSet(builder, Parameters.OP.getIndex(), Parameters.OP.getName());
+    if (opPointsToSet.isEmpty()) {
+      return Collections.emptySet();
+    }
+    return this.getShapesOfValue(builder, opPointsToSet);
   }
 
   @Override
@@ -48,11 +59,14 @@ public class TensorCall extends TensorGenerator {
 
   @Override
   protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
-    int valNum = this.getArgumentValueNumber(builder, DTYPE.getIndex(), DTYPE.getName(), true);
+    int valNum =
+        this.getArgumentValueNumber(
+            builder, this.getDTypeParameterPosition(), this.getDTypeParameterName(), true);
     if (valNum <= 0) return this.getDefaultDTypes(builder);
 
     OrdinalSet<InstanceKey> pointsToSet =
-        this.getArgumentPointsToSet(builder, DTYPE.getIndex(), DTYPE.getName());
+        this.getArgumentPointsToSet(
+            builder, this.getDTypeParameterPosition(), this.getDTypeParameterName());
 
     if (pointsToSet == null || pointsToSet.isEmpty()) return this.getDefaultDTypes(builder);
 
@@ -61,21 +75,33 @@ public class TensorCall extends TensorGenerator {
 
   @Override
   protected int getShapeParameterPosition() {
+    if (getFunction(source).equals(NDARRAY.getDeclaringClass())) {
+      return 0;
+    }
     return UNDEFINED_PARAMETER_POSITION;
   }
 
   @Override
   protected String getShapeParameterName() {
+    if (getFunction(source).equals(NDARRAY.getDeclaringClass())) {
+      return "shape";
+    }
     return null;
   }
 
   @Override
   protected int getDTypeParameterPosition() {
+    if (getFunction(source).equals(NDARRAY.getDeclaringClass())) {
+      return 1;
+    }
     return DTYPE.getIndex();
   }
 
   @Override
   protected String getDTypeParameterName() {
+    if (getFunction(source).equals(NDARRAY.getDeclaringClass())) {
+      return "dtype";
+    }
     return DTYPE.getName();
   }
 }

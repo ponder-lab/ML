@@ -1,14 +1,20 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARRAY_OPS_ZEROS;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT_OP_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FIELD_REFERENCE_TO_DTYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NDARRAY_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_FACTORY_OPS_CONSTANT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_MATH_OPS_RANGE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VARIABLES_VARIABLE;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
@@ -381,13 +387,70 @@ public abstract class TensorGenerator {
           }
         } else if (reference.equals(TENSOR_TYPE)
             || reference.equals(CONVERT_TO_TENSOR_TYPE)
-            || reference.equals(NDARRAY_TYPE)) {
-          // Already a tensor, do nothing. Shapes will flow via the dataflow graph.
+            || reference.equals(NDARRAY_TYPE)
+            || reference.equals(CONSTANT_OP_CONSTANT)
+            || reference.equals(ARRAY_OPS_ZEROS)
+            || reference.equals(VARIABLES_VARIABLE)
+            || reference.equals(SPARSE_TENSOR_TYPE)
+            || reference.equals(RAGGED_FACTORY_OPS_CONSTANT)
+            || reference.equals(RAGGED_MATH_OPS_RANGE)) {
+          // If the value is a tensor, we attempt to find the generator that created it and ask for
+          // its shape.
           LOGGER.fine(
-              "Encountered " + reference.getName() + ". Shape will flow via dataflow graph.");
+              "Encountered "
+                  + reference.getName()
+                  + ". Attempting to retrieve shape from producer.");
+          ret.addAll(getShapesFromTensor(builder, asin));
         } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
       } else throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
 
+    return ret;
+  }
+
+  private Set<List<Dimension<?>>> getShapesFromTensor(
+      PropagationCallGraphBuilder builder, AllocationSiteInNode asin) {
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    CGNode readDataNode = asin.getNode();
+
+    // 1. read_data is called by the operation's 'do' method.
+    Iterator<CGNode> doNodes = builder.getCallGraph().getPredNodes(readDataNode);
+    while (doNodes.hasNext()) {
+      CGNode doNode = doNodes.next();
+
+      // 2. Find the instruction in 'do' that called 'read_data'.
+      // We use the context of the callee (readDataNode) to identify the specific call site.
+      CallString cs = (CallString) readDataNode.getContext().get(CALL_STRING);
+      if (cs != null && cs.getCallSiteRefs().length > 0) {
+        CallSiteReference readDataSite = cs.getCallSiteRefs()[0];
+        IMethod callerMethod = cs.getMethods()[0];
+
+        if (doNode.getMethod().equals(callerMethod)) {
+          SSAAbstractInvokeInstruction[] calls = doNode.getIR().getCalls(readDataSite);
+          for (SSAAbstractInvokeInstruction call : calls) {
+            // Construct a source for the result of this call (which is the tensor object).
+            if (call.getNumberOfDefs() > 0) {
+              int def = call.getDef();
+              PointerKey defKey =
+                  builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(doNode, def);
+              PointsToSetVariable defSource =
+                  builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
+
+              // Instantiate the generator for this source.
+              try {
+                TensorGenerator generator = TensorGeneratorFactory.getGenerator(defSource);
+                if (generator != null) {
+                  LOGGER.fine("Delegating shape inference to: " + generator);
+                  ret.addAll(generator.getShapes(builder));
+                }
+              } catch (IllegalArgumentException e) {
+                // Fallback or ignore if no generator found (e.g. for unknown ops).
+                LOGGER.fine("No generator found for tensor producer: " + call);
+              }
+            }
+          }
+        }
+      }
+    }
     return ret;
   }
 
@@ -653,14 +716,72 @@ public abstract class TensorGenerator {
           }
         } else if (reference.equals(TENSOR_TYPE)
             || reference.equals(CONVERT_TO_TENSOR_TYPE)
-            || reference.equals(NDARRAY_TYPE)) {
-          // Already a tensor, do nothing. DTypes will flow via the dataflow graph.
+            || reference.equals(NDARRAY_TYPE)
+            || reference.equals(CONSTANT_OP_CONSTANT)
+            || reference.equals(ARRAY_OPS_ZEROS)
+            || reference.equals(VARIABLES_VARIABLE)
+            || reference.equals(SPARSE_TENSOR_TYPE)
+            || reference.equals(RAGGED_FACTORY_OPS_CONSTANT)
+            || reference.equals(RAGGED_MATH_OPS_RANGE)) {
+          // If the value is a tensor, we attempt to find the generator that created it and ask for
+          // its dtype.
           LOGGER.fine(
-              "Encountered " + reference.getName() + ". DType will flow via dataflow graph.");
+              "Encountered "
+                  + reference.getName()
+                  + ". Attempting to retrieve dtype from producer.");
+          ret.addAll(getDTypesFromTensor(builder, asin));
         } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
       } else throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
     }
 
+    return ret;
+  }
+
+  private Set<DType> getDTypesFromTensor(
+      PropagationCallGraphBuilder builder, AllocationSiteInNode asin) {
+    Set<DType> ret = EnumSet.noneOf(DType.class);
+    CGNode readDataNode = asin.getNode();
+
+    // Trace back to the user-level call that invoked this generator.
+    // 1. read_data is called by the operation's 'do' method.
+    Iterator<CGNode> doNodes = builder.getCallGraph().getPredNodes(readDataNode);
+    while (doNodes.hasNext()) {
+      CGNode doNode = doNodes.next();
+
+      // 2. Find the instruction in 'do' that called 'read_data'.
+      // We use the context of the callee (readDataNode) to identify the specific call site.
+      CallString cs = (CallString) readDataNode.getContext().get(CALL_STRING);
+      if (cs != null && cs.getCallSiteRefs().length > 0) {
+        CallSiteReference readDataSite = cs.getCallSiteRefs()[0];
+        IMethod callerMethod = cs.getMethods()[0];
+
+        if (doNode.getMethod().equals(callerMethod)) {
+          SSAAbstractInvokeInstruction[] calls = doNode.getIR().getCalls(readDataSite);
+          for (SSAAbstractInvokeInstruction call : calls) {
+            // Construct a source for the result of this call (which is the tensor object).
+            if (call.getNumberOfDefs() > 0) {
+              int def = call.getDef();
+              PointerKey defKey =
+                  builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(doNode, def);
+              PointsToSetVariable defSource =
+                  builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
+
+              // Instantiate the generator for this source.
+              try {
+                TensorGenerator generator = TensorGeneratorFactory.getGenerator(defSource);
+                if (generator != null) {
+                  LOGGER.fine("Delegating dtype inference to: " + generator);
+                  ret.addAll(generator.getDTypes(builder));
+                }
+              } catch (IllegalArgumentException e) {
+                // Fallback or ignore if no generator found (e.g. for unknown ops).
+                LOGGER.fine("No generator found for tensor producer: " + call);
+              }
+            }
+          }
+        }
+      }
+    }
     return ret;
   }
 
