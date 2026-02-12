@@ -101,6 +101,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               TypeName.string2TypeName("Ltensorflow/functions/set_shape")),
           AstMethodReference.fnSelector);
 
+  private static final MethodReference convert_to_tensor =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/convert_to_tensor")),
+          AstMethodReference.fnSelector);
+
   private static final MethodReference ENUMERATE =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
@@ -115,11 +122,22 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
   private final Map<PointerKey, AnalysisError> errorLog = HashMapFactory.make();
 
+  /**
+   * Identifies the dataflow sources for tensor analysis.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} containing analysis information.
+   * @param dataflow The graph of {@link PointsToSetVariable}s representing the pointer analysis
+   *     system's constraint graph, where nodes are variables (points-to sets) and edges represent
+   *     data flow.
+   * @return A {@link Set} of {@link PointsToSetVariable}s that are considered tensor dataflow
+   *     sources.
+   */
   private static Set<PointsToSetVariable> getDataflowSources(
-      Graph<PointsToSetVariable> dataflow,
-      CallGraph callGraph,
-      PointerAnalysis<InstanceKey> pointerAnalysis) {
+      PropagationCallGraphBuilder builder, Graph<PointsToSetVariable> dataflow) {
     Set<PointsToSetVariable> sources = HashSetFactory.make();
+    CallGraph callGraph = builder.getCallGraph();
+    PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+
     for (PointsToSetVariable src : dataflow) {
       PointerKey k = src.getPointerKey();
 
@@ -257,7 +275,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               if (iteratorDef != null && iteratorDef.getNumberOfUses() > 1) {
                 boolean added =
                     processInstructionInterprocedurally(
-                        iteratorDef, iteratorDef.getDef(), node, src, sources, pointerAnalysis);
+                        iteratorDef, iterator, node, src, sources, pointerAnalysis);
 
                 ret |= added;
 
@@ -664,13 +682,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         SlowSparseNumberedGraph.duplicate(
             builder.getPropagationSystem().getFlowGraphIncludingImplicitConstraints());
 
-    Set<PointsToSetVariable> sources =
-        getDataflowSources(dataflow, builder.getCallGraph(), builder.getPointerAnalysis());
+    Set<PointsToSetVariable> sources = getDataflowSources(builder, dataflow);
 
-    TensorType mnistData = TensorType.mnistInput();
-    Map<PointsToSetVariable, TensorType> init = HashMapFactory.make();
+    Map<PointsToSetVariable, Set<TensorType>> init = HashMapFactory.make();
 
-    for (PointsToSetVariable v : sources) init.put(v, mnistData);
+    for (PointsToSetVariable v : sources) init.put(v, getTensorTypes(v, builder));
 
     Map<PointsToSetVariable, TensorType> placeholders = null;
     try {
@@ -681,7 +697,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     logger.fine("Placeholders: " + placeholders);
 
     for (Map.Entry<PointsToSetVariable, TensorType> e : placeholders.entrySet())
-      init.put(e.getKey(), e.getValue());
+      init.put(e.getKey(), Set.of(e.getValue()));
 
     Map<PointsToSetVariable, TensorType> setCalls = HashMapFactory.make();
     Map<PointsToSetVariable, TensorType> set_shapes = getShapeSourceCalls(set_shape, builder, 1);
@@ -710,6 +726,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       throw new RuntimeException("Error while processing reshape calls.", e);
     }
 
+    handlePassThroughOp(builder, dataflow, convert_to_tensor, 1);
+
     Set<PointsToSetVariable> conv2ds = getKeysDefinedByCall(conv2d, builder);
 
     Set<PointsToSetVariable> conv3ds = getKeysDefinedByCall(conv3d, builder);
@@ -720,6 +738,29 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     tt.solve(new NullProgressMonitor());
 
     return tt;
+  }
+
+  /**
+   * Returns the set of possible {@link TensorType}s that the given {@link PointsToSetVariable} can
+   * take on.
+   *
+   * @param source The dataflow source to analyze.
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph and pointer
+   *     analysis.
+   * @return A set of {@link TensorType}s that the given {@link PointsToSetVariable} can take on.
+   *     Empty set is returned if the possible tensor types cannot be determined.
+   */
+  private Set<TensorType> getTensorTypes(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    logger.fine("Getting tensor types for source: " + source + ".");
+
+    TensorGenerator generator = TensorGeneratorFactory.getGenerator(source);
+    logger.fine("Using tensor generator: " + generator + ".");
+
+    Set<TensorType> tensorTypes = generator.getTensorTypes(builder);
+    logger.fine(() -> "Found tensor types: " + tensorTypes + ".");
+
+    return tensorTypes;
   }
 
   private Map<PointsToSetVariable, TensorType> handleShapeSourceOp(
@@ -745,6 +786,26 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       if (!system.isImplicit(from)) dataflow.addEdge(system.findOrCreatePointsToSet(from), to);
     }
     return reshapeTypes;
+  }
+
+  private void handlePassThroughOp(
+      PropagationCallGraphBuilder builder,
+      Graph<PointsToSetVariable> dataflow,
+      MethodReference op,
+      int inputOperand) {
+    Set<PointsToSetVariable> lvals = getKeysDefinedByCall(op, builder);
+    for (PointsToSetVariable to : lvals) {
+      assert to.getPointerKey() instanceof LocalPointerKey;
+      int toVn = ((LocalPointerKey) to.getPointerKey()).getValueNumber();
+      CGNode srcNode = ((LocalPointerKey) to.getPointerKey()).getNode();
+      int srcVn = srcNode.getDU().getDef(toVn).getUse(inputOperand);
+      PointerKey from =
+          builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(srcNode, srcVn);
+
+      final PropagationSystem system = builder.getPropagationSystem();
+
+      if (!system.isImplicit(from)) dataflow.addEdge(system.findOrCreatePointsToSet(from), to);
+    }
   }
 
   public Map<PointerKey, AnalysisError> getErrors() {

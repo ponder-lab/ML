@@ -31,6 +31,8 @@ class SequentialModel(tf.keras.Model):
 
 
 input_data = tf.random.uniform([20, 28, 28])
+assert input_data.shape == (20, 28, 28)
+assert input_data.dtype == tf.float32
 
 model = SequentialModel()
 result = model(input_data)

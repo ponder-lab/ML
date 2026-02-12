@@ -6,4 +6,8 @@ def add(a, b):
     return a + b
 
 
-c = add(tf.ones([1, 2]), ones([2, 2]))  #  [[2., 2.], [2., 2.]]
+x = tf.ones([1, 2])
+assert x.shape.as_list() == [1, 2]
+y = ones([2, 2])
+assert y.shape.as_list() == [2, 2]
+c = add(x, y)  #  [[2., 2.], [2., 2.]]

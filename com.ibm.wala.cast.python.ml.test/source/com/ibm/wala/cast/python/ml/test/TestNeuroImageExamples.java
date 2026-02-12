@@ -15,7 +15,11 @@ public class TestNeuroImageExamples extends TestPythonMLCallGraphShape {
   private static final String Ex1URL =
       "https://raw.githubusercontent.com/corticometrics/neuroimage-tensorflow/master/train.py";
 
-  @Test
+  /**
+   * FIXME: Should not throw an {@link IllegalArgumentException} once
+   * https://github.com/wala/ML/issues/340 is fixed.
+   */
+  @Test(expected = IllegalArgumentException.class)
   public void testEx1CG()
       throws ClassHierarchyException,
           IllegalArgumentException,

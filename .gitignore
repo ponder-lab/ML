@@ -73,8 +73,7 @@ maven_build_stats.csv
 
 bin/
 
-# gemini-cli settings
-.gemini/
+
 
 # GitHub App credentials
 gha-creds-*.json

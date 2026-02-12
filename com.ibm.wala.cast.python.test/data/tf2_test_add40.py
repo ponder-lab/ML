@@ -11,6 +11,9 @@ def func():
     b = tf.constant([[1.0, 1.0], [0.0, 1.0]])
     c = tf.matmul(a, b)
     tensor = tf.Tensor(c.op, 0, tf.float32)
+    assert isinstance(tensor, tf.Tensor)
+    assert tensor.dtype == tf.float32
+    assert tensor.shape == (2, 2)
     func2(tensor)
 
 
