@@ -11,4 +11,8 @@ x = tf.ragged.constant([[1.0, 2.0], [3.0]])
 with tf.GradientTape() as g:
     g.watch(x)
     y = tf.multiply(x, x)
-f(g.gradient(y, x))
+
+grad = g.gradient(y, x)
+assert grad.shape == (2, None)
+assert grad.dtype == tf.float32
+f(grad)
