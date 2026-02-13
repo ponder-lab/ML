@@ -489,52 +489,58 @@ public abstract class TensorGenerator {
         }
       }
 
+      // Check if it matches a known DType field (e.g., tf.float32).
+      boolean found = false;
+      if (instanceKey instanceof AllocationSiteInNode) {
+        CGNode importNode = ((AllocationSiteInNode) instanceKey).getNode();
+
+        if (importNode != null) {
+          LOGGER.fine("Found import node of interest: " + importNode + ".");
+          InstanceKey tensorFlowIK =
+              pointerAnalysis
+                  .getHeapModel()
+                  .getInstanceKeyForAllocation(importNode, NewSiteReference.make(0, TENSORFLOW));
+
+          // Check dtype literals.
+          for (Entry<FieldReference, DType> entry : FIELD_REFERENCE_TO_DTYPE.entrySet()) {
+            FieldReference fieldRef = entry.getKey();
+            DType dtype = entry.getValue();
+            IField field = builder.getClassHierarchy().resolveField(fieldRef);
+
+            if (field != null) {
+              PointerKey pk =
+                  pointerAnalysis.getHeapModel().getPointerKeyForInstanceField(tensorFlowIK, field);
+
+              OrdinalSet<InstanceKey> pts = pointerAnalysis.getPointsToSet(pk);
+              if (pts != null) {
+                for (InstanceKey ik : pts)
+                  if (ik.equals(instanceKey)) {
+                    ret.add(dtype);
+                    LOGGER.info(
+                        "Found dtype: "
+                            + dtype
+                            + " for source: "
+                            + this.getSource()
+                            + " from dType: "
+                            + instanceKey
+                            + ".");
+                    found = true;
+                    break;
+                  }
+              }
+            }
+            if (found) break;
+          }
+        }
+      }
+
+      if (found) continue;
+
       IClass concreteType = instanceKey.getConcreteType();
       TypeReference typeReference = concreteType.getReference();
 
       if (typeReference.equals(TensorFlowTypes.D_TYPE)) {
-        // we have a dtype.
-        boolean found = false;
-        CGNode importNode = null;
-
-        if (instanceKey instanceof AllocationSiteInNode)
-          importNode = ((AllocationSiteInNode) instanceKey).getNode();
-
-        if (importNode == null)
-          throw new IllegalStateException("Cannot find import node for DType: " + instanceKey);
-
-        LOGGER.fine("Found import node of interest: " + importNode + ".");
-
-        InstanceKey tensorFlowIK =
-            pointerAnalysis
-                .getHeapModel()
-                .getInstanceKeyForAllocation(importNode, NewSiteReference.make(0, TENSORFLOW));
-
-        // Check dtype literals.
-        for (Entry<FieldReference, DType> entry : FIELD_REFERENCE_TO_DTYPE.entrySet()) {
-          FieldReference fieldRef = entry.getKey();
-          DType dtype = entry.getValue();
-          IField field = builder.getClassHierarchy().resolveField(fieldRef);
-
-          PointerKey pk =
-              pointerAnalysis.getHeapModel().getPointerKeyForInstanceField(tensorFlowIK, field);
-
-          for (InstanceKey ik : pointerAnalysis.getPointsToSet(pk))
-            if (ik.equals(instanceKey)) {
-              ret.add(dtype);
-              LOGGER.info(
-                  "Found dtype: "
-                      + dtype
-                      + " for source: "
-                      + this.getSource()
-                      + " from dType: "
-                      + instanceKey
-                      + ".");
-              found = true;
-            }
-        }
-
-        if (!found) throw new IllegalStateException("Unknown dtype: " + instanceKey + ".");
+        throw new IllegalStateException("Unknown dtype: " + instanceKey + ".");
       } else if (instanceKey instanceof ConstantKey
           && ((ConstantKey<?>) instanceKey).getValue() instanceof String) {
         String value = (String) ((ConstantKey<?>) instanceKey).getValue();
