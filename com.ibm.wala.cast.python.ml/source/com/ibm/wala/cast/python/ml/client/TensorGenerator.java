@@ -226,6 +226,13 @@ public abstract class TensorGenerator {
 
             ret.add(asList(dimensions));
           }
+      } else if (reference.equals(CONSTANT_OP_CONSTANT)) {
+        // We have a constant tensor. We recurse into its value field.
+        IField valueField =
+            builder.getClassHierarchy().resolveField(TensorFlowTypes.CONSTANT_VALUE);
+        PointerKey valuePK = builder.getPointerKeyForInstanceField(asin, valueField);
+        OrdinalSet<InstanceKey> valuePts = pointerAnalysis.getPointsToSet(valuePK);
+        ret.addAll(this.getShapesFromShapeArgument(builder, valuePts));
       } else
         throw new IllegalStateException(
             "Expected a " + list + " or " + tuple + " for the shape, but got: " + reference + ".");
