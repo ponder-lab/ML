@@ -7,6 +7,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FIELD_REFERENCE_TO_DTYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LINALG_OPS_EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NDARRAY_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_FACTORY_OPS_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_MATH_OPS_RANGE;
@@ -393,7 +394,8 @@ public abstract class TensorGenerator {
             || reference.equals(VARIABLES_VARIABLE)
             || reference.equals(SPARSE_TENSOR_TYPE)
             || reference.equals(RAGGED_FACTORY_OPS_CONSTANT)
-            || reference.equals(RAGGED_MATH_OPS_RANGE)) {
+            || reference.equals(RAGGED_MATH_OPS_RANGE)
+            || reference.equals(LINALG_OPS_EYE)) {
           // If the value is a tensor, we attempt to find the generator that created it and ask for
           // its shape.
           LOGGER.fine(
@@ -722,7 +724,8 @@ public abstract class TensorGenerator {
             || reference.equals(VARIABLES_VARIABLE)
             || reference.equals(SPARSE_TENSOR_TYPE)
             || reference.equals(RAGGED_FACTORY_OPS_CONSTANT)
-            || reference.equals(RAGGED_MATH_OPS_RANGE)) {
+            || reference.equals(RAGGED_MATH_OPS_RANGE)
+            || reference.equals(LINALG_OPS_EYE)) {
           // If the value is a tensor, we attempt to find the generator that created it and ask for
           // its dtype.
           LOGGER.fine(
