@@ -73,9 +73,13 @@ public class ElementWiseOperation extends ZerosLike {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
     Set<List<Dimension<?>>> xShapes =
-        this.getShapes(builder, this.getXArgumentValueNumber(builder));
+        this.getShapesOfValue(
+            builder,
+            this.getArgumentPointsToSet(builder, getXParameterPosition(), getXParameterName()));
     Set<List<Dimension<?>>> yShapes =
-        this.getShapes(builder, this.getYArgumentValueNumber(builder));
+        this.getShapesOfValue(
+            builder,
+            this.getArgumentPointsToSet(builder, getYParameterPosition(), getYParameterName()));
 
     for (List<Dimension<?>> xShape : xShapes)
       for (List<Dimension<?>> yShape : yShapes)

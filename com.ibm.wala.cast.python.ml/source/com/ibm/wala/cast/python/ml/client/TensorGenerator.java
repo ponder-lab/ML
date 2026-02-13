@@ -230,7 +230,7 @@ public abstract class TensorGenerator {
         // We have a constant tensor. We recurse into its value field.
         IField valueField =
             builder.getClassHierarchy().resolveField(TensorFlowTypes.CONSTANT_VALUE);
-        PointerKey valuePK = builder.getPointerKeyForInstanceField(asin, valueField);
+        PointerKey valuePK = builder.getPointerKeyForInstanceField(instanceKey, valueField);
         OrdinalSet<InstanceKey> valuePts = pointerAnalysis.getPointsToSet(valuePK);
         ret.addAll(this.getShapesFromShapeArgument(builder, valuePts));
       } else

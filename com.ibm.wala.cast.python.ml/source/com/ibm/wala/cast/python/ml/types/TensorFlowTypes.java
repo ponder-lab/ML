@@ -91,6 +91,9 @@ public class TensorFlowTypes extends PythonTypes {
   public static final FieldReference CONSTANT_VALUE =
       FieldReference.findOrCreate(CONSTANT_OP_CONSTANT, findOrCreateAsciiAtom("value"), Root);
 
+  public static final FieldReference CONSTANT_DTYPE =
+      FieldReference.findOrCreate(CONSTANT_OP_CONSTANT, findOrCreateAsciiAtom("dtype"), Root);
+
   public static final TypeReference SPARSE_TENSOR_TYPE =
       TypeReference.findOrCreate(
           pythonLoader,

@@ -3,6 +3,8 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.ml.client.RaggedFromNestedValueRowIds.Parameters.FLAT_VALUES;
 import static com.ibm.wala.cast.python.ml.client.RaggedFromNestedValueRowIds.Parameters.NESTED_NROWS;
 import static com.ibm.wala.cast.python.ml.client.RaggedFromNestedValueRowIds.Parameters.NESTED_VALUE_ROWIDS;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT_OP_CONSTANT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT_VALUE;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
@@ -100,7 +102,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
             builder, this.getNestedNrowsParameterPosition(), getNestedNrowsParameterName());
 
     if (nestedNrowsPts != null && !nestedNrowsPts.isEmpty()) {
-      for (InstanceKey ik : nestedNrowsPts) {
+      for (InstanceKey ik : getEffectiveInstances(builder, nestedNrowsPts)) {
         if (ik instanceof AllocationSiteInNode) {
           AllocationSiteInNode asin = getAllocationSiteInNode(ik);
           TypeReference reference = asin.getConcreteType().getReference();
@@ -112,11 +114,12 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
             if (f != null) {
               PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
               OrdinalSet<InstanceKey> firstElemPts = pointerAnalysis.getPointsToSet(pk);
-              for (InstanceKey valKey : firstElemPts) {
+              for (InstanceKey valKey : getEffectiveInstances(builder, firstElemPts)) {
                 if (valKey instanceof ConstantKey) {
                   Object val = ((ConstantKey<?>) valKey).getValue();
                   if (val instanceof Integer) nrowsArgs.add(((Integer) val).longValue());
                   else if (val instanceof Long) nrowsArgs.add((Long) val);
+                  else if (val instanceof String) nrowsArgs.add(Long.parseLong((String) val));
                 }
               }
             }
@@ -136,7 +139,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
     Set<Integer> possibleK = HashSetFactory.make();
 
     if (nestedValueRowIdsPts != null && !nestedValueRowIdsPts.isEmpty()) {
-      for (InstanceKey ik : nestedValueRowIdsPts) {
+      for (InstanceKey ik : getEffectiveInstances(builder, nestedValueRowIdsPts)) {
         if (ik instanceof AllocationSiteInNode) {
           AllocationSiteInNode asin = getAllocationSiteInNode(ik);
           TypeReference reference = asin.getConcreteType().getReference();
@@ -163,7 +166,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
                   Long max = null;
                   boolean foundAny = false;
 
-                  for (InstanceKey innerIk : firstElemPts) {
+                  for (InstanceKey innerIk : getEffectiveInstances(builder, firstElemPts)) {
                     if (innerIk instanceof AllocationSiteInNode) {
                       AllocationSiteInNode innerAsin = getAllocationSiteInNode(innerIk);
                       TypeReference innerRef = innerAsin.getConcreteType().getReference();
@@ -186,14 +189,15 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
                             PointerKey valPk =
                                 builder.getPointerKeyForInstanceField(innerAsin, innerF);
                             OrdinalSet<InstanceKey> valPts = pointerAnalysis.getPointsToSet(valPk);
-                            for (InstanceKey valKey : valPts) {
+                            for (InstanceKey valKey : getEffectiveInstances(builder, valPts)) {
                               if (valKey instanceof ConstantKey) {
                                 Object val = ((ConstantKey<?>) valKey).getValue();
                                 long lVal = -1;
                                 if (val instanceof Integer) lVal = ((Integer) val).longValue();
                                 else if (val instanceof Long) lVal = (Long) val;
+                                else if (val instanceof String) lVal = Long.parseLong((String) val);
 
-                                if (val instanceof Integer || val instanceof Long) {
+                                if (lVal >= 0) {
                                   if (max == null || lVal > max) max = lVal;
                                   foundAny = true;
                                 }
@@ -273,7 +277,28 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
       throw new IllegalStateException("Could not calculate shapes for RaggedFromNestedValueRowIds");
     }
 
+    if (ret.isEmpty()) {
+      throw new IllegalStateException("Could not calculate shapes for RaggedFromNestedValueRowIds");
+    }
+
     return ret;
+  }
+
+  private Set<InstanceKey> getEffectiveInstances(
+      PropagationCallGraphBuilder builder, Iterable<InstanceKey> pts) {
+    Set<InstanceKey> result = HashSetFactory.make();
+    for (InstanceKey ik : pts) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      if (asin != null && asin.getConcreteType().getReference().equals(CONSTANT_OP_CONSTANT)) {
+        IField f = builder.getClassHierarchy().resolveField(CONSTANT_VALUE);
+        PointerKey pk = builder.getPointerKeyForInstanceField(ik, f);
+        OrdinalSet<InstanceKey> valuePts = builder.getPointerAnalysis().getPointsToSet(pk);
+        result.addAll(getEffectiveInstances(builder, valuePts));
+      } else {
+        result.add(ik);
+      }
+    }
+    return result;
   }
 
   @Override

@@ -469,8 +469,7 @@
     <package name="tensorflow/python/framework/constant_op">
       <class name="constant" allocatable="true">
         <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/constant_op/constant" />
-          <return value="x" />
+          <return value="arg0" />
         </method>
       </class>
     </package>
@@ -609,8 +608,7 @@
       </class>
       <class name="from_nested_value_rowids" allocatable="true">
         <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/ragged/ragged_tensor/from_nested_value_rowids" />
-          <return value="x" />
+          <return value="arg0" />
         </method>
       </class>
     </package>
@@ -698,9 +696,11 @@
           <return value="x" />
         </method>
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="value dtype shape name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <putfield class="Ltensorflow/python/framework/constant_op/constant" field="value" fieldType="LRoot" ref="x" value="arg1" />
-          <return value="x" />
+          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="res" />
+          <call class="Ltensorflow/python/framework/constant_op/constant" name="read_data" descriptor="()LRoot;" type="virtual" arg0="res" numArgs="1" />
+          <putfield class="Ltensorflow/python/framework/constant_op/constant" field="value" fieldType="LRoot" ref="res" value="arg1" />
+          <putfield class="Ltensorflow/python/framework/constant_op/constant" field="dtype" fieldType="LRoot" ref="res" value="arg2" />
+          <return value="res" />
         </method>
       </class>
       <class name="zeros" allocatable="true">
@@ -929,14 +929,11 @@
           <return value="x" />
         </method>
       </class>
-      <class name="from_nested_value_rowids" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/ragged/ragged_tensor/from_nested_value_rowids" />
-          <return value="x" />
-        </method>
+      <class name="from_nested_value_rowids">
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="flat_values nested_value_rowids nested_nrows name validate">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <return value="x" />
+          <new def="res" class="Ltensorflow/python/ops/ragged/ragged_tensor/from_nested_value_rowids" />
+          <call class="Ltensorflow/python/ops/ragged/ragged_tensor/from_nested_value_rowids" name="read_data" descriptor="()LRoot;" type="virtual" arg0="res" numArgs="1" />
+          <return value="res" />
         </method>
       </class>
       <class name="from_row_lengths" allocatable="true">
