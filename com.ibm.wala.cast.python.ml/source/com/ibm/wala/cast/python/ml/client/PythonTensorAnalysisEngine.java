@@ -244,12 +244,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
     // don't consider exceptions as a data source.
     if (instruction.getException() != vn) {
-      if (instruction
-          .getCallSite()
-          .getDeclaredTarget()
-          .getName()
-          .toString()
-          .equals(TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME)) {
+      String methodName = instruction.getCallSite().getDeclaredTarget().getName().toString();
+      if (methodName.equals(TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME) || methodName.equals("do")) {
         sources.add(src);
         logger.info("Added dataflow source from tensor generator: " + src + ".");
         ret = true;
@@ -754,13 +750,18 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
     logger.fine("Getting tensor types for source: " + source + ".");
 
-    TensorGenerator generator = TensorGeneratorFactory.getGenerator(source);
-    logger.fine("Using tensor generator: " + generator + ".");
+    try {
+      TensorGenerator generator = TensorGeneratorFactory.getGenerator(source, builder);
+      logger.fine("Using tensor generator: " + generator + ".");
 
-    Set<TensorType> tensorTypes = generator.getTensorTypes(builder);
-    logger.fine(() -> "Found tensor types: " + tensorTypes + ".");
+      Set<TensorType> tensorTypes = generator.getTensorTypes(builder);
+      logger.fine(() -> "Found tensor types: " + tensorTypes + ".");
 
-    return tensorTypes;
+      return tensorTypes;
+    } catch (IllegalArgumentException e) {
+      logger.info("Source " + source + " is not a recognized tensor generator: " + e.getMessage());
+      return HashSetFactory.make();
+    }
   }
 
   private Map<PointsToSetVariable, TensorType> handleShapeSourceOp(

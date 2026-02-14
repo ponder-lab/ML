@@ -446,7 +446,7 @@ public abstract class TensorGenerator {
 
               // Instantiate the generator for this source.
               try {
-                TensorGenerator generator = TensorGeneratorFactory.getGenerator(defSource);
+                TensorGenerator generator = TensorGeneratorFactory.getGenerator(defSource, builder);
                 if (generator != null) {
                   LOGGER.fine("Delegating shape inference to: " + generator);
                   ret.addAll(generator.getShapes(builder));
@@ -784,7 +784,7 @@ public abstract class TensorGenerator {
 
               // Instantiate the generator for this source.
               try {
-                TensorGenerator generator = TensorGeneratorFactory.getGenerator(defSource);
+                TensorGenerator generator = TensorGeneratorFactory.getGenerator(defSource, builder);
                 if (generator != null) {
                   LOGGER.fine("Delegating dtype inference to: " + generator);
                   ret.addAll(generator.getDTypes(builder));
@@ -806,7 +806,13 @@ public abstract class TensorGenerator {
   }
 
   protected CGNode getNode() {
-    return ((LocalPointerKey) this.getSource().getPointerKey()).getNode();
+    PointerKey k = this.getSource().getPointerKey();
+    if (k instanceof LocalPointerKey) {
+      return ((LocalPointerKey) k).getNode();
+    } else if (k instanceof com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey) {
+      return ((com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey) k).getNode();
+    }
+    throw new IllegalArgumentException("Unsupported PointerKey type: " + k.getClass());
   }
 
   @Override

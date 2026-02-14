@@ -382,37 +382,23 @@
       </class>
       <class name="add" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/add -->
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/math/add" />
-          <return value="x" />
-        </method>
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x y name">
-          <!-- Even though tf.add() isn't a tensor "generator," it can convert its non-tensor arguments to tensors. -->
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="xx" />
-          <return value="xx" />
+          <new def="res" class="Ltensorflow/math/add" />
+          <return value="res" />
         </method>
       </class>
       <class name="multiply" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/multiply -->
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/math/multiply" />
-          <return value="x" />
-        </method>
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x y name">
-          <!-- Even though tf.multiply() isn't a tensor "generator," it can convert its non-tensor arguments to tensors. -->
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="xx" />
-          <return value="xx" />
+          <new def="res" class="Ltensorflow/math/multiply" />
+          <return value="res" />
         </method>
       </class>
       <class name="reduce_mean" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/reduce_mean -->
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="y" />
-          <return value="y" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="reduce_sum" allocatable="true">
@@ -614,13 +600,9 @@
     </package>
     <package name="tensorflow/functions">
       <class name="matmul" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
         <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self a b transpose_a transpose_b adjoint_a adjoint_b a_is_sparse b_is_sparse name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="self" numArgs="1" def="x" />
-          <return value="x" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="AdamOptimizer" allocatable="true">
@@ -671,46 +653,29 @@
         </method>
       </class>
       <class name="ones" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self shape dtype name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="self" numArgs="1" def="x" />
-          <return value="x" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="Variable" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/variables/Variable" />
-          <return value="x" />
-        </method>
         <method name="do" descriptor="()LRoot;" numArgs="13" paramNames="self initial_value trainable validate_shape caching_device name variable_def dtype import_scope constraint synchronization aggregation shape">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <return value="x" />
+          <new def="res" class="Ltensorflow/python/ops/variables/Variable" />
+          <return value="res" />
         </method>
       </class>
       <class name="constant" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/constant_op/constant" />
-          <return value="x" />
-        </method>
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="value dtype shape name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="res" />
-          <call class="Ltensorflow/python/framework/constant_op/constant" name="read_data" descriptor="()LRoot;" type="virtual" arg0="res" numArgs="1" />
+          <new def="res" class="Ltensorflow/python/framework/constant_op/constant" />
           <putfield class="Ltensorflow/python/framework/constant_op/constant" field="value" fieldType="LRoot" ref="res" value="arg1" />
           <putfield class="Ltensorflow/python/framework/constant_op/constant" field="dtype" fieldType="LRoot" ref="res" value="arg2" />
           <return value="res" />
         </method>
       </class>
       <class name="zeros" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/array_ops/zeros" />
-          <return value="x" />
-        </method>
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="shape dtype name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <return value="x" />
+          <new def="res" class="Ltensorflow/python/ops/array_ops/zeros" />
+          <return value="res" />
         </method>
       </class>
       <class name="SparseTensor" allocatable="true">
