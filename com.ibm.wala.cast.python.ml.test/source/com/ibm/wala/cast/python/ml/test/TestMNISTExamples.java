@@ -91,11 +91,7 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
     process(Ex2URL);
   }
 
-  /**
-   * FIXME: Should not throw an {@link IllegalArgumentException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testEx2Tensors()
       throws IllegalArgumentException, CancelException, IOException, URISyntaxException {
     checkTensorOps(
@@ -111,11 +107,15 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
           String out =
               "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of "
                   + FLOAT32.name().toLowerCase()
+                  + "}, {[D:Constant,1, D:Constant,28, D:Constant,28, D:Constant,1] of "
+                  + FLOAT32.name().toLowerCase()
                   + "}]";
           checkTensorOp(cgBuilder, CG, result, "reshape", in, out);
 
           in =
               "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of "
+                  + FLOAT32.name().toLowerCase()
+                  + "}, {[D:Constant,1, D:Constant,28, D:Constant,28, D:Constant,1] of "
                   + FLOAT32.name().toLowerCase()
                   + "}]";
           checkTensorOp(cgBuilder, CG, result, "conv2d", in, null);
@@ -211,11 +211,7 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
             });
   }
 
-  /**
-   * FIXME: Should not throw an {@link IllegalArgumentException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testEx3CG()
       throws ClassHierarchyException,
           IllegalArgumentException,
@@ -228,11 +224,7 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
   private static final String Ex4URL =
       "https://raw.githubusercontent.com/tensorflow/tensorflow/r1.12/tensorflow/examples/tutorials/mnist/mnist_softmax_xla.py";
 
-  /**
-   * FIXME: Should not throw an {@link IllegalArgumentException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testEx4CG()
       throws ClassHierarchyException,
           IllegalArgumentException,
@@ -245,11 +237,7 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
   private static final String Ex5URL =
       "https://raw.githubusercontent.com/tensorflow/tensorflow/r1.12/tensorflow/examples/tutorials/mnist/mnist_with_summaries.py";
 
-  /**
-   * FIXME: Should not throw an {@link IllegalArgumentException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testEx5CG()
       throws ClassHierarchyException,
           IllegalArgumentException,
@@ -262,6 +250,8 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
           String in = "[{[D:Symbolic,?, D:Constant,784] of " + FLOAT32.name().toLowerCase() + "}]";
           String out =
               "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of "
+                  + FLOAT32.name().toLowerCase()
+                  + "}, {[D:Constant,1, D:Constant,28, D:Constant,28, D:Constant,1] of "
                   + FLOAT32.name().toLowerCase()
                   + "}]";
           checkTensorOp(cgBuilder, CG, result, "reshape", in, out);

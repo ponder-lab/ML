@@ -673,7 +673,7 @@
         </method>
       </class>
       <class name="zeros" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="shape dtype name">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self shape dtype name">
           <new def="res" class="Ltensorflow/python/ops/array_ops/zeros" />
           <return value="res" />
         </method>
