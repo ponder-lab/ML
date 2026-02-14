@@ -978,6 +978,14 @@ public abstract class TensorGenerator {
    */
   protected int getArgumentValueNumber(
       PropagationCallGraphBuilder builder, int paramPos, String paramName, boolean optional) {
+    if (this.getNode().getMethod().getName().toString().equals("read_data")) {
+      // For read_data nodes, we don't have explicit arguments in the IR.
+      // Returning MAX_VALUE acts as a sentinel to bypass the "missing argument" check below
+      // and allows getDTypes/getShapes to proceed to getArgumentPointsToSet,
+      // which correctly delegates argument resolution to the caller (do).
+      return Integer.MAX_VALUE;
+    }
+
     Set<Integer> numArgs = this.getNumberOfPossiblePositionalArguments(builder);
 
     boolean keywordPresent =
