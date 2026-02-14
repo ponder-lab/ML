@@ -52,11 +52,7 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
     verifyGraphAssertions(CG, assertionsEx1);
   }
 
-  /**
-   * FIXME: Should not throw an {@link IllegalArgumentException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testEx1Tensors()
       throws IllegalArgumentException, CancelException, IOException, URISyntaxException {
     checkTensorOps(
