@@ -992,6 +992,7 @@ public abstract class TensorGenerator {
     if (cs != null) {
       OrdinalSet<InstanceKey> combinedPts = OrdinalSet.empty();
       boolean found = false;
+      boolean callAnalyzed = false;
 
       for (int i = 0; i < cs.getCallSiteRefs().length; i++) {
         CallSiteReference siteReference = cs.getCallSiteRefs()[i];
@@ -1019,6 +1020,7 @@ public abstract class TensorGenerator {
             if (!targetsThisNode) {
               continue;
             }
+            callAnalyzed = true;
 
             if (callInstr instanceof PythonInvokeInstruction) {
               PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
@@ -1056,6 +1058,9 @@ public abstract class TensorGenerator {
 
       if (found) {
         return combinedPts;
+      }
+      if (callAnalyzed) {
+        return OrdinalSet.empty();
       }
     }
 
