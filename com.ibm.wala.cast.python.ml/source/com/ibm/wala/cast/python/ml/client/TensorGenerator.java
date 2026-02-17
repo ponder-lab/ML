@@ -1261,6 +1261,8 @@ public abstract class TensorGenerator {
           PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
           int numKeywords =
               pyCallInstr.getKeywords() != null ? pyCallInstr.getKeywords().size() : 0;
+          LOGGER.finer(() -> "Keywords: " + pyCallInstr.getKeywords());
+          LOGGER.finer(() -> "Number of uses: " + pyCallInstr.getNumberOfUses());
           int numberOfPositionalParameters =
               pyCallInstr.getNumberOfUses()
                   - 1
