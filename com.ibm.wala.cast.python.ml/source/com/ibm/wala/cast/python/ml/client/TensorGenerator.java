@@ -911,6 +911,22 @@ public abstract class TensorGenerator {
     return this.getNode().getIR().getParameter(index);
   }
 
+  protected PythonInvokeInstruction getInvokeInstruction() {
+    if (this.getSource().getPointerKey() instanceof LocalPointerKey) {
+      LocalPointerKey lpk = (LocalPointerKey) this.getSource().getPointerKey();
+      if (lpk.getNode().equals(this.getNode())) {
+        int vn = lpk.getValueNumber();
+        if (vn > 0) {
+          SSAInstruction def = this.getNode().getDU().getDef(vn);
+          if (def instanceof PythonInvokeInstruction) {
+            return (PythonInvokeInstruction) def;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
   /**
    * Returns the points-to set of the argument at the specified position or with the specified name.
    *
@@ -926,6 +942,37 @@ public abstract class TensorGenerator {
 
   protected OrdinalSet<InstanceKey> getArgumentPointsToSet(
       PropagationCallGraphBuilder builder, CGNode node, int paramPos, String paramName) {
+    PythonInvokeInstruction call = getInvokeInstruction();
+    if (call != null) {
+      int argValNum = -1;
+
+      if (paramName != null) {
+        argValNum = call.getUse(paramName);
+      }
+
+      if (argValNum == -1 && paramPos >= 0) {
+        int numKeywords = call.getKeywords() != null ? call.getKeywords().size() : 0;
+        int numPosParams =
+            call.getNumberOfPositionalParameters()
+                - 1
+                - numKeywords; // Exclude function and keywords.
+
+        if (paramPos < numPosParams) {
+          argValNum = call.getUse(paramPos + 1); // Positional arguments start at index 1.
+        }
+      }
+
+      if (argValNum != -1) {
+        PointerKey argPk =
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, argValNum);
+        OrdinalSet<InstanceKey> argPts = builder.getPointerAnalysis().getPointsToSet(argPk);
+        if (argPts != null && !argPts.isEmpty()) {
+          return argPts;
+        }
+      }
+      return OrdinalSet.empty();
+    }
+
     if (node.getMethod().getName().toString().equals("read_data")) {
       OrdinalSet<InstanceKey> ret = OrdinalSet.empty();
       Iterator<CGNode> preds = builder.getCallGraph().getPredNodes(node);
@@ -981,8 +1028,12 @@ public abstract class TensorGenerator {
               }
 
               if (argValNum == -1 && paramPos >= 0) {
+                int numKeywords =
+                    pyCallInstr.getKeywords() != null ? pyCallInstr.getKeywords().size() : 0;
                 int numPosParams =
-                    pyCallInstr.getNumberOfPositionalParameters() - 1; // Exclude function.
+                    pyCallInstr.getNumberOfPositionalParameters()
+                        - 1
+                        - numKeywords; // Exclude function and keywords.
                 if (paramPos < numPosParams) {
                   argValNum =
                       pyCallInstr.getUse(paramPos + 1); // Positional arguments start at index 1.
@@ -1049,6 +1100,37 @@ public abstract class TensorGenerator {
    */
   protected int getArgumentValueNumber(
       PropagationCallGraphBuilder builder, int paramPos, String paramName, boolean optional) {
+    PythonInvokeInstruction call = getInvokeInstruction();
+    if (call != null) {
+      int argValNum = -1;
+
+      if (paramName != null) {
+        argValNum = call.getUse(paramName);
+      }
+
+      if (argValNum == -1 && paramPos >= 0) {
+        int numKeywords = call.getKeywords() != null ? call.getKeywords().size() : 0;
+        int numPosParams =
+            call.getNumberOfPositionalParameters()
+                - 1
+                - numKeywords; // Exclude function and keywords.
+        if (paramPos < numPosParams) {
+          argValNum = call.getUse(paramPos + 1); // Positional arguments start at index 1.
+        }
+      }
+
+      if (argValNum != -1) return argValNum;
+
+      if (optional) return -1;
+      else
+        throw new IllegalStateException(
+            "Cannot determine value number for parameter at position "
+                + paramPos
+                + (paramName == null ? "" : " or name " + paramName)
+                + " of "
+                + this.getSignature());
+    }
+
     if (this.getNode().getMethod().getName().toString().equals("read_data")) {
       // For read_data nodes, we don't have explicit arguments in the IR.
       // Returning MAX_VALUE acts as a sentinel to bypass the "missing argument" check below
@@ -1085,6 +1167,11 @@ public abstract class TensorGenerator {
    */
   protected boolean isKeywordArgumentPresent(
       PropagationCallGraphBuilder builder, String paramName) {
+    PythonInvokeInstruction call = getInvokeInstruction();
+    if (call != null) {
+      return call.getKeywords().contains(paramName);
+    }
+
     CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
     if (cs == null || cs.getCallSiteRefs().length == 0) return false;
 
@@ -1145,6 +1232,13 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder) {
     Set<Integer> ret = HashSetFactory.make();
 
+    PythonInvokeInstruction call = getInvokeInstruction();
+    if (call != null) {
+      int numKeywords = call.getKeywords() != null ? call.getKeywords().size() : 0;
+      ret.add(call.getNumberOfPositionalParameters() - 1 - numKeywords);
+      return ret;
+    }
+
     CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
     if (cs == null || cs.getCallSiteRefs().length == 0) return ret;
 
@@ -1164,8 +1258,12 @@ public abstract class TensorGenerator {
 
         if (callInstr instanceof PythonInvokeInstruction) {
           PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
+          int numKeywords =
+              pyCallInstr.getKeywords() != null ? pyCallInstr.getKeywords().size() : 0;
           int numberOfPositionalParameters =
-              pyCallInstr.getNumberOfPositionalParameters() - 1; // Exclude the function name.
+              pyCallInstr.getNumberOfPositionalParameters()
+                  - 1
+                  - numKeywords; // Exclude the function name and keywords.
           LOGGER.finer(
               () -> "Number of positional parameters: " + numberOfPositionalParameters + ".");
 
