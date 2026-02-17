@@ -263,6 +263,9 @@
         <new def="Tensor" class="Ltensorflow/functions/Tensor" />
         <putfield class="LRoot" field="Tensor" fieldType="LRoot" ref="x" value="Tensor" />
         <putfield class="LRoot" field="Tensor" fieldType="LRoot" ref="ops" value="Tensor" />
+        <new def="Graph" class="Ltensorflow/functions/Graph" />
+        <putfield class="LRoot" field="Graph" fieldType="LRoot" ref="x" value="Graph" />
+        <putfield class="LRoot" field="Graph" fieldType="LRoot" ref="ops" value="Graph" />
         <new def="RaggedTensor" class="Lobject" />
         <putfield class="LRoot" field="RaggedTensor" fieldType="LRoot" ref="x" value="RaggedTensor" />
         <putfield class="LRoot" field="RaggedTensor" fieldType="LRoot" ref="ragged_tensor" value="RaggedTensor" />
@@ -744,17 +747,13 @@
         </method>
       </class>
       <class name="convert_to_tensor" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self value dtype dtype_hint name">
           <new def="x" class="Ltensorflow/python/framework/ops/convert_to_tensor" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="value dtype dtype_hint name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
           <return value="x" />
         </method>
       </class>
       <class name="range" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self start limit delta dtype name">
           <new def="x" class="Llist" />
           <new def="z" class="Ltensorflow/functions/constant" />
           <constant name="p" type="int" value="1" /> <!-- FIXME: The type may actually depend on the arguments passed to `tf.range()`. It may not necessarily be `int`. -->
@@ -762,93 +761,69 @@
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="x" value="y" />
           <return value="x" />
         </method>
-        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="start limit delta dtype name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <return value="x" />
-        </method>
       </class>
       <class name="Tensor" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self op value_index dtype name">
           <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self op value_index dtype">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
           <return value="x" />
         </method>
       </class>
       <class name="ndarray" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self op value_index dtype">
           <new def="x" class="Ltensorflow/python/framework/ops/ndarray" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="op value_index dtype">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
           <return value="x" />
         </method>
       </class>
       <class name="ragged_range" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self starts limits deltas dtype name row_splits_dtype">
           <new def="x" class="Ltensorflow/python/ops/ragged/ragged_math_ops/range" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="starts limits deltas dtype name row_splits_dtype">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
           <return value="x" />
         </method>
       </class>
       <class name="ragged_constant" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self pylist dtype ragged_rank inner_shape name row_splits_dtype">
           <new def="x" class="Ltensorflow/python/ops/ragged/ragged_factory_ops/constant" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="pylist dtype ragged_rank inner_shape name row_splits_dtype">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
           <putfield class="Ltensorflow/python/ops/ragged/ragged_factory_ops/constant" field="value" fieldType="LRoot" ref="x" value="arg1" />
           <return value="x" />
         </method>
       </class>
       <class name="eye" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self num_rows num_columns batch_shape dtype name">
           <new def="x" class="Ltensorflow/python/ops/linalg_ops/eye" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="num_rows num_columns batch_shape dtype name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
           <return value="x" />
         </method>
       </class>
       <class name="uniform" allocatable="true">
         <!-- Allocation moved to do() to avoid 1-CFA aliasing issues with shared read_data(). -->
-        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="shape minval maxval dtype seed name">
+        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self shape minval maxval dtype seed name">
           <new def="x" class="Ltensorflow/python/ops/random_ops/uniform" />
           <return value="x" />
         </method>
       </class>
       <class name="gamma" allocatable="true">
         <!-- Allocation moved to do() to avoid 1-CFA aliasing issues with shared read_data(). -->
-        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="shape alpha beta dtype seed name">
+        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self shape alpha beta dtype seed name">
           <new def="x" class="Ltensorflow/python/ops/random_ops/gamma" />
           <return value="x" />
         </method>
       </class>
       <class name="normal" allocatable="true">
         <!-- Allocation moved to do() to avoid 1-CFA aliasing issues with shared read_data(). -->
-        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="shape mean stddev dtype seed name">
+        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self shape mean stddev dtype seed name">
           <new def="x" class="Ltensorflow/python/ops/random_ops/normal" />
           <return value="x" />
         </method>
       </class>
       <class name="poisson" allocatable="true">
         <!-- Allocation moved to do() to avoid 1-CFA aliasing issues with shared read_data(). -->
-        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="shape lam dtype seed name">
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self shape lam dtype seed name">
           <new def="x" class="Ltensorflow/python/ops/random_ops/poisson" />
           <return value="x" />
         </method>
       </class>
       <class name="truncated_normal" allocatable="true">
         <!-- Allocation moved to do() to avoid 1-CFA aliasing issues with shared read_data(). -->
-        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="shape mean stddev dtype seed name">
+        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self shape mean stddev dtype seed name">
           <new def="x" class="Ltensorflow/python/ops/random_ops/truncated_normal" />
           <return value="x" />
         </method>
@@ -1063,12 +1038,8 @@
     </package>
     <package name="tensorflow/keras/layers">
       <class name="Input" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/keras/layers/Input" />
-          <return value="x" />
-        </method>
         <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="shape batch_size name dtype sparse tensor ragged type_spec">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
+          <new def="x" class="Ltensorflow/keras/layers/Input" />
           <return value="x" />
         </method>
       </class>
@@ -1397,6 +1368,49 @@
           <new def="y" class="Ltensorflow/examples/tutorials/mnist/read_data_sets" />
           <putfield class="Ltensorflow/examples/tutorials/mnist" field="input_data" fieldType="LRoot" ref="arg0" value="x" />
           <putfield class="Ltensorflow/examples/tutorials/mnist/input_data" field="read_data_sets" fieldType="LRoot" ref="x" value="y" />
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/functions">
+      <class name="Graph" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/framework/ops/Graph" />
+          <new def="get_ops" class="Ltensorflow/python/framework/ops/Graph_get_operations" />
+          <putfield class="Ltensorflow/python/framework/ops/Graph" field="get_operations" fieldType="LRoot" ref="x" value="get_ops" />
+          <new def="as_def" class="Ltensorflow/python/framework/ops/Graph_as_default" />
+          <putfield class="Ltensorflow/python/framework/ops/Graph" field="as_default" fieldType="LRoot" ref="x" value="as_def" />
+          <return value="x" />
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/python/framework/ops">
+      <class name="Graph" allocatable="true">
+      </class>
+      <class name="Graph_get_operations" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1">
+          <new def="ops" class="Llist" />
+          <new def="const_func" class="Ltensorflow/functions/constant" />
+          <constant name="val" type="float" value="0.0" />
+          <constant name="dtype" type="int" value="0" />
+          <constant name="shape" type="int" value="0" />
+          <constant name="name" type="string" value="dummy" />
+          <call class="Ltensorflow/functions/constant" name="do" descriptor="()LRoot;" type="virtual" arg0="const_func" arg1="val" arg2="dtype" arg3="shape" arg4="name" numArgs="5" def="c" />
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="ops" value="c" />
+          <return value="ops" />
+        </method>
+      </class>
+      <class name="Graph_as_default" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1">
+          <new def="cm" class="Ltensorflow/python/framework/ops/GraphContextManager" />
+          <return value="cm" />
+        </method>
+      </class>
+      <class name="GraphContextManager" allocatable="true">
+        <method name="__begin__" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <return value="self" />
+        </method>
+        <method name="__end__" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <return value="self" />
         </method>
       </class>
     </package>

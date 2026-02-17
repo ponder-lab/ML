@@ -212,7 +212,7 @@ public class OneHot extends Ones {
 
     if (axisPTS == null || axisPTS.isEmpty())
       // Fallback to default.
-      return ret;
+      return Set.of(AXIS_END);
 
     for (InstanceKey instanceKey : axisPTS)
       ret.add(getIntValueFromInstanceKey(instanceKey).orElse(AXIS_END));

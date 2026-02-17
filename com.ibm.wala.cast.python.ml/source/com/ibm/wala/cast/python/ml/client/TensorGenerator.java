@@ -49,6 +49,8 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
@@ -402,7 +404,19 @@ public abstract class TensorGenerator {
             || reference.equals(SPARSE_TENSOR_TYPE)
             || reference.equals(RAGGED_FACTORY_OPS_CONSTANT)
             || reference.equals(RAGGED_MATH_OPS_RANGE)
-            || reference.equals(LINALG_OPS_EYE)) {
+            || reference.equals(LINALG_OPS_EYE)
+            || reference.equals(TensorFlowTypes.DATASET)
+            || reference.equals(TensorFlowTypes.DATASET_SHUFFLE_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_BATCH_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_MAP_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_RANGE_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_FROM_TENSOR_SLICES_TYPE)
+            || reference.equals(TensorFlowTypes.ADD.getDeclaringClass())
+            || reference.equals(TensorFlowTypes.MULTIPLY.getDeclaringClass())
+            || reference.equals(TensorFlowTypes.REDUCE_SUM.getDeclaringClass())
+            || reference.equals(TensorFlowTypes.REDUCE_MEAN.getDeclaringClass())
+            || reference.equals(TensorFlowTypes.ARGMAX.getDeclaringClass())
+            || reference.equals(TensorFlowTypes.EQUAL.getDeclaringClass())) {
           // If the value is a tensor, we attempt to find the generator that created it and ask for
           // its shape.
           LOGGER.fine(
@@ -420,6 +434,27 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, AllocationSiteInNode asin) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     CGNode readDataNode = asin.getNode();
+
+    // Support allocations directly in 'do' methods (preferred for 1-CFA context separation).
+    if (readDataNode.getMethod().getName().toString().equals("do")) {
+      int def = findDefinition(readDataNode, asin);
+      if (def != -1) {
+        PointerKey defKey =
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(readDataNode, def);
+        PointsToSetVariable defSource =
+            builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
+
+        // Avoid infinite recursion if the current generator is for the same source.
+        if (this.getSource().equals(defSource)) {
+          return ret;
+        }
+
+        TensorGenerator generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+        LOGGER.fine("Delegating shape inference to: " + generator);
+        ret.addAll(generator.getShapes(builder));
+      }
+      return ret;
+    }
 
     // 1. read_data is called by the operation's 'do' method.
     Iterator<CGNode> doNodes = builder.getCallGraph().getPredNodes(readDataNode);
@@ -445,22 +480,28 @@ public abstract class TensorGenerator {
                   builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
 
               // Instantiate the generator for this source.
-              try {
-                TensorGenerator generator = TensorGeneratorFactory.getGenerator(defSource, builder);
-                if (generator != null) {
-                  LOGGER.fine("Delegating shape inference to: " + generator);
-                  ret.addAll(generator.getShapes(builder));
-                }
-              } catch (IllegalArgumentException e) {
-                // Fallback or ignore if no generator found (e.g. for unknown ops).
-                LOGGER.fine("No generator found for tensor producer: " + call);
-              }
+              TensorGenerator generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+              LOGGER.fine("Delegating shape inference to: " + generator);
+              ret.addAll(generator.getShapes(builder));
             }
           }
         }
       }
     }
     return ret;
+  }
+
+  private static int findDefinition(CGNode node, AllocationSiteInNode asin) {
+    if (node.getIR() == null) return -1;
+    for (SSAInstruction inst : node.getIR().getInstructions()) {
+      if (inst != null && inst instanceof SSANewInstruction) {
+        SSANewInstruction newInst = (SSANewInstruction) inst;
+        if (newInst.getNewSite().equals(asin.getSite())) {
+          return newInst.getDef();
+        }
+      }
+    }
+    return -1;
   }
 
   /**
@@ -738,7 +779,19 @@ public abstract class TensorGenerator {
             || reference.equals(SPARSE_TENSOR_TYPE)
             || reference.equals(RAGGED_FACTORY_OPS_CONSTANT)
             || reference.equals(RAGGED_MATH_OPS_RANGE)
-            || reference.equals(LINALG_OPS_EYE)) {
+            || reference.equals(LINALG_OPS_EYE)
+            || reference.equals(TensorFlowTypes.DATASET)
+            || reference.equals(TensorFlowTypes.DATASET_SHUFFLE_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_BATCH_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_MAP_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_RANGE_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_FROM_TENSOR_SLICES_TYPE)
+            || reference.equals(TensorFlowTypes.ADD.getDeclaringClass())
+            || reference.equals(TensorFlowTypes.MULTIPLY.getDeclaringClass())
+            || reference.equals(TensorFlowTypes.REDUCE_SUM.getDeclaringClass())
+            || reference.equals(TensorFlowTypes.REDUCE_MEAN.getDeclaringClass())
+            || reference.equals(TensorFlowTypes.ARGMAX.getDeclaringClass())
+            || reference.equals(TensorFlowTypes.EQUAL.getDeclaringClass())) {
           // If the value is a tensor, we attempt to find the generator that created it and ask for
           // its dtype.
           LOGGER.fine(
@@ -757,6 +810,26 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, AllocationSiteInNode asin) {
     Set<DType> ret = EnumSet.noneOf(DType.class);
     CGNode readDataNode = asin.getNode();
+
+    // Support allocations directly in 'do' methods (preferred for 1-CFA context separation).
+    if (readDataNode.getMethod().getName().toString().equals("do")) {
+      int def = findDefinition(readDataNode, asin);
+      if (def != -1) {
+        PointerKey defKey =
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(readDataNode, def);
+        PointsToSetVariable defSource =
+            builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
+
+        if (this.getSource().equals(defSource)) {
+          return ret;
+        }
+
+        TensorGenerator generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+        LOGGER.fine("Delegating dtype inference to: " + generator);
+        ret.addAll(generator.getDTypes(builder));
+      }
+      return ret;
+    }
 
     // Trace back to the user-level call that invoked this generator.
     // 1. read_data is called by the operation's 'do' method.
@@ -783,16 +856,9 @@ public abstract class TensorGenerator {
                   builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
 
               // Instantiate the generator for this source.
-              try {
-                TensorGenerator generator = TensorGeneratorFactory.getGenerator(defSource, builder);
-                if (generator != null) {
-                  LOGGER.fine("Delegating dtype inference to: " + generator);
-                  ret.addAll(generator.getDTypes(builder));
-                }
-              } catch (IllegalArgumentException e) {
-                // Fallback or ignore if no generator found (e.g. for unknown ops).
-                LOGGER.fine("No generator found for tensor producer: " + call);
-              }
+              TensorGenerator generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+              LOGGER.fine("Delegating dtype inference to: " + generator);
+              ret.addAll(generator.getDTypes(builder));
             }
           }
         }
@@ -830,7 +896,11 @@ public abstract class TensorGenerator {
     return TYPE_REFERENCE_TO_SIGNATURE.get(function);
   }
 
+  protected static final int RECEIVER_PARAMETER_POSITION = -2;
+
   protected int getArgumentValueNumber(int parameterPosition) {
+    if (parameterPosition == RECEIVER_PARAMETER_POSITION)
+      return this.getNode().getIR().getParameter(0);
     if (parameterPosition < 0) return UNDEFINED_PARAMETER_POSITION; // No such argument.
 
     int index = this.getNode().getMethod().isStatic() ? parameterPosition : parameterPosition + 1;
@@ -956,6 +1026,7 @@ public abstract class TensorGenerator {
   }
 
   private int getArgumentValueNumber(CGNode node, int parameterPosition) {
+    if (parameterPosition == RECEIVER_PARAMETER_POSITION) return node.getIR().getParameter(0);
     if (parameterPosition < 0) return UNDEFINED_PARAMETER_POSITION; // No such argument.
 
     int index = node.getMethod().isStatic() ? parameterPosition : parameterPosition + 1;
