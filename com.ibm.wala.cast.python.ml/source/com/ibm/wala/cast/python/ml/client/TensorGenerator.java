@@ -951,11 +951,7 @@ public abstract class TensorGenerator {
       }
 
       if (argValNum == -1 && paramPos >= 0) {
-        int numKeywords = call.getKeywords() != null ? call.getKeywords().size() : 0;
-        int numPosParams =
-            call.getNumberOfPositionalParameters()
-                - 1
-                - numKeywords; // Exclude function and keywords.
+        int numPosParams = call.getNumberOfPositionalParameters() - 1; // Exclude function.
 
         if (paramPos < numPosParams) {
           argValNum = call.getUse(paramPos + 1); // Positional arguments start at index 1.
@@ -1028,8 +1024,6 @@ public abstract class TensorGenerator {
               }
 
               if (argValNum == -1 && paramPos >= 0) {
-                int numKeywords =
-                    pyCallInstr.getKeywords() != null ? pyCallInstr.getKeywords().size() : 0;
                 int numPosParams =
                     pyCallInstr.getNumberOfPositionalParameters() - 1; // Exclude function.
                 if (paramPos < numPosParams) {
@@ -1044,15 +1038,10 @@ public abstract class TensorGenerator {
                         .getPointerAnalysis()
                         .getHeapModel()
                         .getPointerKeyForLocal(caller, argValNum);
-                try {
-                  OrdinalSet<InstanceKey> argPts =
-                      builder.getPointerAnalysis().getPointsToSet(argPk);
-                  if (argPts != null && !argPts.isEmpty()) {
-                    combinedPts = OrdinalSet.unify(combinedPts, argPts);
-                    found = true;
-                  }
-                } catch (UnimplementedError e) {
-                  LOGGER.fine("Gracefully handling UnimplementedError for pointer key: " + argPk);
+                OrdinalSet<InstanceKey> argPts = builder.getPointerAnalysis().getPointsToSet(argPk);
+                if (argPts != null && !argPts.isEmpty()) {
+                  combinedPts = OrdinalSet.unify(combinedPts, argPts);
+                  found = true;
                 }
               }
             }
@@ -1112,11 +1101,7 @@ public abstract class TensorGenerator {
       }
 
       if (argValNum == -1 && paramPos >= 0) {
-        int numKeywords = call.getKeywords() != null ? call.getKeywords().size() : 0;
-        int numPosParams =
-            call.getNumberOfPositionalParameters()
-                - 1
-                - numKeywords; // Exclude function and keywords.
+        int numPosParams = call.getNumberOfPositionalParameters() - 1; // Exclude function.
         if (paramPos < numPosParams) {
           argValNum = call.getUse(paramPos + 1); // Positional arguments start at index 1.
         }
@@ -1263,12 +1248,8 @@ public abstract class TensorGenerator {
 
         if (callInstr instanceof PythonInvokeInstruction) {
           PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
-          int numKeywords =
-              pyCallInstr.getKeywords() != null ? pyCallInstr.getKeywords().size() : 0;
           int numberOfPositionalParameters =
-              pyCallInstr.getNumberOfPositionalParameters()
-                  - 1
-                  - numKeywords; // Exclude the function name and keywords.
+              pyCallInstr.getNumberOfPositionalParameters() - 1; // Exclude the function name.
           LOGGER.finer(
               () -> "Number of positional parameters: " + numberOfPositionalParameters + ".");
 
