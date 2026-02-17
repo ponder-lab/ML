@@ -1031,9 +1031,7 @@ public abstract class TensorGenerator {
                 int numKeywords =
                     pyCallInstr.getKeywords() != null ? pyCallInstr.getKeywords().size() : 0;
                 int numPosParams =
-                    pyCallInstr.getNumberOfPositionalParameters()
-                        - 1
-                        - numKeywords; // Exclude function and keywords.
+                    pyCallInstr.getNumberOfPositionalParameters() - 1; // Exclude function.
                 if (paramPos < numPosParams) {
                   argValNum =
                       pyCallInstr.getUse(paramPos + 1); // Positional arguments start at index 1.
@@ -1046,10 +1044,15 @@ public abstract class TensorGenerator {
                         .getPointerAnalysis()
                         .getHeapModel()
                         .getPointerKeyForLocal(caller, argValNum);
-                OrdinalSet<InstanceKey> argPts = builder.getPointerAnalysis().getPointsToSet(argPk);
-                if (argPts != null && !argPts.isEmpty()) {
-                  combinedPts = OrdinalSet.unify(combinedPts, argPts);
-                  found = true;
+                try {
+                  OrdinalSet<InstanceKey> argPts =
+                      builder.getPointerAnalysis().getPointsToSet(argPk);
+                  if (argPts != null && !argPts.isEmpty()) {
+                    combinedPts = OrdinalSet.unify(combinedPts, argPts);
+                    found = true;
+                  }
+                } catch (UnimplementedError e) {
+                  LOGGER.fine("Gracefully handling UnimplementedError for pointer key: " + argPk);
                 }
               }
             }
@@ -1167,6 +1170,8 @@ public abstract class TensorGenerator {
    */
   protected boolean isKeywordArgumentPresent(
       PropagationCallGraphBuilder builder, String paramName) {
+    // 1. Try to resolve the call directly from the definition of the value.
+    // This works if we are analyzing the code where the function was called (the caller).
     PythonInvokeInstruction call = getInvokeInstruction();
     if (call != null) {
       return call.getKeywords().contains(paramName);
