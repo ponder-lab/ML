@@ -951,9 +951,14 @@ public abstract class TensorGenerator {
       }
 
       if (argValNum == -1 && paramPos >= 0) {
-        int numPosParams = call.getNumberOfPositionalParameters() - 1; // Exclude function.
+
+        int numKeywords = call.getKeywords() != null ? call.getKeywords().size() : 0;
+
+        int numPosParams =
+            call.getNumberOfUses() - 1 - numKeywords; // Exclude function and keywords.
 
         if (paramPos < numPosParams) {
+
           argValNum = call.getUse(paramPos + 1); // Positional arguments start at index 1.
         }
       }
@@ -1101,8 +1106,14 @@ public abstract class TensorGenerator {
       }
 
       if (argValNum == -1 && paramPos >= 0) {
-        int numPosParams = call.getNumberOfPositionalParameters() - 1; // Exclude function.
+
+        int numKeywords = call.getKeywords() != null ? call.getKeywords().size() : 0;
+
+        int numPosParams =
+            call.getNumberOfUses() - 1 - numKeywords; // Exclude function and keywords.
+
         if (paramPos < numPosParams) {
+
           argValNum = call.getUse(paramPos + 1); // Positional arguments start at index 1.
         }
       }
@@ -1225,7 +1236,7 @@ public abstract class TensorGenerator {
     PythonInvokeInstruction call = getInvokeInstruction();
     if (call != null) {
       int numKeywords = call.getKeywords() != null ? call.getKeywords().size() : 0;
-      ret.add(call.getNumberOfPositionalParameters() - 1 - numKeywords);
+      ret.add(call.getNumberOfUses() - 1 - numKeywords);
       return ret;
     }
 
@@ -1248,8 +1259,12 @@ public abstract class TensorGenerator {
 
         if (callInstr instanceof PythonInvokeInstruction) {
           PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
+          int numKeywords =
+              pyCallInstr.getKeywords() != null ? pyCallInstr.getKeywords().size() : 0;
           int numberOfPositionalParameters =
-              pyCallInstr.getNumberOfPositionalParameters() - 1; // Exclude the function name.
+              pyCallInstr.getNumberOfUses()
+                  - 1
+                  - numKeywords; // Exclude the function name and keywords.
           LOGGER.finer(
               () -> "Number of positional parameters: " + numberOfPositionalParameters + ".");
 
