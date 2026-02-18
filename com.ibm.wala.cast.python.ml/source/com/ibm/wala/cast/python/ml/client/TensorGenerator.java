@@ -867,6 +867,7 @@ public abstract class TensorGenerator {
           ret.addAll(getDTypesFromTensor(builder, asin));
         } else if (reference.equals(TensorFlowTypes.FEATURE)) {
           // Ignore features.
+          LOGGER.fine("Ignoring feature: " + asin);
         } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
       } else throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
     }
