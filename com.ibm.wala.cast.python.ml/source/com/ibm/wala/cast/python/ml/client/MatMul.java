@@ -24,6 +24,10 @@ public class MatMul extends TensorGenerator {
     super(source);
   }
 
+  public MatMul(com.ibm.wala.ipa.callgraph.CGNode node, boolean isManual) {
+    super(node, isManual);
+  }
+
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> aPts = this.getArgumentPointsToSet(builder, 0, "a");

@@ -115,6 +115,8 @@ public class TensorFlowTypes extends PythonTypes {
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/python/ops/array_ops/reshape"));
 
+  public static final TypeName TF_RESHAPE = TypeName.findOrCreate("Ltensorflow/functions/reshape");
+
   public static final TypeReference RAGGED_MATH_OPS_RANGE =
       TypeReference.findOrCreate(
           pythonLoader,

@@ -37,6 +37,10 @@ public class SparseEye extends Ones {
     super(source);
   }
 
+  public SparseEye(com.ibm.wala.ipa.callgraph.CGNode node, boolean isManual) {
+    super(node, isManual);
+  }
+
   protected Set<Optional<Integer>> getPossibleArgumentValues(
       PropagationCallGraphBuilder builder, int paramPosition, String paramName) {
     int valNum = this.getArgumentValueNumber(builder, paramPosition, paramName, true);

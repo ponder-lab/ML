@@ -51,6 +51,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_SOFTMAX_C
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SUBTRACT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TF_RESHAPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VARIABLE;
@@ -155,8 +156,7 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, ZEROS.getDeclaringClass())) return new Zeros(source);
     else if (isType(calledFunction, ZEROS_LIKE.getDeclaringClass())) return new ZerosLike(source);
     else if (isType(calledFunction, ARRAY_OPS_RESHAPE)
-        || calledFunction.getName().toString().equals("Ltensorflow/functions/reshape"))
-      return new Reshape(source);
+        || calledFunction.getName().equals(TF_RESHAPE)) return new Reshape(source);
     else if (isType(calledFunction, FILL.getDeclaringClass())) return new Fill(source);
     else if (isType(calledFunction, CONVERT_TO_TENSOR.getDeclaringClass()))
       return new ConvertToTensor(source);

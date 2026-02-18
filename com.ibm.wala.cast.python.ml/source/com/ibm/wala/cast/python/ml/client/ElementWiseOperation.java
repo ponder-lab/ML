@@ -4,10 +4,14 @@ import static com.ibm.wala.cast.python.ml.util.TensorShapeUtil.areBroadcastable;
 import static com.ibm.wala.cast.python.ml.util.TensorShapeUtil.getBroadcastedShapes;
 import static java.util.logging.Logger.getLogger;
 
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -72,14 +76,17 @@ public class ElementWiseOperation extends ZerosLike {
     // The resulting shape is the broadcasted shape of the shapes of x and y.
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
-    Set<List<Dimension<?>>> xShapes =
-        this.getShapesOfValue(
-            builder,
-            this.getArgumentPointsToSet(builder, getXParameterPosition(), getXParameterName()));
-    Set<List<Dimension<?>>> yShapes =
-        this.getShapesOfValue(
-            builder,
-            this.getArgumentPointsToSet(builder, getYParameterPosition(), getYParameterName()));
+    OrdinalSet<InstanceKey> xPts =
+        this.getArgumentPointsToSet(builder, getXParameterPosition(), getXParameterName());
+    if (xPts == null || xPts.isEmpty()) return ret;
+
+    Set<List<Dimension<?>>> xShapes = this.getShapesOfValue(builder, xPts);
+
+    OrdinalSet<InstanceKey> yPts =
+        this.getArgumentPointsToSet(builder, getYParameterPosition(), getYParameterName());
+    if (yPts == null || yPts.isEmpty()) return ret;
+
+    Set<List<Dimension<?>>> yShapes = this.getShapesOfValue(builder, yPts);
 
     for (List<Dimension<?>> xShape : xShapes)
       for (List<Dimension<?>> yShape : yShapes)
@@ -87,6 +94,25 @@ public class ElementWiseOperation extends ZerosLike {
         else throw new NonBroadcastableShapesException(this, xShape, yShape);
 
     return ret;
+  }
+
+  @Override
+  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    int vn = this.getXArgumentValueNumber(builder);
+    if (vn <= 0) return Collections.emptySet();
+
+    OrdinalSet<InstanceKey> pts =
+        builder
+            .getPointerAnalysis()
+            .getPointsToSet(
+                builder
+                    .getPointerAnalysis()
+                    .getHeapModel()
+                    .getPointerKeyForLocal(this.getNode(), vn));
+
+    if (pts == null || pts.isEmpty()) return Collections.emptySet();
+
+    return this.getDTypesOfValue(builder, pts);
   }
 
   /** No explicit dtype argument. Dtype is inferred from 'x'. */

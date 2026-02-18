@@ -19,6 +19,10 @@ public class Placeholder extends TensorGenerator {
     super(source);
   }
 
+  public Placeholder(com.ibm.wala.ipa.callgraph.CGNode node, boolean isManual) {
+    super(node, isManual);
+  }
+
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     return Set.of(Collections.emptyList());

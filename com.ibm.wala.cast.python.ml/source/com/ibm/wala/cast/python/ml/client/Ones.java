@@ -43,6 +43,10 @@ public class Ones extends TensorGenerator {
     super(source);
   }
 
+  public Ones(com.ibm.wala.ipa.callgraph.CGNode node, boolean isManual) {
+    super(node, isManual);
+  }
+
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     LOGGER.info(

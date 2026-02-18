@@ -32,6 +32,10 @@ public class Eye extends SparseEye {
     super(source);
   }
 
+  public Eye(com.ibm.wala.ipa.callgraph.CGNode node, boolean isManual) {
+    super(node, isManual);
+  }
+
   protected int getBatchShapesArgumentValueNumber(PropagationCallGraphBuilder builder) {
     return this.getArgumentValueNumber(
         builder, this.getBatchShapeParameterPosition(), this.getBatchShapeParameterName(), true);
@@ -64,6 +68,8 @@ public class Eye extends SparseEye {
     OrdinalSet<InstanceKey> pts =
         this.getArgumentPointsToSet(
             builder, this.getBatchShapeParameterPosition(), this.getBatchShapeParameterName());
+
+    if (pts == null || pts.isEmpty()) return emptySet();
 
     Set<List<Dimension<?>>> shapesFromShapeArgument = this.getShapesFromShapeArgument(builder, pts);
 
