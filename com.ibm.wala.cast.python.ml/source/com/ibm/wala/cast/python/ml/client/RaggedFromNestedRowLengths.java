@@ -10,6 +10,7 @@ import static java.util.Collections.emptySet;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -113,9 +114,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
               boolean foundRowDim = false;
               FieldReference subscript =
                   FieldReference.findOrCreate(
-                      com.ibm.wala.cast.python.types.PythonTypes.Root,
-                      Atom.findOrCreateAsciiAtom("0"),
-                      com.ibm.wala.cast.python.types.PythonTypes.Root);
+                      PythonTypes.Root, Atom.findOrCreateAsciiAtom("0"), PythonTypes.Root);
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
