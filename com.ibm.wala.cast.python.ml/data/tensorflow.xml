@@ -559,12 +559,6 @@
           <return value="x" />
         </method>
       </class>
-      <class name="from_row_starts" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/ragged/ragged_tensor/from_row_starts" />
-          <return value="x" />
-        </method>
-      </class>
       <class name="from_row_splits" allocatable="true">
         <method name="read_data" descriptor="()LRoot;" numArgs="1">
           <new def="x" class="Ltensorflow/python/ops/ragged/ragged_tensor/from_row_splits" />
@@ -877,13 +871,9 @@
         </method>
       </class>
       <class name="from_row_starts" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/ragged/ragged_tensor/from_row_starts" />
-          <return value="x" />
-        </method>
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="values row_starts name validate">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
-          <return value="x" />
+          <new def="res" class="Ltensorflow/functions/from_row_starts" />
+          <return value="res" />
         </method>
       </class>
       <class name="from_value_rowids" allocatable="true">
