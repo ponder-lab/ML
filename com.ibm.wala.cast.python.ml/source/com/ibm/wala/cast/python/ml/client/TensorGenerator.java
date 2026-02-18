@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARRAY_OPS_RESHAPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARRAY_OPS_ZEROS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT_OP_CONSTANT;
@@ -405,8 +406,10 @@ public abstract class TensorGenerator {
         } else if (reference.equals(TENSOR_TYPE)
             || reference.equals(CONVERT_TO_TENSOR_TYPE)
             || reference.equals(NDARRAY_TYPE)
+            || reference.equals(TensorFlowTypes.OPERATION)
             || reference.equals(CONSTANT_OP_CONSTANT)
             || reference.equals(ARRAY_OPS_ZEROS)
+            || reference.equals(ARRAY_OPS_RESHAPE)
             || reference.equals(VARIABLES_VARIABLE)
             || reference.equals(SPARSE_TENSOR_TYPE)
             || reference.equals(RAGGED_FACTORY_OPS_CONSTANT)
@@ -464,7 +467,7 @@ public abstract class TensorGenerator {
           generator = createManualGenerator(readDataNode, builder);
         } else if (defSource != null) {
           // Avoid infinite recursion if the current generator is for the same source.
-          if (this.getSource().equals(defSource)) {
+          if (this.getSource() != null && this.getSource().equals(defSource)) {
             return ret;
           }
           generator = TensorGeneratorFactory.getGenerator(defSource, builder);
@@ -633,13 +636,13 @@ public abstract class TensorGenerator {
                 + " from string: "
                 + value
                 + ".");
-      } else
-        throw new IllegalStateException(
+        LOGGER.warning(
             "Expected a "
                 + TensorFlowTypes.D_TYPE
                 + " for the dtype, but got: "
                 + typeReference
                 + ".");
+      }
     }
 
     return ret;
@@ -797,8 +800,10 @@ public abstract class TensorGenerator {
         } else if (reference.equals(TENSOR_TYPE)
             || reference.equals(CONVERT_TO_TENSOR_TYPE)
             || reference.equals(NDARRAY_TYPE)
+            || reference.equals(TensorFlowTypes.OPERATION)
             || reference.equals(CONSTANT_OP_CONSTANT)
             || reference.equals(ARRAY_OPS_ZEROS)
+            || reference.equals(ARRAY_OPS_RESHAPE)
             || reference.equals(VARIABLES_VARIABLE)
             || reference.equals(SPARSE_TENSOR_TYPE)
             || reference.equals(RAGGED_FACTORY_OPS_CONSTANT)
@@ -1434,7 +1439,8 @@ public abstract class TensorGenerator {
    * fails (e.g. UnimplementedError due to implicit pointer keys for allocations in synthetic do()
    * methods).
    */
-  private TensorGenerator createManualGenerator(CGNode node, PropagationCallGraphBuilder builder) {
+  private static TensorGenerator createManualGenerator(
+      CGNode node, PropagationCallGraphBuilder builder) {
     com.ibm.wala.types.TypeReference type = node.getMethod().getDeclaringClass().getReference();
     if (type.equals(TensorFlowTypes.ONES.getDeclaringClass())) {
       return new Ones(null) {
@@ -1519,6 +1525,36 @@ public abstract class TensorGenerator {
           return StreamSupport.stream(pts.spliterator(), false)
               .map(SparseEye::getIntValueFromInstanceKey)
               .collect(Collectors.toSet());
+        }
+      };
+    } else if (type.equals(TensorFlowTypes.MATMUL.getDeclaringClass())) {
+      return new MatMul(null) {
+        @Override
+        public String toString() {
+          return "Manual MatMul Generator";
+        }
+
+        @Override
+        protected OrdinalSet<InstanceKey> getArgumentPointsToSet(
+            PropagationCallGraphBuilder builder, int parameterIndex, String parameterName) {
+          int index = node.getMethod().isStatic() ? parameterIndex : parameterIndex + 1;
+          if (index >= node.getIR().getSymbolTable().getNumberOfParameters()) {
+            return OrdinalSet.empty();
+          }
+          int paramVn = node.getIR().getSymbolTable().getParameter(index);
+          PointerKey pk =
+              builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, paramVn);
+          return builder.getPointerAnalysis().getPointsToSet(pk);
+        }
+
+        @Override
+        public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+          return getDefaultShapes(builder);
+        }
+
+        @Override
+        public Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
+          return getDefaultDTypes(builder);
         }
       };
     } else if (type.equals(CONSTANT.getDeclaringClass())) {

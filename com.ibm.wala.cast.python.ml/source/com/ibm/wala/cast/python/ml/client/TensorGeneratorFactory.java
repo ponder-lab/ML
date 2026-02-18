@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARRAY_OPS_RESHAPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
@@ -153,6 +154,9 @@ public class TensorGeneratorFactory {
       return new TruncatedNormal(source);
     else if (isType(calledFunction, ZEROS.getDeclaringClass())) return new Zeros(source);
     else if (isType(calledFunction, ZEROS_LIKE.getDeclaringClass())) return new ZerosLike(source);
+    else if (isType(calledFunction, ARRAY_OPS_RESHAPE)
+        || calledFunction.getName().toString().equals("Ltensorflow/functions/reshape"))
+      return new Reshape(source);
     else if (isType(calledFunction, FILL.getDeclaringClass())) return new Fill(source);
     else if (isType(calledFunction, CONVERT_TO_TENSOR.getDeclaringClass()))
       return new ConvertToTensor(source);

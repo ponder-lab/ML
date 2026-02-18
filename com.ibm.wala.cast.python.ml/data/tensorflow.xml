@@ -436,6 +436,8 @@
       </class>
     </package>
     <package name="tensorflow/python/framework/ops">
+      <class name="Operation" allocatable="true">
+      </class>
       <class name="Tensor" allocatable="true">
         <method name="read_data" descriptor="()LRoot;" numArgs="1">
           <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
@@ -504,6 +506,8 @@
       <class name="matmul" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self a b transpose_a transpose_b adjoint_a adjoint_b a_is_sparse b_is_sparse name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <new def="op" class="Ltensorflow/python/framework/ops/Operation" />
+          <putfield class="Ltensorflow/python/framework/ops/Tensor" field="op" fieldType="LRoot" ref="res" value="op" />
           <return value="res" />
         </method>
       </class>

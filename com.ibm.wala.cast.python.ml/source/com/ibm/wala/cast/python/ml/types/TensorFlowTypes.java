@@ -84,6 +84,10 @@ public class TensorFlowTypes extends PythonTypes {
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/python/framework/ops/ndarray"));
 
+  public static final TypeReference OPERATION =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/python/framework/ops/Operation"));
+
   public static final TypeReference CONSTANT_OP_CONSTANT =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/python/framework/constant_op/constant"));
@@ -106,6 +110,10 @@ public class TensorFlowTypes extends PythonTypes {
   public static final TypeReference ARRAY_OPS_ZEROS =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/python/ops/array_ops/zeros"));
+
+  public static final TypeReference ARRAY_OPS_RESHAPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/python/ops/array_ops/reshape"));
 
   public static final TypeReference RAGGED_MATH_OPS_RANGE =
       TypeReference.findOrCreate(
