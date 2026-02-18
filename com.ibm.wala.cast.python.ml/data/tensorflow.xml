@@ -405,32 +405,20 @@
         </method>
       </class>
       <class name="reduce_sum" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="xx" />
+          <new def="xx" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="xx" />
         </method>
       </class>
       <class name="argmax" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input axis name dimension">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="xx" />
+          <new def="xx" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="xx" />
         </method>
       </class>
       <class name="equal" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x y name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="xx" />
+          <new def="xx" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="xx" />
         </method>
       </class>
@@ -438,103 +426,20 @@
     <package name="tensorflow/python/framework/ops">
       <class name="Operation" allocatable="true">
       </class>
-      <class name="Tensor" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
-      </class>
-      <class name="convert_to_tensor" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/convert_to_tensor" />
-          <return value="x" />
-        </method>
-      </class>
-      <class name="ndarray" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/ndarray" />
-          <return value="x" />
-        </method>
-      </class>
     </package>
     <package name="tensorflow/python/framework/constant_op">
-      <class name="constant" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <return value="arg0" />
-        </method>
-      </class>
     </package>
     <package name="tensorflow/python/ops/array_ops">
-      <class name="zeros" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/array_ops/zeros" />
-          <return value="x" />
-        </method>
-      </class>
-      <class name="zeros_like" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/array_ops/zeros_like" />
-          <return value="x" />
-        </method>
-      </class>
-      <class name="fill" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/array_ops/fill" />
-          <return value="x" />
-        </method>
-      </class>
       <class name="reshape" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="tensor shape name">
           <new def="x" class="Ltensorflow/python/ops/array_ops/reshape" />
           <return value="x" />
         </method>
       </class>
-      <class name="one_hot" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/array_ops/one_hot" />
-          <return value="x" />
-        </method>
-      </class>
     </package>
     <package name="tensorflow/python/ops/linalg_ops">
-      <class name="eye" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/linalg_ops/eye" />
-          <return value="x" />
-        </method>
-      </class>
     </package>
     <package name="tensorflow/python/ops/random_ops">
-      <class name="uniform" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/random_ops/uniform" />
-          <return value="x" />
-        </method>
-      </class>
-      <class name="gamma" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/random_ops/gamma" />
-          <return value="x" />
-        </method>
-      </class>
-      <class name="normal" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/random_ops/normal" />
-          <return value="x" />
-        </method>
-      </class>
-      <class name="poisson" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/random_ops/poisson" />
-          <return value="x" />
-        </method>
-      </class>
-      <class name="truncated_normal" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/random_ops/truncated_normal" />
-          <return value="x" />
-        </method>
-      </class>
     </package>
     <package name="tensorflow/functions">
       <class name="from_nested_value_rowids" allocatable="true">
@@ -624,12 +529,8 @@
         </method>
       </class>
       <class name="SparseTensor" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/sparse_tensor/SparseTensor" />
-          <return value="x" />
-        </method>
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self indices values dense_shape">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
+          <new def="x" class="Ltensorflow/python/framework/sparse_tensor/SparseTensor" />
           <putfield class="LRoot" field="indices" fieldType="LRoot" ref="x" value="indices" />
           <putfield class="LRoot" field="values" fieldType="LRoot" ref="x" value="values" />
           <putfield class="LRoot" field="dense_shape" fieldType="LRoot" ref="x" value="dense_shape" />
@@ -651,12 +552,8 @@
         </method>
       </class>
       <class name="sparse_add" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/sparse_tensor/SparseTensor" />
-          <return value="x" />
-        </method>
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self a b threshold name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
+          <new def="x" class="Ltensorflow/python/framework/sparse_tensor/SparseTensor" />
           <return value="x" />
         </method>
       </class>
@@ -1234,15 +1131,11 @@
     </package>
     <package name="tensorflow/examples/tutorials/mnist">
       <class name="read_data_sets" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
         <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self train_dir fake_data one_hot dtype reshape validation_size seed source_url">
           <new def="test" class="Ldict" />
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <putfield class="LRoot" field="images" fieldType="LRoot" ref="test" value="x" />
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="y" />
+          <new def="y" class="Ltensorflow/python/framework/ops/Tensor" />
           <new def="training" class="Ldict" />
           <putfield class="LRoot" field="images" fieldType="LRoot" ref="training" value="y" />
           <new def="data" class="Ldict" />
