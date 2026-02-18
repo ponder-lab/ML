@@ -351,13 +351,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testFunction3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_function3.py", "func2", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_function3.py", "func2", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
   public void testFunction4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_function4.py", "func2", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_function4.py", "func2", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
@@ -5716,11 +5716,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
   }
 
-  /**
-   * FIXME: Should not throw an {@link IllegalStateException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void testRaggedNestedValueRowidsPositional()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
