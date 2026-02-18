@@ -595,13 +595,14 @@
           <return value="x" />
         </method>
       </class>
-      <class name="from_nested_value_rowids" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <return value="arg0" />
-        </method>
-      </class>
     </package>
     <package name="tensorflow/functions">
+      <class name="from_nested_value_rowids" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="flat_values nested_value_rowids nested_nrows name validate">
+          <new def="res" class="Ltensorflow/functions/from_nested_value_rowids" />
+          <return value="res" />
+        </method>
+      </class>
       <class name="matmul" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self a b transpose_a transpose_b adjoint_a adjoint_b a_is_sparse b_is_sparse name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
@@ -843,13 +844,6 @@
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="flat_values nested_row_splits name validate">
           <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
           <return value="x" />
-        </method>
-      </class>
-      <class name="from_nested_value_rowids">
-        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="flat_values nested_value_rowids nested_nrows name validate">
-          <new def="res" class="Ltensorflow/python/ops/ragged/ragged_tensor/from_nested_value_rowids" />
-          <call class="Ltensorflow/python/ops/ragged/ragged_tensor/from_nested_value_rowids" name="read_data" descriptor="()LRoot;" type="virtual" arg0="res" numArgs="1" />
-          <return value="res" />
         </method>
       </class>
       <class name="from_row_lengths" allocatable="true">
