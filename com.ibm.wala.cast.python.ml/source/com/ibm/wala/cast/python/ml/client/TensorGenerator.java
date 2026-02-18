@@ -54,14 +54,19 @@ import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
+import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 /**
  * An abstract generator for {@link TensorType}s.
@@ -172,7 +177,7 @@ public abstract class TensorGenerator {
                   "Found shape value: "
                       + shapeValue
                       + " for "
-                      + this.getSource().getPointerKey()
+                      + (this.getSource() != null ? this.getSource().getPointerKey() : "null")
                       + ".");
 
               Dimension<Integer> dimension =
@@ -441,17 +446,30 @@ public abstract class TensorGenerator {
       if (def != -1) {
         PointerKey defKey =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(readDataNode, def);
-        PointsToSetVariable defSource =
-            builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
-
-        // Avoid infinite recursion if the current generator is for the same source.
-        if (this.getSource().equals(defSource)) {
-          return ret;
+        PointsToSetVariable defSource = null;
+        try {
+          defSource = builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
+        } catch (UnimplementedError e) {
+          // If the pointer key is implicit, we might fail to get the points-to set.
+          LOGGER.log(Level.FINE, "Could not get points-to set for " + defKey, e);
+          // Try to create a manual generator if possible.
         }
 
-        TensorGenerator generator = TensorGeneratorFactory.getGenerator(defSource, builder);
-        LOGGER.fine("Delegating shape inference to: " + generator);
-        ret.addAll(generator.getShapes(builder));
+        TensorGenerator generator = null;
+        if (defSource != null) {
+          // Avoid infinite recursion if the current generator is for the same source.
+          if (this.getSource().equals(defSource)) {
+            return ret;
+          }
+          generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+        } else {
+          generator = createManualGenerator(readDataNode, builder);
+        }
+
+        if (generator != null) {
+          LOGGER.fine("Delegating shape inference to: " + generator);
+          ret.addAll(generator.getShapes(builder));
+        }
       }
       return ret;
     }
@@ -817,16 +835,30 @@ public abstract class TensorGenerator {
       if (def != -1) {
         PointerKey defKey =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(readDataNode, def);
-        PointsToSetVariable defSource =
-            builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
-
-        if (this.getSource().equals(defSource)) {
-          return ret;
+        PointsToSetVariable defSource = null;
+        try {
+          defSource = builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
+        } catch (UnimplementedError e) {
+          // If the pointer key is implicit, we might fail to get the points-to set.
+          LOGGER.log(Level.FINE, "Could not get points-to set for " + defKey, e);
+          // Try to create a manual generator if possible.
         }
 
-        TensorGenerator generator = TensorGeneratorFactory.getGenerator(defSource, builder);
-        LOGGER.fine("Delegating dtype inference to: " + generator);
-        ret.addAll(generator.getDTypes(builder));
+        if (defSource != null) {
+          if (this.getSource() != null && this.getSource().equals(defSource)) {
+            return ret;
+          }
+
+          TensorGenerator generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+          LOGGER.fine("Delegating dtype inference to: " + generator);
+          ret.addAll(generator.getDTypes(builder));
+        } else {
+          TensorGenerator generator = createManualGenerator(readDataNode, builder);
+          if (generator != null) {
+            LOGGER.fine("Delegating dtype inference to: " + generator);
+            ret.addAll(generator.getDTypes(builder));
+          }
+        }
       }
       return ret;
     }
@@ -1378,5 +1410,97 @@ public abstract class TensorGenerator {
     }
 
     return ret;
+  }
+
+  /**
+   * Creates a manual TensorGenerator for synthetic operations where standard points-to analysis
+   * fails (e.g. UnimplementedError due to implicit pointer keys for allocations in synthetic do()
+   * methods).
+   */
+  private TensorGenerator createManualGenerator(CGNode node, PropagationCallGraphBuilder builder) {
+    com.ibm.wala.types.TypeReference type = node.getMethod().getDeclaringClass().getReference();
+    if (type.equals(TensorFlowTypes.ONES.getDeclaringClass())) {
+      return new Ones(null) {
+        @Override
+        protected OrdinalSet<InstanceKey> getArgumentPointsToSet(
+            PropagationCallGraphBuilder builder, int parameterIndex, String parameterName) {
+          int paramVn = node.getIR().getSymbolTable().getParameter(parameterIndex + 1);
+          PointerKey pk =
+              builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, paramVn);
+          return builder.getPointerAnalysis().getPointsToSet(pk);
+        }
+
+        @Override
+        protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+          return java.util.EnumSet.of(FLOAT32);
+        }
+
+        @Override
+        public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+          OrdinalSet<InstanceKey> pointsToSet =
+              this.getArgumentPointsToSet(
+                  builder, this.getShapeParameterPosition(), this.getShapeParameterName());
+
+          if (pointsToSet == null || pointsToSet.isEmpty()) return getDefaultShapes(builder);
+          return this.getShapesFromShapeArgument(builder, pointsToSet);
+        }
+
+        @Override
+        public String toString() {
+          return "Manual Ones Generator";
+        }
+
+        @Override
+        public Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
+          OrdinalSet<InstanceKey> pts =
+              this.getArgumentPointsToSet(
+                  builder, this.getDTypeParameterPosition(), this.getDTypeParameterName());
+          if (pts == null || pts.isEmpty()) return getDefaultDTypes(builder);
+          return this.getDTypesFromDTypeArgument(builder, pts);
+        }
+      };
+    } else if (type.equals(TensorFlowTypes.SPARSE_EYE.getDeclaringClass())) {
+      return new SparseEye(null) {
+        @Override
+        public String toString() {
+          return "Manual SparseEye Generator";
+        }
+
+        @Override
+        protected OrdinalSet<InstanceKey> getArgumentPointsToSet(
+            PropagationCallGraphBuilder builder, int paramIndex, String paramName) {
+          int paramVn = node.getIR().getSymbolTable().getParameter(paramIndex + 1);
+          PointerKey pk =
+              builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, paramVn);
+          return builder.getPointerAnalysis().getPointsToSet(pk);
+        }
+
+        @Override
+        protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+          return java.util.EnumSet.of(FLOAT32);
+        }
+
+        @Override
+        public Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
+          OrdinalSet<InstanceKey> pts =
+              this.getArgumentPointsToSet(
+                  builder, this.getDTypeParameterPosition(), this.getDTypeParameterName());
+          if (pts == null || pts.isEmpty()) return getDefaultDTypes(builder);
+          return this.getDTypesFromDTypeArgument(builder, pts);
+        }
+
+        @Override
+        protected Set<Optional<Integer>> getPossibleArgumentValues(
+            PropagationCallGraphBuilder builder, int paramPosition, String paramName) {
+          OrdinalSet<InstanceKey> pts =
+              this.getArgumentPointsToSet(builder, paramPosition, paramName);
+          if (pts == null || pts.isEmpty()) return HashSetFactory.make();
+          return StreamSupport.stream(pts.spliterator(), false)
+              .map(SparseEye::getIntValueFromInstanceKey)
+              .collect(Collectors.toSet());
+        }
+      };
+    }
+    return null;
   }
 }

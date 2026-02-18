@@ -37,7 +37,7 @@ public class SparseEye extends Ones {
     super(source);
   }
 
-  private Set<Optional<Integer>> getPossibleArgumentValues(
+  protected Set<Optional<Integer>> getPossibleArgumentValues(
       PropagationCallGraphBuilder builder, int paramPosition, String paramName) {
     int valNum = this.getArgumentValueNumber(builder, paramPosition, paramName, true);
     if (valNum <= 0) return HashSetFactory.make();

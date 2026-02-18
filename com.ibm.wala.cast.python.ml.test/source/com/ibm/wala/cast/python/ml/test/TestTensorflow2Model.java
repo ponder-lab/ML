@@ -5030,7 +5030,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * <p>FIXME: Should not throw an {@link IllegalArgumentException} once
    * https://github.com/wala/ML/issues/340 is fixed.
    */
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testReshape2() throws ClassHierarchyException, CancelException, IOException {
     TensorType expectedType =
         new TensorType(
