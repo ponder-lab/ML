@@ -88,6 +88,10 @@ public class TensorFlowTypes extends PythonTypes {
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/python/framework/ops/Operation"));
 
+  public static final TypeReference FEATURE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/objects/feature"));
+
   public static final TypeReference CONSTANT_OP_CONSTANT =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/python/framework/constant_op/constant"));

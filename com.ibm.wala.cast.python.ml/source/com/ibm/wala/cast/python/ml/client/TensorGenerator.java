@@ -865,6 +865,8 @@ public abstract class TensorGenerator {
                   + reference.getName()
                   + ". Attempting to retrieve dtype from producer.");
           ret.addAll(getDTypesFromTensor(builder, asin));
+        } else if (reference.equals(TensorFlowTypes.FEATURE)) {
+          // Ignore features.
         } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
       } else throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
     }

@@ -15,11 +15,7 @@ public class TestNeuroImageExamples extends TestPythonMLCallGraphShape {
   private static final String Ex1URL =
       "https://raw.githubusercontent.com/corticometrics/neuroimage-tensorflow/master/train.py";
 
-  /**
-   * FIXME: Should not throw an {@link IllegalArgumentException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testEx1CG()
       throws ClassHierarchyException,
           IllegalArgumentException,
@@ -29,11 +25,11 @@ public class TestNeuroImageExamples extends TestPythonMLCallGraphShape {
     checkTensorOps(
         Ex1URL,
         (PropagationCallGraphBuilder cgBuilder, CallGraph CG, TensorTypeAnalysis result) -> {
-          String in = "[{[D:Constant,64000] of pixel}]";
-          String out = "[{[D:Constant,40, D:Constant,40, D:Constant,40, D:Constant,1] of pixel}]";
+          String in = "[{[D:Constant,64000] of float32}]";
+          String out = "[{[D:Constant,40, D:Constant,40, D:Constant,40, D:Constant,1] of float32}]";
           checkTensorOp(cgBuilder, CG, result, "reshape", in, out);
 
-          in = "[{[D:Constant,40, D:Constant,40, D:Constant,40, D:Constant,1] of pixel}]";
+          in = "[{[D:Constant,40, D:Constant,40, D:Constant,40, D:Constant,1] of float32}]";
           checkTensorOp(cgBuilder, CG, result, "conv3d", in, null);
         });
   }
