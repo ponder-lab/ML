@@ -660,7 +660,11 @@ public abstract class TensorGenerator {
         try {
           dtype = DType.valueOf(value.toUpperCase()); // Validate the dtype string.
         } catch (IllegalArgumentException | NullPointerException e) {
-          throw new IllegalStateException("Unknown dtype string: " + value + ".", e);
+          if (value.equals("float")) {
+            dtype = FLOAT32;
+          } else {
+            throw new IllegalStateException("Unknown dtype string: " + value + ".", e);
+          }
         }
 
         ret.add(dtype);
