@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import java.util.Collections;
@@ -19,8 +20,8 @@ public class Placeholder extends TensorGenerator {
     super(source);
   }
 
-  public Placeholder(com.ibm.wala.ipa.callgraph.CGNode node, boolean isManual) {
-    super(node, isManual);
+  public Placeholder(CGNode node) {
+    super(node);
   }
 
   @Override

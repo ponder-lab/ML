@@ -95,7 +95,7 @@ public abstract class TensorGenerator {
     this.source = source;
   }
 
-  public TensorGenerator(CGNode node, boolean isManual) {
+  public TensorGenerator(CGNode node) {
     this.manualNode = node;
   }
 
@@ -1470,13 +1470,13 @@ public abstract class TensorGenerator {
       CGNode node, PropagationCallGraphBuilder builder) {
     TypeReference type = node.getMethod().getDeclaringClass().getReference();
     if (type.equals(TensorFlowTypes.ONES.getDeclaringClass())) {
-      return new Ones(node, true);
+      return new Ones(node);
     } else if (type.equals(TensorFlowTypes.SPARSE_EYE.getDeclaringClass())) {
-      return new SparseEye(node, true);
+      return new SparseEye(node);
     } else if (type.equals(TensorFlowTypes.MATMUL.getDeclaringClass())) {
-      return new MatMul(node, true);
+      return new MatMul(node);
     } else if (type.equals(CONSTANT.getDeclaringClass())) {
-      return new TensorGenerator(node, true) {
+      return new TensorGenerator(node) {
         @Override
         public String toString() {
           return "Manual Constant Generator";
@@ -1515,7 +1515,7 @@ public abstract class TensorGenerator {
         }
       };
     } else if (type.equals(PLACEHOLDER.getDeclaringClass())) {
-      return new Placeholder(node, true);
+      return new Placeholder(node);
     }
     return null;
   }

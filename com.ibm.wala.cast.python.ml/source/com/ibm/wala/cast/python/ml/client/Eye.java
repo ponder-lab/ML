@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import static java.util.Collections.emptySet;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
@@ -32,8 +33,8 @@ public class Eye extends SparseEye {
     super(source);
   }
 
-  public Eye(com.ibm.wala.ipa.callgraph.CGNode node, boolean isManual) {
-    super(node, isManual);
+  public Eye(CGNode node) {
+    super(node);
   }
 
   protected int getBatchShapesArgumentValueNumber(PropagationCallGraphBuilder builder) {
