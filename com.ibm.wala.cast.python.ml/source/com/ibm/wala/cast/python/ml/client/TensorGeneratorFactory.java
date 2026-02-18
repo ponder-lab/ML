@@ -82,8 +82,19 @@ import java.util.logging.Logger;
  */
 public class TensorGeneratorFactory {
 
+  /** Logger for this class. */
   private static final Logger LOGGER = getLogger(TensorGeneratorFactory.class.getName());
 
+  /**
+   * Returns the function type associated with the given source, using the points-to set variable
+   * and the call graph builder. This method handles local pointer keys, including invoke
+   * instructions, and return value keys.
+   *
+   * @param source the points-to set variable representing the source of the function call
+   * @param builder the propagation call graph builder used for the analysis
+   * @return the type reference of the function, or the result of {@link
+   *     Util#getFunction(PointsToSetVariable)} if not resolved
+   */
   private static TypeReference getFunction(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
     PointerKey k = source.getPointerKey();
@@ -118,11 +129,30 @@ public class TensorGeneratorFactory {
     return Util.getFunction(source);
   }
 
+  /**
+   * Checks if the given type reference matches the expected type reference by name.
+   *
+   * @param tr the type reference to check
+   * @param expected the expected type reference
+   * @return {@code true} if the type reference names are equal, {@code false} otherwise or if
+   *     either is null
+   */
   private static boolean isType(TypeReference tr, TypeReference expected) {
     if (tr == null || expected == null) return false;
     return tr.getName().equals(expected.getName());
   }
 
+  /**
+   * Returns a {@link TensorGenerator} instance for the given source and call graph builder. This
+   * method identifies the specific TensorFlow function being called and instantiates the
+   * appropriate generator subclass. It handles recursive calls for return values and various
+   * TensorFlow operations.
+   *
+   * @param source the points-to set variable representing the source of the tensor
+   * @param builder the propagation call graph builder used for the analysis
+   * @return the corresponding {@link TensorGenerator} for the TensorFlow function
+   * @throws IllegalArgumentException if the function call is unknown or not supported
+   */
   public static TensorGenerator getGenerator(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
     PointerKey k = source.getPointerKey();

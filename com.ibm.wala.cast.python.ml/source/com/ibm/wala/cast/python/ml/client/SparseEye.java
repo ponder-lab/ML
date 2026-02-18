@@ -42,6 +42,19 @@ public class SparseEye extends Ones {
     super(node);
   }
 
+  /**
+   * Retrieves the possible integer values for a specific argument.
+   *
+   * <p>It first checks the symbol table for constant values associated with the argument's value
+   * number. If not found, it falls back to the points-to analysis results to find potential integer
+   * values.
+   *
+   * @param builder the propagation call graph builder
+   * @param paramPosition the positional index of the argument
+   * @param paramName the keyword name of the argument
+   * @return a set of optional integers representing the possible values. An empty optional
+   *     indicates a null or non-integer value.
+   */
   protected Set<Optional<Integer>> getPossibleArgumentValues(
       PropagationCallGraphBuilder builder, int paramPosition, String paramName) {
     int valNum = this.getArgumentValueNumber(builder, paramPosition, paramName, true);

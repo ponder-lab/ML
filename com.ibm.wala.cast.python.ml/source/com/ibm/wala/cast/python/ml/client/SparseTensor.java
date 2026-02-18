@@ -37,7 +37,7 @@ public class SparseTensor extends Ones {
     int valuesValNum =
         this.getArgumentValueNumber(
             builder, this.getValuesParameterPosition(), this.getValuesParameterName(), false);
-    return getDTypes(builder, valuesValNum);
+    return this.getDTypes(builder, valuesValNum);
   }
 
   protected int getIndicesParameterPosition() {

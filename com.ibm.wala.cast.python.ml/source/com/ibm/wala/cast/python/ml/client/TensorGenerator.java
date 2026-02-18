@@ -449,6 +449,29 @@ public abstract class TensorGenerator {
     return ret;
   }
 
+  /**
+   * Retrieves the shapes of a tensor that is the result of another TensorFlow operation (the
+   * "producer").
+   *
+   * <p>This method traces the tensor back to its allocation site to identify the operation that
+   * created it. It handles two main scenarios:
+   *
+   * <ol>
+   *   <li><b>Direct Allocation in `do`:</b> The tensor is allocated directly within the `do` method
+   *       of the operation. It attempts to find the definition of the tensor and trace it back to a
+   *       {@link PointsToSetVariable}. If successful, it delegates to the generator for that
+   *       source. If points-to analysis fails (e.g., due to implicit pointer keys), it attempts to
+   *       create a manual generator using {@link #createManualGenerator(CGNode,
+   *       PropagationCallGraphBuilder)}.
+   *   <li><b>Helper Method (`read_data`):</b> The tensor is allocated in a helper method (like
+   *       `read_data`) called by `do`. It identifies the call site in `do` that invoked the helper
+   *       and recursively delegates to the generator for the result of that call.
+   * </ol>
+   *
+   * @param builder the propagation call graph builder
+   * @param asin the allocation site of the tensor
+   * @return a set of possible shapes for the tensor
+   */
   private Set<List<Dimension<?>>> getShapesFromTensor(
       PropagationCallGraphBuilder builder, AllocationSiteInNode asin) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
@@ -473,6 +496,9 @@ public abstract class TensorGenerator {
         TypeReference declaringClass = readDataNode.getMethod().getDeclaringClass().getReference();
         if (declaringClass.equals(PLACEHOLDER.getDeclaringClass())
             || declaringClass.equals(CONSTANT.getDeclaringClass())) {
+          // Create a manual generator if standard analysis fails or for specific types like
+          // Placeholder/Constant
+          // where we might need to inspect the node directly without a PointsToSetVariable.
           generator = createManualGenerator(readDataNode, builder);
         } else if (defSource != null) {
           // Avoid infinite recursion if the current generator is for the same source.
@@ -481,6 +507,7 @@ public abstract class TensorGenerator {
           }
           generator = TensorGeneratorFactory.getGenerator(defSource, builder);
         } else {
+          // Fallback: Attempt to create a manual generator if source resolution failed.
           generator = createManualGenerator(readDataNode, builder);
         }
 
@@ -1015,26 +1042,63 @@ public abstract class TensorGenerator {
     return getArgumentPointsToSet(builder, this.getNode(), paramPos, paramName);
   }
 
+  /**
+   * Retrieves the points-to set for a specific argument of the function call represented by this
+   * generator (or specifically for the given node).
+   *
+   * <p>This method employs a multi-staged strategy to resolve arguments:
+   *
+   * <ol>
+   *   <li><b>Direct Invoke Instruction:</b> If the invoke instruction is directly available (via
+   *       {@link #getInvokeInstruction()}), it resolves the argument using the parameter name (for
+   *       keyword arguments) or position.
+   *   <li><b>`read_data` Wrapper Handling:</b> If the node corresponds to a `read_data` method
+   *       (common in TensorFlow synthetic models), it delegates the resolution to the preceding
+   *       `do` method, which is the actual entry point for the operation logic.
+   *   <li><b>Context-Sensitive Caller Analysis:</b> It utilizes the {@link CallString} context to
+   *       identify the specific caller of the node. It then inspects the call sites in that caller
+   *       to find the {@link PythonInvokeInstruction} that targets this node. This is crucial for
+   *       distinguishing between different calls to the same operation in a context-sensitive
+   *       manner.
+   *   <li><b>Callee Parameter Fallback:</b> If the argument cannot be resolved from the caller
+   *       (e.g., due to analysis imprecision or manual node creation), it attempts to resolve it
+   *       directly from the parameter value numbers within the callee node itself.
+   * </ol>
+   *
+   * @param builder the propagation call graph builder
+   * @param node the call graph node representing the function execution
+   * @param paramPos the 0-based index of the positional parameter (excluding 'self' for instance
+   *     methods)
+   * @param paramName the name of the keyword parameter
+   * @return the points-to set of the argument, or {@link OrdinalSet#empty()} if not found
+   */
   protected OrdinalSet<InstanceKey> getArgumentPointsToSet(
       PropagationCallGraphBuilder builder, CGNode node, int paramPos, String paramName) {
+    // Strategy 1: Direct Invoke Instruction
+    // If we have direct access to the PythonInvokeInstruction, use it. This is the most direct and
+    // reliable method
+    // when the generator is instantiated with a source that directly points to the result of an
+    // invoke.
     PythonInvokeInstruction call = getInvokeInstruction();
     if (call != null) {
       int argValNum = -1;
 
+      // Try to resolve by name (keyword argument) first.
       if (paramName != null) {
         argValNum = call.getUse(paramName);
       }
 
+      // If not found by name, try by position.
       if (argValNum == -1 && paramPos >= 0) {
-
+        // Adjust position to account for keyword arguments which are stored at the end of the use
+        // list.
         int numKeywords = call.getKeywords() != null ? call.getKeywords().size() : 0;
-
-        int numPosParams =
-            call.getNumberOfUses() - 1 - numKeywords; // Exclude function and keywords.
+        // Total uses minus the function object itself (index 0) and the keyword args.
+        int numPosParams = call.getNumberOfUses() - 1 - numKeywords;
 
         if (paramPos < numPosParams) {
-
-          argValNum = call.getUse(paramPos + 1); // Positional arguments start at index 1.
+          // Positional arguments start at index 1 (index 0 is the function object).
+          argValNum = call.getUse(paramPos + 1);
         }
       }
 
@@ -1049,6 +1113,11 @@ public abstract class TensorGenerator {
       return OrdinalSet.empty();
     }
 
+    // Strategy 2: `read_data` Wrapper Handling
+    // Synthetic TensorFlow models often use a `read_data` helper method. If we are analyzing such a
+    // node,
+    // we need to step back to the caller (usually the `do` method of the operation) to find the
+    // actual arguments.
     if (node.getMethod().getName().toString().equals("read_data")) {
       OrdinalSet<InstanceKey> ret = OrdinalSet.empty();
       Iterator<CGNode> preds = builder.getCallGraph().getPredNodes(node);
@@ -1061,8 +1130,10 @@ public abstract class TensorGenerator {
       return ret;
     }
 
-    // 1. Try argument from callers (keyword or positional) - This is more precise for
-    // context-sensitive nodes
+    // Strategy 3: Context-Sensitive Caller Analysis
+    // Use the CallString from the node's context to identify exactly which call site invoked this
+    // function.
+    // This allows us to look up the arguments passed at that specific call site in the caller's IR.
     CallString cs = (CallString) node.getContext().get(CALL_STRING);
     if (cs != null) {
       OrdinalSet<InstanceKey> combinedPts = OrdinalSet.empty();
@@ -1076,14 +1147,15 @@ public abstract class TensorGenerator {
         for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(node); it.hasNext(); ) {
           CGNode caller = it.next();
 
-          // Only consider the caller that matches the context
+          // Ensure we are looking at the caller that matches the method in our call string context.
           if (!caller.getMethod().equals(callerMethod)) {
             continue;
           }
 
           SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(siteReference);
           for (SSAAbstractInvokeInstruction callInstr : calls) {
-            // Verify this specific call instruction actually targets our node in this context
+            // Confirm that this instruction can actually target the current node.
+            // This handles polymorphism where a call site might have multiple possible targets.
             boolean targetsThisNode = false;
             for (CGNode target : builder.getCallGraph().getPossibleTargets(caller, siteReference)) {
               if (target.equals(node)) {
@@ -1101,10 +1173,12 @@ public abstract class TensorGenerator {
               PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
               int argValNum = -1;
 
+              // Try to resolve by name (keyword argument).
               if (paramName != null) {
                 argValNum = pyCallInstr.getUse(paramName);
               }
 
+              // Try to resolve by position.
               if (argValNum == -1 && paramPos >= 0) {
                 int numPosParams =
                     pyCallInstr.getNumberOfPositionalParameters() - 1; // Exclude function.
@@ -1134,13 +1208,17 @@ public abstract class TensorGenerator {
       if (found) {
         return combinedPts;
       }
+      // If we analyzed the call but couldn't find the argument, it likely wasn't provided.
       if (callAnalyzed) {
         return OrdinalSet.empty();
       }
     }
 
-    // 2. Fallback: Try positional parameter in callee
-    int valNum = getArgumentValueNumber(node, paramPos);
+    // Strategy 4: Callee Parameter Fallback
+    // If we couldn't resolve the argument from the caller, we look at the parameter value numbers
+    // within the callee (the `node` itself). This assumes the argument was successfully passed
+    // and mapped to a local variable in the callee.
+    int valNum = this.getArgumentValueNumber(node, paramPos);
     if (valNum > 0) {
       PointerKey pk =
           builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, valNum);
@@ -1186,14 +1264,11 @@ public abstract class TensorGenerator {
       }
 
       if (argValNum == -1 && paramPos >= 0) {
-
         int numKeywords = call.getKeywords() != null ? call.getKeywords().size() : 0;
-
         int numPosParams =
             call.getNumberOfUses() - 1 - numKeywords; // Exclude function and keywords.
 
         if (paramPos < numPosParams) {
-
           argValNum = call.getUse(paramPos + 1); // Positional arguments start at index 1.
         }
       }
@@ -1212,7 +1287,7 @@ public abstract class TensorGenerator {
       // Fallback for manual nodes (no invoke instruction).
       // We assume the arguments are available as parameters in the method body.
       if (paramPos >= 0) {
-        return getArgumentValueNumber(this.getNode(), paramPos);
+        return this.getArgumentValueNumber(this.getNode(), paramPos);
       }
     }
 
