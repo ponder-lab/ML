@@ -27,11 +27,19 @@ public class ReadDataSets extends Ones {
     RESHAPE,
     VALIDATION_SIZE,
     SEED,
-    SOURCE_URL
+    SOURCE_URL;
+
+    public String getName() {
+      return name().toLowerCase();
+    }
   }
 
   public ReadDataSets(PointsToSetVariable source) {
     super(source);
+  }
+
+  public ReadDataSets(CGNode node) {
+    super(node);
   }
 
   @Override
