@@ -442,7 +442,7 @@ public abstract class TensorGenerator {
               "Encountered "
                   + reference.getName()
                   + ". Attempting to retrieve shape from producer.");
-          ret.addAll(getShapesFromTensor(builder, asin));
+          ret.addAll(this.getShapesFromTensor(builder, asin));
         } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
       } else throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
 
