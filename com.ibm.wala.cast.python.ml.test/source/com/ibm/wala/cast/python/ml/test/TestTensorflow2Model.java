@@ -1647,7 +1647,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add43.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_2_3_FLOAT32), 3, Set.of(TENSOR_2_3_FLOAT32)));
   }
 
@@ -1658,7 +1658,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add44.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_2_3_FLOAT32), 3, Set.of(TENSOR_2_3_FLOAT32)));
   }
 

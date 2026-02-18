@@ -47,6 +47,20 @@ public class SparseEye extends Ones {
     int valNum = this.getArgumentValueNumber(builder, paramPosition, paramName, true);
     if (valNum <= 0) return HashSetFactory.make();
 
+    if (this.getNode().getIR() != null
+        && this.getNode().getIR().getSymbolTable().isConstant(valNum)) {
+      Object c = this.getNode().getIR().getSymbolTable().getConstantValue(valNum);
+      Set<Optional<Integer>> ret = HashSetFactory.make();
+      if (c instanceof Number) {
+        ret.add(Optional.of(((Number) c).intValue()));
+      } else if (c == null) {
+        ret.add(Optional.empty());
+      }
+      if (!ret.isEmpty()) {
+        return ret;
+      }
+    }
+
     OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPosition, paramName);
 
     if (pts == null || pts.isEmpty())

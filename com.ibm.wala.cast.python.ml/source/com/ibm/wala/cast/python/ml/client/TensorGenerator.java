@@ -1473,6 +1473,8 @@ public abstract class TensorGenerator {
       return new Ones(node);
     } else if (type.equals(TensorFlowTypes.SPARSE_EYE.getDeclaringClass())) {
       return new SparseEye(node);
+    } else if (type.equals(TensorFlowTypes.EYE.getDeclaringClass())) {
+      return new Eye(node);
     } else if (type.equals(TensorFlowTypes.MATMUL.getDeclaringClass())) {
       return new MatMul(node);
     } else if (type.equals(CONSTANT.getDeclaringClass())) {
