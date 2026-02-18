@@ -107,15 +107,11 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
           String out =
               "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of "
                   + FLOAT32.name().toLowerCase()
-                  + "}, {[D:Constant,1, D:Constant,28, D:Constant,28, D:Constant,1] of "
-                  + FLOAT32.name().toLowerCase()
                   + "}]";
           checkTensorOp(cgBuilder, CG, result, "reshape", in, out);
 
           in =
               "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of "
-                  + FLOAT32.name().toLowerCase()
-                  + "}, {[D:Constant,1, D:Constant,28, D:Constant,28, D:Constant,1] of "
                   + FLOAT32.name().toLowerCase()
                   + "}]";
           checkTensorOp(cgBuilder, CG, result, "conv2d", in, null);
@@ -250,8 +246,6 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
           String in = "[{[D:Symbolic,?, D:Constant,784] of " + FLOAT32.name().toLowerCase() + "}]";
           String out =
               "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of "
-                  + FLOAT32.name().toLowerCase()
-                  + "}, {[D:Constant,1, D:Constant,28, D:Constant,28, D:Constant,1] of "
                   + FLOAT32.name().toLowerCase()
                   + "}]";
           checkTensorOp(cgBuilder, CG, result, "reshape", in, out);
