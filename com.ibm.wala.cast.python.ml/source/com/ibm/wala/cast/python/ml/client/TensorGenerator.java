@@ -636,7 +636,8 @@ public abstract class TensorGenerator {
                 + " from string: "
                 + value
                 + ".");
-        LOGGER.warning(
+      } else {
+        throw new IllegalStateException(
             "Expected a "
                 + TensorFlowTypes.D_TYPE
                 + " for the dtype, but got: "
