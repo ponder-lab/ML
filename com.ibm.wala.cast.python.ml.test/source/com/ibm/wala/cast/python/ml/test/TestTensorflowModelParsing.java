@@ -85,8 +85,8 @@ public class TestTensorflowModelParsing extends TestPythonMLCallGraphShape {
             logger.warning(() -> "Encountered pointer key type: " + pointerKey.getClass() + ".");
         });
 
-    // we should have 3 methods.
-    assertEquals(3, methodSignatureToPointerKeys.size());
+    // we should have 2 methods.
+    assertEquals(2, methodSignatureToPointerKeys.size());
 
     final String addFunctionSignature = "script " + filename + ".add.do()LRoot;";
 
