@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.test;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
+
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
@@ -25,11 +27,17 @@ public class TestNeuroImageExamples extends TestPythonMLCallGraphShape {
     checkTensorOps(
         Ex1URL,
         (PropagationCallGraphBuilder cgBuilder, CallGraph CG, TensorTypeAnalysis result) -> {
-          String in = "[{[D:Constant,64000] of float32}]";
-          String out = "[{[D:Constant,40, D:Constant,40, D:Constant,40, D:Constant,1] of float32}]";
+          String in = "[{[D:Constant,64000] of " + FLOAT32.name().toLowerCase() + "}]";
+          String out =
+              "[{[D:Constant,40, D:Constant,40, D:Constant,40, D:Constant,1] of "
+                  + FLOAT32.name().toLowerCase()
+                  + "}]";
           checkTensorOp(cgBuilder, CG, result, "reshape", in, out);
 
-          in = "[{[D:Constant,40, D:Constant,40, D:Constant,40, D:Constant,1] of float32}]";
+          in =
+              "[{[D:Constant,40, D:Constant,40, D:Constant,40, D:Constant,1] of "
+                  + FLOAT32.name().toLowerCase()
+                  + "}]";
           checkTensorOp(cgBuilder, CG, result, "conv3d", in, null);
         });
   }
