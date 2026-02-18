@@ -57,7 +57,6 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VARIABLE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS_LIKE;
-import static com.ibm.wala.cast.python.util.Util.getFunction;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.util.Util;
