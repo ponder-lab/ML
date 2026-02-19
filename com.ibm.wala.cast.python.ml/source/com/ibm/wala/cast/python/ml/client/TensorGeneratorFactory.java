@@ -208,10 +208,17 @@ public class TensorGeneratorFactory {
             builder.getPropagationSystem().findOrCreatePointsToSet(iterableKey);
         TensorGenerator containerGenerator = getGenerator(iterableSrc, builder);
 
-        // DatasetGenerators are already designed to return element types (the types of the tensors
-        // they produce). Regular Tensors, however, return the type of the Tensor itself.
-        // For iteration over a Tensor, we need to "peel off" the first dimension to get the element
-        // type.
+        // We have a generator for the container (the object being iterated over).
+        // If the container is a Dataset (e.g. tf.data.Dataset), its generator (DatasetGenerator)
+        // is defined to return the shapes/dtypes of its *elements* (not the dataset object itself).
+        // Therefore, we use it directly.
+        //
+        // However, if the container is a Tensor (e.g. tf.range output, or a constant), its
+        // generator
+        // (e.g. Range, Constant) returns the shape/dtype of the *tensor itself* (the container).
+        // When iterating over a Tensor, we effectively slice along the first dimension.
+        // Thus, we wrap the container generator in a TensorElementGenerator, which "peels off"
+        // that first dimension to produce the shapes of the elements yielded by iteration.
         return (containerGenerator instanceof DatasetGenerator)
             ? containerGenerator
             : new TensorElementGenerator(containerGenerator);
@@ -224,8 +231,8 @@ public class TensorGeneratorFactory {
         PointsToSetVariable objSrc = builder.getPropagationSystem().findOrCreatePointsToSet(objKey);
         TensorGenerator containerGenerator = getGenerator(objSrc, builder);
 
-        // Similar to EachElementGet, if we are reading an element from a container that isn't
-        // a Dataset (which already handles elements), we wrap it to adjust the shape.
+        // Similar to EachElementGet, we check if the container generator represents elements
+        // (Dataset) or the container itself (Tensor).
         return (containerGenerator instanceof DatasetGenerator)
             ? containerGenerator
             : new TensorElementGenerator(containerGenerator);
