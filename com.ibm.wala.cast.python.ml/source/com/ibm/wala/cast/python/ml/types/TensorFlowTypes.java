@@ -145,7 +145,8 @@ public class TensorFlowTypes extends PythonTypes {
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/map"));
 
   public static final TypeReference DATASET_RANGE_TYPE =
-      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/range"));
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset/range"));
 
   public static final TypeReference DATASET_FROM_TENSOR_SLICES_TYPE =
       TypeReference.findOrCreate(

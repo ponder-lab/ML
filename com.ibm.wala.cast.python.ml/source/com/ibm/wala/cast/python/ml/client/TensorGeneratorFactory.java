@@ -273,10 +273,10 @@ public class TensorGeneratorFactory {
         || isType(calledFunction, NDARRAY.getDeclaringClass())) return new TensorCall(source);
     else if (isType(calledFunction, DATASET_FROM_TENSOR_SLICES_TYPE))
       return new DatasetFromTensorSlicesGenerator(source);
-    else if (isType(calledFunction, DATASET_BATCH_TYPE)
-        || isType(calledFunction, DATASET_SHUFFLE_TYPE)
+    else if (isType(calledFunction, DATASET_BATCH_TYPE)) return new DatasetBatchGenerator(source);
+    else if (isType(calledFunction, DATASET_RANGE_TYPE)) return new DatasetRangeGenerator(source);
+    else if (isType(calledFunction, DATASET_SHUFFLE_TYPE)
         || isType(calledFunction, DATASET_MAP_TYPE)
-        || isType(calledFunction, DATASET_RANGE_TYPE)
         || isType(calledFunction, DATASET)) return new DatasetGenerator(source);
     else if (isType(calledFunction, READ_DATA_SETS.getDeclaringClass()))
       return new ReadDataSets(source);
