@@ -52,8 +52,9 @@ public class DatasetGenerator extends TensorGenerator {
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     TypeReference func = getFunction(this.getSource());
     if (func != null && func.equals(DATASET_FROM_TENSOR_SLICES_TYPE)) {
-      // The 'tensors' argument is at position 1 (args: this, tensors, name).
-      // We look for argument at position 1. Name is "tensors".
+      // For from_tensor_slices, element shapes are derived by slicing the first dimension of the
+      // input.
+      // The 'tensors' argument is at position 0 (args: this, tensors, name).
       OrdinalSet<InstanceKey> tensorsPTS = this.getArgumentPointsToSet(builder, 0, "tensors");
       if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
         Set<List<Dimension<?>>> inputShapes = this.getShapesOfValue(builder, tensorsPTS);
@@ -86,6 +87,8 @@ public class DatasetGenerator extends TensorGenerator {
   protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     TypeReference func = getFunction(this.getSource());
     if (func != null && func.equals(DATASET_FROM_TENSOR_SLICES_TYPE)) {
+      // For from_tensor_slices, element dtypes are the same as the input tensor(s)' dtypes.
+      // The 'tensors' argument is at position 0 (args: this, tensors, name).
       OrdinalSet<InstanceKey> tensorsPTS = this.getArgumentPointsToSet(builder, 0, "tensors");
       if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
         Set<DType> dTypes = this.getDTypesOfValue(builder, tensorsPTS);
