@@ -519,7 +519,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     // treating it as one. But, in the literal case, it should be possible to model it like the list
     // tests below.
     test(
-        "tf2_test_dataset.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+        "tf2_test_dataset.py",
+        "add",
+        2,
+        2,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32), 3, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
