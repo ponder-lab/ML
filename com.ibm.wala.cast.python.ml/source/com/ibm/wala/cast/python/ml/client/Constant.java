@@ -25,11 +25,11 @@ public class Constant extends TensorGenerator {
     VERIFY_SHAPE;
 
     public String getName() {
-      return name().toLowerCase();
+      return this.name().toLowerCase();
     }
 
     public int getIndex() {
-      return ordinal();
+      return this.ordinal();
     }
   }
 
