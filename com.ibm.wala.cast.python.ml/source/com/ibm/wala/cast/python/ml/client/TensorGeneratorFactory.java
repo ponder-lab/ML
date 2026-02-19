@@ -213,12 +213,8 @@ public class TensorGeneratorFactory {
         // is defined to return the shapes/dtypes of its *elements* (not the dataset object itself).
         // Therefore, we use it directly.
         //
-        // However, if the container is a Tensor (e.g. tf.range output, or a constant), its
-        // generator
-        // (e.g. Range, Constant) returns the shape/dtype of the *tensor itself* (the container).
-        // When iterating over a Tensor, we effectively slice along the first dimension.
-        // Thus, we wrap the container generator in a TensorElementGenerator, which "peels off"
-        // that first dimension to produce the shapes of the elements yielded by iteration.
+        // For Tensors (e.g. tf.range, constants), the generator returns the tensor's own shape.
+        // When iterating, we must peel off the first dimension to get the element shape.
         return (containerGenerator instanceof DatasetGenerator)
             ? containerGenerator
             : new TensorElementGenerator(containerGenerator);
@@ -232,7 +228,7 @@ public class TensorGeneratorFactory {
         TensorGenerator containerGenerator = getGenerator(objSrc, builder);
 
         // Similar to EachElementGet, we check if the container generator represents elements
-        // (Dataset) or the container itself (Tensor).
+        // (Dataset) or the tensor itself (peeling needed).
         return (containerGenerator instanceof DatasetGenerator)
             ? containerGenerator
             : new TensorElementGenerator(containerGenerator);
