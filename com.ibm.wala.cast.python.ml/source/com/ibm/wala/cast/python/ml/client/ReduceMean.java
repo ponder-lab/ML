@@ -14,6 +14,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Logger;
 
 /**
  * A generator for {@code tf.reduce_mean}.
@@ -22,6 +23,8 @@ import java.util.Set;
  *     href="https://www.tensorflow.org/api_docs/python/tf/math/reduce_mean">tf.math.reduce_mean</a>
  */
 public class ReduceMean extends TensorGenerator {
+
+  private static final Logger LOGGER = Logger.getLogger(ReduceMean.class.getName());
 
   protected enum Parameters {
     INPUT_TENSOR,
@@ -116,15 +119,6 @@ public class ReduceMean extends TensorGenerator {
           }
         }
       }
-    }
-
-    if (axisValues.isEmpty() && !axisIsNone) {
-      // If we found points-to but couldn't resolve values, fallback to None? or fail?
-      // Fallback to reducing everything (scalar) is safer for now?
-      // Or identity?
-      // Let's assume None if we couldn't find any specific axes but passed something.
-      // Actually, if we can't analyze axis, we can't determine shape reliably.
-      // But for the test case, axis is explicit (0, 1) or None.
     }
 
     for (List<Dimension<?>> inputShape : inputShapes) {

@@ -538,7 +538,7 @@
     </package>
     <package name="tensorflow/functions">
       <class name="from_nested_value_rowids" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="flat_values nested_value_rowids nested_nrows name validate">
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self flat_values nested_value_rowids nested_nrows name validate">
           <new def="res" class="Ltensorflow/functions/from_nested_value_rowids" />
           <return value="res" />
         </method>
@@ -610,10 +610,10 @@
         </method>
       </class>
       <class name="constant" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="value dtype shape name">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self value dtype shape name">
           <new def="res" class="Ltensorflow/python/framework/constant_op/constant" />
-          <putfield class="Ltensorflow/python/framework/constant_op/constant" field="value" fieldType="LRoot" ref="res" value="arg1" />
-          <putfield class="Ltensorflow/python/framework/constant_op/constant" field="dtype" fieldType="LRoot" ref="res" value="arg2" />
+          <putfield class="Ltensorflow/python/framework/constant_op/constant" field="value" fieldType="LRoot" ref="res" value="value" />
+          <putfield class="Ltensorflow/python/framework/constant_op/constant" field="dtype" fieldType="LRoot" ref="res" value="dtype" />
           <return value="res" />
         </method>
       </class>
@@ -662,21 +662,21 @@
       </class>
       <class name="fill" allocatable="true">
         <!-- Allocation moved to do() to avoid 1-CFA aliasing issues with shared read_data(). -->
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="dims value name">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self dims value name">
           <new def="x" class="Ltensorflow/python/ops/array_ops/fill" />
           <return value="x" />
         </method>
       </class>
       <class name="zeros_like" allocatable="true">
         <!-- Allocation moved to do() to avoid 1-CFA aliasing issues with shared read_data(). -->
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="input dtype name">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self input dtype name">
           <new def="x" class="Ltensorflow/python/ops/array_ops/zeros_like" />
           <return value="x" />
         </method>
       </class>
       <class name="one_hot" allocatable="true">
         <!-- Allocation moved to do() to avoid 1-CFA aliasing issues with shared read_data(). -->
-        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="indices depth on_value off_value axis dtype name">
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self indices depth on_value off_value axis dtype name">
           <new def="x" class="Ltensorflow/python/ops/array_ops/one_hot" />
           <return value="x" />
         </method>
@@ -718,7 +718,7 @@
       <class name="ragged_constant" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self pylist dtype ragged_rank inner_shape name row_splits_dtype">
           <new def="x" class="Ltensorflow/python/ops/ragged/ragged_factory_ops/constant" />
-          <putfield class="Ltensorflow/python/ops/ragged/ragged_factory_ops/constant" field="value" fieldType="LRoot" ref="x" value="arg1" />
+          <putfield class="Ltensorflow/python/ops/ragged/ragged_factory_ops/constant" field="value" fieldType="LRoot" ref="x" value="pylist" />
           <return value="x" />
         </method>
       </class>
@@ -764,49 +764,49 @@
         </method>
       </class>
       <class name="from_nested_row_lengths" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="flat_values nested_row_lengths name validate">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self flat_values nested_row_lengths name validate">
           <new def="res" class="Ltensorflow/functions/from_nested_row_lengths" />
           <return value="res" />
         </method>
       </class>
       <class name="from_nested_row_splits" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="flat_values nested_row_splits name validate">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self flat_values nested_row_splits name validate">
           <new def="res" class="Ltensorflow/functions/from_nested_row_splits" />
           <return value="res" />
         </method>
       </class>
       <class name="from_row_lengths" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="values row_lengths name validate">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self values row_lengths name validate">
           <new def="res" class="Ltensorflow/functions/from_row_lengths" />
           <return value="res" />
         </method>
       </class>
       <class name="from_row_limits" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="values row_limits name validate">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self values row_limits name validate">
           <new def="res" class="Ltensorflow/functions/from_row_limits" />
           <return value="res" />
         </method>
       </class>
       <class name="from_row_splits" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="values row_splits name validate">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self values row_splits name validate">
           <new def="res" class="Ltensorflow/functions/from_row_splits" />
           <return value="res" />
         </method>
       </class>
       <class name="from_row_starts" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="values row_starts name validate">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self values row_starts name validate">
           <new def="res" class="Ltensorflow/functions/from_row_starts" />
           <return value="res" />
         </method>
       </class>
       <class name="from_value_rowids" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="values value_rowids nrows name validate">
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self values value_rowids nrows name validate">
           <new def="res" class="Ltensorflow/functions/from_value_rowids" />
           <return value="res" />
         </method>
       </class>
       <class name="placeholder" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="dtype shape name">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self dtype shape name">
           <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
@@ -938,7 +938,7 @@
     </package>
     <package name="tensorflow/keras/layers">
       <class name="Input" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="shape batch_size name dtype sparse tensor ragged type_spec">
+        <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self shape batch_size name dtype sparse tensor ragged type_spec">
           <new def="x" class="Ltensorflow/keras/layers/Input" />
           <return value="x" />
         </method>

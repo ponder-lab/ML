@@ -237,8 +237,10 @@ public class TensorGeneratorFactory {
         || isType(calledFunction, DATASET)) return new DatasetGenerator(source);
     else if (isType(calledFunction, READ_DATA_SETS.getDeclaringClass()))
       return new ReadDataSets(source);
-    else if (isType(calledFunction, REDUCE_MEAN.getDeclaringClass())) return new ReduceMean(source);
-    else if (isType(calledFunction, PLACEHOLDER.getDeclaringClass()))
+    else if (isType(calledFunction, REDUCE_MEAN.getDeclaringClass())) {
+      System.out.println("DEBUG: Factory matching REDUCE_MEAN");
+      return new ReduceMean(source);
+    } else if (isType(calledFunction, PLACEHOLDER.getDeclaringClass()))
       return new Placeholder(source);
     else if (isType(calledFunction, EQUAL.getDeclaringClass()))
       return new ElementWiseOperation(source);
