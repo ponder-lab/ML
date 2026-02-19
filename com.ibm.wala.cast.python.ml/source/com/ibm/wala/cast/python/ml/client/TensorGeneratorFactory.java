@@ -160,10 +160,20 @@ public class TensorGeneratorFactory {
   }
 
   /**
-   * Returns a {@link TensorGenerator} instance for the given source and call graph builder. This
-   * method identifies the specific TensorFlow function being called and instantiates the
-   * appropriate generator subclass. It handles recursive calls for return values and various
-   * TensorFlow operations.
+   * Returns a {@link TensorGenerator} instance for the given source and call graph builder.
+   *
+   * <p>This method identifies the specific TensorFlow function or operation that produced the value
+   * represented by the source. It handles two main cases:
+   *
+   * <ul>
+   *   <li><b>Function Calls (Invoke Instructions):</b> It inspects the call instruction to
+   *       determine the invoked function (e.g., {@code tf.add}, {@code tf.constant}) and returns a
+   *       corresponding generator. It also handles recursive resolution for return values of calls.
+   *   <li><b>Iteration (EachElementGet Instructions):</b> If the source represents an element
+   *       obtained from iterating over a collection (e.g., a loop variable), it traces back to the
+   *       iterable object (e.g., a {@code tf.data.Dataset}) and delegates to its generator to
+   *       determine the element type.
+   * </ul>
    *
    * @param source the points-to set variable representing the source of the tensor
    * @param builder the propagation call graph builder used for the analysis
