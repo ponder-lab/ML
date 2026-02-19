@@ -14,7 +14,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.logging.Logger;
 
 /**
  * A generator for {@code tf.reduce_mean}.
@@ -23,8 +22,6 @@ import java.util.logging.Logger;
  *     href="https://www.tensorflow.org/api_docs/python/tf/math/reduce_mean">tf.math.reduce_mean</a>
  */
 public class ReduceMean extends TensorGenerator {
-
-  private static final Logger LOGGER = Logger.getLogger(ReduceMean.class.getName());
 
   protected enum Parameters {
     INPUT_TENSOR,
