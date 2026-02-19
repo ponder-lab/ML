@@ -23,6 +23,16 @@ public class TensorElementGenerator extends TensorGenerator {
     this.containerGenerator = containerGenerator;
   }
 
+  /**
+   * Returns the shapes of the elements contained within the container tensor.
+   *
+   * <p>When iterating over a tensor of rank N, the elements produced have rank N-1, where the first
+   * dimension of the container is removed. For example, iterating over a tensor of shape [5, 10]
+   * yields elements of shape [10].
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} for the analysis.
+   * @return A set of possible element shapes.
+   */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     Set<List<Dimension<?>>> containerShapes = this.containerGenerator.getShapes(builder);

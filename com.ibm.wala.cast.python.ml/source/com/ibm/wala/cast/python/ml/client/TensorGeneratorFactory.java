@@ -199,21 +199,33 @@ public class TensorGeneratorFactory {
           return getGenerator(retSrc, builder); // Recursive call for the callee's return value
         }
       } else if (def instanceof EachElementGetInstruction) {
+        // We are iterating over a collection (e.g., for loop). Get the generator for the collection
+        // itself.
         int iterableVn = def.getUse(0);
         PointerKey iterableKey =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
         PointsToSetVariable iterableSrc =
             builder.getPropagationSystem().findOrCreatePointsToSet(iterableKey);
         TensorGenerator containerGenerator = getGenerator(iterableSrc, builder);
+
+        // DatasetGenerators are already designed to return element types (the types of the tensors
+        // they produce). Regular Tensors, however, return the type of the Tensor itself.
+        // For iteration over a Tensor, we need to "peel off" the first dimension to get the element
+        // type.
         return (containerGenerator instanceof DatasetGenerator)
             ? containerGenerator
             : new TensorElementGenerator(containerGenerator);
       } else if (def instanceof PythonPropertyRead) {
+        // Python iteration may also be translated into property reads (e.g., retrieving an element
+        // from a dataset or tensor).
         int objRef = ((PythonPropertyRead) def).getObjectRef();
         PointerKey objKey =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, objRef);
         PointsToSetVariable objSrc = builder.getPropagationSystem().findOrCreatePointsToSet(objKey);
         TensorGenerator containerGenerator = getGenerator(objSrc, builder);
+
+        // Similar to EachElementGet, if we are reading an element from a container that isn't
+        // a Dataset (which already handles elements), we wrap it to adjust the shape.
         return (containerGenerator instanceof DatasetGenerator)
             ? containerGenerator
             : new TensorElementGenerator(containerGenerator);
