@@ -204,13 +204,19 @@ public class TensorGeneratorFactory {
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
         PointsToSetVariable iterableSrc =
             builder.getPropagationSystem().findOrCreatePointsToSet(iterableKey);
-        return getGenerator(iterableSrc, builder);
+        TensorGenerator containerGenerator = getGenerator(iterableSrc, builder);
+        return (containerGenerator instanceof DatasetGenerator)
+            ? containerGenerator
+            : new TensorElementGenerator(containerGenerator);
       } else if (def instanceof PythonPropertyRead) {
         int objRef = ((PythonPropertyRead) def).getObjectRef();
         PointerKey objKey =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, objRef);
         PointsToSetVariable objSrc = builder.getPropagationSystem().findOrCreatePointsToSet(objKey);
-        return getGenerator(objSrc, builder);
+        TensorGenerator containerGenerator = getGenerator(objSrc, builder);
+        return (containerGenerator instanceof DatasetGenerator)
+            ? containerGenerator
+            : new TensorElementGenerator(containerGenerator);
       }
     }
 
