@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * A generator for tensors created by <code>tf.data.Dataset.from_tensor_slices</code>.
+ * A generator for tensors created by {@code tf.data.Dataset.from_tensor_slices}.
  *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */

@@ -26,9 +26,9 @@ public class TensorElementGenerator extends TensorGenerator {
   /**
    * Returns the shapes of the elements contained within the container tensor.
    *
-   * <p>When iterating over a tensor of rank <code>N</code>, the elements produced have rank <code>
-   * N-1</code>, where the first dimension of the container is removed. For example, iterating over
-   * a tensor of shape <code>[5, 10]</code> yields elements of shape <code>[10]</code>.
+   * <p>When iterating over a tensor of rank {@code N}, the elements produced have rank {@code N-1},
+   * where the first dimension of the container is removed. For example, iterating over a tensor of
+   * shape {@code [5, 10]} yields elements of shape {@code [10]}.
    *
    * @param builder The {@link PropagationCallGraphBuilder} for the analysis.
    * @return A set of possible element shapes.

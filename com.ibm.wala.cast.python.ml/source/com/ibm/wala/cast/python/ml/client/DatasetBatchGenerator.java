@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * A generator for tensors created by <code>tf.data.Dataset.batch</code>.
+ * A generator for tensors created by {@code tf.data.Dataset.batch}.
  *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
