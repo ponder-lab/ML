@@ -300,7 +300,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "value_index",
         2,
         2,
-        Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32), 3, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
   @Test
@@ -311,7 +311,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "value_index",
         2,
         2,
-        Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32), 3, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
   @Test
@@ -322,7 +322,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "value_index",
         2,
         2,
-        Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32), 3, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
   @Test
@@ -333,7 +333,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "value_index",
         2,
         2,
-        Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32), 3, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
   @Test

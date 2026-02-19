@@ -351,7 +351,7 @@
       <class name="DType" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes/DType -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self type_enum handle_data">
-          <new def="obj" class="Ltensorflow/DType" />
+          <new def="obj" class="Ltensorflow/dtypes/DType" />
           <putfield class="LRoot" field="type_enum" fieldType="LRoot" ref="obj" value="type_enum" />
           <putfield class="LRoot" field="handle_data" fieldType="LRoot" ref="obj" value="handle_data" />
           <return value="obj" />
@@ -1291,7 +1291,7 @@
           <new def="ops" class="Llist" />
           <new def="const_func" class="Ltensorflow/functions/constant" />
           <constant name="val" type="float" value="0.0" />
-          <constant name="dtype" type="int" value="0" />
+          <constant name="dtype" type="string" value="float" />
           <constant name="shape" type="int" value="0" />
           <constant name="name" type="string" value="dummy" />
           <call class="Ltensorflow/functions/constant" name="do" descriptor="()LRoot;" type="virtual" arg0="const_func" arg1="val" arg2="dtype" arg3="shape" arg4="name" numArgs="5" def="c" />
