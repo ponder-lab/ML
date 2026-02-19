@@ -209,12 +209,12 @@ public class TensorGeneratorFactory {
         TensorGenerator containerGenerator = getGenerator(iterableSrc, builder);
 
         // We have a generator for the container (the object being iterated over).
-        // If the container is a Dataset (e.g. tf.data.Dataset), its generator (DatasetGenerator)
-        // is defined to return the shapes/dtypes of its *elements* (not the dataset object itself).
-        // Therefore, we use it directly.
+        // If the container is a `Dataset` (e.g., `tf.data.Dataset`), its generator
+        // (`DatasetGenerator`) is defined to return the shapes/dtypes of its *elements* (not the
+        // dataset object itself). Therefore, we use it directly.
         //
-        // For Tensors (e.g. tf.range, constants), the generator returns the tensor's own shape.
-        // When iterating, we must peel off the first dimension to get the element shape.
+        // For `Tensors` (e.g., `tf.range`, constants), the generator returns the tensor's own
+        // shape. When iterating, we must peel off the first dimension to get the element shape.
         return (containerGenerator instanceof DatasetGenerator)
             ? containerGenerator
             : new TensorElementGenerator(containerGenerator);
@@ -227,8 +227,8 @@ public class TensorGeneratorFactory {
         PointsToSetVariable objSrc = builder.getPropagationSystem().findOrCreatePointsToSet(objKey);
         TensorGenerator containerGenerator = getGenerator(objSrc, builder);
 
-        // Similar to EachElementGet, we check if the container generator represents elements
-        // (Dataset) or the tensor itself (peeling needed).
+        // Similar to `EachElementGet`, we check if the container generator represents elements
+        // (`Dataset`) or the tensor itself (peeling needed).
         return (containerGenerator instanceof DatasetGenerator)
             ? containerGenerator
             : new TensorElementGenerator(containerGenerator);
