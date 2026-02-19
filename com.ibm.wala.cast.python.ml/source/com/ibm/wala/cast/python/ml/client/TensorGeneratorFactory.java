@@ -59,6 +59,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS_LIKE;
 import static java.util.logging.Logger.getLogger;
 
+import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.python.util.Util;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -169,6 +170,13 @@ public class TensorGeneratorFactory {
               builder.getPropagationSystem().findOrCreatePointsToSet(retKey);
           return getGenerator(retSrc, builder); // Recursive call for the callee's return value
         }
+      } else if (def instanceof EachElementGetInstruction) {
+        int iterableVn = def.getUse(0);
+        PointerKey iterableKey =
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
+        PointsToSetVariable iterableSrc =
+            builder.getPropagationSystem().findOrCreatePointsToSet(iterableKey);
+        return getGenerator(iterableSrc, builder);
       }
     }
 

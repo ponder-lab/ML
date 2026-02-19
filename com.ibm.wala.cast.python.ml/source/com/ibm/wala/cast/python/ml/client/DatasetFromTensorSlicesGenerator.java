@@ -9,7 +9,6 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
@@ -19,6 +18,19 @@ import java.util.Set;
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
 public class DatasetFromTensorSlicesGenerator extends DatasetGenerator {
+
+  protected enum Parameters {
+    TENSORS,
+    NAME;
+
+    public String getName() {
+      return name().toLowerCase();
+    }
+
+    public int getIndex() {
+      return ordinal();
+    }
+  }
 
   public DatasetFromTensorSlicesGenerator(PointsToSetVariable source) {
     super(source);
@@ -30,7 +42,9 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator {
     // slicing the input tensors along their first dimension. Thus, the element shapes are
     // the input shapes with the first dimension removed.
     // The 'tensors' argument is at position 0 (args: this, tensors, name).
-    OrdinalSet<InstanceKey> tensorsPTS = this.getArgumentPointsToSet(builder, 0, "tensors");
+    OrdinalSet<InstanceKey> tensorsPTS =
+        this.getArgumentPointsToSet(
+            builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName());
     if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
       Set<List<Dimension<?>>> inputShapes = this.getShapesOfValue(builder, tensorsPTS);
       Set<List<Dimension<?>>> ret = HashSetFactory.make();
@@ -51,16 +65,15 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator {
   }
 
   @Override
-  protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // For from_tensor_slices, element dtypes are the same as the input tensor(s)' dtypes.
     // The 'tensors' argument is at position 0 (args: this, tensors, name).
-    OrdinalSet<InstanceKey> tensorsPTS = this.getArgumentPointsToSet(builder, 0, "tensors");
+    OrdinalSet<InstanceKey> tensorsPTS =
+        this.getArgumentPointsToSet(
+            builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName());
     if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
-      Set<DType> dTypes = this.getDTypesOfValue(builder, tensorsPTS);
-      if (!dTypes.isEmpty()) {
-        return EnumSet.copyOf(dTypes);
-      }
+      return this.getDTypesOfValue(builder, tensorsPTS);
     }
-    return EnumSet.noneOf(DType.class);
+    return Collections.emptySet();
   }
 }

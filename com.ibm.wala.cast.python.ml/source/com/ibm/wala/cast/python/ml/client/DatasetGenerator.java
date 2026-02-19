@@ -6,7 +6,6 @@ import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.intset.OrdinalSet;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
@@ -55,14 +54,14 @@ public class DatasetGenerator extends TensorGenerator {
   }
 
   @Override
-  protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // For dataset transformations, default to dtypes of the input dataset (the receiver).
     OrdinalSet<InstanceKey> receiverPTS =
         this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, "self");
     if (receiverPTS != null && !receiverPTS.isEmpty()) {
       Set<DType> dTypes = this.getDTypesOfValue(builder, receiverPTS);
       if (!dTypes.isEmpty()) {
-        return EnumSet.copyOf(dTypes);
+        return dTypes;
       }
     }
     throw new UnsupportedOperationException(
