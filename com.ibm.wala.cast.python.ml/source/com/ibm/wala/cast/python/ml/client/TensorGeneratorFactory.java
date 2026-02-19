@@ -86,14 +86,29 @@ public class TensorGeneratorFactory {
   private static final Logger LOGGER = getLogger(TensorGeneratorFactory.class.getName());
 
   /**
-   * Returns the function type associated with the given source, using the points-to set variable
-   * and the call graph builder. This method handles local pointer keys, including invoke
-   * instructions, and return value keys.
+   * Resolves the {@link TypeReference} for the function call associated with the given source.
+   *
+   * <p>This method employs a multi-staged approach:
+   *
+   * <ol>
+   *   <li>If the source represents a local variable (via {@link LocalPointerKey}):
+   *       <ul>
+   *         <li>If the variable is defined by an invoke instruction, it attempts to resolve the
+   *             target's type.
+   *         <li>Special handling is provided for calls to generic containers like {@code LCodeBody}
+   *             or {@code LRoot}: it inspects the points-to set of the call's receiver (the actual
+   *             function object being invoked) to determine the specific concrete type.
+   *         <li>If not an invoke, it defaults to the declaring class of the method where the
+   *             variable resides.
+   *       </ul>
+   *   <li>If the source represents a return value (via {@link ReturnValueKey}), it uses the
+   *       declaring class of the corresponding method.
+   *   <li>As a final fallback, it delegates to {@link Util#getFunction(PointsToSetVariable)}.
+   * </ol>
    *
    * @param source the points-to set variable representing the source of the function call
    * @param builder the propagation call graph builder used for the analysis
-   * @return the type reference of the function, or the result of {@link
-   *     Util#getFunction(PointsToSetVariable)} if not resolved
+   * @return the resolved type reference of the function
    */
   private static TypeReference getFunction(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
@@ -108,6 +123,8 @@ public class TensorGeneratorFactory {
         TypeReference declaredClass = call.getCallSite().getDeclaredTarget().getDeclaringClass();
         if (declaredClass.getName().toString().equals("LCodeBody")
             || declaredClass.getName().toString().equals("LRoot")) {
+          // The call target is generic. We inspect the points-to set of the invoked function object
+          // (at index 0) to resolve the actual concrete type.
           int funcVn = call.getUse(0);
           PointerKey funcKey =
               builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, funcVn);
@@ -246,10 +263,8 @@ public class TensorGeneratorFactory {
         || isType(calledFunction, DATASET)) return new DatasetGenerator(source);
     else if (isType(calledFunction, READ_DATA_SETS.getDeclaringClass()))
       return new ReadDataSets(source);
-    else if (isType(calledFunction, REDUCE_MEAN.getDeclaringClass())) {
-      System.out.println("DEBUG: Factory matching REDUCE_MEAN");
-      return new ReduceMean(source);
-    } else if (isType(calledFunction, PLACEHOLDER.getDeclaringClass()))
+    else if (isType(calledFunction, REDUCE_MEAN.getDeclaringClass())) return new ReduceMean(source);
+    else if (isType(calledFunction, PLACEHOLDER.getDeclaringClass()))
       return new Placeholder(source);
     else if (isType(calledFunction, EQUAL.getDeclaringClass()))
       return new ElementWiseOperation(source);
