@@ -443,6 +443,8 @@ public abstract class TensorGenerator {
                   + reference.getName()
                   + ". Attempting to retrieve shape from producer.");
           ret.addAll(this.getShapesFromTensor(builder, asin));
+        } else if (reference.equals(TensorFlowTypes.D_TYPE)) {
+          LOGGER.fine("Ignoring DType: " + asin);
         } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
       } else throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
 

@@ -5749,11 +5749,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_3_NONE_NONE_STRING)));
   }
 
-  /**
-   * FIXME: Should not throw an {@link IllegalArgumentException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testRaggedNestedValueRowidsKeyword()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -5786,11 +5782,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
   }
 
-  /**
-   * FIXME: Should not throw an {@link IllegalArgumentException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
-  @Test(expected = IllegalArgumentException.class)
+  @Test
   public void testRaggedNestedValueRowidsMixed()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
