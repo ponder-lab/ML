@@ -52,8 +52,9 @@ public class DatasetGenerator extends TensorGenerator {
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     TypeReference func = getFunction(this.getSource());
     if (func != null && func.equals(DATASET_FROM_TENSOR_SLICES_TYPE)) {
-      // For from_tensor_slices, element shapes are derived by slicing the first dimension of the
-      // input.
+      // For tf.data.Dataset.from_tensor_slices(tensors), the dataset elements are created by
+      // slicing the input tensors along their first dimension. Thus, the element shapes are
+      // the input shapes with the first dimension removed.
       // The 'tensors' argument is at position 0 (args: this, tensors, name).
       OrdinalSet<InstanceKey> tensorsPTS = this.getArgumentPointsToSet(builder, 0, "tensors");
       if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
@@ -61,10 +62,11 @@ public class DatasetGenerator extends TensorGenerator {
         Set<List<Dimension<?>>> ret = HashSetFactory.make();
         for (List<Dimension<?>> shape : inputShapes) {
           if (shape.size() > 0) {
-            // Slice off the first dimension.
+            // Remove the first dimension to account for slicing.
             ret.add(new ArrayList<>(shape.subList(1, shape.size())));
           } else {
-            // Scalar input -> empty list.
+            // If the input is already a scalar (unexpected for from_tensor_slices),
+            // the element shape is empty.
             ret.add(Collections.emptyList());
           }
         }
