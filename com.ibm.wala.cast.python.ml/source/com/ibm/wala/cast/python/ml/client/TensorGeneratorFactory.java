@@ -6,10 +6,18 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_BATCH_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CONCATENATE_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_ENUMERATE_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FILTER_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FROM_TENSOR_SLICES_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_MAP_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_PREFETCH_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_RANGE_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_REDUCE_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_REPEAT_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SHUFFLE_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_TAKE_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_WITH_OPTIONS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DENSE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIVIDE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EQUAL;
@@ -25,6 +33,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_ROW_SPLITS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_ROW_STARTS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_VALUE_ROWIDS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MATMUL;
@@ -33,10 +42,12 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MULTIPLY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NDARRAY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONES;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONE_HOT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.PLACEHOLDER;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.POISSON;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.POISSON_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANGE;
@@ -53,7 +64,9 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SUBTRACT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TF_RESHAPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VARIABLE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS_LIKE;
@@ -71,7 +84,9 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey;
+import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.types.TypeReference;
 import java.util.logging.Logger;
@@ -139,6 +154,23 @@ public class TensorGeneratorFactory {
           }
         }
         return declaredClass;
+      } else if (def instanceof SSABinaryOpInstruction) {
+        SSABinaryOpInstruction binOp = (SSABinaryOpInstruction) def;
+        if (binOp.getOperator() == IBinaryOpInstruction.Operator.ADD) {
+          return ADD.getDeclaringClass();
+        } else if (binOp.getOperator() == IBinaryOpInstruction.Operator.SUB) {
+          return SUBTRACT.getDeclaringClass();
+        } else if (binOp.getOperator() == IBinaryOpInstruction.Operator.MUL) {
+          return MULTIPLY.getDeclaringClass();
+        } else if (binOp.getOperator() == IBinaryOpInstruction.Operator.DIV) {
+          return DIVIDE.getDeclaringClass();
+        }
+        // TODO: Handle other operators:
+        // - Modulo (%): tf.math.mod (IBinaryOpInstruction.Operator.REM)
+        // - Power (**): tf.math.pow
+        // - Bitwise (&, |, ^): tf.bitwise operations
+        // - Comparison (==, !=, <, >): tf.equal, etc. (SSAComparisonInstruction)
+        // - Unary (-, ~, abs): tf.negative, etc. (SSAUnaryOpInstruction)
       }
       return lpk.getNode().getMethod().getDeclaringClass().getReference();
     } else if (k instanceof ReturnValueKey) {
@@ -157,7 +189,7 @@ public class TensorGeneratorFactory {
    */
   private static boolean isType(TypeReference tr, TypeReference expected) {
     if (tr == null || expected == null) return false;
-    return tr.getName().equals(expected.getName());
+    return tr.getName().toString().equals(expected.getName().toString());
   }
 
   /**
@@ -241,10 +273,12 @@ public class TensorGeneratorFactory {
     if (isType(calledFunction, ONES.getDeclaringClass())) return new Ones(source);
     else if (isType(calledFunction, CONSTANT.getDeclaringClass())) return new Constant(source);
     else if (isType(calledFunction, RANGE.getDeclaringClass())) return new Range(source);
-    else if (isType(calledFunction, UNIFORM.getDeclaringClass())) return new Uniform(source);
-    else if (isType(calledFunction, NORMAL.getDeclaringClass())) return new Normal(source);
-    else if (isType(calledFunction, TRUNCATED_NORMAL.getDeclaringClass()))
-      return new TruncatedNormal(source);
+    else if (isType(calledFunction, UNIFORM.getDeclaringClass())
+        || isType(calledFunction, UNIFORM_OP)) return new Uniform(source);
+    else if (isType(calledFunction, NORMAL.getDeclaringClass())
+        || isType(calledFunction, NORMAL_OP)) return new Normal(source);
+    else if (isType(calledFunction, TRUNCATED_NORMAL.getDeclaringClass())
+        || isType(calledFunction, TRUNCATED_NORMAL_OP)) return new TruncatedNormal(source);
     else if (isType(calledFunction, ZEROS.getDeclaringClass())) return new Zeros(source);
     else if (isType(calledFunction, ZEROS_LIKE.getDeclaringClass())) return new ZerosLike(source);
     else if (isType(calledFunction, ARRAY_OPS_RESHAPE)
@@ -257,9 +291,11 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, SPARSE_EYE.getDeclaringClass())) return new SparseEye(source);
     else if (isType(calledFunction, SPARSE_TENSOR.getDeclaringClass()))
       return new SparseTensor(source);
-    else if (isType(calledFunction, GAMMA.getDeclaringClass())) return new Gamma(source);
+    else if (isType(calledFunction, GAMMA.getDeclaringClass()) || isType(calledFunction, GAMMA_OP))
+      return new Gamma(source);
     else if (isType(calledFunction, INPUT.getDeclaringClass())) return new Input(source);
-    else if (isType(calledFunction, POISSON.getDeclaringClass())) return new Poisson(source);
+    else if (isType(calledFunction, POISSON.getDeclaringClass())
+        || isType(calledFunction, POISSON_OP)) return new Poisson(source);
     else if (isType(calledFunction, RAGGED_CONSTANT.getDeclaringClass()))
       return new RaggedConstant(source);
     else if (isType(calledFunction, VARIABLE.getDeclaringClass())) return new Variable(source);
@@ -298,6 +334,14 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, DATASET_RANGE_TYPE)) return new DatasetRangeGenerator(source);
     else if (isType(calledFunction, DATASET_SHUFFLE_TYPE)
         || isType(calledFunction, DATASET_MAP_TYPE)
+        || isType(calledFunction, DATASET_REPEAT_TYPE)
+        || isType(calledFunction, DATASET_PREFETCH_TYPE)
+        || isType(calledFunction, DATASET_TAKE_TYPE)
+        || isType(calledFunction, DATASET_WITH_OPTIONS_TYPE)
+        || isType(calledFunction, DATASET_CONCATENATE_TYPE)
+        || isType(calledFunction, DATASET_ENUMERATE_TYPE)
+        || isType(calledFunction, DATASET_REDUCE_TYPE)
+        || isType(calledFunction, DATASET_FILTER_TYPE)
         || isType(calledFunction, DATASET)) return new DatasetGenerator(source);
     else if (isType(calledFunction, READ_DATA_SETS.getDeclaringClass()))
       return new ReadDataSets(source);

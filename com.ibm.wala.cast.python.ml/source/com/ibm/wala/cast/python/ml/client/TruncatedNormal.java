@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 
 /**
@@ -14,5 +15,9 @@ public class TruncatedNormal extends Normal {
 
   public TruncatedNormal(PointsToSetVariable source) {
     super(source);
+  }
+
+  public TruncatedNormal(CGNode node) {
+    super(node);
   }
 }

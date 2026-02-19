@@ -2,15 +2,17 @@ package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
 /**
- * A generator for tensors created by <code>tf.data.Dataset</code> transformations.
+ * A generator for tensors created by {@code tf.data.Dataset} transformations.
  *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
@@ -18,6 +20,10 @@ public class DatasetGenerator extends TensorGenerator {
 
   public DatasetGenerator(PointsToSetVariable source) {
     super(source);
+  }
+
+  public DatasetGenerator(CGNode node) {
+    super(node);
   }
 
   @Override
@@ -45,26 +51,21 @@ public class DatasetGenerator extends TensorGenerator {
     // For dataset transformations, default to shapes of the input dataset (the receiver).
     // The receiver is 'self' (arg0 in IR).
     OrdinalSet<InstanceKey> receiverPTS =
-        this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, "self");
+        this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, SELF);
     if (receiverPTS != null && !receiverPTS.isEmpty()) {
       return this.getShapesOfValue(builder, receiverPTS);
     }
-    throw new UnsupportedOperationException(
-        "Modeling for tf.data.Dataset transformation " + this.getSource() + " is missing.");
+    return Collections.emptySet();
   }
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // For dataset transformations, default to dtypes of the input dataset (the receiver).
     OrdinalSet<InstanceKey> receiverPTS =
-        this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, "self");
+        this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, SELF);
     if (receiverPTS != null && !receiverPTS.isEmpty()) {
-      Set<DType> dTypes = this.getDTypesOfValue(builder, receiverPTS);
-      if (!dTypes.isEmpty()) {
-        return dTypes;
-      }
+      return this.getDTypesOfValue(builder, receiverPTS);
     }
-    throw new UnsupportedOperationException(
-        "Modeling for tf.data.Dataset transformation " + this.getSource() + " is missing.");
+    return Collections.emptySet();
   }
 }

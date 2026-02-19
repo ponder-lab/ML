@@ -144,6 +144,32 @@ public class TensorFlowTypes extends PythonTypes {
   public static final TypeReference DATASET_MAP_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/map"));
 
+  public static final TypeReference DATASET_REPEAT_TYPE =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/repeat"));
+
+  public static final TypeReference DATASET_PREFETCH_TYPE =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/prefetch"));
+
+  public static final TypeReference DATASET_TAKE_TYPE =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/take"));
+
+  public static final TypeReference DATASET_WITH_OPTIONS_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/data/with_options"));
+
+  public static final TypeReference DATASET_CONCATENATE_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/data/concatenate"));
+
+  public static final TypeReference DATASET_ENUMERATE_TYPE =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/enumerate"));
+
+  public static final TypeReference DATASET_REDUCE_TYPE =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/reduce"));
+
+  public static final TypeReference DATASET_FILTER_TYPE =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/filter"));
+
   public static final TypeReference DATASET_RANGE_TYPE =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset/range"));
@@ -195,6 +221,10 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/uniform")),
           AstMethodReference.fnSelector);
 
+  public static final TypeReference UNIFORM_OP =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/python/ops/random_ops/uniform"));
+
   private static final String UNIFORM_SIGNATURE = "tf.random.uniform()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/random/normal. */
@@ -203,6 +233,10 @@ public class TensorFlowTypes extends PythonTypes {
           TypeReference.findOrCreate(
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/normal")),
           AstMethodReference.fnSelector);
+
+  public static final TypeReference NORMAL_OP =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/python/ops/random_ops/normal"));
 
   private static final String NORMAL_SIGNATURE = "tf.random.normal()";
 
@@ -213,6 +247,11 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader,
               TypeName.string2TypeName("Ltensorflow/functions/truncated_normal")),
           AstMethodReference.fnSelector);
+
+  public static final TypeReference TRUNCATED_NORMAL_OP =
+      TypeReference.findOrCreate(
+          pythonLoader,
+          TypeName.findOrCreate("Ltensorflow/python/ops/random_ops/truncated_normal"));
 
   private static final String TRUNCATED_NORMAL_SIGNATURE = "tf.random.truncated_normal()";
 
@@ -319,6 +358,10 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/gamma")),
           AstMethodReference.fnSelector);
 
+  public static final TypeReference GAMMA_OP =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/python/ops/random_ops/gamma"));
+
   private static final String GAMMA_SIGNATURE = "tf.random.gamma()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/poisson. */
@@ -327,6 +370,10 @@ public class TensorFlowTypes extends PythonTypes {
           TypeReference.findOrCreate(
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/poisson")),
           AstMethodReference.fnSelector);
+
+  public static final TypeReference POISSON_OP =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/python/ops/random_ops/poisson"));
 
   private static final String POISSON_SIGNATURE = "tf.random.poisson()";
 

@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 
 /**
@@ -30,6 +31,10 @@ public class Uniform extends Ones {
 
   public Uniform(PointsToSetVariable source) {
     super(source);
+  }
+
+  public Uniform(CGNode node) {
+    super(node);
   }
 
   @Override

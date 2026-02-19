@@ -32,6 +32,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationSystem;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
@@ -152,6 +153,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           // We potentially have a function call that generates a tensor.
           SSAAbstractInvokeInstruction ni = (SSAAbstractInvokeInstruction) inst;
           processInstruction(ni, du, localPointerKeyNode, src, vn, sources, pointerAnalysis);
+        } else if (inst instanceof SSABinaryOpInstruction) {
+          // Binary operations (e.g. +, *) on tensors are also sources.
+          sources.add(src);
+          logger.info("Added dataflow source from binary op: " + src + ".");
         } else if (inst instanceof EachElementGetInstruction) {
           // We are potentially pulling a tensor out of a tensor iterable.
           EachElementGetInstruction eachElementGetInstruction = (EachElementGetInstruction) inst;

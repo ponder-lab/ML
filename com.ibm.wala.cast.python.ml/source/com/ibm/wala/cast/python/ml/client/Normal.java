@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 
 /**
@@ -13,5 +14,9 @@ public class Normal extends Uniform {
 
   public Normal(PointsToSetVariable source) {
     super(source);
+  }
+
+  public Normal(CGNode node) {
+    super(node);
   }
 }

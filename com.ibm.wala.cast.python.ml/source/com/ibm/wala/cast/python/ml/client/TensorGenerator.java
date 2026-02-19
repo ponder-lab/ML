@@ -53,6 +53,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.types.FieldReference;
@@ -428,6 +429,14 @@ public abstract class TensorGenerator {
             || reference.equals(TensorFlowTypes.DATASET_SHUFFLE_TYPE)
             || reference.equals(TensorFlowTypes.DATASET_BATCH_TYPE)
             || reference.equals(TensorFlowTypes.DATASET_MAP_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_REPEAT_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_PREFETCH_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_TAKE_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_WITH_OPTIONS_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_CONCATENATE_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_ENUMERATE_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_REDUCE_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_FILTER_TYPE)
             || reference.equals(TensorFlowTypes.DATASET_RANGE_TYPE)
             || reference.equals(TensorFlowTypes.DATASET_FROM_TENSOR_SLICES_TYPE)
             || reference.equals(TensorFlowTypes.ADD.getDeclaringClass())
@@ -435,7 +444,13 @@ public abstract class TensorGenerator {
             || reference.equals(TensorFlowTypes.REDUCE_SUM.getDeclaringClass())
             || reference.equals(TensorFlowTypes.REDUCE_MEAN.getDeclaringClass())
             || reference.equals(TensorFlowTypes.ARGMAX.getDeclaringClass())
-            || reference.equals(TensorFlowTypes.EQUAL.getDeclaringClass())) {
+            || reference.equals(TensorFlowTypes.EQUAL.getDeclaringClass())
+            || reference.equals(TensorFlowTypes.INPUT.getDeclaringClass())
+            || reference.equals(TensorFlowTypes.UNIFORM_OP)
+            || reference.equals(TensorFlowTypes.NORMAL_OP)
+            || reference.equals(TensorFlowTypes.TRUNCATED_NORMAL_OP)
+            || reference.equals(TensorFlowTypes.GAMMA_OP)
+            || reference.equals(TensorFlowTypes.POISSON_OP)) {
           // If the value is a tensor, we attempt to find the generator that created it and ask for
           // its shape.
           LOGGER.fine(
@@ -494,23 +509,14 @@ public abstract class TensorGenerator {
           // Try to create a manual generator if possible.
         }
 
-        TensorGenerator generator = null;
-        TypeReference declaringClass = readDataNode.getMethod().getDeclaringClass().getReference();
-        if (declaringClass.equals(PLACEHOLDER.getDeclaringClass())
-            || declaringClass.equals(CONSTANT.getDeclaringClass())) {
-          // Create a manual generator if standard analysis fails or for specific types like
-          // Placeholder/Constant
-          // where we might need to inspect the node directly without a PointsToSetVariable.
-          generator = createManualGenerator(readDataNode, builder);
-        } else if (defSource != null) {
+        TensorGenerator generator = createManualGenerator(readDataNode, builder);
+
+        if (generator == null && defSource != null) {
           // Avoid infinite recursion if the current generator is for the same source.
           if (this.getSource() != null && this.getSource().equals(defSource)) {
             return ret;
           }
           generator = TensorGeneratorFactory.getGenerator(defSource, builder);
-        } else {
-          // Fallback: Attempt to create a manual generator if source resolution failed.
-          generator = createManualGenerator(readDataNode, builder);
         }
 
         if (generator != null) {
@@ -544,8 +550,11 @@ public abstract class TensorGenerator {
               PointsToSetVariable defSource =
                   builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
 
-              // Instantiate the generator for this source.
-              TensorGenerator generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+              // Try to create a manual generator for the caller (doNode) first.
+              TensorGenerator generator = createManualGenerator(doNode, builder);
+              if (generator == null) {
+                generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+              }
               LOGGER.fine("Delegating shape inference to: " + generator);
               ret.addAll(generator.getShapes(builder));
             }
@@ -856,6 +865,14 @@ public abstract class TensorGenerator {
             || reference.equals(TensorFlowTypes.DATASET_SHUFFLE_TYPE)
             || reference.equals(TensorFlowTypes.DATASET_BATCH_TYPE)
             || reference.equals(TensorFlowTypes.DATASET_MAP_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_REPEAT_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_PREFETCH_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_TAKE_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_WITH_OPTIONS_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_CONCATENATE_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_ENUMERATE_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_REDUCE_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_FILTER_TYPE)
             || reference.equals(TensorFlowTypes.DATASET_RANGE_TYPE)
             || reference.equals(TensorFlowTypes.DATASET_FROM_TENSOR_SLICES_TYPE)
             || reference.equals(TensorFlowTypes.ADD.getDeclaringClass())
@@ -863,14 +880,20 @@ public abstract class TensorGenerator {
             || reference.equals(TensorFlowTypes.REDUCE_SUM.getDeclaringClass())
             || reference.equals(TensorFlowTypes.REDUCE_MEAN.getDeclaringClass())
             || reference.equals(TensorFlowTypes.ARGMAX.getDeclaringClass())
-            || reference.equals(TensorFlowTypes.EQUAL.getDeclaringClass())) {
+            || reference.equals(TensorFlowTypes.EQUAL.getDeclaringClass())
+            || reference.equals(TensorFlowTypes.INPUT.getDeclaringClass())
+            || reference.equals(TensorFlowTypes.UNIFORM_OP)
+            || reference.equals(TensorFlowTypes.NORMAL_OP)
+            || reference.equals(TensorFlowTypes.TRUNCATED_NORMAL_OP)
+            || reference.equals(TensorFlowTypes.GAMMA_OP)
+            || reference.equals(TensorFlowTypes.POISSON_OP)) {
           // If the value is a tensor, we attempt to find the generator that created it and ask for
           // its dtype.
           LOGGER.fine(
               "Encountered "
                   + reference.getName()
                   + ". Attempting to retrieve dtype from producer.");
-          ret.addAll(getDTypesFromTensor(builder, asin));
+          ret.addAll(this.getDTypesFromTensor(builder, asin));
         } else if (reference.equals(TensorFlowTypes.FEATURE)) {
           // Ignore features.
           LOGGER.fine("Ignoring feature: " + asin);
@@ -904,31 +927,19 @@ public abstract class TensorGenerator {
           // Try to create a manual generator if possible.
         }
 
-        if (defSource != null) {
-          TypeReference declaringClass =
-              readDataNode.getMethod().getDeclaringClass().getReference();
-          if (declaringClass.equals(PLACEHOLDER.getDeclaringClass())
-              || declaringClass.equals(CONSTANT.getDeclaringClass())) {
-            TensorGenerator generator = createManualGenerator(readDataNode, builder);
-            if (generator != null) {
-              LOGGER.fine("Delegating dtype inference to: " + generator);
-              ret.addAll(generator.getDTypes(builder));
-            }
-          } else {
-            if (this.getSource() != null && this.getSource().equals(defSource)) {
-              return ret;
-            }
+        TensorGenerator generator = createManualGenerator(readDataNode, builder);
 
-            TensorGenerator generator = TensorGeneratorFactory.getGenerator(defSource, builder);
-            LOGGER.fine("Delegating dtype inference to: " + generator);
-            ret.addAll(generator.getDTypes(builder));
+        if (generator == null && defSource != null) {
+          if (this.getSource() != null && this.getSource().equals(defSource)) {
+            return ret;
           }
-        } else {
-          TensorGenerator generator = createManualGenerator(readDataNode, builder);
-          if (generator != null) {
-            LOGGER.fine("Delegating dtype inference to: " + generator);
-            ret.addAll(generator.getDTypes(builder));
-          }
+
+          generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+        }
+
+        if (generator != null) {
+          LOGGER.fine("Delegating dtype inference to: " + generator);
+          ret.addAll(generator.getDTypes(builder));
         }
       }
       return ret;
@@ -958,8 +969,11 @@ public abstract class TensorGenerator {
               PointsToSetVariable defSource =
                   builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
 
-              // Instantiate the generator for this source.
-              TensorGenerator generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+              // Try to create a manual generator for the caller (doNode) first.
+              TensorGenerator generator = createManualGenerator(doNode, builder);
+              if (generator == null) {
+                generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+              }
               LOGGER.fine("Delegating dtype inference to: " + generator);
               ret.addAll(generator.getDTypes(builder));
             }
@@ -1009,6 +1023,8 @@ public abstract class TensorGenerator {
 
   protected static final int RECEIVER_PARAMETER_POSITION = -2;
 
+  protected static final String SELF = "self";
+
   protected int getArgumentValueNumber(int parameterPosition) {
     if (parameterPosition == RECEIVER_PARAMETER_POSITION)
       return this.getNode().getIR().getParameter(0);
@@ -1041,6 +1057,25 @@ public abstract class TensorGenerator {
     return null;
   }
 
+  protected SSABinaryOpInstruction getBinaryOpInstruction() {
+    if (this.source == null) {
+      return null;
+    }
+    if (this.getSource().getPointerKey() instanceof LocalPointerKey) {
+      LocalPointerKey lpk = (LocalPointerKey) this.getSource().getPointerKey();
+      if (lpk.getNode().equals(this.getNode())) {
+        int vn = lpk.getValueNumber();
+        if (vn > 0) {
+          SSAInstruction def = this.getNode().getDU().getDef(vn);
+          if (def instanceof SSABinaryOpInstruction) {
+            return (SSABinaryOpInstruction) def;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
   /**
    * Returns the points-to set of the argument at the specified position or with the specified name.
    *
@@ -1064,6 +1099,9 @@ public abstract class TensorGenerator {
    *   <li><b>Direct Invoke Instruction:</b> If the invoke instruction is directly available (via
    *       {@link #getInvokeInstruction()}), it resolves the argument using the parameter name (for
    *       keyword arguments) or position.
+   *   <li><b>Direct Binary Op Instruction:</b> If the instruction is a binary operation (via {@link
+   *       #getBinaryOpInstruction()}), it resolves the argument using the position (0 for left, 1
+   *       for right).
    *   <li><b>`read_data` Wrapper Handling:</b> If the node corresponds to a `read_data` method
    *       (common in TensorFlow synthetic models), it delegates the resolution to the preceding
    *       `do` method, which is the actual entry point for the operation logic.
@@ -1121,6 +1159,21 @@ public abstract class TensorGenerator {
         if (argPts != null && !argPts.isEmpty()) {
           return argPts;
         }
+      }
+      return OrdinalSet.empty();
+    }
+
+    // Strategy 1.5: Direct Binary Op Instruction
+    SSABinaryOpInstruction binOp = getBinaryOpInstruction();
+    if (binOp != null) {
+      int argValNum = -1;
+      if (paramPos >= 0 && paramPos < binOp.getNumberOfUses()) {
+        argValNum = binOp.getUse(paramPos);
+      }
+      if (argValNum != -1) {
+        PointerKey argPk =
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, argValNum);
+        return builder.getPointerAnalysis().getPointsToSet(argPk);
       }
       return OrdinalSet.empty();
     }
@@ -1303,6 +1356,16 @@ public abstract class TensorGenerator {
                 + (paramName == null ? "" : " or name " + paramName)
                 + " of "
                 + this.getSignature());
+    }
+
+    SSABinaryOpInstruction binOp = getBinaryOpInstruction();
+    if (binOp != null) {
+      if (paramPos >= 0 && paramPos < binOp.getNumberOfUses()) {
+        return binOp.getUse(paramPos);
+      }
+      if (optional) return -1;
+      throw new IllegalStateException(
+          "Cannot determine value number for binary op parameter at position " + paramPos);
     } else {
       // Fallback for manual nodes (no invoke instruction).
       // We assume the arguments are available as parameters in the method body.
@@ -1556,12 +1619,28 @@ public abstract class TensorGenerator {
   private static TensorGenerator createManualGenerator(
       CGNode node, PropagationCallGraphBuilder builder) {
     TypeReference type = node.getMethod().getDeclaringClass().getReference();
+    LOGGER.fine("createManualGenerator checking type: " + type.getName().toString());
     if (type.equals(TensorFlowTypes.ONES.getDeclaringClass())) {
       return new Ones(node);
     } else if (type.equals(TensorFlowTypes.SPARSE_EYE.getDeclaringClass())) {
       return new SparseEye(node);
     } else if (type.equals(TensorFlowTypes.EYE.getDeclaringClass())) {
       return new Eye(node);
+    } else if (type.equals(TensorFlowTypes.UNIFORM.getDeclaringClass())) {
+      return new Uniform(node);
+    } else if (type.equals(TensorFlowTypes.NORMAL.getDeclaringClass())) {
+      return new Normal(node);
+    } else if (type.equals(TensorFlowTypes.TRUNCATED_NORMAL.getDeclaringClass())) {
+      return new TruncatedNormal(node);
+    } else if (type.equals(TensorFlowTypes.GAMMA.getDeclaringClass())) {
+      return new Gamma(node);
+    } else if (type.equals(TensorFlowTypes.POISSON.getDeclaringClass())) {
+      return new Poisson(node);
+    } else if (type.equals(TensorFlowTypes.DATASET_FROM_TENSOR_SLICES_TYPE)
+        || type.getName().toString().equals("Ltensorflow/data/from_tensor_slices")) {
+      return new DatasetFromTensorSlicesGenerator(node);
+    } else if (type.equals(TensorFlowTypes.DATASET)) {
+      return new DatasetGenerator(node);
     } else if (type.equals(TensorFlowTypes.MATMUL.getDeclaringClass())) {
       return new MatMul(node);
     } else if (type.equals(CONSTANT.getDeclaringClass())) {
