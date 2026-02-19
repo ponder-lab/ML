@@ -1,11 +1,8 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
-import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
-import java.util.Collections;
-import java.util.List;
 import java.util.Set;
 
 /**
@@ -41,17 +38,6 @@ public class SparseTensor extends Ones {
         this.getArgumentValueNumber(
             builder, this.getValuesParameterPosition(), this.getValuesParameterName(), false);
     return this.getDTypes(builder, valuesValNum);
-  }
-
-  /**
-   * Overridden to return an empty set instead of throwing an exception if the shape cannot be
-   * resolved from arguments. This prevents crashes in scenarios where the analysis cannot link the
-   * dense_shape argument to the SparseTensor allocation, while allowing subsequent operations (like
-   * SparseAdd) to potentially infer the shape from object fields.
-   */
-  @Override
-  protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    return Collections.emptySet();
   }
 
   protected int getIndicesParameterPosition() {
