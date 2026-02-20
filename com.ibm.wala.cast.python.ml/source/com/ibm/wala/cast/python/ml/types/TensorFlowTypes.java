@@ -170,17 +170,26 @@ public class TensorFlowTypes extends PythonTypes {
   public static final TypeReference DATASET_FILTER_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/filter"));
 
+  /** The type of `tf.data.Dataset.from_generator`. */
   public static final TypeReference DATASET_FROM_GENERATOR_TYPE =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset/from_generator"));
 
+  public static final String DATASET_FROM_GENERATOR_SIGNATURE = "tf.data.Dataset.from_generator()";
+
+  /** The type of `tf.TensorSpec`. */
   public static final TypeReference TENSOR_SPEC =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/framework/TensorSpec"));
 
+  public static final String TENSOR_SPEC_SIGNATURE = "tf.TensorSpec()";
+
+  /** The type of `tf.RaggedTensorSpec`. */
   public static final TypeReference RAGGED_TENSOR_SPEC =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/framework/RaggedTensorSpec"));
+
+  public static final String RAGGED_TENSOR_SPEC_SIGNATURE = "tf.RaggedTensorSpec()";
 
   public static final FieldReference SPEC_SHAPE =
       FieldReference.findOrCreate(TENSOR_SPEC, findOrCreateAsciiAtom("shape"), Root);
@@ -749,6 +758,9 @@ public class TensorFlowTypes extends PythonTypes {
   /** A mapping from a {@link TypeReference} to its associated TensorFlow signature. */
   public static final Map<TypeReference, String> TYPE_REFERENCE_TO_SIGNATURE =
       Map.ofEntries(
+          Map.entry(DATASET_FROM_GENERATOR_TYPE, DATASET_FROM_GENERATOR_SIGNATURE),
+          Map.entry(TENSOR_SPEC, TENSOR_SPEC_SIGNATURE),
+          Map.entry(RAGGED_TENSOR_SPEC, RAGGED_TENSOR_SPEC_SIGNATURE),
           Map.entry(RESHAPE.getDeclaringClass(), RESHAPE_SIGNATURE),
           Map.entry(CONSTANT.getDeclaringClass(), CONSTANT_SIGNATURE),
           Map.entry(RANGE.getDeclaringClass(), RANGE_SIGNATURE),
