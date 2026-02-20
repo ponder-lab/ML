@@ -649,7 +649,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testDataset11()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_dataset11.py", "f", 0, 0);
-    test("tf2_test_dataset11.py", "g", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_dataset11.py", "g", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   /**
@@ -660,7 +660,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testDataset12()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_dataset12.py", "f", 0, 0);
-    test("tf2_test_dataset12.py", "g", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_dataset12.py", "g", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   /**
@@ -671,7 +671,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testDataset13()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_dataset13.py", "f", 0, 0);
-    test("tf2_test_dataset13.py", "g", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_dataset13.py", "g", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   /**
@@ -682,7 +682,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testDataset14()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_dataset14.py", "f", 0, 0);
-    test("tf2_test_dataset14.py", "g", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_dataset14.py", "g", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   /**
@@ -692,8 +692,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testDataset15()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_dataset14.py", "f", 0, 0);
-    test("tf2_test_dataset14.py", "g", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test("tf2_test_dataset15.py", "f", 0, 0);
+    test("tf2_test_dataset15.py", "g", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   /** Test a dataset that uses an iterator. */
