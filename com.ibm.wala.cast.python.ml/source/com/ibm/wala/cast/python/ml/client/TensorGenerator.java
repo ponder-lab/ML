@@ -297,6 +297,9 @@ public abstract class TensorGenerator {
         ret.addAll(this.getShapesFromShapeArgument(builder, valuePts));
       } else if (reference.equals(TensorFlowTypes.TENSOR_SPEC)
           || reference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)) {
+        // We have a TensorSpec or RaggedTensorSpec. These objects carry shape and dtype
+        // information in their fields. We extract the 'shape' field and recurse to
+        // parse the actual shape structure (usually a tuple or list of integers).
         IField shapeField =
             builder
                 .getClassHierarchy()
@@ -721,6 +724,8 @@ public abstract class TensorGenerator {
       if (typeReference.equals(TensorFlowTypes.D_TYPE)) {
         throw new IllegalStateException("Unknown dtype: " + instanceKey + ".");
       } else if (typeReference.equals(TensorFlowTypes.CONSTANT_OP_CONSTANT)) {
+        // We have a constant tensor. We extract its 'dtype' field and recurse to
+        // resolve the actual DType value.
         IField valueField =
             builder.getClassHierarchy().resolveField(TensorFlowTypes.CONSTANT_DTYPE);
         PointerKey valuePK = builder.getPointerKeyForInstanceField(instanceKey, valueField);
@@ -730,6 +735,8 @@ public abstract class TensorGenerator {
         }
       } else if (typeReference.equals(TensorFlowTypes.TENSOR_SPEC)
           || typeReference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)) {
+        // We have a TensorSpec or RaggedTensorSpec. We extract the 'dtype' field and recurse to
+        // resolve the actual DType value (usually a tf.DType instance).
         IField dtypeField =
             builder
                 .getClassHierarchy()
