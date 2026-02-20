@@ -590,7 +590,32 @@ public abstract class TensorGenerator {
         } else if (reference.equals(TensorFlowTypes.D_TYPE)) {
           LOGGER.fine("Ignoring DType: " + asin);
         } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
-      } else throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
+      } else if (getAllocationSiteInNode(valueIK) != null) {
+        // Unwrap ScopeMappingInstanceKey or similar wrapping keys
+        AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
+
+        // Instead of forcing a points-to set, try to get the generator for this allocation site
+        try {
+          PointsToSetVariable var =
+              builder
+                  .getPropagationSystem()
+                  .findOrCreatePointsToSet(
+                      builder
+                          .getPointerAnalysis()
+                          .getHeapModel()
+                          .getPointerKeyForLocal(
+                              asin.getNode(), asin.getSite().getProgramCounter()));
+          TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+          if (generator != null && !generator.getClass().equals(this.getClass())) {
+            ret.addAll(generator.getShapes(builder));
+          }
+        } catch (IllegalArgumentException | UnimplementedError e) {
+          // Not a recognized generator or implicit key. Ignore.
+          LOGGER.fine("Could not resolve generator for unwrapped key: " + asin);
+        }
+      } else {
+        throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
+      }
 
     return ret;
   }
@@ -1149,7 +1174,32 @@ public abstract class TensorGenerator {
           // Ignore DTypes.
           LOGGER.fine("Ignoring DType: " + asin);
         } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
-      } else throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
+      } else if (getAllocationSiteInNode(valueIK) != null) {
+        // Unwrap ScopeMappingInstanceKey or similar wrapping keys
+        AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
+
+        // Instead of forcing a points-to set, try to get the generator for this allocation site
+        try {
+          PointsToSetVariable var =
+              builder
+                  .getPropagationSystem()
+                  .findOrCreatePointsToSet(
+                      builder
+                          .getPointerAnalysis()
+                          .getHeapModel()
+                          .getPointerKeyForLocal(
+                              asin.getNode(), asin.getSite().getProgramCounter()));
+          TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+          if (generator != null && !generator.getClass().equals(this.getClass())) {
+            ret.addAll(generator.getDTypes(builder));
+          }
+        } catch (IllegalArgumentException | UnimplementedError e) {
+          // Not a recognized generator or implicit key. Ignore.
+          LOGGER.fine("Could not resolve generator for unwrapped key: " + asin);
+        }
+      } else {
+        throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
+      }
     }
 
     return ret;
