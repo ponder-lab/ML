@@ -219,32 +219,31 @@ public abstract class TensorGenerator {
 
               LOGGER.fine("Adding dimension: " + dimension + ".");
               tensorDimensions.add(dimension);
-            } else if (instanceFieldIK instanceof AllocationSiteInNode
-                && (((AllocationSiteInNode) instanceFieldIK)
-                        .getConcreteType()
-                        .getReference()
-                        .equals(tuple)
-                    || ((AllocationSiteInNode) instanceFieldIK)
-                        .getConcreteType()
-                        .getReference()
-                        .equals(list)
-                    || ((AllocationSiteInNode) instanceFieldIK)
-                        .getConcreteType()
-                        .getReference()
-                        .equals(TensorFlowTypes.TENSOR_SPEC)
-                    || ((AllocationSiteInNode) instanceFieldIK)
-                        .getConcreteType()
-                        .getReference()
-                        .equals(TensorFlowTypes.RAGGED_TENSOR_SPEC))) {
-              // Nested tuple/list or Spec. Recurse.
-              Set<List<Dimension<?>>> nestedShapes =
-                  this.getShapesFromShapeArgument(builder, Collections.singleton(instanceFieldIK));
-              for (List<Dimension<?>> nestedShape : nestedShapes) {
-                tensorDimensions.add(new CompoundDim(nestedShape));
-              }
+            } else if (instanceFieldIK instanceof AllocationSiteInNode) {
+              AllocationSiteInNode innerAsin = (AllocationSiteInNode) instanceFieldIK;
+              TypeReference innerReference = innerAsin.getConcreteType().getReference();
+
+              if (innerReference.equals(tuple)
+                  || innerReference.equals(list)
+                  || innerReference.equals(TensorFlowTypes.TENSOR_SPEC)
+                  || innerReference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)) {
+                // Nested tuple/list or Spec. Recurse.
+                Set<List<Dimension<?>>> nestedShapes =
+                    this.getShapesFromShapeArgument(
+                        builder, Collections.singleton(instanceFieldIK));
+
+                for (List<Dimension<?>> nestedShape : nestedShapes)
+                  tensorDimensions.add(new CompoundDim(nestedShape));
+              } else
+                throw new IllegalStateException(
+                    "Expected a constant key or nested structure for instance field: "
+                        + pointerKeyForInstanceField
+                        + ", but got: "
+                        + instanceFieldIK
+                        + ".");
             } else
               throw new IllegalStateException(
-                  "Expected a constant key for instance field: "
+                  "Expected a constant key or nested structure for instance field: "
                       + pointerKeyForInstanceField
                       + ", but got: "
                       + instanceFieldIK
