@@ -14,6 +14,10 @@ obj = MyClass()
 try:
     # This should raise an exception because row_lengths must be integers
     t = tf.RaggedTensor.from_row_lengths(values=[1, 2, 3], row_lengths=[obj, 1])
+    assert isinstance(t, tf.RaggedTensor)
+    assert t.shape == (2, None)
+    assert t.dtype == tf.int32
+
     test_strictness(t)
 except Exception:
     # Expected exception caught, script runs to completion

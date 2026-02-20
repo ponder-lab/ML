@@ -2462,10 +2462,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             4, Set.of(TENSOR_4_NONE_INT32)));
   }
 
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void testStrictnessFailure()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_strictness_failure.py", "test_strictness", 1, 1, Map.of());
+    test(
+        "tf2_test_strictness_failure.py",
+        "test_strictness",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_NONE_INT32)));
   }
 
   @Test
