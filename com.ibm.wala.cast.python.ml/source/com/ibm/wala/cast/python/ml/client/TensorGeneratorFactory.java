@@ -9,6 +9,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_BATCH_TY
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CONCATENATE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_ENUMERATE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FILTER_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FROM_GENERATOR_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FROM_TENSOR_SLICES_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_MAP_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_PREFETCH_TYPE;
@@ -332,6 +333,8 @@ public class TensorGeneratorFactory {
       return new DatasetFromTensorSlicesGenerator(source);
     else if (isType(calledFunction, DATASET_BATCH_TYPE)) return new DatasetBatchGenerator(source);
     else if (isType(calledFunction, DATASET_RANGE_TYPE)) return new DatasetRangeGenerator(source);
+    else if (isType(calledFunction, DATASET_FROM_GENERATOR_TYPE))
+      return new DatasetFromGeneratorGenerator(source);
     else if (isType(calledFunction, DATASET_SHUFFLE_TYPE)
         || isType(calledFunction, DATASET_MAP_TYPE)
         || isType(calledFunction, DATASET_REPEAT_TYPE)

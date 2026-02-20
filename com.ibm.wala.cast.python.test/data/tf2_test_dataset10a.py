@@ -19,9 +19,10 @@ dataset = tf.data.Dataset.from_generator(
 )
 
 for element in dataset:
-    assert type(element) == tuple
-    assert element[0].shape == ()
-    assert element[0].dtype == tf.int32
-    assert element[1].shape.as_list() == [2, None]
-    assert element[1].dtype == tf.int32
-    c = add(element, element)
+    x = element[0]
+    y = element[1]
+    assert x.shape == ()
+    assert x.dtype == tf.int32
+    assert y.shape.as_list() == [2, None]
+    assert y.dtype == tf.int32
+    c = add(x, y)

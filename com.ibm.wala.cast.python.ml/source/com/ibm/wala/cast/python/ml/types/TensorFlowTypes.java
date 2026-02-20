@@ -170,6 +170,30 @@ public class TensorFlowTypes extends PythonTypes {
   public static final TypeReference DATASET_FILTER_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/filter"));
 
+  public static final TypeReference DATASET_FROM_GENERATOR_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset/from_generator"));
+
+  public static final TypeReference TENSOR_SPEC =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/framework/TensorSpec"));
+
+  public static final TypeReference RAGGED_TENSOR_SPEC =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/framework/RaggedTensorSpec"));
+
+  public static final FieldReference SPEC_SHAPE =
+      FieldReference.findOrCreate(TENSOR_SPEC, findOrCreateAsciiAtom("shape"), Root);
+
+  public static final FieldReference SPEC_DTYPE =
+      FieldReference.findOrCreate(TENSOR_SPEC, findOrCreateAsciiAtom("dtype"), Root);
+
+  public static final FieldReference RAGGED_SPEC_SHAPE =
+      FieldReference.findOrCreate(RAGGED_TENSOR_SPEC, findOrCreateAsciiAtom("shape"), Root);
+
+  public static final FieldReference RAGGED_SPEC_DTYPE =
+      FieldReference.findOrCreate(RAGGED_TENSOR_SPEC, findOrCreateAsciiAtom("dtype"), Root);
+
   public static final TypeReference DATASET_RANGE_TYPE =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset/range"));

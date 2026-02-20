@@ -33,6 +33,7 @@ import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.CompoundDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
@@ -62,6 +63,7 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
@@ -151,9 +153,13 @@ public abstract class TensorGenerator {
                     .getPointerKeyForObjectCatalog(asin));
 
         // We expect the object catalog to contain a list of integers. Each element in the array
-        // corresponds to the set of possible dimensions for that index.
+        // correspondences to the set of possible dimensions for that index.
+        if (objectCatalogPointsToSet.isEmpty()) {
+          ret.add(Collections.emptyList());
+          continue;
+        }
         @SuppressWarnings({"unchecked", "rawtypes"})
-        Set<Dimension<Integer>>[] possibleDimensions = new Set[objectCatalogPointsToSet.size()];
+        Set<Dimension<?>>[] possibleDimensions = new Set[objectCatalogPointsToSet.size()];
 
         for (InstanceKey catalogIK : objectCatalogPointsToSet) {
           ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
@@ -176,7 +182,7 @@ public abstract class TensorGenerator {
 
           // If the instance field points to a constant, we can use it as the shape.
           // TODO: Is it possible to also do it for (simple) expressions?
-          Set<Dimension<Integer>> tensorDimensions = HashSetFactory.make();
+          Set<Dimension<?>> tensorDimensions = HashSetFactory.make();
 
           for (InstanceKey instanceFieldIK : instanceFieldPointsToSet) {
             if (instanceFieldIK instanceof ConstantKey) {
@@ -198,6 +204,29 @@ public abstract class TensorGenerator {
 
               LOGGER.fine("Adding dimension: " + dimension + ".");
               tensorDimensions.add(dimension);
+            } else if (instanceFieldIK instanceof AllocationSiteInNode
+                && (((AllocationSiteInNode) instanceFieldIK)
+                        .getConcreteType()
+                        .getReference()
+                        .equals(tuple)
+                    || ((AllocationSiteInNode) instanceFieldIK)
+                        .getConcreteType()
+                        .getReference()
+                        .equals(list)
+                    || ((AllocationSiteInNode) instanceFieldIK)
+                        .getConcreteType()
+                        .getReference()
+                        .equals(TensorFlowTypes.TENSOR_SPEC)
+                    || ((AllocationSiteInNode) instanceFieldIK)
+                        .getConcreteType()
+                        .getReference()
+                        .equals(TensorFlowTypes.RAGGED_TENSOR_SPEC))) {
+              // Nested tuple/list or Spec. Recurse.
+              Set<List<Dimension<?>>> nestedShapes =
+                  this.getShapesFromShapeArgument(builder, Collections.singleton(instanceFieldIK));
+              for (List<Dimension<?>> nestedShape : nestedShapes) {
+                tensorDimensions.add(new CompoundDim(nestedShape));
+              }
             } else
               throw new IllegalStateException(
                   "Expected a constant key for instance field: "
@@ -234,15 +263,14 @@ public abstract class TensorGenerator {
         }
 
         for (int i = 0; i < possibleDimensions.length; i++)
-          for (Dimension<Integer> iDim : possibleDimensions[i]) {
+          for (Dimension<?> iDim : possibleDimensions[i]) {
             @SuppressWarnings({"unchecked", "rawtypes"})
-            Dimension<Integer>[] dimensions = new Dimension[possibleDimensions.length];
+            Dimension<?>[] dimensions = new Dimension[possibleDimensions.length];
 
             dimensions[i] = iDim;
 
             for (int j = 0; j < possibleDimensions.length; j++)
-              if (i != j)
-                for (Dimension<Integer> jDim : possibleDimensions[j]) dimensions[j] = jDim;
+              if (i != j) for (Dimension<?> jDim : possibleDimensions[j]) dimensions[j] = jDim;
 
             ret.add(asList(dimensions));
           }
@@ -253,6 +281,18 @@ public abstract class TensorGenerator {
         PointerKey valuePK = builder.getPointerKeyForInstanceField(instanceKey, valueField);
         OrdinalSet<InstanceKey> valuePts = pointerAnalysis.getPointsToSet(valuePK);
         ret.addAll(this.getShapesFromShapeArgument(builder, valuePts));
+      } else if (reference.equals(TensorFlowTypes.TENSOR_SPEC)
+          || reference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)) {
+        IField shapeField =
+            builder
+                .getClassHierarchy()
+                .resolveField(
+                    reference.equals(TensorFlowTypes.TENSOR_SPEC)
+                        ? TensorFlowTypes.SPEC_SHAPE
+                        : TensorFlowTypes.RAGGED_SPEC_SHAPE);
+        PointerKey shapePK = builder.getPointerKeyForInstanceField(instanceKey, shapeField);
+        OrdinalSet<InstanceKey> shapePts = pointerAnalysis.getPointsToSet(shapePK);
+        ret.addAll(this.getShapesFromShapeArgument(builder, shapePts));
       } else
         throw new IllegalStateException(
             "Expected a " + list + " or " + tuple + " for the shape, but got: " + reference + ".");
@@ -261,7 +301,7 @@ public abstract class TensorGenerator {
     return ret;
   }
 
-  private static Integer getFieldIndex(ConstantKey<?> constantKey) {
+  protected static Integer getFieldIndex(ConstantKey<?> constantKey) {
     Object constantKeyValue = constantKey.getValue();
 
     if (constantKeyValue instanceof Integer) return (Integer) constantKeyValue;
@@ -437,6 +477,7 @@ public abstract class TensorGenerator {
             || reference.equals(TensorFlowTypes.DATASET_ENUMERATE_TYPE)
             || reference.equals(TensorFlowTypes.DATASET_REDUCE_TYPE)
             || reference.equals(TensorFlowTypes.DATASET_FILTER_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_FROM_GENERATOR_TYPE)
             || reference.equals(TensorFlowTypes.DATASET_RANGE_TYPE)
             || reference.equals(TensorFlowTypes.DATASET_FROM_TENSOR_SLICES_TYPE)
             || reference.equals(TensorFlowTypes.ADD.getDeclaringClass())
@@ -596,6 +637,8 @@ public abstract class TensorGenerator {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey instanceKey : pointsToSet) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(instanceKey);
+      if (asin == null && !(instanceKey instanceof ConstantKey)) continue;
       // First, check for `None`.
       if (instanceKey instanceof ConstantKey) {
         ConstantKey<?> constantKey = (ConstantKey<?>) instanceKey;
@@ -663,6 +706,48 @@ public abstract class TensorGenerator {
 
       if (typeReference.equals(TensorFlowTypes.D_TYPE)) {
         throw new IllegalStateException("Unknown dtype: " + instanceKey + ".");
+      } else if (typeReference.equals(TensorFlowTypes.CONSTANT_OP_CONSTANT)) {
+        IField valueField =
+            builder.getClassHierarchy().resolveField(TensorFlowTypes.CONSTANT_DTYPE);
+        PointerKey valuePK = builder.getPointerKeyForInstanceField(instanceKey, valueField);
+        OrdinalSet<InstanceKey> valuePts = pointerAnalysis.getPointsToSet(valuePK);
+        if (valuePts != null && !valuePts.isEmpty()) {
+          ret.addAll(this.getDTypesFromDTypeArgument(builder, valuePts));
+        }
+      } else if (typeReference.equals(TensorFlowTypes.TENSOR_SPEC)
+          || typeReference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)) {
+        IField dtypeField =
+            builder
+                .getClassHierarchy()
+                .resolveField(
+                    typeReference.equals(TensorFlowTypes.TENSOR_SPEC)
+                        ? TensorFlowTypes.SPEC_DTYPE
+                        : TensorFlowTypes.RAGGED_SPEC_DTYPE);
+        PointerKey dtypePK = builder.getPointerKeyForInstanceField(instanceKey, dtypeField);
+        OrdinalSet<InstanceKey> dtypePts = pointerAnalysis.getPointsToSet(dtypePK);
+        if (dtypePts != null && !dtypePts.isEmpty()) {
+          ret.addAll(this.getDTypesFromDTypeArgument(builder, dtypePts));
+        }
+      } else if (typeReference.equals(tuple) || typeReference.equals(list)) {
+        OrdinalSet<InstanceKey> objectCatalogPointsToSet =
+            pointerAnalysis.getPointsToSet(
+                ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                    .getPointerKeyForObjectCatalog(asin));
+
+        for (InstanceKey catalogIK : objectCatalogPointsToSet) {
+          ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
+          Integer fieldIndex = getFieldIndex(constantKey);
+
+          FieldReference subscript =
+              FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+
+          IField f = builder.getClassHierarchy().resolveField(subscript);
+          if (f != null) {
+            PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+            OrdinalSet<InstanceKey> fieldPts = pointerAnalysis.getPointsToSet(pk);
+            ret.addAll(this.getDTypesFromDTypeArgument(builder, fieldPts));
+          }
+        }
       } else if (instanceKey instanceof ConstantKey
           && ((ConstantKey<?>) instanceKey).getValue() instanceof String) {
         String value = (String) ((ConstantKey<?>) instanceKey).getValue();
@@ -873,6 +958,7 @@ public abstract class TensorGenerator {
             || reference.equals(TensorFlowTypes.DATASET_ENUMERATE_TYPE)
             || reference.equals(TensorFlowTypes.DATASET_REDUCE_TYPE)
             || reference.equals(TensorFlowTypes.DATASET_FILTER_TYPE)
+            || reference.equals(TensorFlowTypes.DATASET_FROM_GENERATOR_TYPE)
             || reference.equals(TensorFlowTypes.DATASET_RANGE_TYPE)
             || reference.equals(TensorFlowTypes.DATASET_FROM_TENSOR_SLICES_TYPE)
             || reference.equals(TensorFlowTypes.ADD.getDeclaringClass())
