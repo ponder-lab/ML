@@ -54,6 +54,12 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator {
     super(node);
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * <p>For {@code tf.data.Dataset.from_generator}, shapes are inferred from the {@code
+   * output_signature} or the legacy {@code output_shapes} arguments.
+   */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     // Strategy 1: Check output_signature.
@@ -111,6 +117,7 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator {
 
     if (outputShapesPts != null && !outputShapesPts.isEmpty()) {
       Set<List<Dimension<?>>> ret = this.getShapesFromShapeArgument(builder, outputShapesPts);
+      // If we found any shapes in the output_shapes, return them.
       if (!ret.isEmpty()) {
         return ret;
       }
@@ -120,9 +127,16 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator {
     return Collections.emptySet();
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * <p>For {@code tf.data.Dataset.from_generator}, dtypes are inferred from the {@code
+   * output_signature} or the legacy {@code output_types} arguments.
+   */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // Strategy 1: Check output_signature.
+    // This is the modern way to specify output properties in from_generator.
     OrdinalSet<InstanceKey> outputSignaturePts =
         this.getArgumentPointsToSet(
             builder, Parameters.OUTPUT_SIGNATURE.getIndex(), Parameters.OUTPUT_SIGNATURE.getName());
@@ -131,11 +145,13 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator {
       Set<DType> ret = EnumSet.noneOf(DType.class);
       for (InstanceKey ik : outputSignaturePts) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-        // Case 1.1: Structured signature.
+        // Case 1.1: Structured signature (tuple or list of specs).
         if (asin != null
             && (asin.getConcreteType().getReference().equals(tuple)
                 || asin.getConcreteType().getReference().equals(list))) {
           // Extract dtypes from each component and union them.
+          // This results in the dataset elements being identified as having any of
+          // the dtypes present in the signature.
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               builder
                   .getPointerAnalysis()
@@ -157,10 +173,11 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator {
             }
           }
         } else {
-          // Case 1.2: Single spec object.
+          // Case 1.2: Single spec object as signature.
           ret.addAll(this.getDTypesFromDTypeArgument(builder, Collections.singleton(ik)));
         }
       }
+      // If we found any dtypes in the output_signature, return them.
       if (!ret.isEmpty()) {
         return ret;
       }
@@ -173,6 +190,7 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator {
 
     if (outputTypesPts != null && !outputTypesPts.isEmpty()) {
       Set<DType> ret = this.getDTypesFromDTypeArgument(builder, outputTypesPts);
+      // If we found any dtypes in the output_types, return them.
       if (!ret.isEmpty()) {
         return ret;
       }
