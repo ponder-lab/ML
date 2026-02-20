@@ -595,23 +595,17 @@ public abstract class TensorGenerator {
         AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
 
         // Instead of forcing a points-to set, try to get the generator for this allocation site
-        try {
-          PointsToSetVariable var =
-              builder
-                  .getPropagationSystem()
-                  .findOrCreatePointsToSet(
-                      builder
-                          .getPointerAnalysis()
-                          .getHeapModel()
-                          .getPointerKeyForLocal(
-                              asin.getNode(), asin.getSite().getProgramCounter()));
-          TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
-          if (generator != null && !generator.getClass().equals(this.getClass())) {
-            ret.addAll(generator.getShapes(builder));
-          }
-        } catch (IllegalArgumentException | UnimplementedError e) {
-          // Not a recognized generator or implicit key. Ignore.
-          LOGGER.fine("Could not resolve generator for unwrapped key: " + asin);
+        PointsToSetVariable var =
+            builder
+                .getPropagationSystem()
+                .findOrCreatePointsToSet(
+                    builder
+                        .getPointerAnalysis()
+                        .getHeapModel()
+                        .getPointerKeyForLocal(asin.getNode(), asin.getSite().getProgramCounter()));
+        TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+        if (generator != null && !generator.getClass().equals(this.getClass())) {
+          ret.addAll(generator.getShapes(builder));
         }
       } else {
         throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
@@ -1179,23 +1173,17 @@ public abstract class TensorGenerator {
         AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
 
         // Instead of forcing a points-to set, try to get the generator for this allocation site
-        try {
-          PointsToSetVariable var =
-              builder
-                  .getPropagationSystem()
-                  .findOrCreatePointsToSet(
-                      builder
-                          .getPointerAnalysis()
-                          .getHeapModel()
-                          .getPointerKeyForLocal(
-                              asin.getNode(), asin.getSite().getProgramCounter()));
-          TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
-          if (generator != null && !generator.getClass().equals(this.getClass())) {
-            ret.addAll(generator.getDTypes(builder));
-          }
-        } catch (IllegalArgumentException | UnimplementedError e) {
-          // Not a recognized generator or implicit key. Ignore.
-          LOGGER.fine("Could not resolve generator for unwrapped key: " + asin);
+        PointsToSetVariable var =
+            builder
+                .getPropagationSystem()
+                .findOrCreatePointsToSet(
+                    builder
+                        .getPointerAnalysis()
+                        .getHeapModel()
+                        .getPointerKeyForLocal(asin.getNode(), asin.getSite().getProgramCounter()));
+        TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+        if (generator != null && !generator.getClass().equals(this.getClass())) {
+          ret.addAll(generator.getDTypes(builder));
         }
       } else {
         throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
