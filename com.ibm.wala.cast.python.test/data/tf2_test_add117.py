@@ -11,4 +11,16 @@ if random.random() < 0.5:
 else:
     a = 3
 
-c = add(tf.ones([a, 2]), tf.ones([2, 2]))
+t1 = tf.ones([a, 2])
+t2 = tf.ones([2, 2])
+
+assert t1.shape in [(1, 2), (3, 2)]
+assert t1.dtype == tf.float32
+
+assert t2.shape == (2, 2)
+assert t2.dtype == tf.float32
+
+try:
+    c = add(t1, t2)
+except tf.errors.InvalidArgumentError:
+    pass  # Expected when a=3
