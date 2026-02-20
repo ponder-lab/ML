@@ -228,6 +228,7 @@
                   <include>**/*.xml</include>
                   <include>**/.pydevproject</include>
                 </includes>
+                <toggleOffOn/>
                 <excludes>
                   <exclude>**/plugin.xml</exclude>
                   <exclude>**/pom.xml</exclude>

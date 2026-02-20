@@ -1,6 +1,20 @@
 <?xml version="1.0" ?>
 <!DOCTYPE summary-spec>
 <!-- TensorFlow model -->
+<!-- spotless:off -->
+<!--
+  Note on <putfield> tags:
+  <putfield> is used to model an SSA field store instruction (e.g., `obj.x = val`).
+
+  Attributes:
+  - ref       : A symbolic reference to the receiver object (the `obj`). Must match a `def` or param name.
+  - field     : The literal name of the field being written to (the `x`).
+  - value     : A symbolic reference to the value being stored (the `val`). Must match a `def` or param name.
+  - class     : The declaring class of the field (where the field is defined in the class hierarchy).
+                Often `LRoot` in synthetic models unless a specific class is needed.
+  - fieldType : The type of the field itself (the type of the slot). Often `LRoot`.
+-->
+<!-- spotless:on -->
 <summary-spec>
   <classloader name="PythonLoader">
     <class name="tensorflow" allocatable="true">
