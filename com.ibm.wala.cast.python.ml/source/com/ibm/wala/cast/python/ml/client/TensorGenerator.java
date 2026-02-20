@@ -579,7 +579,8 @@ public abstract class TensorGenerator {
             || reference.equals(TensorFlowTypes.NORMAL_OP)
             || reference.equals(TensorFlowTypes.TRUNCATED_NORMAL_OP)
             || reference.equals(TensorFlowTypes.GAMMA_OP)
-            || reference.equals(TensorFlowTypes.POISSON_OP)) {
+            || reference.equals(TensorFlowTypes.POISSON_OP)
+            || reference.equals(TensorFlowTypes.SPARSE_ADD.getDeclaringClass())) {
           // If the value is a tensor, we attempt to find the generator that created it and ask for
           // its shape.
           LOGGER.fine(
@@ -1153,7 +1154,8 @@ public abstract class TensorGenerator {
             || reference.equals(TensorFlowTypes.NORMAL_OP)
             || reference.equals(TensorFlowTypes.TRUNCATED_NORMAL_OP)
             || reference.equals(TensorFlowTypes.GAMMA_OP)
-            || reference.equals(TensorFlowTypes.POISSON_OP)) {
+            || reference.equals(TensorFlowTypes.POISSON_OP)
+            || reference.equals(TensorFlowTypes.SPARSE_ADD.getDeclaringClass())) {
           // If the value is a tensor, we attempt to find the generator that created it and ask for
           // its dtype.
           LOGGER.fine(
