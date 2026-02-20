@@ -395,17 +395,88 @@ public abstract class TensorGenerator {
    */
   protected Set<List<Dimension<?>>> getShapes(
       PropagationCallGraphBuilder builder, int valueNumber) {
+    return getShapes(builder, this.getNode(), valueNumber);
+  }
+
+  /**
+   * Returns the possible shapes of the tensor represented by the given value number in the
+   * specified node. This method uses a multi-staged approach, falling back to interprocedural
+   * generator-based tracing if standard points-to analysis fails.
+   */
+  protected Set<List<Dimension<?>>> getShapes(
+      PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
-    PointerKey valuePK =
-        pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
+    PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
     OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
 
-    if (valuePointsToSet.isEmpty())
-      throw new IllegalArgumentException(
-          "Empty points-to set for value number: " + valueNumber + " in: " + this.getNode() + ".");
+    if (!valuePointsToSet.isEmpty()) {
+      return this.getShapesOfValue(builder, valuePointsToSet);
+    }
 
-    // FIXME: Just use the value number directly?
-    return this.getShapesOfValue(builder, valuePointsToSet);
+    // points-to set is empty. Try to find a generator for this variable.
+    PointsToSetVariable var = builder.getPropagationSystem().findOrCreatePointsToSet(valuePK);
+    try {
+      TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+      if (generator != null && !generator.getClass().equals(this.getClass())) {
+        return generator.getShapes(builder);
+      }
+    } catch (IllegalArgumentException e) {
+      // Not a recognized generator.
+    }
+
+    // No direct generator. Try tracing the definition or parameters.
+    SSAInstruction def = node.getDU().getDef(valueNumber);
+    if (def == null) {
+      // It's a parameter. Trace back to call sites.
+      int paramPos = -1;
+      for (int i = 0; i < node.getIR().getNumberOfParameters(); i++) {
+        if (node.getIR().getParameter(i) == valueNumber) {
+          paramPos = node.getMethod().isStatic() ? i : i - 1;
+          break;
+        }
+      }
+
+      if (paramPos >= -1) { // -1 is 'self'
+        Set<List<Dimension<?>>> combinedRet = HashSetFactory.make();
+        CallString cs = (CallString) node.getContext().get(CALL_STRING);
+        if (cs != null) {
+          for (int i = 0; i < cs.getCallSiteRefs().length; i++) {
+            CallSiteReference site = cs.getCallSiteRefs()[i];
+            IMethod callerMethod = cs.getMethods()[i];
+            for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(node); it.hasNext(); ) {
+              CGNode caller = it.next();
+              if (caller.getMethod().equals(callerMethod)) {
+                for (SSAAbstractInvokeInstruction call : caller.getIR().getCalls(site)) {
+                  int argVn = -1;
+                  if (paramPos == -1) { // self
+                    argVn = call.getUse(0);
+                  } else if (call instanceof PythonInvokeInstruction) {
+                    // Try to find the argument index. This is simplified.
+                    if (paramPos + 1 < call.getNumberOfUses()) {
+                      argVn = call.getUse(paramPos + 1);
+                    }
+                  } else if (paramPos < call.getNumberOfUses()) {
+                    argVn = call.getUse(paramPos);
+                  }
+
+                  if (argVn != -1) {
+                    combinedRet.addAll(this.getShapes(builder, caller, argVn));
+                  }
+                }
+              }
+            }
+          }
+          if (!combinedRet.isEmpty()) return combinedRet;
+        }
+      }
+    }
+
+    throw new IllegalArgumentException(
+        "Empty points-to set and could not trace properties for value number: "
+            + valueNumber
+            + " in: "
+            + node
+            + ".");
   }
 
   /**
@@ -856,16 +927,86 @@ public abstract class TensorGenerator {
    * @return A set of possible dtypes of the tensor returned by this generator.
    */
   protected Set<DType> getDTypes(PropagationCallGraphBuilder builder, int valueNumber) {
+    return getDTypes(builder, this.getNode(), valueNumber);
+  }
+
+  /**
+   * Returns the possible dtypes of the tensor represented by the given value number in the
+   * specified node.
+   */
+  protected Set<DType> getDTypes(
+      PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
-    PointerKey valuePK =
-        pointerAnalysis.getHeapModel().getPointerKeyForLocal(this.getNode(), valueNumber);
+    PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
     OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
 
-    if (valuePointsToSet == null || valuePointsToSet.isEmpty())
-      throw new IllegalArgumentException(
-          "Empty points-to set for value number: " + valueNumber + " in: " + this.getNode() + ".");
+    if (valuePointsToSet != null && !valuePointsToSet.isEmpty()) {
+      return this.getDTypesOfValue(builder, valuePointsToSet);
+    }
 
-    return this.getDTypesOfValue(builder, valuePointsToSet);
+    // points-to set is empty. Try to find a generator for this variable.
+    PointsToSetVariable var = builder.getPropagationSystem().findOrCreatePointsToSet(valuePK);
+    try {
+      TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+      if (generator != null && !generator.getClass().equals(this.getClass())) {
+        return generator.getDTypes(builder);
+      }
+    } catch (IllegalArgumentException e) {
+      // Not a recognized generator.
+    }
+
+    // No direct generator. Try tracing the definition or parameters.
+    SSAInstruction def = node.getDU().getDef(valueNumber);
+    if (def == null) {
+      // It's a parameter. Trace back to call sites.
+      int paramPos = -1;
+      for (int i = 0; i < node.getIR().getNumberOfParameters(); i++) {
+        if (node.getIR().getParameter(i) == valueNumber) {
+          paramPos = node.getMethod().isStatic() ? i : i - 1;
+          break;
+        }
+      }
+
+      if (paramPos >= -1) {
+        Set<DType> combinedRet = EnumSet.noneOf(DType.class);
+        CallString cs = (CallString) node.getContext().get(CALL_STRING);
+        if (cs != null) {
+          for (int i = 0; i < cs.getCallSiteRefs().length; i++) {
+            CallSiteReference site = cs.getCallSiteRefs()[i];
+            IMethod callerMethod = cs.getMethods()[i];
+            for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(node); it.hasNext(); ) {
+              CGNode caller = it.next();
+              if (caller.getMethod().equals(callerMethod)) {
+                for (SSAAbstractInvokeInstruction call : caller.getIR().getCalls(site)) {
+                  int argVn = -1;
+                  if (paramPos == -1) { // self
+                    argVn = call.getUse(0);
+                  } else if (call instanceof PythonInvokeInstruction) {
+                    if (paramPos + 1 < call.getNumberOfUses()) {
+                      argVn = call.getUse(paramPos + 1);
+                    }
+                  } else if (paramPos < call.getNumberOfUses()) {
+                    argVn = call.getUse(paramPos);
+                  }
+
+                  if (argVn != -1) {
+                    combinedRet.addAll(this.getDTypes(builder, caller, argVn));
+                  }
+                }
+              }
+            }
+          }
+          if (!combinedRet.isEmpty()) return combinedRet;
+        }
+      }
+    }
+
+    throw new IllegalArgumentException(
+        "Empty points-to set and could not trace properties for value number: "
+            + valueNumber
+            + " in: "
+            + node
+            + ".");
   }
 
   /**
@@ -1746,6 +1887,8 @@ public abstract class TensorGenerator {
     } else if (type.equals(TensorFlowTypes.DATASET_FROM_TENSOR_SLICES_TYPE)
         || type.getName().toString().equals("Ltensorflow/data/from_tensor_slices")) {
       return new DatasetFromTensorSlicesGenerator(node);
+    } else if (type.equals(TensorFlowTypes.DATASET_FROM_GENERATOR_TYPE)) {
+      return new DatasetFromGeneratorGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET)) {
       return new DatasetGenerator(node);
     } else if (type.equals(TensorFlowTypes.MATMUL.getDeclaringClass())) {

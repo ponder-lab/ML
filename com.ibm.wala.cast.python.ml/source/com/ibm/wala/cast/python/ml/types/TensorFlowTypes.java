@@ -170,21 +170,35 @@ public class TensorFlowTypes extends PythonTypes {
   public static final TypeReference DATASET_FILTER_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/filter"));
 
-  /** The type of `tf.data.Dataset.from_generator`. */
+  /**
+   * The type of `tf.data.Dataset.from_generator`.
+   *
+   * @see <a
+   *     href="https://www.tensorflow.org/api_docs/python/tf/data/Dataset#from_generator">tf.data.Dataset.from_generator</a>
+   */
   public static final TypeReference DATASET_FROM_GENERATOR_TYPE =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset/from_generator"));
 
   public static final String DATASET_FROM_GENERATOR_SIGNATURE = "tf.data.Dataset.from_generator()";
 
-  /** The type of `tf.TensorSpec`. */
+  /**
+   * The type of `tf.TensorSpec`.
+   *
+   * @see <a href="https://www.tensorflow.org/api_docs/python/tf/TensorSpec">tf.TensorSpec</a>
+   */
   public static final TypeReference TENSOR_SPEC =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/framework/TensorSpec"));
 
   public static final String TENSOR_SPEC_SIGNATURE = "tf.TensorSpec()";
 
-  /** The type of `tf.RaggedTensorSpec`. */
+  /**
+   * The type of `tf.RaggedTensorSpec`.
+   *
+   * @see <a
+   *     href="https://www.tensorflow.org/api_docs/python/tf/RaggedTensorSpec">tf.RaggedTensorSpec</a>
+   */
   public static final TypeReference RAGGED_TENSOR_SPEC =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/framework/RaggedTensorSpec"));

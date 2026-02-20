@@ -6,11 +6,9 @@ import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
-import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
-import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -76,17 +74,13 @@ public class ElementWiseOperation extends ZerosLike {
     // The resulting shape is the broadcasted shape of the shapes of x and y.
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
-    OrdinalSet<InstanceKey> xPts =
-        this.getArgumentPointsToSet(builder, getXParameterPosition(), getXParameterName());
-    if (xPts == null || xPts.isEmpty()) return ret;
+    int xVn = this.getXArgumentValueNumber(builder);
+    if (xVn <= 0) return ret;
+    Set<List<Dimension<?>>> xShapes = this.getShapes(builder, xVn);
 
-    Set<List<Dimension<?>>> xShapes = this.getShapesOfValue(builder, xPts);
-
-    OrdinalSet<InstanceKey> yPts =
-        this.getArgumentPointsToSet(builder, getYParameterPosition(), getYParameterName());
-    if (yPts == null || yPts.isEmpty()) return ret;
-
-    Set<List<Dimension<?>>> yShapes = this.getShapesOfValue(builder, yPts);
+    int yVn = this.getYArgumentValueNumber(builder);
+    if (yVn <= 0) return ret;
+    Set<List<Dimension<?>>> yShapes = this.getShapes(builder, yVn);
 
     for (List<Dimension<?>> xShape : xShapes)
       for (List<Dimension<?>> yShape : yShapes)
@@ -101,18 +95,7 @@ public class ElementWiseOperation extends ZerosLike {
     int vn = this.getXArgumentValueNumber(builder);
     if (vn <= 0) return Collections.emptySet();
 
-    OrdinalSet<InstanceKey> pts =
-        builder
-            .getPointerAnalysis()
-            .getPointsToSet(
-                builder
-                    .getPointerAnalysis()
-                    .getHeapModel()
-                    .getPointerKeyForLocal(this.getNode(), vn));
-
-    if (pts == null || pts.isEmpty()) return Collections.emptySet();
-
-    return this.getDTypesOfValue(builder, pts);
+    return this.getDTypes(builder, vn);
   }
 
   /** No explicit dtype argument. Dtype is inferred from 'x'. */
