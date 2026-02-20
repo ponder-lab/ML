@@ -2784,13 +2784,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(
-            2,
-            Set.of(
-                TENSOR_1_2_FLOAT32,
-                new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(2)))),
-            3,
-            Set.of(TENSOR_2_2_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32, TENSOR_3_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   /**
