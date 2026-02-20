@@ -1,24 +1,14 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARRAY_OPS_RESHAPE;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARRAY_OPS_ZEROS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT_OP_CONSTANT;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FIELD_REFERENCE_TO_DTYPE;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LINALG_OPS_EYE;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NDARRAY_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.PLACEHOLDER;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_FACTORY_OPS_CONSTANT;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_MATH_OPS_RANGE;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VARIABLES_VARIABLE;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
@@ -541,56 +531,19 @@ public abstract class TensorGenerator {
               ret.add(shape);
             }
           }
-        } else if (reference.equals(TENSOR_TYPE)
-            || reference.equals(CONVERT_TO_TENSOR_TYPE)
-            || reference.equals(NDARRAY_TYPE)
-            || reference.equals(TensorFlowTypes.OPERATION)
-            || reference.equals(CONSTANT_OP_CONSTANT)
-            || reference.equals(ARRAY_OPS_ZEROS)
-            || reference.equals(ARRAY_OPS_RESHAPE)
-            || reference.equals(VARIABLES_VARIABLE)
-            || reference.equals(SPARSE_TENSOR_TYPE)
-            || reference.equals(RAGGED_FACTORY_OPS_CONSTANT)
-            || reference.equals(RAGGED_MATH_OPS_RANGE)
-            || reference.equals(LINALG_OPS_EYE)
-            || reference.equals(TensorFlowTypes.DATASET)
-            || reference.equals(TensorFlowTypes.DATASET_SHUFFLE_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_BATCH_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_MAP_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_REPEAT_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_PREFETCH_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_TAKE_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_WITH_OPTIONS_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_CONCATENATE_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_ENUMERATE_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_REDUCE_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_FILTER_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_FROM_GENERATOR_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_RANGE_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_FROM_TENSOR_SLICES_TYPE)
-            || reference.equals(TensorFlowTypes.ADD.getDeclaringClass())
-            || reference.equals(TensorFlowTypes.MULTIPLY.getDeclaringClass())
-            || reference.equals(TensorFlowTypes.REDUCE_SUM.getDeclaringClass())
-            || reference.equals(TensorFlowTypes.REDUCE_MEAN.getDeclaringClass())
-            || reference.equals(TensorFlowTypes.ARGMAX.getDeclaringClass())
-            || reference.equals(TensorFlowTypes.EQUAL.getDeclaringClass())
-            || reference.equals(TensorFlowTypes.INPUT.getDeclaringClass())
-            || reference.equals(TensorFlowTypes.UNIFORM_OP)
-            || reference.equals(TensorFlowTypes.NORMAL_OP)
-            || reference.equals(TensorFlowTypes.TRUNCATED_NORMAL_OP)
-            || reference.equals(TensorFlowTypes.GAMMA_OP)
-            || reference.equals(TensorFlowTypes.POISSON_OP)
-            || reference.equals(TensorFlowTypes.SPARSE_ADD.getDeclaringClass())) {
-          // If the value is a tensor, we attempt to find the generator that created it and ask for
-          // its shape.
+        } else if (reference.equals(TensorFlowTypes.D_TYPE)) {
+          LOGGER.fine("Ignoring DType: " + asin);
+        } else if (reference.equals(TensorFlowTypes.FEATURE)) {
+          LOGGER.fine("Ignoring feature: " + asin);
+        } else {
+          // Assume the value is a tensor and attempt to find the generator that created it
+          // to ask for its shape.
           LOGGER.fine(
               "Encountered "
                   + reference.getName()
                   + ". Attempting to retrieve shape from producer.");
           ret.addAll(this.getShapesFromTensor(builder, asin));
-        } else if (reference.equals(TensorFlowTypes.D_TYPE)) {
-          LOGGER.fine("Ignoring DType: " + asin);
-        } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
+        }
       } else if (getAllocationSiteInNode(valueIK) != null) {
         // Unwrap ScopeMappingInstanceKey or similar wrapping keys
         AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
@@ -704,8 +657,11 @@ public abstract class TensorGenerator {
               if (generator == null) {
                 generator = TensorGeneratorFactory.getGenerator(defSource, builder);
               }
-              LOGGER.fine("Delegating shape inference to: " + generator);
-              ret.addAll(generator.getShapes(builder));
+
+              if (generator != null) {
+                LOGGER.fine("Delegating shape inference to: " + generator);
+                ret.addAll(generator.getShapes(builder));
+              }
             }
           }
         }
@@ -1116,60 +1072,21 @@ public abstract class TensorGenerator {
 
             ret.addAll(this.getDTypesOfValue(builder, instanceFieldPointsToSet));
           }
-        } else if (reference.equals(TENSOR_TYPE)
-            || reference.equals(CONVERT_TO_TENSOR_TYPE)
-            || reference.equals(NDARRAY_TYPE)
-            || reference.equals(TensorFlowTypes.OPERATION)
-            || reference.equals(CONSTANT_OP_CONSTANT)
-            || reference.equals(ARRAY_OPS_ZEROS)
-            || reference.equals(ARRAY_OPS_RESHAPE)
-            || reference.equals(VARIABLES_VARIABLE)
-            || reference.equals(SPARSE_TENSOR_TYPE)
-            || reference.equals(RAGGED_FACTORY_OPS_CONSTANT)
-            || reference.equals(RAGGED_MATH_OPS_RANGE)
-            || reference.equals(LINALG_OPS_EYE)
-            || reference.equals(TensorFlowTypes.DATASET)
-            || reference.equals(TensorFlowTypes.DATASET_SHUFFLE_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_BATCH_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_MAP_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_REPEAT_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_PREFETCH_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_TAKE_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_WITH_OPTIONS_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_CONCATENATE_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_ENUMERATE_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_REDUCE_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_FILTER_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_FROM_GENERATOR_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_RANGE_TYPE)
-            || reference.equals(TensorFlowTypes.DATASET_FROM_TENSOR_SLICES_TYPE)
-            || reference.equals(TensorFlowTypes.ADD.getDeclaringClass())
-            || reference.equals(TensorFlowTypes.MULTIPLY.getDeclaringClass())
-            || reference.equals(TensorFlowTypes.REDUCE_SUM.getDeclaringClass())
-            || reference.equals(TensorFlowTypes.REDUCE_MEAN.getDeclaringClass())
-            || reference.equals(TensorFlowTypes.ARGMAX.getDeclaringClass())
-            || reference.equals(TensorFlowTypes.EQUAL.getDeclaringClass())
-            || reference.equals(TensorFlowTypes.INPUT.getDeclaringClass())
-            || reference.equals(TensorFlowTypes.UNIFORM_OP)
-            || reference.equals(TensorFlowTypes.NORMAL_OP)
-            || reference.equals(TensorFlowTypes.TRUNCATED_NORMAL_OP)
-            || reference.equals(TensorFlowTypes.GAMMA_OP)
-            || reference.equals(TensorFlowTypes.POISSON_OP)
-            || reference.equals(TensorFlowTypes.SPARSE_ADD.getDeclaringClass())) {
-          // If the value is a tensor, we attempt to find the generator that created it and ask for
-          // its dtype.
-          LOGGER.fine(
-              "Encountered "
-                  + reference.getName()
-                  + ". Attempting to retrieve dtype from producer.");
-          ret.addAll(this.getDTypesFromTensor(builder, asin));
         } else if (reference.equals(TensorFlowTypes.FEATURE)) {
           // Ignore features.
           LOGGER.fine("Ignoring feature: " + asin);
         } else if (reference.equals(TensorFlowTypes.D_TYPE)) {
           // Ignore DTypes.
           LOGGER.fine("Ignoring DType: " + asin);
-        } else throw new IllegalStateException("Unknown type reference: " + reference + ".");
+        } else {
+          // Assume the value is a tensor and attempt to find the generator that created it
+          // to ask for its dtype.
+          LOGGER.fine(
+              "Encountered "
+                  + reference.getName()
+                  + ". Attempting to retrieve dtype from producer.");
+          ret.addAll(this.getDTypesFromTensor(builder, asin));
+        }
       } else if (getAllocationSiteInNode(valueIK) != null) {
         // Unwrap ScopeMappingInstanceKey or similar wrapping keys
         AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
@@ -1262,8 +1179,11 @@ public abstract class TensorGenerator {
               if (generator == null) {
                 generator = TensorGeneratorFactory.getGenerator(defSource, builder);
               }
-              LOGGER.fine("Delegating dtype inference to: " + generator);
-              ret.addAll(generator.getDTypes(builder));
+
+              if (generator != null) {
+                LOGGER.fine("Delegating dtype inference to: " + generator);
+                ret.addAll(generator.getDTypes(builder));
+              }
             }
           }
         }
