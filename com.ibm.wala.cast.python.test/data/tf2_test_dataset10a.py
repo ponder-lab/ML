@@ -20,9 +20,13 @@ dataset = tf.data.Dataset.from_generator(
 
 for element in dataset:
     x = element[0]
-    y = element[1]
+    assert isinstance(x, tf.Tensor)
     assert x.shape == ()
     assert x.dtype == tf.int32
+
+    y = element[1]
+    assert isinstance(y, tf.RaggedTensor)
     assert y.shape.as_list() == [2, None]
     assert y.dtype == tf.int32
+
     c = add(x, y)
