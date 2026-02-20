@@ -56,7 +56,8 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    // Check output_signature first
+    // Strategy 1: Check output_signature.
+    // This is the modern way to specify output properties in from_generator.
     OrdinalSet<InstanceKey> outputSignaturePts =
         this.getArgumentPointsToSet(
             builder, Parameters.OUTPUT_SIGNATURE.getIndex(), Parameters.OUTPUT_SIGNATURE.getName());
@@ -65,9 +66,13 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator {
       Set<List<Dimension<?>>> ret = HashSetFactory.make();
       for (InstanceKey ik : outputSignaturePts) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        // Case 1.1: Structured signature (tuple or list of specs).
         if (asin != null
             && (asin.getConcreteType().getReference().equals(tuple)
                 || asin.getConcreteType().getReference().equals(list))) {
+          // We extract shapes from each component of the structure and union them.
+          // This results in the dataset elements being identified as having any of
+          // the types/shapes present in the signature.
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               builder
                   .getPointerAnalysis()
@@ -89,27 +94,35 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator {
             }
           }
         } else {
+          // Case 1.2: Single spec object as signature.
           ret.addAll(this.getShapesFromShapeArgument(builder, Collections.singleton(ik)));
         }
       }
-      return ret;
+      // If we found any shapes in the output_signature, return them.
+      if (!ret.isEmpty()) {
+        return ret;
+      }
     }
 
-    // Check output_shapes
+    // Strategy 2: Check output_shapes (legacy).
     OrdinalSet<InstanceKey> outputShapesPts =
         this.getArgumentPointsToSet(
             builder, Parameters.OUTPUT_SHAPES.getIndex(), Parameters.OUTPUT_SHAPES.getName());
 
     if (outputShapesPts != null && !outputShapesPts.isEmpty()) {
-      return this.getShapesFromShapeArgument(builder, outputShapesPts);
+      Set<List<Dimension<?>>> ret = this.getShapesFromShapeArgument(builder, outputShapesPts);
+      if (!ret.isEmpty()) {
+        return ret;
+      }
     }
 
+    // Default: No shape information could be extracted from generator arguments.
     return Collections.emptySet();
   }
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    // Check output_signature first
+    // Strategy 1: Check output_signature.
     OrdinalSet<InstanceKey> outputSignaturePts =
         this.getArgumentPointsToSet(
             builder, Parameters.OUTPUT_SIGNATURE.getIndex(), Parameters.OUTPUT_SIGNATURE.getName());
@@ -118,9 +131,11 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator {
       Set<DType> ret = EnumSet.noneOf(DType.class);
       for (InstanceKey ik : outputSignaturePts) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        // Case 1.1: Structured signature.
         if (asin != null
             && (asin.getConcreteType().getReference().equals(tuple)
                 || asin.getConcreteType().getReference().equals(list))) {
+          // Extract dtypes from each component and union them.
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               builder
                   .getPointerAnalysis()
@@ -142,21 +157,28 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator {
             }
           }
         } else {
+          // Case 1.2: Single spec object.
           ret.addAll(this.getDTypesFromDTypeArgument(builder, Collections.singleton(ik)));
         }
       }
-      return ret;
+      if (!ret.isEmpty()) {
+        return ret;
+      }
     }
 
-    // Check output_types
+    // Strategy 2: Check output_types (legacy).
     OrdinalSet<InstanceKey> outputTypesPts =
         this.getArgumentPointsToSet(
             builder, Parameters.OUTPUT_TYPES.getIndex(), Parameters.OUTPUT_TYPES.getName());
 
     if (outputTypesPts != null && !outputTypesPts.isEmpty()) {
-      return this.getDTypesFromDTypeArgument(builder, outputTypesPts);
+      Set<DType> ret = this.getDTypesFromDTypeArgument(builder, outputTypesPts);
+      if (!ret.isEmpty()) {
+        return ret;
+      }
     }
 
+    // Default: No dtype information found.
     return Collections.emptySet();
   }
 }

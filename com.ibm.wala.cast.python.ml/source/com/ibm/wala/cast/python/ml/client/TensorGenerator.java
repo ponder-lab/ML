@@ -89,15 +89,30 @@ public abstract class TensorGenerator {
   protected PointsToSetVariable source;
 
   /**
-   * The call graph node representing the manual generator, used when standard points-to analysis
-   * fails.
+   * The call graph node representing the "manual" generator. A generator is considered manual when
+   * it is instantiated directly from a Call Graph Node ({@link CGNode}) rather than a points-to set
+   * variable. This fallback mechanism is used when WALA's pointer analysis cannot construct a
+   * trackable points-to set for the tensor's allocation site (often due to limitations dealing with
+   * implicit allocations in synthetic model methods). In such cases, the generator analyzes the
+   * instructions directly within this node's IR.
    */
   protected CGNode manualNode;
 
+  /**
+   * Constructs a new tensor generator based on a standard points-to set source.
+   *
+   * @param source The points-to set variable representing the source of the tensor.
+   */
   public TensorGenerator(PointsToSetVariable source) {
     this.source = source;
   }
 
+  /**
+   * Constructs a new "manual" tensor generator based directly on a call graph node.
+   *
+   * @param node The call graph node representing the operation that generates the tensor. Used as a
+   *     fallback when standard pointer analysis fails to provide a trackable source.
+   */
   public TensorGenerator(CGNode node) {
     this.manualNode = node;
   }
