@@ -2761,6 +2761,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
+  /**
+   * Tests that the analysis identifies non-broadcastable shapes in conditional branches.
+   *
+   * <p>In {@code tf2_test_add117.py}, the variable {@code a} can be either 1 or 3.
+   *
+   * <ul>
+   *   <li>If {@code a=1}, the addition is {@code [1, 2] + [2, 2]}, which is broadcastable.
+   *   <li>If {@code a=3}, the addition is {@code [3, 2] + [2, 2]}, which is NOT broadcastable.
+   * </ul>
+   *
+   * The analysis correctly identifies that one possible dataflow is invalid and throws a {@link
+   * NonBroadcastableShapesException}.
+   *
+   * @see #testAdd117a()
+   */
   @Test(expected = NonBroadcastableShapesException.class)
   public void testAdd117()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -2778,6 +2793,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             Set.of(TENSOR_2_2_FLOAT32)));
   }
 
+  /**
+   * Tests that the analysis correctly identifies broadcastable shapes even when they originate from
+   * multiple conditional branches.
+   *
+   * <p>This is a companion test to {@link #testAdd117()}. In {@code tf2_test_add117a.py}, the
+   * variable {@code a} can be either 1 or 2.
+   *
+   * <ul>
+   *   <li>If {@code a=1}, the addition is {@code [1, 2] + [2, 2]}, which is broadcastable to {@code
+   *       [2, 2]}.
+   *   <li>If {@code a=2}, the addition is {@code [2, 2] + [2, 2]}, which is broadcastable to {@code
+   *       [2, 2]}.
+   * </ul>
+   *
+   * Since all branches lead to broadcastable shapes, the analysis succeeds without exception.
+   *
+   * @see #testAdd117()
+   */
   @Test
   public void testAdd117a()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
