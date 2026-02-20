@@ -2761,14 +2761,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
-  @Test
+  @Test(expected = NonBroadcastableShapesException.class)
   public void testAdd117()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_add117.py",
         "add",
         2,
-        2,
+        3,
         Map.of(
             2,
             Set.of(
@@ -2776,6 +2776,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
                 new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(2)))),
             3,
             Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  @Test
+  public void testAdd117a()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add117a.py",
+        "add",
+        2,
+        3,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32, TENSOR_2_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
