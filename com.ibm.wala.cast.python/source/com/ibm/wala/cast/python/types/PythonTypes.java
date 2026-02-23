@@ -79,6 +79,12 @@ public class PythonTypes extends AstTypeReference {
   public static final TypeReference enumerate =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lenumerate"));
 
+  public static final TypeReference ENUMERATE_BUILTIN =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lwala/builtin/enumerate"));
+
+  public static final TypeReference NEXT_BUILTIN =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lwala/builtin/next"));
+
   public static final TypeReference trampoline =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltrampoline"));
 

@@ -75,6 +75,7 @@ import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
+import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.python.util.Util;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -231,9 +232,7 @@ public class TensorGeneratorFactory {
               .getMethod()
               .getReference()
               .getDeclaringClass()
-              .getName()
-              .toString()
-              .equals("Lwala/builtin/enumerate")) {
+              .equals(PythonTypes.ENUMERATE_BUILTIN)) {
             int iterableVn = call.getUse(1);
             PointerKey iterableKey =
                 builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);

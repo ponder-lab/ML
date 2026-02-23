@@ -110,16 +110,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           AstMethodReference.fnSelector);
 
   private static final MethodReference ENUMERATE =
-      MethodReference.findOrCreate(
-          TypeReference.findOrCreate(
-              PythonTypes.pythonLoader, TypeName.string2TypeName("Lwala/builtin/enumerate")),
-          AstMethodReference.fnSelector);
+      MethodReference.findOrCreate(PythonTypes.ENUMERATE_BUILTIN, AstMethodReference.fnSelector);
 
   private static final MethodReference NEXT =
-      MethodReference.findOrCreate(
-          TypeReference.findOrCreate(
-              PythonTypes.pythonLoader, TypeName.string2TypeName("Lwala/builtin/next")),
-          AstMethodReference.fnSelector);
+      MethodReference.findOrCreate(PythonTypes.NEXT_BUILTIN, AstMethodReference.fnSelector);
 
   private final Map<PointerKey, AnalysisError> errorLog = HashMapFactory.make();
 
