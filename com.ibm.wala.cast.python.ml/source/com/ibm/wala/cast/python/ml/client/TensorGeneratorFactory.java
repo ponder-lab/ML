@@ -91,6 +91,12 @@ import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.types.TypeReference;
+import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.graph.Graph;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.Queue;
+import java.util.Set;
 import java.util.logging.Logger;
 
 /**
@@ -195,6 +201,60 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * Traces the dataflow graph backwards from the given source {@link PointsToSetVariable} to find
+   * its creator. The creator is defined as either a return value of a function or a variable
+   * defined by a relevant instruction such as an invoke, an iteration instruction, or a property
+   * read.
+   *
+   * @param source The {@link PointsToSetVariable} to trace backwards from.
+   * @param builder The {@link PropagationCallGraphBuilder} for the current analysis.
+   * @return The {@link PointsToSetVariable} corresponding to the creation site of the value.
+   */
+  private static PointsToSetVariable findCreator(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    Graph<PointsToSetVariable> assignmentGraph =
+        builder.getPropagationSystem().getAssignmentGraph();
+    Set<PointsToSetVariable> visited = HashSetFactory.make();
+    Queue<PointsToSetVariable> queue = new LinkedList<>();
+    queue.add(source);
+    visited.add(source);
+    LOGGER.fine("findCreator started for source: " + source);
+
+    while (!queue.isEmpty()) {
+      PointsToSetVariable current = queue.poll();
+      PointerKey pk = current.getPointerKey();
+      LOGGER.finest("findCreator visiting: " + current);
+
+      if (pk instanceof ReturnValueKey) {
+        LOGGER.fine("findCreator found ReturnValueKey: " + current);
+        return current;
+      }
+
+      if (pk instanceof LocalPointerKey) {
+        LocalPointerKey lpk = (LocalPointerKey) pk;
+        SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
+        if (def instanceof SSAAbstractInvokeInstruction
+            || def instanceof EachElementGetInstruction
+            || def instanceof PythonPropertyRead) {
+          LOGGER.fine("findCreator found creator instruction: " + def);
+          return current;
+        }
+      }
+
+      for (Iterator<PointsToSetVariable> it = assignmentGraph.getPredNodes(current);
+          it.hasNext(); ) {
+        PointsToSetVariable pred = it.next();
+        if (visited.add(pred)) {
+          LOGGER.finest("findCreator adding pred: " + pred);
+          queue.add(pred);
+        }
+      }
+    }
+    LOGGER.fine("findCreator fallback returning original source: " + source);
+    return source;
+  }
+
+  /**
    * Returns a {@link TensorGenerator} instance for the given source and call graph builder.
    *
    * <p>This method identifies the specific TensorFlow function or operation that produced the value
@@ -217,6 +277,7 @@ public class TensorGeneratorFactory {
    */
   public static TensorGenerator getGenerator(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    source = findCreator(source, builder);
     PointerKey k = source.getPointerKey();
     if (k instanceof LocalPointerKey) {
       LocalPointerKey lpk = (LocalPointerKey) k;

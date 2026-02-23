@@ -299,7 +299,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_value_index.py",
         "value_index",
         2,
-        2,
+        3,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32), 3, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
@@ -310,7 +310,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_value_index2.py",
         "value_index",
         2,
-        2,
+        3,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32), 3, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
@@ -321,7 +321,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_value_index3.py",
         "value_index",
         2,
-        2,
+        3,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32), 3, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
@@ -332,7 +332,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_value_index4.py",
         "value_index",
         2,
-        2,
+        3,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32), 3, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
@@ -1692,7 +1692,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add45.py",
         "value_index",
         2,
-        2,
+        3,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32), 3, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
@@ -1703,7 +1703,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add46.py",
         "value_index",
         2,
-        2,
+        3,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32), 3, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
@@ -6247,6 +6247,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         getFunctionSignatures(CG).anyMatch(s -> s.equals(functionSignature)));
 
     // get the tensor variables for the function.
+    LOGGER.fine("Looking for signature: " + functionSignature);
+    LOGGER.fine(
+        "Available signatures in functionSignatureToTensorVariables: "
+            + functionSignatureToTensorVariables.keySet());
     Set<TensorVariable> functionTensorVariables =
         functionSignatureToTensorVariables.getOrDefault(functionSignature, emptySet());
 
