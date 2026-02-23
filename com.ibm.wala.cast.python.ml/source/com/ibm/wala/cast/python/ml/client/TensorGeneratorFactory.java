@@ -225,6 +225,23 @@ public class TensorGeneratorFactory {
       if (def instanceof SSAAbstractInvokeInstruction) {
         SSAAbstractInvokeInstruction call = (SSAAbstractInvokeInstruction) def;
         for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, call.getCallSite())) {
+          // If we're calling the `enumerate` builtin, we want to return the generator for the
+          // underlying iterable (the second element of each tuple returned by the enumerator).
+          if (callee
+              .getMethod()
+              .getReference()
+              .getDeclaringClass()
+              .getName()
+              .toString()
+              .equals("Lwala/builtin/enumerate")) {
+            int iterableVn = call.getUse(1);
+            PointerKey iterableKey =
+                builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
+            PointsToSetVariable iterableSrc =
+                builder.getPropagationSystem().findOrCreatePointsToSet(iterableKey);
+            return getGenerator(iterableSrc, builder);
+          }
+
           PointerKey retKey =
               builder.getPointerAnalysis().getHeapModel().getPointerKeyForReturnValue(callee);
           PointsToSetVariable retSrc =

@@ -501,10 +501,23 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
                   SSAInstruction objRefDef = node.getDU().getDef(srcDef.getObjectRef());
 
+                  logger.finest(
+                      () ->
+                          "objRefDef is: "
+                              + objRefDef.getClass().getName()
+                              + " with use 0: "
+                              + (objRefDef.getNumberOfUses() > 0 ? objRefDef.getUse(0) : "N/A")
+                              + " and val: "
+                              + val);
+
                   // If the object being read is that of the dataset, we know that this is the first
                   // tuple read of the result of enumerate() on the dataset.
                   if (objRefDef instanceof PythonPropertyRead
                       && ((PythonPropertyRead) objRefDef).getObjectRef() == val) return false;
+
+                  // In Python iteration, the object being read may be an EachElementGetInstruction.
+                  if (objRefDef instanceof EachElementGetInstruction && objRefDef.getUse(0) == val)
+                    return false;
                 }
               }
             }
