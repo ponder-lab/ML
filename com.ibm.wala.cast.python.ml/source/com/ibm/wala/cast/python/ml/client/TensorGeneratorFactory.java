@@ -80,6 +80,7 @@ import com.ibm.wala.cast.python.util.Util;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConcreteTypeKey;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
@@ -92,11 +93,13 @@ import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.graph.Graph;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.Set;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -254,6 +257,16 @@ public class TensorGeneratorFactory {
     return source;
   }
 
+  private static PointsToSetVariable getPointsToSetVariable(
+      PointerKey key, PropagationCallGraphBuilder builder) {
+    try {
+      return builder.getPropagationSystem().findOrCreatePointsToSet(key);
+    } catch (UnimplementedError e) {
+      LOGGER.log(Level.FINE, "Could not get points-to set for " + key, e);
+      return null;
+    }
+  }
+
   /**
    * Returns a {@link TensorGenerator} instance for the given source and call graph builder.
    *
@@ -297,16 +310,55 @@ public class TensorGeneratorFactory {
             int iterableVn = call.getUse(1);
             PointerKey iterableKey =
                 builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
-            PointsToSetVariable iterableSrc =
-                builder.getPropagationSystem().findOrCreatePointsToSet(iterableKey);
-            return getGenerator(iterableSrc, builder);
+            PointsToSetVariable iterableSrc = getPointsToSetVariable(iterableKey, builder);
+            return (iterableSrc != null)
+                ? new EnumerateGenerator(source, getGenerator(iterableSrc, builder))
+                : null;
+          }
+
+          // If we're calling `iter`, the result is an iterator over the collection, so we return
+          // the generator for the collection itself.
+          if (callee
+              .getMethod()
+              .getReference()
+              .getDeclaringClass()
+              .equals(PythonTypes.ITER_BUILTIN)) {
+            int iterableVn = call.getUse(1);
+            PointerKey iterableKey =
+                builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
+            PointsToSetVariable iterableSrc = getPointsToSetVariable(iterableKey, builder);
+            return (iterableSrc != null) ? getGenerator(iterableSrc, builder) : null;
+          }
+
+          // If we're calling `next`, the result is an element of the collection.
+          if (callee
+              .getMethod()
+              .getReference()
+              .getDeclaringClass()
+              .equals(PythonTypes.NEXT_BUILTIN)) {
+            int iterableVn = call.getUse(1);
+            PointerKey iterableKey =
+                builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
+            PointsToSetVariable iterableSrc = getPointsToSetVariable(iterableKey, builder);
+            if (iterableSrc == null) return null;
+            TensorGenerator containerGenerator = getGenerator(iterableSrc, builder);
+
+            // Unpacking an EnumerateGenerator gives the second element (the dataset element).
+            if (containerGenerator instanceof EnumerateGenerator) {
+              return ((EnumerateGenerator) containerGenerator).underlying;
+            }
+
+            return (containerGenerator instanceof DatasetGenerator)
+                ? containerGenerator
+                : new TensorElementGenerator(containerGenerator);
           }
 
           PointerKey retKey =
               builder.getPointerAnalysis().getHeapModel().getPointerKeyForReturnValue(callee);
-          PointsToSetVariable retSrc =
-              builder.getPropagationSystem().findOrCreatePointsToSet(retKey);
-          return getGenerator(retSrc, builder); // Recursive call for the callee's return value
+          PointsToSetVariable retSrc = getPointsToSetVariable(retKey, builder);
+          if (retSrc != null) {
+            return getGenerator(retSrc, builder); // Recursive call for the callee's return value
+          }
         }
       } else if (def instanceof EachElementGetInstruction) {
         // We are iterating over a collection (e.g., for loop). Get the generator for the collection
@@ -314,8 +366,8 @@ public class TensorGeneratorFactory {
         int iterableVn = def.getUse(0);
         PointerKey iterableKey =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
-        PointsToSetVariable iterableSrc =
-            builder.getPropagationSystem().findOrCreatePointsToSet(iterableKey);
+        PointsToSetVariable iterableSrc = getPointsToSetVariable(iterableKey, builder);
+        if (iterableSrc == null) return null;
         TensorGenerator containerGenerator = getGenerator(iterableSrc, builder);
 
         // We have a generator for the container (the object being iterated over).
@@ -331,11 +383,38 @@ public class TensorGeneratorFactory {
       } else if (def instanceof PythonPropertyRead) {
         // Python iteration may also be translated into property reads (e.g., retrieving an element
         // from a dataset or tensor).
-        int objRef = ((PythonPropertyRead) def).getObjectRef();
+        PythonPropertyRead propRead = (PythonPropertyRead) def;
+        int objRef = propRead.getObjectRef();
         PointerKey objKey =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, objRef);
-        PointsToSetVariable objSrc = builder.getPropagationSystem().findOrCreatePointsToSet(objKey);
+        PointsToSetVariable objSrc = getPointsToSetVariable(objKey, builder);
+        if (objSrc == null) return null;
         TensorGenerator containerGenerator = getGenerator(objSrc, builder);
+
+        if (containerGenerator instanceof TensorElementGenerator
+            && ((TensorElementGenerator) containerGenerator).getContainerGenerator()
+                instanceof EnumerateGenerator) {
+          EnumerateGenerator enumGen =
+              (EnumerateGenerator)
+                  ((TensorElementGenerator) containerGenerator).getContainerGenerator();
+          int memberRef = propRead.getMemberRef();
+          PointerKey memberRefKey =
+              builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, memberRef);
+          boolean isFirstElement = false;
+          for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(memberRefKey)) {
+            if (ik instanceof ConstantKey) {
+              if (((ConstantKey<?>) ik).getValue().equals(0)) {
+                isFirstElement = true;
+                break;
+              }
+            }
+          }
+          if (isFirstElement) {
+            throw new IllegalArgumentException("First element of enumerate tuple is not a tensor.");
+          }
+          return enumGen
+              .underlying; // Return the underlying dataset generator for the second element.
+        }
 
         // Similar to `EachElementGet`, we check if the container generator represents elements
         // (`Dataset`) or the tensor itself (peeling needed).

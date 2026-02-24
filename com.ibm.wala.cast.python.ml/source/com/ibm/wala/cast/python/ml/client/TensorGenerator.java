@@ -400,7 +400,10 @@ public abstract class TensorGenerator {
     OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
 
     if (!valuePointsToSet.isEmpty()) {
-      return this.getShapesOfValue(builder, valuePointsToSet);
+      Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, valuePointsToSet);
+      if (!shapes.isEmpty()) {
+        return shapes;
+      }
     }
 
     // points-to set is empty. Try to find a generator for this variable.
@@ -557,9 +560,14 @@ public abstract class TensorGenerator {
                         .getPointerAnalysis()
                         .getHeapModel()
                         .getPointerKeyForLocal(asin.getNode(), asin.getSite().getProgramCounter()));
-        TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
-        if (generator != null && !generator.getClass().equals(this.getClass())) {
-          ret.addAll(generator.getShapes(builder));
+        try {
+          TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+          if (generator != null && !generator.getClass().equals(this.getClass())) {
+            ret.addAll(generator.getShapes(builder));
+          }
+        } catch (IllegalArgumentException e) {
+          // Not a recognized generator.
+          LOGGER.log(Level.FINE, "No generator found for variable: " + var, e);
         }
       } else {
         throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
@@ -917,10 +925,13 @@ public abstract class TensorGenerator {
     OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
 
     if (valuePointsToSet != null && !valuePointsToSet.isEmpty()) {
-      return this.getDTypesOfValue(builder, valuePointsToSet);
+      Set<DType> dtypes = this.getDTypesOfValue(builder, valuePointsToSet);
+      if (!dtypes.isEmpty()) {
+        return dtypes;
+      }
     }
 
-    // points-to set is empty. Try to find a generator for this variable.
+    // points-to set is empty or yielded no dtypes. Try to find a generator for this variable.
     PointsToSetVariable var = builder.getPropagationSystem().findOrCreatePointsToSet(valuePK);
     try {
       TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);

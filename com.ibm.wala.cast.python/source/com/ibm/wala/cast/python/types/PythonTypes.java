@@ -82,6 +82,9 @@ public class PythonTypes extends AstTypeReference {
   public static final TypeReference ENUMERATE_BUILTIN =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lwala/builtin/enumerate"));
 
+  public static final TypeReference ITER_BUILTIN =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lwala/builtin/iter"));
+
   public static final TypeReference NEXT_BUILTIN =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lwala/builtin/next"));
 

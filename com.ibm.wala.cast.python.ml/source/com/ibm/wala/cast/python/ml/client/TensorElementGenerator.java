@@ -23,6 +23,10 @@ public class TensorElementGenerator extends TensorGenerator {
     this.containerGenerator = containerGenerator;
   }
 
+  public TensorGenerator getContainerGenerator() {
+    return containerGenerator;
+  }
+
   /**
    * Returns the shapes of the elements contained within the container tensor.
    *

@@ -6,8 +6,11 @@ import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.SSABinaryOpInstruction;
+import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
 import java.util.Collections;
 import java.util.List;
@@ -52,6 +55,13 @@ public class ElementWiseOperation extends ZerosLike {
   }
 
   protected int getXArgumentValueNumber(PropagationCallGraphBuilder builder) {
+    if (this.source.getPointerKey() instanceof LocalPointerKey) {
+      LocalPointerKey lpk = (LocalPointerKey) this.source.getPointerKey();
+      SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
+      if (def instanceof SSABinaryOpInstruction) {
+        return def.getUse(0);
+      }
+    }
     return this.getArgumentValueNumber(
         builder, this.getXParameterPosition(), this.getXParameterName(), false);
   }
@@ -65,6 +75,13 @@ public class ElementWiseOperation extends ZerosLike {
   }
 
   protected int getYArgumentValueNumber(PropagationCallGraphBuilder builder) {
+    if (this.source.getPointerKey() instanceof LocalPointerKey) {
+      LocalPointerKey lpk = (LocalPointerKey) this.source.getPointerKey();
+      SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
+      if (def instanceof SSABinaryOpInstruction) {
+        return def.getUse(1);
+      }
+    }
     return this.getArgumentValueNumber(
         builder, this.getYParameterPosition(), this.getYParameterName(), false);
   }
@@ -75,12 +92,16 @@ public class ElementWiseOperation extends ZerosLike {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
     int xVn = this.getXArgumentValueNumber(builder);
+    logger.fine("ElementWiseOperation getDefaultShapes xVn: " + xVn);
     if (xVn <= 0) return ret;
     Set<List<Dimension<?>>> xShapes = this.getShapes(builder, xVn);
+    logger.fine("ElementWiseOperation getDefaultShapes xShapes: " + xShapes);
 
     int yVn = this.getYArgumentValueNumber(builder);
+    logger.fine("ElementWiseOperation getDefaultShapes yVn: " + yVn);
     if (yVn <= 0) return ret;
     Set<List<Dimension<?>>> yShapes = this.getShapes(builder, yVn);
+    logger.fine("ElementWiseOperation getDefaultShapes yShapes: " + yShapes);
 
     for (List<Dimension<?>> xShape : xShapes)
       for (List<Dimension<?>> yShape : yShapes)
@@ -93,9 +114,12 @@ public class ElementWiseOperation extends ZerosLike {
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     int vn = this.getXArgumentValueNumber(builder);
+    logger.fine("ElementWiseOperation getDefaultDTypes vn: " + vn);
     if (vn <= 0) return Collections.emptySet();
 
-    return this.getDTypes(builder, vn);
+    Set<DType> dtypes = this.getDTypes(builder, vn);
+    logger.fine("ElementWiseOperation getDefaultDTypes dtypes: " + dtypes);
+    return dtypes;
   }
 
   /** No explicit dtype argument. Dtype is inferred from 'x'. */
