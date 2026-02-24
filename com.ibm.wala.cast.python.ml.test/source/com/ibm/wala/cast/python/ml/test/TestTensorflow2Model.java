@@ -739,12 +739,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testDataset19()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType images =
+        new TensorType(
+            FLOAT_32,
+            asList(
+                new NumericDim(512), new NumericDim(112), new NumericDim(112), new NumericDim(3)));
+    TensorType labels = new TensorType(FLOAT_32, asList(new NumericDim(512), null));
+
     test(
-        "tf2_test_dataset19.py",
-        "distributed_train_step",
-        1,
-        1,
-        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+        "tf2_test_dataset19.py", "distributed_train_step", 1, 1, Map.of(2, Set.of(images, labels)));
   }
 
   @Test

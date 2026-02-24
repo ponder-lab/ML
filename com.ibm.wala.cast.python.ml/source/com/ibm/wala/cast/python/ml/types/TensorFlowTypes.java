@@ -170,6 +170,11 @@ public class TensorFlowTypes extends PythonTypes {
   public static final TypeReference DATASET_FILTER_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/filter"));
 
+  public static final TypeReference IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader,
+          TypeName.findOrCreate("Ltensorflow/keras/preprocessing/image/flow_from_directory"));
+
   /**
    * The type of `tf.data.Dataset.from_generator`.
    *
