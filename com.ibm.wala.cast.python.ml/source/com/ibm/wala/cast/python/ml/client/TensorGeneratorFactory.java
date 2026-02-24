@@ -316,8 +316,7 @@ public class TensorGeneratorFactory {
                 : null;
           }
 
-          // If we're calling `iter`, the result is an iterator over the collection, so we return
-          // the generator for the collection itself.
+          // If we're calling `iter`, the result is an iterator over the collection.
           if (callee
               .getMethod()
               .getReference()
@@ -327,7 +326,9 @@ public class TensorGeneratorFactory {
             PointerKey iterableKey =
                 builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
             PointsToSetVariable iterableSrc = getPointsToSetVariable(iterableKey, builder);
-            return (iterableSrc != null) ? getGenerator(iterableSrc, builder) : null;
+            return (iterableSrc != null)
+                ? new IteratorGenerator(source, getGenerator(iterableSrc, builder))
+                : null;
           }
 
           // If we're calling `next`, the result is an element of the collection.
@@ -343,6 +344,10 @@ public class TensorGeneratorFactory {
             if (iterableSrc == null) return null;
             TensorGenerator containerGenerator = getGenerator(iterableSrc, builder);
 
+            if (containerGenerator instanceof IteratorGenerator) {
+              containerGenerator = ((IteratorGenerator) containerGenerator).getUnderlying();
+            }
+
             // Unpacking an EnumerateGenerator gives the second element (the dataset element).
             if (containerGenerator instanceof EnumerateGenerator) {
               return ((EnumerateGenerator) containerGenerator).getUnderlying();
@@ -352,7 +357,6 @@ public class TensorGeneratorFactory {
                 ? containerGenerator
                 : new TensorElementGenerator(containerGenerator);
           }
-
           PointerKey retKey =
               builder.getPointerAnalysis().getHeapModel().getPointerKeyForReturnValue(callee);
           PointsToSetVariable retSrc = getPointsToSetVariable(retKey, builder);
