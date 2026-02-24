@@ -9,12 +9,32 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * A generator for {@link TensorType}s produced by Python's {@code enumerate} built-in function.
+ *
+ * <p>The {@code enumerate} function returns an iterator over tuples, where each tuple contains an
+ * index and an element from the underlying iterable. This generator delegates shape and dtype
+ * inference to the generator of the underlying iterable.
+ *
+ * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
+ */
 public class EnumerateGenerator extends TensorGenerator {
-  public final TensorGenerator underlying;
+
+  /** The generator for the underlying iterable being enumerated. */
+  private final TensorGenerator underlying;
 
   public EnumerateGenerator(PointsToSetVariable source, TensorGenerator underlying) {
     super(source);
     this.underlying = underlying;
+  }
+
+  /**
+   * Returns the generator for the underlying iterable.
+   *
+   * @return the underlying generator.
+   */
+  public TensorGenerator getUnderlying() {
+    return underlying;
   }
 
   @Override

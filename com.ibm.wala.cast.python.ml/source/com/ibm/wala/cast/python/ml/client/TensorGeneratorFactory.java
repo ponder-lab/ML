@@ -345,7 +345,7 @@ public class TensorGeneratorFactory {
 
             // Unpacking an EnumerateGenerator gives the second element (the dataset element).
             if (containerGenerator instanceof EnumerateGenerator) {
-              return ((EnumerateGenerator) containerGenerator).underlying;
+              return ((EnumerateGenerator) containerGenerator).getUnderlying();
             }
 
             return (containerGenerator instanceof DatasetGenerator)
@@ -413,7 +413,7 @@ public class TensorGeneratorFactory {
             throw new IllegalArgumentException("First element of enumerate tuple is not a tensor.");
           }
           return enumGen
-              .underlying; // Return the underlying dataset generator for the second element.
+              .getUnderlying(); // Return the underlying dataset generator for the second element.
         }
 
         // Similar to `EachElementGet`, we check if the container generator represents elements
