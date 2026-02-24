@@ -407,14 +407,20 @@ public abstract class TensorGenerator {
     }
 
     // points-to set is empty. Try to find a generator for this variable.
-    PointsToSetVariable var = builder.getPropagationSystem().findOrCreatePointsToSet(valuePK);
-    try {
-      TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
-      if (generator != null && !generator.getClass().equals(this.getClass())) {
-        return generator.getShapes(builder);
+    PointsToSetVariable var = null;
+    if (!builder.getPropagationSystem().isImplicit(valuePK)) {
+      var = builder.getPropagationSystem().findOrCreatePointsToSet(valuePK);
+    }
+
+    if (var != null) {
+      try {
+        TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+        if (generator != null && !generator.getClass().equals(this.getClass())) {
+          return generator.getShapes(builder);
+        }
+      } catch (IllegalArgumentException e) {
+        LOGGER.log(Level.FINE, "Not a recognized generator: " + var, e);
       }
-    } catch (IllegalArgumentException e) {
-      // Not a recognized generator.
     }
 
     // No direct generator. Try tracing the definition or parameters.
@@ -552,14 +558,15 @@ public abstract class TensorGenerator {
         AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
 
         // Instead of forcing a points-to set, try to get the generator for this allocation site
-        PointsToSetVariable var =
+        PointerKey pk =
             builder
-                .getPropagationSystem()
-                .findOrCreatePointsToSet(
-                    builder
-                        .getPointerAnalysis()
-                        .getHeapModel()
-                        .getPointerKeyForLocal(asin.getNode(), asin.getSite().getProgramCounter()));
+                .getPointerAnalysis()
+                .getHeapModel()
+                .getPointerKeyForLocal(asin.getNode(), asin.getSite().getProgramCounter());
+        PointsToSetVariable var = null;
+        if (!builder.getPropagationSystem().isImplicit(pk)) {
+          var = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
+        }
         try {
           TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
           if (generator != null && !generator.getClass().equals(this.getClass())) {
@@ -657,8 +664,10 @@ public abstract class TensorGenerator {
               int def = call.getDef();
               PointerKey defKey =
                   builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(doNode, def);
-              PointsToSetVariable defSource =
-                  builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
+              PointsToSetVariable defSource = null;
+              if (!builder.getPropagationSystem().isImplicit(defKey)) {
+                defSource = builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
+              }
 
               // Try to create a manual generator for the caller (doNode) first.
               TensorGenerator generator = createManualGenerator(doNode, builder);
@@ -932,14 +941,20 @@ public abstract class TensorGenerator {
     }
 
     // points-to set is empty or yielded no dtypes. Try to find a generator for this variable.
-    PointsToSetVariable var = builder.getPropagationSystem().findOrCreatePointsToSet(valuePK);
-    try {
-      TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
-      if (generator != null && !generator.getClass().equals(this.getClass())) {
-        return generator.getDTypes(builder);
+    PointsToSetVariable var = null;
+    if (!builder.getPropagationSystem().isImplicit(valuePK)) {
+      var = builder.getPropagationSystem().findOrCreatePointsToSet(valuePK);
+    }
+
+    if (var != null) {
+      try {
+        TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+        if (generator != null && !generator.getClass().equals(this.getClass())) {
+          return generator.getDTypes(builder);
+        }
+      } catch (IllegalArgumentException e) {
+        LOGGER.log(Level.FINE, "Not a recognized generator: " + var, e);
       }
-    } catch (IllegalArgumentException e) {
-      // Not a recognized generator.
     }
 
     // No direct generator. Try tracing the definition or parameters.
@@ -1103,14 +1118,15 @@ public abstract class TensorGenerator {
         AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
 
         // Instead of forcing a points-to set, try to get the generator for this allocation site
-        PointsToSetVariable var =
+        PointerKey pk =
             builder
-                .getPropagationSystem()
-                .findOrCreatePointsToSet(
-                    builder
-                        .getPointerAnalysis()
-                        .getHeapModel()
-                        .getPointerKeyForLocal(asin.getNode(), asin.getSite().getProgramCounter()));
+                .getPointerAnalysis()
+                .getHeapModel()
+                .getPointerKeyForLocal(asin.getNode(), asin.getSite().getProgramCounter());
+        PointsToSetVariable var = null;
+        if (!builder.getPropagationSystem().isImplicit(pk)) {
+          var = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
+        }
         TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
         if (generator != null && !generator.getClass().equals(this.getClass())) {
           ret.addAll(generator.getDTypes(builder));
@@ -1182,8 +1198,10 @@ public abstract class TensorGenerator {
               int def = call.getDef();
               PointerKey defKey =
                   builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(doNode, def);
-              PointsToSetVariable defSource =
-                  builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
+              PointsToSetVariable defSource = null;
+              if (!builder.getPropagationSystem().isImplicit(defKey)) {
+                defSource = builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
+              }
 
               // Try to create a manual generator for the caller (doNode) first.
               TensorGenerator generator = createManualGenerator(doNode, builder);
