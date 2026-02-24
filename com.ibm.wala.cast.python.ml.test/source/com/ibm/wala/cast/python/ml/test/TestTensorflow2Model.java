@@ -718,7 +718,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         3,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32), 3, Set.of(SCALAR_TENSOR_OF_INT32)));
-    test("tf2_test_dataset17.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test("tf2_test_dataset17.py", "f", 1, 2, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   /** Test a dataset that uses an iterator. */
@@ -731,8 +731,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         3,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32), 3, Set.of(SCALAR_TENSOR_OF_INT32)));
-    test("tf2_test_dataset18.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
-    test("tf2_test_dataset18.py", "g", 0, 1);
+    test("tf2_test_dataset18.py", "f", 1, 2, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test("tf2_test_dataset18.py", "g", 0, 3);
   }
 
   /** Test a dataset that uses an iterator. */
@@ -1238,11 +1238,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_add.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
-  /**
-   * FIXME: Should not throw an {@link AssertionError} once https://github.com/wala/ML/issues/340 is
-   * fixed.
-   */
-  @Test(expected = AssertionError.class)
   public void testAdd2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_add2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
@@ -1260,11 +1255,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_add4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
-  /**
-   * FIXME: Should not throw an {@link AssertionError} once https://github.com/wala/ML/issues/340 is
-   * fixed.
-   */
-  @Test(expected = AssertionError.class)
   public void testAdd5()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_add5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
@@ -1492,7 +1482,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add26.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
@@ -1503,7 +1493,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add27.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
@@ -1536,7 +1526,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add30.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_1_2_INT32), 3, Set.of(TENSOR_2_2_INT32)));
   }
 
@@ -1547,7 +1537,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add31.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_1_2_INT32), 3, Set.of(TENSOR_2_2_INT32)));
   }
 
@@ -1558,7 +1548,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add32.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_2_INT32), 3, Set.of(TENSOR_2_INT32)));
   }
 
@@ -1569,7 +1559,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add33.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_2_INT32), 3, Set.of(TENSOR_2_INT32)));
   }
 
@@ -1580,7 +1570,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add34.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_3_3_FLOAT32), 3, Set.of(TENSOR_3_3_FLOAT32)));
   }
 
@@ -1591,7 +1581,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add35.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_3_3_FLOAT32), 3, Set.of(TENSOR_3_3_FLOAT32)));
   }
 
@@ -1602,7 +1592,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add36.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32), 3, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
@@ -1613,7 +1603,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add37.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32), 3, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
@@ -1901,7 +1891,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add54.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_NONE_32_FLOAT32), 3, Set.of(TENSOR_NONE_32_FLOAT32)));
   }
 
@@ -1912,7 +1902,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add55.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_NONE_32_FLOAT32), 3, Set.of(TENSOR_NONE_32_FLOAT32)));
   }
 
@@ -1923,7 +1913,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add56.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_NONE_32_FLOAT32), 3, Set.of(TENSOR_NONE_32_FLOAT32)));
   }
 
@@ -1934,7 +1924,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add57.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_NONE_32_FLOAT32), 3, Set.of(TENSOR_NONE_32_FLOAT32)));
   }
 
@@ -1945,7 +1935,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add58.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_NONE_32_FLOAT32), 3, Set.of(TENSOR_NONE_32_FLOAT32)));
   }
 
@@ -2139,7 +2129,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add76.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_3_NONE_NONE_INT32), 3, Set.of(TENSOR_3_NONE_NONE_INT32)));
   }
 
@@ -2150,7 +2140,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add77.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_3_NONE_NONE_INT32), 3, Set.of(TENSOR_3_NONE_NONE_INT32)));
   }
 
@@ -2161,7 +2151,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add78.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_3_NONE_NONE_INT32), 3, Set.of(TENSOR_3_NONE_NONE_INT32)));
   }
 
@@ -2172,7 +2162,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add79.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_3_NONE_NONE_INT32), 3, Set.of(TENSOR_3_NONE_NONE_INT32)));
   }
 
@@ -2183,7 +2173,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add80.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_3_NONE_NONE_INT32), 3, Set.of(TENSOR_3_NONE_NONE_INT32)));
   }
 
@@ -2194,7 +2184,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add81.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_3_NONE_NONE_INT32), 3, Set.of(TENSOR_3_NONE_NONE_INT32)));
   }
 
@@ -2205,7 +2195,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add82.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_3_NONE_NONE_INT32), 3, Set.of(TENSOR_3_NONE_NONE_INT32)));
   }
 
@@ -2216,7 +2206,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add83.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_3_NONE_NONE_INT32), 3, Set.of(TENSOR_3_NONE_NONE_INT32)));
   }
 
@@ -2291,7 +2281,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add88.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_5_NONE_INT32), 3, Set.of(TENSOR_5_NONE_INT32)));
   }
 
@@ -2302,7 +2292,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add89.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_5_NONE_INT32), 3, Set.of(TENSOR_5_NONE_INT32)));
   }
 
@@ -2313,7 +2303,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add90.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_5_NONE_INT32), 3, Set.of(TENSOR_5_NONE_INT32)));
   }
 
@@ -2324,7 +2314,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add91.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_5_NONE_INT32), 3, Set.of(TENSOR_5_NONE_INT32)));
   }
 
@@ -2335,7 +2325,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add92.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_5_NONE_INT32), 3, Set.of(TENSOR_5_NONE_INT32)));
   }
 
@@ -2346,7 +2336,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add93.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_5_NONE_INT32), 3, Set.of(TENSOR_5_NONE_INT32)));
   }
 
@@ -2357,7 +2347,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add94.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_5_NONE_INT32), 3, Set.of(TENSOR_5_NONE_INT32)));
   }
 
@@ -2368,7 +2358,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add95.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_5_NONE_INT32), 3, Set.of(TENSOR_5_NONE_INT32)));
   }
 
@@ -2379,7 +2369,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add96.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_5_NONE_INT32), 3, Set.of(TENSOR_5_NONE_INT32)));
   }
 
@@ -2390,7 +2380,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add97.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_4_NONE_INT32), 3, Set.of(TENSOR_4_NONE_INT32)));
   }
 
@@ -2401,7 +2391,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add98.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_4_NONE_INT32), 3, Set.of(TENSOR_4_NONE_INT32)));
   }
 
@@ -2412,7 +2402,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add99.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_4_NONE_INT32), 3, Set.of(TENSOR_4_NONE_INT32)));
   }
 
@@ -2740,7 +2730,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add114.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_NONE_32_FLOAT32), 3, Set.of(TENSOR_NONE_32_FLOAT32)));
   }
 
@@ -2751,7 +2741,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add115.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_NONE_32_FLOAT32), 3, Set.of(TENSOR_NONE_32_FLOAT32)));
   }
 
@@ -2828,7 +2818,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add118.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_1_2_INT32), 3, Set.of(TENSOR_2_2_INT32)));
   }
 
@@ -2863,7 +2853,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add119.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TENSOR_2_FLOAT32)));
   }
 
@@ -2874,7 +2864,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_add120.py",
         "add",
         2,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
