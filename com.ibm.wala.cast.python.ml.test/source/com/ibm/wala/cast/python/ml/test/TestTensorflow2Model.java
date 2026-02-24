@@ -732,7 +732,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         3,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32), 3, Set.of(SCALAR_TENSOR_OF_INT32)));
     test("tf2_test_dataset18.py", "f", 1, 2, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
-    test("tf2_test_dataset18.py", "g", 0, 3);
+    test("tf2_test_dataset18.py", "g", 0, 2);
   }
 
   /** Test a dataset that uses an iterator. */
