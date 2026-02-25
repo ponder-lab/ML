@@ -12,6 +12,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_T
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
+import static com.ibm.wala.cast.python.util.Util.findDefinition;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.getFunction;
 import static com.ibm.wala.cast.python.util.Util.getReceiverValueNumber;
@@ -47,7 +48,6 @@ import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
-import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
@@ -687,19 +687,6 @@ public abstract class TensorGenerator {
       }
     }
     return ret;
-  }
-
-  protected static int findDefinition(CGNode node, AllocationSiteInNode asin) {
-    if (node.getIR() == null) return -1;
-    for (SSAInstruction inst : node.getIR().getInstructions()) {
-      if (inst != null && inst instanceof SSANewInstruction) {
-        SSANewInstruction newInst = (SSANewInstruction) inst;
-        if (newInst.getNewSite().equals(asin.getSite())) {
-          return newInst.getDef();
-        }
-      }
-    }
-    return -1;
   }
 
   /**

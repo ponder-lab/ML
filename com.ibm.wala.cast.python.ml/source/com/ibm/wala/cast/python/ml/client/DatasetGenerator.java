@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.util.Util.findDefinition;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;

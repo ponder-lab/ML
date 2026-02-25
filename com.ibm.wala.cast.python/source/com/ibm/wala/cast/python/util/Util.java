@@ -26,6 +26,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.types.TypeReference;
 import java.io.File;
 import java.util.ArrayList;
@@ -55,6 +56,27 @@ public class Util {
     SSAInstruction funcDef = node.getDU().getDef(funcVn);
     if (funcDef instanceof PythonPropertyRead) {
       return ((PythonPropertyRead) funcDef).getObjectRef();
+    }
+    return -1;
+  }
+
+  /**
+   * Finds the value number of the definition corresponding to the given allocation site in the
+   * given call graph node.
+   *
+   * @param node The call graph node to search.
+   * @param asin The allocation site in question.
+   * @return The value number of the definition, or -1 if not found.
+   */
+  public static int findDefinition(CGNode node, AllocationSiteInNode asin) {
+    if (node.getIR() == null) return -1;
+    for (SSAInstruction inst : node.getIR().getInstructions()) {
+      if (inst != null && inst instanceof SSANewInstruction) {
+        SSANewInstruction newInst = (SSANewInstruction) inst;
+        if (newInst.getNewSite().equals(asin.getSite())) {
+          return newInst.getDef();
+        }
+      }
     }
     return -1;
   }

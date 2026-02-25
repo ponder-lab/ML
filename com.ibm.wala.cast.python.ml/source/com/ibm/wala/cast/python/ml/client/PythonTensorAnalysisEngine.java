@@ -49,6 +49,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeAnalysis> {
@@ -753,7 +754,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
       return tensorTypes;
     } catch (IllegalArgumentException e) {
-      logger.info("Source " + source + " is not a recognized tensor generator: " + e.getMessage());
+      logger.log(Level.FINER, "Source " + source + " is not a recognized tensor generator.", e);
       return HashSetFactory.make();
     }
   }
