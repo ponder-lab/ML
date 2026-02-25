@@ -816,11 +816,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testDataset26()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_dataset26.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
-    test("tf2_test_dataset26.py", "g1", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
-    test("tf2_test_dataset26.py", "g2", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
-    test("tf2_test_dataset26.py", "g3", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
+    test("tf2_test_dataset26.py", "g1", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+    test("tf2_test_dataset26.py", "g2", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test("tf2_test_dataset26.py", "g3", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
     // TODO: Change to 0, 0 once https://github.com/wala/ML/issues/165 is fixed.
-    test("tf2_test_dataset26.py", "h", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
+    test(
+        "tf2_test_dataset26.py",
+        "h",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64, TENSOR_2_INT32)));
   }
 
   @Test
