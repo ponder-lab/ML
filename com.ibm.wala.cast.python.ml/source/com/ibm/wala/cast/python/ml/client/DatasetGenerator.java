@@ -1,11 +1,16 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Collections;
 import java.util.List;
@@ -65,6 +70,51 @@ public class DatasetGenerator extends TensorGenerator {
         this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, SELF);
     if (receiverPTS != null && !receiverPTS.isEmpty()) {
       return this.getDTypesOfValue(builder, receiverPTS);
+    }
+    return Collections.emptySet();
+  }
+
+  /**
+   * Retrieves the sizes (number of elements) of the dataset represented by this generator. By
+   * default, it recursively queries the receiver (the dataset this one is derived from).
+   *
+   * @param builder The propagation call graph builder used for analysis.
+   * @return A set of possible dataset sizes, or an empty set if unknown.
+   */
+  public Set<Long> getDatasetSizes(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> receiverPTS =
+        this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, SELF);
+    if (receiverPTS != null && !receiverPTS.isEmpty()) {
+      Set<Long> ret = HashSetFactory.make();
+      for (InstanceKey valueIK : receiverPTS) {
+        if (getAllocationSiteInNode(valueIK) != null) {
+          AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
+          int vn = findDefinition(asin.getNode(), asin);
+          if (vn > 0) {
+            PointerKey pk =
+                builder
+                    .getPointerAnalysis()
+                    .getHeapModel()
+                    .getPointerKeyForLocal(asin.getNode(), vn);
+            PointsToSetVariable var = null;
+            if (!builder.getPropagationSystem().isImplicit(pk)) {
+              var = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
+            }
+            TensorGenerator generator = null;
+            if (var != null) {
+              generator = TensorGeneratorFactory.getGenerator(var, builder);
+            } else {
+              generator = createManualGenerator(asin.getNode(), builder);
+            }
+
+            if (generator instanceof DatasetGenerator
+                && !generator.getClass().equals(this.getClass())) {
+              ret.addAll(((DatasetGenerator) generator).getDatasetSizes(builder));
+            }
+          }
+        }
+      }
+      return ret;
     }
     return Collections.emptySet();
   }

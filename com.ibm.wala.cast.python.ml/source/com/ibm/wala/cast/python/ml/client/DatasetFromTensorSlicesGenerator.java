@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
@@ -78,6 +79,27 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator {
             builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName());
     if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
       return this.getDTypesOfValue(builder, tensorsPTS);
+    }
+    return Collections.emptySet();
+  }
+
+  @Override
+  public Set<Long> getDatasetSizes(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> tensorsPTS =
+        this.getArgumentPointsToSet(
+            builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName());
+    if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
+      Set<List<Dimension<?>>> inputShapes = this.getShapesOfValue(builder, tensorsPTS);
+      Set<Long> ret = HashSetFactory.make();
+      for (List<Dimension<?>> shape : inputShapes) {
+        if (!shape.isEmpty()) {
+          Dimension<?> firstDim = shape.get(0);
+          if (firstDim instanceof NumericDim) {
+            ret.add(Long.valueOf(((NumericDim) firstDim).value()));
+          }
+        }
+      }
+      return ret;
     }
     return Collections.emptySet();
   }

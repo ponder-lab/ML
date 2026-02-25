@@ -2,7 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.google.common.collect.Sets.newHashSet;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
-import static com.ibm.wala.cast.types.AstMethodReference.fnReference;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATA_PACKAGE_PREFIX;
 
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.lsp.AnalysisError;
@@ -43,7 +43,6 @@ import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.graph.Graph;
 import com.ibm.wala.util.graph.impl.SlowSparseNumberedGraph;
-import com.ibm.wala.util.intset.OrdinalSet;
 import java.io.File;
 import java.io.IOException;
 import java.util.Iterator;
@@ -422,7 +421,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         IClass concreteType = asin.getConcreteType();
         TypeReference reference = concreteType.getReference();
 
-        if (reference.equals(DATASET) && isDatasetTensorElement(src, use, pointerAnalysis)) {
+        if ((reference.equals(DATASET)
+                || reference.getName().toString().startsWith(DATA_PACKAGE_PREFIX))
+            && isDatasetTensorElement(src, use, pointerAnalysis)) {
           sources.add(src);
           logger.info("Added dataflow source from tensor dataset: " + src + ".");
           return true;
@@ -578,37 +579,18 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       SSAAbstractInvokeInstruction invocationInstruction =
           (SSAAbstractInvokeInstruction) instruction;
 
-      if (invocationInstruction.getNumberOfUses() > 0) {
-        // What function are we calling?
-        int use = invocationInstruction.getUse(0);
-        PointerKey pointerKeyForLocal =
-            pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, use);
-        OrdinalSet<InstanceKey> pointsToSet = pointerAnalysis.getPointsToSet(pointerKeyForLocal);
+      logger.fine(() -> "definesTensorIterable checking instruction: " + invocationInstruction);
+      for (CGNode target :
+          callGraph.getPossibleTargets(node, invocationInstruction.getCallSite())) {
+        logger.fine(() -> "Target: " + target.getMethod().getSignature());
+        for (Iterator<CGNode> succNodes = callGraph.getSuccNodes(target); succNodes.hasNext(); ) {
+          CGNode callee = succNodes.next();
+          IMethod calledMethod = callee.getMethod();
+          logger.fine(() -> "  Succ: " + calledMethod.getSignature());
 
-        for (InstanceKey ik : pointsToSet) {
-          if (ik instanceof AllocationSiteInNode) {
-            AllocationSiteInNode asin = (AllocationSiteInNode) ik;
-            IClass concreteType = asin.getConcreteType();
-            TypeReference reference = concreteType.getReference();
-            MethodReference methodReference = fnReference(reference);
-
-            // Get the nodes this method calls.
-            Set<CGNode> iterableNodes = callGraph.getNodes(methodReference);
-
-            for (CGNode itNode : iterableNodes)
-              for (Iterator<CGNode> succNodes = callGraph.getSuccNodes(itNode);
-                  succNodes.hasNext(); ) {
-                CGNode callee = succNodes.next();
-                IMethod calledMethod = callee.getMethod();
-
-                // Does this method call the synthetic "marker?"
-                if (calledMethod
-                    .getName()
-                    .toString()
-                    .equals(TENSOR_ITERABLE_SYNTHETIC_FUNCTION_NAME)) {
-                  return true;
-                }
-              }
+          // Does this method call the synthetic "marker?"
+          if (calledMethod.getName().toString().equals(TENSOR_ITERABLE_SYNTHETIC_FUNCTION_NAME)) {
+            return true;
           }
         }
       }

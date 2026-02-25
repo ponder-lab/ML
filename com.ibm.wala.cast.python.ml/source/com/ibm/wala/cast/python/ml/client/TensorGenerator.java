@@ -14,6 +14,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.getFunction;
+import static com.ibm.wala.cast.python.util.Util.getReceiverValueNumber;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
 import static java.util.Arrays.asList;
@@ -50,7 +51,6 @@ import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
-import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -73,7 +73,7 @@ public abstract class TensorGenerator {
 
   protected static final int UNDEFINED_PARAMETER_POSITION = -1;
 
-  private static final Logger LOGGER = Logger.getLogger(TensorGenerator.class.getName());
+  protected static final Logger LOGGER = Logger.getLogger(TensorGenerator.class.getName());
 
   /** The source of the tensor, represented by a points-to set variable. */
   protected PointsToSetVariable source;
@@ -618,12 +618,8 @@ public abstract class TensorGenerator {
         PointerKey defKey =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(readDataNode, def);
         PointsToSetVariable defSource = null;
-        try {
+        if (!builder.getPropagationSystem().isImplicit(defKey)) {
           defSource = builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
-        } catch (UnimplementedError e) {
-          // If the pointer key is implicit, we might fail to get the points-to set.
-          LOGGER.log(Level.FINE, "Could not get points-to set for " + defKey, e);
-          // Try to create a manual generator if possible.
         }
 
         TensorGenerator generator = createManualGenerator(readDataNode, builder);
@@ -687,7 +683,7 @@ public abstract class TensorGenerator {
     return ret;
   }
 
-  private static int findDefinition(CGNode node, AllocationSiteInNode asin) {
+  protected static int findDefinition(CGNode node, AllocationSiteInNode asin) {
     if (node.getIR() == null) return -1;
     for (SSAInstruction inst : node.getIR().getInstructions()) {
       if (inst != null && inst instanceof SSANewInstruction) {
@@ -1151,12 +1147,8 @@ public abstract class TensorGenerator {
         PointerKey defKey =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(readDataNode, def);
         PointsToSetVariable defSource = null;
-        try {
+        if (!builder.getPropagationSystem().isImplicit(defKey)) {
           defSource = builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
-        } catch (UnimplementedError e) {
-          // If the pointer key is implicit, we might fail to get the points-to set.
-          LOGGER.log(Level.FINE, "Could not get points-to set for " + defKey, e);
-          // Try to create a manual generator if possible.
         }
 
         TensorGenerator generator = createManualGenerator(readDataNode, builder);
@@ -1376,20 +1368,24 @@ public abstract class TensorGenerator {
       }
 
       // If not found by name, try by position.
-      if (argValNum == -1 && paramPos >= 0) {
-        // Adjust position to account for keyword arguments which are stored at the end of the use
-        // list.
-        int numKeywords = call.getKeywords() != null ? call.getKeywords().size() : 0;
-        // Total uses minus the function object itself (index 0) and the keyword args.
-        int numPosParams = call.getNumberOfUses() - 1 - numKeywords;
+      if (argValNum == -1) {
+        if (paramPos == RECEIVER_PARAMETER_POSITION) {
+          argValNum = getReceiverValueNumber(node, call);
+        } else if (paramPos >= 0) {
+          // Adjust position to account for keyword arguments which are stored at the end of the use
+          // list.
+          int numKeywords = call.getKeywords() != null ? call.getKeywords().size() : 0;
+          // Total uses minus the function object itself (index 0) and the keyword args.
+          int numPosParams = call.getNumberOfUses() - 1 - numKeywords;
 
-        if (paramPos < numPosParams) {
-          // Positional arguments start at index 1 (index 0 is the function object).
-          argValNum = call.getUse(paramPos + 1);
+          if (paramPos < numPosParams) {
+            // Positional arguments start at index 1 (index 0 is the function object).
+            argValNum = call.getUse(paramPos + 1);
+          }
         }
       }
 
-      if (argValNum != -1) {
+      if (argValNum > 0) {
         PointerKey argPk =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, argValNum);
         OrdinalSet<InstanceKey> argPts = builder.getPointerAnalysis().getPointsToSet(argPk);
@@ -1407,7 +1403,7 @@ public abstract class TensorGenerator {
       if (paramPos >= 0 && paramPos < binOp.getNumberOfUses()) {
         argValNum = binOp.getUse(paramPos);
       }
-      if (argValNum != -1) {
+      if (argValNum > 0) {
         PointerKey argPk =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, argValNum);
         return builder.getPointerAnalysis().getPointsToSet(argPk);
@@ -1481,16 +1477,20 @@ public abstract class TensorGenerator {
               }
 
               // Try to resolve by position.
-              if (argValNum == -1 && paramPos >= 0) {
-                int numPosParams =
-                    pyCallInstr.getNumberOfPositionalParameters() - 1; // Exclude function.
-                if (paramPos < numPosParams) {
-                  argValNum =
-                      pyCallInstr.getUse(paramPos + 1); // Positional arguments start at index 1.
+              if (argValNum == -1) {
+                if (paramPos == RECEIVER_PARAMETER_POSITION) {
+                  argValNum = getReceiverValueNumber(caller, pyCallInstr);
+                } else if (paramPos >= 0) {
+                  int numPosParams =
+                      pyCallInstr.getNumberOfPositionalParameters() - 1; // Exclude function.
+                  if (paramPos < numPosParams) {
+                    argValNum =
+                        pyCallInstr.getUse(paramPos + 1); // Positional arguments start at index 1.
+                  }
                 }
               }
 
-              if (argValNum != -1) {
+              if (argValNum > 0) {
                 PointerKey argPk =
                     builder
                         .getPointerAnalysis()
@@ -1853,7 +1853,7 @@ public abstract class TensorGenerator {
    * fails (e.g. UnimplementedError due to implicit pointer keys for allocations in synthetic do()
    * methods).
    */
-  private static TensorGenerator createManualGenerator(
+  protected static TensorGenerator createManualGenerator(
       CGNode node, PropagationCallGraphBuilder builder) {
     TypeReference type = node.getMethod().getDeclaringClass().getReference();
     LOGGER.fine("createManualGenerator checking type: " + type.getName().toString());
@@ -1878,7 +1878,13 @@ public abstract class TensorGenerator {
       return new DatasetFromTensorSlicesGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_FROM_GENERATOR_TYPE)) {
       return new DatasetFromGeneratorGenerator(node);
-    } else if (type.equals(TensorFlowTypes.DATASET)) {
+    } else if (type.equals(TensorFlowTypes.DATASET_RANGE_TYPE)) {
+      return new DatasetRangeGenerator(node);
+    } else if (type.equals(TensorFlowTypes.DATASET_BATCH_TYPE)) {
+      return new DatasetBatchGenerator(node);
+    } else if (type.equals(TensorFlowTypes.IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE)) {
+      return new FlowFromDirectoryGenerator(node);
+    } else if (type.getName().toString().startsWith(TensorFlowTypes.DATA_PACKAGE_PREFIX)) {
       return new DatasetGenerator(node);
     } else if (type.equals(TensorFlowTypes.MATMUL.getDeclaringClass())) {
       return new MatMul(node);

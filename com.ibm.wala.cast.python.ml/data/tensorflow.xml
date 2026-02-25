@@ -65,6 +65,12 @@
         <putfield class="LRoot" field="preprocessing" fieldType="LRoot" ref="keras" value="preprocessing" />
         <new def="image" class="Lobject" />
         <putfield class="LRoot" field="image" fieldType="LRoot" ref="preprocessing" value="image" />
+        <new def="datasets" class="Lobject" />
+        <putfield class="LRoot" field="datasets" fieldType="LRoot" ref="keras" value="datasets" />
+        <new def="keras_mnist" class="Lobject" />
+        <putfield class="LRoot" field="mnist" fieldType="LRoot" ref="datasets" value="keras_mnist" />
+        <new def="load_data" class="Ltensorflow/keras/datasets/mnist/load_data" />
+        <putfield class="LRoot" field="load_data" fieldType="LRoot" ref="keras_mnist" value="load_data" />
         <new def="app" class="Lobject" />
         <putfield class="LRoot" field="app" fieldType="LRoot" ref="x" value="app" />
         <new def="run" class="Ltensorflow/app/run" />
@@ -1362,6 +1368,34 @@
         </method>
         <method name="__end__" descriptor="()LRoot;" numArgs="1" paramNames="self">
           <return value="self" />
+        </method>
+      </class>
+      <class name="tensorflow/keras/datasets/mnist/load_data" allocatable="true">
+        <!-- We use helper methods `get_images` and `get_labels` to ensure each tensor has a distinct allocation site in the WALA IR. This prevents context-insensitive points-to analysis from aliasing all returned tensors together. -->
+        <method name="get_images" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="x" />
+        </method>
+        <method name="get_labels" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="x" />
+        </method>
+        <!-- https://www.tensorflow.org/api_docs/python/tf/keras/datasets/mnist/load_data -->
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <call class="Ltensorflow/keras/datasets/mnist/load_data" name="get_images" descriptor="()LRoot;" type="virtual" arg0="self" numArgs="1" def="x_train" />
+          <call class="Ltensorflow/keras/datasets/mnist/load_data" name="get_labels" descriptor="()LRoot;" type="virtual" arg0="self" numArgs="1" def="y_train" />
+          <new def="train" class="Ltuple" />
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="train" value="x_train" />
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="train" value="y_train" />
+          <call class="Ltensorflow/keras/datasets/mnist/load_data" name="get_images" descriptor="()LRoot;" type="virtual" arg0="self" numArgs="1" def="x_test" />
+          <call class="Ltensorflow/keras/datasets/mnist/load_data" name="get_labels" descriptor="()LRoot;" type="virtual" arg0="self" numArgs="1" def="y_test" />
+          <new def="test" class="Ltuple" />
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="test" value="x_test" />
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="test" value="y_test" />
+          <new def="ret" class="Ltuple" />
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="ret" value="train" />
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="ret" value="test" />
+          <return value="ret" />
         </method>
       </class>
     </package>

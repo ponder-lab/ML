@@ -44,6 +44,10 @@ public class DatasetBatchGenerator extends DatasetGenerator {
     super(source);
   }
 
+  public DatasetBatchGenerator(CGNode node) {
+    super(node);
+  }
+
   private OrdinalSet<InstanceKey> getReceiverPTS(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> pts =
         this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, SELF);
@@ -97,6 +101,9 @@ public class DatasetBatchGenerator extends DatasetGenerator {
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
+    // Get the total dataset sizes (before batching).
+    Set<Long> datasetSizes = this.getDatasetSizes(builder);
+
     for (List<Dimension<?>> shape : inputShapes) {
       if (batchSizes.isEmpty()) {
         // If the batch size is unknown, we assume it is symbolic.
@@ -106,14 +113,64 @@ public class DatasetBatchGenerator extends DatasetGenerator {
         ret.add(newShape);
       } else {
         for (Long batchSize : batchSizes) {
-          List<Dimension<?>> newShape = new ArrayList<>();
           if (batchSize != null) {
-            newShape.add(new NumericDim(batchSize.intValue()));
+            // Drop remainder is implicitly false here, so we could have a partial batch.
+            // If we know the dataset size, we can infer if a partial batch is possible.
+            boolean canHaveFullBatch = true;
+            boolean canHavePartialBatch = false;
+            long partialBatchSize = 0;
+
+            if (!datasetSizes.isEmpty()) {
+              canHaveFullBatch = false;
+              for (Long dsSize : datasetSizes) {
+                if (dsSize >= batchSize) {
+                  canHaveFullBatch = true;
+                }
+                long rem = dsSize % batchSize;
+                if (rem != 0) {
+                  canHavePartialBatch = true;
+                  partialBatchSize =
+                      rem; // We might have multiple dataset sizes, but this is an approximation
+                }
+              }
+            } else {
+              // We don't know dataset size, assume both are possible to be safe,
+              // but we usually just assume full batch size if dataset size is unknown to avoid
+              // explosion,
+              // or maybe we should add both? Let's add both.
+              canHavePartialBatch = true;
+              partialBatchSize =
+                  -1; // -1 means unknown partial size, so we might need a symbolic dim or just drop
+              // it.
+            }
+
+            if (canHaveFullBatch) {
+              List<Dimension<?>> newShape = new ArrayList<>();
+              newShape.add(new NumericDim(batchSize.intValue()));
+              newShape.addAll(shape);
+              ret.add(newShape);
+            }
+
+            if (canHavePartialBatch) {
+              List<Dimension<?>> newShape = new ArrayList<>();
+              if (partialBatchSize > 0) {
+                newShape.add(new NumericDim((int) partialBatchSize));
+              } else {
+                newShape.add(
+                    new SymbolicDim(
+                        "?")); // Or we could just not add the partial batch if we don't know the
+                // exact size.
+              }
+              newShape.addAll(shape);
+              ret.add(newShape);
+            }
+
           } else {
+            List<Dimension<?>> newShape = new ArrayList<>();
             newShape.add(new SymbolicDim("?"));
+            newShape.addAll(shape);
+            ret.add(newShape);
           }
-          newShape.addAll(shape);
-          ret.add(newShape);
         }
       }
     }

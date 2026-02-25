@@ -4,6 +4,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT64;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT64;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.UINT8;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.python.types.PythonTypes;
@@ -32,6 +33,7 @@ public class TensorFlowTypes extends PythonTypes {
     FLOAT64(true, true, 64),
     INT32(true, false, 32),
     INT64(true, false, 64),
+    UINT8(true, false, 8),
     STRING(false, false, 0);
 
     private boolean numeric;
@@ -60,8 +62,11 @@ public class TensorFlowTypes extends PythonTypes {
   public static final TypeReference TENSORFLOW =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow"));
 
+  public static final String DATA_PACKAGE_PREFIX = "Ltensorflow/data/";
+
   public static final TypeReference DATASET =
-      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset"));
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "Dataset"));
 
   /**
    * Represents the TensorFlow data type.
@@ -887,6 +892,17 @@ public class TensorFlowTypes extends PythonTypes {
           PythonTypes.Root, findOrCreateAsciiAtom(INT64.name().toLowerCase()), D_TYPE);
 
   /**
+   * Represents the TensorFlow uint8 data type.
+   *
+   * @see <a
+   *     href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes#uint8">TensorFlow
+   *     uint8 DType</a>.
+   */
+  public static final FieldReference UINT_8 =
+      FieldReference.findOrCreate(
+          PythonTypes.Root, findOrCreateAsciiAtom(UINT8.name().toLowerCase()), D_TYPE);
+
+  /**
    * Represents the TensorFlow string data type.
    *
    * @see <a
@@ -899,8 +915,13 @@ public class TensorFlowTypes extends PythonTypes {
 
   /** A mapping from a field reference to its associated {@link DType}, if any. */
   public static final Map<FieldReference, DType> FIELD_REFERENCE_TO_DTYPE =
-      Map.of(
-          FLOAT_32, FLOAT32, FLOAT_64, FLOAT64, INT_32, INT32, INT_64, INT64, STRING, DType.STRING);
+      Map.ofEntries(
+          Map.entry(FLOAT_32, FLOAT32),
+          Map.entry(FLOAT_64, FLOAT64),
+          Map.entry(INT_32, INT32),
+          Map.entry(INT_64, INT64),
+          Map.entry(UINT_8, UINT8),
+          Map.entry(STRING, DType.STRING));
 
   private TensorFlowTypes() {}
 }
