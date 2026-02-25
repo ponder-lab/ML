@@ -624,17 +624,23 @@ public abstract class TensorGenerator {
 
         TensorGenerator generator = createManualGenerator(readDataNode, builder);
 
-        if (generator == null && defSource != null) {
+        if (generator != null) {
+          // Avoid infinite recursion for manual generators
+          if (this.manualNode != null && this.manualNode.equals(readDataNode)) {
+            return ret;
+          }
+          LOGGER.fine("Delegating shape inference to: " + generator);
+          ret.addAll(generator.getShapes(builder));
+        } else if (defSource != null) {
           // Avoid infinite recursion if the current generator is for the same source.
           if (this.getSource() != null && this.getSource().equals(defSource)) {
             return ret;
           }
           generator = TensorGeneratorFactory.getGenerator(defSource, builder);
-        }
-
-        if (generator != null) {
-          LOGGER.fine("Delegating shape inference to: " + generator);
-          ret.addAll(generator.getShapes(builder));
+          if (generator != null) {
+            LOGGER.fine("Delegating shape inference to: " + generator);
+            ret.addAll(generator.getShapes(builder));
+          }
         }
       }
       return ret;
@@ -1153,17 +1159,22 @@ public abstract class TensorGenerator {
 
         TensorGenerator generator = createManualGenerator(readDataNode, builder);
 
-        if (generator == null && defSource != null) {
+        if (generator != null) {
+          if (this.manualNode != null && this.manualNode.equals(readDataNode)) {
+            return ret;
+          }
+          LOGGER.fine("Delegating dtype inference to: " + generator);
+          ret.addAll(generator.getDTypes(builder));
+        } else if (defSource != null) {
           if (this.getSource() != null && this.getSource().equals(defSource)) {
             return ret;
           }
 
           generator = TensorGeneratorFactory.getGenerator(defSource, builder);
-        }
-
-        if (generator != null) {
-          LOGGER.fine("Delegating dtype inference to: " + generator);
-          ret.addAll(generator.getDTypes(builder));
+          if (generator != null) {
+            LOGGER.fine("Delegating dtype inference to: " + generator);
+            ret.addAll(generator.getDTypes(builder));
+          }
         }
       }
       return ret;
