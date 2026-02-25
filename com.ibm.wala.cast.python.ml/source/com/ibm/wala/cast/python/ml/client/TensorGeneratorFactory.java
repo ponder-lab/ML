@@ -440,7 +440,7 @@ public class TensorGeneratorFactory {
           if (isFirstElement) {
             return new EnumerateIndexGenerator(objSrc);
           } else if (isSecondElement) {
-            return enumGen.getUnderlyingGenerator(builder);
+            return new DatasetElementGenerator(objSrc, enumGen.getUnderlyingGenerator(builder));
           }
         }
 
