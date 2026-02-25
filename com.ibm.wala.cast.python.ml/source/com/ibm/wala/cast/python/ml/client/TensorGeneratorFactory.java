@@ -396,6 +396,54 @@ public class TensorGeneratorFactory {
         if (objSrc == null) return null;
         TensorGenerator containerGenerator = getGenerator(objSrc, builder);
 
+        if (containerGenerator instanceof DatasetEnumerateGenerator) {
+          LOGGER.fine("Found DatasetEnumerateGenerator during property read!");
+          DatasetEnumerateGenerator enumGen = (DatasetEnumerateGenerator) containerGenerator;
+          int memberRef = propRead.getMemberRef();
+          PointerKey memberRefKey =
+              builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, memberRef);
+          boolean isFirstElement = false;
+          boolean isSecondElement = false;
+          for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(memberRefKey)) {
+            if (ik instanceof ConstantKey) {
+              Object val = ((ConstantKey<?>) ik).getValue();
+              LOGGER.fine(
+                  "Member ref constant key value: "
+                      + val
+                      + " (class: "
+                      + (val != null ? val.getClass().getName() : "null")
+                      + ")");
+              Integer idx = null;
+              if (val instanceof Integer) {
+                idx = (Integer) val;
+              } else if (val instanceof String) {
+                try {
+                  idx = Integer.parseInt((String) val);
+                } catch (NumberFormatException e) {
+                  // Ignore
+                }
+              } else if (val instanceof Long) {
+                idx = ((Long) val).intValue();
+              }
+
+              if (idx != null) {
+                if (idx == 0) {
+                  isFirstElement = true;
+                } else if (idx == 1) {
+                  isSecondElement = true;
+                }
+              }
+            }
+          }
+          LOGGER.fine(
+              "isFirstElement: " + isFirstElement + ", isSecondElement: " + isSecondElement);
+          if (isFirstElement) {
+            return new EnumerateIndexGenerator(objSrc);
+          } else if (isSecondElement) {
+            return enumGen.getUnderlyingGenerator(builder);
+          }
+        }
+
         if (containerGenerator instanceof TensorElementGenerator
             && ((TensorElementGenerator) containerGenerator).getContainerGenerator()
                 instanceof EnumerateGenerator) {
@@ -496,6 +544,8 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, DATASET_RANGE_TYPE)) return new DatasetRangeGenerator(source);
     else if (isType(calledFunction, DATASET_FROM_GENERATOR_TYPE))
       return new DatasetFromGeneratorGenerator(source);
+    else if (isType(calledFunction, DATASET_ENUMERATE_TYPE))
+      return new DatasetEnumerateGenerator(source);
     else if (isType(calledFunction, DATASET_SHUFFLE_TYPE)
         || isType(calledFunction, DATASET_MAP_TYPE)
         || isType(calledFunction, DATASET_REPEAT_TYPE)
@@ -503,7 +553,6 @@ public class TensorGeneratorFactory {
         || isType(calledFunction, DATASET_TAKE_TYPE)
         || isType(calledFunction, DATASET_WITH_OPTIONS_TYPE)
         || isType(calledFunction, DATASET_CONCATENATE_TYPE)
-        || isType(calledFunction, DATASET_ENUMERATE_TYPE)
         || isType(calledFunction, DATASET_REDUCE_TYPE)
         || isType(calledFunction, DATASET_FILTER_TYPE)
         || isType(calledFunction, DATASET)) return new DatasetGenerator(source);

@@ -3,13 +3,18 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.util.Util.findDefinition;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.Collections;
+import java.util.Set;
 
 /**
  * A generator for tensors created by {@code tf.data.Dataset.enumerate}.
@@ -24,6 +29,22 @@ public class DatasetEnumerateGenerator extends DatasetGenerator {
 
   public DatasetEnumerateGenerator(CGNode node) {
     super(node);
+  }
+
+  @Override
+  public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
+    Set<TensorType> types = HashSetFactory.make();
+
+    // Add the index type (int64 scalar)
+    types.add(new TensorType(DType.INT64.name().toLowerCase(), Collections.emptyList()));
+
+    // Add the underlying dataset types
+    TensorGenerator underlying = getUnderlyingGenerator(builder);
+    if (underlying != null) {
+      types.addAll(underlying.getTensorTypes(builder));
+    }
+
+    return types;
   }
 
   /**
