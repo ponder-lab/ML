@@ -10,25 +10,32 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * A proxy generator for an element of a dataset (e.g., a tuple element) that delegates type
- * inference to the dataset's underlying generator, but is not itself a DatasetGenerator. This
- * ensures that subsequent property reads on this element correctly peel dimensions instead of being
- * treated as dataset iterations.
+ * A generator representing a specific element within a tuple produced by a dataset. This is used
+ * when a dataset yields structured elements (like tuples) and we need to track the shape and type
+ * of individual components within that structure, delegating the lookup to the underlying generator
+ * based on the tuple index.
  */
-public class DatasetElementGenerator extends TensorGenerator implements DelegatingTensorGenerator {
+public class DatasetTupleElementGenerator extends TensorGenerator
+    implements DelegatingTensorGenerator {
 
   /** The generator representing the underlying dataset this element belongs to. */
-  private final TensorGenerator underlying;
+  private final DatasetFromGeneratorGenerator underlying;
+
+  /** The index of this element within the tuple. */
+  private final int index;
 
   /**
-   * Constructs a new {@code DatasetElementGenerator}.
+   * Constructs a new {@code DatasetTupleElementGenerator}.
    *
    * @param source the points-to set variable representing the source of the element
    * @param underlying the generator representing the underlying dataset
+   * @param index the index of this element within the tuple
    */
-  public DatasetElementGenerator(PointsToSetVariable source, TensorGenerator underlying) {
+  public DatasetTupleElementGenerator(
+      PointsToSetVariable source, DatasetFromGeneratorGenerator underlying, int index) {
     super(source);
     this.underlying = underlying;
+    this.index = index;
   }
 
   /**
@@ -36,24 +43,26 @@ public class DatasetElementGenerator extends TensorGenerator implements Delegati
    *
    * @return the generator representing the underlying dataset
    */
+  @Override
   public TensorGenerator getUnderlying() {
     return underlying;
   }
 
   @Override
   public String toString() {
-    return "DatasetElementGenerator(" + underlying + ")";
+    return "DatasetTupleElementGenerator(" + underlying + ", index=" + index + ")";
   }
 
   /**
    * {@inheritDoc}
    *
-   * <p>This implementation delegates to the underlying dataset generator.
+   * <p>This implementation delegates to the underlying dataset generator for the specific tuple
+   * index.
    */
   @Override
   public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     if (underlying != null) {
-      return underlying.getTensorTypes(builder);
+      return underlying.getTensorTypesForIndex(builder, index);
     }
     return super.getTensorTypes(builder);
   }
@@ -61,12 +70,13 @@ public class DatasetElementGenerator extends TensorGenerator implements Delegati
   /**
    * {@inheritDoc}
    *
-   * <p>This implementation delegates to the underlying dataset generator.
+   * <p>This implementation delegates to the underlying dataset generator for the specific tuple
+   * index.
    */
   @Override
   public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     if (underlying != null) {
-      return underlying.getShapes(builder);
+      return underlying.getShapesForIndex(builder, index);
     }
     return super.getShapes(builder);
   }
@@ -74,12 +84,13 @@ public class DatasetElementGenerator extends TensorGenerator implements Delegati
   /**
    * {@inheritDoc}
    *
-   * <p>This implementation delegates to the underlying dataset generator.
+   * <p>This implementation delegates to the underlying dataset generator for the specific tuple
+   * index.
    */
   @Override
   public Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
     if (underlying != null) {
-      return underlying.getDTypes(builder);
+      return underlying.getDTypesForIndex(builder, index);
     }
     return super.getDTypes(builder);
   }

@@ -8,6 +8,7 @@ import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -52,6 +53,56 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator {
 
   public DatasetFromGeneratorGenerator(CGNode node) {
     super(node);
+  }
+
+  /**
+   * Retrieves the shapes of the dataset elements at a specific index within the output signature.
+   *
+   * @param builder The propagation call graph builder used for the analysis.
+   * @param index The index within the output signature tuple.
+   * @return A set of possible shapes for the element at the given index.
+   */
+  public Set<List<Dimension<?>>> getShapesForIndex(PropagationCallGraphBuilder builder, int index) {
+    OrdinalSet<InstanceKey> outputSignaturePts =
+        this.getArgumentPointsToSet(
+            builder, Parameters.OUTPUT_SIGNATURE.getIndex(), Parameters.OUTPUT_SIGNATURE.getName());
+
+    if (outputSignaturePts != null && !outputSignaturePts.isEmpty()) {
+      Set<List<Dimension<?>>> ret = HashSetFactory.make();
+      for (InstanceKey ik : outputSignaturePts) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        if (asin != null
+            && (asin.getConcreteType().getReference().equals(tuple)
+                || asin.getConcreteType().getReference().equals(list))) {
+          OrdinalSet<InstanceKey> objectCatalogPointsToSet =
+              builder
+                  .getPointerAnalysis()
+                  .getPointsToSet(
+                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                          .getPointerKeyForObjectCatalog(asin));
+
+          for (InstanceKey catalogIK : objectCatalogPointsToSet) {
+            Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
+            if (fieldIndex != null && fieldIndex == index) {
+              FieldReference subscript =
+                  FieldReference.findOrCreate(
+                      Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+              IField f = builder.getClassHierarchy().resolveField(subscript);
+              if (f != null) {
+                PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+                ret.addAll(
+                    this.getShapesFromShapeArgument(
+                        builder, builder.getPointerAnalysis().getPointsToSet(pk)));
+              }
+            }
+          }
+        }
+      }
+      if (!ret.isEmpty()) {
+        return ret;
+      }
+    }
+    return this.getShapes(builder);
   }
 
   /**
@@ -125,6 +176,76 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator {
 
     // Default: No shape information could be extracted from generator arguments.
     return Collections.emptySet();
+  }
+
+  /**
+   * Retrieves the dtypes of the dataset elements at a specific index within the output signature.
+   *
+   * @param builder The propagation call graph builder used for the analysis.
+   * @param index The index within the output signature tuple.
+   * @return A set of possible dtypes for the element at the given index.
+   */
+  public Set<DType> getDTypesForIndex(PropagationCallGraphBuilder builder, int index) {
+    OrdinalSet<InstanceKey> outputSignaturePts =
+        this.getArgumentPointsToSet(
+            builder, Parameters.OUTPUT_SIGNATURE.getIndex(), Parameters.OUTPUT_SIGNATURE.getName());
+
+    if (outputSignaturePts != null && !outputSignaturePts.isEmpty()) {
+      Set<DType> ret = EnumSet.noneOf(DType.class);
+      for (InstanceKey ik : outputSignaturePts) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        if (asin != null
+            && (asin.getConcreteType().getReference().equals(tuple)
+                || asin.getConcreteType().getReference().equals(list))) {
+          OrdinalSet<InstanceKey> objectCatalogPointsToSet =
+              builder
+                  .getPointerAnalysis()
+                  .getPointsToSet(
+                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                          .getPointerKeyForObjectCatalog(asin));
+
+          for (InstanceKey catalogIK : objectCatalogPointsToSet) {
+            Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
+            if (fieldIndex != null && fieldIndex == index) {
+              FieldReference subscript =
+                  FieldReference.findOrCreate(
+                      Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+              IField f = builder.getClassHierarchy().resolveField(subscript);
+              if (f != null) {
+                PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+                ret.addAll(
+                    this.getDTypesFromDTypeArgument(
+                        builder, builder.getPointerAnalysis().getPointsToSet(pk)));
+              }
+            }
+          }
+        }
+      }
+      if (!ret.isEmpty()) {
+        return ret;
+      }
+    }
+    return this.getDTypes(builder);
+  }
+
+  /**
+   * Retrieves the tensor types (shape and dtype combinations) of the dataset elements at a specific
+   * index within the output signature.
+   *
+   * @param builder The propagation call graph builder used for the analysis.
+   * @param index The index within the output signature tuple.
+   * @return A set of possible tensor types for the element at the given index.
+   */
+  public Set<TensorType> getTensorTypesForIndex(PropagationCallGraphBuilder builder, int index) {
+    Set<List<Dimension<?>>> shapes = this.getShapesForIndex(builder, index);
+    Set<DType> dTypes = this.getDTypesForIndex(builder, index);
+
+    Set<TensorType> ret = HashSetFactory.make();
+
+    for (List<Dimension<?>> dimensionList : shapes)
+      for (DType dtype : dTypes) ret.add(new TensorType(dtype.name().toLowerCase(), dimensionList));
+
+    return ret;
   }
 
   /**

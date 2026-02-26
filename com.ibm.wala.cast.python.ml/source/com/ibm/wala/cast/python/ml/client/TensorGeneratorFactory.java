@@ -397,45 +397,39 @@ public class TensorGeneratorFactory {
           effectiveGenerator = ((DelegatingTensorGenerator) containerGenerator).getUnderlying();
         }
 
+        Integer propertyIndex = null;
+        int memberRef = propRead.getMemberRef();
+        PointerKey memberRefKey =
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, memberRef);
+        for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(memberRefKey)) {
+          if (ik instanceof ConstantKey) {
+            Object val = ((ConstantKey<?>) ik).getValue();
+            LOGGER.fine(
+                "Member ref constant key value: "
+                    + val
+                    + " (class: "
+                    + (val != null ? val.getClass().getName() : "null")
+                    + ")");
+            if (val instanceof Integer) {
+              propertyIndex = (Integer) val;
+            } else if (val instanceof String) {
+              try {
+                propertyIndex = Integer.parseInt((String) val);
+              } catch (NumberFormatException e) {
+                // Ignore
+              }
+            } else if (val instanceof Long) {
+              propertyIndex = ((Long) val).intValue();
+            }
+          }
+        }
+
         if (effectiveGenerator instanceof DatasetEnumerateGenerator) {
           LOGGER.fine("Found DatasetEnumerateGenerator during property read!");
           DatasetEnumerateGenerator enumGen = (DatasetEnumerateGenerator) effectiveGenerator;
-          int memberRef = propRead.getMemberRef();
-          PointerKey memberRefKey =
-              builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, memberRef);
-          boolean isFirstElement = false;
-          boolean isSecondElement = false;
-          for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(memberRefKey)) {
-            if (ik instanceof ConstantKey) {
-              Object val = ((ConstantKey<?>) ik).getValue();
-              LOGGER.fine(
-                  "Member ref constant key value: "
-                      + val
-                      + " (class: "
-                      + (val != null ? val.getClass().getName() : "null")
-                      + ")");
-              Integer idx = null;
-              if (val instanceof Integer) {
-                idx = (Integer) val;
-              } else if (val instanceof String) {
-                try {
-                  idx = Integer.parseInt((String) val);
-                } catch (NumberFormatException e) {
-                  // Ignore
-                }
-              } else if (val instanceof Long) {
-                idx = ((Long) val).intValue();
-              }
+          boolean isFirstElement = propertyIndex != null && propertyIndex == 0;
+          boolean isSecondElement = propertyIndex != null && propertyIndex == 1;
 
-              if (idx != null) {
-                if (idx == 0) {
-                  isFirstElement = true;
-                } else if (idx == 1) {
-                  isSecondElement = true;
-                }
-              }
-            }
-          }
           LOGGER.fine(
               "isFirstElement: " + isFirstElement + ", isSecondElement: " + isSecondElement);
           if (isFirstElement) {
@@ -445,14 +439,23 @@ public class TensorGeneratorFactory {
           }
         }
 
+        if (effectiveGenerator instanceof DatasetFromGeneratorGenerator && propertyIndex != null) {
+          LOGGER.fine(
+              "Found DatasetFromGeneratorGenerator during property read with index "
+                  + propertyIndex
+                  + "!");
+          return new DatasetTupleElementGenerator(
+              objSrc, (DatasetFromGeneratorGenerator) effectiveGenerator, propertyIndex);
+        }
+
         if (containerGenerator instanceof TensorElementGenerator
             && ((TensorElementGenerator) containerGenerator).getContainerGenerator()
                 instanceof EnumerateGenerator) {
           EnumerateGenerator enumGen =
               (EnumerateGenerator)
                   ((TensorElementGenerator) containerGenerator).getContainerGenerator();
-          int memberRef = propRead.getMemberRef();
-          PointerKey memberRefKey =
+          memberRef = propRead.getMemberRef();
+          memberRefKey =
               builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, memberRef);
           boolean isFirstElement = false;
           for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(memberRefKey)) {

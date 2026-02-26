@@ -653,8 +653,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         3,
         Map.of(
-            2, Set.of(SCALAR_TENSOR_OF_INT32, TENSOR_2_NONE_INT32),
-            3, Set.of(SCALAR_TENSOR_OF_INT32, TENSOR_2_NONE_INT32)));
+            2, Set.of(SCALAR_TENSOR_OF_INT32),
+            3, Set.of(TENSOR_2_NONE_INT32)));
   }
 
   /**
