@@ -82,6 +82,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType SCALAR_TENSOR_OF_FLOAT32 = new TensorType(FLOAT_32, emptyList());
 
+  private static final TensorType SCALAR_TENSOR_OF_STRING = new TensorType(STRING, emptyList());
+
   private static final TensorType TENSOR_1_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(2)));
 
@@ -840,10 +842,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testDataset28()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_dataset28.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
-    test("tf2_test_dataset28.py", "g", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
+    test("tf2_test_dataset28.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_INT32)));
+    test("tf2_test_dataset28.py", "g", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_STRING)));
     // TODO: Change to 0, 0 when https://github.com/wala/ML/issues/164 is fixed:
-    test("tf2_test_dataset28.py", "h", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
+    test(
+        "tf2_test_dataset28.py",
+        "h",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_INT32, SCALAR_TENSOR_OF_STRING)));
   }
 
   @Test

@@ -27,7 +27,8 @@ import java.util.List;
 import java.util.Set;
 
 /** A generator for tensors created by {@code tf.data.Dataset.from_generator}. */
-public class DatasetFromGeneratorGenerator extends DatasetGenerator {
+public class DatasetFromGeneratorGenerator extends DatasetGenerator
+    implements TupleElementProvider {
 
   protected enum Parameters {
     GENERATOR,

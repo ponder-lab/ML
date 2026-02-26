@@ -1,0 +1,42 @@
+package com.ibm.wala.cast.python.ml.client;
+
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * An interface for generators that can provide types, shapes, and dtypes for specific elements when
+ * they yield a tuple or structured object.
+ */
+public interface TupleElementProvider {
+
+  /**
+   * Retrieves the tensor types for the element at the specified index within the generated tuple.
+   *
+   * @param builder The propagation call graph builder used for the analysis.
+   * @param index The index within the tuple.
+   * @return A set of possible tensor types for the element at the given index.
+   */
+  Set<TensorType> getTensorTypesForIndex(PropagationCallGraphBuilder builder, int index);
+
+  /**
+   * Retrieves the shapes for the element at the specified index within the generated tuple.
+   *
+   * @param builder The propagation call graph builder used for the analysis.
+   * @param index The index within the tuple.
+   * @return A set of possible shapes for the element at the given index.
+   */
+  Set<List<Dimension<?>>> getShapesForIndex(PropagationCallGraphBuilder builder, int index);
+
+  /**
+   * Retrieves the dtypes for the element at the specified index within the generated tuple.
+   *
+   * @param builder The propagation call graph builder used for the analysis.
+   * @param index The index within the tuple.
+   * @return A set of possible dtypes for the element at the given index.
+   */
+  Set<DType> getDTypesForIndex(PropagationCallGraphBuilder builder, int index);
+}

@@ -19,7 +19,7 @@ public class DatasetTupleElementGenerator extends TensorGenerator
     implements DelegatingTensorGenerator {
 
   /** The generator representing the underlying dataset this element belongs to. */
-  private final DatasetFromGeneratorGenerator underlying;
+  private final TupleElementProvider underlying;
 
   /** The index of this element within the tuple. */
   private final int index;
@@ -32,7 +32,7 @@ public class DatasetTupleElementGenerator extends TensorGenerator
    * @param index the index of this element within the tuple
    */
   public DatasetTupleElementGenerator(
-      PointsToSetVariable source, DatasetFromGeneratorGenerator underlying, int index) {
+      PointsToSetVariable source, TupleElementProvider underlying, int index) {
     super(source);
     this.underlying = underlying;
     this.index = index;
@@ -45,7 +45,7 @@ public class DatasetTupleElementGenerator extends TensorGenerator
    */
   @Override
   public TensorGenerator getUnderlying() {
-    return underlying;
+    return (TensorGenerator) underlying;
   }
 
   @Override
