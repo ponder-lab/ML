@@ -48,7 +48,7 @@ public class DatasetElementGenerator extends TensorGenerator implements Delegati
   /**
    * {@inheritDoc}
    *
-   * <p>This implementation delegates to the underlying dataset generator.
+   * @implNote This implementation delegates to the underlying dataset generator.
    */
   @Override
   public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
@@ -61,7 +61,7 @@ public class DatasetElementGenerator extends TensorGenerator implements Delegati
   /**
    * {@inheritDoc}
    *
-   * <p>This implementation delegates to the underlying dataset generator.
+   * @implNote This implementation delegates to the underlying dataset generator.
    */
   @Override
   public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
@@ -74,7 +74,7 @@ public class DatasetElementGenerator extends TensorGenerator implements Delegati
   /**
    * {@inheritDoc}
    *
-   * <p>This implementation delegates to the underlying dataset generator.
+   * @implNote This implementation delegates to the underlying dataset generator.
    */
   @Override
   public Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
@@ -87,7 +87,7 @@ public class DatasetElementGenerator extends TensorGenerator implements Delegati
   /**
    * {@inheritDoc}
    *
-   * <p>This implementation returns an empty set since properties are fully delegated.
+   * @implNote This implementation returns an empty set since properties are fully delegated.
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
@@ -107,7 +107,7 @@ public class DatasetElementGenerator extends TensorGenerator implements Delegati
   /**
    * {@inheritDoc}
    *
-   * <p>This implementation returns an empty set since properties are fully delegated.
+   * @implNote This implementation returns an empty set since properties are fully delegated.
    */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
