@@ -123,7 +123,7 @@ public abstract class TensorGenerator {
     for (List<Dimension<?>> dimensionList : shapes)
       for (DType dtype : dTypes) ret.add(new TensorType(dtype.name().toLowerCase(), dimensionList));
 
-    LOGGER.fine(() -> "Generator " + this.getClass().getSimpleName() + " produced types: " + ret);
+    LOGGER.info("Generator " + this.getClass().getSimpleName() + " produced types: " + ret);
 
     return ret;
   }

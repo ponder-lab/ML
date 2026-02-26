@@ -15,15 +15,37 @@ import java.util.Set;
  * ensures that subsequent property reads on this element correctly peel dimensions instead of being
  * treated as dataset iterations.
  */
-public class DatasetElementGenerator extends TensorGenerator {
+public class DatasetElementGenerator extends TensorGenerator implements DelegatingTensorGenerator {
 
+  /** The generator representing the underlying dataset this element belongs to. */
   private final TensorGenerator underlying;
 
+  /**
+   * Constructs a new {@code DatasetElementGenerator}.
+   *
+   * @param source the points-to set variable representing the source of the element
+   * @param underlying the generator representing the underlying dataset
+   */
   public DatasetElementGenerator(PointsToSetVariable source, TensorGenerator underlying) {
     super(source);
     this.underlying = underlying;
   }
 
+  /**
+   * Retrieves the underlying generator.
+   *
+   * @return the generator representing the underlying dataset
+   */
+  public TensorGenerator getUnderlying() {
+    return underlying;
+  }
+
+  @Override
+  public String toString() {
+    return "DatasetElementGenerator(" + underlying + ")";
+  }
+
+  /** {@inheritDoc} */
   @Override
   public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     if (underlying != null) {
@@ -32,6 +54,7 @@ public class DatasetElementGenerator extends TensorGenerator {
     return super.getTensorTypes(builder);
   }
 
+  /** {@inheritDoc} */
   @Override
   public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     if (underlying != null) {
@@ -40,6 +63,7 @@ public class DatasetElementGenerator extends TensorGenerator {
     return super.getShapes(builder);
   }
 
+  /** {@inheritDoc} */
   @Override
   public Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
     if (underlying != null) {
@@ -48,6 +72,7 @@ public class DatasetElementGenerator extends TensorGenerator {
     return super.getDTypes(builder);
   }
 
+  /** {@inheritDoc} */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     return Collections.emptySet();
@@ -63,6 +88,7 @@ public class DatasetElementGenerator extends TensorGenerator {
     return null;
   }
 
+  /** {@inheritDoc} */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     return Collections.emptySet();

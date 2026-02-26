@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
 import java.util.ArrayList;
@@ -14,17 +15,27 @@ import java.util.Set;
  *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class TensorElementGenerator extends TensorGenerator {
+public class TensorElementGenerator extends TensorGenerator implements DelegatingTensorGenerator {
 
   private final TensorGenerator containerGenerator;
 
-  public TensorElementGenerator(TensorGenerator containerGenerator) {
-    super(containerGenerator.getSource());
+  public TensorElementGenerator(PointsToSetVariable source, TensorGenerator containerGenerator) {
+    super(source);
     this.containerGenerator = containerGenerator;
   }
 
   public TensorGenerator getContainerGenerator() {
     return containerGenerator;
+  }
+
+  @Override
+  public TensorGenerator getUnderlying() {
+    return containerGenerator;
+  }
+
+  @Override
+  public String toString() {
+    return "TensorElementGenerator(" + containerGenerator + ")";
   }
 
   /**

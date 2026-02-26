@@ -235,6 +235,10 @@ public class TensorFlowTypes extends PythonTypes {
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset/from_tensor_slices"));
 
+  public static final TypeReference DATASET_FROM_TENSORS_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset/from_tensors"));
+
   /** https://www.tensorflow.org/api_docs/python/tf/ones. */
   public static final MethodReference ONES =
       MethodReference.findOrCreate(

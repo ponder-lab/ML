@@ -18,7 +18,7 @@ import java.util.Set;
  *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class EnumerateGenerator extends TensorGenerator {
+public class EnumerateGenerator extends TensorGenerator implements DelegatingTensorGenerator {
 
   /** The generator for the underlying iterable being enumerated. */
   private final TensorGenerator underlying;

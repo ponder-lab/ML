@@ -10,6 +10,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CONCATEN
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_ENUMERATE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FILTER_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FROM_GENERATOR_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FROM_TENSORS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FROM_TENSOR_SLICES_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_MAP_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_PREFETCH_TYPE;
@@ -345,18 +346,13 @@ public class TensorGeneratorFactory {
             if (iterableSrc == null) return null;
             TensorGenerator containerGenerator = getGenerator(iterableSrc, builder);
 
-            if (containerGenerator instanceof IteratorGenerator) {
-              containerGenerator = ((IteratorGenerator) containerGenerator).getUnderlying();
-            }
-
-            // Unpacking an EnumerateGenerator gives the second element (the dataset element).
-            if (containerGenerator instanceof EnumerateGenerator) {
-              return ((EnumerateGenerator) containerGenerator).getUnderlying();
+            while (containerGenerator instanceof DelegatingTensorGenerator) {
+              containerGenerator = ((DelegatingTensorGenerator) containerGenerator).getUnderlying();
             }
 
             return (containerGenerator instanceof DatasetGenerator)
                 ? containerGenerator
-                : new TensorElementGenerator(containerGenerator);
+                : new TensorElementGenerator(source, containerGenerator);
           }
           PointerKey retKey =
               builder.getPointerAnalysis().getHeapModel().getPointerKeyForReturnValue(callee);
@@ -383,8 +379,8 @@ public class TensorGeneratorFactory {
         // For `Tensors` (e.g., `tf.range`, constants), the generator returns the tensor's own
         // shape. When iterating, we must peel off the first dimension to get the element shape.
         return (containerGenerator instanceof DatasetGenerator)
-            ? containerGenerator
-            : new TensorElementGenerator(containerGenerator);
+            ? new DatasetElementGenerator(iterableSrc, containerGenerator)
+            : new TensorElementGenerator(source, containerGenerator);
       } else if (def instanceof PythonPropertyRead) {
         // Python iteration may also be translated into property reads (e.g., retrieving an element
         // from a dataset or tensor).
@@ -396,9 +392,14 @@ public class TensorGeneratorFactory {
         if (objSrc == null) return null;
         TensorGenerator containerGenerator = getGenerator(objSrc, builder);
 
-        if (containerGenerator instanceof DatasetEnumerateGenerator) {
+        TensorGenerator effectiveGenerator = containerGenerator;
+        if (containerGenerator instanceof DelegatingTensorGenerator) {
+          effectiveGenerator = ((DelegatingTensorGenerator) containerGenerator).getUnderlying();
+        }
+
+        if (effectiveGenerator instanceof DatasetEnumerateGenerator) {
           LOGGER.fine("Found DatasetEnumerateGenerator during property read!");
-          DatasetEnumerateGenerator enumGen = (DatasetEnumerateGenerator) containerGenerator;
+          DatasetEnumerateGenerator enumGen = (DatasetEnumerateGenerator) effectiveGenerator;
           int memberRef = propRead.getMemberRef();
           PointerKey memberRefKey =
               builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, memberRef);
@@ -472,8 +473,8 @@ public class TensorGeneratorFactory {
         // Similar to `EachElementGet`, we check if the container generator represents elements
         // (`Dataset`) or the tensor itself (peeling needed).
         return (containerGenerator instanceof DatasetGenerator)
-            ? containerGenerator
-            : new TensorElementGenerator(containerGenerator);
+            ? new DatasetElementGenerator(objSrc, containerGenerator)
+            : new TensorElementGenerator(source, containerGenerator);
       }
     }
 
@@ -540,6 +541,8 @@ public class TensorGeneratorFactory {
         || isType(calledFunction, NDARRAY.getDeclaringClass())) return new TensorCall(source);
     else if (isType(calledFunction, DATASET_FROM_TENSOR_SLICES_TYPE))
       return new DatasetFromTensorSlicesGenerator(source);
+    else if (isType(calledFunction, DATASET_FROM_TENSORS_TYPE))
+      return new DatasetFromTensorsGenerator(source);
     else if (isType(calledFunction, DATASET_BATCH_TYPE)) return new DatasetBatchGenerator(source);
     else if (isType(calledFunction, DATASET_RANGE_TYPE)) return new DatasetRangeGenerator(source);
     else if (isType(calledFunction, DATASET_FROM_GENERATOR_TYPE))

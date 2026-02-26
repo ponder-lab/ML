@@ -16,7 +16,7 @@ import java.util.Set;
  * reference to the generator of the underlying iterable so that elements can be generated during
  * iteration (e.g., via {@code next()}).
  */
-public class IteratorGenerator extends TensorGenerator {
+public class IteratorGenerator extends TensorGenerator implements DelegatingTensorGenerator {
 
   /** The generator for the underlying iterable. */
   private final TensorGenerator underlying;

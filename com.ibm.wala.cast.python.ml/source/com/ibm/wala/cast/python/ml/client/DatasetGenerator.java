@@ -52,6 +52,13 @@ public class DatasetGenerator extends TensorGenerator {
     return null;
   }
 
+  /**
+   * By default, dataset transformations inherit the element shapes of the dataset they are called
+   * on (the receiver). This method looks up the receiver dataset and infers shapes from it.
+   *
+   * @param builder the propagation call graph builder used for the analysis
+   * @return a set of possible element shapes, or an empty set if unknown
+   */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     // For dataset transformations, default to shapes of the input dataset (the receiver).
