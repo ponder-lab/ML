@@ -77,6 +77,25 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
     super(node);
   }
 
+  @Override
+  public boolean yieldsTuple(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> outputSignaturePts =
+        this.getArgumentPointsToSet(
+            builder, Parameters.OUTPUT_SIGNATURE.getIndex(), Parameters.OUTPUT_SIGNATURE.getName());
+
+    if (outputSignaturePts != null && !outputSignaturePts.isEmpty()) {
+      for (InstanceKey ik : outputSignaturePts) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        if (asin != null
+            && (asin.getConcreteType().getReference().equals(tuple)
+                || asin.getConcreteType().getReference().equals(list))) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   /**
    * {@inheritDoc}
    *

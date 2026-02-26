@@ -439,15 +439,16 @@ public class TensorGeneratorFactory {
           }
         }
 
-        if (effectiveGenerator instanceof TupleElementProvider && propertyIndex != null) {
-          LOGGER.fine(
-              "Found "
-                  + TupleElementProvider.class.getName()
-                  + " during property read with index "
-                  + propertyIndex
-                  + "!");
-          return new DatasetTupleElementGenerator(
-              objSrc, (TupleElementProvider) effectiveGenerator, propertyIndex);
+        if (effectiveGenerator instanceof TupleElementProvider tep && propertyIndex != null) {
+          if (tep.yieldsTuple(builder)) {
+            LOGGER.fine(
+                "Found "
+                    + TupleElementProvider.class.getName()
+                    + " during property read with index "
+                    + propertyIndex
+                    + "!");
+            return new DatasetTupleElementGenerator(objSrc, tep, propertyIndex);
+          }
         }
 
         if (containerGenerator instanceof TensorElementGenerator

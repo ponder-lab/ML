@@ -1,7 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
-import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
@@ -69,6 +68,23 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
     super(node);
   }
 
+  @Override
+  public boolean yieldsTuple(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> tensorsPTS =
+        this.getArgumentPointsToSet(
+            builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName());
+
+    if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
+      for (InstanceKey ik : tensorsPTS) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        if (asin != null && asin.getConcreteType().getReference().equals(tuple)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   /**
    * {@inheritDoc}
    *
@@ -86,9 +102,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
       Set<TensorType> ret = HashSetFactory.make();
       for (InstanceKey ik : tensorsPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-        if (asin != null
-            && (asin.getConcreteType().getReference().equals(tuple)
-                || asin.getConcreteType().getReference().equals(list))) {
+        if (asin != null && asin.getConcreteType().getReference().equals(tuple)) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               builder
                   .getPointerAnalysis()
@@ -138,9 +152,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
       Set<List<Dimension<?>>> ret = HashSetFactory.make();
       for (InstanceKey ik : tensorsPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-        if (asin != null
-            && (asin.getConcreteType().getReference().equals(tuple)
-                || asin.getConcreteType().getReference().equals(list))) {
+        if (asin != null && asin.getConcreteType().getReference().equals(tuple)) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               builder
                   .getPointerAnalysis()
@@ -188,9 +200,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
       Set<DType> ret = HashSetFactory.make();
       for (InstanceKey ik : tensorsPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-        if (asin != null
-            && (asin.getConcreteType().getReference().equals(tuple)
-                || asin.getConcreteType().getReference().equals(list))) {
+        if (asin != null && asin.getConcreteType().getReference().equals(tuple)) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               builder
                   .getPointerAnalysis()
@@ -255,9 +265,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
       Set<List<Dimension<?>>> ret = HashSetFactory.make();
       for (InstanceKey ik : tensorsPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-        if (asin != null
-            && (asin.getConcreteType().getReference().equals(tuple)
-                || asin.getConcreteType().getReference().equals(list))) {
+        if (asin != null && asin.getConcreteType().getReference().equals(tuple)) {
           // It's a structured element. We return the union of all possible shapes of its members.
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               builder
@@ -314,9 +322,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
       Set<DType> ret = HashSetFactory.make();
       for (InstanceKey ik : tensorsPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-        if (asin != null
-            && (asin.getConcreteType().getReference().equals(tuple)
-                || asin.getConcreteType().getReference().equals(list))) {
+        if (asin != null && asin.getConcreteType().getReference().equals(tuple)) {
           // It's a structured element. We return the union of all possible dtypes of its members.
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               builder
