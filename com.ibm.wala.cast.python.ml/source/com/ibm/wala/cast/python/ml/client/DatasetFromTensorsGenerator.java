@@ -25,11 +25,21 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
-/** A generator for tensors created by {@code tf.data.Dataset.from_tensors}. */
+/**
+ * A generator for tensors created by {@code tf.data.Dataset.from_tensors}.
+ *
+ * <p>Unlike {@code from_tensor_slices}, which slices the input along its first dimension, {@code
+ * from_tensors} creates a dataset containing the input as a single, whole element.
+ *
+ * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
+ */
 public class DatasetFromTensorsGenerator extends DatasetGenerator implements TupleElementProvider {
 
+  /** Parameter indices for {@code tf.data.Dataset.from_tensors}. */
   protected enum Parameters {
+    /** The tensor or structured object to be converted into a dataset. */
     TENSORS,
+    /** The name of the operation (optional). */
     NAME;
 
     public String getName() {
@@ -41,14 +51,31 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
     }
   }
 
+  /**
+   * Constructs a new {@code DatasetFromTensorsGenerator}.
+   *
+   * @param source the points-to set variable representing the source of the dataset
+   */
   public DatasetFromTensorsGenerator(PointsToSetVariable source) {
     super(source);
   }
 
+  /**
+   * Constructs a new {@code DatasetFromTensorsGenerator}.
+   *
+   * @param node the call graph node where the dataset is created
+   */
   public DatasetFromTensorsGenerator(CGNode node) {
     super(node);
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote This implementation handles structured elements (tuples or lists) by returning the
+   *     union of the types of their constituent members, instead of treating the structure itself
+   *     as a single tensor type.
+   */
   @Override
   public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> tensorsPTS =
@@ -95,6 +122,12 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
     return super.getTensorTypes(builder);
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote This implementation retrieves the shape of the constituent element at the specified
+   *     index when the input to {@code from_tensors} is a structured object (tuple or list).
+   */
   @Override
   public Set<List<Dimension<?>>> getShapesForIndex(PropagationCallGraphBuilder builder, int index) {
     OrdinalSet<InstanceKey> tensorsPTS =
@@ -139,6 +172,12 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
     return this.getShapes(builder);
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote This implementation retrieves the dtype of the constituent element at the specified
+   *     index when the input to {@code from_tensors} is a structured object (tuple or list).
+   */
   @Override
   public Set<DType> getDTypesForIndex(PropagationCallGraphBuilder builder, int index) {
     OrdinalSet<InstanceKey> tensorsPTS =
@@ -183,6 +222,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
     return this.getDTypes(builder);
   }
 
+  /** {@inheritDoc} */
   @Override
   public Set<TensorType> getTensorTypesForIndex(PropagationCallGraphBuilder builder, int index) {
     Set<List<Dimension<?>>> shapes = this.getShapesForIndex(builder, index);
@@ -196,6 +236,13 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
     return ret;
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote For {@code tf.data.Dataset.from_tensors(tensors)}, the dataset contains a single
+   *     element which is the {@code tensors} argument itself. If that argument is a structured
+   *     object (tuple or list), this method returns the union of the shapes of its members.
+   */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     // For tf.data.Dataset.from_tensors(tensors), the dataset contains a single element
@@ -250,6 +297,13 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
     return Collections.emptySet();
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote For {@code tf.data.Dataset.from_tensors(tensors)}, the dataset contains a single
+   *     element which is the {@code tensors} argument itself. If that argument is a structured
+   *     object (tuple or list), this method returns the union of the dtypes of its members.
+   */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> tensorsPTS =
@@ -302,6 +356,11 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
     return Collections.emptySet();
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote For {@code from_tensors}, the dataset always contains exactly one element.
+   */
   @Override
   public Set<Long> getDatasetSizes(PropagationCallGraphBuilder builder) {
     return Collections.singleton(1L);

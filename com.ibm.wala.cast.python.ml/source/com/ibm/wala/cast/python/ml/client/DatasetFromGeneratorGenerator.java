@@ -26,16 +26,27 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
-/** A generator for tensors created by {@code tf.data.Dataset.from_generator}. */
+/**
+ * A generator for tensors created by {@code tf.data.Dataset.from_generator}.
+ *
+ * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
+ */
 public class DatasetFromGeneratorGenerator extends DatasetGenerator
     implements TupleElementProvider {
 
+  /** Parameter indices for {@code tf.data.Dataset.from_generator}. */
   protected enum Parameters {
+    /** The generator function. */
     GENERATOR,
+    /** Legacy argument for output types. */
     OUTPUT_TYPES,
+    /** Legacy argument for output shapes. */
     OUTPUT_SHAPES,
+    /** Arguments to the generator function. */
     ARGS,
+    /** Modern way to specify output properties. */
     OUTPUT_SIGNATURE,
+    /** Operation name. */
     NAME;
 
     public String getName() {
@@ -48,21 +59,31 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
     }
   }
 
+  /**
+   * Constructs a new {@code DatasetFromGeneratorGenerator}.
+   *
+   * @param source the points-to set variable representing the source of the dataset
+   */
   public DatasetFromGeneratorGenerator(PointsToSetVariable source) {
     super(source);
   }
 
+  /**
+   * Constructs a new {@code DatasetFromGeneratorGenerator}.
+   *
+   * @param node the call graph node where the dataset is created
+   */
   public DatasetFromGeneratorGenerator(CGNode node) {
     super(node);
   }
 
   /**
-   * Retrieves the shapes of the dataset elements at a specific index within the output signature.
+   * {@inheritDoc}
    *
-   * @param builder The propagation call graph builder used for the analysis.
-   * @param index The index within the output signature tuple.
-   * @return A set of possible shapes for the element at the given index.
+   * @implNote This implementation retrieves the shapes of the constituent element at the specified
+   *     index by inspecting the {@code output_signature}.
    */
+  @Override
   public Set<List<Dimension<?>>> getShapesForIndex(PropagationCallGraphBuilder builder, int index) {
     OrdinalSet<InstanceKey> outputSignaturePts =
         this.getArgumentPointsToSet(
@@ -109,8 +130,8 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
   /**
    * {@inheritDoc}
    *
-   * <p>For {@code tf.data.Dataset.from_generator}, shapes are inferred from the {@code
-   * output_signature} or the legacy {@code output_shapes} arguments.
+   * @implNote For {@code tf.data.Dataset.from_generator}, shapes are inferred from the {@code
+   *     output_signature} or the legacy {@code output_shapes} arguments.
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
@@ -180,12 +201,12 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
   }
 
   /**
-   * Retrieves the dtypes of the dataset elements at a specific index within the output signature.
+   * {@inheritDoc}
    *
-   * @param builder The propagation call graph builder used for the analysis.
-   * @param index The index within the output signature tuple.
-   * @return A set of possible dtypes for the element at the given index.
+   * @implNote This implementation retrieves the dtypes of the constituent element at the specified
+   *     index by inspecting the {@code output_signature}.
    */
+  @Override
   public Set<DType> getDTypesForIndex(PropagationCallGraphBuilder builder, int index) {
     OrdinalSet<InstanceKey> outputSignaturePts =
         this.getArgumentPointsToSet(
@@ -230,13 +251,12 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
   }
 
   /**
-   * Retrieves the tensor types (shape and dtype combinations) of the dataset elements at a specific
-   * index within the output signature.
+   * {@inheritDoc}
    *
-   * @param builder The propagation call graph builder used for the analysis.
-   * @param index The index within the output signature tuple.
-   * @return A set of possible tensor types for the element at the given index.
+   * @implNote This implementation retrieves the tensor types of the constituent element at the
+   *     specified index by inspecting the {@code output_signature}.
    */
+  @Override
   public Set<TensorType> getTensorTypesForIndex(PropagationCallGraphBuilder builder, int index) {
     Set<List<Dimension<?>>> shapes = this.getShapesForIndex(builder, index);
     Set<DType> dTypes = this.getDTypesForIndex(builder, index);
@@ -252,8 +272,8 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
   /**
    * {@inheritDoc}
    *
-   * <p>For {@code tf.data.Dataset.from_generator}, dtypes are inferred from the {@code
-   * output_signature} or the legacy {@code output_types} arguments.
+   * @implNote For {@code tf.data.Dataset.from_generator}, dtypes are inferred from the {@code
+   *     output_signature} or the legacy {@code output_types} arguments.
    */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
