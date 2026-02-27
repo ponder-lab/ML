@@ -856,7 +856,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testDataset29()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_dataset29.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
+    test("tf2_test_dataset29.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_STRING)));
   }
 
   @Test
