@@ -938,7 +938,7 @@
         <method name="do" descriptor="()LRoot;" numArgs="16" paramNames="self directory target_size color_mode classes class_mode batch_size shuffle seed save_to_dir save_prefix save_format follow_links subset interpolation keep_aspect_ratio">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <return value="xx" />
+          <return value="x" />
         </method>
       </class>
     </package>
@@ -1082,7 +1082,7 @@
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. This method (shuffle) doesn't really return a "new" dataset but rather a modified version of the receiver. But, the receiver isn't available without a trampoline AFAIK. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <return value="xx" />
+          <return value="x" />
         </method>
       </class>
       <class name="batch" allocatable="true">
@@ -1091,7 +1091,7 @@
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <return value="xx" />
+          <return value="x" />
         </method>
       </class>
       <class name="repeat" allocatable="true">
@@ -1100,7 +1100,7 @@
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <return value="xx" />
+          <return value="x" />
         </method>
       </class>
       <class name="prefetch" allocatable="true">
@@ -1109,7 +1109,7 @@
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <return value="xx" />
+          <return value="x" />
         </method>
       </class>
       <class name="with_options" allocatable="true">
@@ -1118,7 +1118,7 @@
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <return value="xx" />
+          <return value="x" />
         </method>
       </class>
       <class name="take" allocatable="true">
@@ -1127,7 +1127,7 @@
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <return value="xx" />
+          <return value="x" />
         </method>
       </class>
       <class name="map" allocatable="true">
@@ -1136,7 +1136,7 @@
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <return value="xx" />
+          <return value="x" />
         </method>
       </class>
       <class name="filter" allocatable="true">
@@ -1145,7 +1145,7 @@
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <return value="xx" />
+          <return value="x" />
         </method>
       </class>
       <class name="concatenate" allocatable="true">
@@ -1154,7 +1154,7 @@
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <return value="xx" />
+          <return value="x" />
         </method>
       </class>
       <class name="reduce" allocatable="true">
@@ -1170,7 +1170,7 @@
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <return value="xx" />
+          <return value="x" />
         </method>
       </class>
     </package>
@@ -1181,7 +1181,7 @@
           <!-- FIXME: We should encode the tensors argument here. See https://github.com/wala/ML/issues/164. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <return value="xx" />
+          <return value="x" />
         </method>
       </class>
       <class name="from_tensor_slices" allocatable="true">
@@ -1189,7 +1189,7 @@
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="tensors name">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <return value="xx" />
+          <return value="x" />
         </method>
       </class>
       <class name="sample_from_datasets" allocatable="true">
@@ -1197,7 +1197,7 @@
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="datasets weights seed stop_on_empty_dataset">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <return value="xx" />
+          <return value="x" />
         </method>
       </class>
       <class name="list_files" allocatable="true">
@@ -1205,15 +1205,14 @@
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="file_pattern shuffle seed name">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <return value="xx" />
+          <return value="x" />
         </method>
       </class>
       <class name="choose_from_datasets" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#choose_from_datasets -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="datasets choice_dataset stop_on_empty_dataset">
-          <!-- Return the first one in the list. -->
-          <constant name="l" type="int" value="0" />
-          <aaload index="l" type="Ltensorflow/data/Dataset" ref="datasets" def="x" />
+          <new def="x" class="Ltensorflow/data/Dataset" />
+          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
           <return value="x" />
         </method>
       </class>
@@ -1222,7 +1221,7 @@
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="generator output_types output_shapes args output_signature name">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <return value="xx" />
+          <return value="x" />
         </method>
       </class>
       <class name="zip" allocatable="true">
@@ -1239,7 +1238,7 @@
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="args kwargs">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <return value="xx" />
+          <return value="x" />
         </method>
       </class>
       <class name="random" allocatable="true">
@@ -1247,7 +1246,7 @@
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="seed name">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
-          <return value="xx" />
+          <return value="x" />
         </method>
       </class>
     </package>

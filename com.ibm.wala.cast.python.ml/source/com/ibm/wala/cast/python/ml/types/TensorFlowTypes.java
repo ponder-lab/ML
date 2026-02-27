@@ -165,6 +165,9 @@ public class TensorFlowTypes extends PythonTypes {
   public static final TypeReference DATASET_CONCATENATE_TYPE =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/data/concatenate"));
+  public static final TypeReference DATASET_CHOOSE_FROM_DATASETS_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset/choose_from_datasets"));
 
   public static final TypeReference DATASET_ENUMERATE_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/enumerate"));
@@ -191,6 +194,11 @@ public class TensorFlowTypes extends PythonTypes {
           pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset/from_generator"));
 
   public static final String DATASET_FROM_GENERATOR_SIGNATURE = "tf.data.Dataset.from_generator()";
+
+  public static final String DATASET_FROM_TENSORS_SIGNATURE = "tf.data.Dataset.from_tensors()";
+
+  public static final String DATASET_CHOOSE_FROM_DATASETS_SIGNATURE =
+      "tf.data.Dataset.choose_from_datasets()";
 
   /**
    * The type of `tf.TensorSpec`.
@@ -787,6 +795,8 @@ public class TensorFlowTypes extends PythonTypes {
   public static final Map<TypeReference, String> TYPE_REFERENCE_TO_SIGNATURE =
       Map.ofEntries(
           Map.entry(DATASET_FROM_GENERATOR_TYPE, DATASET_FROM_GENERATOR_SIGNATURE),
+          Map.entry(DATASET_FROM_TENSORS_TYPE, DATASET_FROM_TENSORS_SIGNATURE),
+          Map.entry(DATASET_CHOOSE_FROM_DATASETS_TYPE, DATASET_CHOOSE_FROM_DATASETS_SIGNATURE),
           Map.entry(TENSOR_SPEC, TENSOR_SPEC_SIGNATURE),
           Map.entry(RAGGED_TENSOR_SPEC, RAGGED_TENSOR_SPEC_SIGNATURE),
           Map.entry(RESHAPE.getDeclaringClass(), RESHAPE_SIGNATURE),

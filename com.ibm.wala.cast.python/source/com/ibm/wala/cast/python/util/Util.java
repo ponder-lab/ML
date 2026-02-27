@@ -25,6 +25,7 @@ import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.SSAGetInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.types.TypeReference;
@@ -54,7 +55,9 @@ public class Util {
   public static int getReceiverValueNumber(CGNode node, PythonInvokeInstruction call) {
     int funcVn = call.getUse(0);
     SSAInstruction funcDef = node.getDU().getDef(funcVn);
-    if (funcDef instanceof PythonPropertyRead) {
+    if (funcDef instanceof SSAGetInstruction) {
+      return ((SSAGetInstruction) funcDef).getRef();
+    } else if (funcDef instanceof PythonPropertyRead) {
       return ((PythonPropertyRead) funcDef).getObjectRef();
     }
     return -1;

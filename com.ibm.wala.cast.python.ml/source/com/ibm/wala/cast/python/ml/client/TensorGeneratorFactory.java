@@ -6,6 +6,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_BATCH_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CHOOSE_FROM_DATASETS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CONCATENATE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_ENUMERATE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FILTER_TYPE;
@@ -553,6 +554,8 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, DATASET_RANGE_TYPE)) return new DatasetRangeGenerator(source);
     else if (isType(calledFunction, DATASET_FROM_GENERATOR_TYPE))
       return new DatasetFromGeneratorGenerator(source);
+    else if (isType(calledFunction, DATASET_CHOOSE_FROM_DATASETS_TYPE))
+      return new DatasetChooseFromDatasetsGenerator(source);
     else if (isType(calledFunction, DATASET_ENUMERATE_TYPE))
       return new DatasetEnumerateGenerator(source);
     else if (isType(calledFunction, DATASET_SHUFFLE_TYPE)

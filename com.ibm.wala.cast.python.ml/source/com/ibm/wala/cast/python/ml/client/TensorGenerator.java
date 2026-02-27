@@ -171,7 +171,8 @@ public abstract class TensorGenerator {
           Integer fieldIndex = getFieldIndex(constantKey);
 
           FieldReference subscript =
-              FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+              FieldReference.findOrCreate(
+                  reference, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
 
           IField f = builder.getClassHierarchy().resolveField(subscript);
           LOGGER.fine("Found field: " + f);
@@ -515,7 +516,7 @@ public abstract class TensorGenerator {
 
             FieldReference subscript =
                 FieldReference.findOrCreate(
-                    Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+                    reference, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
 
             IField f = builder.getClassHierarchy().resolveField(subscript);
             LOGGER.fine("Found field: " + f);
@@ -813,7 +814,8 @@ public abstract class TensorGenerator {
           Integer fieldIndex = getFieldIndex(constantKey);
 
           FieldReference subscript =
-              FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+              FieldReference.findOrCreate(
+                  reference, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
 
           IField f = builder.getClassHierarchy().resolveField(subscript);
           if (f != null) {
@@ -1072,7 +1074,7 @@ public abstract class TensorGenerator {
 
             FieldReference subscript =
                 FieldReference.findOrCreate(
-                    Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+                    reference, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
 
             IField f = builder.getClassHierarchy().resolveField(subscript);
             LOGGER.fine("Found field: " + f);
@@ -1874,6 +1876,11 @@ public abstract class TensorGenerator {
     } else if (type.equals(TensorFlowTypes.DATASET_FROM_TENSOR_SLICES_TYPE)
         || type.getName().toString().equals("Ltensorflow/data/from_tensor_slices")) {
       return new DatasetFromTensorSlicesGenerator(node);
+    } else if (type.equals(TensorFlowTypes.DATASET_FROM_TENSORS_TYPE)
+        || type.getName().toString().equals("Ltensorflow/data/from_tensors")) {
+      return new DatasetFromTensorsGenerator(node);
+    } else if (type.equals(TensorFlowTypes.DATASET_CHOOSE_FROM_DATASETS_TYPE)) {
+      return new DatasetChooseFromDatasetsGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_FROM_GENERATOR_TYPE)) {
       return new DatasetFromGeneratorGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_RANGE_TYPE)) {
