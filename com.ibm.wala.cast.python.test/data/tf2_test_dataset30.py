@@ -12,4 +12,7 @@ b = tf.data.Dataset.range(4, 8)  # ==> [ 4, 5, 6, 7 ]
 ds = a.concatenate(b)
 
 for element in ds:
+    assert isinstance(element, tf.Tensor)
+    assert element.shape == ()
+    assert element.dtype == tf.int64
     f(element)
