@@ -6,21 +6,27 @@ import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
-import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
+import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.DefUse;
+import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -59,12 +65,64 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    Set<DType> ret = HashSetFactory.make();
+
+    // Bypass pointer analysis imprecision for list elements by directly analyzing the IR
+    // if the list was created locally in the caller.
+    PointerKey pk = this.getSource() != null ? this.getSource().getPointerKey() : null;
+    if (pk instanceof LocalPointerKey) {
+      CGNode caller = ((LocalPointerKey) pk).getNode();
+      int vn = ((LocalPointerKey) pk).getValueNumber();
+      SSAInstruction defInst = caller.getDU().getDef(vn);
+      if (defInst instanceof PythonInvokeInstruction) {
+        PythonInvokeInstruction call = (PythonInvokeInstruction) defInst;
+        int paramPos = Parameters.DATASETS.getIndex();
+        int argVn = -1;
+        if (paramPos + 1 < call.getNumberOfUses()) {
+          argVn = call.getUse(paramPos + 1);
+        }
+        if (argVn != -1) {
+          DefUse du = caller.getDU();
+          SSAInstruction def = du.getDef(argVn);
+          if (def instanceof SSANewInstruction) {
+            Iterator<SSAInstruction> uses = du.getUses(argVn);
+            while (uses.hasNext()) {
+              SSAInstruction use = uses.next();
+              if (use instanceof AstPropertyWrite) {
+                AstPropertyWrite write = (AstPropertyWrite) use;
+                if (write.getObjectRef() == argVn) {
+                  int valueVn = write.getValue();
+                  PointerKey valuePK =
+                      builder
+                          .getPointerAnalysis()
+                          .getHeapModel()
+                          .getPointerKeyForLocal(caller, valueVn);
+                  if (!builder.getPropagationSystem().isImplicit(valuePK)) {
+                    PointsToSetVariable var =
+                        builder.getPropagationSystem().findOrCreatePointsToSet(valuePK);
+                    try {
+                      TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+                      if (generator != null) {
+                        ret.addAll(generator.getDTypes(builder));
+                      }
+                    } catch (IllegalArgumentException e) {
+                      // Ignore.
+                    }
+                  }
+                }
+              }
+            }
+            if (!ret.isEmpty()) return ret;
+          }
+        }
+      }
+    }
+
     OrdinalSet<InstanceKey> datasetsPTS =
         this.getArgumentPointsToSet(
             builder, Parameters.DATASETS.getIndex(), Parameters.DATASETS.getName());
 
     if (datasetsPTS != null && !datasetsPTS.isEmpty()) {
-      Set<DType> ret = HashSetFactory.make();
       for (InstanceKey ik : datasetsPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin != null
@@ -88,13 +146,31 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
                       Root);
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
-                PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
-                OrdinalSet<InstanceKey> fieldPTS = builder.getPointerAnalysis().getPointsToSet(pk);
-                LOGGER.fine("      Field PTS size: " + fieldPTS.size());
-                for (InstanceKey fieldIK : fieldPTS) {
-                  LOGGER.fine("        Field element: " + fieldIK);
+                PointerKey fieldPK = builder.getPointerKeyForInstanceField(asin, f);
+
+                boolean preciseTypesFound = false;
+                if (!builder.getPropagationSystem().isImplicit(fieldPK)) {
+                  PointsToSetVariable var =
+                      builder.getPropagationSystem().findOrCreatePointsToSet(fieldPK);
+                  try {
+                    TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+                    if (generator != null) {
+                      Set<DType> preciseTypes = generator.getDTypes(builder);
+                      if (!preciseTypes.isEmpty()) {
+                        ret.addAll(preciseTypes);
+                        preciseTypesFound = true;
+                      }
+                    }
+                  } catch (IllegalArgumentException e) {
+                    // Ignore
+                  }
                 }
-                ret.addAll(this.getDTypesOfValue(builder, fieldPTS));
+
+                if (!preciseTypesFound) {
+                  OrdinalSet<InstanceKey> fieldPTS =
+                      builder.getPointerAnalysis().getPointsToSet(fieldPK);
+                  ret.addAll(this.getDTypesOfValue(builder, fieldPTS));
+                }
               }
             }
           }
@@ -114,12 +190,64 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+
+    // Bypass pointer analysis imprecision for list elements by directly analyzing the IR
+    // if the list was created locally in the caller.
+    PointerKey pk = this.getSource() != null ? this.getSource().getPointerKey() : null;
+    if (pk instanceof LocalPointerKey) {
+      CGNode caller = ((LocalPointerKey) pk).getNode();
+      int vn = ((LocalPointerKey) pk).getValueNumber();
+      SSAInstruction defInst = caller.getDU().getDef(vn);
+      if (defInst instanceof PythonInvokeInstruction) {
+        PythonInvokeInstruction call = (PythonInvokeInstruction) defInst;
+        int paramPos = Parameters.DATASETS.getIndex();
+        int argVn = -1;
+        if (paramPos + 1 < call.getNumberOfUses()) {
+          argVn = call.getUse(paramPos + 1);
+        }
+        if (argVn != -1) {
+          DefUse du = caller.getDU();
+          SSAInstruction def = du.getDef(argVn);
+          if (def instanceof SSANewInstruction) {
+            Iterator<SSAInstruction> uses = du.getUses(argVn);
+            while (uses.hasNext()) {
+              SSAInstruction use = uses.next();
+              if (use instanceof AstPropertyWrite) {
+                AstPropertyWrite write = (AstPropertyWrite) use;
+                if (write.getObjectRef() == argVn) {
+                  int valueVn = write.getValue();
+                  PointerKey valuePK =
+                      builder
+                          .getPointerAnalysis()
+                          .getHeapModel()
+                          .getPointerKeyForLocal(caller, valueVn);
+                  if (!builder.getPropagationSystem().isImplicit(valuePK)) {
+                    PointsToSetVariable var =
+                        builder.getPropagationSystem().findOrCreatePointsToSet(valuePK);
+                    try {
+                      TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+                      if (generator != null) {
+                        ret.addAll(generator.getShapes(builder));
+                      }
+                    } catch (IllegalArgumentException e) {
+                      // Ignore.
+                    }
+                  }
+                }
+              }
+            }
+            if (!ret.isEmpty()) return ret;
+          }
+        }
+      }
+    }
+
     OrdinalSet<InstanceKey> datasetsPTS =
         this.getArgumentPointsToSet(
             builder, Parameters.DATASETS.getIndex(), Parameters.DATASETS.getName());
 
     if (datasetsPTS != null && !datasetsPTS.isEmpty()) {
-      Set<List<Dimension<?>>> ret = HashSetFactory.make();
       for (InstanceKey ik : datasetsPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin != null
@@ -143,13 +271,31 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
                       Root);
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
-                PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
-                OrdinalSet<InstanceKey> fieldPTS = builder.getPointerAnalysis().getPointsToSet(pk);
-                LOGGER.fine("      Field PTS size: " + fieldPTS.size());
-                for (InstanceKey fieldIK : fieldPTS) {
-                  LOGGER.fine("        Field element: " + fieldIK);
+                PointerKey fieldPK = builder.getPointerKeyForInstanceField(asin, f);
+
+                boolean preciseTypesFound = false;
+                if (!builder.getPropagationSystem().isImplicit(fieldPK)) {
+                  PointsToSetVariable var =
+                      builder.getPropagationSystem().findOrCreatePointsToSet(fieldPK);
+                  try {
+                    TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+                    if (generator != null) {
+                      Set<List<Dimension<?>>> preciseTypes = generator.getShapes(builder);
+                      if (!preciseTypes.isEmpty()) {
+                        ret.addAll(preciseTypes);
+                        preciseTypesFound = true;
+                      }
+                    }
+                  } catch (IllegalArgumentException e) {
+                    // Ignore
+                  }
                 }
-                ret.addAll(this.getShapesOfValue(builder, fieldPTS));
+
+                if (!preciseTypesFound) {
+                  OrdinalSet<InstanceKey> fieldPTS =
+                      builder.getPointerAnalysis().getPointsToSet(fieldPK);
+                  ret.addAll(this.getShapesOfValue(builder, fieldPTS));
+                }
               }
             }
           }
