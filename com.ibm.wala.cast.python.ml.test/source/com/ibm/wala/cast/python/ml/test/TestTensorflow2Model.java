@@ -895,13 +895,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testDataset32()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_dataset32.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test("tf2_test_dataset32.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
   }
 
   @Test
   public void testDataset33()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_dataset33.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test("tf2_test_dataset33.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
   }
 
   /** Test a dataset that uses an iterator. */
