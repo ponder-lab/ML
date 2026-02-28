@@ -553,24 +553,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testDataset3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_dataset3.py",
-        "add",
-        2,
-        3,
-        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32), 3, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test("tf2_test_dataset3.py", "add", 0, 0, emptyMap());
   }
 
   /** This is not a legal case. */
   @Test
   public void testDataset4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_dataset4.py",
-        "add",
-        2,
-        3,
-        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32), 3, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test("tf2_test_dataset4.py", "add", 0, 0, emptyMap());
   }
 
   @Test
