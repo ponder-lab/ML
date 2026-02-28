@@ -172,7 +172,7 @@ public abstract class TensorGenerator {
 
           FieldReference subscript =
               FieldReference.findOrCreate(
-                  reference, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+                  typeReference, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
 
           IField f = builder.getClassHierarchy().resolveField(subscript);
           LOGGER.fine("Found field: " + f);
@@ -815,7 +815,7 @@ public abstract class TensorGenerator {
 
           FieldReference subscript =
               FieldReference.findOrCreate(
-                  reference, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+                  typeReference, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
 
           IField f = builder.getClassHierarchy().resolveField(subscript);
           if (f != null) {
