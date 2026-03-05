@@ -201,6 +201,14 @@ public class TensorFlowTypes extends PythonTypes {
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset/zip"));
 
+  public static final String DATASET_ZIP_SIGNATURE = "tf.data.Dataset.zip()";
+
+  public static final TypeReference DATASET_RANDOM_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset/random"));
+
+  public static final String DATASET_RANDOM_SIGNATURE = "tf.data.Dataset.random()";
+
   public static final String DATASET_CHOOSE_FROM_DATASETS_SIGNATURE =
       "tf.data.Dataset.choose_from_datasets()";
 
@@ -801,6 +809,8 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(DATASET_FROM_GENERATOR_TYPE, DATASET_FROM_GENERATOR_SIGNATURE),
           Map.entry(DATASET_FROM_TENSORS_TYPE, DATASET_FROM_TENSORS_SIGNATURE),
           Map.entry(DATASET_CHOOSE_FROM_DATASETS_TYPE, DATASET_CHOOSE_FROM_DATASETS_SIGNATURE),
+          Map.entry(DATASET_ZIP_TYPE, DATASET_ZIP_SIGNATURE),
+          Map.entry(DATASET_RANDOM_TYPE, DATASET_RANDOM_SIGNATURE),
           Map.entry(TENSOR_SPEC, TENSOR_SPEC_SIGNATURE),
           Map.entry(RAGGED_TENSOR_SPEC, RAGGED_TENSOR_SPEC_SIGNATURE),
           Map.entry(RESHAPE.getDeclaringClass(), RESHAPE_SIGNATURE),

@@ -1885,6 +1885,8 @@ public abstract class TensorGenerator {
       return new DatasetZipGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_RANGE_TYPE)) {
       return new DatasetRangeGenerator(node);
+    } else if (type.equals(TensorFlowTypes.DATASET_RANDOM_TYPE)) {
+      return new DatasetRandomGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_BATCH_TYPE)) {
       return new DatasetBatchGenerator(node);
     } else if (type.equals(TensorFlowTypes.IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE)) {
