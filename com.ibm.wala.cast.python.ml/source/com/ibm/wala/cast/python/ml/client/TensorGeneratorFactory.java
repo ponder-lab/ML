@@ -243,8 +243,7 @@ public class TensorGeneratorFactory {
         LocalPointerKey lpk = (LocalPointerKey) pk;
         SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
         if (def instanceof SSAAbstractInvokeInstruction
-            || def instanceof EachElementGetInstruction
-            || def instanceof PythonPropertyRead) {
+            || def instanceof EachElementGetInstruction) {
           LOGGER.fine("findCreator found creator instruction: " + def);
           return current;
         }
