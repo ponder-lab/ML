@@ -2,6 +2,8 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT_OP_CONSTANT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CHOOSE_FROM_DATASETS_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SAMPLE_FROM_DATASETS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
@@ -1877,8 +1879,10 @@ public abstract class TensorGenerator {
     } else if (type.equals(TensorFlowTypes.DATASET_FROM_TENSORS_TYPE)
         || type.getName().toString().equals("Ltensorflow/data/from_tensors")) {
       return new DatasetFromTensorsGenerator(node);
-    } else if (type.equals(TensorFlowTypes.DATASET_CHOOSE_FROM_DATASETS_TYPE)) {
+    } else if (type.equals(DATASET_CHOOSE_FROM_DATASETS_TYPE)) {
       return new DatasetChooseFromDatasetsGenerator(node);
+    } else if (type.equals(DATASET_SAMPLE_FROM_DATASETS_TYPE)) {
+      return new DatasetSampleFromDatasetsGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_FROM_GENERATOR_TYPE)) {
       return new DatasetFromGeneratorGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_ZIP_TYPE)) {
