@@ -1229,12 +1229,12 @@
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
           <!-- FIXME: This could return tuples of tensors. See https://github.com/wala/ML/issues/165. -->
-          <return value="xx" />
+          <return value="x" />
         </method>
       </class>
       <class name="range" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#range -->
-        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="args kwargs">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="start stop step output_type name">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
           <return value="x" />

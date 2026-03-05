@@ -197,6 +197,10 @@ public class TensorFlowTypes extends PythonTypes {
 
   public static final String DATASET_FROM_TENSORS_SIGNATURE = "tf.data.Dataset.from_tensors()";
 
+  public static final TypeReference DATASET_ZIP_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset/zip"));
+
   public static final String DATASET_CHOOSE_FROM_DATASETS_SIGNATURE =
       "tf.data.Dataset.choose_from_datasets()";
 

@@ -21,6 +21,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_REPEAT_T
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SHUFFLE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_TAKE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_WITH_OPTIONS_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_ZIP_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DENSE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIVIDE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EQUAL;
@@ -554,6 +555,7 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, DATASET_RANGE_TYPE)) return new DatasetRangeGenerator(source);
     else if (isType(calledFunction, DATASET_FROM_GENERATOR_TYPE))
       return new DatasetFromGeneratorGenerator(source);
+    else if (isType(calledFunction, DATASET_ZIP_TYPE)) return new DatasetZipGenerator(source);
     else if (isType(calledFunction, DATASET_CHOOSE_FROM_DATASETS_TYPE))
       return new DatasetChooseFromDatasetsGenerator(source);
     else if (isType(calledFunction, DATASET_ENUMERATE_TYPE))
