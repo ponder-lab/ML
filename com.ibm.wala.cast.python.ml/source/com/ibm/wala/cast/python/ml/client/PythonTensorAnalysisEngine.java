@@ -7,7 +7,9 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATA_PACKAGE_PRE
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
@@ -19,6 +21,10 @@ import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
+import com.ibm.wala.ipa.callgraph.Context;
+import com.ibm.wala.ipa.callgraph.ContextSelector;
+import com.ibm.wala.ipa.callgraph.IAnalysisCacheView;
+import com.ibm.wala.ipa.callgraph.impl.ContextInsensitiveSelector;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConcreteTypeKey;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
@@ -29,6 +35,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationSystem;
+import com.ibm.wala.ipa.callgraph.propagation.cfa.nCFAContextSelector;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
@@ -43,6 +50,7 @@ import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.graph.Graph;
 import com.ibm.wala.util.graph.impl.SlowSparseNumberedGraph;
+import com.ibm.wala.util.intset.IntSet;
 import java.io.File;
 import java.io.IOException;
 import java.util.Iterator;
@@ -54,10 +62,60 @@ import java.util.logging.Logger;
 
 public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeAnalysis> {
 
-  public PythonTensorAnalysisEngine() {}
+  public static final String TENSORFLOW =
+      TensorFlowTypes.TENSORFLOW.getName().getClassName().toString();
+
+  private final String targetFramework;
+
+  public PythonTensorAnalysisEngine() {
+    this(TENSORFLOW);
+  }
 
   public PythonTensorAnalysisEngine(List<File> pythonPath) {
+    this(pythonPath, TENSORFLOW);
+  }
+
+  public PythonTensorAnalysisEngine(String targetFramework) {
+    this.targetFramework = targetFramework;
+  }
+
+  public PythonTensorAnalysisEngine(List<File> pythonPath, String targetFramework) {
     super(pythonPath);
+    this.targetFramework = targetFramework;
+  }
+
+  @Override
+  protected PythonSSAPropagationCallGraphBuilder getCallGraphBuilder(
+      IClassHierarchy cha, AnalysisOptions options, IAnalysisCacheView cache2) {
+    PythonSSAPropagationCallGraphBuilder builder = super.getCallGraphBuilder(cha, options, cache2);
+
+    final ContextSelector base = builder.getContextSelector();
+    final ContextSelector targeted2CFA =
+        new nCFAContextSelector(2, new ContextInsensitiveSelector());
+
+    builder.setContextSelector(
+        new ContextSelector() {
+          @Override
+          public Context getCalleeTarget(
+              CGNode caller,
+              CallSiteReference site,
+              IMethod callee,
+              InstanceKey[] actualParameters) {
+            String calleeClass = callee.getDeclaringClass().getName().toString();
+            // Apply 2-CFA for any methods in the target framework, which includes internal helpers.
+            if (calleeClass.contains(targetFramework)) {
+              return targeted2CFA.getCalleeTarget(caller, site, callee, actualParameters);
+            }
+            return base.getCalleeTarget(caller, site, callee, actualParameters);
+          }
+
+          @Override
+          public IntSet getRelevantParameters(CGNode caller, CallSiteReference site) {
+            return base.getRelevantParameters(caller, site);
+          }
+        });
+
+    return builder;
   }
 
   /** A "fake" function name in the summaries that indicates that an API produces a new tensor. */
