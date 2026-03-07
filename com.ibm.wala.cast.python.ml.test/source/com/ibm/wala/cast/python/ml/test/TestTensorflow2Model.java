@@ -1161,6 +1161,59 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Test case exposing 1-CFA precision problem using {@code tf.data.Dataset.from_tensors} inside a
+   * shared wrapper function.
+   */
+  @Test
+  public void testDataset62()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset62.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_32, asList(new NumericDim(3))))));
+    test(
+        "tf2_test_dataset62.py",
+        "g",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_32, asList(new NumericDim(3))))));
+  }
+
+  /** Control test for {@link #testDataset62()}, utilizing only a single dataset. */
+  @Test
+  public void testDataset63()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset63.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_32, asList(new NumericDim(3))))));
+  }
+
+  /**
+   * Test case exposing 1-CFA precision problem using {@code tf.data.Dataset.range} inside a shared
+   * wrapper function.
+   */
+  @Test
+  public void testDataset64()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    // The range generator always produces int64, but the 1-CFA merge occurs anyway,
+    // though the type sets will both be {int64}. We verify it runs.
+    test("tf2_test_dataset64.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
+    test("tf2_test_dataset64.py", "g", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
+  }
+
+  /** Control test for {@link #testDataset64()}, utilizing only a single dataset. */
+  @Test
+  public void testDataset65()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset65.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT64)));
+  }
+
+  /**
    * Test enumerating a dataset (https://github.com/wala/ML/issues/140). The first element of the
    * tuple returned isn't a tensor.
    */
