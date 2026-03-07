@@ -93,6 +93,22 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
         }
       }
     }
+
+    OrdinalSet<InstanceKey> outputTypesPts =
+        this.getArgumentPointsToSet(
+            builder, Parameters.OUTPUT_TYPES.getIndex(), Parameters.OUTPUT_TYPES.getName());
+
+    if (outputTypesPts != null && !outputTypesPts.isEmpty()) {
+      for (InstanceKey ik : outputTypesPts) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        if (asin != null
+            && (asin.getConcreteType().getReference().equals(tuple)
+                || asin.getConcreteType().getReference().equals(list))) {
+          return true;
+        }
+      }
+    }
+
     return false;
   }
 
@@ -100,7 +116,7 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
    * {@inheritDoc}
    *
    * @implNote This implementation retrieves the shapes of the constituent element at the specified
-   *     index by inspecting the {@code output_signature}.
+   *     index by inspecting the {@code output_signature} or the legacy {@code output_shapes}.
    */
   @Override
   public Set<List<Dimension<?>>> getShapesForIndex(PropagationCallGraphBuilder builder, int index) {
@@ -143,6 +159,47 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
         return ret;
       }
     }
+
+    OrdinalSet<InstanceKey> outputShapesPts =
+        this.getArgumentPointsToSet(
+            builder, Parameters.OUTPUT_SHAPES.getIndex(), Parameters.OUTPUT_SHAPES.getName());
+
+    if (outputShapesPts != null && !outputShapesPts.isEmpty()) {
+      Set<List<Dimension<?>>> ret = HashSetFactory.make();
+      for (InstanceKey ik : outputShapesPts) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        if (asin != null
+            && (asin.getConcreteType().getReference().equals(tuple)
+                || asin.getConcreteType().getReference().equals(list))) {
+          OrdinalSet<InstanceKey> objectCatalogPointsToSet =
+              builder
+                  .getPointerAnalysis()
+                  .getPointsToSet(
+                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                          .getPointerKeyForObjectCatalog(asin));
+
+          for (InstanceKey catalogIK : objectCatalogPointsToSet) {
+            Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
+            if (fieldIndex != null && fieldIndex == index) {
+              FieldReference subscript =
+                  FieldReference.findOrCreate(
+                      Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+              IField f = builder.getClassHierarchy().resolveField(subscript);
+              if (f != null) {
+                PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+                ret.addAll(
+                    this.getShapesFromShapeArgument(
+                        builder, builder.getPointerAnalysis().getPointsToSet(pk)));
+              }
+            }
+          }
+        }
+      }
+      if (!ret.isEmpty()) {
+        return ret;
+      }
+    }
+
     return this.getShapes(builder);
   }
 
@@ -216,14 +273,15 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
     }
 
     // Default: No shape information could be extracted from generator arguments.
-    return Collections.emptySet();
+    // Default to scalar shape as missing output_shapes often implies it.
+    return Collections.singleton(Collections.emptyList());
   }
 
   /**
    * {@inheritDoc}
    *
    * @implNote This implementation retrieves the dtypes of the constituent element at the specified
-   *     index by inspecting the {@code output_signature}.
+   *     index by inspecting the {@code output_signature} or the legacy {@code output_types}.
    */
   @Override
   public Set<DType> getDTypesForIndex(PropagationCallGraphBuilder builder, int index) {
@@ -266,6 +324,47 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
         return ret;
       }
     }
+
+    OrdinalSet<InstanceKey> outputTypesPts =
+        this.getArgumentPointsToSet(
+            builder, Parameters.OUTPUT_TYPES.getIndex(), Parameters.OUTPUT_TYPES.getName());
+
+    if (outputTypesPts != null && !outputTypesPts.isEmpty()) {
+      Set<DType> ret = EnumSet.noneOf(DType.class);
+      for (InstanceKey ik : outputTypesPts) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        if (asin != null
+            && (asin.getConcreteType().getReference().equals(tuple)
+                || asin.getConcreteType().getReference().equals(list))) {
+          OrdinalSet<InstanceKey> objectCatalogPointsToSet =
+              builder
+                  .getPointerAnalysis()
+                  .getPointsToSet(
+                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                          .getPointerKeyForObjectCatalog(asin));
+
+          for (InstanceKey catalogIK : objectCatalogPointsToSet) {
+            Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
+            if (fieldIndex != null && fieldIndex == index) {
+              FieldReference subscript =
+                  FieldReference.findOrCreate(
+                      Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+              IField f = builder.getClassHierarchy().resolveField(subscript);
+              if (f != null) {
+                PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+                ret.addAll(
+                    this.getDTypesFromDTypeArgument(
+                        builder, builder.getPointerAnalysis().getPointsToSet(pk)));
+              }
+            }
+          }
+        }
+      }
+      if (!ret.isEmpty()) {
+        return ret;
+      }
+    }
+
     return this.getDTypes(builder);
   }
 
