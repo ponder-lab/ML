@@ -17,6 +17,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -142,14 +143,9 @@ public class OneHot extends Ones {
         this.getArgumentPointsToSet(
             builder, this.getIndicesParameterPosition(), getIndicesParameterName());
 
-    if (indicesPTS == null || indicesPTS.isEmpty())
-      throw new IllegalStateException(
-          "Empty points-to set for "
-              + INDICES.name().toLowerCase()
-              + " argument in "
-              + OneHot.class.getName()
-              + ": "
-              + this.getNode());
+    if (indicesPTS == null || indicesPTS.isEmpty()) {
+      return Collections.emptySet();
+    }
 
     Set<List<Dimension<?>>> indices = this.getShapesOfValue(builder, indicesPTS);
 
@@ -157,9 +153,9 @@ public class OneHot extends Ones {
         this.getArgumentPointsToSet(
             builder, this.getDepthParameterPosition(), getDepthParameterName());
 
-    if (depthPTS == null || depthPTS.isEmpty())
-      throw new IllegalStateException(
-          "No depth argument value found for " + OneHot.class.getName() + " tensor generation.");
+    if (depthPTS == null || depthPTS.isEmpty()) {
+      return Collections.emptySet();
+    }
 
     Set<Integer> possibleAxes = this.getPossibleAxes(builder);
 
