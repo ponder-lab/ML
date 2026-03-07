@@ -1017,6 +1017,77 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Test case based on {@link #testDataset38()}, exercising potential 1-CFA precision problem with
+   * Datasets by varying the shape (e.g., shape (2,) vs (2, 2)) instead of the dtype.
+   */
+  @Test
+  public void testDataset46()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset46.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+    test("tf2_test_dataset46.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_2_2_INT32)));
+  }
+
+  /** Control test for {@link #testDataset46()}, utilizing only a single dataset. */
+  @Test
+  public void testDataset47()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset47.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+  }
+
+  /**
+   * Test case based on {@link #testDataset40()}, exercising potential 1-CFA precision problem with
+   * Datasets by varying the shape using tf.constant.
+   */
+  @Test
+  public void testDataset48()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset48.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+    test("tf2_test_dataset48.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_2_2_INT32)));
+  }
+
+  /** Control test for {@link #testDataset48()}, utilizing only a single dataset. */
+  @Test
+  public void testDataset49()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset49.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+  }
+
+  /**
+   * Direct access test based on {@link #testDataset46()}, iterating over the dataset directly
+   * instead of through a shared function.
+   */
+  @Test
+  public void testDataset50()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset50.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+    test("tf2_test_dataset50.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_2_2_INT32)));
+  }
+
+  /** Control test for {@link #testDataset50()}, utilizing only a single dataset. */
+  @Test
+  public void testDataset51()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset51.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+  }
+
+  /**
+   * Direct access test based on {@link #testDataset48()}, using tf.constant and iterating directly.
+   */
+  @Test
+  public void testDataset52()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset52.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+    test("tf2_test_dataset52.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_2_2_INT32)));
+  }
+
+  /** Control test for {@link #testDataset52()}, utilizing only a single dataset. */
+  @Test
+  public void testDataset53()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset53.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+  }
+
+  /**
    * Test enumerating a dataset (https://github.com/wala/ML/issues/140). The first element of the
    * tuple returned isn't a tensor.
    */
