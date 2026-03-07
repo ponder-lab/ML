@@ -1124,6 +1124,43 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Direct access version of {@link #testDataset56()}, utilizing chained Datasets (shuffle)
+   * directly in the script without a shared helper function. This should NOT suffer from 1-CFA
+   * precision merging.
+   */
+  @Test
+  public void testDataset58()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset58.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test("tf2_test_dataset58.py", "g", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  /** Control test for {@link #testDataset58()}, utilizing only a single dataset. */
+  @Test
+  public void testDataset59()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset59.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  /**
+   * Direct access version of {@link #testDataset54()}, utilizing an explicit iterator directly in
+   * the script without a shared helper function.
+   */
+  @Test
+  public void testDataset60()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset60.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test("tf2_test_dataset60.py", "g", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  /** Control test for {@link #testDataset60()}, utilizing only a single dataset. */
+  @Test
+  public void testDataset61()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset61.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  /**
    * Test enumerating a dataset (https://github.com/wala/ML/issues/140). The first element of the
    * tuple returned isn't a tensor.
    */
