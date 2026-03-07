@@ -1214,6 +1214,42 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Test case exposing 1-CFA precision problem using {@code shuffle} inside a shared wrapper
+   * function, varying shapes instead of dtypes.
+   */
+  @Test
+  public void testDataset66()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset66.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+    test("tf2_test_dataset66.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_2_2_INT32)));
+  }
+
+  /** Control test for {@link #testDataset66()}, utilizing only a single dataset. */
+  @Test
+  public void testDataset67()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset67.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+  }
+
+  /**
+   * Test case exposing 1-CFA precision problem using {@code tf.data.Dataset.from_tensors} inside a
+   * shared wrapper function, varying shapes instead of dtypes.
+   */
+  @Test
+  public void testDataset68()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset68.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+    test("tf2_test_dataset68.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_2_2_INT32)));
+  }
+
+  /** Control test for {@link #testDataset68()}, utilizing only a single dataset. */
+  @Test
+  public void testDataset69()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset69.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+  }
+
+  /**
    * Test enumerating a dataset (https://github.com/wala/ML/issues/140). The first element of the
    * tuple returned isn't a tensor.
    */
