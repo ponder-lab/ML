@@ -62,8 +62,7 @@ import java.util.logging.Logger;
 
 public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeAnalysis> {
 
-  public static final String TENSORFLOW =
-      TensorFlowTypes.TENSORFLOW.getName().getClassName().toString();
+  public static final String TENSORFLOW = TensorFlowTypes.TENSORFLOW;
 
   private final String targetFramework;
 

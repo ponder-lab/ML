@@ -9,7 +9,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FIELD_REFERENCE_TO_DTYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.PLACEHOLDER;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
@@ -736,7 +736,8 @@ public abstract class TensorGenerator {
           InstanceKey tensorFlowIK =
               pointerAnalysis
                   .getHeapModel()
-                  .getInstanceKeyForAllocation(importNode, NewSiteReference.make(0, TENSORFLOW));
+                  .getInstanceKeyForAllocation(
+                      importNode, NewSiteReference.make(0, TENSORFLOW_TYPE));
 
           // Check dtype literals.
           for (Entry<FieldReference, DType> entry : FIELD_REFERENCE_TO_DTYPE.entrySet()) {

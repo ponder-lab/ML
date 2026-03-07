@@ -59,7 +59,9 @@ public class TensorFlowTypes extends PythonTypes {
     }
   }
 
-  public static final TypeReference TENSORFLOW =
+  public static final String TENSORFLOW = "tensorflow";
+
+  public static final TypeReference TENSORFLOW_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow"));
 
   public static final String DATA_PACKAGE_PREFIX = "Ltensorflow/data/";
