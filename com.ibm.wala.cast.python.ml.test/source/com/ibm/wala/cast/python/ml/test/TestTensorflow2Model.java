@@ -939,6 +939,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Test case that exercises a potential 1-CFA precision problem with Datasets by using a shared
+   * function to retrieve the first element from two different datasets.
+   */
+  @Test
+  public void testDataset38()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset38.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test("tf2_test_dataset38.py", "g", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  /**
    * Test enumerating a dataset (https://github.com/wala/ML/issues/140). The first element of the
    * tuple returned isn't a tensor.
    */
