@@ -4,6 +4,7 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -49,12 +50,12 @@ public class Model extends TensorGenerator {
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     // TODO: Will need https://github.com/wala/ML/issues/340 to be resolved.
-    return null;
+    return Collections.emptySet();
   }
 
   @Override
   protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // TODO: Will need https://github.com/wala/ML/issues/340 to be resolved.
-    return null;
+    return EnumSet.noneOf(DType.class);
   }
 }
