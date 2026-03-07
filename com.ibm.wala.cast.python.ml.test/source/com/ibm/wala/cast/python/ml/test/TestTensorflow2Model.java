@@ -284,6 +284,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_5_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(5)));
 
+  private static final TensorType TENSOR_64_5_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(64), new NumericDim(5)));
+
   private static final TensorType TENSOR_5_INT32 =
       new TensorType(INT_32, asList(new NumericDim(5)));
 
@@ -1404,7 +1407,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testModelAttributes()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_model_attributes.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_model_attributes.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32)));
   }
 
   /**
