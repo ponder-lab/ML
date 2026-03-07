@@ -593,8 +593,25 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, DENSE.getDeclaringClass())) return new Dense(source);
     else if (isType(calledFunction, FLATTEN.getDeclaringClass())) return new Flatten(source);
     else if (isType(calledFunction, MAX_POOL.getDeclaringClass())) return new MaxPool(source);
-    else
+    else {
+      if (source.getPointerKey() instanceof ReturnValueKey) {
+        Graph<PointsToSetVariable> assignmentGraph =
+            builder.getPropagationSystem().getAssignmentGraph();
+        for (Iterator<PointsToSetVariable> it = assignmentGraph.getPredNodes(source);
+            it.hasNext(); ) {
+          PointsToSetVariable pred = it.next();
+          try {
+            TensorGenerator gen = getGenerator(pred, builder);
+            if (gen != null) {
+              return gen;
+            }
+          } catch (IllegalArgumentException ex) {
+            // Ignore and continue searching other predecessors.
+          }
+        }
+      }
       throw new IllegalArgumentException(
           "Unknown call: " + calledFunction + " for source: " + source + ".");
+    }
   }
 }
