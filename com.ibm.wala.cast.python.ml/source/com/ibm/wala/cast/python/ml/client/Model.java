@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import java.util.Collections;
@@ -17,14 +18,30 @@ import java.util.Set;
  */
 public class Model extends TensorGenerator {
 
+  /** Parameter positions and names for {@code tf.keras.Model}. */
   protected enum Parameters {
+    /** The input(s) of the model. */
     INPUTS,
+    /** The output(s) of the model. */
     OUTPUTS,
-    NAME
+    /** Name of the model. */
+    NAME;
+
+    public String getName() {
+      return name().toLowerCase();
+    }
+
+    public int getIndex() {
+      return ordinal();
+    }
   }
 
   public Model(PointsToSetVariable source) {
     super(source);
+  }
+
+  public Model(CGNode node) {
+    super(node);
   }
 
   @Override

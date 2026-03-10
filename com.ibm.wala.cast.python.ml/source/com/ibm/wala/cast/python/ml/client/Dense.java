@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
@@ -22,18 +23,45 @@ import java.util.Set;
  */
 public class Dense extends TensorGenerator {
 
+  /** Parameter positions and names for {@code tf.layers.dense}. */
+  protected enum Parameters {
+    /** The input tensor. */
+    INPUTS,
+    /** Integer or Long, dimensionality of the output space. */
+    UNITS;
+
+    public String getName() {
+      return name().toLowerCase();
+    }
+
+    public int getIndex() {
+      return ordinal();
+    }
+  }
+
   public Dense(PointsToSetVariable source) {
     super(source);
   }
 
+  public Dense(CGNode node) {
+    super(node);
+  }
+
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    OrdinalSet<InstanceKey> inputPts = this.getArgumentPointsToSet(builder, 0, "inputs");
+    OrdinalSet<InstanceKey> inputPts =
+        this.getArgumentPointsToSet(
+            builder, Parameters.INPUTS.getIndex(), Parameters.INPUTS.getName());
+    LOGGER.fine("Dense inputPts size: " + inputPts.size());
     if (inputPts.isEmpty()) return Collections.emptySet();
 
     Set<List<Dimension<?>>> inputShapes = this.getShapesOfValue(builder, inputPts);
+    LOGGER.fine("Dense inputShapes: " + inputShapes);
 
-    OrdinalSet<InstanceKey> unitsPts = this.getArgumentPointsToSet(builder, 1, "units");
+    OrdinalSet<InstanceKey> unitsPts =
+        this.getArgumentPointsToSet(
+            builder, Parameters.UNITS.getIndex(), Parameters.UNITS.getName());
+    LOGGER.fine("Dense unitsPts size: " + (unitsPts == null ? 0 : unitsPts.size()));
     Set<Integer> unitsValues = HashSetFactory.make();
     if (unitsPts != null) {
       for (InstanceKey ik : unitsPts) {
@@ -43,6 +71,7 @@ public class Dense extends TensorGenerator {
         }
       }
     }
+    LOGGER.fine("Dense unitsValues: " + unitsValues);
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     for (List<Dimension<?>> inputShape : inputShapes) {
@@ -65,7 +94,9 @@ public class Dense extends TensorGenerator {
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // Derive dtype from the input tensor.
-    OrdinalSet<InstanceKey> inputPts = this.getArgumentPointsToSet(builder, 0, "inputs");
+    OrdinalSet<InstanceKey> inputPts =
+        this.getArgumentPointsToSet(
+            builder, Parameters.INPUTS.getIndex(), Parameters.INPUTS.getName());
     if (inputPts.isEmpty()) return EnumSet.noneOf(DType.class);
     return this.getDTypesOfValue(builder, inputPts);
   }
