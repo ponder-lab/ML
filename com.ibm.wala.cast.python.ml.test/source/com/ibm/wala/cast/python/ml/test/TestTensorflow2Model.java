@@ -1465,6 +1465,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_model_attributes6.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
   }
 
+  /**
+   * Tests precise dataflow tracing for Keras {@code Model} weights when using keyword arguments for
+   * both {@code Dense} layer instantiation and {@code Model} construction. Verifies that the
+   * weights are correctly identified and have the expected shapes {@code (64, 5)} and {@code (5,)}.
+   */
+  @Test
+  public void testModelAttributes7()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_attributes7.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32)));
+  }
+
   @Test
   public void testCallbacks()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
