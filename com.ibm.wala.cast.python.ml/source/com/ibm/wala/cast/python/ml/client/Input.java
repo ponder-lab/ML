@@ -6,6 +6,7 @@ import static java.util.logging.Logger.getLogger;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
@@ -48,6 +49,10 @@ public class Input extends Ones {
 
   public Input(PointsToSetVariable source) {
     super(source);
+  }
+
+  public Input(CGNode node) {
+    super(node);
   }
 
   @Override

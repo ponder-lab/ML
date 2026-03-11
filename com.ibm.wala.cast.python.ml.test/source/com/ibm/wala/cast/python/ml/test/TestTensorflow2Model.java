@@ -2448,44 +2448,52 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_1_NONE_INT32), 3, Set.of(TENSOR_1_NONE_INT32)));
   }
 
-  /**
-   * FIXME: Should not throw an {@link IllegalStateException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void testAdd72()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add72.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add72.py",
+        "add",
+        2,
+        3,
+        Map.of(
+            2, Set.of(TENSOR_4_NONE_NONE_NONE_STRING), 3, Set.of(TENSOR_4_NONE_NONE_NONE_STRING)));
   }
 
-  /**
-   * FIXME: Should not throw an {@link IllegalStateException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void testAdd73()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add73.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add73.py",
+        "add",
+        2,
+        3,
+        Map.of(
+            2, Set.of(TENSOR_4_NONE_NONE_NONE_STRING), 3, Set.of(TENSOR_4_NONE_NONE_NONE_STRING)));
   }
 
-  /**
-   * FIXME: Should not throw an {@link IllegalStateException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void testAdd74()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add74.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add74.py",
+        "add",
+        2,
+        3,
+        Map.of(
+            2, Set.of(TENSOR_4_NONE_NONE_NONE_STRING), 3, Set.of(TENSOR_4_NONE_NONE_NONE_STRING)));
   }
 
-  /**
-   * FIXME: Should not throw an {@link IllegalStateException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void testAdd75()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_add75.py", "add", 2, 2, Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_add75.py",
+        "add",
+        2,
+        3,
+        Map.of(
+            2, Set.of(TENSOR_4_NONE_NONE_NONE_STRING), 3, Set.of(TENSOR_4_NONE_NONE_NONE_STRING)));
   }
 
   @Test
@@ -2576,66 +2584,50 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_3_NONE_NONE_INT32), 3, Set.of(TENSOR_3_NONE_NONE_INT32)));
   }
 
-  /**
-   * FIXME: Should not throw an {@link IllegalStateException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void testAdd84()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_add84.py",
         "add",
         2,
-        2,
+        3,
         Map.of(
             2, Set.of(TENSOR_4_NONE_NONE_NONE_STRING), 3, Set.of(TENSOR_4_NONE_NONE_NONE_STRING)));
   }
 
-  /**
-   * FIXME: Should not throw an {@link IllegalStateException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void testAdd85()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_add85.py",
         "add",
         2,
-        2,
+        3,
         Map.of(
             2, Set.of(TENSOR_4_NONE_NONE_NONE_STRING), 3, Set.of(TENSOR_4_NONE_NONE_NONE_STRING)));
   }
 
-  /**
-   * FIXME: Should not throw an {@link IllegalStateException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void testAdd86()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_add86.py",
         "add",
         2,
-        2,
+        3,
         Map.of(
             2, Set.of(TENSOR_4_NONE_NONE_NONE_STRING), 3, Set.of(TENSOR_4_NONE_NONE_NONE_STRING)));
   }
 
-  /**
-   * FIXME: Should not throw an {@link IllegalStateException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void testAdd87()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_add87.py",
         "add",
         2,
-        2,
+        3,
         Map.of(
             2, Set.of(TENSOR_4_NONE_NONE_NONE_STRING), 3, Set.of(TENSOR_4_NONE_NONE_NONE_STRING)));
   }

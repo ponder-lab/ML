@@ -19,7 +19,7 @@ import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
-import com.ibm.wala.cast.python.loader.PythonLoader.PythonClass;
+import com.ibm.wala.cast.python.loader.IPythonClass;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
@@ -62,7 +62,7 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
 
       IClassHierarchy cha = receiver.getClassHierarchy();
       if (cha.isSubclassOf(receiver, cha.lookupClass(PythonTypes.object))
-          && receiver instanceof PythonClass) {
+          && receiver instanceof IPythonClass) {
         if (!ctors.containsKey(receiver)) {
           TypeReference ctorRef =
               TypeReference.findOrCreate(
@@ -82,7 +82,7 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
               insts.NewInstruction(pc, inst, NewSiteReference.make(pc, PythonTypes.object)));
           pc++;
 
-          PythonClass x = (PythonClass) receiver;
+          IPythonClass x = (IPythonClass) receiver;
           for (TypeReference r : x.getInnerReferences()) {
             int orig_t = v++;
             String typeName = r.getName().toString();

@@ -141,7 +141,7 @@ public class TensorGeneratorFactory {
    *
    * @param source the points-to set variable representing the source of the function call
    * @param builder the propagation call graph builder used for the analysis
-   * @return the resolved type reference of the function
+   * @return the resolved {@link TypeReference}, or {@code null} if it cannot be resolved.
    */
   private static TypeReference getFunction(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
@@ -151,6 +151,7 @@ public class TensorGeneratorFactory {
       CGNode node = lpk.getNode();
       int vn = lpk.getValueNumber();
       SSAInstruction def = node.getDU().getDef(vn);
+
       if (def instanceof SSAAbstractInvokeInstruction) {
         SSAAbstractInvokeInstruction call = (SSAAbstractInvokeInstruction) def;
         TypeReference declaredClass = call.getCallSite().getDeclaredTarget().getDeclaringClass();
@@ -219,7 +220,7 @@ public class TensorGeneratorFactory {
    * @param builder The {@link PropagationCallGraphBuilder} for the current analysis.
    * @return The {@link PointsToSetVariable} corresponding to the creation site of the value.
    */
-  private static PointsToSetVariable findCreator(
+  public static PointsToSetVariable findCreator(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
     Graph<PointsToSetVariable> assignmentGraph =
         builder.getPropagationSystem().getAssignmentGraph();
@@ -258,6 +259,7 @@ public class TensorGeneratorFactory {
         }
       }
     }
+
     LOGGER.fine("findCreator fallback returning original source: " + source);
     return source;
   }
