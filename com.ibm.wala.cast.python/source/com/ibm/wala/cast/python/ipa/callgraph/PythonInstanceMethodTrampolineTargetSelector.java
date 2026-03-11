@@ -295,6 +295,8 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
    * @return True iff the given {@link IClass} represents a Python callable object.
    */
   private boolean isCallable(IClass receiver) {
-    return receiver != null && receiver.getReference().equals(PythonTypes.object);
+    return receiver != null
+        && (receiver.getReference().equals(PythonTypes.object)
+            || receiver instanceof com.ibm.wala.ipa.summaries.BypassSyntheticClass);
   }
 }

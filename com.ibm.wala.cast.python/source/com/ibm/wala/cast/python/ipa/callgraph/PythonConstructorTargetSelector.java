@@ -31,12 +31,15 @@ import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.MethodTargetSelector;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.ipa.summaries.BypassSyntheticClass;
 import com.ibm.wala.ssa.SSAInstructionFactory;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.Pair;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.logging.Logger;
@@ -62,7 +65,7 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
 
       IClassHierarchy cha = receiver.getClassHierarchy();
       if (cha.isSubclassOf(receiver, cha.lookupClass(PythonTypes.object))
-          && receiver instanceof IPythonClass) {
+          && (receiver instanceof IPythonClass || receiver instanceof BypassSyntheticClass)) {
         if (!ctors.containsKey(receiver)) {
           TypeReference ctorRef =
               TypeReference.findOrCreate(
@@ -82,8 +85,22 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
               insts.NewInstruction(pc, inst, NewSiteReference.make(pc, PythonTypes.object)));
           pc++;
 
-          IPythonClass x = (IPythonClass) receiver;
-          for (TypeReference r : x.getInnerReferences()) {
+          Collection<TypeReference> innerReferences = Collections.emptyList();
+          Collection<MethodReference> methodReferences = new ArrayList<>();
+
+          if (receiver instanceof IPythonClass) {
+            IPythonClass x = (IPythonClass) receiver;
+            innerReferences = x.getInnerReferences();
+            methodReferences = x.getMethodReferences();
+          } else {
+            for (IMethod m : receiver.getDeclaredMethods()) {
+              if (!m.isInit() && !m.isClinit()) {
+                methodReferences.add(m.getReference());
+              }
+            }
+          }
+
+          for (TypeReference r : innerReferences) {
             int orig_t = v++;
             String typeName = r.getName().toString();
             typeName = typeName.substring(typeName.lastIndexOf('/') + 1);
@@ -98,7 +115,7 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
             pc++;
           }
 
-          for (MethodReference r : x.getMethodReferences()) {
+          for (MethodReference r : methodReferences) {
             int f = v++;
             ctor.addStatement(
                 insts.NewInstruction(
