@@ -31,7 +31,6 @@ import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.MethodTargetSelector;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
-import com.ibm.wala.ipa.summaries.BypassSyntheticClass;
 import com.ibm.wala.ssa.SSAInstructionFactory;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
@@ -65,7 +64,7 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
 
       IClassHierarchy cha = receiver.getClassHierarchy();
       if (cha.isSubclassOf(receiver, cha.lookupClass(PythonTypes.object))
-          && (receiver instanceof IPythonClass || receiver instanceof BypassSyntheticClass)) {
+          && (receiver instanceof IPythonClass)) {
         if (!ctors.containsKey(receiver)) {
           TypeReference ctorRef =
               TypeReference.findOrCreate(
