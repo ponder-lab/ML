@@ -34,6 +34,7 @@ import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKeyFactory;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.ipa.summaries.BypassSyntheticClass;
 import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.types.ClassLoaderReference;
 import com.ibm.wala.types.FieldReference;
@@ -297,6 +298,6 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
   private boolean isCallable(IClass receiver) {
     return receiver != null
         && (receiver.getReference().equals(PythonTypes.object)
-            || receiver instanceof com.ibm.wala.ipa.summaries.BypassSyntheticClass);
+            || receiver instanceof BypassSyntheticClass);
   }
 }
