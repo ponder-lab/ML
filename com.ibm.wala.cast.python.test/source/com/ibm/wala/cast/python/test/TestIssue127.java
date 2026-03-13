@@ -1,20 +1,25 @@
 package com.ibm.wala.cast.python.test;
 
-import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.SSAPropagationCallGraphBuilder;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.File;
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.junit.Test;
@@ -34,15 +39,14 @@ public class TestIssue127 extends TestJythonCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     return new PythonAnalysisEngine<Void>(pythonPath) {
       @Override
-      public PythonSSAPropagationCallGraphBuilder defaultCallGraphBuilder()
-          throws IllegalArgumentException {
-        try {
-          PythonSSAPropagationCallGraphBuilder builder = super.defaultCallGraphBuilder();
-          addSummaryBypassLogic(getOptions(), "issue127.xml");
-          return builder;
-        } catch (Exception e) {
-          throw new RuntimeException(e);
-        }
+      protected void addBypassLogic(
+          com.ibm.wala.ipa.cha.IClassHierarchy cha,
+          com.ibm.wala.ipa.callgraph.AnalysisOptions options) {
+        super.addBypassLogic(cha, options);
+        addSummaryBypassLogic(options, "issue127.xml");
+        addSummaryBypassLogic(options, "issue127b.xml");
+        addSummaryBypassLogic(options, "issue127c.xml");
+        addSummaryBypassLogic(options, "issue127d.xml");
       }
 
       @Override
@@ -61,7 +65,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
   @Test
   public void testIssue127()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    PythonAnalysisEngine<?> engine = makeEngine("issue127.py");
+    PythonAnalysisEngine<?> engine = makeEngine("test_issue127.py");
     PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
     CallGraph CG = builder.makeCallGraph(builder.getOptions());
 
@@ -77,26 +81,227 @@ public class TestIssue127 extends TestJythonCallGraphShape {
     boolean found = false;
 
     for (CGNode node : CG) {
-      if (node.getMethod().getDeclaringClass().getName().toString().equals("Lscript issue127.py")) {
+      if (node.getMethod()
+          .getDeclaringClass()
+          .getName()
+          .toString()
+          .equals("Lscript test_issue127.py")) {
         for (Iterator<CGNode> it = CG.getSuccNodes(node); it.hasNext(); ) {
           CGNode callee = it.next();
-          logger.info("Found callee: " + callee.getMethod().getSignature());
-          if (callee.getMethod().getDeclaringClass().getName().toString().equals("Lissue127/C")) {
-            // check if it calls __call__
-            for (Iterator<CGNode> it2 = CG.getSuccNodes(callee); it2.hasNext(); ) {
-              CGNode callee2 = it2.next();
-              logger.info("Found callee2: " + callee2.getMethod().getSignature());
-            }
-          }
-          if (callee.getMethod().getDeclaringClass().getName().toString().equals("Lissue127/C")
-              && callee.getMethod().getName().toString().equals("__call__")) {
+          String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
+          logger.info("Found callee: " + calleeName + "." + callee.getMethod().getName());
+          if ((calleeName.endsWith("/C")
+                  || calleeName.contains("/C/")
+                  || calleeName.contains("/C/__call__"))
+              && callee.getMethod().getName().toString().matches("(__call__|trampoline.*)")) {
             found = true;
           }
         }
       }
     }
 
-    // FIXME: Change to assertTrue once https://github.com/wala/ML/issues/127 is fixed.
-    assertFalse("Expecting to find __call__ method trampoline.", found);
+    assertTrue("Expecting to find __call__ method trampoline.", found);
+  }
+
+  /**
+   * Test explicit method call on a synthetic object.
+   *
+   * @see <a href="https://github.com/wala/ML/issues/127">Issue 127</a>
+   */
+  @Test
+  public void testIssue127b()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("test_issue127b.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+
+    if (logger.isLoggable(Level.FINE)) {
+      CAstCallGraphUtil.AVOID_DUMP.set(false);
+      CAstCallGraphUtil.dumpCG(
+          ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
+          builder.getPointerAnalysis(),
+          CG);
+      logger.fine("Call graph:\n" + CG);
+    }
+
+    boolean found = false;
+
+    for (CGNode node : CG) {
+      if (node.getMethod()
+          .getDeclaringClass()
+          .getName()
+          .toString()
+          .equals("Lscript test_issue127b.py")) {
+        for (Iterator<CGNode> it = CG.getSuccNodes(node); it.hasNext(); ) {
+          CGNode callee = it.next();
+          String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
+          logger.info("Found callee: " + calleeName + "." + callee.getMethod().getName());
+          if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
+              && callee.getMethod().getName().toString().matches("(foo|trampoline.*)")) {
+            found = true;
+          }
+        }
+      }
+    }
+
+    assertTrue("Expecting to find foo method call.", found);
+  }
+
+  /**
+   * Test explicit method call on a real (non-synthetic) object.
+   *
+   * <p>This is a control case for comparison with {@link #testIssue127b()}.
+   */
+  @Test
+  public void testIssue127bReal()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("test_issue127b_real.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+
+    if (logger.isLoggable(Level.FINE)) {
+      CAstCallGraphUtil.AVOID_DUMP.set(false);
+      CAstCallGraphUtil.dumpCG(
+          ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
+          builder.getPointerAnalysis(),
+          CG);
+      logger.fine("Call graph:\n" + CG);
+    }
+
+    boolean found = false;
+
+    for (CGNode node : CG) {
+      if (node.getMethod()
+          .getDeclaringClass()
+          .getName()
+          .toString()
+          .equals("Lscript test_issue127b_real.py")) {
+        for (Iterator<CGNode> it = CG.getSuccNodes(node); it.hasNext(); ) {
+          CGNode callee = it.next();
+          String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
+          logger.info("Found callee: " + calleeName + "." + callee.getMethod().getName());
+          if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
+              && callee.getMethod().getName().toString().matches("(foo|trampoline.*)")) {
+            found = true;
+          }
+        }
+      }
+    }
+
+    assertTrue("Expecting to find foo method call.", found);
+  }
+
+  /**
+   * Test precision when calling the same method on two different objects.
+   *
+   * @see <a href="https://github.com/wala/ML/issues/127">Issue 127</a>
+   */
+  @Test
+  public void testIssue127c()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("test_issue127c.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+
+    if (logger.isLoggable(Level.FINE)) {
+      CAstCallGraphUtil.AVOID_DUMP.set(false);
+      CAstCallGraphUtil.dumpCG(
+          ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
+          builder.getPointerAnalysis(),
+          CG);
+      logger.fine("Call graph:\n" + CG);
+    }
+
+    int foundCount = 0;
+    Set<Object> argValues = new HashSet<>();
+    for (CGNode node : CG) {
+      if (node.getMethod()
+          .getDeclaringClass()
+          .getName()
+          .toString()
+          .equals("Lscript test_issue127c.py")) {
+        for (Iterator<CGNode> it = CG.getSuccNodes(node); it.hasNext(); ) {
+          CGNode callee = it.next();
+          String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
+          if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
+              && callee.getMethod().getName().toString().matches("(foo|trampoline.*)")) {
+            foundCount++;
+
+            // Check parameter 2 (index 2 for positional param 'a', self is param 1)
+            int[] params = callee.getIR().getSymbolTable().getParameterValueNumbers();
+            if (params.length > 1) {
+              PointerKey pk =
+                  builder.getPointerKeyFactory().getPointerKeyForLocal(callee, params[1]);
+              for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(pk)) {
+                if (ik instanceof ConstantKey) {
+                  argValues.add(((ConstantKey<?>) ik).getValue());
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    assertTrue("Expecting to find foo method calls for both objects.", foundCount >= 2);
+    assertTrue(
+        "Expecting to find distinct arguments 5 and 10 tracked by pointer analysis.",
+        argValues.contains(5) && argValues.contains(10));
+  }
+
+  /**
+   * Test precision when calling the same method on an object directly and via variable.
+   *
+   * @see <a href="https://github.com/wala/ML/issues/127">Issue 127</a>
+   */
+  @Test
+  public void testIssue127d()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("test_issue127d.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+
+    if (logger.isLoggable(Level.FINE)) {
+      CAstCallGraphUtil.AVOID_DUMP.set(false);
+      CAstCallGraphUtil.dumpCG(
+          ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
+          builder.getPointerAnalysis(),
+          CG);
+      logger.fine("Call graph:\n" + CG);
+    }
+
+    int foundCount = 0;
+    Set<Object> argValues = new HashSet<>();
+    for (CGNode node : CG) {
+      if (node.getMethod()
+          .getDeclaringClass()
+          .getName()
+          .toString()
+          .equals("Lscript test_issue127d.py")) {
+        for (Iterator<CGNode> it = CG.getSuccNodes(node); it.hasNext(); ) {
+          CGNode callee = it.next();
+          String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
+          if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
+              && callee.getMethod().getName().toString().matches("(foo|trampoline.*)")) {
+            foundCount++;
+
+            int[] params = callee.getIR().getSymbolTable().getParameterValueNumbers();
+            if (params.length > 1) {
+              PointerKey pk =
+                  builder.getPointerKeyFactory().getPointerKeyForLocal(callee, params[1]);
+              for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(pk)) {
+                if (ik instanceof ConstantKey) {
+                  argValues.add(((ConstantKey<?>) ik).getValue());
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    assertTrue(
+        "Expecting to find foo method calls for direct and variable calls.", foundCount >= 2);
+    assertTrue(
+        "Expecting to find distinct arguments 5 and 3 tracked by pointer analysis.",
+        argValues.contains(5) && argValues.contains(3));
   }
 }
