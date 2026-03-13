@@ -1,3 +1,13 @@
+/*
+ * Copyright (c) 2018 IBM Corporation.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ */
 package com.ibm.wala.cast.python.client;
 
 import static java.util.Collections.emptyList;
@@ -14,8 +24,12 @@ import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuild
 import com.ibm.wala.cast.python.ipa.callgraph.PythonScopeMappingInstanceKeys;
 import com.ibm.wala.cast.python.ipa.summaries.BuiltinFunctions;
 import com.ibm.wala.cast.python.ipa.summaries.PythonComprehensionTrampolines;
+import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
+import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
+import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSuper;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
+import com.ibm.wala.cast.python.loader.IPythonClass;
 import com.ibm.wala.cast.python.loader.PythonLoaderFactory;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
@@ -25,6 +39,7 @@ import com.ibm.wala.classLoader.IClassLoader;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.classLoader.Module;
+import com.ibm.wala.classLoader.NewSiteReference;
 import com.ibm.wala.classLoader.SyntheticClass;
 import com.ibm.wala.client.AbstractAnalysisEngine;
 import com.ibm.wala.core.util.strings.Atom;
@@ -49,13 +64,19 @@ import com.ibm.wala.ipa.cha.SeqClassHierarchyFactory;
 import com.ibm.wala.ipa.summaries.BypassClassTargetSelector;
 import com.ibm.wala.ipa.summaries.BypassMethodTargetSelector;
 import com.ibm.wala.ipa.summaries.BypassSyntheticClassLoader;
+import com.ibm.wala.ipa.summaries.MethodSummary;
 import com.ibm.wala.ipa.summaries.XMLMethodSummaryReader;
 import com.ibm.wala.shrike.shrikeBT.Constants;
 import com.ibm.wala.ssa.IRFactory;
+import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSAInstructionFactory;
+import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAOptions;
 import com.ibm.wala.ssa.SSAOptions.DefaultValues;
+import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.ClassLoaderReference;
+import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.Selector;
 import com.ibm.wala.types.TypeReference;
@@ -67,9 +88,12 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -185,21 +209,268 @@ public abstract class PythonAnalysisEngine<T>
     return cha;
   }
 
+  private abstract class AbstractPythonSyntheticClass extends SyntheticClass
+      implements IPythonClass {
+    public AbstractPythonSyntheticClass(TypeReference T, IClassHierarchy cha) {
+      super(T, cha);
+    }
+  }
+
   protected void addSummaryBypassLogic(AnalysisOptions options, String summary) {
     IClassHierarchy cha = getClassHierarchy();
     XMLMethodSummaryReader xml =
         new XMLMethodSummaryReader(getClass().getClassLoader().getResourceAsStream(summary), scope);
+
+    Map<MethodReference, MethodSummary> summaries = new HashMap<>(xml.getSummaries());
+    BypassSyntheticClassLoader ldr =
+        (BypassSyntheticClassLoader) cha.getLoader(scope.getSyntheticLoader());
+
+    Map<TypeReference, List<MethodReference>> classToFunDoRefs = new HashMap<>();
+
+    // Pass 1: Transform methods to function classes
+    for (MethodSummary s : xml.getSummaries().values()) {
+      MethodReference mr = s.getMethod();
+      String methodName = mr.getName().toString();
+      if (!methodName.equals("do")
+          && !methodName.equals("import")
+          && !methodName.equals("__init__")) {
+        TypeReference t = mr.getDeclaringClass();
+        TypeReference funClsRef =
+            TypeReference.findOrCreate(
+                t.getClassLoader(), t.getName().toString() + "/" + methodName);
+        MethodReference funDoRef =
+            MethodReference.findOrCreate(funClsRef, AstMethodReference.fnSelector);
+
+        List<MethodReference> funDoRefs =
+            classToFunDoRefs.computeIfAbsent(t, k -> new ArrayList<>());
+        funDoRefs.add(funDoRef);
+
+        PythonSummary funSummary = new PythonSummary(funDoRef, s.getNumberOfParameters());
+        for (SSAInstruction inst : s.getStatements())
+          if (inst != null) funSummary.addStatement(inst);
+        funSummary.setValueNames(s.getValueNames());
+        summaries.put(funDoRef, funSummary);
+        summaries.remove(mr);
+
+        ldr.registerClass(
+            funClsRef.getName(),
+            new SyntheticClass(funClsRef, cha) {
+              @Override
+              public IClassLoader getClassLoader() {
+                return ldr;
+              }
+
+              @Override
+              public boolean isPublic() {
+                return true;
+              }
+
+              @Override
+              public int getModifiers() {
+                return Constants.ACC_PUBLIC;
+              }
+
+              @Override
+              public IClass getSuperclass() {
+                return cha.lookupClass(PythonTypes.CodeBody);
+              }
+
+              @Override
+              public Collection<? extends IClass> getDirectInterfaces() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public Collection<IClass> getAllImplementedInterfaces() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public IMethod getMethod(Selector selector) {
+                return selector.equals(AstMethodReference.fnSelector)
+                    ? new PythonSummarizedFunction(funDoRef, funSummary, this)
+                    : null;
+              }
+
+              @Override
+              public IField getField(Atom name) {
+                return null;
+              }
+
+              @Override
+              public IMethod getClassInitializer() {
+                return null;
+              }
+
+              @Override
+              public Collection<? extends IMethod> getDeclaredMethods() {
+                return Collections.singleton(getMethod(AstMethodReference.fnSelector));
+              }
+
+              @Override
+              public Collection<IField> getAllInstanceFields() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public Collection<IField> getAllStaticFields() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public Collection<IField> getAllFields() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public Collection<? extends IMethod> getAllMethods() {
+                return getDeclaredMethods();
+              }
+
+              @Override
+              public Collection<IField> getDeclaredInstanceFields() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public Collection<IField> getDeclaredStaticFields() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public boolean isReferenceType() {
+                return true;
+              }
+
+              @Override
+              public boolean isPrivate() {
+                return false;
+              }
+            });
+      }
+    }
+
+    // Pass 2: Identify and rewrite constructors to inject trampolines
+    for (MethodReference mr : new ArrayList<>(summaries.keySet())) {
+      if (mr.getName().toString().equals("do")) {
+        MethodSummary s = summaries.get(mr);
+        int returnVn = -1;
+        TypeReference instanceType = null;
+        for (SSAInstruction inst : s.getStatements()) {
+          if (inst != null) {
+            if (inst instanceof SSANewInstruction) {
+              instanceType = ((SSANewInstruction) inst).getNewSite().getDeclaredType();
+              returnVn = ((SSANewInstruction) inst).getDef();
+            } else if (inst.toString().contains(" = new <")) {
+              try {
+                java.lang.reflect.Method m = inst.getClass().getMethod("getNewSite");
+                NewSiteReference site = (NewSiteReference) m.invoke(inst);
+                instanceType = site.getDeclaredType();
+                m = inst.getClass().getMethod("getDef");
+                returnVn = (Integer) m.invoke(inst);
+              } catch (Exception e) {
+              }
+            }
+          }
+        }
+
+        // Check if it's the 2-instruction 'new Lobject; return' summary generated by XML reader
+        boolean isAutoGenerated = false;
+        int stmtCount = 0;
+        for (SSAInstruction inst : s.getStatements()) if (inst != null) stmtCount++;
+        if (stmtCount == 2 && instanceType != null && instanceType.equals(PythonTypes.object)) {
+          isAutoGenerated = true;
+        }
+
+        if (isAutoGenerated && xml.getAllocatableClasses().contains(mr.getDeclaringClass())) {
+          // Remove it from the bypass map so PythonConstructorTargetSelector can take over and
+          // inject trampolines
+          summaries.remove(mr);
+        } else if (instanceType != null && classToFunDoRefs.containsKey(instanceType)) {
+          // It's an explicit constructor, rewrite it to inject trampolines
+          PythonSummary newSummary = new PythonSummary(s.getMethod(), s.getNumberOfParameters());
+          newSummary.setValueNames(s.getValueNames());
+          SSAReturnInstruction returnInst = null;
+          for (SSAInstruction inst : s.getStatements()) {
+            if (inst instanceof SSAReturnInstruction) returnInst = (SSAReturnInstruction) inst;
+            else if (inst != null) newSummary.addStatement(inst);
+          }
+
+          int v = 2000, pc = newSummary.getNumberOfStatements();
+          SSAInstructionFactory insts = PythonLanguage.Python.instructionFactory();
+          for (MethodReference funDoRef : classToFunDoRefs.get(instanceType)) {
+            TypeReference funClsRef = funDoRef.getDeclaringClass();
+            int funObjVn = v++, trampVn = v++;
+            newSummary.addStatement(
+                insts.NewInstruction(pc++, funObjVn, NewSiteReference.make(pc, funClsRef)));
+            newSummary.addStatement(
+                insts.NewInstruction(
+                    pc++,
+                    trampVn,
+                    NewSiteReference.make(
+                        pc, PythonInstanceMethodTrampoline.findOrCreate(funClsRef, cha))));
+            newSummary.addStatement(
+                insts.PutInstruction(
+                    pc++,
+                    trampVn,
+                    returnVn,
+                    FieldReference.findOrCreate(
+                        PythonTypes.Root,
+                        Atom.findOrCreateUnicodeAtom("$self"),
+                        PythonTypes.Root)));
+            newSummary.addStatement(
+                insts.PutInstruction(
+                    pc++,
+                    trampVn,
+                    funObjVn,
+                    FieldReference.findOrCreate(
+                        PythonTypes.Root,
+                        Atom.findOrCreateUnicodeAtom("$function"),
+                        PythonTypes.Root)));
+
+            String fieldName =
+                funClsRef
+                    .getName()
+                    .toString()
+                    .substring(funClsRef.getName().toString().lastIndexOf('/') + 1);
+            newSummary.addStatement(
+                insts.PutInstruction(
+                    pc++,
+                    returnVn,
+                    trampVn,
+                    FieldReference.findOrCreate(
+                        PythonTypes.Root,
+                        Atom.findOrCreateUnicodeAtom(fieldName),
+                        PythonTypes.Root)));
+
+            // For callable objects, also bind the trampoline to the 'do' field to handle implicit
+            // c() calls which are often translated to c.do()
+            if (fieldName.equals("__call__") || fieldName.equals("call")) {
+              newSummary.addStatement(
+                  insts.PutInstruction(
+                      pc++,
+                      returnVn,
+                      trampVn,
+                      FieldReference.findOrCreate(
+                          PythonTypes.Root, Atom.findOrCreateUnicodeAtom("do"), PythonTypes.Root)));
+            }
+          }
+          if (returnInst != null) newSummary.addStatement(returnInst);
+          summaries.put(s.getMethod(), newSummary);
+        }
+      }
+    }
+
+    // Pass 3: Register all synthetic classes as AbstractPythonSyntheticClass
     for (TypeReference t : xml.getAllocatableClasses()) {
-      BypassSyntheticClassLoader ldr =
-          (BypassSyntheticClassLoader) cha.getLoader(scope.getSyntheticLoader());
       ldr.registerClass(
           t.getName(),
-          new SyntheticClass(t, cha) {
+          new AbstractPythonSyntheticClass(t, cha) {
             private final Map<Atom, IField> fields = HashMapFactory.make();
 
             @Override
             public IClassLoader getClassLoader() {
-              return cha.getLoader(cha.getScope().getSyntheticLoader());
+              return ldr;
             }
 
             @Override
@@ -213,13 +484,13 @@ public abstract class PythonAnalysisEngine<T>
             }
 
             @Override
-            public int getModifiers() throws UnsupportedOperationException {
+            public int getModifiers() {
               return Constants.ACC_PUBLIC;
             }
 
             @Override
             public IClass getSuperclass() {
-              return cha.lookupClass(PythonTypes.CodeBody);
+              return cha.lookupClass(PythonTypes.object);
             }
 
             @Override
@@ -234,31 +505,32 @@ public abstract class PythonAnalysisEngine<T>
 
             @Override
             public IMethod getMethod(Selector selector) {
-              // TODO Auto-generated method stub
+              for (IMethod m : getDeclaredMethods()) if (m.getSelector().equals(selector)) return m;
               return null;
             }
 
             @Override
             public IField getField(Atom name) {
-              if (!fields.containsKey(name)) {
+              if (!fields.containsKey(name))
                 fields.put(
                     name,
                     new AstDynamicField(
                         false, cha.lookupClass(PythonTypes.Root), name, PythonTypes.Root));
-              }
               return fields.get(name);
             }
 
             @Override
             public IMethod getClassInitializer() {
-              // TODO Auto-generated method stub
               return null;
             }
 
             @Override
             public Collection<? extends IMethod> getDeclaredMethods() {
-              // TODO Auto-generated method stub
-              return null;
+              Set<IMethod> methods = new HashSet<>();
+              for (MethodSummary s : summaries.values())
+                if (s.getMethod().getDeclaringClass().equals(getReference()))
+                  methods.add(new PythonSummarizedFunction(s.getMethod(), s, this));
+              return methods;
             }
 
             @Override
@@ -278,8 +550,7 @@ public abstract class PythonAnalysisEngine<T>
 
             @Override
             public Collection<? extends IMethod> getAllMethods() {
-              // TODO Auto-generated method stub
-              return null;
+              return getDeclaredMethods();
             }
 
             @Override
@@ -296,21 +567,27 @@ public abstract class PythonAnalysisEngine<T>
             public boolean isReferenceType() {
               return true;
             }
+
+            @Override
+            public Collection<MethodReference> getMethodReferences() {
+              return classToFunDoRefs.getOrDefault(getReference(), Collections.emptyList());
+            }
+
+            @Override
+            public Collection<TypeReference> getInnerReferences() {
+              return Collections.emptySet();
+            }
           });
     }
 
     MethodTargetSelector targetSelector = options.getMethodTargetSelector();
     targetSelector =
-        new BypassMethodTargetSelector(
-            targetSelector, xml.getSummaries(), xml.getIgnoredPackages(), cha);
+        new BypassMethodTargetSelector(targetSelector, summaries, xml.getIgnoredPackages(), cha);
     options.setSelector(targetSelector);
 
     ClassTargetSelector cs =
         new BypassClassTargetSelector(
-            options.getClassTargetSelector(),
-            xml.getAllocatableClasses(),
-            cha,
-            cha.getLoader(scope.getSyntheticLoader()));
+            options.getClassTargetSelector(), xml.getAllocatableClasses(), cha, ldr);
     options.setSelector(cs);
   }
 
@@ -330,6 +607,10 @@ public abstract class PythonAnalysisEngine<T>
   }
 
   @Override
+  public IClassHierarchy getClassHierarchy() {
+    return super.getClassHierarchy();
+  }
+
   protected Iterable<Entrypoint> makeDefaultEntrypoints(IClassHierarchy cha) {
     Set<Entrypoint> result = HashSetFactory.make();
     cha.forEach(
@@ -341,6 +622,10 @@ public abstract class PythonAnalysisEngine<T>
           }
         });
     return result;
+  }
+
+  public PythonSSAPropagationCallGraphBuilder getCachedCallGraphBuilder() {
+    return this.builder;
   }
 
   @Override
@@ -381,10 +666,6 @@ public abstract class PythonAnalysisEngine<T>
     new PythonSuper(cha).handleSuperCalls(builder, options);
 
     return this.builder = builder;
-  }
-
-  public PythonSSAPropagationCallGraphBuilder getCachedCallGraphBuilder() {
-    return this.builder;
   }
 
   protected PythonSSAPropagationCallGraphBuilder makeBuilder(

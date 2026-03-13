@@ -21,11 +21,14 @@ import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
+import com.ibm.wala.cast.python.loader.IPythonClass;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IMethod;
+import com.ibm.wala.classLoader.SyntheticClass;
 import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.MethodTargetSelector;
@@ -38,6 +41,8 @@ import com.ibm.wala.ipa.summaries.BypassSyntheticClass;
 import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.types.ClassLoaderReference;
 import com.ibm.wala.types.FieldReference;
+import com.ibm.wala.types.MethodReference;
+import com.ibm.wala.types.Selector;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashMapFactory;
@@ -189,14 +194,17 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
     for (int j = 1; j < call.getNumberOfPositionalParameters(); j++) params[i++] = j + 1;
 
     int ki = 0, ji = call.getNumberOfPositionalParameters() + 1;
+    @SuppressWarnings({"unchecked", "rawtypes"})
     Pair<String, Integer>[] keys = new Pair[0];
 
     if (call.getKeywords() != null) {
-      keys = new Pair[call.getKeywords().size()];
+      @SuppressWarnings({"unchecked", "rawtypes"})
+      Pair<String, Integer>[] tmp = (Pair<String, Integer>[]) new Pair[call.getKeywords().size()];
+      keys = tmp;
 
       for (String k : call.getKeywords()) {
         names.put(ji, Atom.findOrCreateUnicodeAtom(k));
-        keys[ki++] = Pair.make(k, ji++);
+        keys[ki++] = Pair.<String, Integer>make(k, ji++);
       }
     }
 
@@ -238,6 +246,29 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
         IClass declaringClass = method.getDeclaringClass();
         final ClassLoaderReference classLoaderReference =
             declaringClass.getClassLoader().getReference();
+
+        // First, check the concrete type of the allocated object
+        IClass concreteType = o.getConcreteType();
+        if (concreteType != null) {
+          String concreteTypeName = "$" + concreteType.getName().toString().substring(1);
+          IClass concreteCallable =
+              cha.lookupClass(
+                  TypeReference.findOrCreateClass(
+                      classLoaderReference, concreteTypeName, CALLABLE_METHOD_NAME));
+          if (concreteCallable == null) {
+            concreteCallable =
+                cha.lookupClass(
+                    TypeReference.findOrCreateClass(
+                        classLoaderReference,
+                        concreteTypeName,
+                        CALLABLE_METHOD_NAME_FOR_KERAS_MODELS));
+          }
+          if (concreteCallable != null) {
+            callableSet.add(concreteCallable);
+            continue;
+          }
+        }
+
         TypeName declaringClassName = declaringClass.getName();
         final String packageName = "$" + declaringClassName.toString().substring(1);
 
@@ -261,7 +292,9 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
             LOGGER.info("Applying callable workaround for https://github.com/wala/ML/issues/118.");
         }
 
-        callableSet.add(callable);
+        if (callable != null) {
+          callableSet.add(callable);
+        }
       }
     }
 
@@ -296,8 +329,35 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
    * @return True iff the given {@link IClass} represents a Python callable object.
    */
   private boolean isCallable(IClass receiver) {
-    return receiver != null
-        && (receiver.getReference().equals(PythonTypes.object)
-            || receiver instanceof BypassSyntheticClass);
+    if (receiver == null) return false;
+    if (receiver.getReference().equals(PythonTypes.object)
+        || receiver instanceof BypassSyntheticClass) {
+      return true;
+    }
+    if (receiver instanceof SyntheticClass) {
+      if (receiver.getMethod(
+                  new Selector(
+                      Atom.findOrCreateUnicodeAtom(CALLABLE_METHOD_NAME),
+                      AstMethodReference.fnDesc))
+              != null
+          || receiver.getMethod(
+                  new Selector(
+                      Atom.findOrCreateUnicodeAtom(CALLABLE_METHOD_NAME_FOR_KERAS_MODELS),
+                      AstMethodReference.fnDesc))
+              != null) {
+        return true;
+      }
+
+      if (receiver instanceof IPythonClass) {
+        for (MethodReference mr : ((IPythonClass) receiver).getMethodReferences()) {
+          String clsName = mr.getDeclaringClass().getName().toString();
+          if (clsName.endsWith("/" + CALLABLE_METHOD_NAME)
+              || clsName.endsWith("/" + CALLABLE_METHOD_NAME_FOR_KERAS_MODELS)) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
   }
 }
