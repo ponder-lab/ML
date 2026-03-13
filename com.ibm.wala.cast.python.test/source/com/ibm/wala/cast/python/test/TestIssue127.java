@@ -24,12 +24,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.junit.Test;
 
-/**
- * Isolated test case for https://github.com/wala/ML/issues/127.
- *
- * <p>This test verifies that WALA can resolve implicit {@code __call__} method invocations for
- * synthetic classes defined in XML summaries.
- */
+/** Isolated test case for https://github.com/wala/ML/issues/127. */
 public class TestIssue127 extends TestJythonCallGraphShape {
 
   private static Logger logger = Logger.getLogger(TestIssue127.class.getName());
@@ -59,6 +54,9 @@ public class TestIssue127 extends TestJythonCallGraphShape {
 
   /**
    * Test implicit {@code __call__} on a synthetic object.
+   *
+   * <p>This test verifies that WALA can resolve implicit {@code __call__} method invocations for
+   * synthetic classes defined in XML summaries.
    *
    * @see <a href="https://github.com/wala/ML/issues/127">Issue 127</a>
    */
@@ -242,10 +240,22 @@ public class TestIssue127 extends TestJythonCallGraphShape {
         }
       }
     }
+
+    logger.fine("Test 127c argValues: " + argValues + " foundCount: " + foundCount);
+
+    boolean has5 = false, has10 = false;
+
+    for (Object v : argValues) {
+      if (v instanceof Number) {
+        if (((Number) v).intValue() == 5) has5 = true;
+        if (((Number) v).intValue() == 10) has10 = true;
+      }
+    }
+
     assertTrue("Expecting to find foo method calls for both objects.", foundCount >= 2);
     assertTrue(
         "Expecting to find distinct arguments 5 and 10 tracked by pointer analysis.",
-        argValues.contains(5) && argValues.contains(10));
+        has5 && has10);
   }
 
   /**
@@ -271,6 +281,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
 
     int foundCount = 0;
     Set<Object> argValues = new HashSet<>();
+
     for (CGNode node : CG) {
       if (node.getMethod()
           .getDeclaringClass()
@@ -298,10 +309,21 @@ public class TestIssue127 extends TestJythonCallGraphShape {
         }
       }
     }
+
+    logger.fine("Test 127d argValues: " + argValues + " foundCount: " + foundCount);
+
+    boolean has5 = false, has3 = false;
+
+    for (Object v : argValues) {
+      if (v instanceof Number) {
+        if (((Number) v).intValue() == 5) has5 = true;
+        if (((Number) v).intValue() == 3) has3 = true;
+      }
+    }
+
     assertTrue(
         "Expecting to find foo method calls for direct and variable calls.", foundCount >= 2);
     assertTrue(
-        "Expecting to find distinct arguments 5 and 3 tracked by pointer analysis.",
-        argValues.contains(5) && argValues.contains(3));
+        "Expecting to find distinct arguments 5 and 3 tracked by pointer analysis.", has5 && has3);
   }
 }
