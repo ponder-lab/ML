@@ -277,6 +277,15 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
                 TypeReference.findOrCreateClass(
                     classLoaderReference, packageName, CALLABLE_METHOD_NAME));
 
+        if (callable == null) {
+          callable =
+              cha.lookupClass(
+                  TypeReference.findOrCreateClass(
+                      classLoaderReference,
+                      declaringClassName.toString().substring(1),
+                      CALLABLE_METHOD_NAME));
+        }
+
         // TODO: Remove this code once https://github.com/wala/ML/issues/118 is completed.
         if (callable == null) {
           // try the workaround for https://github.com/wala/ML/issues/106. NOTE: We cannot verify
@@ -287,6 +296,15 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
               cha.lookupClass(
                   TypeReference.findOrCreateClass(
                       classLoaderReference, packageName, CALLABLE_METHOD_NAME_FOR_KERAS_MODELS));
+
+          if (callable == null) {
+            callable =
+                cha.lookupClass(
+                    TypeReference.findOrCreateClass(
+                        classLoaderReference,
+                        declaringClassName.toString().substring(1),
+                        CALLABLE_METHOD_NAME_FOR_KERAS_MODELS));
+          }
 
           if (callable != null)
             LOGGER.info("Applying callable workaround for https://github.com/wala/ML/issues/118.");
