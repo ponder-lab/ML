@@ -77,6 +77,9 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
    */
   private static final String CALLABLE_METHOD_NAME_FOR_KERAS_MODELS = "call";
 
+  /** The method name that is used for summarized methods in tensorflow.xml. */
+  private static final String DO_METHOD_NAME = "do";
+
   private PythonAnalysisEngine<T> engine;
 
   public PythonInstanceMethodTrampolineTargetSelector(
@@ -100,6 +103,7 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
       LOGGER.fine("Encountered callable.");
 
       PythonInvokeInstruction call = this.getCall(caller, site);
+      if (call == null) return super.getCalleeTarget(caller, site, receiver);
 
       // It's a callable. Change the receiver.
       receiver = getCallable(caller, receiver.getClassHierarchy(), call);
@@ -263,6 +267,12 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
                         concreteTypeName,
                         CALLABLE_METHOD_NAME_FOR_KERAS_MODELS));
           }
+          if (concreteCallable == null) {
+            concreteCallable =
+                cha.lookupClass(
+                    TypeReference.findOrCreateClass(
+                        classLoaderReference, concreteTypeName, DO_METHOD_NAME));
+          }
           if (concreteCallable != null) {
             callableSet.add(concreteCallable);
             continue;
@@ -287,6 +297,21 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
         }
 
         // TODO: Remove this code once https://github.com/wala/ML/issues/118 is completed.
+        if (callable == null) {
+          callable =
+              cha.lookupClass(
+                  TypeReference.findOrCreateClass(
+                      classLoaderReference, packageName, DO_METHOD_NAME));
+
+          if (callable == null) {
+            callable =
+                cha.lookupClass(
+                    TypeReference.findOrCreateClass(
+                        classLoaderReference,
+                        declaringClassName.toString().substring(1),
+                        DO_METHOD_NAME));
+          }
+        }
         if (callable == null) {
           // try the workaround for https://github.com/wala/ML/issues/106. NOTE: We cannot verify
           // that the super class is tf.keras.Model due to https://github.com/wala/ML/issues/118.
@@ -362,6 +387,10 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
                   new Selector(
                       Atom.findOrCreateUnicodeAtom(CALLABLE_METHOD_NAME_FOR_KERAS_MODELS),
                       AstMethodReference.fnDesc))
+              != null
+          || receiver.getMethod(
+                  new Selector(
+                      Atom.findOrCreateUnicodeAtom(DO_METHOD_NAME), AstMethodReference.fnDesc))
               != null) {
         return true;
       }

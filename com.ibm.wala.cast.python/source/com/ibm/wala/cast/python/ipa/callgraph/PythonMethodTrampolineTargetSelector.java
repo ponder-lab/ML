@@ -10,6 +10,7 @@ import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.MethodTargetSelector;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.Pair;
@@ -36,6 +37,7 @@ public abstract class PythonMethodTrampolineTargetSelector<T> implements MethodT
 
       if (this.shouldProcess(caller, site, receiver)) {
         PythonInvokeInstruction call = this.getCall(caller, site);
+        if (call == null) return null;
         Pair<IClass, Integer> key = this.makeKey(receiver, call);
 
         if (!codeBodies.containsKey(key)) {
@@ -69,7 +71,11 @@ public abstract class PythonMethodTrampolineTargetSelector<T> implements MethodT
    *     given {@link CGNode}.
    */
   protected PythonInvokeInstruction getCall(CGNode caller, CallSiteReference site) {
-    return (PythonInvokeInstruction) caller.getIR().getCalls(site)[0];
+    SSAAbstractInvokeInstruction inst = caller.getIR().getCalls(site)[0];
+    if (inst instanceof PythonInvokeInstruction) {
+      return (PythonInvokeInstruction) inst;
+    }
+    return null;
   }
 
   /**
