@@ -310,6 +310,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_6_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(6)));
 
+  private static final TensorType TENSOR_256_28_28_1_FLOAT32 =
+      new TensorType(
+          FLOAT_32,
+          asList(new NumericDim(256), new NumericDim(28), new NumericDim(28), new NumericDim(1)));
+
+  private static final TensorType TENSOR_96_28_28_1_FLOAT32 =
+      new TensorType(
+          FLOAT_32,
+          asList(new NumericDim(96), new NumericDim(28), new NumericDim(28), new NumericDim(1)));
+
   @Test
   public void testValueIndex()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -1496,7 +1506,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testGanTutorial()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tensorflow_gan_tutorial.py", "train_step", 1, 2, Map.of(2, Set.of(MNIST_INPUT)));
+    test(
+        "tensorflow_gan_tutorial.py",
+        "train_step",
+        1,
+        2,
+        Map.of(2, Set.of(TENSOR_256_28_28_1_FLOAT32, TENSOR_96_28_28_1_FLOAT32)));
   }
 
   @Test
