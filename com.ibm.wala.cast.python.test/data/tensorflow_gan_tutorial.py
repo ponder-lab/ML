@@ -70,6 +70,8 @@ def train_step(
     images, generator, discriminator, generator_optimizer, discriminator_optimizer
 ):
     noise = tf.random.normal([images.shape[0], noise_dim])
+    assert noise.shape == (256, 100) or noise.shape == (96, 100)
+    assert noise.dtype == tf.float32
 
     with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
         generated_images = generator(noise, training=True)
