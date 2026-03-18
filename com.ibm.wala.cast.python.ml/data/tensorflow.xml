@@ -1018,33 +1018,6 @@
     <package name="tensorflow/data">
       <class name="Dataset" allocatable="true">
         <!-- "read_dataset" means that this function reads a tensor iterable. -->
-        <method name="read_dataset" descriptor="()LRoot;">
-          <new def="shuffle" class="Ltensorflow/data/shuffle" />
-          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="arg0" value="shuffle" />
-          <new def="batch" class="Ltensorflow/data/batch" />
-          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="arg0" value="batch" />
-          <new def="repeat" class="Ltensorflow/data/repeat" />
-          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="arg0" value="repeat" />
-          <new def="prefetch" class="Ltensorflow/data/prefetch" />
-          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="arg0" value="prefetch" />
-          <new def="with_options" class="Ltensorflow/data/with_options" />
-          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="arg0" value="with_options" />
-          <new def="take" class="Ltensorflow/data/take" />
-          <putfield class="LRoot" field="take" fieldType="LRoot" ref="arg0" value="take" />
-          <return value="arg0" />
-          <new def="map" class="Ltensorflow/data/map" />
-          <putfield class="LRoot" field="map" fieldType="LRoot" ref="arg0" value="map" />
-          <return value="arg0" />
-          <new def="filter" class="Ltensorflow/data/filter" />
-          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="arg0" value="filter" />
-          <new def="concatenate" class="Ltensorflow/data/concatenate" />
-          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="arg0" value="concatenate" />
-          <new def="reduce" class="Ltensorflow/data/reduce" />
-          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="arg0" value="reduce" />
-          <new def="enumerate" class="Ltensorflow/data/enumerate" />
-          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="arg0" value="enumerate" />
-          <return value="arg0" />
-        </method>
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self variant_tensor">
           <call class="LRoot" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
           <return value="x" />
@@ -1070,7 +1043,31 @@
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self buffer_size seed reshuffle_each_iteration name">
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. This method (shuffle) doesn't really return a "new" dataset but rather a modified version of the receiver. But, the receiver isn't available without a trampoline AFAIK. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
+          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+            calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
+            endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle" />
+          <new def="rd_batch" class="Ltensorflow/data/batch" />
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch" />
+          <new def="rd_repeat" class="Ltensorflow/data/repeat" />
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat" />
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch" />
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch" />
+          <new def="rd_with_options" class="Ltensorflow/data/with_options" />
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options" />
+          <new def="rd_take" class="Ltensorflow/data/take" />
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take" />
+          <new def="rd_map" class="Ltensorflow/data/map" />
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map" />
+          <new def="rd_filter" class="Ltensorflow/data/filter" />
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter" />
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate" />
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate" />
+          <new def="rd_reduce" class="Ltensorflow/data/reduce" />
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce" />
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate" />
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate" />
           <return value="x" />
         </method>
       </class>
@@ -1079,7 +1076,31 @@
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self batch_size drop_remainder num_parallel_calls deterministic name">
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
+          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+            calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
+            endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle" />
+          <new def="rd_batch" class="Ltensorflow/data/batch" />
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch" />
+          <new def="rd_repeat" class="Ltensorflow/data/repeat" />
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat" />
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch" />
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch" />
+          <new def="rd_with_options" class="Ltensorflow/data/with_options" />
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options" />
+          <new def="rd_take" class="Ltensorflow/data/take" />
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take" />
+          <new def="rd_map" class="Ltensorflow/data/map" />
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map" />
+          <new def="rd_filter" class="Ltensorflow/data/filter" />
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter" />
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate" />
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate" />
+          <new def="rd_reduce" class="Ltensorflow/data/reduce" />
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce" />
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate" />
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate" />
           <return value="x" />
         </method>
       </class>
@@ -1096,7 +1117,31 @@
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self buffer_size name">
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
+          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+            calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
+            endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle" />
+          <new def="rd_batch" class="Ltensorflow/data/batch" />
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch" />
+          <new def="rd_repeat" class="Ltensorflow/data/repeat" />
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat" />
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch" />
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch" />
+          <new def="rd_with_options" class="Ltensorflow/data/with_options" />
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options" />
+          <new def="rd_take" class="Ltensorflow/data/take" />
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take" />
+          <new def="rd_map" class="Ltensorflow/data/map" />
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map" />
+          <new def="rd_filter" class="Ltensorflow/data/filter" />
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter" />
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate" />
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate" />
+          <new def="rd_reduce" class="Ltensorflow/data/reduce" />
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce" />
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate" />
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate" />
           <return value="x" />
         </method>
       </class>
@@ -1105,7 +1150,31 @@
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self options name">
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
+          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+            calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
+            endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle" />
+          <new def="rd_batch" class="Ltensorflow/data/batch" />
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch" />
+          <new def="rd_repeat" class="Ltensorflow/data/repeat" />
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat" />
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch" />
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch" />
+          <new def="rd_with_options" class="Ltensorflow/data/with_options" />
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options" />
+          <new def="rd_take" class="Ltensorflow/data/take" />
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take" />
+          <new def="rd_map" class="Ltensorflow/data/map" />
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map" />
+          <new def="rd_filter" class="Ltensorflow/data/filter" />
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter" />
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate" />
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate" />
+          <new def="rd_reduce" class="Ltensorflow/data/reduce" />
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce" />
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate" />
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate" />
           <return value="x" />
         </method>
       </class>
@@ -1114,7 +1183,31 @@
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self count name">
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
+          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+            calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
+            endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle" />
+          <new def="rd_batch" class="Ltensorflow/data/batch" />
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch" />
+          <new def="rd_repeat" class="Ltensorflow/data/repeat" />
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat" />
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch" />
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch" />
+          <new def="rd_with_options" class="Ltensorflow/data/with_options" />
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options" />
+          <new def="rd_take" class="Ltensorflow/data/take" />
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take" />
+          <new def="rd_map" class="Ltensorflow/data/map" />
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map" />
+          <new def="rd_filter" class="Ltensorflow/data/filter" />
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter" />
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate" />
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate" />
+          <new def="rd_reduce" class="Ltensorflow/data/reduce" />
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce" />
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate" />
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate" />
           <return value="x" />
         </method>
       </class>
@@ -1123,7 +1216,31 @@
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self map_func num_parallel_calls deterministic name">
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
+          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+            calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
+            endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle" />
+          <new def="rd_batch" class="Ltensorflow/data/batch" />
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch" />
+          <new def="rd_repeat" class="Ltensorflow/data/repeat" />
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat" />
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch" />
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch" />
+          <new def="rd_with_options" class="Ltensorflow/data/with_options" />
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options" />
+          <new def="rd_take" class="Ltensorflow/data/take" />
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take" />
+          <new def="rd_map" class="Ltensorflow/data/map" />
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map" />
+          <new def="rd_filter" class="Ltensorflow/data/filter" />
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter" />
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate" />
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate" />
+          <new def="rd_reduce" class="Ltensorflow/data/reduce" />
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce" />
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate" />
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate" />
           <return value="x" />
         </method>
       </class>
@@ -1132,7 +1249,31 @@
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self predicate name">
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
+          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+            calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
+            endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle" />
+          <new def="rd_batch" class="Ltensorflow/data/batch" />
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch" />
+          <new def="rd_repeat" class="Ltensorflow/data/repeat" />
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat" />
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch" />
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch" />
+          <new def="rd_with_options" class="Ltensorflow/data/with_options" />
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options" />
+          <new def="rd_take" class="Ltensorflow/data/take" />
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take" />
+          <new def="rd_map" class="Ltensorflow/data/map" />
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map" />
+          <new def="rd_filter" class="Ltensorflow/data/filter" />
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter" />
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate" />
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate" />
+          <new def="rd_reduce" class="Ltensorflow/data/reduce" />
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce" />
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate" />
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate" />
           <return value="x" />
         </method>
       </class>
@@ -1141,7 +1282,31 @@
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self predicate name">
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
+          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+            calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
+            endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle" />
+          <new def="rd_batch" class="Ltensorflow/data/batch" />
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch" />
+          <new def="rd_repeat" class="Ltensorflow/data/repeat" />
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat" />
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch" />
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch" />
+          <new def="rd_with_options" class="Ltensorflow/data/with_options" />
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options" />
+          <new def="rd_take" class="Ltensorflow/data/take" />
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take" />
+          <new def="rd_map" class="Ltensorflow/data/map" />
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map" />
+          <new def="rd_filter" class="Ltensorflow/data/filter" />
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter" />
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate" />
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate" />
+          <new def="rd_reduce" class="Ltensorflow/data/reduce" />
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce" />
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate" />
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate" />
           <return value="x" />
         </method>
       </class>
@@ -1157,7 +1322,31 @@
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self predicate name">
           <!-- FIXME: Workaround for https://github.com/wala/ML/issues/127. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
+          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+            calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
+            endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle" />
+          <new def="rd_batch" class="Ltensorflow/data/batch" />
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch" />
+          <new def="rd_repeat" class="Ltensorflow/data/repeat" />
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat" />
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch" />
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch" />
+          <new def="rd_with_options" class="Ltensorflow/data/with_options" />
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options" />
+          <new def="rd_take" class="Ltensorflow/data/take" />
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take" />
+          <new def="rd_map" class="Ltensorflow/data/map" />
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map" />
+          <new def="rd_filter" class="Ltensorflow/data/filter" />
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter" />
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate" />
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate" />
+          <new def="rd_reduce" class="Ltensorflow/data/reduce" />
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce" />
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate" />
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate" />
           <return value="x" />
         </method>
       </class>
@@ -1168,7 +1357,31 @@
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="tensors name">
           <!-- FIXME: We should encode the tensors argument here. See https://github.com/wala/ML/issues/164. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
+          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+            calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
+            endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle" />
+          <new def="rd_batch" class="Ltensorflow/data/batch" />
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch" />
+          <new def="rd_repeat" class="Ltensorflow/data/repeat" />
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat" />
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch" />
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch" />
+          <new def="rd_with_options" class="Ltensorflow/data/with_options" />
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options" />
+          <new def="rd_take" class="Ltensorflow/data/take" />
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take" />
+          <new def="rd_map" class="Ltensorflow/data/map" />
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map" />
+          <new def="rd_filter" class="Ltensorflow/data/filter" />
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter" />
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate" />
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate" />
+          <new def="rd_reduce" class="Ltensorflow/data/reduce" />
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce" />
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate" />
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate" />
           <return value="x" />
         </method>
       </class>
@@ -1179,7 +1392,31 @@
             `read_dataset` or an `init_fields` method), 1-CFA would merge all calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained
             operations. By inlining these allocations directly into each endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
+          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+            calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
+            endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle" />
+          <new def="rd_batch" class="Ltensorflow/data/batch" />
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch" />
+          <new def="rd_repeat" class="Ltensorflow/data/repeat" />
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat" />
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch" />
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch" />
+          <new def="rd_with_options" class="Ltensorflow/data/with_options" />
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options" />
+          <new def="rd_take" class="Ltensorflow/data/take" />
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take" />
+          <new def="rd_map" class="Ltensorflow/data/map" />
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map" />
+          <new def="rd_filter" class="Ltensorflow/data/filter" />
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter" />
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate" />
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate" />
+          <new def="rd_reduce" class="Ltensorflow/data/reduce" />
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce" />
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate" />
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate" />
           <return value="x" />
         </method>
       </class>
@@ -1187,7 +1424,31 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#sample_from_datasets -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="datasets weights seed stop_on_empty_dataset">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
+          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+            calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
+            endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle" />
+          <new def="rd_batch" class="Ltensorflow/data/batch" />
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch" />
+          <new def="rd_repeat" class="Ltensorflow/data/repeat" />
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat" />
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch" />
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch" />
+          <new def="rd_with_options" class="Ltensorflow/data/with_options" />
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options" />
+          <new def="rd_take" class="Ltensorflow/data/take" />
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take" />
+          <new def="rd_map" class="Ltensorflow/data/map" />
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map" />
+          <new def="rd_filter" class="Ltensorflow/data/filter" />
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter" />
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate" />
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate" />
+          <new def="rd_reduce" class="Ltensorflow/data/reduce" />
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce" />
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate" />
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate" />
           <return value="x" />
         </method>
       </class>
@@ -1195,7 +1456,31 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#list_files -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="file_pattern shuffle seed name">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
+          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+            calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
+            endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle" />
+          <new def="rd_batch" class="Ltensorflow/data/batch" />
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch" />
+          <new def="rd_repeat" class="Ltensorflow/data/repeat" />
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat" />
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch" />
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch" />
+          <new def="rd_with_options" class="Ltensorflow/data/with_options" />
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options" />
+          <new def="rd_take" class="Ltensorflow/data/take" />
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take" />
+          <new def="rd_map" class="Ltensorflow/data/map" />
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map" />
+          <new def="rd_filter" class="Ltensorflow/data/filter" />
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter" />
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate" />
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate" />
+          <new def="rd_reduce" class="Ltensorflow/data/reduce" />
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce" />
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate" />
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate" />
           <return value="x" />
         </method>
       </class>
@@ -1203,7 +1488,31 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#choose_from_datasets -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="datasets choice_dataset stop_on_empty_dataset">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
+          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+            calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
+            endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle" />
+          <new def="rd_batch" class="Ltensorflow/data/batch" />
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch" />
+          <new def="rd_repeat" class="Ltensorflow/data/repeat" />
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat" />
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch" />
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch" />
+          <new def="rd_with_options" class="Ltensorflow/data/with_options" />
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options" />
+          <new def="rd_take" class="Ltensorflow/data/take" />
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take" />
+          <new def="rd_map" class="Ltensorflow/data/map" />
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map" />
+          <new def="rd_filter" class="Ltensorflow/data/filter" />
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter" />
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate" />
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate" />
+          <new def="rd_reduce" class="Ltensorflow/data/reduce" />
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce" />
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate" />
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate" />
           <return value="x" />
         </method>
       </class>
@@ -1211,7 +1520,31 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#from_generator -->
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="generator output_types output_shapes args output_signature name">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
+          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+            calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
+            endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle" />
+          <new def="rd_batch" class="Ltensorflow/data/batch" />
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch" />
+          <new def="rd_repeat" class="Ltensorflow/data/repeat" />
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat" />
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch" />
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch" />
+          <new def="rd_with_options" class="Ltensorflow/data/with_options" />
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options" />
+          <new def="rd_take" class="Ltensorflow/data/take" />
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take" />
+          <new def="rd_map" class="Ltensorflow/data/map" />
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map" />
+          <new def="rd_filter" class="Ltensorflow/data/filter" />
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter" />
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate" />
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate" />
+          <new def="rd_reduce" class="Ltensorflow/data/reduce" />
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce" />
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate" />
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate" />
           <return value="x" />
         </method>
       </class>
@@ -1219,7 +1552,31 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#zip -->
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="datasets name">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
+          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+            calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
+            endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle" />
+          <new def="rd_batch" class="Ltensorflow/data/batch" />
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch" />
+          <new def="rd_repeat" class="Ltensorflow/data/repeat" />
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat" />
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch" />
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch" />
+          <new def="rd_with_options" class="Ltensorflow/data/with_options" />
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options" />
+          <new def="rd_take" class="Ltensorflow/data/take" />
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take" />
+          <new def="rd_map" class="Ltensorflow/data/map" />
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map" />
+          <new def="rd_filter" class="Ltensorflow/data/filter" />
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter" />
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate" />
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate" />
+          <new def="rd_reduce" class="Ltensorflow/data/reduce" />
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce" />
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate" />
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate" />
           <!-- FIXME: This could return tuples of tensors. See https://github.com/wala/ML/issues/165. -->
           <return value="x" />
         </method>
@@ -1228,7 +1585,31 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#range -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="start stop step output_type name">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
+          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+            calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
+            endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle" />
+          <new def="rd_batch" class="Ltensorflow/data/batch" />
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch" />
+          <new def="rd_repeat" class="Ltensorflow/data/repeat" />
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat" />
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch" />
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch" />
+          <new def="rd_with_options" class="Ltensorflow/data/with_options" />
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options" />
+          <new def="rd_take" class="Ltensorflow/data/take" />
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take" />
+          <new def="rd_map" class="Ltensorflow/data/map" />
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map" />
+          <new def="rd_filter" class="Ltensorflow/data/filter" />
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter" />
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate" />
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate" />
+          <new def="rd_reduce" class="Ltensorflow/data/reduce" />
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce" />
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate" />
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate" />
           <return value="x" />
         </method>
       </class>
@@ -1236,7 +1617,31 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#random -->
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="seed name">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <call class="Ltensorflow/data/Dataset" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="x" numArgs="1" def="xx" />
+          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+            calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
+            endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle" />
+          <new def="rd_batch" class="Ltensorflow/data/batch" />
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch" />
+          <new def="rd_repeat" class="Ltensorflow/data/repeat" />
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat" />
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch" />
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch" />
+          <new def="rd_with_options" class="Ltensorflow/data/with_options" />
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options" />
+          <new def="rd_take" class="Ltensorflow/data/take" />
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take" />
+          <new def="rd_map" class="Ltensorflow/data/map" />
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map" />
+          <new def="rd_filter" class="Ltensorflow/data/filter" />
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter" />
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate" />
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate" />
+          <new def="rd_reduce" class="Ltensorflow/data/reduce" />
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce" />
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate" />
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate" />
           <return value="x" />
         </method>
       </class>
