@@ -296,7 +296,6 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
                       CALLABLE_METHOD_NAME));
         }
 
-        // TODO: Remove this code once https://github.com/wala/ML/issues/118 is completed.
         if (callable == null) {
           callable =
               cha.lookupClass(
@@ -312,6 +311,8 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
                         DO_METHOD_NAME));
           }
         }
+
+        // TODO: Remove this code once https://github.com/wala/ML/issues/118 is completed.
         if (callable == null) {
           // try the workaround for https://github.com/wala/ML/issues/106. NOTE: We cannot verify
           // that the super class is tf.keras.Model due to https://github.com/wala/ML/issues/118.
