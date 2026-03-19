@@ -34,7 +34,8 @@ public class TensorFlowTypes extends PythonTypes {
     INT32(true, false, 32),
     INT64(true, false, 64),
     UINT8(true, false, 8),
-    STRING(false, false, 0);
+    STRING(false, false, 0),
+    UNKNOWN(false, false, 0);
 
     private boolean numeric;
 
