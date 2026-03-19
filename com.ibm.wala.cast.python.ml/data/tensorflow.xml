@@ -1754,25 +1754,18 @@
           <return value="self" />
         </method>
       </class>
-      <class name="tensorflow/keras/datasets/mnist/load_data" allocatable="true">
-        <!-- We use helper methods `get_images` and `get_labels` to ensure each tensor has a distinct allocation site in the WALA IR. This prevents context-insensitive points-to analysis from aliasing all returned tensors together. -->
-        <method name="get_images" descriptor="()LRoot;" numArgs="1" paramNames="self">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
-        <method name="get_labels" descriptor="()LRoot;" numArgs="1" paramNames="self">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
-        <!-- https://www.tensorflow.org/api_docs/python/tf/keras/datasets/mnist/load_data -->
+    </package>
+    <package name="tensorflow/keras/datasets/mnist">
+      <!-- https://www.tensorflow.org/api_docs/python/tf/keras/datasets/mnist/load_data -->
+      <class name="load_data" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
-          <call class="Ltensorflow/keras/datasets/mnist/load_data" name="get_images" descriptor="()LRoot;" type="virtual" arg0="self" numArgs="1" def="x_train" />
-          <call class="Ltensorflow/keras/datasets/mnist/load_data" name="get_labels" descriptor="()LRoot;" type="virtual" arg0="self" numArgs="1" def="y_train" />
+          <new def="x_train" class="Ltensorflow/examples/tutorials/mnist/input_data" />
+          <new def="y_train" class="Ltensorflow/examples/tutorials/mnist/input_data" />
           <new def="train" class="Ltuple" />
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="train" value="x_train" />
           <putfield class="LRoot" field="1" fieldType="LRoot" ref="train" value="y_train" />
-          <call class="Ltensorflow/keras/datasets/mnist/load_data" name="get_images" descriptor="()LRoot;" type="virtual" arg0="self" numArgs="1" def="x_test" />
-          <call class="Ltensorflow/keras/datasets/mnist/load_data" name="get_labels" descriptor="()LRoot;" type="virtual" arg0="self" numArgs="1" def="y_test" />
+          <new def="x_test" class="Ltensorflow/examples/tutorials/mnist/input_data" />
+          <new def="y_test" class="Ltensorflow/examples/tutorials/mnist/input_data" />
           <new def="test" class="Ltuple" />
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="test" value="x_test" />
           <putfield class="LRoot" field="1" fieldType="LRoot" ref="test" value="y_test" />
