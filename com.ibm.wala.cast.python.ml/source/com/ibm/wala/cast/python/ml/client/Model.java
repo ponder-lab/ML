@@ -3,8 +3,10 @@ package com.ibm.wala.cast.python.ml.client;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
@@ -66,12 +68,26 @@ public class Model extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    String methodName = this.getNode().getMethod().getName().toString();
+    if (methodName.equals("__call__") || methodName.equals("call") || methodName.equals("do")) {
+      OrdinalSet<InstanceKey> inputPts =
+          this.getArgumentPointsToSet(
+              builder, Parameters.INPUTS.getIndex(), Parameters.INPUTS.getName());
+      if (!inputPts.isEmpty()) return this.getShapesOfValue(builder, inputPts);
+    }
     // TODO: Will need https://github.com/wala/ML/issues/340 to be resolved.
     return Collections.emptySet();
   }
 
   @Override
-  protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    String methodName = this.getNode().getMethod().getName().toString();
+    if (methodName.equals("__call__") || methodName.equals("call") || methodName.equals("do")) {
+      OrdinalSet<InstanceKey> inputPts =
+          this.getArgumentPointsToSet(
+              builder, Parameters.INPUTS.getIndex(), Parameters.INPUTS.getName());
+      if (!inputPts.isEmpty()) return this.getDTypesOfValue(builder, inputPts);
+    }
     // TODO: Will need https://github.com/wala/ML/issues/340 to be resolved.
     return EnumSet.noneOf(DType.class);
   }

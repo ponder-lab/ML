@@ -203,7 +203,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         if (inst instanceof SSAAbstractInvokeInstruction) {
           // We potentially have a function call that generates a tensor.
           SSAAbstractInvokeInstruction ni = (SSAAbstractInvokeInstruction) inst;
-          processInstruction(ni, du, localPointerKeyNode, src, vn, sources, pointerAnalysis);
+          processInstruction(
+              builder, ni, du, localPointerKeyNode, src, vn, sources, pointerAnalysis);
         } else if (inst instanceof SSABinaryOpInstruction) {
           // Binary operations (e.g. +, *) on tensors are also sources.
           sources.add(src);
@@ -257,6 +258,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               SSAAbstractInvokeInstruction invokeInstruction = (SSAAbstractInvokeInstruction) def;
               added =
                   processInstruction(
+                      builder,
                       invokeInstruction,
                       du,
                       localPointerKeyNode,
@@ -289,6 +291,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * @return True iff given the source was added to the set.
    */
   private static boolean processInstruction(
+      PropagationCallGraphBuilder builder,
       SSAAbstractInvokeInstruction instruction,
       DefUse du,
       CGNode node,
@@ -302,9 +305,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     if (instruction.getException() != vn) {
       String methodName = instruction.getCallSite().getDeclaredTarget().getName().toString();
       if (methodName.equals(TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME) || methodName.equals("do")) {
-        sources.add(src);
-        logger.info("Added dataflow source from tensor generator: " + src + ".");
-        ret = true;
+        try {
+          TensorGeneratorFactory.getGenerator(src, builder);
+          sources.add(src);
+          logger.info("Added dataflow source from tensor generator: " + src + ".");
+          ret = true;
+        } catch (IllegalArgumentException e) {
+          // not a tensor source.
+        }
       } else if (instruction.getNumberOfUses() > 1) {
         // Get the invoked function from the PA.
         int target = instruction.getUse(0);

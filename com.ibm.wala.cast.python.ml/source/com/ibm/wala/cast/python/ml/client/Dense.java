@@ -49,6 +49,8 @@ public class Dense extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    String methodName = this.getNode().getMethod().getName().toString();
+
     OrdinalSet<InstanceKey> inputPts =
         this.getArgumentPointsToSet(
             builder, Parameters.INPUTS.getIndex(), Parameters.INPUTS.getName());
@@ -82,9 +84,15 @@ public class Dense extends TensorGenerator {
         ret.add(newShape);
       }
       if (unitsValues.isEmpty()) {
-        List<Dimension<?>> newShape = new ArrayList<>(inputShape);
-        newShape.set(newShape.size() - 1, new NumericDim(-1)); // Unknown units
-        ret.add(newShape);
+        // If units are not provided (e.g., Keras __call__ or Model.do), we treat it as a
+        // pass-through.
+        if (methodName.equals("__call__") || methodName.equals("call") || methodName.equals("do")) {
+          ret.add(inputShape);
+        } else {
+          List<Dimension<?>> newShape = new ArrayList<>(inputShape);
+          newShape.set(newShape.size() - 1, new NumericDim(-1)); // Unknown units
+          ret.add(newShape);
+        }
       }
     }
 

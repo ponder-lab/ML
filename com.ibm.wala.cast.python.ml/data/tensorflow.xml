@@ -939,31 +939,23 @@
         </method>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/models/Model -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self inputs outputs name">
-          <new def="__call__" class="Ltensorflow/keras/models/__call__" />
-          <putfield class="LRoot" field="__call__" fieldType="LRoot" ref="arg0" value="__call__" />
-          <new def="call" class="Ltensorflow/keras/models/call" />
-          <putfield class="LRoot" field="call" fieldType="LRoot" ref="arg0" value="call" />
+          <new def="res" class="Ltensorflow/keras/models/Model" />
           <new def="x" class="Llist" />
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="xx" />
+          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="res" numArgs="1" def="xx" />
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="x" value="xx" />
           <!-- https://www.tensorflow.org/guide/keras/transfer_learning#freezing_layers_understanding_the_trainable_attribute -->
-          <putfield class="LRoot" field="trainable_weights" fieldType="LRoot" ref="arg0" value="x" />
-          <putfield class="LRoot" field="weights" fieldType="LRoot" ref="arg0" value="x" />
-          <putfield class="LRoot" field="non_trainable_weights" fieldType="LRoot" ref="arg0" value="x" />
-          <return value="arg0" />
+          <putfield class="LRoot" field="trainable_weights" fieldType="LRoot" ref="res" value="x" />
+          <putfield class="LRoot" field="weights" fieldType="LRoot" ref="res" value="x" />
+          <putfield class="LRoot" field="non_trainable_weights" fieldType="LRoot" ref="res" value="x" />
+          <return value="res" />
         </method>
-      </class>
-      <class name="__call__" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Model#call -->
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self inputs training mask">
-          <return value="inputs" />
+        <method name="__call__" descriptor="()LRoot;" numArgs="4" paramNames="self inputs training mask">
+          <new def="out" class="Ltensorflow/keras/models/Model" />
+          <return value="out" />
         </method>
-      </class>
-      <!-- FIXME: Workaround for https://github.com/wala/ML/issues/106. -->
-      <class name="call" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Model#call -->
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self inputs training mask">
-          <return value="inputs" />
+        <method name="call" descriptor="()LRoot;" numArgs="4" paramNames="self inputs training mask">
+          <new def="out" class="Ltensorflow/keras/models/Model" />
+          <return value="out" />
         </method>
       </class>
     </package>
@@ -977,24 +969,17 @@
       <class name="Dense" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Dense -->
         <method name="do" descriptor="()LRoot;" numArgs="11" paramNames="self units activation use_bias kernel_initializer bias_initializer kernel_regularizer bias_regularizer activity_regularizer kernel_constraint bias_constraint">
-          <new def="__call__" class="Ltensorflow/keras/layers/__call__" />
-          <putfield class="LRoot" field="__call__" fieldType="LRoot" ref="arg0" value="__call__" />
-          <new def="call" class="Ltensorflow/keras/layers/call" />
-          <putfield class="LRoot" field="call" fieldType="LRoot" ref="arg0" value="call" />
-          <return value="arg0" />
+          <new def="res" class="Ltensorflow/keras/layers/Dense" />
+          <return value="res" />
         </method>
-      </class>
-      <class name="__call__" allocatable="true">
         <!-- https://github.com/keras-team/keras/blob/07e13740fd181fc3ddec7d9a594d8a08666645f6/keras/layers/core/dense.py#L166-L240 -->
-        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self inputs">
-          <return value="inputs" />
+        <method name="__call__" descriptor="()LRoot;" numArgs="2" paramNames="self inputs">
+          <new def="out" class="Ltensorflow/keras/layers/Dense" />
+          <return value="out" />
         </method>
-      </class>
-      <!-- FIXME: Workaround for https://github.com/wala/ML/issues/106. -->
-      <class name="call" allocatable="true">
-        <!-- https://github.com/keras-team/keras/blob/07e13740fd181fc3ddec7d9a594d8a08666645f6/keras/layers/core/dense.py#L166-L240 -->
-        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self inputs">
-          <return value="inputs" />
+        <method name="call" descriptor="()LRoot;" numArgs="2" paramNames="self inputs">
+          <new def="out" class="Ltensorflow/keras/layers/Dense" />
+          <return value="out" />
         </method>
       </class>
     </package>
