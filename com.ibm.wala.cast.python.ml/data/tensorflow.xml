@@ -950,10 +950,13 @@
           <return value="res" />
         </method>
         <method name="__call__" descriptor="()LRoot;" numArgs="4" paramNames="self inputs training mask">
+          <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Model#call -->
           <new def="out" class="Ltensorflow/keras/models/Model" />
           <return value="out" />
         </method>
+        <!-- FIXME: Workaround for https://github.com/wala/ML/issues/106. -->
         <method name="call" descriptor="()LRoot;" numArgs="4" paramNames="self inputs training mask">
+          <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Model#call -->
           <new def="out" class="Ltensorflow/keras/models/Model" />
           <return value="out" />
         </method>
@@ -977,7 +980,9 @@
           <new def="out" class="Ltensorflow/keras/layers/Dense" />
           <return value="out" />
         </method>
+        <!-- FIXME: Workaround for https://github.com/wala/ML/issues/106. -->
         <method name="call" descriptor="()LRoot;" numArgs="2" paramNames="self inputs">
+          <!-- https://github.com/keras-team/keras/blob/07e13740fd181fc3ddec7d9a594d8a08666645f6/keras/layers/core/dense.py#L166-L240 -->
           <new def="out" class="Ltensorflow/keras/layers/Dense" />
           <return value="out" />
         </method>
