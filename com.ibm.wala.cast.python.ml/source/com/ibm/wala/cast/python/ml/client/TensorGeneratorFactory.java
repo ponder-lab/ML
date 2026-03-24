@@ -244,7 +244,8 @@ public class TensorGeneratorFactory {
         LocalPointerKey lpk = (LocalPointerKey) pk;
         SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
         if (def instanceof SSAAbstractInvokeInstruction
-            || def instanceof EachElementGetInstruction) {
+            || def instanceof EachElementGetInstruction
+            || def instanceof PythonPropertyRead) {
           LOGGER.fine("findCreator found creator instruction: " + def);
           return current;
         }
@@ -403,6 +404,7 @@ public class TensorGeneratorFactory {
         }
 
         Integer propertyIndex = null;
+        String propertyName = null;
         int memberRef = propRead.getMemberRef();
         PointerKey memberRefKey =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, memberRef);
@@ -418,6 +420,7 @@ public class TensorGeneratorFactory {
             if (val instanceof Integer) {
               propertyIndex = (Integer) val;
             } else if (val instanceof String) {
+              propertyName = (String) val;
               try {
                 propertyIndex = Integer.parseInt((String) val);
               } catch (NumberFormatException e) {
@@ -429,8 +432,13 @@ public class TensorGeneratorFactory {
           }
         }
 
+        if (effectiveGenerator instanceof Model
+            && (propertyName != null
+                && (propertyName.equals("trainable_weights") || propertyName.equals("weights")))) {
+          return new ModelWeightsGenerator(source, (Model) effectiveGenerator);
+        }
+
         if (effectiveGenerator instanceof DatasetEnumerateGenerator) {
-          LOGGER.fine("Found DatasetEnumerateGenerator during property read!");
           DatasetEnumerateGenerator enumGen = (DatasetEnumerateGenerator) effectiveGenerator;
           boolean isFirstElement = propertyIndex != null && propertyIndex == 0;
           boolean isSecondElement = propertyIndex != null && propertyIndex == 1;
