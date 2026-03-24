@@ -46,6 +46,30 @@ def test_mixed():
     check_mixed(out)
 
 
+def check_multiple(x, y):
+    pass
+
+
+def test_multiple():
+    input3 = tf.keras.Input(shape=(2,), dtype=tf.float32)
+    output3 = tf.keras.layers.Dense(2)(input3)
+    model3 = tf.keras.Model(input3, outputs=output3)
+
+    out = model3(tf.ones((1, 2)))
+    assert out.shape.as_list() == [1, 2]
+    assert out.dtype == tf.float32
+
+    input4 = tf.keras.Input(shape=(2,), dtype=tf.int32)
+    output4 = tf.keras.layers.Dense(2)(input4)
+    model4 = tf.keras.Model(input4, outputs=output4)
+
+    out2 = model4(tf.ones((2, 2)))
+    assert out2.shape.as_list() == [2, 2]
+    assert out2.dtype == tf.float32
+
+    check_multiple(out, out2)
+
+
 class SubclassModel(tf.keras.Model):
     def __init__(self):
         super(SubclassModel, self).__init__()
@@ -71,4 +95,5 @@ if __name__ == "__main__":
     test_positional()
     test_keyword()
     test_mixed()
+    test_multiple()
     test_subclass()

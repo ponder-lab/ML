@@ -6395,6 +6395,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_model_init.py", "check_keyword", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
     test("tf2_test_model_init.py", "check_mixed", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
     test("tf2_test_model_init.py", "check_subclass", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
+    test(
+        "tf2_test_model_init.py",
+        "check_multiple",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   @Test
