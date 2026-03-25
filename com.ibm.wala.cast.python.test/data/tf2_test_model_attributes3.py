@@ -14,4 +14,6 @@ model = tf.keras.Model(inputs=inputs, outputs=outputs)
 
 # From https://www.tensorflow.org/guide/keras/transfer_learning#freezing_layers_understanding_the_trainable_attribute
 for i in model.weights:
+    assert i.dtype == tf.float32
+    assert i.shape in [(3, 4), (4,), (4, 5), (5,)]
     f(i)

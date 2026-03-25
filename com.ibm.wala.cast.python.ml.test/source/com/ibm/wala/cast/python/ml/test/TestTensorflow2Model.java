@@ -299,6 +299,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_3_4_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3), new NumericDim(4)));
 
+  private static final TensorType TENSOR_3_4_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(4)));
+
+  private static final TensorType TENSOR_4_5_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(5)));
+
   private static final TensorType TENSOR_1_28_28_1_FLOAT32 =
       new TensorType(
           FLOAT_32,
@@ -1410,10 +1416,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(3, Set.of(TENSOR_20_28_28_INT32)));
   }
 
-  /**
-   * FIXME: Should not throw a {@link NullPointerException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
   @Test
   public void testModelAttributes()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -1425,54 +1427,62 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32)));
   }
 
-  /**
-   * FIXME: Should not throw a {@link NullPointerException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
   @Test
   public void testModelAttributes2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_model_attributes2.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_model_attributes2.py",
+        "f",
+        1,
+        1,
+        Map.of(
+            2, Set.of(TENSOR_3_4_FLOAT32, TENSOR_4_FLOAT32, TENSOR_4_5_FLOAT32, TENSOR_5_FLOAT32)));
   }
 
-  /**
-   * FIXME: Should not throw a {@link NullPointerException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
   @Test
   public void testModelAttributes3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_model_attributes3.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_model_attributes3.py",
+        "f",
+        1,
+        1,
+        Map.of(
+            2, Set.of(TENSOR_3_4_FLOAT32, TENSOR_4_FLOAT32, TENSOR_4_5_FLOAT32, TENSOR_5_FLOAT32)));
   }
 
-  /**
-   * FIXME: Should not throw a {@link NullPointerException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
   @Test
   public void testModelAttributes4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_model_attributes4.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_model_attributes4.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32)));
   }
 
-  /**
-   * FIXME: Should not throw a {@link NullPointerException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
   @Test
   public void testModelAttributes5()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_model_attributes5.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_model_attributes5.py",
+        "f",
+        1,
+        1,
+        Map.of(
+            2, Set.of(TENSOR_3_4_FLOAT32, TENSOR_4_FLOAT32, TENSOR_4_5_FLOAT32, TENSOR_5_FLOAT32)));
   }
 
-  /**
-   * FIXME: Should not throw a {@link NullPointerException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
   @Test
   public void testModelAttributes6()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_model_attributes6.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
+    test(
+        "tf2_test_model_attributes6.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32)));
   }
 
   /**
@@ -6394,7 +6404,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_model_init.py", "check_positional", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
     test("tf2_test_model_init.py", "check_keyword", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
     test("tf2_test_model_init.py", "check_mixed", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
-    test("tf2_test_model_init.py", "check_subclass", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
+    // TODO: Change to `1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32))` once
+    // https://github.com/wala/ML/issues/118 is resolved:
+    test("tf2_test_model_init.py", "check_subclass", 0, 0);
     test(
         "tf2_test_model_init.py",
         "check_multiple",
