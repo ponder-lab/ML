@@ -389,6 +389,10 @@ public abstract class PythonAnalysisEngine<T>
         int v = 2000;
         SSAInstructionFactory insts = PythonLanguage.Python.instructionFactory();
 
+        SSAInstruction lastAlloc = null;
+        int lastAllocVn = -1;
+        TypeReference lastAllocType = null;
+
         for (SSAInstruction inst : s.getStatements()) {
           if (inst == null) continue;
           newSummary.addStatement(inst);
@@ -411,68 +415,75 @@ public abstract class PythonAnalysisEngine<T>
             }
           }
 
-          if (instanceType != null
-              && classToFunDoRefs.containsKey(instanceType)
-              && !classToFunDoRefs.get(instanceType).isEmpty()) {
-            modified = true;
-            for (MethodReference funDoRef : classToFunDoRefs.get(instanceType)) {
-              TypeReference funClsRef = funDoRef.getDeclaringClass();
-              int funObjVn = v++, trampVn = v++;
-              newSummary.addStatement(
-                  insts.NewInstruction(pc++, funObjVn, NewSiteReference.make(pc, funClsRef)));
-              newSummary.addStatement(
-                  insts.NewInstruction(
-                      pc++,
-                      trampVn,
-                      NewSiteReference.make(
-                          pc, PythonInstanceMethodTrampoline.findOrCreate(funClsRef, cha))));
-              newSummary.addStatement(
-                  insts.PutInstruction(
-                      pc++,
-                      trampVn,
-                      returnVn,
-                      FieldReference.findOrCreate(
-                          PythonTypes.Root,
-                          Atom.findOrCreateUnicodeAtom("$self"),
-                          PythonTypes.Root)));
-              newSummary.addStatement(
-                  insts.PutInstruction(
-                      pc++,
-                      trampVn,
-                      funObjVn,
-                      FieldReference.findOrCreate(
-                          PythonTypes.Root,
-                          Atom.findOrCreateUnicodeAtom("$function"),
-                          PythonTypes.Root)));
+          if (instanceType != null) {
+            lastAlloc = inst;
+            lastAllocVn = returnVn;
+            lastAllocType = instanceType;
+          }
+        }
 
-              String fieldName =
-                  funClsRef
-                      .getName()
-                      .toString()
-                      .substring(funClsRef.getName().toString().lastIndexOf('/') + 1);
+        if (lastAllocType != null
+            && classToFunDoRefs.containsKey(lastAllocType)
+            && !classToFunDoRefs.get(lastAllocType).isEmpty()) {
+          modified = true;
+          int pc = newSummary.getNumberOfStatements();
+          for (MethodReference funDoRef : classToFunDoRefs.get(lastAllocType)) {
+            TypeReference funClsRef = funDoRef.getDeclaringClass();
+            int funObjVn = v++, trampVn = v++;
+            int curPc = pc++;
+            newSummary.addStatement(
+                insts.NewInstruction(curPc, funObjVn, NewSiteReference.make(curPc, funClsRef)));
+            curPc = pc++;
+            newSummary.addStatement(
+                insts.NewInstruction(
+                    curPc,
+                    trampVn,
+                    NewSiteReference.make(
+                        curPc, PythonInstanceMethodTrampoline.findOrCreate(funClsRef, cha))));
+            newSummary.addStatement(
+                insts.PutInstruction(
+                    pc++,
+                    trampVn,
+                    lastAllocVn,
+                    FieldReference.findOrCreate(
+                        PythonTypes.Root,
+                        Atom.findOrCreateUnicodeAtom("$self"),
+                        PythonTypes.Root)));
+            newSummary.addStatement(
+                insts.PutInstruction(
+                    pc++,
+                    trampVn,
+                    funObjVn,
+                    FieldReference.findOrCreate(
+                        PythonTypes.Root,
+                        Atom.findOrCreateUnicodeAtom("$function"),
+                        PythonTypes.Root)));
+
+            String fieldName =
+                funClsRef
+                    .getName()
+                    .toString()
+                    .substring(funClsRef.getName().toString().lastIndexOf('/') + 1);
+            newSummary.addStatement(
+                insts.PutInstruction(
+                    pc++,
+                    lastAllocVn,
+                    trampVn,
+                    FieldReference.findOrCreate(
+                        PythonTypes.Root,
+                        Atom.findOrCreateUnicodeAtom(fieldName),
+                        PythonTypes.Root)));
+
+            if (fieldName.equals("__call__")
+                || fieldName.equals("call")
+                || fieldName.equals("do")) {
               newSummary.addStatement(
                   insts.PutInstruction(
                       pc++,
-                      returnVn,
+                      lastAllocVn,
                       trampVn,
                       FieldReference.findOrCreate(
-                          PythonTypes.Root,
-                          Atom.findOrCreateUnicodeAtom(fieldName),
-                          PythonTypes.Root)));
-
-              if (fieldName.equals("__call__")
-                  || fieldName.equals("call")
-                  || fieldName.equals("do")) {
-                newSummary.addStatement(
-                    insts.PutInstruction(
-                        pc++,
-                        returnVn,
-                        trampVn,
-                        FieldReference.findOrCreate(
-                            PythonTypes.Root,
-                            Atom.findOrCreateUnicodeAtom("do"),
-                            PythonTypes.Root)));
-              }
+                          PythonTypes.Root, Atom.findOrCreateUnicodeAtom("do"), PythonTypes.Root)));
             }
           }
         }
