@@ -21,7 +21,7 @@
       </class>
     </package>
     <class name="issue127/C" allocatable="true">
-      <method name="__call__" descriptor="()LRoot;" numArgs="2" paramNames="self x">
+      <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self x">
         <return value="x" />
       </method>
     </class>

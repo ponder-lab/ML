@@ -739,6 +739,21 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
       // If it's an "object" method.
       if (reference.equals(PythonTypes.object)) return true;
+
+      // Handle synthetic classes (e.g., from XML summaries) which inherit from object
+      // but are not functions or trampolines.
+      IClassHierarchy cha = pointerAnalysis.getClassHierarchy();
+      IClass objClass = cha.lookupClass(PythonTypes.object);
+      IClass trampClass = cha.lookupClass(PythonTypes.trampoline);
+
+      if (objClass != null && cha.isSubclassOf(concreteType, objClass)) {
+        if (trampClass == null || !cha.isSubclassOf(concreteType, trampClass)) {
+          // Do not treat generated trampoline classes (which contain '$') as generic objects
+          if (!concreteType.getName().toString().contains("$")) {
+            return true;
+          }
+        }
+      }
     }
 
     return false;
