@@ -73,6 +73,7 @@ import com.ibm.wala.ssa.SSAInstructionFactory;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAOptions;
 import com.ibm.wala.ssa.SSAOptions.DefaultValues;
+import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.ClassLoaderReference;
 import com.ibm.wala.types.FieldReference;
@@ -87,6 +88,7 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -393,8 +395,13 @@ public abstract class PythonAnalysisEngine<T>
         int lastAllocVn = -1;
         TypeReference lastAllocType = null;
 
+        SSAReturnInstruction returnInst = null;
         for (SSAInstruction inst : s.getStatements()) {
           if (inst == null) continue;
+          if (inst instanceof SSAReturnInstruction) {
+            returnInst = (SSAReturnInstruction) inst;
+            continue;
+          }
           newSummary.addStatement(inst);
           int pc = newSummary.getNumberOfStatements();
 
@@ -406,7 +413,7 @@ public abstract class PythonAnalysisEngine<T>
             returnVn = ((SSANewInstruction) inst).getDef();
           } else if (inst.toString().contains(" = new <")) {
             try {
-              java.lang.reflect.Method m = inst.getClass().getMethod("getNewSite");
+              Method m = inst.getClass().getMethod("getNewSite");
               NewSiteReference site = (NewSiteReference) m.invoke(inst);
               instanceType = site.getDeclaredType();
               m = inst.getClass().getMethod("getDef");
@@ -426,20 +433,19 @@ public abstract class PythonAnalysisEngine<T>
             && classToFunDoRefs.containsKey(lastAllocType)
             && !classToFunDoRefs.get(lastAllocType).isEmpty()) {
           modified = true;
-          int pc = newSummary.getNumberOfStatements();
           for (MethodReference funDoRef : classToFunDoRefs.get(lastAllocType)) {
             TypeReference funClsRef = funDoRef.getDeclaringClass();
             int funObjVn = v++, trampVn = v++;
-            int curPc = pc++;
+            int pc = newSummary.getNumberOfStatements();
             newSummary.addStatement(
-                insts.NewInstruction(curPc, funObjVn, NewSiteReference.make(curPc, funClsRef)));
-            curPc = pc++;
+                insts.NewInstruction(pc, funObjVn, NewSiteReference.make(pc, funClsRef)));
+            pc = newSummary.getNumberOfStatements();
             newSummary.addStatement(
                 insts.NewInstruction(
-                    curPc,
+                    pc,
                     trampVn,
                     NewSiteReference.make(
-                        curPc, PythonInstanceMethodTrampoline.findOrCreate(funClsRef, cha))));
+                        pc, PythonInstanceMethodTrampoline.findOrCreate(funClsRef, cha))));
             newSummary.addStatement(
                 insts.PutInstruction(
                     pc++,
@@ -488,12 +494,20 @@ public abstract class PythonAnalysisEngine<T>
           }
         }
 
+        if (returnInst != null) {
+          int pc = newSummary.getNumberOfStatements();
+          if (returnInst.getNumberOfUses() > 0) {
+            newSummary.addStatement(insts.ReturnInstruction(pc, returnInst.getUse(0), false));
+          } else {
+            newSummary.addStatement(insts.ReturnInstruction(pc));
+          }
+        }
+
         if (modified) {
           summaries.put(s.getMethod(), newSummary);
         }
       }
     }
-
     // Pass 3: Register classes. Use AbstractPythonSyntheticClass only for classes with methods
     // (requiring trampolines)
     for (TypeReference t : xml.getAllocatableClasses()) {
