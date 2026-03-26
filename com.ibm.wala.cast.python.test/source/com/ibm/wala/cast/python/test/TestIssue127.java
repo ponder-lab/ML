@@ -123,6 +123,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
     }
 
     boolean found = false;
+    boolean foundArg = false;
 
     for (CGNode node : CG) {
       if (node.getMethod()
@@ -137,12 +138,31 @@ public class TestIssue127 extends TestJythonCallGraphShape {
           if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
               && callee.getMethod().getName().toString().matches("(foo|trampoline.*)")) {
             found = true;
+
+            // Check that the argument passed to foo is the constant 5
+            int[] params = callee.getIR().getSymbolTable().getParameterValueNumbers();
+            if (params.length > 1) {
+              PointerKey pk =
+                  builder
+                      .getPointerAnalysis()
+                      .getHeapModel()
+                      .getPointerKeyForLocal(callee, params[1]);
+              for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(pk)) {
+                if (ik instanceof ConstantKey) {
+                  Object val = ((ConstantKey<?>) ik).getValue();
+                  if (val instanceof Number && ((Number) val).longValue() == 5L) {
+                    foundArg = true;
+                  }
+                }
+              }
+            }
           }
         }
       }
     }
 
     assertTrue("Expecting to find foo method call.", found);
+    assertTrue("Expecting to find integer 5 passed to foo.", foundArg);
   }
 
   /**
@@ -167,6 +187,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
     }
 
     boolean found = false;
+    boolean foundArg = false;
 
     for (CGNode node : CG) {
       if (node.getMethod()
@@ -181,12 +202,31 @@ public class TestIssue127 extends TestJythonCallGraphShape {
           if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
               && callee.getMethod().getName().toString().matches("(foo|trampoline.*)")) {
             found = true;
+
+            // Check that the argument passed to foo is the constant 5
+            int[] params = callee.getIR().getSymbolTable().getParameterValueNumbers();
+            if (params.length > 1) {
+              PointerKey pk =
+                  builder
+                      .getPointerAnalysis()
+                      .getHeapModel()
+                      .getPointerKeyForLocal(callee, params[1]);
+              for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(pk)) {
+                if (ik instanceof ConstantKey) {
+                  Object val = ((ConstantKey<?>) ik).getValue();
+                  if (val instanceof Number && ((Number) val).longValue() == 5L) {
+                    foundArg = true;
+                  }
+                }
+              }
+            }
           }
         }
       }
     }
 
     assertTrue("Expecting to find foo method call.", found);
+    assertTrue("Expecting to find integer 5 passed to foo.", foundArg);
   }
 
   /**
