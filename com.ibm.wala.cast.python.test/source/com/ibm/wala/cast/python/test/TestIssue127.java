@@ -15,6 +15,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.SSAPropagationCallGraphBuilder;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.util.CancelException;
 import java.io.File;
 import java.io.IOException;
@@ -43,6 +44,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
         addSummaryBypassLogic(options, "issue127c.xml");
         addSummaryBypassLogic(options, "issue127d.xml");
         addSummaryBypassLogic(options, "issue127e.xml");
+        addSummaryBypassLogic(options, "issue127f.xml");
       }
 
       @Override
@@ -137,7 +139,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
           String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
           logger.info("Found callee: " + calleeName + "." + callee.getMethod().getName());
           if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
-              && callee.getMethod().getName().toString().matches("(foo|trampoline.*)")) {
+              && callee.getMethod().getName().toString().matches("(foo|do|trampoline.*)")) {
             found = true;
 
             // Check that the argument passed to foo is the constant 5
@@ -201,7 +203,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
           String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
           logger.info("Found callee: " + calleeName + "." + callee.getMethod().getName());
           if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
-              && callee.getMethod().getName().toString().matches("(foo|trampoline.*)")) {
+              && callee.getMethod().getName().toString().matches("(foo|do|trampoline.*)")) {
             found = true;
 
             // Check that the value returned from foo (which is field f) is 42
@@ -259,7 +261,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
           String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
           logger.info("Found callee: " + calleeName + "." + callee.getMethod().getName());
           if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
-              && callee.getMethod().getName().toString().matches("(foo|trampoline.*)")) {
+              && callee.getMethod().getName().toString().matches("(foo|do|trampoline.*)")) {
             found = true;
 
             // Check that the value returned from foo (which is field f) is 42
@@ -280,6 +282,153 @@ public class TestIssue127 extends TestJythonCallGraphShape {
 
     assertTrue("Expecting to find foo method call.", found);
     assertTrue("Expecting to find value 42 returned from foo.", foundVal);
+  }
+
+  /**
+   * Test field extraction and argument passing from a synthetic object.
+   *
+   * @see <a href="https://github.com/wala/ML/issues/127">Issue 127</a>
+   */
+  @Test
+  public void testIssue127f()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("test_issue127f.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+
+    if (logger.isLoggable(Level.FINE)) {
+      CAstCallGraphUtil.AVOID_DUMP.set(false);
+      CAstCallGraphUtil.dumpCG(
+          ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
+          builder.getPointerAnalysis(),
+          CG);
+      logger.fine("Call graph:\n" + CG);
+    }
+
+    boolean found = false;
+    boolean foundArg = false;
+    boolean foundField = false;
+
+    for (CGNode callee : CG) {
+      String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
+      if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
+          && callee.getMethod().getName().toString().matches("(foo|do|trampoline.*)")) {
+        logger.info("Inspecting node: " + calleeName + "." + callee.getMethod().getName());
+        found = true;
+
+        // Check return value
+        PointerKey pk =
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForReturnValue(callee);
+        for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(pk)) {
+          if (ik instanceof ConstantKey) {
+            Object val = ((ConstantKey<?>) ik).getValue();
+            if (val instanceof Number && ((Number) val).longValue() == 100L) {
+              foundArg = true;
+            }
+          }
+        }
+
+        // Check field f value 42
+        for (Iterator<SSAInstruction> it2 = callee.getIR().iterateAllInstructions();
+            it2.hasNext(); ) {
+          SSAInstruction inst = it2.next();
+          if (inst != null && inst.toString().contains("f") && inst.hasDef()) {
+            PointerKey fpk =
+                builder
+                    .getPointerAnalysis()
+                    .getHeapModel()
+                    .getPointerKeyForLocal(callee, inst.getDef());
+            for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(fpk)) {
+              if (ik instanceof ConstantKey) {
+                Object val = ((ConstantKey<?>) ik).getValue();
+                if (val instanceof Number && ((Number) val).longValue() == 42L) {
+                  foundField = true;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    assertTrue("Expecting to find foo method call.", found);
+    assertTrue("Expecting to find argument 100 returned from foo.", foundArg);
+    assertTrue("Expecting to find field f value 42 inside foo.", foundField);
+  }
+
+  /**
+   * Test field extraction and argument passing from a real (non-synthetic) object.
+   *
+   * <p>This is a control case for comparison with {@link #testIssue127f()}.
+   */
+  @Test
+  public void testIssue127fReal()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("test_issue127f_real.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+
+    if (logger.isLoggable(Level.FINE)) {
+      CAstCallGraphUtil.AVOID_DUMP.set(false);
+      CAstCallGraphUtil.dumpCG(
+          ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
+          builder.getPointerAnalysis(),
+          CG);
+      logger.fine("Call graph:\n" + CG);
+    }
+
+    boolean found = false;
+    boolean foundArg = false;
+    boolean foundField = false;
+
+    for (CGNode callee : CG) {
+      String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
+      if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
+          && callee.getMethod().getName().toString().matches("(foo|do|trampoline.*)")) {
+        logger.info("Inspecting node: " + calleeName + "." + callee.getMethod().getName());
+        found = true;
+
+        // Check return value
+        PointerKey pk =
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForReturnValue(callee);
+        for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(pk)) {
+          if (ik instanceof ConstantKey) {
+            Object val = ((ConstantKey<?>) ik).getValue();
+            if (val instanceof Number && ((Number) val).longValue() == 100L) {
+              foundArg = true;
+            }
+          }
+        }
+
+        // Check field f value 42
+        // For real Python, the method is not named "do"
+        if (!callee.getMethod().getName().toString().startsWith("trampoline")) {
+          for (Iterator<SSAInstruction> it2 = callee.getIR().iterateAllInstructions();
+              it2.hasNext(); ) {
+            SSAInstruction inst = it2.next();
+            if (inst != null && inst.toString().contains("f") && inst.hasDef()) {
+              PointerKey fpk =
+                  builder
+                      .getPointerAnalysis()
+                      .getHeapModel()
+                      .getPointerKeyForLocal(callee, inst.getDef());
+              for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(fpk)) {
+                if (ik instanceof ConstantKey) {
+                  Object val = ((ConstantKey<?>) ik).getValue();
+                  if (val instanceof Number && ((Number) val).longValue() == 42L) {
+                    foundField = true;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    assertTrue("Expecting to find foo method call.", found);
+    assertTrue("Expecting to find argument 100 returned from foo.", foundArg);
+    assertTrue("Expecting to find field f value 42 inside foo.", foundField);
   }
 
   /**
@@ -317,7 +466,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
           String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
           logger.info("Found callee: " + calleeName + "." + callee.getMethod().getName());
           if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
-              && callee.getMethod().getName().toString().matches("(foo|trampoline.*)")) {
+              && callee.getMethod().getName().toString().matches("(foo|do|trampoline.*)")) {
             found = true;
 
             // Check that the argument passed to foo is the constant 5
@@ -379,7 +528,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
           CGNode callee = it.next();
           String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
           if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
-              && callee.getMethod().getName().toString().matches("(foo|trampoline.*)")) {
+              && callee.getMethod().getName().toString().matches("(foo|do|trampoline.*)")) {
             foundCount++;
 
             // Check parameter 2 (index 2 for positional param 'a', self is param 1)
@@ -449,7 +598,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
           CGNode callee = it.next();
           String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
           if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
-              && callee.getMethod().getName().toString().matches("(foo|trampoline.*)")) {
+              && callee.getMethod().getName().toString().matches("(foo|do|trampoline.*)")) {
             foundCount++;
 
             int[] params = callee.getIR().getSymbolTable().getParameterValueNumbers();
