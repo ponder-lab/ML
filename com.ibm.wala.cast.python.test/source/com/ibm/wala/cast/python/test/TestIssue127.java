@@ -5,6 +5,7 @@ import static org.junit.Assert.assertTrue;
 import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
@@ -45,6 +46,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
         addSummaryBypassLogic(options, "issue127d.xml");
         addSummaryBypassLogic(options, "issue127e.xml");
         addSummaryBypassLogic(options, "issue127f.xml");
+        addSummaryBypassLogic(options, "issue127g.xml");
       }
 
       @Override
@@ -429,6 +431,126 @@ public class TestIssue127 extends TestJythonCallGraphShape {
     assertTrue("Expecting to find foo method call.", found);
     assertTrue("Expecting to find argument 100 returned from foo.", foundArg);
     assertTrue("Expecting to find field f value 42 inside foo.", foundField);
+  }
+
+  /**
+   * Test keyword argument extraction from a synthetic object.
+   *
+   * @see <a href="https://github.com/wala/ML/issues/127">Issue 127</a>
+   */
+  @Test
+  public void testIssue127g()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("test_issue127g.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+
+    if (logger.isLoggable(Level.FINE)) {
+      CAstCallGraphUtil.AVOID_DUMP.set(false);
+      CAstCallGraphUtil.dumpCG(
+          ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
+          builder.getPointerAnalysis(),
+          CG);
+      logger.fine("Call graph:\n" + CG);
+    }
+
+    boolean found = false;
+    boolean foundArg = false;
+
+    for (CGNode callee : CG) {
+      String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
+      if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
+          && callee.getMethod().getName().toString().matches("(foo|do|trampoline.*)")) {
+        logger.info("Inspecting node: " + calleeName + "." + callee.getMethod().getName());
+        found = true;
+
+        if (callee.getMethod().getName().toString().startsWith("trampoline")) {
+          // Check that the trampoline's invokeFunction has the keyword argument 'val' pointing to
+          // 42
+          for (Iterator<SSAInstruction> it2 = callee.getIR().iterateAllInstructions();
+              it2.hasNext(); ) {
+            SSAInstruction inst = it2.next();
+            if (inst instanceof PythonInvokeInstruction) {
+              PythonInvokeInstruction invoke = (PythonInvokeInstruction) inst;
+              if (invoke.getKeywords() != null) {
+                int kwIndex = 0;
+                for (String kw : invoke.getKeywords()) {
+                  if (kw.equals("val")) {
+                    int valVn = invoke.getUse(invoke.getNumberOfPositionalParameters() + kwIndex);
+                    PointerKey kwPk =
+                        builder
+                            .getPointerAnalysis()
+                            .getHeapModel()
+                            .getPointerKeyForLocal(callee, valVn);
+                    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(kwPk)) {
+                      if (ik instanceof ConstantKey) {
+                        Object val = ((ConstantKey<?>) ik).getValue();
+                        if (val instanceof Number && ((Number) val).longValue() == 42L) {
+                          foundArg = true;
+                        }
+                      }
+                    }
+                  }
+                  kwIndex++;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    assertTrue("Expecting to find foo method call.", found);
+    assertTrue("Expecting to find keyword argument 42 passed through trampoline.", foundArg);
+  }
+
+  /**
+   * Test keyword argument extraction from a real (non-synthetic) object.
+   *
+   * <p>This is a control case for comparison with {@link #testIssue127g()}.
+   */
+  @Test
+  public void testIssue127gReal()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("test_issue127g_real.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+
+    if (logger.isLoggable(Level.FINE)) {
+      CAstCallGraphUtil.AVOID_DUMP.set(false);
+      CAstCallGraphUtil.dumpCG(
+          ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
+          builder.getPointerAnalysis(),
+          CG);
+      logger.fine("Call graph:\n" + CG);
+    }
+
+    boolean found = false;
+    boolean foundArg = false;
+
+    for (CGNode callee : CG) {
+      String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
+      if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
+          && callee.getMethod().getName().toString().matches("(foo|do|trampoline.*)")) {
+        logger.info("Inspecting node: " + calleeName + "." + callee.getMethod().getName());
+        found = true;
+
+        // Check return value (which should be the keyword argument 42)
+        PointerKey pk =
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForReturnValue(callee);
+        for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(pk)) {
+          if (ik instanceof ConstantKey) {
+            Object val = ((ConstantKey<?>) ik).getValue();
+            if (val instanceof Number && ((Number) val).longValue() == 42L) {
+              foundArg = true;
+            }
+          }
+        }
+      }
+    }
+
+    assertTrue("Expecting to find foo method call.", found);
+    assertTrue("Expecting to find keyword argument 42 returned from foo.", foundArg);
   }
 
   /**
