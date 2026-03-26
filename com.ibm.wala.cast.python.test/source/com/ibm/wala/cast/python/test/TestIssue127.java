@@ -42,6 +42,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
         addSummaryBypassLogic(options, "issue127b.xml");
         addSummaryBypassLogic(options, "issue127c.xml");
         addSummaryBypassLogic(options, "issue127d.xml");
+        addSummaryBypassLogic(options, "issue127e.xml");
       }
 
       @Override
@@ -163,6 +164,122 @@ public class TestIssue127 extends TestJythonCallGraphShape {
 
     assertTrue("Expecting to find foo method call.", found);
     assertTrue("Expecting to find integer 5 passed to foo.", foundArg);
+  }
+
+  /**
+   * Test field extraction from a synthetic object.
+   *
+   * @see <a href="https://github.com/wala/ML/issues/127">Issue 127</a>
+   */
+  @Test
+  public void testIssue127e()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("test_issue127e.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+
+    if (logger.isLoggable(Level.FINE)) {
+      CAstCallGraphUtil.AVOID_DUMP.set(false);
+      CAstCallGraphUtil.dumpCG(
+          ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
+          builder.getPointerAnalysis(),
+          CG);
+      logger.fine("Call graph:\n" + CG);
+    }
+
+    boolean found = false;
+    boolean foundVal = false;
+
+    for (CGNode node : CG) {
+      if (node.getMethod()
+          .getDeclaringClass()
+          .getName()
+          .toString()
+          .equals("Lscript test_issue127e.py")) {
+        for (Iterator<CGNode> it = CG.getSuccNodes(node); it.hasNext(); ) {
+          CGNode callee = it.next();
+          String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
+          logger.info("Found callee: " + calleeName + "." + callee.getMethod().getName());
+          if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
+              && callee.getMethod().getName().toString().matches("(foo|trampoline.*)")) {
+            found = true;
+
+            // Check that the value returned from foo (which is field f) is 42
+            PointerKey pk =
+                builder.getPointerAnalysis().getHeapModel().getPointerKeyForReturnValue(callee);
+            for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(pk)) {
+              if (ik instanceof ConstantKey) {
+                Object val = ((ConstantKey<?>) ik).getValue();
+                if (val instanceof Number && ((Number) val).longValue() == 42L) {
+                  foundVal = true;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    assertTrue("Expecting to find foo method call.", found);
+    assertTrue("Expecting to find value 42 returned from foo.", foundVal);
+  }
+
+  /**
+   * Test field extraction from a real (non-synthetic) object.
+   *
+   * <p>This is a control case for comparison with {@link #testIssue127e()}.
+   */
+  @Test
+  public void testIssue127eReal()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("test_issue127e_real.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+
+    if (logger.isLoggable(Level.FINE)) {
+      CAstCallGraphUtil.AVOID_DUMP.set(false);
+      CAstCallGraphUtil.dumpCG(
+          ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
+          builder.getPointerAnalysis(),
+          CG);
+      logger.fine("Call graph:\n" + CG);
+    }
+
+    boolean found = false;
+    boolean foundVal = false;
+
+    for (CGNode node : CG) {
+      if (node.getMethod()
+          .getDeclaringClass()
+          .getName()
+          .toString()
+          .equals("Lscript test_issue127e_real.py")) {
+        for (Iterator<CGNode> it = CG.getSuccNodes(node); it.hasNext(); ) {
+          CGNode callee = it.next();
+          String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
+          logger.info("Found callee: " + calleeName + "." + callee.getMethod().getName());
+          if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
+              && callee.getMethod().getName().toString().matches("(foo|trampoline.*)")) {
+            found = true;
+
+            // Check that the value returned from foo (which is field f) is 42
+            PointerKey pk =
+                builder.getPointerAnalysis().getHeapModel().getPointerKeyForReturnValue(callee);
+            for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(pk)) {
+              if (ik instanceof ConstantKey) {
+                Object val = ((ConstantKey<?>) ik).getValue();
+                if (val instanceof Number && ((Number) val).longValue() == 42L) {
+                  foundVal = true;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    assertTrue("Expecting to find foo method call.", found);
+    assertTrue("Expecting to find value 42 returned from foo.", foundVal);
   }
 
   /**
