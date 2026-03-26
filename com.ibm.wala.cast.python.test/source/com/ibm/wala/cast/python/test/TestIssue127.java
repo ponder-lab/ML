@@ -48,6 +48,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
         addSummaryBypassLogic(options, "issue127f.xml");
         addSummaryBypassLogic(options, "issue127g.xml");
         addSummaryBypassLogic(options, "issue127h.xml");
+        addSummaryBypassLogic(options, "issue127i.xml");
       }
 
       @Override
@@ -782,6 +783,180 @@ public class TestIssue127 extends TestJythonCallGraphShape {
     assertTrue("Expecting to find __call__ method call.", found);
     assertTrue("Expecting to find keyword argument 100 returned from __call__.", foundArg);
     assertTrue("Expecting to find field f value 42 inside __call__.", foundField);
+  }
+
+  /**
+   * Test a combination of {@code call}, field access, and keyword arguments on a synthetic object
+   * (validating the Keras Model workaround).
+   *
+   * @see <a href="https://github.com/wala/ML/issues/127">Issue 127</a>
+   */
+  @Test
+  public void testIssue127i()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("test_issue127i.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+
+    if (logger.isLoggable(Level.FINE)) {
+      CAstCallGraphUtil.AVOID_DUMP.set(false);
+      CAstCallGraphUtil.dumpCG(
+          ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
+          builder.getPointerAnalysis(),
+          CG);
+      logger.fine("Call graph:\n" + CG);
+    }
+
+    boolean found = false;
+    boolean foundArg = false;
+    boolean foundField = false;
+
+    for (CGNode callee : CG) {
+      String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
+      if ((calleeName.endsWith("/C")
+              || calleeName.contains("/C/")
+              || calleeName.contains("/C/call"))
+          && callee.getMethod().getName().toString().matches("(call|do|trampoline.*)")) {
+        logger.info("Inspecting node: " + calleeName + "." + callee.getMethod().getName());
+        found = true;
+
+        if (callee.getMethod().getName().toString().startsWith("trampoline")) {
+          // Check that the trampoline's invokeFunction has the keyword argument 'val2' pointing to
+          // 100
+          for (Iterator<SSAInstruction> it2 = callee.getIR().iterateAllInstructions();
+              it2.hasNext(); ) {
+            SSAInstruction inst = it2.next();
+            if (inst instanceof PythonInvokeInstruction) {
+              PythonInvokeInstruction invoke = (PythonInvokeInstruction) inst;
+              if (invoke.getKeywords() != null) {
+                int kwIndex = 0;
+                for (String kw : invoke.getKeywords()) {
+                  if (kw.equals("val2")) {
+                    int valVn = invoke.getUse(invoke.getNumberOfPositionalParameters() + kwIndex);
+                    PointerKey kwPk =
+                        builder
+                            .getPointerAnalysis()
+                            .getHeapModel()
+                            .getPointerKeyForLocal(callee, valVn);
+                    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(kwPk)) {
+                      if (ik instanceof ConstantKey) {
+                        Object val = ((ConstantKey<?>) ik).getValue();
+                        if (val instanceof Number && ((Number) val).longValue() == 100L) {
+                          foundArg = true;
+                        }
+                      }
+                    }
+                  }
+                  kwIndex++;
+                }
+              }
+            }
+          }
+        }
+
+        // Check field f value 42
+        for (Iterator<SSAInstruction> it2 = callee.getIR().iterateAllInstructions();
+            it2.hasNext(); ) {
+          SSAInstruction inst = it2.next();
+          if (inst != null && inst.toString().contains("f") && inst.hasDef()) {
+            PointerKey fpk =
+                builder
+                    .getPointerAnalysis()
+                    .getHeapModel()
+                    .getPointerKeyForLocal(callee, inst.getDef());
+            for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(fpk)) {
+              if (ik instanceof ConstantKey) {
+                Object val = ((ConstantKey<?>) ik).getValue();
+                if (val instanceof Number && ((Number) val).longValue() == 42L) {
+                  foundField = true;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    assertTrue("Expecting to find call method call.", found);
+    assertTrue("Expecting to find keyword argument 100 passed through trampoline.", foundArg);
+    assertTrue("Expecting to find field f value 42 inside call.", foundField);
+  }
+
+  /**
+   * Test a combination of method call, field access, and keyword arguments on a real
+   * (non-synthetic) object.
+   *
+   * <p>This is a control case for comparison with {@link #testIssue127i()}.
+   */
+  @Test
+  public void testIssue127iReal()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("test_issue127i_real.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+
+    if (logger.isLoggable(Level.FINE)) {
+      CAstCallGraphUtil.AVOID_DUMP.set(false);
+      CAstCallGraphUtil.dumpCG(
+          ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
+          builder.getPointerAnalysis(),
+          CG);
+      logger.fine("Call graph:\n" + CG);
+    }
+
+    boolean found = false;
+    boolean foundArg = false;
+    boolean foundField = false;
+
+    for (CGNode callee : CG) {
+      String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
+      if ((calleeName.endsWith("/C")
+              || calleeName.contains("/C/")
+              || calleeName.contains("/C/call"))
+          && callee.getMethod().getName().toString().matches("(call|do|trampoline.*)")) {
+        logger.info("Inspecting node: " + calleeName + "." + callee.getMethod().getName());
+        found = true;
+
+        // Check return value (which should be the keyword argument 100)
+        PointerKey pk =
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForReturnValue(callee);
+        for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(pk)) {
+          if (ik instanceof ConstantKey) {
+            Object val = ((ConstantKey<?>) ik).getValue();
+            if (val instanceof Number && ((Number) val).longValue() == 100L) {
+              foundArg = true;
+            }
+          }
+        }
+
+        // Check field f value 42
+        if (!callee.getMethod().getName().toString().startsWith("trampoline")) {
+          for (Iterator<SSAInstruction> it2 = callee.getIR().iterateAllInstructions();
+              it2.hasNext(); ) {
+            SSAInstruction inst = it2.next();
+            if (inst != null && inst.toString().contains("f") && inst.hasDef()) {
+              PointerKey fpk =
+                  builder
+                      .getPointerAnalysis()
+                      .getHeapModel()
+                      .getPointerKeyForLocal(callee, inst.getDef());
+              for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(fpk)) {
+                if (ik instanceof ConstantKey) {
+                  Object val = ((ConstantKey<?>) ik).getValue();
+                  if (val instanceof Number && ((Number) val).longValue() == 42L) {
+                    foundField = true;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    assertTrue("Expecting to find call method call.", found);
+    assertTrue("Expecting to find keyword argument 100 returned from call.", foundArg);
+    assertTrue("Expecting to find field f value 42 inside call.", foundField);
   }
 
   /**
