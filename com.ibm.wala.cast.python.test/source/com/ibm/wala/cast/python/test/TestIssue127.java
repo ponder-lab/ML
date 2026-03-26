@@ -5,6 +5,7 @@ import static org.junit.Assert.assertTrue;
 import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
@@ -13,6 +14,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.SSAPropagationCallGraphBuilder;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
+import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.util.CancelException;
 import java.io.File;
 import java.io.IOException;
@@ -34,9 +36,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     return new PythonAnalysisEngine<Void>(pythonPath) {
       @Override
-      protected void addBypassLogic(
-          com.ibm.wala.ipa.cha.IClassHierarchy cha,
-          com.ibm.wala.ipa.callgraph.AnalysisOptions options) {
+      protected void addBypassLogic(IClassHierarchy cha, AnalysisOptions options) {
         super.addBypassLogic(cha, options);
         addSummaryBypassLogic(options, "issue127.xml");
         addSummaryBypassLogic(options, "issue127b.xml");
