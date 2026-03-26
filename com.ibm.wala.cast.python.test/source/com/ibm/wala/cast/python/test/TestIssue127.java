@@ -82,28 +82,84 @@ public class TestIssue127 extends TestJythonCallGraphShape {
     }
 
     boolean found = false;
+    boolean foundArg = false;
 
-    for (CGNode node : CG) {
-      if (node.getMethod()
-          .getDeclaringClass()
-          .getName()
-          .toString()
-          .equals("Lscript test_issue127.py")) {
-        for (Iterator<CGNode> it = CG.getSuccNodes(node); it.hasNext(); ) {
-          CGNode callee = it.next();
-          String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
-          logger.info("Found callee: " + calleeName + "." + callee.getMethod().getName());
-          if ((calleeName.endsWith("/C")
-                  || calleeName.contains("/C/")
-                  || calleeName.contains("/C/__call__"))
-              && callee.getMethod().getName().toString().matches("(__call__|trampoline.*)")) {
-            found = true;
+    for (CGNode callee : CG) {
+      String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
+      if ((calleeName.endsWith("/C")
+              || calleeName.contains("/C/")
+              || calleeName.contains("/C/__call__"))
+          && callee.getMethod().getName().toString().matches("(__call__|do|trampoline.*)")) {
+        logger.info("Inspecting node: " + calleeName + "." + callee.getMethod().getName());
+        found = true;
+
+        // Check that the value returned from __call__ (which is the argument 5) is 5
+        PointerKey pk =
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForReturnValue(callee);
+        for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(pk)) {
+          if (ik instanceof ConstantKey) {
+            Object val = ((ConstantKey<?>) ik).getValue();
+            if (val instanceof Number && ((Number) val).longValue() == 5L) {
+              foundArg = true;
+            }
           }
         }
       }
     }
 
     assertTrue("Expecting to find __call__ method trampoline.", found);
+    assertTrue("Expecting to find argument 5 returned from __call__.", foundArg);
+  }
+
+  /**
+   * Test explicit method call on a real (non-synthetic) callable object.
+   *
+   * <p>This is a control case for comparison with {@link #testIssue127()}.
+   */
+  @Test
+  public void testIssue127Real()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("test_issue127_real.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+
+    if (logger.isLoggable(Level.FINE)) {
+      CAstCallGraphUtil.AVOID_DUMP.set(false);
+      CAstCallGraphUtil.dumpCG(
+          ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
+          builder.getPointerAnalysis(),
+          CG);
+      logger.fine("Call graph:\n" + CG);
+    }
+
+    boolean found = false;
+    boolean foundArg = false;
+
+    for (CGNode callee : CG) {
+      String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
+      if ((calleeName.endsWith("/C")
+              || calleeName.contains("/C/")
+              || calleeName.contains("/C/__call__"))
+          && callee.getMethod().getName().toString().matches("(__call__|do|trampoline.*)")) {
+        logger.info("Inspecting node: " + calleeName + "." + callee.getMethod().getName());
+        found = true;
+
+        // Check that the value returned from __call__ (which is the argument 5) is 5
+        PointerKey pk =
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForReturnValue(callee);
+        for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(pk)) {
+          if (ik instanceof ConstantKey) {
+            Object val = ((ConstantKey<?>) ik).getValue();
+            if (val instanceof Number && ((Number) val).longValue() == 5L) {
+              foundArg = true;
+            }
+          }
+        }
+      }
+    }
+
+    assertTrue("Expecting to find __call__ method trampoline.", found);
+    assertTrue("Expecting to find argument 5 returned from __call__.", foundArg);
   }
 
   /**
