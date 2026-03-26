@@ -638,8 +638,10 @@ public class TestIssue127 extends TestJythonCallGraphShape {
 
     for (CGNode callee : CG) {
       String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
-      if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
-          && callee.getMethod().getName().toString().matches("(foo|do|trampoline.*)")) {
+      if ((calleeName.endsWith("/C")
+              || calleeName.contains("/C/")
+              || calleeName.contains("/C/__call__"))
+          && callee.getMethod().getName().toString().matches("(__call__|do|trampoline.*)")) {
         logger.info("Inspecting node: " + calleeName + "." + callee.getMethod().getName());
         found = true;
 
@@ -700,9 +702,9 @@ public class TestIssue127 extends TestJythonCallGraphShape {
       }
     }
 
-    assertTrue("Expecting to find foo method call.", found);
+    assertTrue("Expecting to find __call__ method call.", found);
     assertTrue("Expecting to find keyword argument 100 passed through trampoline.", foundArg);
-    assertTrue("Expecting to find field f value 42 inside foo.", foundField);
+    assertTrue("Expecting to find field f value 42 inside __call__.", foundField);
   }
 
   /**
@@ -733,8 +735,10 @@ public class TestIssue127 extends TestJythonCallGraphShape {
 
     for (CGNode callee : CG) {
       String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
-      if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
-          && callee.getMethod().getName().toString().matches("(foo|do|trampoline.*)")) {
+      if ((calleeName.endsWith("/C")
+              || calleeName.contains("/C/")
+              || calleeName.contains("/C/__call__"))
+          && callee.getMethod().getName().toString().matches("(__call__|do|trampoline.*)")) {
         logger.info("Inspecting node: " + calleeName + "." + callee.getMethod().getName());
         found = true;
 
@@ -775,9 +779,9 @@ public class TestIssue127 extends TestJythonCallGraphShape {
       }
     }
 
-    assertTrue("Expecting to find foo method call.", found);
-    assertTrue("Expecting to find keyword argument 100 returned from foo.", foundArg);
-    assertTrue("Expecting to find field f value 42 inside foo.", foundField);
+    assertTrue("Expecting to find __call__ method call.", found);
+    assertTrue("Expecting to find keyword argument 100 returned from __call__.", foundArg);
+    assertTrue("Expecting to find field f value 42 inside __call__.", foundField);
   }
 
   /**

@@ -20,7 +20,7 @@
       </class>
     </package>
     <class name="issue127h/C" allocatable="true">
-      <method name="foo" descriptor="()LRoot;" numArgs="3" paramNames="func self val2">
+      <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self val2">
         <getfield def="res" class="LRoot" field="f" fieldType="LRoot" ref="self" />
         <return value="val2" />
       </method>
