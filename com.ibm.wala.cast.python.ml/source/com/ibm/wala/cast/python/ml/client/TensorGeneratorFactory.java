@@ -600,7 +600,7 @@ public class TensorGeneratorFactory {
       return new ElementWiseOperation(source);
     else if (isType(calledFunction, REDUCE_SUM.getDeclaringClass())) return new ReduceSum(source);
     else if (isType(calledFunction, MATMUL.getDeclaringClass())) return new MatMul(source);
-    else if (isType(calledFunction, DENSE.getDeclaringClass())) return new Dense(source);
+    else if (isType(calledFunction, DENSE.getDeclaringClass())) return new DenseCall(source);
     else if (isType(calledFunction, FLATTEN.getDeclaringClass())) return new Flatten(source);
     else if (isType(calledFunction, MAX_POOL.getDeclaringClass())) return new MaxPool(source);
     else {

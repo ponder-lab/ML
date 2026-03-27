@@ -109,7 +109,7 @@ public class Model extends TensorGenerator {
       }
 
       if (realClassName.contains("Dense")) {
-        Dense denseGen = new Dense(node);
+        DenseCall denseGen = new DenseCall(node);
 
         // Hyper-exhaustive search: check indices 0-5 for both units and inputs in node and all
         // callers.
