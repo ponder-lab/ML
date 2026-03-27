@@ -789,7 +789,17 @@ public class TestIssue127 extends TestJythonCallGraphShape {
    * Test a combination of {@code call}, field access, and keyword arguments on a synthetic object
    * (validating the Keras Model workaround).
    *
+   * <p>TODO: Currently, the WALA-Cast-Python XML summary parser ({@code PythonAnalysisEngine})
+   * hardcodes the superclass of all synthetic classes to {@code PythonTypes.object}. Therefore,
+   * {@code issue127i/C} cannot actually inherit from {@code tf.keras.Model}. This test only works
+   * because the current workaround in {@code PythonInstanceMethodTrampolineTargetSelector} blindly
+   * treats ANY object with a {@code call} method as a callable without checking its class
+   * hierarchy. If that workaround is ever tightened to require explicit {@code tf.keras.Model}
+   * inheritance, this test will fail and WALA's XML parsing will need to be upgraded to support a
+   * {@code super} attribute.
+   *
    * @see <a href="https://github.com/wala/ML/issues/127">Issue 127</a>
+   * @see <a href="https://github.com/wala/ML/issues/118">Issue 118</a>
    */
   @Test
   public void testIssue127i()
