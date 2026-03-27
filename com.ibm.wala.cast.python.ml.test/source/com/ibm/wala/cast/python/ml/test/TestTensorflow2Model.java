@@ -6745,8 +6745,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testDenseCall()
+  public void testDense()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_dense_call.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_NONE_4_FLOAT32)));
+    test("tf2_test_dense.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_NONE_4_FLOAT32)));
   }
 }
