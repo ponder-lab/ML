@@ -51,28 +51,101 @@ public class Dense extends TensorGenerator {
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     String methodName = this.getNode().getMethod().getName().toString();
 
+    // Adjust parameter positions based on method signature
+    int inputPos = -1;
+    int unitsPos = -1;
+
+    if (methodName.equals("__call__") || methodName.equals("call")) {
+      inputPos = 1; // func, self, inputs (so inputs is pos 1)
+    } else if (methodName.equals("do")
+        && !this.getNode().getMethod().getDeclaringClass().getName().toString().contains("call")) {
+      unitsPos = 1; // self, units (so units is pos 1)
+    }
+
+    Set<List<Dimension<?>>> inputShapes = HashSetFactory.make();
     OrdinalSet<InstanceKey> inputPts =
-        this.getArgumentPointsToSet(
-            builder, Parameters.INPUTS.getIndex(), Parameters.INPUTS.getName());
-    LOGGER.fine("Dense inputPts size: " + inputPts.size());
-    if (inputPts.isEmpty()) return Collections.emptySet();
+        inputPos >= 0
+            ? this.getArgumentPointsToSet(builder, inputPos, Parameters.INPUTS.getName())
+            : null;
 
-    Set<List<Dimension<?>>> inputShapes = this.getShapesOfValue(builder, inputPts);
+    if (inputPts != null && !inputPts.isEmpty()) {
+      inputShapes.addAll(this.getShapesOfValue(builder, inputPts));
+    } else {
+      // Fallback: Read 'inputs' field from self
+      OrdinalSet<InstanceKey> selfPts =
+          this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, null);
+      if (selfPts != null) {
+        for (InstanceKey ik : selfPts) {
+          com.ibm.wala.classLoader.IField inputsField =
+              ik.getConcreteType()
+                  .getField(com.ibm.wala.core.util.strings.Atom.findOrCreateUnicodeAtom("inputs"));
+          if (inputsField != null) {
+            OrdinalSet<InstanceKey> fPts =
+                builder
+                    .getPointerAnalysis()
+                    .getPointsToSet(
+                        builder
+                            .getPointerKeyFactory()
+                            .getPointerKeyForInstanceField(ik, inputsField));
+            if (fPts != null && !fPts.isEmpty()) {
+              inputShapes.addAll(this.getShapesOfValue(builder, fPts));
+            }
+          }
+        }
+      }
+    }
+
     LOGGER.fine("Dense inputShapes: " + inputShapes);
+    if (inputShapes.isEmpty()) return Collections.emptySet();
 
-    OrdinalSet<InstanceKey> unitsPts =
-        this.getArgumentPointsToSet(
-            builder, Parameters.UNITS.getIndex(), Parameters.UNITS.getName());
-    LOGGER.fine("Dense unitsPts size: " + (unitsPts == null ? 0 : unitsPts.size()));
     Set<Integer> unitsValues = HashSetFactory.make();
-    if (unitsPts != null) {
+    OrdinalSet<InstanceKey> unitsPts =
+        unitsPos >= 0
+            ? this.getArgumentPointsToSet(builder, unitsPos, Parameters.UNITS.getName())
+            : null;
+
+    if (unitsPts != null && !unitsPts.isEmpty()) {
       for (InstanceKey ik : unitsPts) {
         if (ik instanceof ConstantKey) {
           Object val = ((ConstantKey<?>) ik).getValue();
           if (val instanceof Number) unitsValues.add(((Number) val).intValue());
         }
       }
+    } else {
+      // Fallback: Read 'units' field from self
+      OrdinalSet<InstanceKey> selfPts = null;
+      if (methodName.equals("__call__") || methodName.equals("call")) {
+        selfPts = this.getArgumentPointsToSet(builder, 0, null);
+      } else {
+        selfPts = this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, null);
+      }
+
+      if (selfPts != null) {
+        for (InstanceKey ik : selfPts) {
+          com.ibm.wala.classLoader.IField unitsField =
+              ik.getConcreteType()
+                  .getField(com.ibm.wala.core.util.strings.Atom.findOrCreateUnicodeAtom("units"));
+          if (unitsField != null) {
+            OrdinalSet<InstanceKey> fPts =
+                builder
+                    .getPointerAnalysis()
+                    .getPointsToSet(
+                        builder
+                            .getPointerKeyFactory()
+                            .getPointerKeyForInstanceField(ik, unitsField));
+            if (fPts != null) {
+              for (InstanceKey p : fPts) {
+                if (p instanceof ConstantKey) {
+                  Object val = ((ConstantKey<?>) p).getValue();
+                  if (val instanceof Number) unitsValues.add(((Number) val).intValue());
+                }
+              }
+            }
+          }
+        }
+      }
     }
+
     LOGGER.fine("Dense unitsValues: " + unitsValues);
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();

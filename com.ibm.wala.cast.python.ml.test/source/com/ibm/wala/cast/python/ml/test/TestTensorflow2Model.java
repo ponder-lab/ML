@@ -105,6 +105,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_NONE_32_FLOAT32 =
       new TensorType(FLOAT_32, asList(null, new NumericDim(32)));
 
+  private static final TensorType TENSOR_NONE_4_FLOAT32 =
+      new TensorType(FLOAT_32, asList(null, new NumericDim(4)));
+
   private static final TensorType TENSOR_NONE_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(null, new NumericDim(2)));
 
@@ -6739,5 +6742,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
               }
             })
         .collect(toList());
+  }
+
+  @Test
+  public void testDenseCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dense_call.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_NONE_4_FLOAT32)));
   }
 }

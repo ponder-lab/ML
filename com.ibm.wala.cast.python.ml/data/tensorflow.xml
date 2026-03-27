@@ -949,13 +949,13 @@
           <putfield class="LRoot" field="non_trainable_weights" fieldType="LRoot" ref="res" value="x" />
           <return value="res" />
         </method>
-        <method name="__call__" descriptor="()LRoot;" numArgs="4" paramNames="self inputs training mask">
+        <method name="__call__" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs training mask">
           <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Model#call -->
           <new def="out" class="Ltensorflow/keras/models/Model" />
           <return value="out" />
         </method>
         <!-- FIXME: Workaround for https://github.com/wala/ML/issues/106. -->
-        <method name="call" descriptor="()LRoot;" numArgs="4" paramNames="self inputs training mask">
+        <method name="call" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs training mask">
           <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Model#call -->
           <new def="out" class="Ltensorflow/keras/models/Model" />
           <return value="out" />
@@ -973,17 +973,24 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Dense -->
         <method name="do" descriptor="()LRoot;" numArgs="11" paramNames="self units activation use_bias kernel_initializer bias_initializer kernel_regularizer bias_regularizer activity_regularizer kernel_constraint bias_constraint">
           <new def="res" class="Ltensorflow/keras/layers/Dense" />
+          <putfield class="LRoot" field="units" fieldType="LRoot" ref="res" value="units" />
           <return value="res" />
         </method>
         <!-- https://github.com/keras-team/keras/blob/07e13740fd181fc3ddec7d9a594d8a08666645f6/keras/layers/core/dense.py#L166-L240 -->
-        <method name="__call__" descriptor="()LRoot;" numArgs="2" paramNames="self inputs">
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <putfield class="LRoot" field="inputs" fieldType="LRoot" ref="self" value="inputs" />
           <new def="out" class="Ltensorflow/keras/layers/Dense" />
+          <getfield def="u" class="LRoot" field="units" fieldType="LRoot" ref="self" />
+          <putfield class="LRoot" field="units" fieldType="LRoot" ref="out" value="u" />
           <return value="out" />
         </method>
         <!-- FIXME: Workaround for https://github.com/wala/ML/issues/106. -->
-        <method name="call" descriptor="()LRoot;" numArgs="2" paramNames="self inputs">
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <putfield class="LRoot" field="inputs" fieldType="LRoot" ref="self" value="inputs" />
           <!-- https://github.com/keras-team/keras/blob/07e13740fd181fc3ddec7d9a594d8a08666645f6/keras/layers/core/dense.py#L166-L240 -->
           <new def="out" class="Ltensorflow/keras/layers/Dense" />
+          <getfield def="u" class="LRoot" field="units" fieldType="LRoot" ref="self" />
+          <putfield class="LRoot" field="units" fieldType="LRoot" ref="out" value="u" />
           <return value="out" />
         </method>
       </class>
