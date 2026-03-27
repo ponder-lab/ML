@@ -6498,6 +6498,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             3, Set.of(TENSOR_3_3_FLOAT32)));
   }
 
+  @Test
+  public void testDense()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dense.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_NONE_4_FLOAT32)));
+  }
+
   private void test(
       String filename,
       String functionName,
@@ -6742,11 +6748,5 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
               }
             })
         .collect(toList());
-  }
-
-  @Test
-  public void testDense()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_dense.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_NONE_4_FLOAT32)));
   }
 }
