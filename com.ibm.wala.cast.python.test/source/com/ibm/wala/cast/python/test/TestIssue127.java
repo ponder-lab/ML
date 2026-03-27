@@ -49,6 +49,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
         addSummaryBypassLogic(options, "issue127g.xml");
         addSummaryBypassLogic(options, "issue127h.xml");
         addSummaryBypassLogic(options, "issue127i.xml");
+        addSummaryBypassLogic(options, "issue127j.xml");
       }
 
       @Override
@@ -967,6 +968,166 @@ public class TestIssue127 extends TestJythonCallGraphShape {
     assertTrue("Expecting to find call method call.", found);
     assertTrue("Expecting to find keyword argument 100 returned from call.", foundArg);
     assertTrue("Expecting to find field f value 42 inside call.", foundField);
+  }
+
+  /**
+   * Test pointer analysis precision and isolation for multiple synthetic instances of the same
+   * class initialized with varied field values and invoked with different arguments.
+   *
+   * @see <a href="https://github.com/wala/ML/issues/127">Issue 127</a>
+   */
+  @Test
+  public void testIssue127j()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("test_issue127j.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+
+    if (logger.isLoggable(Level.FINE)) {
+      CAstCallGraphUtil.AVOID_DUMP.set(false);
+      CAstCallGraphUtil.dumpCG(
+          ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
+          builder.getPointerAnalysis(),
+          CG);
+      logger.fine("Call graph:\n" + CG);
+    }
+
+    Set<Object> argValues = new HashSet<>();
+    Set<Object> fieldValues = new HashSet<>();
+
+    for (CGNode callee : CG) {
+      String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
+      if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
+          && callee.getMethod().getName().toString().matches("(foo|do|trampoline.*)")) {
+
+        // Extract return values (arguments passed)
+        PointerKey pk =
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForReturnValue(callee);
+        for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(pk)) {
+          if (ik instanceof ConstantKey) {
+            argValues.add(((ConstantKey<?>) ik).getValue());
+          }
+        }
+
+        // Extract field read values
+        for (Iterator<SSAInstruction> it2 = callee.getIR().iterateAllInstructions();
+            it2.hasNext(); ) {
+          SSAInstruction inst = it2.next();
+          if (inst != null && inst.toString().contains("f") && inst.hasDef()) {
+            PointerKey fpk =
+                builder
+                    .getPointerAnalysis()
+                    .getHeapModel()
+                    .getPointerKeyForLocal(callee, inst.getDef());
+            for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(fpk)) {
+              if (ik instanceof ConstantKey) {
+                fieldValues.add(((ConstantKey<?>) ik).getValue());
+              }
+            }
+          }
+        }
+      }
+    }
+
+    boolean has100 = false, has200 = false;
+    for (Object v : argValues) {
+      if (v instanceof Number) {
+        if (((Number) v).longValue() == 100L) has100 = true;
+        if (((Number) v).longValue() == 200L) has200 = true;
+      }
+    }
+
+    boolean has42 = false, has84 = false;
+    for (Object v : fieldValues) {
+      if (v instanceof Number) {
+        if (((Number) v).longValue() == 42L) has42 = true;
+        if (((Number) v).longValue() == 84L) has84 = true;
+      }
+    }
+
+    assertTrue("Expecting to find BOTH arguments (100, 200) returned.", has100 && has200);
+    assertTrue("Expecting to find BOTH field values (42, 84) inside methods.", has42 && has84);
+  }
+
+  /**
+   * Test pointer analysis precision and isolation for multiple real (non-synthetic) instances
+   * initialized with varied field values and invoked with different arguments.
+   *
+   * <p>This is a control case for comparison with {@link #testIssue127j()}.
+   */
+  @Test
+  public void testIssue127jReal()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("test_issue127j_real.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+
+    if (logger.isLoggable(Level.FINE)) {
+      CAstCallGraphUtil.AVOID_DUMP.set(false);
+      CAstCallGraphUtil.dumpCG(
+          ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
+          builder.getPointerAnalysis(),
+          CG);
+      logger.fine("Call graph:\n" + CG);
+    }
+
+    Set<Object> argValues = new HashSet<>();
+    Set<Object> fieldValues = new HashSet<>();
+
+    for (CGNode callee : CG) {
+      String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
+      if ((calleeName.endsWith("/C") || calleeName.contains("/C/"))
+          && callee.getMethod().getName().toString().matches("(foo|do|trampoline.*)")) {
+
+        // Extract return values (arguments passed)
+        PointerKey pk =
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForReturnValue(callee);
+        for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(pk)) {
+          if (ik instanceof ConstantKey) {
+            argValues.add(((ConstantKey<?>) ik).getValue());
+          }
+        }
+
+        // Extract field read values (excluding trampolines)
+        if (!callee.getMethod().getName().toString().startsWith("trampoline")) {
+          for (Iterator<SSAInstruction> it2 = callee.getIR().iterateAllInstructions();
+              it2.hasNext(); ) {
+            SSAInstruction inst = it2.next();
+            if (inst != null && inst.toString().contains("f") && inst.hasDef()) {
+              PointerKey fpk =
+                  builder
+                      .getPointerAnalysis()
+                      .getHeapModel()
+                      .getPointerKeyForLocal(callee, inst.getDef());
+              for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(fpk)) {
+                if (ik instanceof ConstantKey) {
+                  fieldValues.add(((ConstantKey<?>) ik).getValue());
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    boolean has100 = false, has200 = false;
+    for (Object v : argValues) {
+      if (v instanceof Number) {
+        if (((Number) v).longValue() == 100L) has100 = true;
+        if (((Number) v).longValue() == 200L) has200 = true;
+      }
+    }
+
+    boolean has42 = false, has84 = false;
+    for (Object v : fieldValues) {
+      if (v instanceof Number) {
+        if (((Number) v).longValue() == 42L) has42 = true;
+        if (((Number) v).longValue() == 84L) has84 = true;
+      }
+    }
+
+    assertTrue("Expecting to find BOTH arguments (100, 200) returned.", has100 && has200);
+    assertTrue("Expecting to find BOTH field values (42, 84) inside methods.", has42 && has84);
   }
 
   /**
