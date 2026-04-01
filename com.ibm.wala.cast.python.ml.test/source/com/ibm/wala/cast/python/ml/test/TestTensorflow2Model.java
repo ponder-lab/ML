@@ -1374,7 +1374,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * https://github.com/wala/WALA/discussions/1417#discussioncomment-10085680. This should fail due
    * to https://github.com/wala/ML/issues/207.
    */
-  @Test(expected = java.lang.AssertionError.class)
+  @Test(expected = AssertionError.class)
   public void testModelCall5()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
