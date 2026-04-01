@@ -87,6 +87,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_1_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(2)));
 
+  @SuppressWarnings("unused")
   private static final TensorType TENSOR_32_INT32 =
       new TensorType(INT_32, asList(new NumericDim(32)));
 

@@ -243,7 +243,7 @@ public abstract class PythonAnalysisEngine<T>
             MethodReference.findOrCreate(funClsRef, AstMethodReference.fnSelector);
 
         List<MethodReference> funDoRefs =
-            classToFunDoRefs.computeIfAbsent(t, k -> new ArrayList<>());
+            classToFunDoRefs.computeIfAbsent(t, _ -> new ArrayList<>());
         funDoRefs.add(funDoRef);
 
         PythonSummary funSummary = new PythonSummary(funDoRef, s.getNumberOfParameters());
