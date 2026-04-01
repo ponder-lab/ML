@@ -50,6 +50,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
         addSummaryBypassLogic(options, "issue127h.xml");
         addSummaryBypassLogic(options, "issue127i.xml");
         addSummaryBypassLogic(options, "issue127j.xml");
+        addSummaryBypassLogic(options, "issue127k.xml");
       }
 
       @Override
@@ -1330,5 +1331,109 @@ public class TestIssue127 extends TestJythonCallGraphShape {
         "Expecting to find foo method calls for direct and variable calls.", foundCount >= 2);
     assertTrue(
         "Expecting to find distinct arguments 5 and 3 tracked by pointer analysis.", has5 && has3);
+  }
+
+  /**
+   * Test pointer analysis precision and isolation for multiple synthetic instances of the same
+   * class initialized with varied field values and invoked via implicit call.
+   *
+   * @see <a href="https://github.com/wala/ML/issues/127">Issue 127</a>
+   */
+  @Test
+  public void testIssue127k()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("test_issue127k.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+
+    if (logger.isLoggable(Level.FINE)) {
+      CAstCallGraphUtil.AVOID_DUMP.set(false);
+      CAstCallGraphUtil.dumpCG(
+          ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
+          builder.getPointerAnalysis(),
+          CG);
+      logger.fine("Call graph:\n" + CG);
+    }
+
+    Set<Object> returnValues = new HashSet<>();
+
+    for (CGNode callee : CG) {
+      String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
+      if ((calleeName.contains("/C") || calleeName.contains("/C/__call__"))
+          && callee.getMethod().getName().toString().matches("(__call__|do|trampoline.*)")) {
+
+        // Extract return values (field values returned)
+        PointerKey pk =
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForReturnValue(callee);
+        for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(pk)) {
+          if (ik instanceof ConstantKey) {
+            returnValues.add(((ConstantKey<?>) ik).getValue());
+          }
+        }
+      }
+    }
+
+    boolean has42 = false, has84 = false;
+    for (Object v : returnValues) {
+      if (v instanceof Number) {
+        if (((Number) v).longValue() == 42L) has42 = true;
+        if (((Number) v).longValue() == 84L) has84 = true;
+      }
+    }
+
+    assertTrue(
+        "Expecting to find BOTH field values (42, 84) returned from __call__.", has42 && has84);
+  }
+
+  /**
+   * Test pointer analysis precision and isolation for multiple real (non-synthetic) instances
+   * initialized with varied field values and invoked via implicit call.
+   *
+   * <p>This is a control case for comparison with {@link #testIssue127k()}.
+   */
+  @Test
+  public void testIssue127kReal()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonAnalysisEngine<?> engine = makeEngine("test_issue127k_real.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+
+    if (logger.isLoggable(Level.FINE)) {
+      CAstCallGraphUtil.AVOID_DUMP.set(false);
+      CAstCallGraphUtil.dumpCG(
+          ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
+          builder.getPointerAnalysis(),
+          CG);
+      logger.fine("Call graph:\n" + CG);
+    }
+
+    Set<Object> returnValues = new HashSet<>();
+
+    for (CGNode callee : CG) {
+      String calleeName = callee.getMethod().getDeclaringClass().getName().toString();
+      if ((calleeName.contains("/C") || calleeName.contains("/C/__call__"))
+          && callee.getMethod().getName().toString().matches("(__call__|do|trampoline.*)")) {
+
+        // Extract return values (field values returned)
+        PointerKey pk =
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForReturnValue(callee);
+        for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(pk)) {
+          if (ik instanceof ConstantKey) {
+            returnValues.add(((ConstantKey<?>) ik).getValue());
+          }
+        }
+      }
+    }
+
+    boolean has42 = false, has84 = false;
+    for (Object v : returnValues) {
+      if (v instanceof Number) {
+        if (((Number) v).longValue() == 42L) has42 = true;
+        if (((Number) v).longValue() == 84L) has84 = true;
+      }
+    }
+
+    assertTrue(
+        "Expecting to find BOTH field values (42, 84) returned from __call__.", has42 && has84);
   }
 }
