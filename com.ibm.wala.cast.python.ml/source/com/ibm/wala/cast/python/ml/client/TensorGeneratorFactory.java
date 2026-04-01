@@ -24,7 +24,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SHUFFLE_
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_TAKE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_WITH_OPTIONS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_ZIP_TYPE;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DENSE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DENSE_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIVIDE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EYE;
@@ -600,7 +600,7 @@ public class TensorGeneratorFactory {
       return new ElementWiseOperation(source);
     else if (isType(calledFunction, REDUCE_SUM.getDeclaringClass())) return new ReduceSum(source);
     else if (isType(calledFunction, MATMUL.getDeclaringClass())) return new MatMul(source);
-    else if (isType(calledFunction, DENSE.getDeclaringClass())) return new DenseCall(source);
+    else if (isType(calledFunction, DENSE_CALL.getDeclaringClass())) return new DenseCall(source);
     else if (isType(calledFunction, FLATTEN.getDeclaringClass())) return new Flatten(source);
     else if (isType(calledFunction, MAX_POOL.getDeclaringClass())) return new MaxPool(source);
     else {

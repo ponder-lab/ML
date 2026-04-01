@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.google.common.collect.Sets.newHashSet;
+import static com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory.getGenerator;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATA_PACKAGE_PREFIX;
 
@@ -306,12 +307,15 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       String methodName = instruction.getCallSite().getDeclaredTarget().getName().toString();
       if (methodName.equals(TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME) || methodName.equals("do")) {
         try {
-          TensorGeneratorFactory.getGenerator(src, builder);
+          TensorGenerator generator = getGenerator(src, builder);
+          logger.fine(() -> "Found tensor generator: " + generator + " for source: " + src + ".");
           sources.add(src);
           logger.info("Added dataflow source from tensor generator: " + src + ".");
           ret = true;
         } catch (IllegalArgumentException e) {
           // not a tensor source.
+          logger.log(Level.FINE, "Not a tensor source: " + methodName, e);
+          e.printStackTrace();
         }
       } else if (instruction.getNumberOfUses() > 1) {
         // Get the invoked function from the PA.
@@ -811,7 +815,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     logger.fine("Getting tensor types for source: " + source + ".");
 
     try {
-      TensorGenerator generator = TensorGeneratorFactory.getGenerator(source, builder);
+      TensorGenerator generator = getGenerator(source, builder);
       logger.fine("Using tensor generator: " + generator + ".");
 
       Set<TensorType> tensorTypes = generator.getTensorTypes(builder);

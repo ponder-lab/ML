@@ -1941,7 +1941,7 @@ public abstract class TensorGenerator {
       };
     } else if (type.equals(PLACEHOLDER.getDeclaringClass())) {
       return new Placeholder(node);
-    } else if (type.equals(TensorFlowTypes.DENSE.getDeclaringClass())) {
+    } else if (type.equals(TensorFlowTypes.DENSE_CALL.getDeclaringClass())) {
       return new DenseCall(node);
     } else if (type.equals(TensorFlowTypes.MODEL.getDeclaringClass())) {
       return new Model(node);

@@ -741,14 +741,17 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String MATMUL_SIGNATURE = "tf.matmul()";
 
-  /** https://www.tensorflow.org/api_docs/python/tf/layers/dense. */
-  public static final MethodReference DENSE =
+  /**
+   * https://github.com/keras-team/keras/blob/f6c4ac55692c132cd16211f4877fac6dbeead749/keras/src/layers/core/dense.py#L149-L155.
+   */
+  public static final MethodReference DENSE_CALL =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
-              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/dense")),
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/keras/layers/Dense/__call__")),
           AstMethodReference.fnSelector);
 
-  private static final String DENSE_SIGNATURE = "tf.layers.dense()";
+  private static final String DENSE_CALL_SIGNATURE = "tf.keras.layers.Dense.__call__()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/layers/flatten. */
   public static final MethodReference FLATTEN =
@@ -878,7 +881,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(LOG.getDeclaringClass(), LOG_SIGNATURE),
           Map.entry(REDUCE_SUM.getDeclaringClass(), REDUCE_SUM_SIGNATURE),
           Map.entry(MATMUL.getDeclaringClass(), MATMUL_SIGNATURE),
-          Map.entry(DENSE.getDeclaringClass(), DENSE_SIGNATURE),
+          Map.entry(DENSE_CALL.getDeclaringClass(), DENSE_CALL_SIGNATURE),
           Map.entry(FLATTEN.getDeclaringClass(), FLATTEN_SIGNATURE),
           Map.entry(MAX_POOL.getDeclaringClass(), MAX_POOL_SIGNATURE),
           Map.entry(ADAM_OPTIMIZER.getDeclaringClass(), ADAM_OPTIMIZER_SIGNATURE),
