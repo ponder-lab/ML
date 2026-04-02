@@ -1442,6 +1442,8 @@ public abstract class TensorGenerator {
       for (int i = 0; i < cs.getCallSiteRefs().length; i++) {
         CallSiteReference siteReference = cs.getCallSiteRefs()[i];
         IMethod callerMethod = cs.getMethods()[i];
+        LOGGER.finer(
+            "Strategy 3: Checking call site: " + siteReference + " in method: " + callerMethod);
 
         for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(node); it.hasNext(); ) {
           CGNode caller = it.next();
