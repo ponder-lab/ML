@@ -975,7 +975,7 @@
     <package name="tensorflow/keras/layers">
       <class name="Input" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self shape batch_size name dtype sparse tensor ragged type_spec">
-          <new def="x" class="Ltensorflow/keras/layers/Input" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
