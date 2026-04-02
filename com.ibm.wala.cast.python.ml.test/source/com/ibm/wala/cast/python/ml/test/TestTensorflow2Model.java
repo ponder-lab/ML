@@ -6705,6 +6705,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
                     expectedTypes);
 
                 // check that the types are the same.
+                if (LOGGER.isLoggable(Level.INFO) && !expectedTypes.equals(types)) {
+                  LOGGER.info("Assertion failure for lpk: " + lpk);
+                  LOGGER.info("  Node: " + lpk.getNode());
+                  LOGGER.info("  Context: " + lpk.getNode().getContext());
+                  LOGGER.info("  Expected: " + expectedTypes);
+                  LOGGER.info("  Actual: " + types);
+                }
+
                 assertEquals(
                     "Comparing expected types for value number: " + lpk.getValueNumber() + ".",
                     expectedTypes,
