@@ -10,6 +10,9 @@
  */
 package com.ibm.wala.cast.python.ipa.callgraph;
 
+import static com.ibm.wala.cast.python.types.PythonTypes.CALLABLE_METHOD_NAME;
+import static com.ibm.wala.cast.python.types.PythonTypes.CALLABLE_METHOD_NAME_FOR_KERAS_MODELS;
+import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
 import static com.ibm.wala.cast.python.types.PythonTypes.STATIC_METHOD;
 import static com.ibm.wala.cast.python.types.Util.getDeclaringClassTypeReference;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
@@ -58,27 +61,6 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
 
   private static final Logger LOGGER =
       Logger.getLogger(PythonInstanceMethodTrampolineTargetSelector.class.getName());
-
-  /**
-   * The method name that is used for Python callables.
-   *
-   * @see <a href="https://docs.python.org/3/reference/datamodel.html#class-instances">Python
-   *     documentation</a>.
-   */
-  private static final String CALLABLE_METHOD_NAME = "__call__";
-
-  /**
-   * The method name that is used for tf.keras.Models callables. This is a workaround for
-   * https://github.com/wala/ML/issues/106.
-   *
-   * @see <a
-   *     href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Model#call">TensorFlow
-   *     documentation</a>.
-   */
-  private static final String CALLABLE_METHOD_NAME_FOR_KERAS_MODELS = "call";
-
-  /** The method name that is used for summarized methods in tensorflow.xml. */
-  private static final String DO_METHOD_NAME = "do";
 
   private PythonAnalysisEngine<T> engine;
 

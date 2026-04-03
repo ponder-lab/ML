@@ -31,6 +31,27 @@ public class PythonTypes extends AstTypeReference {
   /** The name of the type used for CAst dynamic annotations (decorators). */
   private static final String DYNAMIC_ANNOTATION_TYPE_NAME = "DYNAMIC_ANNOTATION";
 
+  /**
+   * The method name that is used for Python callables.
+   *
+   * @see <a href="https://docs.python.org/3/reference/datamodel.html#class-instances">Python
+   *     documentation</a>.
+   */
+  public static final String CALLABLE_METHOD_NAME = "__call__";
+
+  /**
+   * The method name that is used for tf.keras.Models callables. This is a workaround for
+   * https://github.com/wala/ML/issues/106.
+   *
+   * @see <a
+   *     href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Model#call">TensorFlow
+   *     documentation</a>.
+   */
+  public static final String CALLABLE_METHOD_NAME_FOR_KERAS_MODELS = "call";
+
+  /** The method name that is used for summarized methods in tensorflow.xml. */
+  public static final String DO_METHOD_NAME = "do";
+
   public static final Atom pythonName = Atom.findOrCreateUnicodeAtom(pythonNameStr);
 
   public static final Atom pythonLoaderName = Atom.findOrCreateUnicodeAtom(pythonLoaderNameStr);
@@ -121,4 +142,6 @@ public class PythonTypes extends AstTypeReference {
           return new HashSet<>();
         }
       };
+
+  protected PythonTypes() {}
 }
