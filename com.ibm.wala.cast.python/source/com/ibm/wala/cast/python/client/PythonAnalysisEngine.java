@@ -10,6 +10,9 @@
  */
 package com.ibm.wala.cast.python.client;
 
+import static com.ibm.wala.cast.python.types.PythonTypes.CALLABLE_METHOD_NAME;
+import static com.ibm.wala.cast.python.types.PythonTypes.CALLABLE_METHOD_NAME_FOR_KERAS_MODELS;
+import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
 import static java.util.Collections.emptyList;
 import static java.util.logging.Level.SEVERE;
 
@@ -232,7 +235,7 @@ public abstract class PythonAnalysisEngine<T>
     for (MethodSummary s : xml.getSummaries().values()) {
       MethodReference mr = s.getMethod();
       String methodName = mr.getName().toString();
-      if (!methodName.equals("do")
+      if (!methodName.equals(DO_METHOD_NAME)
           && !methodName.equals("import")
           && !methodName.equals("__init__")) {
         TypeReference t = mr.getDeclaringClass();
@@ -353,7 +356,7 @@ public abstract class PythonAnalysisEngine<T>
 
     // Pass 2: Identify and rewrite constructors to inject trampolines
     for (MethodReference mr : new ArrayList<>(summaries.keySet())) {
-      if (mr.getName().toString().equals("do")) {
+      if (mr.getName().toString().equals(DO_METHOD_NAME)) {
         MethodSummary s = summaries.get(mr);
         boolean hasMethods =
             classToFunDoRefs.containsKey(mr.getDeclaringClass())
@@ -480,16 +483,18 @@ public abstract class PythonAnalysisEngine<T>
                         Atom.findOrCreateUnicodeAtom(fieldName),
                         PythonTypes.Root)));
 
-            if (fieldName.equals("__call__")
-                || fieldName.equals("call")
-                || fieldName.equals("do")) {
+            if (fieldName.equals(CALLABLE_METHOD_NAME)
+                || fieldName.equals(CALLABLE_METHOD_NAME_FOR_KERAS_MODELS)
+                || fieldName.equals(DO_METHOD_NAME)) {
               newSummary.addStatement(
                   insts.PutInstruction(
                       pc++,
                       lastAllocVn,
                       trampVn,
                       FieldReference.findOrCreate(
-                          PythonTypes.Root, Atom.findOrCreateUnicodeAtom("do"), PythonTypes.Root)));
+                          PythonTypes.Root,
+                          Atom.findOrCreateUnicodeAtom(DO_METHOD_NAME),
+                          PythonTypes.Root)));
             }
           }
         }

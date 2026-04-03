@@ -4,6 +4,7 @@ import static com.google.common.collect.Sets.newHashSet;
 import static com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory.getGenerator;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATA_PACKAGE_PREFIX;
+import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
 
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.lsp.AnalysisError;
@@ -305,7 +306,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // don't consider exceptions as a data source.
     if (instruction.getException() != vn) {
       String methodName = instruction.getCallSite().getDeclaredTarget().getName().toString();
-      if (methodName.equals(TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME) || methodName.equals("do")) {
+      if (methodName.equals(TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME)
+          || methodName.equals(DO_METHOD_NAME)) {
         try {
           TensorGenerator generator = getGenerator(src, builder);
           logger.fine(() -> "Found tensor generator: " + generator + " for source: " + src + ".");

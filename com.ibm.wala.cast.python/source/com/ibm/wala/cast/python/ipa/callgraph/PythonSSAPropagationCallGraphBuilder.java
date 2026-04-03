@@ -456,7 +456,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
       return MethodReference.findOrCreate(
           typeReference,
-          Atom.findOrCreateAsciiAtom("do"),
+          Atom.findOrCreateAsciiAtom(DO_METHOD_NAME),
           Descriptor.findOrCreate(null, PythonTypes.rootTypeName));
     }
 

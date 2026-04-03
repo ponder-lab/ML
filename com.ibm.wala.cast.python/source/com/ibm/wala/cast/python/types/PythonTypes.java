@@ -49,8 +49,11 @@ public class PythonTypes extends AstTypeReference {
    */
   public static final String CALLABLE_METHOD_NAME_FOR_KERAS_MODELS = "call";
 
-  /** The method name that is used for summarized methods in tensorflow.xml. */
+  /** The method name that is used for summarized methods . */
   public static final String DO_METHOD_NAME = "do";
+
+  /** The method name used for trampoline methods. */
+  public static final String TRAMPOLINE_METHOD_NAME = "trampoline";
 
   public static final Atom pythonName = Atom.findOrCreateUnicodeAtom(pythonNameStr);
 

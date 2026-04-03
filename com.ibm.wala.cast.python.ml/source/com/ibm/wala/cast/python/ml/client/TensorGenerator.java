@@ -11,6 +11,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FIELD_REFERENCE_
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.PLACEHOLDER;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
+import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
@@ -614,7 +615,7 @@ public abstract class TensorGenerator {
     CGNode readDataNode = asin.getNode();
 
     // Support allocations directly in 'do' methods (preferred for 1-CFA context separation).
-    if (readDataNode.getMethod().getName().toString().equals("do")) {
+    if (readDataNode.getMethod().getName().toString().equals(DO_METHOD_NAME)) {
       int def = findDefinition(readDataNode, asin);
       if (def != -1) {
         PointerKey defKey =
@@ -1137,7 +1138,7 @@ public abstract class TensorGenerator {
     CGNode readDataNode = asin.getNode();
 
     // Support allocations directly in 'do' methods (preferred for 1-CFA context separation).
-    if (readDataNode.getMethod().getName().toString().equals("do")) {
+    if (readDataNode.getMethod().getName().toString().equals(DO_METHOD_NAME)) {
       int def = findDefinition(readDataNode, asin);
       if (def != -1) {
         PointerKey defKey =
@@ -1422,7 +1423,7 @@ public abstract class TensorGenerator {
       Iterator<CGNode> preds = builder.getCallGraph().getPredNodes(node);
       while (preds.hasNext()) {
         CGNode pred = preds.next();
-        if (pred.getMethod().getName().toString().equals("do")) {
+        if (pred.getMethod().getName().toString().equals(DO_METHOD_NAME)) {
           ret = OrdinalSet.unify(ret, getArgumentPointsToSet(builder, pred, paramPos, paramName));
         }
       }

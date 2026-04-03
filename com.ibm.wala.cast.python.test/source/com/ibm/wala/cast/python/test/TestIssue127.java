@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.test;
 
+import static com.ibm.wala.cast.python.types.PythonTypes.TRAMPOLINE_METHOD_NAME;
 import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
@@ -464,7 +465,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
 
         // Check field f value 42
         // For real Python, the method is not named "do"
-        if (!callee.getMethod().getName().toString().startsWith("trampoline")) {
+        if (!callee.getMethod().getName().toString().startsWith(TRAMPOLINE_METHOD_NAME)) {
           for (Iterator<SSAInstruction> it2 = callee.getIR().iterateAllInstructions();
               it2.hasNext(); ) {
             SSAInstruction inst = it2.next();
@@ -524,7 +525,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
         logger.info("Inspecting node: " + calleeName + "." + callee.getMethod().getName());
         found = true;
 
-        if (callee.getMethod().getName().toString().startsWith("trampoline")) {
+        if (callee.getMethod().getName().toString().startsWith(TRAMPOLINE_METHOD_NAME)) {
           // Check that the trampoline's invokeFunction has the keyword argument 'val' pointing to
           // 42
           for (Iterator<SSAInstruction> it2 = callee.getIR().iterateAllInstructions();
@@ -648,7 +649,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
         logger.info("Inspecting node: " + calleeName + "." + callee.getMethod().getName());
         found = true;
 
-        if (callee.getMethod().getName().toString().startsWith("trampoline")) {
+        if (callee.getMethod().getName().toString().startsWith(TRAMPOLINE_METHOD_NAME)) {
           // Check that the trampoline's invokeFunction has the keyword argument 'val2' pointing to
           // 100
           for (Iterator<SSAInstruction> it2 = callee.getIR().iterateAllInstructions();
@@ -758,7 +759,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
         }
 
         // Check field f value 42
-        if (!callee.getMethod().getName().toString().startsWith("trampoline")) {
+        if (!callee.getMethod().getName().toString().startsWith(TRAMPOLINE_METHOD_NAME)) {
           for (Iterator<SSAInstruction> it2 = callee.getIR().iterateAllInstructions();
               it2.hasNext(); ) {
             SSAInstruction inst = it2.next();
@@ -832,7 +833,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
         logger.info("Inspecting node: " + calleeName + "." + callee.getMethod().getName());
         found = true;
 
-        if (callee.getMethod().getName().toString().startsWith("trampoline")) {
+        if (callee.getMethod().getName().toString().startsWith(TRAMPOLINE_METHOD_NAME)) {
           // Check that the trampoline's invokeFunction has the keyword argument 'val2' pointing to
           // 100
           for (Iterator<SSAInstruction> it2 = callee.getIR().iterateAllInstructions();
@@ -942,7 +943,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
         }
 
         // Check field f value 42
-        if (!callee.getMethod().getName().toString().startsWith("trampoline")) {
+        if (!callee.getMethod().getName().toString().startsWith(TRAMPOLINE_METHOD_NAME)) {
           for (Iterator<SSAInstruction> it2 = callee.getIR().iterateAllInstructions();
               it2.hasNext(); ) {
             SSAInstruction inst = it2.next();
@@ -1090,7 +1091,7 @@ public class TestIssue127 extends TestJythonCallGraphShape {
         }
 
         // Extract field read values (excluding trampolines)
-        if (!callee.getMethod().getName().toString().startsWith("trampoline")) {
+        if (!callee.getMethod().getName().toString().startsWith(TRAMPOLINE_METHOD_NAME)) {
           for (Iterator<SSAInstruction> it2 = callee.getIR().iterateAllInstructions();
               it2.hasNext(); ) {
             SSAInstruction inst = it2.next();

@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ipa.callgraph;
 
+import static com.ibm.wala.cast.python.types.PythonTypes.TRAMPOLINE_METHOD_NAME;
+
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
@@ -44,7 +46,8 @@ public abstract class PythonMethodTrampolineTargetSelector<T> implements MethodT
           MethodReference tr =
               MethodReference.findOrCreate(
                   receiver.getReference(),
-                  Atom.findOrCreateUnicodeAtom("trampoline" + call.getNumberOfTotalParameters()),
+                  Atom.findOrCreateUnicodeAtom(
+                      TRAMPOLINE_METHOD_NAME + call.getNumberOfTotalParameters()),
                   AstMethodReference.fnDesc);
           PythonSummary x = new PythonSummary(tr, call.getNumberOfTotalParameters());
           int v = call.getNumberOfTotalParameters() + 1;

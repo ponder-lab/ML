@@ -748,10 +748,11 @@ public class TensorFlowTypes extends PythonTypes {
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
               PythonTypes.pythonLoader,
-              TypeName.string2TypeName("Ltensorflow/keras/layers/Dense/__call__")),
+              TypeName.string2TypeName("Ltensorflow/keras/layers/Dense/" + CALLABLE_METHOD_NAME)),
           AstMethodReference.fnSelector);
 
-  private static final String DENSE_CALL_SIGNATURE = "tf.keras.layers.Dense.__call__()";
+  private static final String DENSE_CALL_SIGNATURE =
+      "tf.keras.layers.Dense." + CALLABLE_METHOD_NAME + "()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/layers/flatten. */
   public static final MethodReference FLATTEN =

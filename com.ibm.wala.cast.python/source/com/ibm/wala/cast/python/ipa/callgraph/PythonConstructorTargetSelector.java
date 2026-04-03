@@ -10,6 +10,7 @@
  */
 package com.ibm.wala.cast.python.ipa.callgraph;
 
+import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
 import static com.ibm.wala.cast.python.types.Util.getGlobalName;
 import static com.ibm.wala.cast.python.types.Util.makeGlobalRef;
 
@@ -88,7 +89,7 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
           // Copy metadata from the original do() method if it exists.
           // This is useful for summarized methods like Dense.do() that carry extra parameters.
           MethodReference originalDoRef =
-              MethodReference.findOrCreate(receiver.getReference(), "do", "()LRoot;");
+              MethodReference.findOrCreate(receiver.getReference(), DO_METHOD_NAME, "()LRoot;");
           IClass ctorContainer = cha.lookupClass(originalDoRef.getDeclaringClass());
           IMethod originalDo =
               ctorContainer == null ? null : ctorContainer.getMethod(originalDoRef.getSelector());
