@@ -8,7 +8,6 @@ import static java.util.Collections.emptySet;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
-import com.ibm.wala.cast.python.util.Util;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -77,7 +76,7 @@ public class DenseCall extends TensorGenerator {
 
     for (InstanceKey inputIK : inputPts) {
       LOGGER.fine("Found input tensor instance key: " + inputIK);
-      AllocationSiteInNode inputASIN = Util.getAllocationSiteInNode(inputIK);
+      AllocationSiteInNode inputASIN = getAllocationSiteInNode(inputIK);
 
       if (inputASIN != null) {
         CGNode node = inputASIN.getNode();
