@@ -1,13 +1,13 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
+import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+
+import com.ibm.wala.cast.python.ml.client.DenseCall.Parameters;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
-import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.ipa.callgraph.CGNode;
-import com.ibm.wala.ipa.callgraph.CallGraph;
-import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
+import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
@@ -15,8 +15,9 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
 import java.util.Set;
 
 /**
@@ -29,10 +30,15 @@ public class Model extends TensorGenerator {
 
   /** Parameter positions and names for {@code tf.keras.Model}. */
   protected enum Parameters {
+    /** The model itself. */
+    SELF,
+
     /** The input(s) of the model. */
     INPUTS,
+
     /** The output(s) of the model. */
     OUTPUTS,
+
     /** Name of the model. */
     NAME;
 
@@ -84,7 +90,8 @@ public class Model extends TensorGenerator {
   }
 
   /**
-   * Infers the shapes of the model's weights by traversing the dataflow graph.
+   * Infers the shapes of the model's weights by traversing the computation graph backwards from the
+   * model's outputs.
    *
    * @param builder The propagation call graph builder.
    * @param modelSource The source points-to set variable representing the model.
@@ -93,88 +100,65 @@ public class Model extends TensorGenerator {
   public Set<List<Dimension<?>>> getWeightShapes(
       PropagationCallGraphBuilder builder, PointsToSetVariable modelSource) {
     Set<List<Dimension<?>>> weightShapes = HashSetFactory.make();
-    CallGraph cg = builder.getCallGraph();
 
-    // We want to collect all Dense information from the entire call graph.
-    Set<Integer> unitsValues = HashSetFactory.make();
-    Set<List<Dimension<?>>> inputShapes = HashSetFactory.make();
+    OrdinalSet<InstanceKey> outputsPts =
+        this.getArgumentPointsToSet(
+            builder, Parameters.OUTPUTS.getIndex(), Parameters.OUTPUTS.getName());
 
-    for (CGNode node : cg) {
-      IClass declaringClass = node.getMethod().getDeclaringClass();
-      String className = declaringClass.getReference().getName().toString();
-      String realClassName = className;
-      if (declaringClass instanceof PythonInstanceMethodTrampoline) {
-        realClassName =
-            ((PythonInstanceMethodTrampoline) declaringClass).getRealClass().getName().toString();
-      }
+    Set<CGNode> visited = HashSetFactory.make();
+    Queue<CGNode> queue = new LinkedList<>();
 
-      if (realClassName.contains("Dense")) {
-        DenseCall denseGen = new DenseCall(node);
-
-        // Hyper-exhaustive search: check indices 0-5 for both units and inputs in node and all
-        // callers.
-        int[] indices = {0, 1, 2, 3, 4, 5};
-
-        // Search current node
-        for (int idx : indices) {
-          OrdinalSet<InstanceKey> nodeUnitsPts =
-              denseGen.getArgumentPointsToSet(builder, idx, "units");
-          if (nodeUnitsPts != null && !nodeUnitsPts.isEmpty()) {
-            for (InstanceKey ik : nodeUnitsPts) {
-              if (ik instanceof ConstantKey) {
-                Object val = ((ConstantKey<?>) ik).getValue();
-                if (val instanceof Number) unitsValues.add(((Number) val).intValue());
-              }
-            }
-          }
-
-          OrdinalSet<InstanceKey> nodeInputPts =
-              denseGen.getArgumentPointsToSet(builder, idx, "inputs");
-          if (nodeInputPts != null && !nodeInputPts.isEmpty()) {
-            inputShapes.addAll(denseGen.getShapesOfValue(builder, nodeInputPts));
-          }
-        }
-
-        // Search all callers
-        Iterator<CGNode> callers = cg.getPredNodes(node);
-        while (callers.hasNext()) {
-          CGNode caller = callers.next();
-          for (int idx : indices) {
-            OrdinalSet<InstanceKey> callerUnitsPts =
-                denseGen.getArgumentPointsToSet(builder, caller, idx, "units");
-            if (callerUnitsPts != null && !callerUnitsPts.isEmpty()) {
-              for (InstanceKey ik : callerUnitsPts) {
-                if (ik instanceof ConstantKey) {
-                  Object val = ((ConstantKey<?>) ik).getValue();
-                  if (val instanceof Number) unitsValues.add(((Number) val).intValue());
-                }
-              }
-            }
-
-            OrdinalSet<InstanceKey> callerInputPts =
-                denseGen.getArgumentPointsToSet(builder, caller, idx, "inputs");
-            if (callerInputPts != null && !callerInputPts.isEmpty()) {
-              inputShapes.addAll(denseGen.getShapesOfValue(builder, callerInputPts));
-            }
-          }
-        }
+    for (InstanceKey outputIK : outputsPts) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(outputIK);
+      if (asin != null) {
+        queue.add(asin.getNode());
       }
     }
 
-    for (List<Dimension<?>> inputShape : inputShapes) {
-      if (inputShape.isEmpty()) continue;
-      Dimension<?> lastDim = inputShape.get(inputShape.size() - 1);
-      for (Integer units : unitsValues) {
-        // Kernel shape: (input_dim, units)
-        List<Dimension<?>> kernelShape = new ArrayList<>();
-        kernelShape.add(lastDim);
-        kernelShape.add(new NumericDim(units));
-        weightShapes.add(kernelShape);
+    while (!queue.isEmpty()) {
+      CGNode node = queue.poll();
+      if (!visited.add(node)) continue;
 
-        // Bias shape: (units,)
-        List<Dimension<?>> biasShape = new ArrayList<>();
-        biasShape.add(new NumericDim(units));
-        weightShapes.add(biasShape);
+      TensorGenerator generator = createManualGenerator(node, builder);
+      if (generator instanceof DenseCall denseCall) {
+        int valNum =
+            denseCall.getArgumentValueNumber(
+                builder,
+                DenseCall.Parameters.INPUTS.getIndex(),
+                DenseCall.Parameters.INPUTS.getName(),
+                false);
+        Set<List<Dimension<?>>> inputShapes = denseCall.getShapes(builder, valNum);
+        Set<Long> unitsValues = denseCall.getPossibleUnits(builder);
+
+        for (List<Dimension<?>> inputShape : inputShapes) {
+          if (inputShape.isEmpty()) continue;
+          Dimension<?> lastDim = inputShape.get(inputShape.size() - 1);
+          for (Long units : unitsValues) {
+            // Kernel shape: (input_dim, units)
+            List<Dimension<?>> kernelShape = new ArrayList<>();
+            kernelShape.add(lastDim);
+            kernelShape.add(new NumericDim(units.intValue()));
+            weightShapes.add(kernelShape);
+
+            // Bias shape: (units,)
+            List<Dimension<?>> biasShape = new ArrayList<>();
+            biasShape.add(new NumericDim(units.intValue()));
+            weightShapes.add(biasShape);
+          }
+        }
+      }
+
+      // Trace back to preceding layers
+      if (generator != null) {
+        for (int i = 0; i < 10; i++) { // Check up to 10 positional arguments
+          OrdinalSet<InstanceKey> inputs = generator.getArgumentPointsToSet(builder, i, null);
+          for (InstanceKey inputIK : inputs) {
+            AllocationSiteInNode asin = getAllocationSiteInNode(inputIK);
+            if (asin != null) {
+              queue.add(asin.getNode());
+            }
+          }
+        }
       }
     }
 

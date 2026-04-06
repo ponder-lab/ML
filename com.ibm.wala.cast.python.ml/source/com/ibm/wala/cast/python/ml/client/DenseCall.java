@@ -62,6 +62,60 @@ public class DenseCall extends TensorGenerator {
     super(node);
   }
 
+  /**
+   * Derives possible values for the 'units' parameter of the `Dense` layer.
+   *
+   * <p>Derives possible values for the 'units' parameter of the `Dense` layer by analyzing the
+   * points-to set of the `self` parameter (the `Dense` layer instance) and extracting the value of
+   * the 'units' field from that instance.
+   *
+   * @param builder The call graph builder used to perform points-to analysis and resolve field
+   *     references.
+   * @return A set of possible values for the 'units' parameter of the `Dense` layer.
+   */
+  protected Set<Long> getPossibleUnits(PropagationCallGraphBuilder builder) {
+    Set<Long> ret = new HashSet<>();
+
+    // Extract the 'units' value from the Dense layer instance (Parameters.SELF).
+    OrdinalSet<InstanceKey> selfPTS =
+        this.getArgumentPointsToSet(builder, Parameters.SELF.getIndex(), Parameters.SELF.getName());
+    LOGGER.fine(
+        () -> "Found `self` points-to set: " + selfPTS + " for node: " + this.getNode() + ".");
+
+    if (selfPTS != null)
+      for (InstanceKey selfIK : selfPTS) {
+        LOGGER.finer(
+            () -> "Found `self` instance key: " + selfIK + " for node: " + this.getNode() + ".");
+
+        // Extract the 'units' value from the Dense layer instance (Parameters.SELF).
+        AllocationSiteInNode selfASIN = getAllocationSiteInNode(selfIK);
+
+        // Create a field reference for the 'units' field of the Dense layer instance.
+        FieldReference unitsFieldRef =
+            FieldReference.findOrCreate(
+                selfASIN.getConcreteType().getReference(), findOrCreateAsciiAtom("units"), Root);
+
+        IField f = builder.getClassHierarchy().resolveField(unitsFieldRef);
+
+        if (f != null) {
+          PointerKey fieldPK = builder.getPointerKeyForInstanceField(selfASIN, f);
+          LOGGER.finer(
+              "Field pointer key: " + fieldPK + " for field reference: " + unitsFieldRef + ".");
+
+          OrdinalSet<InstanceKey> unitsPTS = builder.getPointerAnalysis().getPointsToSet(fieldPK);
+          LOGGER.finer("Points-to set: " + unitsPTS + " for field pointer key: " + fieldPK + ".");
+
+          Set<Long> unitValues = getPossibleLongValues(unitsPTS);
+          LOGGER.finer(
+              "Possible `units` values: " + unitValues + " for points-to set: " + unitsPTS + ".");
+
+          ret.addAll(unitValues);
+        }
+      }
+
+    return ret;
+  }
+
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     LOGGER.info("Deriving shape for Dense call at: " + this.getNode());
@@ -73,6 +127,7 @@ public class DenseCall extends TensorGenerator {
     if (inputPts.isEmpty()) return emptySet();
 
     Set<List<Dimension<?>>> outputShapes = new HashSet<>();
+    Set<Long> unitValues = this.getPossibleUnits(builder);
 
     for (InstanceKey inputIK : inputPts) {
       LOGGER.fine("Found input tensor instance key: " + inputIK);
@@ -98,74 +153,20 @@ public class DenseCall extends TensorGenerator {
             for (List<Dimension<?>> inputShape : inputShapes) {
               if (inputShape.isEmpty()) continue;
 
-              // Extract the 'units' value from the Dense layer instance (Parameters.SELF)
-              OrdinalSet<InstanceKey> selfPTS =
-                  this.getArgumentPointsToSet(
-                      builder, Parameters.SELF.getIndex(), Parameters.SELF.getName());
-              LOGGER.fine(
-                  "Found `self` points-to set: " + selfPTS + " for node: " + this.getNode() + ".");
-
-              if (selfPTS != null)
-                for (InstanceKey selfIK : selfPTS) {
-                  LOGGER.finer(
-                      "Found `self` instance key: "
-                          + selfIK
-                          + " for node: "
-                          + this.getNode()
-                          + ".");
-
-                  // Extract the 'units' value from the Dense layer instance (Parameters.SELF).
-                  AllocationSiteInNode selfASIN = getAllocationSiteInNode(selfIK);
-
-                  // Create a field reference for the 'units' field of the Dense layer instance.
-                  FieldReference unitsFieldRef =
-                      FieldReference.findOrCreate(
-                          selfASIN.getConcreteType().getReference(),
-                          findOrCreateAsciiAtom("units"),
-                          Root);
-
-                  IField f = builder.getClassHierarchy().resolveField(unitsFieldRef);
-
-                  if (f != null) {
-                    PointerKey fieldPK = builder.getPointerKeyForInstanceField(selfASIN, f);
-                    LOGGER.finer(
-                        "Field pointer key: "
-                            + fieldPK
-                            + " for field reference: "
-                            + unitsFieldRef
-                            + ".");
-
-                    OrdinalSet<InstanceKey> unitsPTS =
-                        builder.getPointerAnalysis().getPointsToSet(fieldPK);
-                    LOGGER.finer(
-                        "Points-to set: " + unitsPTS + " for field pointer key: " + fieldPK + ".");
-
-                    Set<Long> unitValues = getPossibleLongValues(unitsPTS);
-                    LOGGER.finer(
-                        "Possible `units` values: "
-                            + unitValues
-                            + " for points-to set: "
-                            + unitsPTS
-                            + ".");
-
-                    // For each possible value of 'units', set the last dimension of the output
-                    // shape to that value.
-                    for (Long units : unitValues) {
-                      if (units != null) {
-                        // Create a new output shape based on the input shape, but with the last
-                        // dimension set to 'units'.
-                        List<Dimension<?>> outShape = new ArrayList<>(inputShape);
-                        outShape.set(outShape.size() - 1, new NumericDim(units.intValue()));
-                        outputShapes.add(outShape);
-                      }
-                    }
-                  }
+              // For each possible value of 'units', set the last dimension of the output
+              // shape to that value.
+              for (Long units : unitValues)
+                if (units != null) {
+                  // Create a new output shape based on the input shape, but with the last
+                  // dimension set to 'units'.
+                  List<Dimension<?>> outShape = new ArrayList<>(inputShape);
+                  outShape.set(outShape.size() - 1, new NumericDim(units.intValue()));
+                  outputShapes.add(outShape);
                 }
             }
-          else
-            LOGGER.fine(
-                "No generator found for instance key: " + inputIK + " at node: " + node + ".");
-        }
+        } else
+          LOGGER.fine(
+              "No generator found for instance key: " + inputIK + " at node: " + node + ".");
       }
     }
 
