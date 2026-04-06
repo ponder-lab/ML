@@ -951,13 +951,13 @@
         </method>
         <method name="__call__" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs training mask">
           <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Model#call -->
-          <new def="out" class="Ltensorflow/keras/models/Model" />
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="out" />
         </method>
         <!-- FIXME: Workaround for https://github.com/wala/ML/issues/106. -->
         <method name="call" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs training mask">
           <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Model#call -->
-          <new def="out" class="Ltensorflow/keras/models/Model" />
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="out" />
         </method>
       </class>
