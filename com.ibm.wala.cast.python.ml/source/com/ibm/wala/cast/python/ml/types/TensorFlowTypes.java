@@ -628,6 +628,16 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String MODEL_SIGNATURE = "tf.keras.Model()";
 
+  public static final MethodReference MODEL_CALL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/keras/models/Model/" + CALLABLE_METHOD_NAME)),
+          AstMethodReference.fnSelector);
+
+  private static final String MODEL_CALL_SIGNATURE =
+      "tf.keras.models.Model." + CALLABLE_METHOD_NAME + "()";
+
   public static final MethodReference TENSOR =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
@@ -866,6 +876,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(DIVIDE.getDeclaringClass(), DIVIDE_SIGNATURE),
           Map.entry(REDUCE_MEAN.getDeclaringClass(), REDUCE_MEAN_SIGNATURE),
           Map.entry(MODEL.getDeclaringClass(), MODEL_SIGNATURE),
+          Map.entry(MODEL_CALL.getDeclaringClass(), MODEL_CALL_SIGNATURE),
           Map.entry(TENSOR.getDeclaringClass(), TENSOR_SIGNATURE),
           Map.entry(NDARRAY.getDeclaringClass(), NDARRAY_SIGNATURE),
           Map.entry(READ_DATA_SETS.getDeclaringClass(), READ_DATA_SETS_SIGNATURE),
