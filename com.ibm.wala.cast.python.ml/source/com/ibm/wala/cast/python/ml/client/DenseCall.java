@@ -179,12 +179,8 @@ public class DenseCall extends TensorGenerator {
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    // Derive dtype from the input tensor.
-    OrdinalSet<InstanceKey> inputPts =
-        this.getArgumentPointsToSet(
-            builder, Parameters.INPUTS.getIndex(), Parameters.INPUTS.getName());
-    if (inputPts.isEmpty()) return EnumSet.noneOf(DType.class);
-    return this.getDTypesOfValue(builder, inputPts);
+    // Keras layers like Dense usually output FLOAT32 by default, regardless of input dtype.
+    return EnumSet.of(DType.FLOAT32);
   }
 
   @Override
