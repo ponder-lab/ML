@@ -32,6 +32,8 @@ import java.util.Set;
  */
 public class DenseCall extends TensorGenerator {
 
+  private static final String DENSE_UNITS_FIELD_NAME = "units";
+
   /**
    * Parameter positions and names for calls to {@code tf.keras.layers.Dense}.
    *
@@ -93,7 +95,9 @@ public class DenseCall extends TensorGenerator {
         // Create a field reference for the 'units' field of the Dense layer instance.
         FieldReference unitsFieldRef =
             FieldReference.findOrCreate(
-                selfASIN.getConcreteType().getReference(), findOrCreateAsciiAtom("units"), Root);
+                selfASIN.getConcreteType().getReference(),
+                findOrCreateAsciiAtom(DENSE_UNITS_FIELD_NAME),
+                Root);
 
         IField f = builder.getClassHierarchy().resolveField(unitsFieldRef);
 
