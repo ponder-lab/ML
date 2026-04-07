@@ -394,49 +394,87 @@ public abstract class PythonAnalysisEngine<T>
         int v = 2000;
         SSAInstructionFactory insts = PythonLanguage.Python.instructionFactory();
 
-        SSAInstruction lastAlloc = null;
-        int lastAllocVn = -1;
-        TypeReference lastAllocType = null;
-
         SSAReturnInstruction returnInst = null;
+        int returnedVn = -1;
+
         for (SSAInstruction inst : s.getStatements()) {
           if (inst == null) continue;
           if (inst instanceof SSAReturnInstruction) {
             returnInst = (SSAReturnInstruction) inst;
+            if (returnInst.getNumberOfUses() > 0) {
+              returnedVn = returnInst.getUse(0);
+            }
             continue;
           }
           newSummary.addStatement(inst);
-          int pc = newSummary.getNumberOfStatements();
+        }
 
+        TypeReference returnedType = null;
+        int allocVn = -1;
+
+        // Find the allocation instruction that created the returned value.
+        // If the method returns a parameter, or we can't find the allocation, this will remain
+        // null.
+        for (SSAInstruction inst : s.getStatements()) {
+          if (inst == null) continue;
+          int def = -1;
           TypeReference instanceType = null;
-          int returnVn = -1;
 
           if (inst instanceof SSANewInstruction) {
+            def = ((SSANewInstruction) inst).getDef();
             instanceType = ((SSANewInstruction) inst).getNewSite().getDeclaredType();
-            returnVn = ((SSANewInstruction) inst).getDef();
           } else if (inst.toString().contains(" = new <")) {
             try {
-              Method m = inst.getClass().getMethod("getNewSite");
+              Method m = inst.getClass().getMethod("getDef");
+              def = (Integer) m.invoke(inst);
+              m = inst.getClass().getMethod("getNewSite");
               NewSiteReference site = (NewSiteReference) m.invoke(inst);
               instanceType = site.getDeclaredType();
-              m = inst.getClass().getMethod("getDef");
-              returnVn = (Integer) m.invoke(inst);
             } catch (Exception e) {
             }
           }
 
-          if (instanceType != null) {
-            lastAlloc = inst;
-            lastAllocVn = returnVn;
-            lastAllocType = instanceType;
+          if (def == returnedVn && instanceType != null) {
+            returnedType = instanceType;
+            allocVn = def;
+            break;
           }
         }
 
-        if (lastAllocType != null
-            && classToFunDoRefs.containsKey(lastAllocType)
-            && !classToFunDoRefs.get(lastAllocType).isEmpty()) {
+        // Fallback for methods that don't directly return the newly allocated object.
+        // We look for the last allocation that matches the declaring class.
+        if (returnedType == null) {
+          for (SSAInstruction inst : s.getStatements()) {
+            if (inst == null) continue;
+            int def = -1;
+            TypeReference instanceType = null;
+
+            if (inst instanceof SSANewInstruction) {
+              def = ((SSANewInstruction) inst).getDef();
+              instanceType = ((SSANewInstruction) inst).getNewSite().getDeclaredType();
+            } else if (inst.toString().contains(" = new <")) {
+              try {
+                Method m = inst.getClass().getMethod("getDef");
+                def = (Integer) m.invoke(inst);
+                m = inst.getClass().getMethod("getNewSite");
+                NewSiteReference site = (NewSiteReference) m.invoke(inst);
+                instanceType = site.getDeclaredType();
+              } catch (Exception e) {
+              }
+            }
+
+            if (instanceType != null && instanceType.equals(mr.getDeclaringClass())) {
+              returnedType = instanceType;
+              allocVn = def;
+            }
+          }
+        }
+
+        if (returnedType != null
+            && classToFunDoRefs.containsKey(returnedType)
+            && !classToFunDoRefs.get(returnedType).isEmpty()) {
           modified = true;
-          for (MethodReference funDoRef : classToFunDoRefs.get(lastAllocType)) {
+          for (MethodReference funDoRef : classToFunDoRefs.get(returnedType)) {
             TypeReference funClsRef = funDoRef.getDeclaringClass();
             int funObjVn = v++, trampVn = v++;
             int pc = newSummary.getNumberOfStatements();
@@ -453,7 +491,7 @@ public abstract class PythonAnalysisEngine<T>
                 insts.PutInstruction(
                     pc++,
                     trampVn,
-                    lastAllocVn,
+                    allocVn,
                     FieldReference.findOrCreate(
                         PythonTypes.Root,
                         Atom.findOrCreateUnicodeAtom("$self"),
@@ -476,7 +514,7 @@ public abstract class PythonAnalysisEngine<T>
             newSummary.addStatement(
                 insts.PutInstruction(
                     pc++,
-                    lastAllocVn,
+                    allocVn,
                     trampVn,
                     FieldReference.findOrCreate(
                         PythonTypes.Root,
@@ -489,7 +527,7 @@ public abstract class PythonAnalysisEngine<T>
               newSummary.addStatement(
                   insts.PutInstruction(
                       pc++,
-                      lastAllocVn,
+                      allocVn,
                       trampVn,
                       FieldReference.findOrCreate(
                           PythonTypes.Root,

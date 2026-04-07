@@ -6408,9 +6408,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_model_init.py", "check_positional", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
     test("tf2_test_model_init.py", "check_keyword", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
     test("tf2_test_model_init.py", "check_mixed", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
-    // TODO: Change to `1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32))` once
-    // https://github.com/wala/ML/issues/118 is resolved:
-    test("tf2_test_model_init.py", "check_subclass", 0, 0);
+    test("tf2_test_model_init.py", "check_subclass", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
     test(
         "tf2_test_model_init.py",
         "check_multiple",
