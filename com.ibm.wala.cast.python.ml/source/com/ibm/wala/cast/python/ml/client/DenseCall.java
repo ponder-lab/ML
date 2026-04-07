@@ -151,7 +151,7 @@ public class DenseCall extends TensorGenerator {
 
         if (generator != null) {
           Set<List<Dimension<?>>> inputShapes = generator.getShapes(builder);
-          LOGGER.fine("Found input shapes: " + inputShapes + ".");
+          LOGGER.fine(() -> "Found input shapes: " + inputShapes + ".");
 
           if (inputShapes != null)
             for (List<Dimension<?>> inputShape : inputShapes) {
