@@ -7,7 +7,13 @@ def check_positional(x):
 
 def test_positional():
     input1 = tf.keras.Input(shape=(2,), dtype=tf.float32)
+    assert input1.shape == (None, 2)
+    assert input1.dtype == tf.float32
+
     output1 = tf.keras.layers.Dense(2)(input1)
+    assert output1.shape == (None, 2)
+    assert output1.dtype == tf.float32
+
     model1 = tf.keras.Model(input1, output1)
 
     out = model1(tf.ones((1, 2)))
