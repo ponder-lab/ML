@@ -30,9 +30,6 @@ public class Model extends TensorGenerator {
 
   /** Parameter positions and names for {@code tf.keras.Model}. */
   protected enum Parameters {
-    /** The model itself. */
-    SELF,
-
     /** The input(s) of the model. */
     INPUTS,
 
