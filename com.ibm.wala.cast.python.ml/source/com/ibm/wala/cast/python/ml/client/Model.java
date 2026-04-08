@@ -81,12 +81,12 @@ public class Model extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    return getWeightShapes(builder, this.getSource());
+    return this.getWeightShapes(builder, this.getSource());
   }
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    return getWeightDTypes(builder, this.getSource());
+    return this.getWeightDTypes(builder, this.getSource());
   }
 
   /**
