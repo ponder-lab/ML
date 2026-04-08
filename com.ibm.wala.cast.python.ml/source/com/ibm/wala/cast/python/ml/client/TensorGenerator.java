@@ -1863,6 +1863,14 @@ public abstract class TensorGenerator {
     TypeReference type = node.getMethod().getDeclaringClass().getReference();
     LOGGER.fine("createManualGenerator checking type: " + type.getName());
 
+    // sanitize the type name by removing the artificial "/class" suffix that is added for synthetic
+    // classes to facilitate trampoline generation.
+    type =
+        TypeReference.findOrCreate(
+            type.getClassLoader(), type.getName().toString().replace("/class", ""));
+
+    LOGGER.fine("createManualGenerator checking sanitized type: " + type.getName());
+
     if (type.equals(TensorFlowTypes.ONES.getDeclaringClass())) {
       return new Ones(node);
     } else if (type.equals(TensorFlowTypes.SPARSE_EYE.getDeclaringClass())) {
