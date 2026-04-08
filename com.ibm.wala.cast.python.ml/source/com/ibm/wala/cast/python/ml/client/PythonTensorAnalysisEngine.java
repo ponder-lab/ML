@@ -120,7 +120,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /** A "fake" function name in the summaries that indicates that an API produces a new tensor. */
-  private static final String TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME = "read_data";
+  public static final String TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME = "read_data";
 
   /**
    * A "fake" function name in the summaries that indicates that an API produces a tensor iterable.
