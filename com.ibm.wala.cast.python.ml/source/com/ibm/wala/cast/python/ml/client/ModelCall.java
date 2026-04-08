@@ -148,7 +148,7 @@ public class ModelCall extends TensorGenerator {
         FieldReference outputsFieldRef =
             FieldReference.findOrCreate(
                 selfASIN.getConcreteType().getReference(),
-                findOrCreateAsciiAtom(Model.Parameters.OUTPUTS.getName()),
+                findOrCreateAsciiAtom(Model.Fields.OUTPUTS.getName()),
                 Root);
 
         IField field = builder.getClassHierarchy().resolveField(outputsFieldRef);
