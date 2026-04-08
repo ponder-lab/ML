@@ -1563,7 +1563,11 @@ public abstract class TensorGenerator {
   protected int getArgumentValueNumber(
       PropagationCallGraphBuilder builder, int paramPos, String paramName, boolean optional) {
     PythonInvokeInstruction call = getInvokeInstruction();
-    if (this.getNode().getMethod().getName().toString().equals(TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME)) {
+    if (this.getNode()
+        .getMethod()
+        .getName()
+        .toString()
+        .equals(TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME)) {
       // For read_data nodes, we don't have explicit arguments in the IR.
       // Returning MAX_VALUE acts as a sentinel to bypass the "missing argument" check below
       // and allows getDTypes/getShapes to proceed to getArgumentPointsToSet,
