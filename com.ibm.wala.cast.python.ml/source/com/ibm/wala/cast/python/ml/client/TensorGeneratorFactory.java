@@ -501,6 +501,15 @@ public class TensorGeneratorFactory {
     TypeReference calledFunction = getFunction(source, builder);
     LOGGER.info("Getting tensor generator for call to: " + calledFunction + ".");
 
+    // sanitize the type name by removing the artificial "/class" suffix that is added for synthetic
+    // classes to facilitate trampoline generation.
+    calledFunction =
+        TypeReference.findOrCreate(
+            calledFunction.getClassLoader(),
+            calledFunction.getName().toString().replace("/class", ""));
+
+    LOGGER.info("Getting tensor generator for sanitized call to: " + calledFunction + ".");
+
     if (isType(calledFunction, ONES.getDeclaringClass())) return new Ones(source);
     else if (isType(calledFunction, CONSTANT.getDeclaringClass())) return new Constant(source);
     else if (isType(calledFunction, RANGE.getDeclaringClass())) return new Range(source);
