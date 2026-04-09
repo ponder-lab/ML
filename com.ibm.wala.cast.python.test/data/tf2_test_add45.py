@@ -2,7 +2,13 @@ import tensorflow as tf
 
 
 def value_index(a, b):
-    return a.value_index + b.value_index
+    assert type(a) == tf.Tensor
+    assert type(b) == tf.Tensor
+    assert type(a.value_index) == int
+    assert type(b.value_index) == int
+    ret = a.value_index + b.value_index
+    assert type(ret) == int
+    return ret
 
 
 # From https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/Graph#using_graphs_directly_deprecated
