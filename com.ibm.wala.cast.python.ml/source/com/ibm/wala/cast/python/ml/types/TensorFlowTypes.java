@@ -626,6 +626,10 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/keras/models/Model")),
           AstMethodReference.fnSelector);
 
+  public static final TypeReference MODEL_ATTRIBUTE =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/keras/Model/attribute"));
+
   private static final String MODEL_SIGNATURE = "tf.keras.Model()";
 
   public static final MethodReference MODEL_CALL =
