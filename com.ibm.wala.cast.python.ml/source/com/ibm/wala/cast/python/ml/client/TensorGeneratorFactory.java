@@ -436,7 +436,9 @@ public class TensorGeneratorFactory {
 
         if (effectiveGenerator instanceof Model
             && (propertyName != null
-                && (propertyName.equals("trainable_weights") || propertyName.equals("weights")))) {
+                && (propertyName.equals("trainable_weights")
+                    || propertyName.equals("weights")
+                    || propertyName.equals("non_trainable_weights")))) {
           return new ModelWeightsGenerator(source, (Model) effectiveGenerator);
         }
 
