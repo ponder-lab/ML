@@ -78,6 +78,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VARIABLE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS_LIKE;
+import static com.ibm.wala.cast.python.util.Util.sanitize;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
@@ -501,12 +502,9 @@ public class TensorGeneratorFactory {
     TypeReference calledFunction = getFunction(source, builder);
     LOGGER.info("Getting tensor generator for call to: " + calledFunction + ".");
 
-    // sanitize the type name by removing the artificial "/class" suffix that is added for synthetic
+    // sanitize the type name by removing the artificial suffix that is added for synthetic
     // classes to facilitate trampoline generation.
-    calledFunction =
-        TypeReference.findOrCreate(
-            calledFunction.getClassLoader(),
-            calledFunction.getName().toString().replace("/class", ""));
+    calledFunction = sanitize(calledFunction);
 
     LOGGER.info("Getting tensor generator for sanitized call to: " + calledFunction + ".");
 

@@ -55,6 +55,13 @@ public class PythonTypes extends AstTypeReference {
   /** The method name used for trampoline methods. */
   public static final String TRAMPOLINE_METHOD_NAME = "trampoline";
 
+  /**
+   * The suffix used for synthetic classes that are assigned generated trampolines. By default,
+   * synthetic (summarized) classes do not receive trampolines. This suffix is used in the summary
+   * to avoid naming conflicts during trampoline generation.
+   */
+  public static final String ARTIFICIAL_SUFFIX_FOR_TRAMPOLINED_SYNTHETIC_CLASSES = "class";
+
   public static final Atom pythonName = Atom.findOrCreateUnicodeAtom(pythonNameStr);
 
   public static final Atom pythonLoaderName = Atom.findOrCreateUnicodeAtom(pythonLoaderNameStr);

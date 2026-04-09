@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.util;
 
 import static com.google.common.collect.Iterables.concat;
 import static com.google.common.io.Files.getNameWithoutExtension;
+import static com.ibm.wala.cast.python.types.PythonTypes.ARTIFICIAL_SUFFIX_FOR_TRAMPOLINED_SYNTHETIC_CLASSES;
 import static com.ibm.wala.cast.python.types.PythonTypes.CAST_DYNAMIC_ANNOTATION;
 import static com.ibm.wala.cast.python.types.PythonTypes.CLASS_METHOD;
 import static com.ibm.wala.types.annotations.Annotation.make;
@@ -294,10 +295,31 @@ public class Util {
     PointerKey k = source.getPointerKey();
 
     if (k instanceof LocalPointerKey)
-      return ((LocalPointerKey) k).getNode().getMethod().getDeclaringClass().getReference();
+      return sanitize(
+          ((LocalPointerKey) k).getNode().getMethod().getDeclaringClass().getReference());
     else if (k instanceof ReturnValueKey)
-      return ((ReturnValueKey) k).getNode().getMethod().getDeclaringClass().getReference();
+      return sanitize(
+          ((ReturnValueKey) k).getNode().getMethod().getDeclaringClass().getReference());
 
     throw new IllegalArgumentException("Unsupported PointerKey type: " + k.getClass() + ".");
+  }
+
+  /**
+   * Removes the artificial "/class" suffix from the given {@link TypeReference} if it is present.
+   *
+   * <p>This suffix is used to generate trampolines for synthetic (summarized) instance methods, but
+   * it is not part of the actual type reference for the method's class.
+   *
+   * @param reference The {@link TypeReference} to sanitize.
+   * @return The sanitized {@link TypeReference} with the "/class" suffix removed if it was present,
+   *     or the original {@link TypeReference} if the suffix was not present.
+   */
+  public static TypeReference sanitize(TypeReference reference) {
+    return TypeReference.findOrCreate(
+        reference.getClassLoader(),
+        reference
+            .getName()
+            .toString()
+            .replace("/" + ARTIFICIAL_SUFFIX_FOR_TRAMPOLINED_SYNTHETIC_CLASSES, ""));
   }
 }

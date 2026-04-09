@@ -20,6 +20,7 @@ import static com.ibm.wala.cast.python.util.Util.findDefinition;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.getFunction;
 import static com.ibm.wala.cast.python.util.Util.getReceiverValueNumber;
+import static com.ibm.wala.cast.python.util.Util.sanitize;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
 import static java.util.Arrays.asList;
@@ -1867,11 +1868,9 @@ public abstract class TensorGenerator {
     TypeReference type = node.getMethod().getDeclaringClass().getReference();
     LOGGER.fine("createManualGenerator checking type: " + type.getName());
 
-    // sanitize the type name by removing the artificial "/class" suffix that is added for synthetic
+    // sanitize the type name by removing the artificial suffix that is added for synthetic
     // classes to facilitate trampoline generation.
-    type =
-        TypeReference.findOrCreate(
-            type.getClassLoader(), type.getName().toString().replace("/class", ""));
+    type = sanitize(type);
 
     LOGGER.fine("createManualGenerator checking sanitized type: " + type.getName());
 
