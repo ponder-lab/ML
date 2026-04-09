@@ -868,12 +868,14 @@
       </class>
       <class name="conv2d" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x y">
-          <return value="x" />
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="out" />
         </method>
       </class>
       <class name="conv3d" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x y">
-          <return value="x" />
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="out" />
         </method>
       </class>
       <class name="softmax" allocatable="true">
@@ -930,6 +932,9 @@
           <return value="x" />
         </method>
       </class>
+    </package>
+    <package name="tensorflow/keras/Model">
+      <class name="attribute" allocatable="true" />
     </package>
     <package name="tensorflow/keras/models/class">
       <class name="Model" allocatable="true">
