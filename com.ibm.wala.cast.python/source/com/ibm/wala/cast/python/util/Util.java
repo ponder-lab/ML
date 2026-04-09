@@ -25,6 +25,7 @@ import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey;
 import com.ibm.wala.ssa.SSAGetInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
@@ -291,15 +292,12 @@ public class Util {
    */
   public static TypeReference getFunction(PointsToSetVariable source) {
     PointerKey k = source.getPointerKey();
-    if (k instanceof LocalPointerKey) {
+
+    if (k instanceof LocalPointerKey)
       return ((LocalPointerKey) k).getNode().getMethod().getDeclaringClass().getReference();
-    } else if (k instanceof com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey) {
-      return ((com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey) k)
-          .getNode()
-          .getMethod()
-          .getDeclaringClass()
-          .getReference();
-    }
-    throw new IllegalArgumentException("Unsupported PointerKey type: " + k.getClass());
+    else if (k instanceof ReturnValueKey)
+      return ((ReturnValueKey) k).getNode().getMethod().getDeclaringClass().getReference();
+
+    throw new IllegalArgumentException("Unsupported PointerKey type: " + k.getClass() + ".");
   }
 }
