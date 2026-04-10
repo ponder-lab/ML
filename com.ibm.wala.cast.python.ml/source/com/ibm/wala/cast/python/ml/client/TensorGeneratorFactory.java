@@ -120,6 +120,10 @@ public class TensorGeneratorFactory {
   /** Logger for this class. */
   private static final Logger LOGGER = getLogger(TensorGeneratorFactory.class.getName());
 
+  /** Attributes of `tf.Tensor` that do not represent tensor elements. */
+  private static final Set<String> NON_TENSOR_ATTRIBUTES =
+      Set.of("value_index", "dtype", "shape", "name", "graph", "op", "device", "consumers");
+
   /**
    * Resolves the {@link TypeReference} for the function call associated with the given source.
    *
@@ -275,6 +279,10 @@ public class TensorGeneratorFactory {
       LOGGER.log(Level.FINE, "Could not get points-to set for " + key, e);
       return null;
     }
+  }
+
+  private static boolean isNonTensorAttribute(String propertyName) {
+    return NON_TENSOR_ATTRIBUTES.contains(propertyName);
   }
 
   /**
@@ -495,9 +503,11 @@ public class TensorGeneratorFactory {
 
         // Similar to `EachElementGet`, we check if the container generator represents elements
         // (`Dataset`) or the tensor itself (peeling needed).
-        return (containerGenerator instanceof DatasetGenerator)
-            ? new DatasetElementGenerator(objSrc, containerGenerator)
-            : new TensorElementGenerator(source, containerGenerator);
+        if (propertyName == null || !isNonTensorAttribute(propertyName)) {
+          return (containerGenerator instanceof DatasetGenerator)
+              ? new DatasetElementGenerator(objSrc, containerGenerator)
+              : new TensorElementGenerator(source, containerGenerator);
+        }
       }
     }
 
