@@ -120,6 +120,10 @@ public class TensorGeneratorFactory {
   /** Logger for this class. */
   private static final Logger LOGGER = getLogger(TensorGeneratorFactory.class.getName());
 
+  /** Attributes of `tf.Tensor` that do not represent tensor elements. */
+  private static final Set<String> NON_TENSOR_ATTRIBUTES =
+      Set.of("value_index", "dtype", "shape", "name", "graph", "op", "device", "consumers");
+
   /**
    * Resolves the {@link TypeReference} for the function call associated with the given source.
    *
@@ -195,6 +199,8 @@ public class TensorGeneratorFactory {
       return lpk.getNode().getMethod().getDeclaringClass().getReference();
     } else if (k instanceof ReturnValueKey) {
       return ((ReturnValueKey) k).getNode().getMethod().getDeclaringClass().getReference();
+    } else if (k instanceof AllocationSiteInNode) {
+      return ((AllocationSiteInNode) k).getConcreteType().getReference();
     }
     return Util.getFunction(source);
   }
@@ -230,15 +236,12 @@ public class TensorGeneratorFactory {
     Queue<PointsToSetVariable> queue = new LinkedList<>();
     queue.add(source);
     visited.add(source);
-    LOGGER.fine("findCreator started for source: " + source);
 
     while (!queue.isEmpty()) {
       PointsToSetVariable current = queue.poll();
       PointerKey pk = current.getPointerKey();
-      LOGGER.finest("findCreator visiting: " + current);
 
       if (pk instanceof ReturnValueKey) {
-        LOGGER.fine("findCreator found ReturnValueKey: " + current);
         return current;
       }
 
@@ -248,7 +251,6 @@ public class TensorGeneratorFactory {
         if (def instanceof SSAAbstractInvokeInstruction
             || def instanceof EachElementGetInstruction
             || def instanceof PythonPropertyRead) {
-          LOGGER.fine("findCreator found creator instruction: " + def);
           return current;
         }
       }
@@ -257,13 +259,11 @@ public class TensorGeneratorFactory {
           it.hasNext(); ) {
         PointsToSetVariable pred = it.next();
         if (visited.add(pred)) {
-          LOGGER.finest("findCreator adding pred: " + pred);
           queue.add(pred);
         }
       }
     }
 
-    LOGGER.fine("findCreator fallback returning original source: " + source);
     return source;
   }
 
@@ -275,6 +275,10 @@ public class TensorGeneratorFactory {
       LOGGER.log(Level.FINE, "Could not get points-to set for " + key, e);
       return null;
     }
+  }
+
+  private static boolean isNonTensorAttribute(String propertyName) {
+    return NON_TENSOR_ATTRIBUTES.contains(propertyName);
   }
 
   /**
@@ -413,12 +417,6 @@ public class TensorGeneratorFactory {
         for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(memberRefKey)) {
           if (ik instanceof ConstantKey) {
             Object val = ((ConstantKey<?>) ik).getValue();
-            LOGGER.fine(
-                "Member ref constant key value: "
-                    + val
-                    + " (class: "
-                    + (val != null ? val.getClass().getName() : "null")
-                    + ")");
             if (val instanceof Integer) {
               propertyIndex = (Integer) val;
             } else if (val instanceof String) {
@@ -447,8 +445,6 @@ public class TensorGeneratorFactory {
           boolean isFirstElement = propertyIndex != null && propertyIndex == 0;
           boolean isSecondElement = propertyIndex != null && propertyIndex == 1;
 
-          LOGGER.fine(
-              "isFirstElement: " + isFirstElement + ", isSecondElement: " + isSecondElement);
           if (isFirstElement) {
             return new EnumerateIndexGenerator(objSrc);
           } else if (isSecondElement) {
@@ -458,12 +454,6 @@ public class TensorGeneratorFactory {
 
         if (effectiveGenerator instanceof TupleElementProvider tep && propertyIndex != null) {
           if (tep.yieldsTuple(builder)) {
-            LOGGER.fine(
-                "Found "
-                    + TupleElementProvider.class.getName()
-                    + " during property read with index "
-                    + propertyIndex
-                    + "!");
             return new DatasetTupleElementGenerator(objSrc, tep, propertyIndex);
           }
         }
@@ -495,20 +485,19 @@ public class TensorGeneratorFactory {
 
         // Similar to `EachElementGet`, we check if the container generator represents elements
         // (`Dataset`) or the tensor itself (peeling needed).
-        return (containerGenerator instanceof DatasetGenerator)
-            ? new DatasetElementGenerator(objSrc, containerGenerator)
-            : new TensorElementGenerator(source, containerGenerator);
+        if (propertyName == null || !isNonTensorAttribute(propertyName)) {
+          return (containerGenerator instanceof DatasetGenerator)
+              ? new DatasetElementGenerator(objSrc, containerGenerator)
+              : new TensorElementGenerator(source, containerGenerator);
+        }
       }
     }
 
     TypeReference calledFunction = getFunction(source, builder);
-    LOGGER.info("Getting tensor generator for call to: " + calledFunction + ".");
 
     // sanitize the type name by removing the artificial suffix that is added for synthetic
     // classes to facilitate trampoline generation.
     calledFunction = sanitize(calledFunction);
-
-    LOGGER.info("Getting tensor generator for sanitized call to: " + calledFunction + ".");
 
     if (isType(calledFunction, ONES.getDeclaringClass())) return new Ones(source);
     else if (isType(calledFunction, CONSTANT.getDeclaringClass())) return new Constant(source);
