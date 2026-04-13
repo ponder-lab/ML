@@ -261,6 +261,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_20_28_28_INT32 =
       new TensorType(INT_32, asList(new NumericDim(20), new NumericDim(28), new NumericDim(28)));
 
+  private static final TensorType TENSOR_20_10_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(20), new NumericDim(10)));
+
   private static final TensorType TENSOR_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2)));
 
@@ -6551,6 +6554,30 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testDenseChain3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_dense_chain3.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_NONE_4_FLOAT32)));
+  }
+
+  /**
+   * Test https://github.com/wala/ML/issues/358.
+   *
+   * <p>Derived from {@link #testModelCall()} (see {@code tf2_test_model_call.py}) by adding a
+   * {@code consume(x)} call inside {@code SequentialModel.__call__} immediately after {@code x =
+   * self.dense_2(x)}. At that point {@code x} should have shape {@code (20, 10)} and dtype {@code
+   * float32}: the chain traces {@code (20, 28, 28)} input → {@code Flatten} → {@code (20, 784)} →
+   * 100× {@code Dense(64)} → {@code (20, 64)} → {@code Dropout} → {@code (20, 64)} → {@code
+   * Dense(10)} → {@code (20, 10)}.
+   *
+   * <p>Currently fails because the analysis produces {@code {? of float32}} at {@code consume}'s
+   * parameter instead of {@code {(20, 10) of float32}}. The minimal chained-layer regression tests
+   * ({@link #testDenseChain()}, {@link #testDenseChain2()}, {@link #testDenseChain3()}) all pass,
+   * so the trigger here is something more specific to {@code SequentialModel}'s particular
+   * combination of {@code Flatten} + 100-element layer list comprehension + {@code Dropout} +
+   * {@code tf.random.uniform} input.
+   */
+  @Test(expected = AssertionError.class)
+  public void testModelCallConsume()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_call_consume.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_20_10_FLOAT32)));
   }
 
   private void test(
