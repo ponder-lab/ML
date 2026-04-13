@@ -226,7 +226,7 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     // This shouldn't really be called as getShapes overrides it, but satisfying the abstract
     // method.
-    return emptySet();
+    return null;
   }
 
   @Override

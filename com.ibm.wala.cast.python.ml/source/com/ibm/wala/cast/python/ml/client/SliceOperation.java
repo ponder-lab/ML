@@ -14,7 +14,7 @@ import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -43,7 +43,7 @@ public class SliceOperation extends TensorGenerator {
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     PointsToSetVariable sourceVar = getSource();
-    if (sourceVar == null) return Collections.emptySet();
+    if (sourceVar == null) return null;
 
     if (sourceVar.getPointerKey() instanceof LocalPointerKey) {
       LocalPointerKey lpk = (LocalPointerKey) sourceVar.getPointerKey();
@@ -56,7 +56,7 @@ public class SliceOperation extends TensorGenerator {
         int sliceTupleVn = propRead.getMemberRef();
 
         Set<List<Dimension<?>>> inputShapes = getShapes(builder, node, receiverVn);
-        if (inputShapes.isEmpty()) return Collections.emptySet();
+        if (inputShapes == null || inputShapes.isEmpty()) return null;
 
         // Inspect the slice tuple to see if we are adding a dimension (None/newaxis)
         boolean addsDimension = false;
@@ -95,7 +95,7 @@ public class SliceOperation extends TensorGenerator {
         return ret;
       }
     }
-    return Collections.emptySet();
+    return null;
   }
 
   @Override
@@ -106,7 +106,7 @@ public class SliceOperation extends TensorGenerator {
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     PointsToSetVariable sourceVar = getSource();
-    if (sourceVar == null) return Collections.emptySet();
+    if (sourceVar == null) return EnumSet.of(DType.UNKNOWN);
     if (sourceVar.getPointerKey() instanceof LocalPointerKey) {
       LocalPointerKey lpk = (LocalPointerKey) sourceVar.getPointerKey();
       SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
@@ -114,7 +114,7 @@ public class SliceOperation extends TensorGenerator {
         return getDTypes(builder, lpk.getNode(), ((PythonPropertyRead) def).getObjectRef());
       }
     }
-    return Collections.emptySet();
+    return EnumSet.of(DType.UNKNOWN);
   }
 
   @Override

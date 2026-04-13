@@ -21,6 +21,7 @@ import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
@@ -308,7 +309,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
         return ret;
       }
     }
-    return Collections.emptySet();
+    return null;
   }
 
   /**
@@ -373,7 +374,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
         return ret;
       }
     }
-    return Collections.emptySet();
+    return EnumSet.of(DType.UNKNOWN);
   }
 
   /**

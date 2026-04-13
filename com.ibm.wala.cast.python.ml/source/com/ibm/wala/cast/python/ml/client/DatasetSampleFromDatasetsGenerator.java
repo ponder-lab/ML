@@ -188,7 +188,7 @@ public class DatasetSampleFromDatasetsGenerator extends DatasetGenerator {
       }
       return ret;
     }
-    return Collections.emptySet();
+    return null;
   }
 
   @Override
@@ -231,7 +231,8 @@ public class DatasetSampleFromDatasetsGenerator extends DatasetGenerator {
                     try {
                       TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
                       if (generator != null) {
-                        ret.addAll(generator.getShapes(builder));
+                        Set<List<Dimension<?>>> generatorShapes = generator.getShapes(builder);
+                        if (generatorShapes != null) ret.addAll(generatorShapes);
                       }
                     } catch (IllegalArgumentException e) {
                       // Ignore.
@@ -284,7 +285,7 @@ public class DatasetSampleFromDatasetsGenerator extends DatasetGenerator {
                     TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
                     if (generator != null) {
                       Set<List<Dimension<?>>> preciseTypes = generator.getShapes(builder);
-                      if (!preciseTypes.isEmpty()) {
+                      if (preciseTypes != null && !preciseTypes.isEmpty()) {
                         ret.addAll(preciseTypes);
                         preciseTypesFound = true;
                       }
@@ -311,8 +312,8 @@ public class DatasetSampleFromDatasetsGenerator extends DatasetGenerator {
                       builder.getPointerAnalysis().getInstanceKeyMapping())));
         }
       }
-      return ret;
+      return ret.isEmpty() ? null : ret;
     }
-    return Collections.emptySet();
+    return null;
   }
 }

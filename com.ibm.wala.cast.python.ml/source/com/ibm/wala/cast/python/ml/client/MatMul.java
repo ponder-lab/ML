@@ -9,7 +9,6 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -34,7 +33,7 @@ public class MatMul extends TensorGenerator {
     OrdinalSet<InstanceKey> aPts = this.getArgumentPointsToSet(builder, 0, "a");
     OrdinalSet<InstanceKey> bPts = this.getArgumentPointsToSet(builder, 1, "b");
 
-    if (aPts.isEmpty() || bPts.isEmpty()) return Collections.emptySet();
+    if (aPts.isEmpty() || bPts.isEmpty()) return null;
 
     Set<List<Dimension<?>>> aShapes = this.getShapesOfValue(builder, aPts);
     Set<List<Dimension<?>>> bShapes = this.getShapesOfValue(builder, bPts);
@@ -55,7 +54,7 @@ public class MatMul extends TensorGenerator {
     }
 
     if (ret.isEmpty()) {
-      return Set.of(Collections.emptyList());
+      return null;
     }
 
     return ret;
@@ -65,7 +64,7 @@ public class MatMul extends TensorGenerator {
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // Derive dtype from the first input argument.
     OrdinalSet<InstanceKey> aPts = this.getArgumentPointsToSet(builder, 0, "a");
-    if (aPts.isEmpty()) return EnumSet.noneOf(DType.class);
+    if (aPts.isEmpty()) return EnumSet.of(DType.UNKNOWN);
     return this.getDTypesOfValue(builder, aPts);
   }
 

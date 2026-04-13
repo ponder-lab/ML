@@ -27,6 +27,7 @@ import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
@@ -186,7 +187,7 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
       }
       return ret;
     }
-    return Collections.emptySet();
+    return EnumSet.of(DType.UNKNOWN);
   }
 
   @Override
@@ -229,7 +230,8 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
                     try {
                       TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
                       if (generator != null) {
-                        ret.addAll(generator.getShapes(builder));
+                        Set<List<Dimension<?>>> generatorShapes = generator.getShapes(builder);
+                        if (generatorShapes != null) ret.addAll(generatorShapes);
                       }
                     } catch (IllegalArgumentException e) {
                       // Ignore.
@@ -282,7 +284,7 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
                     TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
                     if (generator != null) {
                       Set<List<Dimension<?>>> preciseTypes = generator.getShapes(builder);
-                      if (!preciseTypes.isEmpty()) {
+                      if (preciseTypes != null && !preciseTypes.isEmpty()) {
                         ret.addAll(preciseTypes);
                         preciseTypesFound = true;
                       }
@@ -309,8 +311,8 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
                       builder.getPointerAnalysis().getInstanceKeyMapping())));
         }
       }
-      return ret;
+      return ret.isEmpty() ? null : ret;
     }
-    return Collections.emptySet();
+    return null;
   }
 }

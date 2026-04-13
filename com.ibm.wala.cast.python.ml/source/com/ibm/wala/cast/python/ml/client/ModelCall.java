@@ -18,6 +18,7 @@ import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -88,7 +89,9 @@ public class ModelCall extends TensorGenerator {
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     Set<List<Dimension<?>>> outputShapes =
         this.getOutputGenerators(builder).stream()
-            .flatMap(g -> g.getShapes(builder).stream())
+            .map(g -> g.getShapes(builder))
+            .filter(shapes -> shapes != null)
+            .flatMap(Collection::stream)
             .collect(Collectors.toSet());
 
     // Extract shapes from the inputs passed to __call__.
@@ -119,7 +122,7 @@ public class ModelCall extends TensorGenerator {
       }
     }
 
-    return outputShapes;
+    return outputShapes.isEmpty() ? null : outputShapes;
   }
 
   /**

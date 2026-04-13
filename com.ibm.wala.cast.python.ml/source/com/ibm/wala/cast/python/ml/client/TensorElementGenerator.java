@@ -51,6 +51,7 @@ public class TensorElementGenerator extends TensorGenerator implements Delegatin
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     Set<List<Dimension<?>>> containerShapes = this.containerGenerator.getShapes(builder);
+    if (containerShapes == null) return null;
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     for (List<Dimension<?>> shape : containerShapes) {
       if (shape.size() > 0) {

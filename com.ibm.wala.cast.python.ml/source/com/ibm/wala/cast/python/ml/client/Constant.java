@@ -43,7 +43,9 @@ public class Constant extends TensorGenerator {
     OrdinalSet<InstanceKey> pointsToSet =
         this.getArgumentPointsToSet(
             builder, this.getValueParameterPosition(), this.getValueParameterName());
-    return this.getShapesOfValue(builder, pointsToSet);
+    Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, pointsToSet);
+    // An empty result means the shape could not be inferred — treat as unknown (null / ⊤).
+    return shapes.isEmpty() ? null : shapes;
   }
 
   /**

@@ -3,7 +3,6 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
-import static java.util.Collections.emptySet;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -128,7 +127,7 @@ public class DenseCall extends TensorGenerator {
         this.getArgumentPointsToSet(
             builder, Parameters.INPUTS.getIndex(), Parameters.INPUTS.getName());
 
-    if (inputPts.isEmpty()) return emptySet();
+    if (inputPts.isEmpty()) return null;
 
     Set<List<Dimension<?>>> outputShapes = new HashSet<>();
     Set<Long> unitValues = this.getPossibleUnits(builder);

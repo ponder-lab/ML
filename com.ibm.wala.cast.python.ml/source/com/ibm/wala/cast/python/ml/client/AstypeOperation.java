@@ -6,7 +6,6 @@ import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ssa.SSAInstruction;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -27,12 +26,12 @@ public class AstypeOperation extends TensorGenerator {
     int receiverVn = getReceiverVn();
     if (receiverVn > 0) {
       Set<List<Dimension<?>>> shapes = getShapes(builder, getNode(), receiverVn);
-      if (!shapes.isEmpty()) {
+      if (shapes != null && !shapes.isEmpty()) {
         LOGGER.info("AstypeOperation returning shapes: " + shapes);
         return shapes;
       }
     }
-    return Collections.emptySet();
+    return null;
   }
 
   private int getReceiverVn() {

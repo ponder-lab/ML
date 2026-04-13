@@ -11,6 +11,7 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
@@ -67,7 +68,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator {
       return ret;
     }
     // If we can't find the argument, we can't infer shape.
-    return Collections.emptySet();
+    return null;
   }
 
   @Override
@@ -80,7 +81,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator {
     if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
       return this.getDTypesOfValue(builder, tensorsPTS);
     }
-    return Collections.emptySet();
+    return EnumSet.of(DType.UNKNOWN);
   }
 
   @Override

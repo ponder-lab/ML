@@ -14,6 +14,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
@@ -68,7 +69,7 @@ public class DatasetGenerator extends TensorGenerator {
     if (receiverPTS != null && !receiverPTS.isEmpty()) {
       return this.getShapesOfValue(builder, receiverPTS);
     }
-    return Collections.emptySet();
+    return null;
   }
 
   @Override
@@ -79,7 +80,7 @@ public class DatasetGenerator extends TensorGenerator {
     if (receiverPTS != null && !receiverPTS.isEmpty()) {
       return this.getDTypesOfValue(builder, receiverPTS);
     }
-    return Collections.emptySet();
+    return EnumSet.of(DType.UNKNOWN);
   }
 
   /**

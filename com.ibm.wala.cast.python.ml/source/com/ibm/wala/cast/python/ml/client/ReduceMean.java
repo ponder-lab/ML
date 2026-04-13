@@ -51,6 +51,7 @@ public class ReduceMean extends TensorGenerator {
         this.getArgumentValueNumber(
             builder, Parameters.INPUT_TENSOR.getIndex(), Parameters.INPUT_TENSOR.getName(), false);
     Set<List<Dimension<?>>> inputShapes = this.getShapes(builder, inputValNum);
+    if (inputShapes == null) return null;
 
     OrdinalSet<InstanceKey> axisPts =
         this.getArgumentPointsToSet(builder, Parameters.AXIS.getIndex(), Parameters.AXIS.getName());
@@ -174,7 +175,7 @@ public class ReduceMean extends TensorGenerator {
       }
     }
 
-    return ret;
+    return ret.isEmpty() ? null : ret;
   }
 
   @Override

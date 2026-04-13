@@ -138,6 +138,7 @@ public class Model extends TensorGenerator {
                 DenseCall.Parameters.INPUTS.getName(),
                 false);
         Set<List<Dimension<?>>> inputShapes = denseCall.getShapes(builder, valNum);
+        if (inputShapes == null) continue;
         Set<Long> unitsValues = denseCall.getPossibleUnits(builder);
 
         for (List<Dimension<?>> inputShape : inputShapes) {

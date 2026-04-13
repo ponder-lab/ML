@@ -12,7 +12,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
-import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -93,15 +93,17 @@ public class ElementWiseOperation extends ZerosLike {
 
     int xVn = this.getXArgumentValueNumber(builder);
     logger.fine("ElementWiseOperation getDefaultShapes xVn: " + xVn);
-    if (xVn <= 0) return ret;
+    if (xVn <= 0) return null;
     Set<List<Dimension<?>>> xShapes = this.getShapes(builder, xVn);
     logger.fine("ElementWiseOperation getDefaultShapes xShapes: " + xShapes);
+    if (xShapes == null) return null;
 
     int yVn = this.getYArgumentValueNumber(builder);
     logger.fine("ElementWiseOperation getDefaultShapes yVn: " + yVn);
-    if (yVn <= 0) return ret;
+    if (yVn <= 0) return null;
     Set<List<Dimension<?>>> yShapes = this.getShapes(builder, yVn);
     logger.fine("ElementWiseOperation getDefaultShapes yShapes: " + yShapes);
+    if (yShapes == null) return null;
 
     for (List<Dimension<?>> xShape : xShapes)
       for (List<Dimension<?>> yShape : yShapes)
@@ -115,7 +117,7 @@ public class ElementWiseOperation extends ZerosLike {
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     int vn = this.getXArgumentValueNumber(builder);
     logger.fine("ElementWiseOperation getDefaultDTypes vn: " + vn);
-    if (vn <= 0) return Collections.emptySet();
+    if (vn <= 0) return EnumSet.of(DType.UNKNOWN);
 
     Set<DType> dtypes = this.getDTypes(builder, vn);
     logger.fine("ElementWiseOperation getDefaultDTypes dtypes: " + dtypes);

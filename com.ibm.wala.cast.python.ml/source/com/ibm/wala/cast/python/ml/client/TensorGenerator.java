@@ -113,20 +113,35 @@ public abstract class TensorGenerator {
   }
 
   /**
-   * Returns a set of possible {@link TensorType}s that this generator can produce.
+   * Returns a set of possible {@link TensorType}s that this generator can produce, or {@code null}
+   * if this generator is known to produce a tensor but its shape cannot be determined (unknown /
+   * top). An empty set means the variable has no possible tensor type (i.e., it is not a tensor).
    *
    * @param builder The {@link PropagationCallGraphBuilder} for the analysis.
-   * @return A set of possible {@link TensorType}s.
+   * @return A set of possible {@link TensorType}s, or {@code null} if the shape is unknown.
    */
   public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
     Set<List<Dimension<?>>> shapes = this.getShapes(builder);
     Set<DType> dTypes = this.getDTypes(builder);
 
+    // If we have no dtype info at all, fall back to signaling "unknown tensor" when shapes are
+    // also unknown, otherwise produce an empty set (⊥, not a tensor).
+    if (dTypes.isEmpty()) {
+      return shapes == null ? null : HashSetFactory.make();
+    }
+
     Set<TensorType> ret = HashSetFactory.make();
 
-    // Create a tensor type for each possible shape and dtype combination.
-    for (List<Dimension<?>> dimensionList : shapes)
-      for (DType dtype : dTypes) ret.add(new TensorType(dtype.name().toLowerCase(), dimensionList));
+    if (shapes == null) {
+      // Shape is unknown (⊤), but dtype info may still be available. Emit TensorTypes with null
+      // dims so the dtype information is preserved.
+      for (DType dtype : dTypes) ret.add(new TensorType(dtype.name().toLowerCase(), null));
+    } else {
+      // Create a tensor type for each possible shape and dtype combination.
+      for (List<Dimension<?>> dimensionList : shapes)
+        for (DType dtype : dTypes)
+          ret.add(new TensorType(dtype.name().toLowerCase(), dimensionList));
+    }
 
     LOGGER.info("Generator " + this.getClass().getSimpleName() + " produced types: " + ret);
 
@@ -323,10 +338,13 @@ public abstract class TensorGenerator {
   }
 
   /**
-   * Returns the default shapes if no shape argument is provided.
+   * Returns the default shapes when no explicit shape argument is provided. Implementations should
+   * return {@code null} when the generator is known to produce a tensor but its shape cannot be
+   * determined (unknown / ⊤). An empty set should be returned only when the variable is provably
+   * not a tensor (⊥). A non-empty set carries concrete shape information.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @return The default shapes if no shape argument is provided.
+   * @return The default shapes, or {@code null} if the shape is unknown.
    */
   protected abstract Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder);
 
@@ -406,7 +424,7 @@ public abstract class TensorGenerator {
 
     if (!valuePointsToSet.isEmpty()) {
       Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, valuePointsToSet);
-      if (!shapes.isEmpty()) {
+      if (shapes == null || !shapes.isEmpty()) {
         return shapes;
       }
     }
@@ -464,7 +482,8 @@ public abstract class TensorGenerator {
                   }
 
                   if (argVn != -1) {
-                    combinedRet.addAll(this.getShapes(builder, caller, argVn));
+                    Set<List<Dimension<?>>> argShapes = this.getShapes(builder, caller, argVn);
+                    if (argShapes != null) combinedRet.addAll(argShapes);
                   }
                 }
               }
@@ -556,7 +575,8 @@ public abstract class TensorGenerator {
               "Encountered "
                   + reference.getName()
                   + ". Attempting to retrieve shape from producer.");
-          ret.addAll(this.getShapesFromTensor(builder, asin));
+          Set<List<Dimension<?>>> fromTensor = this.getShapesFromTensor(builder, asin);
+          if (fromTensor != null) ret.addAll(fromTensor);
         }
       } else if (getAllocationSiteInNode(valueIK) != null) {
         // Unwrap ScopeMappingInstanceKey or similar wrapping keys
@@ -575,7 +595,8 @@ public abstract class TensorGenerator {
         try {
           TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
           if (generator != null && !generator.getClass().equals(this.getClass())) {
-            ret.addAll(generator.getShapes(builder));
+            Set<List<Dimension<?>>> generatorShapes = generator.getShapes(builder);
+            if (generatorShapes != null) ret.addAll(generatorShapes);
           }
         } catch (IllegalArgumentException e) {
           // Not a recognized generator.
@@ -635,7 +656,8 @@ public abstract class TensorGenerator {
             return ret;
           }
           LOGGER.fine("Delegating shape inference to: " + generator);
-          ret.addAll(generator.getShapes(builder));
+          Set<List<Dimension<?>>> delegatedShapes = generator.getShapes(builder);
+          if (delegatedShapes != null) ret.addAll(delegatedShapes);
         } else if (defSource != null) {
           // Avoid infinite recursion if the current generator is for the same source.
           if (this.getSource() != null && this.getSource().equals(defSource)) {
@@ -644,7 +666,8 @@ public abstract class TensorGenerator {
           generator = TensorGeneratorFactory.getGenerator(defSource, builder);
           if (generator != null) {
             LOGGER.fine("Delegating shape inference to: " + generator);
-            ret.addAll(generator.getShapes(builder));
+            Set<List<Dimension<?>>> delegatedShapes = generator.getShapes(builder);
+            if (delegatedShapes != null) ret.addAll(delegatedShapes);
           }
         }
       }
@@ -684,7 +707,8 @@ public abstract class TensorGenerator {
 
               if (generator != null) {
                 LOGGER.fine("Delegating shape inference to: " + generator);
-                ret.addAll(generator.getShapes(builder));
+                Set<List<Dimension<?>>> delegatedShapes = generator.getShapes(builder);
+                if (delegatedShapes != null) ret.addAll(delegatedShapes);
               }
             }
           }
@@ -869,9 +893,15 @@ public abstract class TensorGenerator {
    * Returns a set of possible dtypes of the tensor returned by this generator when an explicit
    * dtype isn't provided as an argument.
    *
+   * <p>Implementations should return {@link DType#UNKNOWN} (i.e., {@code EnumSet.of(DType.UNKNOWN)}
+   * or {@code Set.of(DType.UNKNOWN)}) to indicate that the dtype cannot be determined. An empty set
+   * means the variable is not a tensor at all (⊥). A set of concrete dtypes means the dtype is
+   * known.
+   *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @return The set of possible dtypes of the tensor returned by this generator when an explicit
-   *     dtype isn't provided as an argument.
+   *     dtype isn't provided as an argument, or a set containing {@link DType#UNKNOWN} if the dtype
+   *     cannot be determined.
    */
   protected abstract Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder);
 

@@ -804,13 +804,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
   /**
    * Returns the set of possible {@link TensorType}s that the given {@link PointsToSetVariable} can
-   * take on.
+   * take on, or {@code null} if the variable is a recognized tensor source but its type cannot be
+   * determined (unknown / ⊤). An empty set means the variable is not a recognized tensor source
+   * (⊥).
    *
    * @param source The dataflow source to analyze.
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph and pointer
    *     analysis.
-   * @return A set of {@link TensorType}s that the given {@link PointsToSetVariable} can take on.
-   *     Empty set is returned if the possible tensor types cannot be determined.
+   * @return A set of {@link TensorType}s, or {@code null} if the tensor type is unknown.
    */
   private Set<TensorType> getTensorTypes(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {

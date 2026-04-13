@@ -9,7 +9,6 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -28,7 +27,7 @@ public class MaxPool extends TensorGenerator {
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> inputPts = this.getArgumentPointsToSet(builder, 0, "value");
-    if (inputPts.isEmpty()) return Collections.emptySet();
+    if (inputPts.isEmpty()) return null;
     Set<List<Dimension<?>>> inputShapes = this.getShapesOfValue(builder, inputPts);
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
@@ -50,7 +49,7 @@ public class MaxPool extends TensorGenerator {
     }
 
     if (ret.isEmpty()) {
-      return Set.of(Collections.emptyList());
+      return null;
     }
 
     return ret;
@@ -59,7 +58,7 @@ public class MaxPool extends TensorGenerator {
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> inputPts = this.getArgumentPointsToSet(builder, 0, "value");
-    if (inputPts.isEmpty()) return EnumSet.noneOf(DType.class);
+    if (inputPts.isEmpty()) return EnumSet.of(DType.UNKNOWN);
     return this.getDTypesOfValue(builder, inputPts);
   }
 

@@ -5,7 +5,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
-import com.ibm.wala.util.collections.HashSetFactory;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
@@ -37,12 +37,12 @@ public class IteratorGenerator extends TensorGenerator implements DelegatingTens
 
   @Override
   public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
-    return HashSetFactory.make();
+    return null;
   }
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    return HashSetFactory.make();
+    return null;
   }
 
   @Override
@@ -57,7 +57,7 @@ public class IteratorGenerator extends TensorGenerator implements DelegatingTens
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    return HashSetFactory.make();
+    return EnumSet.of(DType.UNKNOWN);
   }
 
   @Override

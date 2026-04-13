@@ -5,7 +5,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
-import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
@@ -87,11 +87,12 @@ public class DatasetElementGenerator extends TensorGenerator implements Delegati
   /**
    * {@inheritDoc}
    *
-   * @implNote This implementation returns an empty set since properties are fully delegated.
+   * @implNote This implementation returns {@code null} since properties are fully delegated and the
+   *     shape cannot be determined here.
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    return Collections.emptySet();
+    return null;
   }
 
   @Override
@@ -107,11 +108,12 @@ public class DatasetElementGenerator extends TensorGenerator implements Delegati
   /**
    * {@inheritDoc}
    *
-   * @implNote This implementation returns an empty set since properties are fully delegated.
+   * @implNote This implementation returns {@link DType#UNKNOWN} since properties are fully
+   *     delegated and dtype cannot be determined here.
    */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    return Collections.emptySet();
+    return EnumSet.of(DType.UNKNOWN);
   }
 
   @Override

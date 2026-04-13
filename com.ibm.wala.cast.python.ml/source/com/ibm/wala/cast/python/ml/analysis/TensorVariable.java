@@ -112,7 +112,7 @@ public class TensorVariable implements IVariable<TensorVariable> {
 
   @Override
   public void copyState(TensorVariable v) {
-    this.state = HashSetFactory.make(v.state);
+    this.state = v.state == null ? null : HashSetFactory.make(v.state);
   }
 
   @Override

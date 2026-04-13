@@ -29,6 +29,7 @@ import com.ibm.wala.ssa.SymbolTable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -276,6 +277,13 @@ public class TensorType implements Iterable<Dimension<?>> {
       cellType.addProperty("description", "Elements of type " + this.getCellType());
     }
 
+    if (this.getDims() == null) {
+      JsonObject unknownShape = new JsonObject();
+      unknownShape.addProperty(
+          "description", "Unknown shape of elements of type " + this.getCellType());
+      return unknownShape;
+    }
+
     JsonElement inner = cellType;
     for (Dimension<?> dim : this.getDims()) {
       inner = dim.toJsonSchema(inner);
@@ -284,18 +292,27 @@ public class TensorType implements Iterable<Dimension<?>> {
   }
 
   public String toMDString() {
-    final String dimString =
-        getDims().stream().map(Dimension::toMDString).collect(Collectors.joining(" ; "));
+    final String dimString;
+    if (getDims() == null) {
+      dimString = "?";
+    } else {
+      dimString = getDims().stream().map(Dimension::toMDString).collect(Collectors.joining(" ; "));
+    }
 
     return "[ " + dimString + " **of** _" + getCellType() + "_ ]";
   }
 
   public String toCString(boolean useMarkdown) {
-    final String dimString =
-        getDims().stream()
-            .map(x -> x.toCString(useMarkdown))
-            .map(x -> "[" + x + "]")
-            .collect(Collectors.joining());
+    final String dimString;
+    if (getDims() == null) {
+      dimString = "[?]";
+    } else {
+      dimString =
+          getDims().stream()
+              .map(x -> x.toCString(useMarkdown))
+              .map(x -> "[" + x + "]")
+              .collect(Collectors.joining());
+    }
 
     final String ctypeString;
     if (useMarkdown) {
@@ -309,7 +326,7 @@ public class TensorType implements Iterable<Dimension<?>> {
 
   @Override
   public String toString() {
-    return "{" + getDims().toString() + " of " + getCellType() + "}";
+    return "{" + (getDims() == null ? "?" : getDims().toString()) + " of " + getCellType() + "}";
   }
 
   @Override
@@ -422,7 +439,7 @@ public class TensorType implements Iterable<Dimension<?>> {
 
   @Override
   public Iterator<Dimension<?>> iterator() {
-    return getDims().iterator();
+    return getDims() == null ? Collections.emptyIterator() : getDims().iterator();
   }
 
   public int symbolicDims() {

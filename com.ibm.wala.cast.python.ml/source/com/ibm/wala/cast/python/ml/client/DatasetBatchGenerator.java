@@ -17,7 +17,7 @@ import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
@@ -84,13 +84,13 @@ public class DatasetBatchGenerator extends DatasetGenerator {
     // Get the shapes from the input dataset.
     OrdinalSet<InstanceKey> receiverPTS = getReceiverPTS(builder);
 
-    Set<List<Dimension<?>>> inputShapes = Collections.emptySet();
+    Set<List<Dimension<?>>> inputShapes = null;
     if (receiverPTS != null && !receiverPTS.isEmpty()) {
       inputShapes = this.getShapesOfValue(builder, receiverPTS);
     }
 
-    if (inputShapes.isEmpty()) {
-      return Collections.emptySet();
+    if (inputShapes == null || inputShapes.isEmpty()) {
+      return null;
     }
 
     // Get the batch size.
@@ -175,7 +175,7 @@ public class DatasetBatchGenerator extends DatasetGenerator {
       }
     }
 
-    return ret;
+    return ret.isEmpty() ? null : ret;
   }
 
   @Override
@@ -184,6 +184,6 @@ public class DatasetBatchGenerator extends DatasetGenerator {
     if (receiverPTS != null && !receiverPTS.isEmpty()) {
       return this.getDTypesOfValue(builder, receiverPTS);
     }
-    return Collections.emptySet();
+    return EnumSet.of(DType.UNKNOWN);
   }
 }

@@ -102,7 +102,7 @@ public class RaggedFromRowLengths extends RaggedTensorFromValues {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    return emptySet();
+    return null;
   }
 
   @Override

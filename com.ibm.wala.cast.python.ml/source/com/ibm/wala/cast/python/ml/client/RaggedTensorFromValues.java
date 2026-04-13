@@ -44,7 +44,7 @@ public abstract class RaggedTensorFromValues extends TensorGenerator {
       LOGGER.info(() -> "Inferred dtypes from values for " + this.getSource() + ": " + ret + ".");
       return ret;
     }
-    return EnumSet.noneOf(DType.class);
+    return EnumSet.of(DType.UNKNOWN);
   }
 
   protected Set<List<Dimension<?>>> constructRaggedShape(

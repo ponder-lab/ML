@@ -521,7 +521,12 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
   protected void initializeVariables() {
     super.initializeVariables();
     for (PointsToSetVariable src : init.keySet()) {
-      getOut(src).state.addAll(init.get(src));
+      Set<TensorType> types = init.get(src);
+      if (types != null) {
+        getOut(src).state.addAll(types);
+      } else {
+        getOut(src).state = null; // unknown tensor — distinguishable from empty (not-a-tensor)
+      }
     }
   }
 

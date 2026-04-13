@@ -1,7 +1,5 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static java.util.Collections.emptySet;
-
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -52,15 +50,15 @@ public class Variable extends TensorGenerator {
     int valNum =
         this.getArgumentValueNumber(
             builder, Parameters.INITIAL_VALUE.getIndex(), Parameters.INITIAL_VALUE.getName(), true);
-    if (valNum <= 0) return emptySet();
+    if (valNum <= 0) return null;
 
     OrdinalSet<InstanceKey> initialValuePts =
         this.getArgumentPointsToSet(
             builder, Parameters.INITIAL_VALUE.getIndex(), Parameters.INITIAL_VALUE.getName());
 
     if (initialValuePts == null || initialValuePts.isEmpty())
-      // Fallback to default (empty).
-      return emptySet();
+      // Shape cannot be determined from initial_value.
+      return null;
 
     return this.getShapesOfValue(builder, initialValuePts);
   }
@@ -71,15 +69,15 @@ public class Variable extends TensorGenerator {
     int valNum =
         this.getArgumentValueNumber(
             builder, Parameters.INITIAL_VALUE.getIndex(), Parameters.INITIAL_VALUE.getName(), true);
-    if (valNum <= 0) return EnumSet.noneOf(DType.class);
+    if (valNum <= 0) return EnumSet.of(DType.UNKNOWN);
 
     OrdinalSet<InstanceKey> initialValuePts =
         this.getArgumentPointsToSet(
             builder, Parameters.INITIAL_VALUE.getIndex(), Parameters.INITIAL_VALUE.getName());
 
     if (initialValuePts == null || initialValuePts.isEmpty())
-      // Fallback to default (empty).
-      return EnumSet.noneOf(DType.class);
+      // Dtype cannot be determined.
+      return EnumSet.of(DType.UNKNOWN);
 
     return this.getDTypesOfValue(builder, initialValuePts);
   }
