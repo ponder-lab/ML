@@ -8,7 +8,6 @@ import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.intset.OrdinalSet;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -40,7 +39,9 @@ public class TensorCall extends TensorGenerator {
     OrdinalSet<InstanceKey> opPointsToSet =
         this.getArgumentPointsToSet(builder, Parameters.OP.getIndex(), Parameters.OP.getName());
     if (opPointsToSet.isEmpty()) {
-      return Collections.emptySet();
+      // `tf.Tensor(...)` is always a tensor; we just can't determine its shape
+      // from an unresolvable `op` argument. Return ⊤ (null), not ⊥ (empty set).
+      return null;
     }
     return this.getShapesOfValue(builder, opPointsToSet);
   }

@@ -6,6 +6,7 @@ import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
@@ -59,7 +60,11 @@ public class Constant extends TensorGenerator {
     OrdinalSet<InstanceKey> pointsToSet =
         this.getArgumentPointsToSet(
             builder, this.getValueParameterPosition(), this.getValueParameterName());
-    return this.getDTypesOfValue(builder, pointsToSet);
+    Set<DType> dTypes = this.getDTypesOfValue(builder, pointsToSet);
+    // An empty result means the dtype could not be inferred — treat as unknown
+    // (⊤), mirroring the ⊤ treatment in getDefaultShapes. A `tf.constant` is
+    // always a tensor; we just cannot pin down its dtype.
+    return dTypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : dTypes;
   }
 
   protected int getValueArgumentValueNumber() {
