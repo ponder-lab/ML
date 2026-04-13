@@ -1044,7 +1044,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#shuffle -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self buffer_size seed reshuffle_each_iteration name">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
             endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
@@ -1076,7 +1076,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#batch -->
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self batch_size drop_remainder num_parallel_calls deterministic name">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
             endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
@@ -1115,7 +1115,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#prefetch -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self buffer_size name">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
             endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
@@ -1147,7 +1147,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#with_options -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self options name">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
             endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
@@ -1179,7 +1179,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#take -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self count name">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
             endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
@@ -1211,7 +1211,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#map -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self map_func num_parallel_calls deterministic name">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
             endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
@@ -1243,7 +1243,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#filter -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self predicate name">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
             endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
@@ -1275,7 +1275,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#concatenate -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self predicate name">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
             endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
@@ -1314,7 +1314,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#enumerate -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self predicate name">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
             endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
@@ -1349,7 +1349,7 @@
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="tensors name">
           <!-- FIXME: We should encode the tensors argument here. See https://github.com/wala/ML/issues/164. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
             endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
@@ -1380,11 +1380,11 @@
       <class name="from_tensor_slices" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#from_tensor_slices -->
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="tensors name">
-          <!-- Note: This block of dataset field initializations is duplicated across all dataset methods (e.g., from_tensor_slices, shuffle, batch) intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like
+          <!-- NOTE: This block of dataset field initializations is duplicated across all dataset methods (e.g., from_tensor_slices, shuffle, batch) intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like
             `read_dataset` or an `init_fields` method), 1-CFA would merge all calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained
             operations. By inlining these allocations directly into each endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
             endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
@@ -1416,7 +1416,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#sample_from_datasets -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="datasets weights seed stop_on_empty_dataset">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
             endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
@@ -1448,7 +1448,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#list_files -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="file_pattern shuffle seed name">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
             endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
@@ -1480,7 +1480,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#choose_from_datasets -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="datasets choice_dataset stop_on_empty_dataset">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
             endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
@@ -1512,7 +1512,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#from_generator -->
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="generator output_types output_shapes args output_signature name">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
             endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
@@ -1544,7 +1544,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#zip -->
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="datasets name">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
             endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
@@ -1577,7 +1577,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#range -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="start stop step output_type name">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
             endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
@@ -1609,7 +1609,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#random -->
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="seed name">
           <new def="x" class="Ltensorflow/data/Dataset" />
-          <!-- Note: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
             endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
