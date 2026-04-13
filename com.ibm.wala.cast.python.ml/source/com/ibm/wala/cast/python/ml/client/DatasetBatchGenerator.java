@@ -17,7 +17,9 @@ import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -89,9 +91,9 @@ public class DatasetBatchGenerator extends DatasetGenerator {
       inputShapes = this.getShapesOfValue(builder, receiverPTS);
     }
 
-    if (inputShapes == null || inputShapes.isEmpty()) {
-      return null;
-    }
+    // Lattice propagation: ⊤ in → ⊤ out; ⊥ in → ⊥ out.
+    if (inputShapes == null) return null;
+    if (inputShapes.isEmpty()) return Collections.emptySet();
 
     // Get the batch size.
     Set<Long> batchSizes =
@@ -116,9 +118,11 @@ public class DatasetBatchGenerator extends DatasetGenerator {
           if (batchSize != null) {
             // Drop remainder is implicitly false here, so we could have a partial batch.
             // If we know the dataset size, we can infer if a partial batch is possible.
-            boolean canHaveFullBatch = true;
-            boolean canHavePartialBatch = false;
-            long partialBatchSize = 0;
+            boolean canHaveFullBatch;
+            // Accumulate every possible partial-batch size across the dataset sizes instead of
+            // overwriting (previously only the last non-divisor remainder was retained).
+            Set<Long> partialBatchSizes = new HashSet<>();
+            boolean partialBatchSizeUnknown = false;
 
             if (!datasetSizes.isEmpty()) {
               canHaveFullBatch = false;
@@ -128,20 +132,14 @@ public class DatasetBatchGenerator extends DatasetGenerator {
                 }
                 long rem = dsSize % batchSize;
                 if (rem != 0) {
-                  canHavePartialBatch = true;
-                  partialBatchSize =
-                      rem; // We might have multiple dataset sizes, but this is an approximation
+                  partialBatchSizes.add(rem);
                 }
               }
             } else {
-              // We don't know dataset size, assume both are possible to be safe,
-              // but we usually just assume full batch size if dataset size is unknown to avoid
-              // explosion,
-              // or maybe we should add both? Let's add both.
-              canHavePartialBatch = true;
-              partialBatchSize =
-                  -1; // -1 means unknown partial size, so we might need a symbolic dim or just drop
-              // it.
+              // We don't know the dataset size; assume both a full batch and a symbolic partial
+              // batch are possible.
+              canHaveFullBatch = true;
+              partialBatchSizeUnknown = true;
             }
 
             if (canHaveFullBatch) {
@@ -151,16 +149,16 @@ public class DatasetBatchGenerator extends DatasetGenerator {
               ret.add(newShape);
             }
 
-            if (canHavePartialBatch) {
+            for (Long partialBatchSize : partialBatchSizes) {
               List<Dimension<?>> newShape = new ArrayList<>();
-              if (partialBatchSize > 0) {
-                newShape.add(new NumericDim((int) partialBatchSize));
-              } else {
-                newShape.add(
-                    new SymbolicDim(
-                        "?")); // Or we could just not add the partial batch if we don't know the
-                // exact size.
-              }
+              newShape.add(new NumericDim(partialBatchSize.intValue()));
+              newShape.addAll(shape);
+              ret.add(newShape);
+            }
+
+            if (partialBatchSizeUnknown) {
+              List<Dimension<?>> newShape = new ArrayList<>();
+              newShape.add(new SymbolicDim("?"));
               newShape.addAll(shape);
               ret.add(newShape);
             }
