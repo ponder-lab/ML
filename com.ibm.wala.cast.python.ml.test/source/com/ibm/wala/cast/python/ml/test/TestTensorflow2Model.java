@@ -1328,11 +1328,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testModelCall()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    // Two tensor variables in __call__: the `x` parameter (value number 3) and the float32 result
+    // of an internal `DenseCall` whose concrete shape cannot currently be inferred through the
+    // chained layer calls — tracked as `{? of float32}`. See wala/ML#356 for the underlying PTS
+    // propagation gap.
     test(
         "tf2_test_model_call.py",
         "SequentialModel.__call__",
         1,
-        1,
+        2,
         Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
@@ -1343,7 +1347,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_model_call2.py",
         "SequentialModel.call",
         1,
-        1,
+        2,
         Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
@@ -1354,7 +1358,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_model_call3.py",
         "SequentialModel.call",
         1,
-        1,
+        2,
         Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
@@ -1365,7 +1369,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_model_call4.py",
         "SequentialModel.__call__",
         1,
-        1,
+        2,
         Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
@@ -1416,7 +1420,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_model_call6.py",
         "SequentialModel.__call__",
         1,
-        1,
+        2,
         Map.of(3, Set.of(TENSOR_20_28_28_INT32)));
   }
 
