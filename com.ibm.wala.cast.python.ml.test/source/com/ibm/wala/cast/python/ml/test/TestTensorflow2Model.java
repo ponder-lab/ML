@@ -1524,14 +1524,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tensorflow_gan_tutorial.py",
         "train_step",
         1,
-        2,
+        3,
         Map.of(2, Set.of(TENSOR_256_28_28_1_FLOAT32, TENSOR_96_28_28_1_FLOAT32)));
   }
 
   @Test
   public void testGanTutorial2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tensorflow_gan_tutorial2.py", "train_step", 1, 2, Map.of(2, Set.of(MNIST_INPUT)));
+    test(
+        "tensorflow_gan_tutorial2.py",
+        "train_step",
+        1,
+        3,
+        Map.of(2, Set.of(TENSOR_256_28_28_1_FLOAT32, TENSOR_96_28_28_1_FLOAT32)));
   }
 
   @Test
