@@ -33,6 +33,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -251,7 +252,9 @@ public class TensorType implements Iterable<Dimension<?>> {
   private final List<Dimension<?>> dims;
 
   public TensorType(String cellType, List<Dimension<?>> dims) {
-    this.cellType = cellType;
+    // A TensorType with a null cellType is nonsensical: every tensor has a dtype, even if it is
+    // DType.UNKNOWN. Dims, on the other hand, may legitimately be null (unknown rank / ⊤ shape).
+    this.cellType = Objects.requireNonNull(cellType, "cellType");
     this.dims = dims;
   }
 
