@@ -149,6 +149,8 @@ public class TensorFlowTypes extends PythonTypes {
   public static final TypeReference DATASET_BATCH_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/batch"));
 
+  public static final String DATASET_BATCH_SIGNATURE = "tf.data.Dataset.batch()";
+
   public static final TypeReference DATASET_MAP_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/map"));
 
@@ -834,6 +836,7 @@ public class TensorFlowTypes extends PythonTypes {
   /** A mapping from a {@link TypeReference} to its associated TensorFlow signature. */
   public static final Map<TypeReference, String> TYPE_REFERENCE_TO_SIGNATURE =
       Map.ofEntries(
+          Map.entry(DATASET_BATCH_TYPE, DATASET_BATCH_SIGNATURE),
           Map.entry(DATASET_FROM_GENERATOR_TYPE, DATASET_FROM_GENERATOR_SIGNATURE),
           Map.entry(DATASET_FROM_TENSORS_TYPE, DATASET_FROM_TENSORS_SIGNATURE),
           Map.entry(DATASET_CHOOSE_FROM_DATASETS_TYPE, DATASET_CHOOSE_FROM_DATASETS_SIGNATURE),
