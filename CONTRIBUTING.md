@@ -57,6 +57,41 @@ black --fast .
 - Always add `assert` statements in Python test files for tensor `shape` and `dtype`.
 - Ensure that `assert` statements in Python test files match the expectations defined in the corresponding JUnit test cases.
 
+## Tensor Type Generators
+
+When writing a new `TensorGenerator` subclass in `com.ibm.wala.cast.python.ml.client`, uphold the lattice conventions for shapes and dtypes so downstream analysis can distinguish "unknown tensor" (⊤) from "not a tensor" (⊥). The class-level Javadoc on `TensorGenerator` is the source of truth; the summary below is the quick version.
+
+### Shapes — `getDefaultShapes`
+
+| Return value | Meaning |
+|---|---|
+| `null` | ⊤ — the generator produces a tensor, but its shape cannot be determined. |
+| empty set (`Collections.emptySet()`) | ⊥ — the variable is provably not a tensor. |
+| non-empty set | The set of concrete shapes the tensor may take. |
+
+Within a single shape, use `new SymbolicDim("?")` for a known-rank-but-unknown-size dimension (e.g., a dynamic batch size). A `null` shape *list* means even the rank is unknown.
+
+### Dtypes — `getDefaultDTypes`
+
+| Return value | Meaning |
+|---|---|
+| `EnumSet.of(DType.UNKNOWN)` | ⊤ — the generator produces a tensor, but its dtype cannot be determined. |
+| empty set | ⊥ — the variable is provably not a tensor. |
+| non-empty set of concrete `DType`s | The set of possible dtypes. |
+
+Never return a bare empty set to mean "unknown dtype" — that collides with the "not a tensor" signal.
+
+### Tensor types — `getTensorTypes`
+
+Shapes and dtypes are orthogonal. When the shape is unknown but the dtype is known, `getTensorTypes` emits `TensorType` instances with `null` dims so dtype information is preserved. `TensorType` is null-dims-safe; any code that consumes `TensorType`s must handle `getDims() == null`.
+
+### Checklist when adding a new generator
+
+- [ ] Audit every final-fallback return in `getDefaultShapes` and `getDefaultDTypes` against the tables above.
+- [ ] Prefer `null` over `Collections.emptySet()` when the intended meaning is "we know it's a tensor, we just can't figure out the shape."
+- [ ] Prefer `EnumSet.of(DType.UNKNOWN)` over `EnumSet.noneOf(DType.class)` / `Collections.emptySet()` for unknown dtypes.
+- [ ] If your generator's result is accumulated into a `ret` set inside a loop, verify the final `return ret` cannot return an empty set when you actually meant "unknown." Add `return ret.isEmpty() ? null : ret;` if it can.
+
 ## Java Testing
 
 - Always run `mvn test` to ensure all Java tests pass before committing changes.

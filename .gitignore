@@ -75,3 +75,6 @@ bin/
 
 # GitHub App credentials
 gha-creds-*.json
+
+# Claude Code local settings
+.claude/
