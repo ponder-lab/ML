@@ -14,6 +14,7 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Logger;
 
 /**
  * A generator for tensors created by {@code tf.data.Dataset.from_tensor_slices}.
@@ -21,6 +22,9 @@ import java.util.Set;
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
 public class DatasetFromTensorSlicesGenerator extends DatasetGenerator {
+
+  private static final Logger LOGGER =
+      Logger.getLogger(DatasetFromTensorSlicesGenerator.class.getName());
 
   protected enum Parameters {
     TENSORS,
@@ -52,23 +56,52 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator {
     OrdinalSet<InstanceKey> tensorsPTS =
         this.getArgumentPointsToSet(
             builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName());
+
+    Set<List<Dimension<?>>> inputShapes = null;
     if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
-      Set<List<Dimension<?>>> inputShapes = this.getShapesOfValue(builder, tensorsPTS);
-      Set<List<Dimension<?>>> ret = HashSetFactory.make();
-      for (List<Dimension<?>> shape : inputShapes) {
-        if (shape.size() > 0) {
-          // Remove the first dimension to account for slicing.
-          ret.add(new ArrayList<>(shape.subList(1, shape.size())));
-        } else {
-          // If the input is already a scalar (unexpected for from_tensor_slices),
-          // the element shape is empty.
-          ret.add(Collections.emptyList());
-        }
-      }
-      return ret;
+      inputShapes = this.getShapesOfValue(builder, tensorsPTS);
     }
-    // If we can't find the argument, we can't infer shape.
-    return null;
+    final int tensorsPTSSize = tensorsPTS == null ? -1 : tensorsPTS.size();
+    final Set<List<Dimension<?>>> ptsPathShapes = inputShapes;
+    LOGGER.fine(
+        () ->
+            "DatasetFromTensorSlicesGenerator.getDefaultShapes: source="
+                + this.getSource()
+                + ", tensorsPTS size="
+                + tensorsPTSSize
+                + ", inputShapes via pts-path="
+                + (ptsPathShapes == null ? "null" : ptsPathShapes.size() + " shapes"));
+
+    // Fallback: if the points-to set for the argument is empty (e.g., `tensors` is the result of
+    // a Python binary op, for which WALA does not allocate a trackable target), walk the call
+    // string to resolve the argument value number in each caller and delegate to getShapes, which
+    // knows how to construct an ElementWiseOperation generator for binop-def'd locals.
+    if (inputShapes == null || inputShapes.isEmpty()) {
+      inputShapes =
+          this.getArgumentShapesViaCallers(
+              builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName());
+      final Set<List<Dimension<?>>> fallbackShapes = inputShapes;
+      LOGGER.fine(
+          () ->
+              "DatasetFromTensorSlicesGenerator.getDefaultShapes: fallback inputShapes="
+                  + (fallbackShapes == null ? "null" : fallbackShapes.size() + " shapes"));
+    }
+
+    if (inputShapes == null) return null;
+    if (inputShapes.isEmpty()) return Collections.emptySet();
+
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    for (List<Dimension<?>> shape : inputShapes) {
+      if (shape.size() > 0) {
+        // Remove the first dimension to account for slicing.
+        ret.add(new ArrayList<>(shape.subList(1, shape.size())));
+      } else {
+        // If the input is already a scalar (unexpected for from_tensor_slices),
+        // the element shape is empty.
+        ret.add(Collections.emptyList());
+      }
+    }
+    return ret;
   }
 
   @Override
@@ -79,8 +112,16 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator {
         this.getArgumentPointsToSet(
             builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName());
     if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
-      return this.getDTypesOfValue(builder, tensorsPTS);
+      Set<DType> dtypes = this.getDTypesOfValue(builder, tensorsPTS);
+      if (!dtypes.isEmpty()) return dtypes;
     }
+
+    // Fallback: walk the call string to resolve the argument in each caller.
+    Set<DType> fallback =
+        this.getArgumentDTypesViaCallers(
+            builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName());
+    if (fallback != null && !fallback.isEmpty()) return fallback;
+
     return EnumSet.of(DType.UNKNOWN);
   }
 

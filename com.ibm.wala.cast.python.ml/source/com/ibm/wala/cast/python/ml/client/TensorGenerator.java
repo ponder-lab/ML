@@ -459,6 +459,15 @@ public abstract class TensorGenerator {
     PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
     OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
 
+    LOGGER.fine(
+        () ->
+            "getShapes(node, vn): node="
+                + node
+                + ", vn="
+                + valueNumber
+                + ", ptsEmpty="
+                + valuePointsToSet.isEmpty());
+
     if (!valuePointsToSet.isEmpty()) {
       Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, valuePointsToSet);
       if (shapes == null || !shapes.isEmpty()) {
@@ -467,8 +476,9 @@ public abstract class TensorGenerator {
     }
 
     // points-to set is empty. Try to find a generator for this variable.
+    boolean implicit = builder.getPropagationSystem().isImplicit(valuePK);
     PointsToSetVariable var = null;
-    if (!builder.getPropagationSystem().isImplicit(valuePK)) {
+    if (!implicit) {
       var = builder.getPropagationSystem().findOrCreatePointsToSet(valuePK);
     }
 
@@ -476,10 +486,19 @@ public abstract class TensorGenerator {
       try {
         TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
         if (generator != null && !generator.getClass().equals(this.getClass())) {
+          LOGGER.fine(
+              () ->
+                  "getShapes(node, vn): recovering via factory generator "
+                      + generator.getClass().getSimpleName()
+                      + " for vn="
+                      + valueNumber);
           return generator.getShapes(builder);
         }
       } catch (IllegalArgumentException e) {
-        LOGGER.log(Level.FINE, "Not a recognized generator: " + var, e);
+        LOGGER.log(
+            Level.FINE,
+            "getShapes(node, vn): factory IAE for vn=" + valueNumber + ": " + e.getMessage(),
+            e);
       }
     }
 
@@ -1387,6 +1406,114 @@ public abstract class TensorGenerator {
   protected OrdinalSet<InstanceKey> getArgumentPointsToSet(
       PropagationCallGraphBuilder builder, int paramPos, String paramName) {
     return getArgumentPointsToSet(builder, this.getNode(), paramPos, paramName);
+  }
+
+  /**
+   * Resolves shapes for the argument at the given parameter position by walking the {@link
+   * CallString} context to find each caller's invocation site, then delegating to {@link
+   * #getShapes(PropagationCallGraphBuilder, CGNode, int)} with the caller's value number. This is a
+   * fallback path used when {@link #getArgumentPointsToSet(PropagationCallGraphBuilder, int,
+   * String)} returns an empty set because the argument's points-to set is empty — commonly the case
+   * when the argument is the result of a Python binary op on tensors, for which WALA does not
+   * allocate a trackable target. The caller-side recursion into {@link #getShapes(
+   * PropagationCallGraphBuilder, CGNode, int)} picks up the {@link ElementWiseOperation} (or
+   * similar) generator via {@link TensorGeneratorFactory}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param paramPos The 0-based index of the positional parameter (excluding {@code self} for
+   *     instance methods).
+   * @param paramName The name of the keyword parameter, or {@code null}.
+   * @return The union of shapes resolved from each caller, or {@code null} if no caller could be
+   *     resolved.
+   */
+  protected Set<List<Dimension<?>>> getArgumentShapesViaCallers(
+      PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
+    LOGGER.fine(() -> "getArgumentShapesViaCallers: node=" + this.getNode() + ", cs=" + cs);
+    if (cs == null) return null;
+    Set<List<Dimension<?>>> combined = null;
+    for (int i = 0; i < cs.getCallSiteRefs().length; i++) {
+      CallSiteReference siteRef = cs.getCallSiteRefs()[i];
+      IMethod callerMethod = cs.getMethods()[i];
+      for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode());
+          it.hasNext(); ) {
+        CGNode caller = it.next();
+        if (!caller.getMethod().equals(callerMethod)) continue;
+        for (SSAAbstractInvokeInstruction callInstr : caller.getIR().getCalls(siteRef)) {
+          if (!(callInstr instanceof PythonInvokeInstruction)) continue;
+          PythonInvokeInstruction pyCall = (PythonInvokeInstruction) callInstr;
+          int argVn = -1;
+          if (paramName != null) argVn = pyCall.getUse(paramName);
+          if (argVn == -1 && paramPos >= 0) {
+            int numPosParams = pyCall.getNumberOfPositionalParameters() - 1;
+            if (paramPos < numPosParams) argVn = pyCall.getUse(paramPos + 1);
+          }
+          if (argVn <= 0) continue;
+          final int finalArgVn = argVn;
+          final CGNode finalCaller = caller;
+          try {
+            Set<List<Dimension<?>>> argShapes = this.getShapes(builder, caller, argVn);
+            LOGGER.fine(
+                () -> "getArgumentShapesViaCallers: argVn=" + finalArgVn + " shapes=" + argShapes);
+            if (argShapes != null) {
+              if (combined == null) combined = HashSetFactory.make();
+              combined.addAll(argShapes);
+            }
+          } catch (IllegalArgumentException e) {
+            LOGGER.log(
+                Level.FINE,
+                "getArgumentShapesViaCallers: IAE for argVn="
+                    + finalArgVn
+                    + " in caller="
+                    + finalCaller,
+                e);
+          }
+        }
+      }
+    }
+    return combined;
+  }
+
+  /**
+   * Dtype counterpart of {@link #getArgumentShapesViaCallers(PropagationCallGraphBuilder, int,
+   * String)}. See that method for the rationale; the behaviour is the same but returns a set of
+   * {@link DType}s resolved via {@link #getDTypes(PropagationCallGraphBuilder, CGNode, int)}.
+   */
+  protected Set<DType> getArgumentDTypesViaCallers(
+      PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
+    if (cs == null) return null;
+    Set<DType> combined = null;
+    for (int i = 0; i < cs.getCallSiteRefs().length; i++) {
+      CallSiteReference siteRef = cs.getCallSiteRefs()[i];
+      IMethod callerMethod = cs.getMethods()[i];
+      for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode());
+          it.hasNext(); ) {
+        CGNode caller = it.next();
+        if (!caller.getMethod().equals(callerMethod)) continue;
+        for (SSAAbstractInvokeInstruction callInstr : caller.getIR().getCalls(siteRef)) {
+          if (!(callInstr instanceof PythonInvokeInstruction)) continue;
+          PythonInvokeInstruction pyCall = (PythonInvokeInstruction) callInstr;
+          int argVn = -1;
+          if (paramName != null) argVn = pyCall.getUse(paramName);
+          if (argVn == -1 && paramPos >= 0) {
+            int numPosParams = pyCall.getNumberOfPositionalParameters() - 1;
+            if (paramPos < numPosParams) argVn = pyCall.getUse(paramPos + 1);
+          }
+          if (argVn <= 0) continue;
+          try {
+            Set<DType> argDTypes = this.getDTypes(builder, caller, argVn);
+            if (argDTypes != null && !argDTypes.isEmpty()) {
+              if (combined == null) combined = EnumSet.noneOf(DType.class);
+              combined.addAll(argDTypes);
+            }
+          } catch (IllegalArgumentException e) {
+            LOGGER.log(Level.FINE, "Could not get dtypes for caller argument: " + argVn, e);
+          }
+        }
+      }
+    }
+    return combined;
   }
 
   /**
