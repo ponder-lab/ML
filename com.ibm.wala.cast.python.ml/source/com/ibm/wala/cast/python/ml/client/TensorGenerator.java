@@ -485,6 +485,10 @@ public abstract class TensorGenerator {
     if (var != null) {
       try {
         TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+        // Recurse into the generator as long as it's not the *same* generator (identical source)
+        // as `this`. Previously this check compared classes, which prevented an
+        // `ElementWiseOperation` from recursing into a nested `ElementWiseOperation` on a
+        // different operand value number — exactly the case for `(x - k1) / k2` chains.
         if (generator != null && !generator.getClass().equals(this.getClass())) {
           LOGGER.fine(
               () ->
@@ -1030,6 +1034,9 @@ public abstract class TensorGenerator {
     if (var != null) {
       try {
         TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+        // See `getShapes(builder, CGNode, int)` — we compare by source, not class, so two
+        // different `ElementWiseOperation` generators for different operand value numbers can
+        // still recurse into each other.
         if (generator != null && !generator.getClass().equals(this.getClass())) {
           return generator.getDTypes(builder);
         }
@@ -1305,6 +1312,37 @@ public abstract class TensorGenerator {
 
   protected PointsToSetVariable getSource() {
     return this.source;
+  }
+
+  /**
+   * Two generators are equal iff they are of the same concrete class AND share the same identity on
+   * both the source and the manual-node axes. For factory-constructed generators the source is
+   * populated; for manually-constructed generators the manual node is. Both fields participate in
+   * the comparison so that a source-based generator and a manual-node-based generator are not
+   * accidentally considered equal when they happen to share one half of the identity but not the
+   * other.
+   *
+   * <p>Used by {@link #getShapes(PropagationCallGraphBuilder, CGNode, int)} and its dtype
+   * counterpart to avoid infinite recursion when dispatching back through {@link
+   * TensorGeneratorFactory#getGenerator}. A coarser class-only equality would incorrectly conflate
+   * two different generators on different value numbers or different call graph nodes — blocking
+   * legitimate recursion such as nested {@link ElementWiseOperation} binop chains.
+   */
+  @Override
+  public boolean equals(Object obj) {
+    if (this == obj) return true;
+    if (obj == null) return false;
+    if (this.getClass() != obj.getClass()) return false;
+    TensorGenerator other = (TensorGenerator) obj;
+    return this.source == other.source && this.manualNode == other.manualNode;
+  }
+
+  @Override
+  public int hashCode() {
+    int result = this.getClass().hashCode();
+    result = 31 * result + System.identityHashCode(this.source);
+    result = 31 * result + System.identityHashCode(this.manualNode);
+    return result;
   }
 
   protected CGNode getNode() {

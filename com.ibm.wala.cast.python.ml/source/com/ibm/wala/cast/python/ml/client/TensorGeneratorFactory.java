@@ -241,7 +241,7 @@ public class TensorGeneratorFactory {
     while (!queue.isEmpty()) {
       PointsToSetVariable current = queue.poll();
       PointerKey pk = current.getPointerKey();
-      LOGGER.finest("findCreator visiting: " + current);
+      LOGGER.fine("findCreator visiting: " + current);
 
       if (pk instanceof ReturnValueKey) {
         LOGGER.fine("findCreator found ReturnValueKey: " + current);
@@ -263,13 +263,13 @@ public class TensorGeneratorFactory {
           it.hasNext(); ) {
         PointsToSetVariable pred = it.next();
         if (visited.add(pred)) {
-          LOGGER.finest("findCreator adding pred: " + pred);
+          LOGGER.fine("findCreator adding pred: " + pred);
           queue.add(pred);
         }
       }
     }
 
-    LOGGER.fine("findCreator fallback returning original source: " + source);
+    LOGGER.info("findCreator fallback returning original source: " + source);
     return source;
   }
 
