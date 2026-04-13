@@ -6519,6 +6519,40 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_dense2.py", "consume2", 1, 1, Map.of(2, Set.of(TENSOR_NONE_2_FLOAT32)));
   }
 
+  /**
+   * Chained {@code Dense} layer calls at module level, where the second layer's {@code inputs}
+   * argument is the return value of the first layer's call. Exercises shape propagation through a
+   * layer-call result at script-body scope.
+   */
+  @Test
+  public void testDenseChain()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dense_chain.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_NONE_2_FLOAT32)));
+  }
+
+  /**
+   * Chained {@code Dense} layer calls inside a {@code tf.keras.Model.__call__} method body with
+   * direct {@code self.layer1} / {@code self.layer2} attribute reads. Exercises shape propagation
+   * through a layer-call result inside a user-defined class method.
+   */
+  @Test
+  public void testDenseChain2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dense_chain2.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_NONE_2_FLOAT32)));
+  }
+
+  /**
+   * Chained {@code Dense} layer calls inside a {@code tf.keras.Model.__call__} method body, where
+   * the layers are iterated via a {@code for} loop over a {@code self.layers_list} attribute rather
+   * than being accessed by direct attribute name. Exercises shape propagation through a loop-phi'd
+   * local whose points-to set spans every list element.
+   */
+  @Test
+  public void testDenseChain3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dense_chain3.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_NONE_4_FLOAT32)));
+  }
+
   private void test(
       String filename,
       String functionName,
