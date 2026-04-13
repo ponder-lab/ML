@@ -70,6 +70,43 @@ import java.util.logging.Logger;
 /**
  * An abstract generator for {@link TensorType}s.
  *
+ * <h2>Lattice conventions for shapes and dtypes</h2>
+ *
+ * Subclasses <strong>must</strong> follow these conventions so that downstream consumers can
+ * distinguish "unknown tensor" (⊤) from "not a tensor" (⊥):
+ *
+ * <h3>Shapes — {@link #getDefaultShapes(PropagationCallGraphBuilder)}</h3>
+ *
+ * <ul>
+ *   <li>{@code null} — ⊤, the generator produces a tensor but its shape cannot be determined.
+ *   <li>empty set ({@code Collections.emptySet()}) — ⊥, the variable is provably not a tensor.
+ *   <li>non-empty set — the set of concrete shapes the tensor may take.
+ * </ul>
+ *
+ * <p>Within a single shape, use {@link TensorType.SymbolicDim}{@code ("?")} for a
+ * known-rank-but-unknown-size dimension (e.g., a dynamic batch size). A {@code null} shape list
+ * means even the rank is unknown.
+ *
+ * <h3>Dtypes — {@link #getDefaultDTypes(PropagationCallGraphBuilder)}</h3>
+ *
+ * <ul>
+ *   <li>{@code EnumSet.of(DType.UNKNOWN)} — ⊤, the generator produces a tensor but its dtype cannot
+ *       be determined. Never return a bare empty set for the "unknown" case.
+ *   <li>empty set — ⊥, the variable is provably not a tensor.
+ *   <li>non-empty set of concrete {@link DType}s — the set of possible dtypes.
+ * </ul>
+ *
+ * <h3>Tensor types — {@link #getTensorTypes(PropagationCallGraphBuilder)}</h3>
+ *
+ * Shapes and dtypes are orthogonal. When the shape is unknown but the dtype is known, {@link
+ * #getTensorTypes(PropagationCallGraphBuilder)} emits {@code TensorType} instances with {@code
+ * null} dims so dtype information is preserved. {@link TensorType} is null-dims-safe; subclasses
+ * consuming {@link TensorType}s must also be.
+ *
+ * <p>When adding a new {@link TensorGenerator} subclass, audit every final-fallback return in
+ * {@code getDefaultShapes} and {@code getDefaultDTypes} against the table above — the most common
+ * mistake is returning {@code Collections.emptySet()} when the intended meaning is "unknown."
+ *
  * <p>TODO: Revisit caching of shapes and dtypes.
  *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
