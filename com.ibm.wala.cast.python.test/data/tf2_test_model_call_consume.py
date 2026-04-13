@@ -32,6 +32,8 @@ class SequentialModel(tf.keras.Model):
         x = self.dropout(x)
         x = self.dense_2(x)
 
+        assert x.shape == (20, 10)
+        assert x.dtype == tf.float32
         consume(x)
         return x
 
