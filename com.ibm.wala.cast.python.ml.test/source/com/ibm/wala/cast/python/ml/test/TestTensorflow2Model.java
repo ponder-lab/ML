@@ -267,6 +267,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /** A {@code float32} tensor whose shape cannot be statically inferred. */
   private static final TensorType TENSOR_UNKNOWN_SHAPE_FLOAT32 = new TensorType(FLOAT_32, null);
 
+  private static final TensorType TENSOR_60000_28_28_FLOAT32 =
+      new TensorType(
+          FLOAT_32, asList(new NumericDim(60000), new NumericDim(28), new NumericDim(28)));
+
   private static final TensorType TENSOR_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2)));
 
@@ -6561,20 +6565,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Exercise the duck-typed {@code numpy.ndarray.astype(...)} dispatch path added for wala/ML#356.
-   * The receiver is the first element of {@code tf.keras.datasets.mnist.load_data()}, which is
-   * currently tracked by the analysis with an unknown shape; after the {@code astype} call, {@code
-   * consume}'s parameter is recognised as a float32 tensor even though its concrete shape still
-   * cannot be inferred.
+   * The receiver is {@code x_train}, the first element of {@code
+   * tf.keras.datasets.mnist.load_data()}, now modeled by {@link
+   * com.ibm.wala.cast.python.ml.client.MnistInputData} with shape {@code (60000, 28, 28)} uint8
+   * (wala/ML#361). After the {@code .astype(np.float32)} call, {@code consume}'s parameter is
+   * recognised as a float32 tensor, but its concrete shape is still lost.
    *
-   * <p>TODO: This expectation intentionally under-approximates the true shape. The companion Python
-   * file {@code tf2_test_astype.py} asserts at runtime that {@code y.shape == (60000, 28, 28)} and
-   * {@code y.dtype == np.float32}, but the JUnit expectation here is {@link
-   * #TENSOR_UNKNOWN_SHAPE_FLOAT32} — float32 dtype with a {@code null} dims list. The discrepancy
-   * reflects wala/ML#356 (the receiver shape is lost through the tuple-destructure chain from
-   * {@code mnist.load_data}) and wala/ML#359 (the systemic front-end improvement that would let the
-   * receiver shape propagate through unsummarised ops). Once either of those lands, tighten this
-   * expectation to a concrete {@code (60000, 28, 28) of float32} tensor so the Python and JUnit
-   * assertions agree.
+   * <p>TODO: The companion Python file {@code tf2_test_astype.py} asserts {@code y.shape == (60000,
+   * 28, 28)} and {@code y.dtype == np.float32} at runtime. The JUnit expectation here is {@link
+   * #TENSOR_UNKNOWN_SHAPE_FLOAT32} because {@code AstypeOperation}'s receiver shape lookup cannot
+   * walk the fieldref chain {@code v261 ← v259.#0 ← v247.#0 ← load_data()} back to the {@link
+   * com.ibm.wala.cast.python.ml.client.MnistInputData} allocation site. Tracked as a follow-up to
+   * wala/ML#361; tighten to {@link #TENSOR_60000_28_28_FLOAT32} once the fieldref walk lands.
    */
   @Test
   public void testAstype()

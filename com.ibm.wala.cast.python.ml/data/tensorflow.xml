@@ -1760,15 +1760,16 @@
     </package>
     <package name="tensorflow/keras/datasets/mnist">
       <!-- https://www.tensorflow.org/api_docs/python/tf/keras/datasets/mnist/load_data -->
+      <!-- Each element of the returned ((x_train, y_train), (x_test, y_test)) tuple is allocated as a distinct class so `TensorGeneratorFactory` can dispatch per element to a `MnistInputData` generator with the appropriate hard-coded shape and dtype. See wala/ML#361. -->
       <class name="load_data" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
-          <new def="x_train" class="Ltensorflow/examples/tutorials/mnist/input_data" />
-          <new def="y_train" class="Ltensorflow/examples/tutorials/mnist/input_data" />
+          <new def="x_train" class="Ltensorflow/keras/datasets/mnist/x_train" />
+          <new def="y_train" class="Ltensorflow/keras/datasets/mnist/y_train" />
           <new def="train" class="Ltuple" />
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="train" value="x_train" />
           <putfield class="LRoot" field="1" fieldType="LRoot" ref="train" value="y_train" />
-          <new def="x_test" class="Ltensorflow/examples/tutorials/mnist/input_data" />
-          <new def="y_test" class="Ltensorflow/examples/tutorials/mnist/input_data" />
+          <new def="x_test" class="Ltensorflow/keras/datasets/mnist/x_test" />
+          <new def="y_test" class="Ltensorflow/keras/datasets/mnist/y_test" />
           <new def="test" class="Ltuple" />
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="test" value="x_test" />
           <putfield class="LRoot" field="1" fieldType="LRoot" ref="test" value="y_test" />
