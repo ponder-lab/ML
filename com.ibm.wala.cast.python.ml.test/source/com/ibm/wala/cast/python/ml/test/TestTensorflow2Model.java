@@ -1437,6 +1437,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Test call string imprecision as described in
    * https://github.com/wala/WALA/discussions/1417#discussioncomment-10085680. This should fail due
    * to https://github.com/wala/ML/issues/207.
+   *
+   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#207 is fixed.
    */
   @Test(expected = AssertionError.class)
   public void testModelCall5()
@@ -4958,7 +4960,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
-  /** Test https://github.com/wala/ML/issues/210. */
+  /**
+   * Test https://github.com/wala/ML/issues/210.
+   *
+   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#210 is fixed.
+   */
   @Test(expected = AssertionError.class)
   public void testModule70()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -4972,7 +4978,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
-  /** Test https://github.com/wala/ML/issues/210. */
+  /**
+   * Test https://github.com/wala/ML/issues/210.
+   *
+   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#210 is fixed.
+   */
   @Test(expected = AssertionError.class)
   public void testModule71()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -5028,7 +5038,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
   }
 
-  /** Test https://github.com/wala/ML/issues/211. */
+  /**
+   * Test https://github.com/wala/ML/issues/211.
+   *
+   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#211 is fixed.
+   */
   @Test(expected = AssertionError.class)
   public void testModule75()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -5341,13 +5355,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_decorated_method.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
-  /** Test https://github.com/wala/ML/issues/188. */
+  /**
+   * Test https://github.com/wala/ML/issues/188.
+   *
+   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#188 is fixed.
+   */
   @Test(expected = AssertionError.class)
   public void testDecoratedMethod2() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_decorated_method2.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
   }
 
-  /** Test https://github.com/wala/ML/issues/190. */
+  /**
+   * Test https://github.com/wala/ML/issues/190.
+   *
+   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#190 is fixed.
+   */
   @Test(expected = AssertionError.class)
   public void testDecoratedMethod3() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_decorated_method3.py", "raffi", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
@@ -5389,7 +5411,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_decorated_method9.py", "f", 0, 0);
   }
 
-  /** Test https://github.com/wala/ML/issues/190. */
+  /**
+   * Test https://github.com/wala/ML/issues/190.
+   *
+   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#190 is fixed.
+   */
   @Test(expected = AssertionError.class)
   public void testDecoratedMethod10() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_decorated_method10.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
@@ -5402,11 +5428,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   @Test
   public void testDecoratedMethod12() throws ClassHierarchyException, CancelException, IOException {
-    // NOTE: Change to 1, 1, 2 once https://github.com/wala/ML/issues/188 is fixed.
+    // TODO: Change to 1, 1, 2 once https://github.com/wala/ML/issues/188 is fixed.
     test("tf2_test_decorated_method12.py", "f", 0, 0);
   }
 
-  /** Test https://github.com/wala/ML/issues/190. */
+  /**
+   * Test https://github.com/wala/ML/issues/190.
+   *
+   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#190 is fixed.
+   */
   @Test(expected = AssertionError.class)
   public void testDecoratedMethod13() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_decorated_method13.py", "f", 1, 1, Map.of(2, Set.of(MNIST_INPUT)));
@@ -6652,6 +6682,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * so the trigger here is something more specific to {@code SequentialModel}'s particular
    * combination of {@code Flatten} + 100-element layer list comprehension + {@code Dropout} +
    * {@code tf.random.uniform} input.
+   *
+   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#358 is fixed.
    */
   @Test(expected = AssertionError.class)
   public void testModelCallConsume()
