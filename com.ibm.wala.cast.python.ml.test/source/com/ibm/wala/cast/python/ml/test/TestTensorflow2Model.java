@@ -1292,6 +1292,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * shape {@code (2, 3)} and slices the outer dimension, producing {@code (3,)} as the element
    * shape. Marked {@code expected = AssertionError.class} as a committed bug repro until
    * wala/ML#366 lands.
+   *
+   * <p>TODO: Once wala/ML#366 is fixed, flip the annotation back to a plain {@code @Test} so this
+   * becomes a positive regression guard instead of a suppressed failure.
    */
   @Test(expected = AssertionError.class)
   public void testDataset70()
@@ -1313,6 +1316,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * wrong output, confirming the bug is in the tuple walk itself and not in the element dispatch.
    * Marked {@code expected = AssertionError.class} as a committed bug repro until wala/ML#366
    * lands.
+   *
+   * <p>TODO: Once wala/ML#366 is fixed, flip the annotation back to a plain {@code @Test} so this
+   * becomes a positive regression guard instead of a suppressed failure.
    */
   @Test(expected = AssertionError.class)
   public void testDataset71()
