@@ -99,5 +99,18 @@ Shapes and dtypes are orthogonal. When the shape is unknown but the dtype is kno
 - Ensure that all new and existing JUnit test cases pass successfully before committing changes.
 - Use descriptive names for JUnit test methods that clearly indicate the purpose of the test.
 - If you change any of the summary files (e.g., `tensorflow.xml`), ensure that you add or update JUnit test cases to cover the changes made. Also, you must run `mvn clean` to ensure that the changes are correctly reflected in the build for summary (XML) files.
+- When suppressing a known-failing test with `@Test(expected = AssertionError.class)`, always add a `TODO:` line to the test's Javadoc naming the issue that needs to land before the annotation can be removed. For example:
+
+	```java
+	/**
+	 * Test https://github.com/wala/ML/issues/210.
+	 *
+	 * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#210 is fixed.
+	 */
+	@Test(expected = AssertionError.class)
+	public void testModule70() { ... }
+	```
+
+	Without the `TODO` keyword a suppressed failure is indistinguishable from an intentional positive negative-assertion (see `testDecoratedMethod9`), and IDE task-list / `grep TODO` tooling will not surface it as temporary. The only legitimate exception is when the `AssertionError` is itself the expected positive outcome (e.g., "this function doesn't exist, so the test should fail"); those should be documented in the Javadoc as intentional.
 
 [SO post]: https://stackoverflow.com/questions/4955635/how-to-add-local-jar-files-to-a-maven-project#answer-4955635

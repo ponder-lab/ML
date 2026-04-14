@@ -128,7 +128,7 @@ Python test inputs live in `com.ibm.wala.cast.python.test/data/*.py`. When addin
 
 ### Issue-blocked tests
 
-The `@Test(expected = AssertionError.class)` pattern (see `testModelCall5`, `testModelCallConsume`) is the idiom for "this test documents a known failure, tracked by issue #N." When the issue is resolved, flip the annotation to plain `@Test` to convert the test into a positive regression guard.
+The `@Test(expected = AssertionError.class)` pattern (see `testModelCall5`, `testModelCallConsume`) is the idiom for "this test documents a known failure, tracked by issue #N." When adding one, always include a `TODO:` line in the Javadoc naming the blocking issue — without it, the suppression is indistinguishable from an intentional positive negative-assertion (as in `testDecoratedMethod9`) and tooling can't distinguish the two. When the underlying issue is resolved, flip the annotation to plain `@Test` and remove the `TODO` to convert the test into a positive regression guard.
 
 ## Commit style
 
