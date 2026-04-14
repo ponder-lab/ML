@@ -723,7 +723,13 @@ public abstract class TensorGenerator {
           if (this.getSource() != null && this.getSource().equals(defSource)) {
             return ret;
           }
-          generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+          try {
+            generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+          } catch (IllegalArgumentException e) {
+            // Factory couldn't resolve — treat as "no generator" and skip. See wala/ML#363.
+            LOGGER.log(Level.FINE, "Delegating shape inference: factory IAE for " + defSource, e);
+            generator = null;
+          }
           if (generator != null) {
             LOGGER.fine("Delegating shape inference to: " + generator);
             Set<List<Dimension<?>>> delegatedShapes = generator.getShapes(builder);
@@ -762,7 +768,14 @@ public abstract class TensorGenerator {
               // Try to create a manual generator for the caller (doNode) first.
               TensorGenerator generator = createManualGenerator(doNode, builder);
               if (generator == null) {
-                generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+                try {
+                  generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+                } catch (IllegalArgumentException e) {
+                  // Factory couldn't resolve — treat as "no generator". See wala/ML#363.
+                  LOGGER.log(
+                      Level.FINE, "Delegating shape inference: factory IAE for " + defSource, e);
+                  generator = null;
+                }
               }
 
               if (generator != null) {
@@ -1215,9 +1228,14 @@ public abstract class TensorGenerator {
         if (!builder.getPropagationSystem().isImplicit(pk)) {
           var = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
         }
-        TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
-        if (generator != null && !generator.getClass().equals(this.getClass())) {
-          ret.addAll(generator.getDTypes(builder));
+        try {
+          TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+          if (generator != null && !generator.getClass().equals(this.getClass())) {
+            ret.addAll(generator.getDTypes(builder));
+          }
+        } catch (IllegalArgumentException e) {
+          // Factory couldn't resolve — skip this instance. See wala/ML#363.
+          LOGGER.log(Level.FINE, "getDTypesOfValue: factory IAE for " + var, e);
         }
       } else {
         throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
@@ -1256,7 +1274,13 @@ public abstract class TensorGenerator {
             return ret;
           }
 
-          generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+          try {
+            generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+          } catch (IllegalArgumentException e) {
+            // Factory couldn't resolve — treat as "no generator". See wala/ML#363.
+            LOGGER.log(Level.FINE, "Delegating dtype inference: factory IAE for " + defSource, e);
+            generator = null;
+          }
           if (generator != null) {
             LOGGER.fine("Delegating dtype inference to: " + generator);
             ret.addAll(generator.getDTypes(builder));
@@ -1295,7 +1319,14 @@ public abstract class TensorGenerator {
               // Try to create a manual generator for the caller (doNode) first.
               TensorGenerator generator = createManualGenerator(doNode, builder);
               if (generator == null) {
-                generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+                try {
+                  generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+                } catch (IllegalArgumentException e) {
+                  // Factory couldn't resolve — treat as "no generator". See wala/ML#363.
+                  LOGGER.log(
+                      Level.FINE, "Delegating dtype inference: factory IAE for " + defSource, e);
+                  generator = null;
+                }
               }
 
               if (generator != null) {
