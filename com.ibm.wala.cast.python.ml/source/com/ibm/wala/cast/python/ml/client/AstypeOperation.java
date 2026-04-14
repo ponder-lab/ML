@@ -27,15 +27,27 @@ public class AstypeOperation extends TensorGenerator {
     LOGGER.fine(
         () -> "AstypeOperation.getDefaultShapes: source=" + source + ", receiverVn=" + receiverVn);
     if (receiverVn > 0) {
-      Set<List<Dimension<?>>> shapes = getShapes(builder, getNode(), receiverVn);
-      LOGGER.fine(
-          () ->
-              "AstypeOperation.getDefaultShapes: shapes from receiverVn="
-                  + receiverVn
-                  + " -> "
-                  + shapes);
-      if (shapes != null && !shapes.isEmpty()) {
-        return shapes;
+      try {
+        Set<List<Dimension<?>>> shapes = getShapes(builder, getNode(), receiverVn);
+        LOGGER.fine(
+            () ->
+                "AstypeOperation.getDefaultShapes: shapes from receiverVn="
+                    + receiverVn
+                    + " -> "
+                    + shapes);
+        if (shapes != null && !shapes.isEmpty()) {
+          return shapes;
+        }
+      } catch (IllegalArgumentException e) {
+        // `getShapes` throws when the receiver's call chain ends at a generator the factory
+        // doesn't recognise (e.g., `mnist.load_data` whose outputs aren't shape-typed). Catch
+        // and return `null` (⊤ unknown shape) so dtype inference still proceeds and the result
+        // flows downstream as a tensor instead of being dropped entirely. See wala/ML#356.
+        LOGGER.log(
+            java.util.logging.Level.FINE,
+            "AstypeOperation.getDefaultShapes: receiver shape lookup failed for receiverVn="
+                + receiverVn,
+            e);
       }
     }
     return null;
