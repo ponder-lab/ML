@@ -47,10 +47,6 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MATMUL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MAX_POOL;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MNIST_X_TEST_TYPE;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MNIST_X_TRAIN_TYPE;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MNIST_Y_TEST_TYPE;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MNIST_Y_TRAIN_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MULTIPLY;
@@ -84,11 +80,8 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VARIABLE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS_LIKE;
-import static com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
-import static com.ibm.wala.cast.python.ml.types.UINT8;
 import static com.ibm.wala.cast.python.util.Util.sanitize;
 import static java.util.Map.entry;
-import static java.util.asList;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
@@ -751,19 +744,6 @@ public class TensorGeneratorFactory {
       return new FlowFromDirectoryGenerator(source);
     else if (isType(calledFunction, READ_DATA_SETS.getDeclaringClass()))
       return new ReadDataSets(source);
-    // The four arrays returned by `tf.keras.datasets.mnist.load_data()` each have a distinct
-    // allocation class in `tensorflow.xml`, so dispatch per element to a `MnistInputData`
-    // generator with the appropriate hard-coded shape and `uint8` dtype. See wala/ML#361.
-    else if (isType(calledFunction, MNIST_X_TRAIN_TYPE))
-      return new MnistInputData(
-          source, asList(new NumericDim(60000), new NumericDim(28), new NumericDim(28)), UINT8);
-    else if (isType(calledFunction, MNIST_Y_TRAIN_TYPE))
-      return new MnistInputData(source, asList(new NumericDim(60000)), UINT8);
-    else if (isType(calledFunction, MNIST_X_TEST_TYPE))
-      return new MnistInputData(
-          source, asList(new NumericDim(10000), new NumericDim(28), new NumericDim(28)), UINT8);
-    else if (isType(calledFunction, MNIST_Y_TEST_TYPE))
-      return new MnistInputData(source, asList(new NumericDim(10000)), UINT8);
     else if (isType(calledFunction, REDUCE_MEAN.getDeclaringClass())) return new ReduceMean(source);
     else if (isType(calledFunction, PLACEHOLDER.getDeclaringClass()))
       return new Placeholder(source);
