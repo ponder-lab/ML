@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.types.NumpyTypes.ASTYPE;
+import static com.ibm.wala.cast.python.ml.types.NumpyTypes.ASTYPE_METHOD_NAME;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARRAY_OPS_RESHAPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
@@ -79,6 +81,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VARIABLE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS_LIKE;
 import static com.ibm.wala.cast.python.util.Util.sanitize;
+import static java.util.Map.entry;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
@@ -105,8 +108,10 @@ import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.graph.Graph;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -123,6 +128,23 @@ public class TensorGeneratorFactory {
   /** Attributes of `tf.Tensor` that do not represent tensor elements. */
   private static final Set<String> NON_TENSOR_ATTRIBUTES =
       Set.of("value_index", "dtype", "shape", "name", "graph", "op", "device", "consumers");
+
+  /**
+   * Registry of property-name → generator-constructor mappings used by the duck-typing dispatch
+   * path in {@link #getGenerator(PointsToSetVariable, PropagationCallGraphBuilder)}. When an invoke
+   * instruction's function object came from a {@link PythonPropertyRead} whose member is the
+   * constant string key of this map, the factory constructs the corresponding generator regardless
+   * of whether WALA resolved the call target to a concrete summary. This reflects Python's dynamic
+   * attribute dispatch semantics: {@code x.method_name(...)} resolves by name even when the
+   * receiver's static type is unknown.
+   *
+   * <p>Register a new entry when adding a {@code TensorGenerator} that represents an instance
+   * method whose receiver's type may not be statically known at the call site — typical for methods
+   * on values that flow through slice operations, tuple destructuring, or other unsummarized
+   * property reads. See wala/ML#356 for the broader context.
+   */
+  private static final Map<String, Function<PointsToSetVariable, TensorGenerator>>
+      PROPERTY_NAME_GENERATORS = Map.ofEntries(entry(ASTYPE_METHOD_NAME, AstypeOperation::new));
 
   /**
    * Resolves the {@link TypeReference} for the function call associated with the given source.
@@ -288,6 +310,73 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * Duck-typed generator dispatch by the invoke instruction's function-object property name. If
+   * {@code call.getUse(0)}'s def is a {@link PythonPropertyRead} whose member points to a {@link
+   * ConstantKey} whose value matches a key in {@link #PROPERTY_NAME_GENERATORS}, the corresponding
+   * factory function is invoked to construct a generator for {@code source}. Otherwise returns
+   * {@code null}.
+   *
+   * <p>This is the only stable dispatch path for instance-method calls whose receiver's class is
+   * lost through unsummarized ops (slices, tuple destructuring, binop results, etc.). Python's
+   * runtime attribute lookup is dynamic, so matching by property name is a sound — if coarse —
+   * model of its semantics. See wala/ML#356 for the broader context and wala/ML#359 for the
+   * structural improvement that would eventually make this path unnecessary.
+   *
+   * @param source The {@link PointsToSetVariable} that represents the invocation's result value
+   *     (the SSA value number that holds the return of the call), passed to the matched generator's
+   *     constructor as its source. This is the same {@code source} the factory's caller wants a
+   *     generator for; the helper does not rewrite it.
+   * @param call The {@link SSAAbstractInvokeInstruction} whose function object is inspected. {@code
+   *     call.getUse(0)} is the callable's SSA value number; its def is checked for a {@link
+   *     PythonPropertyRead} pattern.
+   * @param node The {@link CGNode} that contains {@code call}. Used to look up the member-ref value
+   *     number's def and points-to set.
+   * @param vn The SSA value number of {@code source} within {@code node}. Used only for diagnostic
+   *     logging so the trace identifies the specific call site.
+   * @param builder The {@link PropagationCallGraphBuilder} used to resolve the member-ref points-to
+   *     set (which is where the {@link ConstantKey} for the property name lives).
+   * @return A new {@link TensorGenerator} constructed by the matched entry in {@link
+   *     #PROPERTY_NAME_GENERATORS}, or {@code null} if the function object is not a property read
+   *     with a constant-string member, or if the member name has no entry in the registry.
+   */
+  private static TensorGenerator dispatchByPropertyName(
+      PointsToSetVariable source,
+      SSAAbstractInvokeInstruction call,
+      CGNode node,
+      int vn,
+      PropagationCallGraphBuilder builder) {
+    if (call.getNumberOfUses() == 0) return null;
+    SSAInstruction funcDef = node.getDU().getDef(call.getUse(0));
+    if (!(funcDef instanceof PythonPropertyRead)) return null;
+    PythonPropertyRead funcRead = (PythonPropertyRead) funcDef;
+    PointerKey memberKey =
+        builder
+            .getPointerAnalysis()
+            .getHeapModel()
+            .getPointerKeyForLocal(node, funcRead.getMemberRef());
+    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(memberKey)) {
+      if (!(ik instanceof ConstantKey)) continue;
+      Object value = ((ConstantKey<?>) ik).getValue();
+      if (!(value instanceof String)) continue;
+      Function<PointsToSetVariable, TensorGenerator> constructor =
+          PROPERTY_NAME_GENERATORS.get((String) value);
+      if (constructor != null) {
+        LOGGER.fine(
+            () ->
+                "TensorGeneratorFactory: dispatching `."
+                    + value
+                    + "(...)` call at "
+                    + node
+                    + " v"
+                    + vn
+                    + " via property-name registry.");
+        return constructor.apply(source);
+      }
+    }
+    return null;
+  }
+
+  /**
    * Returns a {@link TensorGenerator} instance for the given source and call graph builder.
    *
    * <p>This method identifies the specific TensorFlow function or operation that produced the value
@@ -319,6 +408,11 @@ public class TensorGeneratorFactory {
       SSAInstruction def = node.getDU().getDef(vn);
       if (def instanceof SSAAbstractInvokeInstruction) {
         SSAAbstractInvokeInstruction call = (SSAAbstractInvokeInstruction) def;
+
+        // Duck-typing fallback: dispatch by the property-read member name.
+        TensorGenerator byPropertyName = dispatchByPropertyName(source, call, node, vn, builder);
+        if (byPropertyName != null) return byPropertyName;
+
         for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, call.getCallSite())) {
           // If we're calling the `enumerate` builtin, we want to return the generator for the
           // underlying iterable (the second element of each tuple returned by the enumerator).
@@ -349,6 +443,23 @@ public class TensorGeneratorFactory {
             return (iterableSrc != null)
                 ? new IteratorGenerator(source, getGenerator(iterableSrc, builder))
                 : null;
+          }
+
+          // If we're calling `numpy.ndarray.astype`, the result is a new tensor with the same
+          // shape as the receiver but a different dtype. See wala/ML#356.
+          if (callee
+              .getMethod()
+              .getReference()
+              .getDeclaringClass()
+              .equals(ASTYPE.getDeclaringClass())) {
+            LOGGER.fine(
+                () ->
+                    "TensorGeneratorFactory: dispatching astype call at "
+                        + node
+                        + " v"
+                        + vn
+                        + " to AstypeOperation.");
+            return new AstypeOperation(source);
           }
 
           // If we're calling `next`, the result is an element of the collection.

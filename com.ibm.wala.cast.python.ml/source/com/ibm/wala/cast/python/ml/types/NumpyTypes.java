@@ -93,6 +93,9 @@ public class NumpyTypes extends PythonTypes {
 
   private static final String RESHAPE_SIGNATURE = "numpy.reshape()";
 
+  /** Method name used in {@code numpy.xml} for {@link #ASTYPE}. */
+  public static final String ASTYPE_METHOD_NAME = "astype";
+
   /** https://numpy.org/doc/stable/reference/generated/numpy.ndarray.astype.html */
   public static final MethodReference ASTYPE =
       MethodReference.findOrCreate(

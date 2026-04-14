@@ -16,11 +16,17 @@
         <return value="x" />
       </method>
     </class>
-    <class name="numpy/ndarray" allocatable="true">
-      <method name="astype" descriptor="()LRoot;" numArgs="2" paramNames="self,dtype">
-        <new def="ret" class="Lnumpy/ndarray" />
-        <return value="ret" />
-      </method>
-    </class>
+    <package name="numpy/ndarray">
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.ndarray.astype.html -->
+      <!-- Modeled as a class-per-function (same pattern as `tensorflow/data/shuffle`, etc.) so that attribute access `x.astype` on an ndarray-like value resolves to this class via a field lookup, and the subsequent invocation dispatches to its `do` method. -->
+      <class name="astype" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self ndarray dtype">
+          <new def="ret" class="Lnumpy/ndarray" />
+          <new def="astype" class="Lnumpy/ndarray/astype" />
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype" />
+          <return value="ret" />
+        </method>
+      </class>
+    </package>
   </classloader>
 </summary-spec>

@@ -882,6 +882,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
   protected void addBypassLogic(IClassHierarchy cha, AnalysisOptions options) {
     super.addBypassLogic(cha, options);
+    // Load numpy before tensorflow so tensorflow-level generators can reference numpy types via
+    // `NumpyTypes` constants without depending on load order side effects.
+    addSummaryBypassLogic(options, "numpy.xml");
     addSummaryBypassLogic(options, "tensorflow.xml");
   }
 }

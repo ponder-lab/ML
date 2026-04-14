@@ -24,10 +24,17 @@ public class AstypeOperation extends TensorGenerator {
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     int receiverVn = getReceiverVn();
+    LOGGER.fine(
+        () -> "AstypeOperation.getDefaultShapes: source=" + source + ", receiverVn=" + receiverVn);
     if (receiverVn > 0) {
       Set<List<Dimension<?>>> shapes = getShapes(builder, getNode(), receiverVn);
+      LOGGER.fine(
+          () ->
+              "AstypeOperation.getDefaultShapes: shapes from receiverVn="
+                  + receiverVn
+                  + " -> "
+                  + shapes);
       if (shapes != null && !shapes.isEmpty()) {
-        LOGGER.info("AstypeOperation returning shapes: " + shapes);
         return shapes;
       }
     }
