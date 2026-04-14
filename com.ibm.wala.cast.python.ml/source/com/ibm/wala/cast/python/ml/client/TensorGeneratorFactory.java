@@ -384,23 +384,6 @@ public class TensorGeneratorFactory {
   }
 
   /**
-   * Recursive-call helper for {@link #getGenerator(PointsToSetVariable,
-   * PropagationCallGraphBuilder)} that swallows {@link IllegalArgumentException} and returns {@code
-   * null} instead. Used at the inner walk sites that recurse into containers, return values, and
-   * the objects of property reads: one unresolved branch should not abort dispatch for the whole
-   * source. See wala/ML#363.
-   */
-  private static TensorGenerator tryGetGenerator(
-      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
-    try {
-      return getGenerator(source, builder);
-    } catch (IllegalArgumentException e) {
-      LOGGER.log(Level.FINE, "tryGetGenerator: swallowed IAE for source=" + source, e);
-      return null;
-    }
-  }
-
-  /**
    * Returns a {@link TensorGenerator} instance for the given source and call graph builder.
    *
    * <p>This method identifies the specific TensorFlow function or operation that produced the value
@@ -421,6 +404,23 @@ public class TensorGeneratorFactory {
    * @return the corresponding {@link TensorGenerator} for the TensorFlow function
    * @throws IllegalArgumentException if the function call is unknown or not supported
    */
+  /**
+   * Recursive-call helper for {@link #getGenerator(PointsToSetVariable,
+   * PropagationCallGraphBuilder)} that swallows {@link IllegalArgumentException} and returns {@code
+   * null} instead. Used at the inner walk sites that recurse into containers, return values, and
+   * the objects of property reads: one unresolved branch should not abort dispatch for the whole
+   * source. See wala/ML#363.
+   */
+  private static TensorGenerator tryGetGenerator(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    try {
+      return getGenerator(source, builder);
+    } catch (IllegalArgumentException e) {
+      LOGGER.log(Level.FINE, "tryGetGenerator: swallowed IAE for source=" + source, e);
+      return null;
+    }
+  }
+
   public static TensorGenerator getGenerator(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
     source = findCreator(source, builder);
