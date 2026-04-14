@@ -8,6 +8,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ssa.SSAInstruction;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -44,7 +45,7 @@ public class AstypeOperation extends TensorGenerator {
         // and return `null` (⊤ unknown shape) so dtype inference still proceeds and the result
         // flows downstream as a tensor instead of being dropped entirely. See wala/ML#356.
         LOGGER.log(
-            java.util.logging.Level.FINE,
+            Level.FINE,
             "AstypeOperation.getDefaultShapes: receiver shape lookup failed for receiverVn="
                 + receiverVn,
             e);
