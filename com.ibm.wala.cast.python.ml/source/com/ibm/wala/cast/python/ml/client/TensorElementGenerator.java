@@ -50,6 +50,11 @@ public class TensorElementGenerator extends TensorGenerator implements Delegatin
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    // The container generator may be null if the factory's recursive walk could not resolve the
+    // iterable's source (see wala/ML#363). Return empty set (⊥ / not-a-tensor) so the source is
+    // effectively dropped from tensor analysis, matching the pre-audit behaviour where the IAE
+    // bubbled up through the wrapper constructor and the source never got added to the init map.
+    if (this.containerGenerator == null) return Collections.emptySet();
     Set<List<Dimension<?>>> containerShapes = this.containerGenerator.getShapes(builder);
     if (containerShapes == null) return null;
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
@@ -69,6 +74,8 @@ public class TensorElementGenerator extends TensorGenerator implements Delegatin
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    // See the null check in getDefaultShapes. ⊥ preserves source-dropped semantics.
+    if (this.containerGenerator == null) return Collections.emptySet();
     return this.containerGenerator.getDTypes(builder);
   }
 
