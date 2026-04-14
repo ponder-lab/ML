@@ -670,33 +670,6 @@ public class TensorFlowTypes extends PythonTypes {
   private static final String READ_DATA_SETS_SIGNATURE =
       "tf.contrib.learn.datasets.mnist.read_data_sets()";
 
-  /**
-   * Distinct allocation classes for the four arrays returned by {@code
-   * tf.keras.datasets.mnist.load_data()}. Each class is used in {@code tensorflow.xml}'s {@code
-   * load_data.do} summary as the {@code class=} of a {@code <new>} instruction, so that {@link
-   * com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory} can dispatch per element to a
-   * generator with the appropriate hard-coded shape and dtype (wala/ML#361).
-   */
-  public static final TypeReference MNIST_X_TRAIN_TYPE =
-      TypeReference.findOrCreate(
-          PythonTypes.pythonLoader,
-          TypeName.string2TypeName("Ltensorflow/keras/datasets/mnist/x_train"));
-
-  public static final TypeReference MNIST_Y_TRAIN_TYPE =
-      TypeReference.findOrCreate(
-          PythonTypes.pythonLoader,
-          TypeName.string2TypeName("Ltensorflow/keras/datasets/mnist/y_train"));
-
-  public static final TypeReference MNIST_X_TEST_TYPE =
-      TypeReference.findOrCreate(
-          PythonTypes.pythonLoader,
-          TypeName.string2TypeName("Ltensorflow/keras/datasets/mnist/x_test"));
-
-  public static final TypeReference MNIST_Y_TEST_TYPE =
-      TypeReference.findOrCreate(
-          PythonTypes.pythonLoader,
-          TypeName.string2TypeName("Ltensorflow/keras/datasets/mnist/y_test"));
-
   /** https://www.tensorflow.org/api_docs/python/tf/placeholder. */
   public static final MethodReference PLACEHOLDER =
       MethodReference.findOrCreate(
