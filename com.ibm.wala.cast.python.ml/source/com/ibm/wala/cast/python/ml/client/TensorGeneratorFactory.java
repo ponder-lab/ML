@@ -377,6 +377,23 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * Recursive-call helper for {@link #getGenerator(PointsToSetVariable,
+   * PropagationCallGraphBuilder)} that swallows {@link IllegalArgumentException} and returns {@code
+   * null} instead. Used at the inner walk sites that recurse into containers, return values, and
+   * the objects of property reads: one unresolved branch should not abort dispatch for the whole
+   * source. See wala/ML#363.
+   */
+  private static TensorGenerator tryGetGenerator(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    try {
+      return getGenerator(source, builder);
+    } catch (IllegalArgumentException e) {
+      LOGGER.log(Level.FINE, "tryGetGenerator: swallowed IAE for source=" + source, e);
+      return null;
+    }
+  }
+
+  /**
    * Returns a {@link TensorGenerator} instance for the given source and call graph builder.
    *
    * <p>This method identifies the specific TensorFlow function or operation that produced the value
@@ -426,7 +443,7 @@ public class TensorGeneratorFactory {
                 builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
             PointsToSetVariable iterableSrc = getPointsToSetVariable(iterableKey, builder);
             return (iterableSrc != null)
-                ? new EnumerateGenerator(source, getGenerator(iterableSrc, builder))
+                ? new EnumerateGenerator(source, tryGetGenerator(iterableSrc, builder))
                 : null;
           }
 
@@ -441,7 +458,7 @@ public class TensorGeneratorFactory {
                 builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
             PointsToSetVariable iterableSrc = getPointsToSetVariable(iterableKey, builder);
             return (iterableSrc != null)
-                ? new IteratorGenerator(source, getGenerator(iterableSrc, builder))
+                ? new IteratorGenerator(source, tryGetGenerator(iterableSrc, builder))
                 : null;
           }
 
@@ -473,7 +490,7 @@ public class TensorGeneratorFactory {
                 builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
             PointsToSetVariable iterableSrc = getPointsToSetVariable(iterableKey, builder);
             if (iterableSrc == null) return null;
-            TensorGenerator containerGenerator = getGenerator(iterableSrc, builder);
+            TensorGenerator containerGenerator = tryGetGenerator(iterableSrc, builder);
 
             while (containerGenerator instanceof DelegatingTensorGenerator) {
               containerGenerator = ((DelegatingTensorGenerator) containerGenerator).getUnderlying();
@@ -487,7 +504,12 @@ public class TensorGeneratorFactory {
               builder.getPointerAnalysis().getHeapModel().getPointerKeyForReturnValue(callee);
           PointsToSetVariable retSrc = getPointsToSetVariable(retKey, builder);
           if (retSrc != null) {
-            return getGenerator(retSrc, builder); // Recursive call for the callee's return value
+            // Recursive dispatch on the callee's return value. Swallow IAE so a single
+            // unresolved callee doesn't abort dispatch for the whole source — the outer
+            // loop should try the remaining candidate callees, and failing that fall through
+            // to the `ReturnValueKey` / assignment-graph fallback below. See wala/ML#363.
+            TensorGenerator fromRet = tryGetGenerator(retSrc, builder);
+            if (fromRet != null) return fromRet;
           }
         }
       } else if (def instanceof EachElementGetInstruction) {
@@ -498,7 +520,7 @@ public class TensorGeneratorFactory {
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
         PointsToSetVariable iterableSrc = getPointsToSetVariable(iterableKey, builder);
         if (iterableSrc == null) return null;
-        TensorGenerator containerGenerator = getGenerator(iterableSrc, builder);
+        TensorGenerator containerGenerator = tryGetGenerator(iterableSrc, builder);
 
         // We have a generator for the container (the object being iterated over).
         // If the container is a `Dataset` (e.g., `tf.data.Dataset`), its generator
@@ -519,7 +541,7 @@ public class TensorGeneratorFactory {
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, objRef);
         PointsToSetVariable objSrc = getPointsToSetVariable(objKey, builder);
         if (objSrc == null) return null;
-        TensorGenerator containerGenerator = getGenerator(objSrc, builder);
+        TensorGenerator containerGenerator = tryGetGenerator(objSrc, builder);
 
         TensorGenerator effectiveGenerator = containerGenerator;
         if (containerGenerator instanceof DelegatingTensorGenerator) {
