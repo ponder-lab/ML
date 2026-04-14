@@ -1493,7 +1493,7 @@ public abstract class TensorGenerator {
             Set<List<Dimension<?>>> argShapes = this.getShapes(builder, caller, argVn);
             LOGGER.fine(
                 () -> "getArgumentShapesViaCallers: argVn=" + finalArgVn + " shapes=" + argShapes);
-            if (argShapes != null) {
+            if (argShapes != null && !argShapes.isEmpty()) {
               if (combined == null) combined = HashSetFactory.make();
               combined.addAll(argShapes);
             }
