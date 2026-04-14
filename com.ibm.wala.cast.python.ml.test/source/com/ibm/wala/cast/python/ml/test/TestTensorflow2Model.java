@@ -1279,6 +1279,54 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Test {@code tf.data.Dataset.from_tensor_slices} with a tuple of two Python list literals,
+   * followed by the same {@code .shuffle(...).batch(...)} chain as {@link #testDataset5()}. The
+   * iterator yields a tuple {@code (element_a, element_b)} where each element has the same batched
+   * shape as {@code testDataset5}'s single element. This isolates the "tuple-structured argument"
+   * path from the {@link #testDataset5()} "single-list" path; every test that feeds a tuple to
+   * {@code from_tensor_slices} today does so via {@code mnist.load_data()}'s ndarray split, and no
+   * existing test exercises the tuple-of-literals case in isolation.
+   *
+   * <p>Currently fails with actual result {@code {(3,) int32}} instead of the expected {@code {(2,)
+   * int32, (1,) int32}} — the analyzer reads the tuple {@code ([1,2,3], [4,5,6])} as a 2D array of
+   * shape {@code (2, 3)} and slices the outer dimension, producing {@code (3,)} as the element
+   * shape. Marked {@code expected = AssertionError.class} as a committed bug repro until
+   * wala/ML#366 lands.
+   */
+  @Test(expected = AssertionError.class)
+  public void testDataset70()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset70.py",
+        "add",
+        2,
+        3,
+        Map.of(
+            2, Set.of(TENSOR_2_INT32, TENSOR_1_INT32), 3, Set.of(TENSOR_2_INT32, TENSOR_1_INT32)));
+  }
+
+  /**
+   * Like {@link #testDataset70()} but the two elements of the tuple are {@code tf.constant(...)}
+   * calls rather than raw Python list literals. Used as a comparison point to isolate whether the
+   * tuple-structured-argument bug observed in {@link #testDataset70()} is specific to raw literals
+   * or also applies when the tuple elements are already typed tensors. Both fail with identical
+   * wrong output, confirming the bug is in the tuple walk itself and not in the element dispatch.
+   * Marked {@code expected = AssertionError.class} as a committed bug repro until wala/ML#366
+   * lands.
+   */
+  @Test(expected = AssertionError.class)
+  public void testDataset71()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset71.py",
+        "add",
+        2,
+        3,
+        Map.of(
+            2, Set.of(TENSOR_2_INT32, TENSOR_1_INT32), 3, Set.of(TENSOR_2_INT32, TENSOR_1_INT32)));
+  }
+
+  /**
    * Test enumerating a dataset (https://github.com/wala/ML/issues/140). The first element of the
    * tuple returned isn't a tensor.
    */
