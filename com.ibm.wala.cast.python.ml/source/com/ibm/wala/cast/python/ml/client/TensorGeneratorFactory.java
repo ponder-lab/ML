@@ -28,6 +28,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_WITH_OPT
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_ZIP_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DENSE_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIVIDE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.UINT8;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
@@ -85,10 +86,9 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VARIABLE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS_LIKE;
 import static com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
-import static com.ibm.wala.cast.python.ml.types.UINT8;
 import static com.ibm.wala.cast.python.util.Util.sanitize;
+import static java.util.Arrays.asList;
 import static java.util.Map.entry;
-import static java.util.asList;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
