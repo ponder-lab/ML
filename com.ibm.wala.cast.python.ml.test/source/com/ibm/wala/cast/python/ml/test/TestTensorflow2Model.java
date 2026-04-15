@@ -6647,20 +6647,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Exercise the duck-typed {@code numpy.ndarray.astype(...)} dispatch path added for wala/ML#356.
-   * The receiver is the first element of {@code tf.keras.datasets.mnist.load_data()}, which is
-   * currently tracked by the analysis with an unknown shape; after the {@code astype} call, {@code
-   * consume}'s parameter is recognised as a float32 tensor even though its concrete shape still
-   * cannot be inferred.
+   * The receiver is {@code x_train}, the first element of {@code
+   * tf.keras.datasets.mnist.load_data()}. Without mnist modeling, the receiver's concrete shape
+   * cannot be resolved; after the {@code astype} call, {@code consume}'s parameter is recognised as
+   * a float32 tensor with a {@code null} dims list.
    *
-   * <p>TODO: This expectation intentionally under-approximates the true shape. The companion Python
-   * file {@code tf2_test_astype.py} asserts at runtime that {@code y.shape == (60000, 28, 28)} and
-   * {@code y.dtype == np.float32}, but the JUnit expectation here is {@link
-   * #TENSOR_UNKNOWN_SHAPE_FLOAT32} — float32 dtype with a {@code null} dims list. The discrepancy
-   * reflects wala/ML#356 (the receiver shape is lost through the tuple-destructure chain from
-   * {@code mnist.load_data}) and wala/ML#359 (the systemic front-end improvement that would let the
-   * receiver shape propagate through unsummarised ops). Once either of those lands, tighten this
-   * expectation to a concrete {@code (60000, 28, 28) of float32} tensor so the Python and JUnit
-   * assertions agree.
+   * <p>TODO: Tighten the expectation from {@link #TENSOR_UNKNOWN_SHAPE_FLOAT32} to a concrete
+   * {@code (60000, 28, 28) of float32} tensor once <b>both</b> wala/ML#361 (mnist modeling, so the
+   * receiver allocation has a concrete shape) and wala/ML#362 ({@code AstypeOperation}
+   * fieldref-chain walk, so the receiver shape can be traced back through the tuple destructure
+   * {@code (x_train, _) = mnist.load_data()}) have landed. This test does <b>not</b> depend on
+   * wala/ML#367 or wala/ML#368 — its chain goes through a direct property-read on the destructured
+   * tuple, not through {@code .shuffle().batch()} or a {@code for a, b in dataset:} unpack.
    */
   @Test
   public void testAstype()
