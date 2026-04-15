@@ -1287,14 +1287,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * {@code from_tensor_slices} today does so via {@code mnist.load_data()}'s ndarray split, and no
    * existing test exercises the tuple-of-literals case in isolation.
    *
-   * <p>Currently fails with actual result {@code {(3,) int32}} instead of the expected {@code {(2,)
-   * int32, (1,) int32}} — the analyzer reads the tuple {@code ([1,2,3], [4,5,6])} as a 2D array of
-   * shape {@code (2, 3)} and slices the outer dimension, producing {@code (3,)} as the element
-   * shape. Marked {@code expected = AssertionError.class} as a committed bug repro until
-   * wala/ML#366 lands.
+   * <p>The root-cause tuple walk was fixed on the feature branch for wala/ML#366 via a call-site
+   * helper in {@link com.ibm.wala.cast.python.ml.client.DatasetFromTensorSlicesGenerator}, but this
+   * test still fails because of a separate "chain-preservation gap": the {@code .shuffle().batch()}
+   * chain wraps the dataset in generators that don't implement {@code DelegatingTensorGenerator},
+   * so the factory's {@code PythonPropertyRead} dispatch for the {@code for element_a, element_b in
+   * dataset:} unpack cannot peel back to find the tuple structure, and instead wraps in {@code
+   * TensorElementGenerator} which over-peels one dim — collapsing the batched shape {@code (2,)}
+   * back to {@code ()}.
    *
-   * <p>TODO: Once wala/ML#366 is fixed, flip the annotation back to a plain {@code @Test} so this
-   * becomes a positive regression guard instead of a suppressed failure.
+   * <p>TODO: Once the chain-preservation gap is also fixed, flip the annotation back to a plain
+   * {@code @Test} so this becomes a positive regression guard.
    */
   @Test(expected = AssertionError.class)
   public void testDataset70()
@@ -1313,12 +1316,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * calls rather than raw Python list literals. Used as a comparison point to isolate whether the
    * tuple-structured-argument bug observed in {@link #testDataset70()} is specific to raw literals
    * or also applies when the tuple elements are already typed tensors. Both fail with identical
-   * wrong output, confirming the bug is in the tuple walk itself and not in the element dispatch.
-   * Marked {@code expected = AssertionError.class} as a committed bug repro until wala/ML#366
-   * lands.
+   * wrong output; see {@link #testDataset70()}'s Javadoc for the current root-cause status
+   * (wala/ML#366 root-cause walk fixed, chain-preservation gap remains).
    *
-   * <p>TODO: Once wala/ML#366 is fixed, flip the annotation back to a plain {@code @Test} so this
-   * becomes a positive regression guard instead of a suppressed failure.
+   * <p>TODO: Once the chain-preservation gap is also fixed, flip the annotation back to a plain
+   * {@code @Test} so this becomes a positive regression guard.
    */
   @Test(expected = AssertionError.class)
   public void testDataset71()

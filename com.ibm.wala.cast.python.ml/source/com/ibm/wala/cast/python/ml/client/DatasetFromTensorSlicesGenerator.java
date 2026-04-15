@@ -1,12 +1,22 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.types.PythonTypes.Root;
+import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
+import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
+
+import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
@@ -59,7 +69,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator {
 
     Set<List<Dimension<?>>> inputShapes = null;
     if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
-      inputShapes = this.getShapesOfValue(builder, tensorsPTS);
+      inputShapes = getShapesOfTensorsArgument(builder, tensorsPTS);
     }
     final int tensorsPTSSize = tensorsPTS == null ? -1 : tensorsPTS.size();
     final Set<List<Dimension<?>>> ptsPathShapes = inputShapes;
@@ -112,7 +122,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator {
         this.getArgumentPointsToSet(
             builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName());
     if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
-      Set<DType> dtypes = this.getDTypesOfValue(builder, tensorsPTS);
+      Set<DType> dtypes = getDTypesOfTensorsArgument(builder, tensorsPTS);
       if (!dtypes.isEmpty()) return dtypes;
     }
 
@@ -131,7 +141,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator {
         this.getArgumentPointsToSet(
             builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName());
     if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
-      Set<List<Dimension<?>>> inputShapes = this.getShapesOfValue(builder, tensorsPTS);
+      Set<List<Dimension<?>>> inputShapes = getShapesOfTensorsArgument(builder, tensorsPTS);
       Set<Long> ret = HashSetFactory.make();
       for (List<Dimension<?>> shape : inputShapes) {
         if (!shape.isEmpty()) {
@@ -144,5 +154,107 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator {
       return ret;
     }
     return Collections.emptySet();
+  }
+
+  /**
+   * Shape-walk helper for the {@code tensors} argument of {@code
+   * tf.data.Dataset.from_tensor_slices}.
+   *
+   * <p>{@code from_tensor_slices} accepts a "nested structure" argument: when the argument is a
+   * tuple like {@code (a, b)}, the two elements are not the outer dimensions of a single tensor —
+   * they are independent tensors bundled together, and the dataset yields tuples of per-element
+   * slices. The base {@link TensorGenerator#getShapesOfValue} treats tuple and list identically
+   * (both as multi-dim tensor values), which is the right interpretation for {@code
+   * tf.convert_to_tensor((1, 2, 3))} and for nested-inside-list cases like {@code [(7, 8), (9,
+   * 10)]}, but wrong for a top-level tuple argument to this specific API.
+   *
+   * <p>This helper special-cases a top-level tuple: walk each field independently and union the
+   * per-field shapes (obtained via the base {@link TensorGenerator#getShapesOfValue}, which still
+   * treats nested tuples as multi-dim). For non-tuple top-level values it falls through to the base
+   * implementation unchanged, so list literals and single-tensor arguments keep their current
+   * behavior. See wala/ML#366.
+   */
+  private Set<List<Dimension<?>>> getShapesOfTensorsArgument(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    boolean sawTuple = false;
+
+    for (InstanceKey ik : valuePointsToSet) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      if (asin == null || !asin.getConcreteType().getReference().equals(tuple)) {
+        continue;
+      }
+      sawTuple = true;
+      OrdinalSet<InstanceKey> objectCatalogPointsToSet =
+          builder
+              .getPointerAnalysis()
+              .getPointsToSet(
+                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                      .getPointerKeyForObjectCatalog(asin));
+
+      LOGGER.fine(
+          DatasetFromTensorSlicesGenerator.class.getName()
+              + ".getShapesOfTensorsArgument: top-level tuple catalog size="
+              + objectCatalogPointsToSet.size());
+
+      for (InstanceKey catalogIK : objectCatalogPointsToSet) {
+        Integer fieldIndex =
+            getFieldIndex((com.ibm.wala.ipa.callgraph.propagation.ConstantKey<?>) catalogIK);
+        if (fieldIndex == null) continue;
+        FieldReference subscript =
+            FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+        IField f = builder.getClassHierarchy().resolveField(subscript);
+        if (f == null) continue;
+        PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+        OrdinalSet<InstanceKey> fieldPts = builder.getPointerAnalysis().getPointsToSet(pk);
+        ret.addAll(this.getShapesOfValue(builder, fieldPts));
+      }
+    }
+
+    if (!sawTuple) {
+      return this.getShapesOfValue(builder, valuePointsToSet);
+    }
+    return ret;
+  }
+
+  /**
+   * Dtype counterpart of {@link #getShapesOfTensorsArgument}. See that method for the rationale.
+   */
+  private Set<DType> getDTypesOfTensorsArgument(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
+    Set<DType> ret = EnumSet.noneOf(DType.class);
+    boolean sawTuple = false;
+
+    for (InstanceKey ik : valuePointsToSet) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      if (asin == null || !asin.getConcreteType().getReference().equals(tuple)) {
+        continue;
+      }
+      sawTuple = true;
+      OrdinalSet<InstanceKey> objectCatalogPointsToSet =
+          builder
+              .getPointerAnalysis()
+              .getPointsToSet(
+                  ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                      .getPointerKeyForObjectCatalog(asin));
+
+      for (InstanceKey catalogIK : objectCatalogPointsToSet) {
+        Integer fieldIndex =
+            getFieldIndex((com.ibm.wala.ipa.callgraph.propagation.ConstantKey<?>) catalogIK);
+        if (fieldIndex == null) continue;
+        FieldReference subscript =
+            FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+        IField f = builder.getClassHierarchy().resolveField(subscript);
+        if (f == null) continue;
+        PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+        OrdinalSet<InstanceKey> fieldPts = builder.getPointerAnalysis().getPointsToSet(pk);
+        ret.addAll(this.getDTypesOfValue(builder, fieldPts));
+      }
+    }
+
+    if (!sawTuple) {
+      return this.getDTypesOfValue(builder, valuePointsToSet);
+    }
+    return ret;
   }
 }
