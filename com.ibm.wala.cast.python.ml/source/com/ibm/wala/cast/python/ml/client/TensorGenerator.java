@@ -1408,12 +1408,6 @@ public abstract class TensorGenerator {
     }
     String signature = TYPE_REFERENCE_TO_SIGNATURE.get(function);
     if (signature == null) {
-      LOGGER.finer(
-          () ->
-              "No signature mapping for function: "
-                  + function
-                  + ". getFunction() resolved the containing function instead of the TF"
-                  + " operation. See wala/ML#373.");
       return "<unmapped:" + function + ">";
     }
     return signature;
