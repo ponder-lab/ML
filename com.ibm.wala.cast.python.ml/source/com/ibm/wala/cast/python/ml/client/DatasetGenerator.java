@@ -4,6 +4,7 @@ import static com.ibm.wala.cast.python.util.Util.findDefinition;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -23,7 +24,7 @@ import java.util.Set;
  *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class DatasetGenerator extends TensorGenerator {
+public class DatasetGenerator extends TensorGenerator implements TupleElementProvider {
 
   public DatasetGenerator(PointsToSetVariable source) {
     super(source);
@@ -81,6 +82,48 @@ public class DatasetGenerator extends TensorGenerator {
       return this.getDTypesOfValue(builder, receiverPTS);
     }
     return EnumSet.of(DType.UNKNOWN);
+  }
+
+  @Override
+  public boolean yieldsTuple(PropagationCallGraphBuilder builder) {
+    TensorGenerator receiver = getReceiverGenerator(builder);
+    if (receiver instanceof TupleElementProvider tep) {
+      return tep.yieldsTuple(builder);
+    }
+    return false;
+  }
+
+  @Override
+  public Set<List<Dimension<?>>> getShapesForIndex(PropagationCallGraphBuilder builder, int index) {
+    TensorGenerator receiver = getReceiverGenerator(builder);
+    if (receiver instanceof TupleElementProvider tep) {
+      return tep.getShapesForIndex(builder, index);
+    }
+    return this.getShapes(builder);
+  }
+
+  @Override
+  public Set<DType> getDTypesForIndex(PropagationCallGraphBuilder builder, int index) {
+    TensorGenerator receiver = getReceiverGenerator(builder);
+    if (receiver instanceof TupleElementProvider tep) {
+      return tep.getDTypesForIndex(builder, index);
+    }
+    return this.getDTypes(builder);
+  }
+
+  @Override
+  public Set<TensorType> getTensorTypesForIndex(PropagationCallGraphBuilder builder, int index) {
+    Set<List<Dimension<?>>> shapes = this.getShapesForIndex(builder, index);
+    Set<DType> dTypes = this.getDTypesForIndex(builder, index);
+
+    if (shapes == null) return this.getTensorTypes(builder);
+
+    Set<TensorType> ret = HashSetFactory.make();
+
+    for (List<Dimension<?>> dimensionList : shapes)
+      for (DType dtype : dTypes) ret.add(new TensorType(dtype.name().toLowerCase(), dimensionList));
+
+    return ret;
   }
 
   /**

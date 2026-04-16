@@ -1298,11 +1298,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * dataset:} unpack cannot peel back to find the tuple structure, and instead wraps in {@code
    * TensorElementGenerator} which over-peels one dim — collapsing the batched shape {@code (2,)}
    * back to {@code ()}.
-   *
-   * <p>TODO: Once the chain-preservation gap is also fixed, flip the annotation back to a plain
-   * {@code @Test} so this becomes a positive regression guard.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testDataset70()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -1321,11 +1318,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * or also applies when the tuple elements are already typed tensors. Both fail with identical
    * wrong output; see {@link #testDataset70()}'s Javadoc for the current root-cause status
    * (wala/ML#366 root-cause walk fixed, chain-preservation gap remains).
-   *
-   * <p>TODO: Once the chain-preservation gap is also fixed, flip the annotation back to a plain
-   * {@code @Test} so this becomes a positive regression guard.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testDataset71()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(

@@ -81,7 +81,6 @@ public class DatasetBatchGenerator extends DatasetGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    // Get the shapes from the input dataset.
     OrdinalSet<InstanceKey> receiverPTS = getReceiverPTS(builder);
 
     Set<List<Dimension<?>>> inputShapes = null;
@@ -93,7 +92,23 @@ public class DatasetBatchGenerator extends DatasetGenerator {
       return null;
     }
 
-    // Get the batch size.
+    return applyBatching(inputShapes, builder);
+  }
+
+  @Override
+  public Set<List<Dimension<?>>> getShapesForIndex(PropagationCallGraphBuilder builder, int index) {
+    TensorGenerator receiver = getReceiverGenerator(builder);
+    if (receiver instanceof TupleElementProvider tep) {
+      Set<List<Dimension<?>>> perIndexShapes = tep.getShapesForIndex(builder, index);
+      if (perIndexShapes != null && !perIndexShapes.isEmpty()) {
+        return applyBatching(perIndexShapes, builder);
+      }
+    }
+    return this.getShapes(builder);
+  }
+
+  private Set<List<Dimension<?>>> applyBatching(
+      Set<List<Dimension<?>>> inputShapes, PropagationCallGraphBuilder builder) {
     Set<Long> batchSizes =
         getPossibleLongValues(
             this.getArgumentPointsToSet(
@@ -101,12 +116,10 @@ public class DatasetBatchGenerator extends DatasetGenerator {
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
-    // Get the total dataset sizes (before batching).
     Set<Long> datasetSizes = this.getDatasetSizes(builder);
 
     for (List<Dimension<?>> shape : inputShapes) {
       if (batchSizes.isEmpty()) {
-        // If the batch size is unknown, we assume it is symbolic.
         List<Dimension<?>> newShape = new ArrayList<>();
         newShape.add(new SymbolicDim("?"));
         newShape.addAll(shape);
@@ -114,8 +127,6 @@ public class DatasetBatchGenerator extends DatasetGenerator {
       } else {
         for (Long batchSize : batchSizes) {
           if (batchSize != null) {
-            // Drop remainder is implicitly false here, so we could have a partial batch.
-            // If we know the dataset size, we can infer if a partial batch is possible.
             boolean canHaveFullBatch = true;
             boolean canHavePartialBatch = false;
             long partialBatchSize = 0;
@@ -129,19 +140,12 @@ public class DatasetBatchGenerator extends DatasetGenerator {
                 long rem = dsSize % batchSize;
                 if (rem != 0) {
                   canHavePartialBatch = true;
-                  partialBatchSize =
-                      rem; // We might have multiple dataset sizes, but this is an approximation
+                  partialBatchSize = rem;
                 }
               }
             } else {
-              // We don't know dataset size, assume both are possible to be safe,
-              // but we usually just assume full batch size if dataset size is unknown to avoid
-              // explosion,
-              // or maybe we should add both? Let's add both.
               canHavePartialBatch = true;
-              partialBatchSize =
-                  -1; // -1 means unknown partial size, so we might need a symbolic dim or just drop
-              // it.
+              partialBatchSize = -1;
             }
 
             if (canHaveFullBatch) {
@@ -156,10 +160,7 @@ public class DatasetBatchGenerator extends DatasetGenerator {
               if (partialBatchSize > 0) {
                 newShape.add(new NumericDim((int) partialBatchSize));
               } else {
-                newShape.add(
-                    new SymbolicDim(
-                        "?")); // Or we could just not add the partial batch if we don't know the
-                // exact size.
+                newShape.add(new SymbolicDim("?"));
               }
               newShape.addAll(shape);
               ret.add(newShape);
