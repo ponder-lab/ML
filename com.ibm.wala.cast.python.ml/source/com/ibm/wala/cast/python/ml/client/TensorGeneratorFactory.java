@@ -554,6 +554,9 @@ public class TensorGeneratorFactory {
               changed = true;
             }
           }
+          // Exact class check, not instanceof: only plain DatasetGenerator (pass-through wrappers
+          // like shuffle/map/repeat/prefetch/take) should be unwrapped. Subclasses have their own
+          // shape logic (e.g., DatasetBatchGenerator prepends a batch dim) that would be skipped.
           if (!changed
               && effectiveGenerator != null
               && effectiveGenerator.getClass() == DatasetGenerator.class) {
