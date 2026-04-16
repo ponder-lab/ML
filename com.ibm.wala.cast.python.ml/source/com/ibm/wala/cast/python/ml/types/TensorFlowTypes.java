@@ -149,7 +149,37 @@ public class TensorFlowTypes extends PythonTypes {
   public static final TypeReference DATASET_BATCH_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/batch"));
 
+  public static final String DATASET_SIGNATURE = "tf.data.Dataset()";
+
   public static final String DATASET_BATCH_SIGNATURE = "tf.data.Dataset.batch()";
+
+  public static final String DATASET_SHUFFLE_SIGNATURE = "tf.data.Dataset.shuffle()";
+
+  public static final String DATASET_MAP_SIGNATURE = "tf.data.Dataset.map()";
+
+  public static final String DATASET_REPEAT_SIGNATURE = "tf.data.Dataset.repeat()";
+
+  public static final String DATASET_PREFETCH_SIGNATURE = "tf.data.Dataset.prefetch()";
+
+  public static final String DATASET_TAKE_SIGNATURE = "tf.data.Dataset.take()";
+
+  public static final String DATASET_WITH_OPTIONS_SIGNATURE = "tf.data.Dataset.with_options()";
+
+  public static final String DATASET_CONCATENATE_SIGNATURE = "tf.data.Dataset.concatenate()";
+
+  public static final String DATASET_ENUMERATE_SIGNATURE = "tf.data.Dataset.enumerate()";
+
+  public static final String DATASET_REDUCE_SIGNATURE = "tf.data.Dataset.reduce()";
+
+  public static final String DATASET_FILTER_SIGNATURE = "tf.data.Dataset.filter()";
+
+  public static final String DATASET_FROM_TENSOR_SLICES_SIGNATURE =
+      "tf.data.Dataset.from_tensor_slices()";
+
+  public static final String DATASET_RANGE_SIGNATURE = "tf.data.Dataset.range()";
+
+  public static final String FLOW_FROM_DIRECTORY_SIGNATURE =
+      "tf.keras.preprocessing.image.ImageDataGenerator.flow_from_directory()";
 
   public static final TypeReference DATASET_MAP_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/map"));
@@ -836,7 +866,21 @@ public class TensorFlowTypes extends PythonTypes {
   /** A mapping from a {@link TypeReference} to its associated TensorFlow signature. */
   public static final Map<TypeReference, String> TYPE_REFERENCE_TO_SIGNATURE =
       Map.ofEntries(
+          Map.entry(DATASET, DATASET_SIGNATURE),
           Map.entry(DATASET_BATCH_TYPE, DATASET_BATCH_SIGNATURE),
+          Map.entry(DATASET_SHUFFLE_TYPE, DATASET_SHUFFLE_SIGNATURE),
+          Map.entry(DATASET_MAP_TYPE, DATASET_MAP_SIGNATURE),
+          Map.entry(DATASET_REPEAT_TYPE, DATASET_REPEAT_SIGNATURE),
+          Map.entry(DATASET_PREFETCH_TYPE, DATASET_PREFETCH_SIGNATURE),
+          Map.entry(DATASET_TAKE_TYPE, DATASET_TAKE_SIGNATURE),
+          Map.entry(DATASET_WITH_OPTIONS_TYPE, DATASET_WITH_OPTIONS_SIGNATURE),
+          Map.entry(DATASET_CONCATENATE_TYPE, DATASET_CONCATENATE_SIGNATURE),
+          Map.entry(DATASET_ENUMERATE_TYPE, DATASET_ENUMERATE_SIGNATURE),
+          Map.entry(DATASET_REDUCE_TYPE, DATASET_REDUCE_SIGNATURE),
+          Map.entry(DATASET_FILTER_TYPE, DATASET_FILTER_SIGNATURE),
+          Map.entry(DATASET_FROM_TENSOR_SLICES_TYPE, DATASET_FROM_TENSOR_SLICES_SIGNATURE),
+          Map.entry(DATASET_RANGE_TYPE, DATASET_RANGE_SIGNATURE),
+          Map.entry(IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE, FLOW_FROM_DIRECTORY_SIGNATURE),
           Map.entry(DATASET_FROM_GENERATOR_TYPE, DATASET_FROM_GENERATOR_SIGNATURE),
           Map.entry(DATASET_FROM_TENSORS_TYPE, DATASET_FROM_TENSORS_SIGNATURE),
           Map.entry(DATASET_CHOOSE_FROM_DATASETS_TYPE, DATASET_CHOOSE_FROM_DATASETS_SIGNATURE),
