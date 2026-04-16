@@ -80,6 +80,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VARIABLE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS_LIKE;
+import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.sanitize;
 import static java.util.Map.entry;
 import static java.util.logging.Logger.getLogger;
@@ -507,8 +508,13 @@ public class TensorGeneratorFactory {
               LOGGER.fine(
                   () -> "next() field-indirection fallback: iterPTS size=" + iterPTS.size());
               for (InstanceKey iterIK : iterPTS) {
-                if (iterIK instanceof AllocationSiteInNode) {
-                  AllocationSiteInNode asin = (AllocationSiteInNode) iterIK;
+                AllocationSiteInNode asin;
+                try {
+                  asin = getAllocationSiteInNode(iterIK);
+                } catch (IllegalArgumentException e) {
+                  continue;
+                }
+                if (asin != null) {
                   CGNode creatorNode = asin.getNode();
                   if (creatorNode
                       .getMethod()

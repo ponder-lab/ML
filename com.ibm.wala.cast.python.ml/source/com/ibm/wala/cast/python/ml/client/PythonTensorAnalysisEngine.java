@@ -5,6 +5,7 @@ import static com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory.getGener
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATA_PACKAGE_PREFIX;
 import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
+import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.lsp.AnalysisError;
@@ -361,8 +362,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                       pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, iterator);
                   for (InstanceKey iterIK : pointerAnalysis.getPointsToSet(iterPK)) {
                     if (ret) break;
-                    if (iterIK instanceof AllocationSiteInNode) {
-                      AllocationSiteInNode asin = (AllocationSiteInNode) iterIK;
+                    AllocationSiteInNode asin;
+                    try {
+                      asin = getAllocationSiteInNode(iterIK);
+                    } catch (IllegalArgumentException e) {
+                      continue;
+                    }
+                    if (asin != null) {
                       CGNode creatorNode = asin.getNode();
                       if (creatorNode
                           .getMethod()
