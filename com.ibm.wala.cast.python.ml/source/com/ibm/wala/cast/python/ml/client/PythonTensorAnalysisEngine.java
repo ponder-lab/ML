@@ -352,6 +352,31 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                       processInstructionInterprocedurally(
                           iteratorDef, iterArg, node, src, sources, pointerAnalysis);
                 }
+
+                // When the iterator definition is not a direct call (e.g., a property read on
+                // a user-defined class field like `c.some_iter`), chase the PA to find iterator
+                // allocations and check their creator's iter() argument for a dataset.
+                if (!added && !ret) {
+                  PointerKey iterPK =
+                      pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, iterator);
+                  for (InstanceKey iterIK : pointerAnalysis.getPointsToSet(iterPK)) {
+                    if (ret) break;
+                    if (iterIK instanceof AllocationSiteInNode) {
+                      AllocationSiteInNode asin = (AllocationSiteInNode) iterIK;
+                      CGNode creatorNode = asin.getNode();
+                      if (creatorNode
+                          .getMethod()
+                          .getReference()
+                          .getDeclaringClass()
+                          .equals(PythonTypes.ITER_BUILTIN)) {
+                        int iterArgVn = 2;
+                        ret |=
+                            processInstructionInterprocedurally(
+                                iteratorDef, iterArgVn, creatorNode, src, sources, pointerAnalysis);
+                      }
+                    }
+                  }
+                }
               } else
                 // Use the original instruction. NOTE: We can only do this because `iter()` is
                 // currently just passing-through its argument.

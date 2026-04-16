@@ -106,6 +106,7 @@ import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.graph.Graph;
+import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Map;
@@ -494,6 +495,39 @@ public class TensorGeneratorFactory {
 
             while (containerGenerator instanceof DelegatingTensorGenerator) {
               containerGenerator = ((DelegatingTensorGenerator) containerGenerator).getUnderlying();
+            }
+
+            // When the iterable comes from a property read on a user-defined class (e.g.,
+            // c.some_iter), the generator chain resolves to null. Chase the PA to find the
+            // underlying iterator allocation, then resolve through iter()'s argument to the
+            // dataset.
+            if (containerGenerator == null) {
+              OrdinalSet<InstanceKey> iterPTS =
+                  builder.getPointerAnalysis().getPointsToSet(iterableKey);
+              LOGGER.fine(
+                  () -> "next() field-indirection fallback: iterPTS size=" + iterPTS.size());
+              for (InstanceKey iterIK : iterPTS) {
+                if (iterIK instanceof AllocationSiteInNode) {
+                  AllocationSiteInNode asin = (AllocationSiteInNode) iterIK;
+                  CGNode creatorNode = asin.getNode();
+                  if (creatorNode
+                      .getMethod()
+                      .getReference()
+                      .getDeclaringClass()
+                      .equals(PythonTypes.ITER_BUILTIN)) {
+                    PointerKey iterArgKey =
+                        builder
+                            .getPointerAnalysis()
+                            .getHeapModel()
+                            .getPointerKeyForLocal(creatorNode, 2);
+                    PointsToSetVariable iterArgSrc = getPointsToSetVariable(iterArgKey, builder);
+                    if (iterArgSrc != null) {
+                      containerGenerator = tryGetGenerator(iterArgSrc, builder);
+                      if (containerGenerator != null) break;
+                    }
+                  }
+                }
+              }
             }
 
             return (containerGenerator instanceof DatasetGenerator)
