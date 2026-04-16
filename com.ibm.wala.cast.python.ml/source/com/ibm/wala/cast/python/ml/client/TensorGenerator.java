@@ -1406,7 +1406,11 @@ public abstract class TensorGenerator {
     } else {
       function = getFunction(this.getSource());
     }
-    return TYPE_REFERENCE_TO_SIGNATURE.get(function);
+    String signature = TYPE_REFERENCE_TO_SIGNATURE.get(function);
+    if (signature == null) {
+      return "<unmapped:" + function + ">";
+    }
+    return signature;
   }
 
   protected static final int RECEIVER_PARAMETER_POSITION = -2;
