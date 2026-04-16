@@ -106,6 +106,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_NONE_32_FLOAT32 =
       new TensorType(FLOAT_32, asList(null, new NumericDim(32)));
 
+  private static final TensorType TENSOR_NONE_3_FLOAT32 =
+      new TensorType(FLOAT_32, asList(null, new NumericDim(3)));
+
   private static final TensorType TENSOR_NONE_4_FLOAT32 =
       new TensorType(FLOAT_32, asList(null, new NumericDim(4)));
 
@@ -6605,19 +6608,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Test for <a href="https://github.com/wala/ML/issues/371">wala/ML#371</a>. Minimal repro for the
-   * test helper double-counting tensor variables under multiple calling contexts.
+   * Test for <a href="https://github.com/wala/ML/issues/371">wala/ML#371</a>. A single {@code
+   * Dense} layer call inside {@code M.call} with a {@code tf.keras.Input} parameter.
    *
-   * <p>A single {@code Dense} layer call inside {@code M.call} produces one source-level tensor
-   * variable, but the test helper counts it twice because {@code M.call} is analyzed under two
-   * trampoline contexts (2-CFA artifact).
-   *
-   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#371 is fixed.
+   * <p>Two tensor variables are found: the {@code x} parameter (v3, shape {@code (None, 3)}) and
+   * the {@code Dense} result (v25, shape {@code (None, 4)}). Both are correct source-level tensors
+   * under a single trampoline context.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testDenseModelCall()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_dense_model_call.py", "M.call", 1, 1, Map.of(3, Set.of(TENSOR_NONE_4_FLOAT32)));
+    test("tf2_test_dense_model_call.py", "M.call", 1, 2, Map.of(3, Set.of(TENSOR_NONE_3_FLOAT32)));
   }
 
   @Test
