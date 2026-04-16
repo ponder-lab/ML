@@ -1610,13 +1610,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testEagerExecution()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tensorflow_eager_execution.py", "MyModel.call", 1, 2, Map.of(3, Set.of(MNIST_INPUT)));
+    test("tensorflow_eager_execution.py", "MyModel.call", 1, 1, Map.of(3, Set.of(MNIST_INPUT)));
   }
 
   @Test
   public void testNeuralNetwork()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("neural_network.py", "NeuralNet.call", 1, 2, Map.of(3, Set.of(MNIST_INPUT)));
+    test("neural_network.py", "NeuralNet.call", 1, 1, Map.of(3, Set.of(MNIST_INPUT)));
   }
 
   @Test
