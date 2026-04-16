@@ -71,6 +71,8 @@ public class TensorFlowTypes extends PythonTypes {
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate(DATA_PACKAGE_PREFIX + "Dataset"));
 
+  public static final String DATASET_SIGNATURE = "tf.data.Dataset()";
+
   /**
    * Represents the TensorFlow data type.
    *
@@ -146,60 +148,45 @@ public class TensorFlowTypes extends PythonTypes {
   public static final TypeReference DATASET_SHUFFLE_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/shuffle"));
 
+  public static final String DATASET_SHUFFLE_SIGNATURE = "tf.data.Dataset.shuffle()";
+
   public static final TypeReference DATASET_BATCH_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/batch"));
 
-  public static final String DATASET_SIGNATURE = "tf.data.Dataset()";
-
   public static final String DATASET_BATCH_SIGNATURE = "tf.data.Dataset.batch()";
-
-  public static final String DATASET_SHUFFLE_SIGNATURE = "tf.data.Dataset.shuffle()";
-
-  public static final String DATASET_MAP_SIGNATURE = "tf.data.Dataset.map()";
-
-  public static final String DATASET_REPEAT_SIGNATURE = "tf.data.Dataset.repeat()";
-
-  public static final String DATASET_PREFETCH_SIGNATURE = "tf.data.Dataset.prefetch()";
-
-  public static final String DATASET_TAKE_SIGNATURE = "tf.data.Dataset.take()";
-
-  public static final String DATASET_WITH_OPTIONS_SIGNATURE = "tf.data.Dataset.with_options()";
-
-  public static final String DATASET_CONCATENATE_SIGNATURE = "tf.data.Dataset.concatenate()";
-
-  public static final String DATASET_ENUMERATE_SIGNATURE = "tf.data.Dataset.enumerate()";
-
-  public static final String DATASET_REDUCE_SIGNATURE = "tf.data.Dataset.reduce()";
-
-  public static final String DATASET_FILTER_SIGNATURE = "tf.data.Dataset.filter()";
-
-  public static final String DATASET_FROM_TENSOR_SLICES_SIGNATURE =
-      "tf.data.Dataset.from_tensor_slices()";
-
-  public static final String DATASET_RANGE_SIGNATURE = "tf.data.Dataset.range()";
-
-  public static final String FLOW_FROM_DIRECTORY_SIGNATURE =
-      "tf.keras.preprocessing.image.ImageDataGenerator.flow_from_directory()";
 
   public static final TypeReference DATASET_MAP_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/map"));
 
+  public static final String DATASET_MAP_SIGNATURE = "tf.data.Dataset.map()";
+
   public static final TypeReference DATASET_REPEAT_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/repeat"));
+
+  public static final String DATASET_REPEAT_SIGNATURE = "tf.data.Dataset.repeat()";
 
   public static final TypeReference DATASET_PREFETCH_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/prefetch"));
 
+  public static final String DATASET_PREFETCH_SIGNATURE = "tf.data.Dataset.prefetch()";
+
   public static final TypeReference DATASET_TAKE_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/take"));
+
+  public static final String DATASET_TAKE_SIGNATURE = "tf.data.Dataset.take()";
 
   public static final TypeReference DATASET_WITH_OPTIONS_TYPE =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/data/with_options"));
 
+  public static final String DATASET_WITH_OPTIONS_SIGNATURE = "tf.data.Dataset.with_options()";
+
   public static final TypeReference DATASET_CONCATENATE_TYPE =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/data/concatenate"));
+
+  public static final String DATASET_CONCATENATE_SIGNATURE = "tf.data.Dataset.concatenate()";
+
   public static final TypeReference DATASET_CHOOSE_FROM_DATASETS_TYPE =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset/choose_from_datasets"));
@@ -207,16 +194,25 @@ public class TensorFlowTypes extends PythonTypes {
   public static final TypeReference DATASET_ENUMERATE_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/enumerate"));
 
+  public static final String DATASET_ENUMERATE_SIGNATURE = "tf.data.Dataset.enumerate()";
+
   public static final TypeReference DATASET_REDUCE_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/reduce"));
 
+  public static final String DATASET_REDUCE_SIGNATURE = "tf.data.Dataset.reduce()";
+
   public static final TypeReference DATASET_FILTER_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/filter"));
+
+  public static final String DATASET_FILTER_SIGNATURE = "tf.data.Dataset.filter()";
 
   public static final TypeReference IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE =
       TypeReference.findOrCreate(
           pythonLoader,
           TypeName.findOrCreate("Ltensorflow/keras/preprocessing/image/flow_from_directory"));
+
+  public static final String FLOW_FROM_DIRECTORY_SIGNATURE =
+      "tf.keras.preprocessing.image.ImageDataGenerator.flow_from_directory()";
 
   /**
    * The type of `tf.data.Dataset.from_generator`.
@@ -229,8 +225,6 @@ public class TensorFlowTypes extends PythonTypes {
           pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset/from_generator"));
 
   public static final String DATASET_FROM_GENERATOR_SIGNATURE = "tf.data.Dataset.from_generator()";
-
-  public static final String DATASET_FROM_TENSORS_SIGNATURE = "tf.data.Dataset.from_tensors()";
 
   public static final TypeReference DATASET_ZIP_TYPE =
       TypeReference.findOrCreate(
@@ -293,13 +287,20 @@ public class TensorFlowTypes extends PythonTypes {
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset/range"));
 
+  public static final String DATASET_RANGE_SIGNATURE = "tf.data.Dataset.range()";
+
   public static final TypeReference DATASET_FROM_TENSOR_SLICES_TYPE =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset/from_tensor_slices"));
 
+  public static final String DATASET_FROM_TENSOR_SLICES_SIGNATURE =
+      "tf.data.Dataset.from_tensor_slices()";
+
   public static final TypeReference DATASET_FROM_TENSORS_TYPE =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset/from_tensors"));
+
+  public static final String DATASET_FROM_TENSORS_SIGNATURE = "tf.data.Dataset.from_tensors()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/ones. */
   public static final MethodReference ONES =
