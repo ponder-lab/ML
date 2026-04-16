@@ -7,11 +7,13 @@ import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
@@ -31,7 +33,8 @@ import java.util.logging.Logger;
  *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class DatasetFromTensorSlicesGenerator extends DatasetGenerator {
+public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
+    implements TupleElementProvider {
 
   private static final Logger LOGGER =
       Logger.getLogger(DatasetFromTensorSlicesGenerator.class.getName());
@@ -154,6 +157,130 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator {
       return ret;
     }
     return Collections.emptySet();
+  }
+
+  @Override
+  public boolean yieldsTuple(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> tensorsPTS =
+        this.getArgumentPointsToSet(
+            builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName());
+
+    if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
+      for (InstanceKey ik : tensorsPTS) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        if (asin != null && asin.getConcreteType().getReference().equals(tuple)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  @Override
+  public Set<List<Dimension<?>>> getShapesForIndex(PropagationCallGraphBuilder builder, int index) {
+    OrdinalSet<InstanceKey> tensorsPTS =
+        this.getArgumentPointsToSet(
+            builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName());
+
+    if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
+      Set<List<Dimension<?>>> ret = HashSetFactory.make();
+      for (InstanceKey ik : tensorsPTS) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        if (asin != null && asin.getConcreteType().getReference().equals(tuple)) {
+          OrdinalSet<InstanceKey> objectCatalogPointsToSet =
+              builder
+                  .getPointerAnalysis()
+                  .getPointsToSet(
+                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                          .getPointerKeyForObjectCatalog(asin));
+
+          for (InstanceKey catalogIK : objectCatalogPointsToSet) {
+            Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
+            if (fieldIndex != null && fieldIndex == index) {
+              FieldReference subscript =
+                  FieldReference.findOrCreate(
+                      asin.getConcreteType().getReference(),
+                      findOrCreateAsciiAtom(fieldIndex.toString()),
+                      Root);
+              IField f = builder.getClassHierarchy().resolveField(subscript);
+              if (f != null) {
+                PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+                Set<List<Dimension<?>>> fieldShapes =
+                    this.getShapesOfValue(builder, builder.getPointerAnalysis().getPointsToSet(pk));
+                for (List<Dimension<?>> shape : fieldShapes) {
+                  if (shape.size() > 0) {
+                    ret.add(new ArrayList<>(shape.subList(1, shape.size())));
+                  } else {
+                    ret.add(Collections.emptyList());
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      if (!ret.isEmpty()) {
+        return ret;
+      }
+    }
+    return this.getShapes(builder);
+  }
+
+  @Override
+  public Set<DType> getDTypesForIndex(PropagationCallGraphBuilder builder, int index) {
+    OrdinalSet<InstanceKey> tensorsPTS =
+        this.getArgumentPointsToSet(
+            builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName());
+
+    if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
+      Set<DType> ret = HashSetFactory.make();
+      for (InstanceKey ik : tensorsPTS) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        if (asin != null && asin.getConcreteType().getReference().equals(tuple)) {
+          OrdinalSet<InstanceKey> objectCatalogPointsToSet =
+              builder
+                  .getPointerAnalysis()
+                  .getPointsToSet(
+                      ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                          .getPointerKeyForObjectCatalog(asin));
+
+          for (InstanceKey catalogIK : objectCatalogPointsToSet) {
+            Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
+            if (fieldIndex != null && fieldIndex == index) {
+              FieldReference subscript =
+                  FieldReference.findOrCreate(
+                      asin.getConcreteType().getReference(),
+                      findOrCreateAsciiAtom(fieldIndex.toString()),
+                      Root);
+              IField f = builder.getClassHierarchy().resolveField(subscript);
+              if (f != null) {
+                PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+                ret.addAll(
+                    this.getDTypesOfValue(
+                        builder, builder.getPointerAnalysis().getPointsToSet(pk)));
+              }
+            }
+          }
+        }
+      }
+      if (!ret.isEmpty()) {
+        return ret;
+      }
+    }
+    return this.getDTypes(builder);
+  }
+
+  @Override
+  public Set<TensorType> getTensorTypesForIndex(PropagationCallGraphBuilder builder, int index) {
+    Set<List<Dimension<?>>> shapes = this.getShapesForIndex(builder, index);
+    Set<DType> dTypes = this.getDTypesForIndex(builder, index);
+
+    Set<TensorType> ret = HashSetFactory.make();
+
+    for (List<Dimension<?>> dimensionList : shapes)
+      for (DType dtype : dTypes) ret.add(new TensorType(dtype.name().toLowerCase(), dimensionList));
+
+    return ret;
   }
 
   /**
