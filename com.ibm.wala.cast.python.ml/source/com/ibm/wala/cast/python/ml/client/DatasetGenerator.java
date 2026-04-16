@@ -84,6 +84,46 @@ public class DatasetGenerator extends TensorGenerator {
   }
 
   /**
+   * Resolves the receiver (the dataset this one is derived from) to a {@link TensorGenerator}.
+   *
+   * @param builder The propagation call graph builder used for analysis.
+   * @return The generator for the receiver dataset, or {@code null} if it cannot be resolved.
+   */
+  public TensorGenerator getReceiverGenerator(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> receiverPTS =
+        this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, SELF);
+    if (receiverPTS != null && !receiverPTS.isEmpty()) {
+      for (InstanceKey valueIK : receiverPTS) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
+        if (asin != null) {
+          int vn = findDefinition(asin.getNode(), asin);
+          if (vn > 0) {
+            PointerKey pk =
+                builder
+                    .getPointerAnalysis()
+                    .getHeapModel()
+                    .getPointerKeyForLocal(asin.getNode(), vn);
+            PointsToSetVariable var = null;
+            if (!builder.getPropagationSystem().isImplicit(pk)) {
+              var = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
+            }
+            TensorGenerator generator = null;
+            if (var != null) {
+              generator = TensorGeneratorFactory.getGenerator(var, builder);
+            } else {
+              generator = createManualGenerator(asin.getNode(), builder);
+            }
+            if (generator != null) {
+              return generator;
+            }
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
    * Retrieves the sizes (number of elements) of the dataset represented by this generator. By
    * default, it recursively queries the receiver (the dataset this one is derived from).
    *

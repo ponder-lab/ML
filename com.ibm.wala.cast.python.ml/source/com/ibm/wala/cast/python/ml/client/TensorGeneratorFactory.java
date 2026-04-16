@@ -544,8 +544,26 @@ public class TensorGeneratorFactory {
         TensorGenerator containerGenerator = tryGetGenerator(objSrc, builder);
 
         TensorGenerator effectiveGenerator = containerGenerator;
-        if (containerGenerator instanceof DelegatingTensorGenerator) {
-          effectiveGenerator = ((DelegatingTensorGenerator) containerGenerator).getUnderlying();
+        boolean changed = true;
+        while (changed) {
+          changed = false;
+          if (effectiveGenerator instanceof DelegatingTensorGenerator dtg) {
+            TensorGenerator next = dtg.getUnderlying();
+            if (next != null && next != effectiveGenerator) {
+              effectiveGenerator = next;
+              changed = true;
+            }
+          }
+          if (!changed
+              && effectiveGenerator != null
+              && effectiveGenerator.getClass() == DatasetGenerator.class) {
+            DatasetGenerator dg = (DatasetGenerator) effectiveGenerator;
+            TensorGenerator receiver = dg.getReceiverGenerator(builder);
+            if (receiver != null && receiver != effectiveGenerator) {
+              effectiveGenerator = receiver;
+              changed = true;
+            }
+          }
         }
 
         Integer propertyIndex = null;
