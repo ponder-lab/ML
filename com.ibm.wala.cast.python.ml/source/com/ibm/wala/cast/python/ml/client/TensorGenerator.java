@@ -1410,10 +1410,10 @@ public abstract class TensorGenerator {
     if (signature == null) {
       LOGGER.finer(
           () ->
-              "Unmapped TensorGenerator for function: "
+              "No signature mapping for function: "
                   + function
-                  + ". Either add an entry to TYPE_REFERENCE_TO_SIGNATURE or fix the dispatch"
-                  + " that created a generator for a non-TF function. See wala/ML#373.");
+                  + ". getFunction() resolved the containing function instead of the TF"
+                  + " operation. See wala/ML#373.");
       return "<unmapped:" + function + ">";
     }
     return signature;
