@@ -1760,15 +1760,43 @@
     </package>
     <package name="tensorflow/keras/datasets/mnist">
       <!-- https://www.tensorflow.org/api_docs/python/tf/keras/datasets/mnist/load_data -->
+      <class name="x_train" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="ret" class="Ltensorflow/keras/datasets/mnist/x_train" />
+          <return value="ret" />
+        </method>
+      </class>
+      <class name="y_train" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="ret" class="Ltensorflow/keras/datasets/mnist/y_train" />
+          <return value="ret" />
+        </method>
+      </class>
+      <class name="x_test" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="ret" class="Ltensorflow/keras/datasets/mnist/x_test" />
+          <return value="ret" />
+        </method>
+      </class>
+      <class name="y_test" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="ret" class="Ltensorflow/keras/datasets/mnist/y_test" />
+          <return value="ret" />
+        </method>
+      </class>
       <class name="load_data" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
-          <new def="x_train" class="Ltensorflow/examples/tutorials/mnist/input_data" />
-          <new def="y_train" class="Ltensorflow/examples/tutorials/mnist/input_data" />
+          <new def="x_train_fn" class="Ltensorflow/keras/datasets/mnist/x_train" />
+          <call class="Ltensorflow/keras/datasets/mnist/x_train" name="do" type="virtual" def="x_train" descriptor="()LRoot;" arg0="x_train_fn" numArgs="1" />
+          <new def="y_train_fn" class="Ltensorflow/keras/datasets/mnist/y_train" />
+          <call class="Ltensorflow/keras/datasets/mnist/y_train" name="do" type="virtual" def="y_train" descriptor="()LRoot;" arg0="y_train_fn" numArgs="1" />
           <new def="train" class="Ltuple" />
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="train" value="x_train" />
           <putfield class="LRoot" field="1" fieldType="LRoot" ref="train" value="y_train" />
-          <new def="x_test" class="Ltensorflow/examples/tutorials/mnist/input_data" />
-          <new def="y_test" class="Ltensorflow/examples/tutorials/mnist/input_data" />
+          <new def="x_test_fn" class="Ltensorflow/keras/datasets/mnist/x_test" />
+          <call class="Ltensorflow/keras/datasets/mnist/x_test" name="do" type="virtual" def="x_test" descriptor="()LRoot;" arg0="x_test_fn" numArgs="1" />
+          <new def="y_test_fn" class="Ltensorflow/keras/datasets/mnist/y_test" />
+          <call class="Ltensorflow/keras/datasets/mnist/y_test" name="do" type="virtual" def="y_test" descriptor="()LRoot;" arg0="y_test_fn" numArgs="1" />
           <new def="test" class="Ltuple" />
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="test" value="x_test" />
           <putfield class="LRoot" field="1" fieldType="LRoot" ref="test" value="y_test" />

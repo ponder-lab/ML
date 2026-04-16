@@ -267,6 +267,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_20_10_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(20), new NumericDim(10)));
 
+  private static final TensorType TENSOR_60000_28_28_FLOAT32 =
+      new TensorType(
+          FLOAT_32, asList(new NumericDim(60000), new NumericDim(28), new NumericDim(28)));
+
   /** A {@code float32} tensor whose shape cannot be statically inferred. */
   private static final TensorType TENSOR_UNKNOWN_SHAPE_FLOAT32 = new TensorType(FLOAT_32, null);
 
@@ -6662,19 +6666,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * tf.keras.datasets.mnist.load_data()}. Without mnist modeling, the receiver's concrete shape
    * cannot be resolved; after the {@code astype} call, {@code consume}'s parameter is recognised as
    * a float32 tensor with a {@code null} dims list.
-   *
-   * <p>TODO: Tighten the expectation from {@link #TENSOR_UNKNOWN_SHAPE_FLOAT32} to a concrete
-   * {@code (60000, 28, 28) of float32} tensor once <b>both</b> wala/ML#361 (mnist modeling, so the
-   * receiver allocation has a concrete shape) and wala/ML#362 ({@code AstypeOperation}
-   * fieldref-chain walk, so the receiver shape can be traced back through the tuple destructure
-   * {@code (x_train, _) = mnist.load_data()}) have landed. This test does <b>not</b> depend on
-   * wala/ML#367 or wala/ML#368 — its chain goes through a direct property-read on the destructured
-   * tuple, not through {@code .shuffle().batch()} or a {@code for a, b in dataset:} unpack.
    */
   @Test
   public void testAstype()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_astype.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test("tf2_test_astype.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_60000_28_28_FLOAT32)));
   }
 
   /**

@@ -708,7 +708,8 @@ public abstract class TensorGenerator {
           defSource = builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
         }
 
-        TensorGenerator generator = createManualGenerator(readDataNode, builder);
+        TensorGenerator generator =
+            createManualGenerator(readDataNode, asin.getConcreteType().getReference(), builder);
 
         if (generator != null) {
           // Avoid infinite recursion for manual generators
@@ -1261,7 +1262,8 @@ public abstract class TensorGenerator {
           defSource = builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
         }
 
-        TensorGenerator generator = createManualGenerator(readDataNode, builder);
+        TensorGenerator generator =
+            createManualGenerator(readDataNode, asin.getConcreteType().getReference(), builder);
 
         if (generator != null) {
           if (this.manualNode != null && this.manualNode.equals(readDataNode)) {
@@ -2126,6 +2128,39 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Creates a manual TensorGenerator for a specific allocation site within a synthetic method.
+   *
+   * <p>This overload dispatches on the concrete type of the allocation rather than on the declaring
+   * class of the containing method. It is needed when a single synthetic {@code do()} body
+   * allocates multiple objects of distinct types — e.g., {@code load_data/do()} allocates both
+   * {@code x_train} and {@code y_train} with different shapes.
+   *
+   * @param node The {@link CGNode} containing the allocation.
+   * @param allocationType The concrete {@link TypeReference} of the allocated object.
+   * @param builder The {@link PropagationCallGraphBuilder} for the analysis.
+   * @return A {@link TensorGenerator} for the allocation, or {@code null} if the type is not
+   *     recognized.
+   */
+  protected static TensorGenerator createManualGenerator(
+      CGNode node, TypeReference allocationType, PropagationCallGraphBuilder builder) {
+    LOGGER.fine("createManualGenerator checking allocation type: " + allocationType.getName());
+
+    TypeReference sanitized = sanitize(allocationType);
+
+    if (sanitized.equals(TensorFlowTypes.MNIST_X_TRAIN)) {
+      return new MnistInputData(node, MnistInputData.imagesShape(60000));
+    } else if (sanitized.equals(TensorFlowTypes.MNIST_Y_TRAIN)) {
+      return new MnistInputData(node, MnistInputData.labelsShape(60000));
+    } else if (sanitized.equals(TensorFlowTypes.MNIST_X_TEST)) {
+      return new MnistInputData(node, MnistInputData.imagesShape(10000));
+    } else if (sanitized.equals(TensorFlowTypes.MNIST_Y_TEST)) {
+      return new MnistInputData(node, MnistInputData.labelsShape(10000));
+    }
+
+    return createManualGenerator(node, builder);
+  }
+
+  /**
    * Creates a manual TensorGenerator for synthetic operations where standard points-to analysis
    * fails (e.g. UnimplementedError due to implicit pointer keys for allocations in synthetic do()
    * methods).
@@ -2179,6 +2214,14 @@ public abstract class TensorGenerator {
       return new DatasetBatchGenerator(node);
     } else if (type.equals(TensorFlowTypes.IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE)) {
       return new FlowFromDirectoryGenerator(node);
+    } else if (type.equals(TensorFlowTypes.MNIST_X_TRAIN)) {
+      return new MnistInputData(node, MnistInputData.imagesShape(60000));
+    } else if (type.equals(TensorFlowTypes.MNIST_Y_TRAIN)) {
+      return new MnistInputData(node, MnistInputData.labelsShape(60000));
+    } else if (type.equals(TensorFlowTypes.MNIST_X_TEST)) {
+      return new MnistInputData(node, MnistInputData.imagesShape(10000));
+    } else if (type.equals(TensorFlowTypes.MNIST_Y_TEST)) {
+      return new MnistInputData(node, MnistInputData.labelsShape(10000));
     } else if (type.getName().toString().startsWith(TensorFlowTypes.DATA_PACKAGE_PREFIX)) {
       return new DatasetGenerator(node);
     } else if (type.equals(TensorFlowTypes.MATMUL.getDeclaringClass())) {

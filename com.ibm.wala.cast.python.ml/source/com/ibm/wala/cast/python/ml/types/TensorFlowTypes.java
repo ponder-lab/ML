@@ -701,6 +701,30 @@ public class TensorFlowTypes extends PythonTypes {
   private static final String READ_DATA_SETS_SIGNATURE =
       "tf.contrib.learn.datasets.mnist.read_data_sets()";
 
+  public static final TypeReference MNIST_X_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/mnist/x_train"));
+
+  public static final String MNIST_X_TRAIN_SIGNATURE = "tf.keras.datasets.mnist.load_data/x_train";
+
+  public static final TypeReference MNIST_Y_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/mnist/y_train"));
+
+  public static final String MNIST_Y_TRAIN_SIGNATURE = "tf.keras.datasets.mnist.load_data/y_train";
+
+  public static final TypeReference MNIST_X_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/mnist/x_test"));
+
+  public static final String MNIST_X_TEST_SIGNATURE = "tf.keras.datasets.mnist.load_data/x_test";
+
+  public static final TypeReference MNIST_Y_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/mnist/y_test"));
+
+  public static final String MNIST_Y_TEST_SIGNATURE = "tf.keras.datasets.mnist.load_data/y_test";
+
   /** https://www.tensorflow.org/api_docs/python/tf/placeholder. */
   public static final MethodReference PLACEHOLDER =
       MethodReference.findOrCreate(
@@ -932,6 +956,10 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(TENSOR.getDeclaringClass(), TENSOR_SIGNATURE),
           Map.entry(NDARRAY.getDeclaringClass(), NDARRAY_SIGNATURE),
           Map.entry(READ_DATA_SETS.getDeclaringClass(), READ_DATA_SETS_SIGNATURE),
+          Map.entry(MNIST_X_TRAIN, MNIST_X_TRAIN_SIGNATURE),
+          Map.entry(MNIST_Y_TRAIN, MNIST_Y_TRAIN_SIGNATURE),
+          Map.entry(MNIST_X_TEST, MNIST_X_TEST_SIGNATURE),
+          Map.entry(MNIST_Y_TEST, MNIST_Y_TEST_SIGNATURE),
           Map.entry(PLACEHOLDER.getDeclaringClass(), PLACEHOLDER_SIGNATURE),
           Map.entry(ARGMAX.getDeclaringClass(), ARGMAX_SIGNATURE),
           Map.entry(EQUAL.getDeclaringClass(), EQUAL_SIGNATURE),

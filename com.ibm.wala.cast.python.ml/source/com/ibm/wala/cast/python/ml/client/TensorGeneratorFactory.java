@@ -47,6 +47,10 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MATMUL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MAX_POOL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MNIST_X_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MNIST_X_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MNIST_Y_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MNIST_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MULTIPLY;
@@ -804,6 +808,14 @@ public class TensorGeneratorFactory {
       return new FlowFromDirectoryGenerator(source);
     else if (isType(calledFunction, READ_DATA_SETS.getDeclaringClass()))
       return new ReadDataSets(source);
+    else if (isType(calledFunction, MNIST_X_TRAIN))
+      return new MnistInputData(source, MnistInputData.imagesShape(60000));
+    else if (isType(calledFunction, MNIST_Y_TRAIN))
+      return new MnistInputData(source, MnistInputData.labelsShape(60000));
+    else if (isType(calledFunction, MNIST_X_TEST))
+      return new MnistInputData(source, MnistInputData.imagesShape(10000));
+    else if (isType(calledFunction, MNIST_Y_TEST))
+      return new MnistInputData(source, MnistInputData.labelsShape(10000));
     else if (isType(calledFunction, REDUCE_MEAN.getDeclaringClass())) return new ReduceMean(source);
     else if (isType(calledFunction, PLACEHOLDER.getDeclaringClass()))
       return new Placeholder(source);
