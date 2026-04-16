@@ -27,7 +27,7 @@ import java.util.logging.Logger;
  */
 public class ElementWiseOperation extends ZerosLike {
 
-  private static final Logger logger = getLogger(ElementWiseOperation.class.getName());
+  private static final Logger LOGGER = getLogger(ElementWiseOperation.class.getName());
 
   protected enum Parameters {
     X,
@@ -92,22 +92,22 @@ public class ElementWiseOperation extends ZerosLike {
     // The resulting shape is the broadcasted shape of the shapes of x and y.
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
-    logger.fine(
+    LOGGER.fine(
         () ->
             "EWO.getDefaultShapes entered with source=" + this.source + ", node=" + this.getNode());
 
     int xVn = this.getXArgumentValueNumber(builder);
-    logger.fine(() -> "EWO.getDefaultShapes xVn: " + xVn);
+    LOGGER.fine(() -> "EWO.getDefaultShapes xVn: " + xVn);
     if (xVn <= 0) return null;
     Set<List<Dimension<?>>> xShapes = this.getOperandShapes(builder, xVn);
-    logger.fine(() -> "EWO.getDefaultShapes xShapes: " + xShapes);
+    LOGGER.fine(() -> "EWO.getDefaultShapes xShapes: " + xShapes);
     if (xShapes == null) return null;
 
     int yVn = this.getYArgumentValueNumber(builder);
-    logger.fine(() -> "EWO.getDefaultShapes yVn: " + yVn);
+    LOGGER.fine(() -> "EWO.getDefaultShapes yVn: " + yVn);
     if (yVn <= 0) return null;
     Set<List<Dimension<?>>> yShapes = this.getOperandShapes(builder, yVn);
-    logger.fine(() -> "EWO.getDefaultShapes yShapes: " + yShapes);
+    LOGGER.fine(() -> "EWO.getDefaultShapes yShapes: " + yShapes);
     if (yShapes == null) return null;
 
     for (List<Dimension<?>> xShape : xShapes)
@@ -121,11 +121,11 @@ public class ElementWiseOperation extends ZerosLike {
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     int vn = this.getXArgumentValueNumber(builder);
-    logger.fine(() -> "ElementWiseOperation getDefaultDTypes vn: " + vn);
+    LOGGER.fine(() -> "ElementWiseOperation getDefaultDTypes vn: " + vn);
     if (vn <= 0) return EnumSet.of(DType.UNKNOWN);
 
     Set<DType> dtypes = this.getOperandDTypes(builder, vn);
-    logger.fine(() -> "ElementWiseOperation getDefaultDTypes dtypes: " + dtypes);
+    LOGGER.fine(() -> "ElementWiseOperation getDefaultDTypes dtypes: " + dtypes);
     return dtypes;
   }
 
