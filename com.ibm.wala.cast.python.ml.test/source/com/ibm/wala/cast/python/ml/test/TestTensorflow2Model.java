@@ -6604,6 +6604,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_dense.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_NONE_4_FLOAT32)));
   }
 
+  /**
+   * Test for <a href="https://github.com/wala/ML/issues/371">wala/ML#371</a>. Minimal repro for the
+   * test helper double-counting tensor variables under multiple calling contexts.
+   *
+   * <p>A single {@code Dense} layer call inside {@code M.call} produces one source-level tensor
+   * variable, but the test helper counts it twice because {@code M.call} is analyzed under two
+   * trampoline contexts (2-CFA artifact).
+   *
+   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#371 is fixed.
+   */
+  @Test(expected = AssertionError.class)
+  public void testDenseModelCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dense_model_call.py", "M.call", 1, 1, Map.of(3, Set.of(TENSOR_NONE_4_FLOAT32)));
+  }
+
   @Test
   public void testDense2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
