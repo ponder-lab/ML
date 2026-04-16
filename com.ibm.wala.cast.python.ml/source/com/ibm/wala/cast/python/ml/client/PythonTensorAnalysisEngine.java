@@ -342,7 +342,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               if (iteratorDef != null && iteratorDef.getNumberOfUses() > 1) {
                 boolean added =
                     processInstructionInterprocedurally(
-                        iteratorDef, iterator, node, src, sources, pointerAnalysis);
+                        iteratorDef, iteratorDef.getDef(), node, src, sources, pointerAnalysis);
 
                 ret |= added;
 
