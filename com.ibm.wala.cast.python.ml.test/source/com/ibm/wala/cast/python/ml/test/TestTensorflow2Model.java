@@ -1625,7 +1625,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * <p>TODO: Once a generator for ndarray {@code .reshape()} is added, tighten the expected types
    * to {@code TENSOR_256_784_FLOAT32}.
    *
-   * <p>TODO: Once wala/ML#371 is resolved, decrease the tensor variable count from 3 to 2.
+   * <p>TODO: Revisit the tensor variable count once wala/ML#371 decides whether the test helper
+   * should count {@code (CGNode, vn)} pairs (current: 3) or deduplicate by {@code vn} (would be 2).
    */
   @Test
   public void testNeuralNetwork()
