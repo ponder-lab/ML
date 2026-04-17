@@ -128,7 +128,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    */
   private static final String TENSOR_ITERABLE_SYNTHETIC_FUNCTION_NAME = "read_dataset";
 
-  private static final Logger logger = Logger.getLogger(PythonTensorAnalysisEngine.class.getName());
+  private static final Logger LOGGER = Logger.getLogger(PythonTensorAnalysisEngine.class.getName());
 
   private static final MethodReference conv2d =
       MethodReference.findOrCreate(
@@ -211,7 +211,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         } else if (inst instanceof SSABinaryOpInstruction) {
           // Binary operations (e.g. +, *) on tensors are also sources.
           sources.add(src);
-          logger.info("Added dataflow source from binary op: " + src + ".");
+          LOGGER.info("Added dataflow source from binary op: " + src + ".");
         } else if (inst instanceof EachElementGetInstruction) {
           // We are potentially pulling a tensor out of a tensor iterable.
           EachElementGetInstruction eachElementGetInstruction = (EachElementGetInstruction) inst;
@@ -219,12 +219,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           // Don't add the source if the container has elements in it. In that case, we want to add
           // the individual elements themselves as sources instead.
           if (definitionIsNonScalar(eachElementGetInstruction, du))
-            logger.info(
+            LOGGER.info(
                 "Definition of instruction: "
                     + eachElementGetInstruction
                     + " is non-scalar. Skipping...");
           else {
-            logger.info(
+            LOGGER.info(
                 "Definition of instruction: "
                     + eachElementGetInstruction
                     + " is scalar. Processing...");
@@ -311,13 +311,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           || methodName.equals(DO_METHOD_NAME)) {
         try {
           TensorGenerator generator = getGenerator(src, builder);
-          logger.fine(() -> "Found tensor generator: " + generator + " for source: " + src + ".");
+          LOGGER.fine(() -> "Found tensor generator: " + generator + " for source: " + src + ".");
           sources.add(src);
-          logger.info("Added dataflow source from tensor generator: " + src + ".");
+          LOGGER.info("Added dataflow source from tensor generator: " + src + ".");
           ret = true;
         } catch (IllegalArgumentException e) {
           // not a tensor source.
-          logger.log(Level.FINE, "Not a tensor source: " + methodName, e);
+          LOGGER.log(Level.FINE, "Not a tensor source: " + methodName, e);
           e.printStackTrace();
         }
       } else if (instruction.getNumberOfUses() > 1) {
@@ -453,9 +453,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       PointerAnalysis<InstanceKey> pointerAnalysis,
       Set<SSAInstruction> seen) {
     if (seen.contains(instruction))
-      logger.fine(() -> "Skipping instruction: " + instruction + ". We've seen it before.");
+      LOGGER.fine(() -> "Skipping instruction: " + instruction + ". We've seen it before.");
     else {
-      logger.fine(() -> "Processing instruction: " + instruction + ".");
+      LOGGER.fine(() -> "Processing instruction: " + instruction + ".");
       seen.add(instruction);
 
       if (instruction != null && instruction.getNumberOfUses() > 0) {
@@ -465,7 +465,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         // First try intraprocedural analysis.
         if (definesTensorIterable(def, node, callGraph, pointerAnalysis)) {
           sources.add(src);
-          logger.info("Added dataflow source from tensor iterable: " + src + ".");
+          LOGGER.info("Added dataflow source from tensor iterable: " + src + ".");
           return true;
         } else {
           // Use interprocedural analysis using the PA.
@@ -507,7 +507,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       PointsToSetVariable src,
       Set<PointsToSetVariable> sources,
       PointerAnalysis<InstanceKey> pointerAnalysis) {
-    logger.info(
+    LOGGER.info(
         () ->
             "Using interprocedural analysis to find potential tensor definition for use: "
                 + use
@@ -528,7 +528,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                 || reference.getName().toString().startsWith(DATA_PACKAGE_PREFIX))
             && isDatasetTensorElement(src, use, pointerAnalysis)) {
           sources.add(src);
-          logger.info("Added dataflow source from tensor dataset: " + src + ".");
+          LOGGER.info("Added dataflow source from tensor dataset: " + src + ".");
           return true;
         }
       }
@@ -599,7 +599,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
                   SSAInstruction objRefDef = node.getDU().getDef(srcDef.getObjectRef());
 
-                  logger.finest(
+                  LOGGER.finest(
                       () ->
                           "objRefDef is: "
                               + objRefDef.getClass().getName()
@@ -636,10 +636,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    */
   private static boolean definitionIsNonScalar(SSAInstruction instruction, DefUse du) {
     int def = instruction.getDef();
-    logger.fine("Processing definition: " + def + " of instruction: " + instruction + ".");
+    LOGGER.fine("Processing definition: " + def + " of instruction: " + instruction + ".");
 
     int numberOfUses = du.getNumberOfUses(def);
-    logger.fine(
+    LOGGER.fine(
         "Definition: "
             + def
             + " of instruction: "
@@ -650,11 +650,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
     for (Iterator<SSAInstruction> uses = du.getUses(def); uses.hasNext(); ) {
       SSAInstruction useInstruction = uses.next();
-      logger.fine("Processing use: " + useInstruction + ".");
+      LOGGER.fine("Processing use: " + useInstruction + ".");
 
       if (useInstruction instanceof PythonPropertyRead) {
         PythonPropertyRead read = (PythonPropertyRead) useInstruction;
-        logger.fine("Found property read use: " + read + ".");
+        LOGGER.fine("Found property read use: " + read + ".");
 
         // if the definition appears on the LHS of the read.
         if (read.getObjectRef() == def) return true;
@@ -682,14 +682,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       SSAAbstractInvokeInstruction invocationInstruction =
           (SSAAbstractInvokeInstruction) instruction;
 
-      logger.fine(() -> "definesTensorIterable checking instruction: " + invocationInstruction);
+      LOGGER.fine(() -> "definesTensorIterable checking instruction: " + invocationInstruction);
       for (CGNode target :
           callGraph.getPossibleTargets(node, invocationInstruction.getCallSite())) {
-        logger.fine(() -> "Target: " + target.getMethod().getSignature());
+        LOGGER.fine(() -> "Target: " + target.getMethod().getSignature());
         for (Iterator<CGNode> succNodes = callGraph.getSuccNodes(target); succNodes.hasNext(); ) {
           CGNode callee = succNodes.next();
           IMethod calledMethod = callee.getMethod();
-          logger.fine(() -> "  Succ: " + calledMethod.getSignature());
+          LOGGER.fine(() -> "  Succ: " + calledMethod.getSignature());
 
           // Does this method call the synthetic "marker?"
           if (calledMethod.getName().toString().equals(TENSOR_ITERABLE_SYNTHETIC_FUNCTION_NAME)) {
@@ -787,7 +787,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     } catch (IOException e) {
       throw new RuntimeException("Error while processing placeholder calls.", e);
     }
-    logger.fine("Placeholders: " + placeholders);
+    LOGGER.fine("Placeholders: " + placeholders);
 
     for (Map.Entry<PointsToSetVariable, TensorType> e : placeholders.entrySet())
       init.put(e.getKey(), Set.of(e.getValue()));
@@ -846,18 +846,18 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    */
   private Set<TensorType> getTensorTypes(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
-    logger.fine("Getting tensor types for source: " + source + ".");
+    LOGGER.fine("Getting tensor types for source: " + source + ".");
 
     try {
       TensorGenerator generator = getGenerator(source, builder);
-      logger.fine("Using tensor generator: " + generator + ".");
+      LOGGER.fine("Using tensor generator: " + generator + ".");
 
       Set<TensorType> tensorTypes = generator.getTensorTypes(builder);
-      logger.fine(() -> "Found tensor types: " + tensorTypes + ".");
+      LOGGER.fine(() -> "Found tensor types: " + tensorTypes + ".");
 
       return tensorTypes;
     } catch (IllegalArgumentException e) {
-      logger.log(Level.FINER, "Source " + source + " is not a recognized tensor generator.", e);
+      LOGGER.log(Level.FINER, "Source " + source + " is not a recognized tensor generator.", e);
       return HashSetFactory.make();
     }
   }
