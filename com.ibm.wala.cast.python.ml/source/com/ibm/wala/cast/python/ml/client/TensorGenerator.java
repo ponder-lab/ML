@@ -163,7 +163,7 @@ public abstract class TensorGenerator {
 
     // If we have no dtype info at all, fall back to signaling "unknown tensor" when shapes are
     // also unknown, otherwise produce an empty set (⊥, not a tensor).
-    if (dTypes.isEmpty()) {
+    if (dTypes == null || dTypes.isEmpty()) {
       return shapes == null ? null : HashSetFactory.make();
     }
 
@@ -571,9 +571,14 @@ public abstract class TensorGenerator {
    */
   protected Set<List<Dimension<?>>> getShapesOfValue(
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
-    if (valuePointsToSet == null || valuePointsToSet.isEmpty())
-      throw new IllegalArgumentException(
-          "Empty points-to set for value in source: " + this.getSource() + ".");
+    if (valuePointsToSet == null || valuePointsToSet.isEmpty()) {
+      LOGGER.fine(
+          () ->
+              "Empty points-to set for value in source: "
+                  + this.getSource()
+                  + ". Returning null (unknown).");
+      return null;
+    }
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
@@ -614,6 +619,8 @@ public abstract class TensorGenerator {
 
             Set<List<Dimension<?>>> shapesOfField =
                 this.getShapesOfValue(builder, instanceFieldPointsToSet);
+
+            if (shapesOfField == null) continue;
 
             for (List<Dimension<?>> shapeList : shapesOfField) {
               List<Dimension<?>> shape = new ArrayList<>();
@@ -1123,9 +1130,14 @@ public abstract class TensorGenerator {
    */
   protected Set<DType> getDTypesOfValue(
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
-    if (valuePointsToSet == null || valuePointsToSet.isEmpty())
-      throw new IllegalArgumentException(
-          "Empty points-to set for value in source: " + this.getSource() + ".");
+    if (valuePointsToSet == null || valuePointsToSet.isEmpty()) {
+      LOGGER.fine(
+          () ->
+              "Empty points-to set for value in source: "
+                  + this.getSource()
+                  + ". Returning null (unknown).");
+      return null;
+    }
 
     Set<DType> ret = EnumSet.noneOf(DType.class);
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
@@ -1198,7 +1210,8 @@ public abstract class TensorGenerator {
                 pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
             LOGGER.fine("Points-to set for instance field: " + instanceFieldPointsToSet + ".");
 
-            ret.addAll(this.getDTypesOfValue(builder, instanceFieldPointsToSet));
+            Set<DType> fieldDTypes = this.getDTypesOfValue(builder, instanceFieldPointsToSet);
+            if (fieldDTypes != null) ret.addAll(fieldDTypes);
           }
         } else if (reference.equals(TensorFlowTypes.FEATURE)) {
           // Ignore features.

@@ -207,13 +207,14 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
                 Set<List<Dimension<?>>> fieldShapes =
                     this.getShapesOfValue(builder, builder.getPointerAnalysis().getPointsToSet(pk));
-                for (List<Dimension<?>> shape : fieldShapes) {
-                  if (shape.size() > 0) {
-                    ret.add(new ArrayList<>(shape.subList(1, shape.size())));
-                  } else {
-                    ret.add(Collections.emptyList());
+                if (fieldShapes != null)
+                  for (List<Dimension<?>> shape : fieldShapes) {
+                    if (shape.size() > 0) {
+                      ret.add(new ArrayList<>(shape.subList(1, shape.size())));
+                    } else {
+                      ret.add(Collections.emptyList());
+                    }
                   }
-                }
               }
             }
           }
@@ -255,9 +256,9 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
-                ret.addAll(
-                    this.getDTypesOfValue(
-                        builder, builder.getPointerAnalysis().getPointsToSet(pk)));
+                Set<DType> fieldDTypes =
+                    this.getDTypesOfValue(builder, builder.getPointerAnalysis().getPointsToSet(pk));
+                if (fieldDTypes != null) ret.addAll(fieldDTypes);
               }
             }
           }
@@ -334,7 +335,8 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
         if (f == null) continue;
         PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
         OrdinalSet<InstanceKey> fieldPts = builder.getPointerAnalysis().getPointsToSet(pk);
-        ret.addAll(this.getShapesOfValue(builder, fieldPts));
+        Set<List<Dimension<?>>> fieldShapes = this.getShapesOfValue(builder, fieldPts);
+        if (fieldShapes != null) ret.addAll(fieldShapes);
       }
     }
 
@@ -375,7 +377,8 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
         if (f == null) continue;
         PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
         OrdinalSet<InstanceKey> fieldPts = builder.getPointerAnalysis().getPointsToSet(pk);
-        ret.addAll(this.getDTypesOfValue(builder, fieldPts));
+        Set<DType> fieldDTypes = this.getDTypesOfValue(builder, fieldPts);
+        if (fieldDTypes != null) ret.addAll(fieldDTypes);
       }
     }
 

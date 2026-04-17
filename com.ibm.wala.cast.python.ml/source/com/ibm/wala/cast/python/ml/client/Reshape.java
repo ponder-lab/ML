@@ -98,7 +98,7 @@ public class Reshape extends TensorGenerator {
             // We need input shapes to infer -1 dimension.
             Set<List<Dimension<?>>> inputShapes = this.getDefaultShapes(builder);
 
-            if (canInfer && !inputShapes.isEmpty()) {
+            if (canInfer && inputShapes != null && !inputShapes.isEmpty()) {
               for (List<Dimension<?>> inputShape : inputShapes) {
                 long inputSize = 1;
                 boolean inputKnown = true;
