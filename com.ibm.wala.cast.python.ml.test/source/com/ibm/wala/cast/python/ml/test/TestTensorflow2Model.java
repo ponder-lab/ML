@@ -94,6 +94,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_32_UINT8 =
       new TensorType(UINT_8, asList(new NumericDim(32)));
 
+  private static final TensorType TENSOR_256_784_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(256), new NumericDim(784)));
+
   private static final TensorType TENSOR_32_28_28_UINT8 =
       new TensorType(UINT_8, asList(new NumericDim(32), new NumericDim(28), new NumericDim(28)));
 
@@ -1614,10 +1617,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tensorflow_eager_execution.py", "MyModel.call", 1, 2, Map.of(3, Set.of(MNIST_INPUT)));
   }
 
+  /**
+   * Parameter {@code x} of {@code NeuralNet.call} receives {@code batch_x} from the dataset
+   * iteration chain. At runtime, {@code batch_x} has shape {@code (256, 784)} and dtype {@code
+   * float32} (verified by Python assert statements in {@code neural_network.py}).
+   *
+   * <p>TODO: Once a generator for ndarray {@code .reshape()} is added, tighten the expected types
+   * to {@code TENSOR_256_784_FLOAT32}.
+   *
+   * <p>TODO: Once wala/ML#371 is resolved, decrease the tensor variable count from 3 to 2.
+   */
   @Test
   public void testNeuralNetwork()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("neural_network.py", "NeuralNet.call", 1, 2, Map.of(3, Set.of(MNIST_INPUT)));
+    test("neural_network.py", "NeuralNet.call", 1, 3, Map.of(3, Set.of(TENSOR_256_784_FLOAT32)));
   }
 
   @Test

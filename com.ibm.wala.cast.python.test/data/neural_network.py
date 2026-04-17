@@ -150,6 +150,11 @@ def run_optimization(x, y):
 # %%
 # Run training for the given number of steps.
 for step, (batch_x, batch_y) in enumerate(train_data.take(training_steps), 1):
+    assert batch_x.shape == (batch_size, num_features)
+    assert batch_x.dtype == tf.float32
+    assert batch_y.shape == (batch_size,)
+    assert batch_y.dtype == tf.uint8
+
     # Run the optimization to update W and b values.
     run_optimization(batch_x, batch_y)
 
