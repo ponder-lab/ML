@@ -75,6 +75,15 @@ PythonTensorAnalysisEngine.performAnalysis()
 
 - **TF/Keras modeling lives in `tensorflow.xml`** (in `com.ibm.wala.cast.python.ml/data/`) — this is a WALA XML summary file describing synthetic method bodies for TF APIs. Changing the XML requires `mvn clean` because of resource caching. Generators in `client/` read from the call graph built against these summaries.
 
+### PTS vs `TensorTypeAnalysis` — two separate systems
+
+WALA's Pointer Analysis (PA) and `TensorTypeAnalysis` serve different roles:
+
+- The **PA** provides the assignment graph (edges between variables) and points-to sets (PTS). However, PTS for tensor variables is **often empty** — the XML summaries don't always create allocations that flow correctly through the PA to all consumers.
+- **`TensorTypeAnalysis`** is a parallel type system that uses the PA's assignment graph as its flow graph but seeds tensor types independently via syntactic markers (`read_data`/`read_dataset` method names in `tensorflow.xml`). Variables with empty PTS can still have tensor types in this analysis.
+
+When debugging why a tensor variable isn't recognized, check the `TensorTypeAnalysis` seeding path (`getDataflowSources`, `processInstruction`, `definesTensorIterable`), not just the PTS. An empty PTS doesn't mean the variable isn't a tensor — it means the seeding didn't reach it.
+
 ### Lattice conventions for `getDefaultShapes` / `getDefaultDTypes`
 
 **Critical.** See the class-level Javadoc on `TensorGenerator` and the "Tensor Type Generators" section of `CONTRIBUTING.md`. The short version:
