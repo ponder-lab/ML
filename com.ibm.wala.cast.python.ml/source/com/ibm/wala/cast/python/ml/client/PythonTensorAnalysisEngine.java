@@ -54,6 +54,7 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.graph.Graph;
 import com.ibm.wala.util.graph.impl.SlowSparseNumberedGraph;
 import com.ibm.wala.util.intset.IntSet;
+import com.ibm.wala.util.intset.OrdinalSet;
 import java.io.File;
 import java.io.IOException;
 import java.util.Iterator;
@@ -683,17 +684,30 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           (SSAAbstractInvokeInstruction) instruction;
 
       LOGGER.fine(() -> "definesTensorIterable checking instruction: " + invocationInstruction);
-      for (CGNode target :
-          callGraph.getPossibleTargets(node, invocationInstruction.getCallSite())) {
-        LOGGER.fine(() -> "Target: " + target.getMethod().getSignature());
-        for (Iterator<CGNode> succNodes = callGraph.getSuccNodes(target); succNodes.hasNext(); ) {
-          CGNode callee = succNodes.next();
-          IMethod calledMethod = callee.getMethod();
-          LOGGER.fine(() -> "  Succ: " + calledMethod.getSignature());
 
-          // Does this method call the synthetic "marker?"
-          if (calledMethod.getName().toString().equals(TENSOR_ITERABLE_SYNTHETIC_FUNCTION_NAME)) {
-            return true;
+      int defVn = invocationInstruction.getDef();
+
+      if (defVn >= 0) {
+        PointerKey defPointerKey =
+            pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, defVn);
+        OrdinalSet<InstanceKey> defPointsToSet = pointerAnalysis.getPointsToSet(defPointerKey);
+
+        for (InstanceKey ik : defPointsToSet) {
+          AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+
+          if (asin != null) {
+            TypeReference reference = asin.getConcreteType().getReference();
+
+            if (reference.getName().toString().startsWith(DATA_PACKAGE_PREFIX)) {
+              LOGGER.fine(
+                  () ->
+                      "Instruction: "
+                          + instruction
+                          + " defines a tensor iterable of type: "
+                          + reference
+                          + ".");
+              return true;
+            }
           }
         }
       }
