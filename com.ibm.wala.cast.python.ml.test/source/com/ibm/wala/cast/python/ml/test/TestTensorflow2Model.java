@@ -94,12 +94,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_32_UINT8 =
       new TensorType(UINT_8, asList(new NumericDim(32)));
 
-  private static final TensorType TENSOR_256_UINT8 =
-      new TensorType(UINT_8, asList(new NumericDim(256)));
-
-  private static final TensorType TENSOR_NONE_UINT8 =
-      new TensorType(UINT_8, asList(new SymbolicDim("?")));
-
   private static final TensorType TENSOR_32_28_28_UINT8 =
       new TensorType(UINT_8, asList(new NumericDim(32), new NumericDim(28), new NumericDim(28)));
 
@@ -1620,25 +1614,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tensorflow_eager_execution.py", "MyModel.call", 1, 2, Map.of(3, Set.of(MNIST_INPUT)));
   }
 
-  /**
-   * The parameter {@code x} of {@code NeuralNet.call} receives batch_x from the dataset iteration
-   * chain. The analysis currently reports {@code y_train}'s batched type because {@code x_train}
-   * passes through {@code np.array().reshape()}, which breaks the PA chain for field 0 of the
-   * {@code from_tensor_slices} tuple. The third tensor variable is the {@code Dense.__call__}
-   * return allocation.
-   *
-   * <p>TODO: Once a generator for ndarray {@code .reshape()} is added, tighten the expected types
-   * to reflect the reshaped {@code x_train} shape ({@code (256, 784) float32}).
-   */
   @Test
   public void testNeuralNetwork()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "neural_network.py",
-        "NeuralNet.call",
-        1,
-        3,
-        Map.of(3, Set.of(TENSOR_256_UINT8, TENSOR_NONE_UINT8)));
+    test("neural_network.py", "NeuralNet.call", 1, 2, Map.of(3, Set.of(MNIST_INPUT)));
   }
 
   @Test
