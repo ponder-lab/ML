@@ -1634,8 +1634,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * iteration chain. At runtime, {@code batch_x} has shape {@code (256, 784)} and dtype {@code
    * float32} (verified by Python assert statements in {@code neural_network.py}).
    *
-   * <p>TODO: Once a generator for ndarray {@code .reshape()} is added, tighten the expected types
-   * to {@code TENSOR_256_784_FLOAT32}.
+   * <p>The test currently fails because value 3 (slot 0 of the {@code (x_train, y_train)} tuple
+   * consumed by {@code from_tensor_slices}) receives {@code y_train}'s types {@code {(256,) uint8,
+   * (?) uint8}} instead of {@code x_train}'s {@code (256, 784) float32}. Two contributing root
+   * causes: (1) a missing generator for ndarray {@code .reshape()} breaks {@code x_train}'s PA
+   * chain through {@code np.array(x_train, np.float32).reshape([-1, 784])}; (2) per-index {@code
+   * TupleElementProvider} routing doesn't survive the {@code .shuffle().batch()} chain because
+   * {@code DatasetBatchGenerator} and the shuffle-generated {@code DatasetGenerator} don't
+   * implement {@code DelegatingTensorGenerator} (wala/ML#385).
    *
    * <p>TODO: Revisit the tensor variable count once wala/ML#371 decides whether the test helper
    * should count {@code (CGNode, vn)} pairs (current: 3) or deduplicate by {@code vn} (would be 2).
@@ -1659,9 +1665,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * remains untracked until the same reshape/tuple-routing gap blocking {@link
    * #testNeuralNetwork()} is resolved. See wala/ML#378.
    *
-   * <p>TODO: The actual {@code y} type today is {@code {(256,) uint8, (?) uint8}} due to the same
-   * seeding/generator tension as {@code testNeuralNetwork} (wala/ML#385). Tighten to {@code
-   * TENSOR_256_UINT8} once the extra {@code (?)} is gone.
+   * <p>Once value 2 is tracked, the test will also fail on value 3: the actual {@code y} type
+   * includes a spurious {@code (?) uint8} in the union ({@code {(256,) uint8, (?) uint8}}) &mdash;
+   * same seeding/generator tension as {@link #testNeuralNetwork()} (wala/ML#385).
    */
   @Test
   public void testNeuralNetwork2()
@@ -1680,12 +1686,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * float32} and {@code y} has shape {@code (256,)} dtype {@code uint8} (verified by Python assert
    * statements in {@code neural_network.py}).
    *
-   * <p>TODO: Once a generator for ndarray {@code .reshape()} is added (wala/ML#385), tighten value
-   * 2's expected types to {@code TENSOR_256_784_FLOAT32}.
-   *
-   * <p>TODO: The actual {@code y} type today is {@code {(256,) uint8, (?) uint8}} due to the same
-   * seeding/generator tension as {@code testNeuralNetwork} (wala/ML#385). Tighten to {@code
-   * TENSOR_256_UINT8} once the extra {@code (?)} is gone.
+   * <p>The test currently fails because value 2 (slot 0 of the tuple, same as {@link
+   * #testNeuralNetwork()}) receives {@code y_train}'s types instead of {@code x_train}'s, and value
+   * 3 additionally carries a spurious {@code (?) uint8} in its union. Same tuple-routing and
+   * reshape root causes as {@link #testNeuralNetwork()} (wala/ML#385).
    */
   @Test
   public void testNeuralNetwork3()
@@ -1707,16 +1711,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Python assert statements in {@code neural_network.py}). The static analysis should union these
    * types for each parameter.
    *
-   * <p>TODO: Value 2 ({@code y_pred}) is not yet tracked as a tensor parameter. Like {@code
-   * testNeuralNetwork2}, it flows from {@code pred = neural_net(...)}, which dispatches through the
-   * summarized {@code Model.__call__} into user-defined {@code NeuralNet.call}. wala/ML#127 (now
-   * closed) was a necessary but insufficient fix; the same reshape/tuple-routing gap blocking
-   * {@link #testNeuralNetwork()} also blocks value 2 here. Bump the tensor parameter count to 2 and
-   * add {@code TENSOR_256_10_FLOAT32} and {@code TENSOR_10000_10_FLOAT32} for value 2 once that
-   * lands. See wala/ML#378.
+   * <p>The test currently fails on local tensor variable count: expected 5 (the five intermediate
+   * tensors {@code argmax}, {@code cast-to-int64}, {@code equal}, {@code cast-to-float32}, and
+   * {@code reduce_mean}), actual 4. One intermediate is missing; root cause not yet investigated.
    *
-   * <p>TODO: The expected tensor local count is 5 (five intermediate tensors: {@code argmax},
-   * {@code cast-to-int64}, {@code equal}, {@code cast-to-float32}, {@code reduce_mean}).
+   * <p>Once the local count clears, value 2 ({@code y_pred}) may also be blocked: it flows from
+   * {@code pred = neural_net(...)} through the summarized {@code Model.__call__} into user-defined
+   * {@code NeuralNet.call}, the same dispatch chain that blocks {@link #testNeuralNetwork2()}.
+   * wala/ML#127 (closed) was a necessary-but-insufficient prerequisite; the same
+   * reshape/tuple-routing gap blocking {@link #testNeuralNetwork()} (wala/ML#385) may apply here
+   * too.
    */
   @Test
   public void testNeuralNetwork4()
