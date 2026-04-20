@@ -1366,6 +1366,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Test enumerating a dataset (https://github.com/wala/ML/issues/140). The first element of the
    * tuple returned isn't a tensor.
+   *
+   * <p>{@code summarize_weights(step)} takes only an {@code int} step counter (not a tensor, hence
+   * parameter count 0). Inside the function, dict lookups {@code weights[w]} and {@code biases[b]}
+   * feed the tensor variables to {@code tf.summary.histogram}. Expected tensor variable count: 4
+   * (master baseline). Branch currently registers 3 &mdash; a regression. Keeping expected at the
+   * master baseline lets the failing count check serve as the regression signal; no separate issue
+   * is needed because the test itself tracks the discrepancy. No Python asserts are added because
+   * the function has no tensor parameters and the local tensor SSAs (dict lookups and subscript
+   * reads) are not named at positions where asserts can live without restructuring the original
+   * program.
    */
   @Test
   public void testTensorboardExample()
