@@ -1621,16 +1621,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32)));
   }
 
+  /**
+   * {@code replica_fn(input)} body: {@code return input * 2.0}. Both {@code input} (parameter) and
+   * the binop result are tensors, so the expected count is 2 (1 param + 1 binop-result SSA value).
+   * Prior to wala/ML#395's scalar-literal-broadcast fix, the binop result was under-classified
+   * (null shape) and didn't register, producing a count of 1. The updated count reflects the
+   * corrected identification.
+   */
   @Test
   public void testCallbacks()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_callbacks.py", "replica_fn", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+    test("tf2_test_callbacks.py", "replica_fn", 1, 2, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
+  /** See {@link #testCallbacks()} for the count rationale. */
   @Test
   public void testCallbacks2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_callbacks2.py", "replica_fn", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+    test("tf2_test_callbacks2.py", "replica_fn", 1, 2, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
   /**

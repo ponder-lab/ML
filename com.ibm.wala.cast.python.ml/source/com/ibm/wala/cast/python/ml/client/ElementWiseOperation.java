@@ -2,6 +2,8 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.util.TensorShapeUtil.areBroadcastable;
 import static com.ibm.wala.cast.python.ml.util.TensorShapeUtil.getBroadcastedShapes;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.singleton;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -140,13 +142,23 @@ public class ElementWiseOperation extends ZerosLike {
    *
    * <p>If the operand's def is itself a {@link SSABinaryOpInstruction}, this method constructs a
    * child {@link ElementWiseOperation} for the operand and invokes its {@link
-   * #getDefaultShapes(PropagationCallGraphBuilder)} directly, bypassing the class-skip. Otherwise
-   * it falls through to the standard {@link #getShapes(PropagationCallGraphBuilder, int)} path so
-   * non-binop operands (invokes, slices, etc.) follow the normal generator dispatch.
+   * #getDefaultShapes(PropagationCallGraphBuilder)} directly, bypassing the class-skip.
+   *
+   * <p>If the operand is a Python scalar literal (e.g., {@code 127.5} in {@code x - 127.5}), it has
+   * an empty points-to set and no defining instruction &mdash; {@link #getShapes} would fall
+   * through to a factory lookup that throws. Return {@code {emptyList}} (scalar rank-0) so the
+   * tensor-scalar broadcast proceeds correctly. See wala/ML#395.
+   *
+   * <p>Otherwise falls through to the standard {@link #getShapes(PropagationCallGraphBuilder, int)}
+   * path so non-binop, non-scalar-literal operands (invokes, slices, etc.) follow the normal
+   * generator dispatch.
    */
   private Set<List<Dimension<?>>> getOperandShapes(PropagationCallGraphBuilder builder, int vn) {
     ElementWiseOperation nested = getNestedForBinop(builder, vn);
     if (nested != null) return nested.getDefaultShapes(builder);
+    if (isScalarLiteral(builder, vn)) {
+      return singleton(emptyList());
+    }
     return this.getShapes(builder, vn);
   }
 
@@ -155,6 +167,21 @@ public class ElementWiseOperation extends ZerosLike {
     ElementWiseOperation nested = getNestedForBinop(builder, vn);
     if (nested != null) return nested.getDefaultDTypes(builder);
     return this.getDTypes(builder, vn);
+  }
+
+  /**
+   * Identifies Python scalar literals at binop operand slots &mdash; values that have empty
+   * points-to sets, no defining instruction, and appear in the IR's symbol table as constants
+   * (e.g., {@code 127.5}, {@code 1}, {@code 2}). Used to short-circuit {@link #getOperandShapes}
+   * and {@link #getOperandDTypes} so scalar-tensor broadcasts preserve shape/dtype info. See
+   * wala/ML#395.
+   */
+  private boolean isScalarLiteral(PropagationCallGraphBuilder builder, int vn) {
+    CGNode node = this.getNode();
+    if (node.getDU().getDef(vn) != null) return false;
+    PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+    if (!builder.getPointerAnalysis().getPointsToSet(pk).isEmpty()) return false;
+    return node.getIR().getSymbolTable().isConstant(vn);
   }
 
   /**
