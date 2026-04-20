@@ -995,8 +995,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       // shape inference) can tell ellipsis apart from `None`, which `visitNameConstant` currently
       // translates to Java `null`. Prior behavior returned `CAstNode.EMPTY` via `fail(arg0)`,
       // which collapsed ellipsis and `None` into indistinguishable IR. See wala/ML#356.
-      return notePosition(
-          Ast.makeConstant(com.ibm.wala.cast.python.types.PythonTypes.ELLIPSIS), arg0);
+      return notePosition(Ast.makeConstant(PythonTypes.ELLIPSIS), arg0);
     }
 
     @Override

@@ -72,7 +72,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
 
     Set<List<Dimension<?>>> inputShapes = null;
     if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
-      inputShapes = getShapesOfTensorsArgument(builder, tensorsPTS);
+      inputShapes = this.getShapesOfTensorsArgument(builder, tensorsPTS);
     }
     final int tensorsPTSSize = tensorsPTS == null ? -1 : tensorsPTS.size();
     final Set<List<Dimension<?>>> ptsPathShapes = inputShapes;
@@ -125,7 +125,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
         this.getArgumentPointsToSet(
             builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName());
     if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
-      Set<DType> dtypes = getDTypesOfTensorsArgument(builder, tensorsPTS);
+      Set<DType> dtypes = this.getDTypesOfTensorsArgument(builder, tensorsPTS);
       if (!dtypes.isEmpty()) return dtypes;
     }
 
@@ -146,7 +146,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
 
     Set<List<Dimension<?>>> inputShapes = null;
     if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
-      inputShapes = getShapesOfTensorsArgument(builder, tensorsPTS);
+      inputShapes = this.getShapesOfTensorsArgument(builder, tensorsPTS);
     }
 
     // Fallback mirroring `getDefaultShapes`: when the `tensors` argument has empty PTS (e.g.,
