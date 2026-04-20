@@ -40,6 +40,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -3772,6 +3773,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     // get the tensor variables for the function.
     Set<TensorVariable> functionTensorVariables =
         functionSignatureToTensorVariables.getOrDefault(functionSignature, emptySet());
+
+    // Dump `(vn, TensorVariable)` pairs for the FUT so cross-branch comparison can identify
+    // which specific SSA value explains a count discrepancy.
+    LOGGER.fine(
+        () ->
+            "Tensor variables for "
+                + functionSignature
+                + ":\n\t"
+                + functionSignatureToPointerKeys
+                    .getOrDefault(functionSignature, emptySet())
+                    .stream()
+                    .sorted(Comparator.comparingInt(LocalPointerKey::getValueNumber))
+                    .map(
+                        pk ->
+                            "vn="
+                                + pk.getValueNumber()
+                                + " -> "
+                                + pointerKeyToTensorVariable.get(pk))
+                    .collect(Collectors.joining("\n\t")));
 
     assertEquals(expectedNumberOfFunctionTensorVariables, functionTensorVariables.size());
 
