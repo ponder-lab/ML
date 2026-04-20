@@ -156,6 +156,7 @@ for step, (batch_x, batch_y) in enumerate(train_data.take(training_steps), 1):
     assert batch_x.dtype == tf.float32
     assert batch_y.shape == (256,)
     assert batch_y.dtype == tf.uint8
+
     # Run the optimization to update W and b values.
     run_optimization(batch_x, batch_y)
 
@@ -191,9 +192,8 @@ assert pred.shape == (10000, 10)
 assert pred.dtype == tf.float32
 assert y_test.shape == (10000,)
 assert y_test.dtype == tf.uint8
-acc = accuracy(pred, y_test)
 print_time = timeit.default_timer()
-print("Test Accuracy: %f" % acc)
+print("Test Accuracy: %f" % accuracy(pred, y_test))
 skipped_time += timeit.default_timer() - print_time
 
 # %%

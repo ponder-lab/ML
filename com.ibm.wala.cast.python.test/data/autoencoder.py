@@ -176,15 +176,11 @@ n = 4
 canvas_orig = np.empty((28 * n, 28 * n))
 canvas_recon = np.empty((28 * n, 28 * n))
 for i, (batch_x, _) in enumerate(test_data.take(n)):
-    # asserts before FUT encoder (testAutoencoder).
+    # asserts before FUT encoder (testAutoencoder) and FUT decoder (testAutoencoder4).
     assert batch_x.shape == (256, 784)
     assert batch_x.dtype == tf.float32
-    encoded = encoder(batch_x)
-    # asserts before FUT decoder (testAutoencoder4).
-    assert encoded.shape == (256, 64)
-    assert encoded.dtype == tf.float32
     # Encode and decode the digit image.
-    reconstructed_images = decoder(encoded)
+    reconstructed_images = decoder(encoder(batch_x))
     # Display original images.
     for j in range(n):
         # Draw the generated digits.
