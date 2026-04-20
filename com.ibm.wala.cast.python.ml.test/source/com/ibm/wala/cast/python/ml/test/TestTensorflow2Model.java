@@ -363,6 +363,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
           FLOAT_32,
           asList(new NumericDim(16), new NumericDim(28), new NumericDim(28), new NumericDim(1)));
 
+  private static final TensorType TENSOR_256_64_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(256), new NumericDim(64)));
+
   private static final TensorType TENSOR_96_28_28_1_FLOAT32 =
       new TensorType(
           FLOAT_32,
@@ -1809,6 +1812,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("autoencoder.py", "encoder", 1, 18, Map.of(2, Set.of(TENSOR_256_784_FLOAT32)));
   }
 
+  /**
+   * {@code mean_square(reconstructed, original)} is called only from {@code run_optimization}
+   * (itself a FUT &mdash; {@link #testAutoencoder3()}). Its arguments are {@code
+   * reconstructed_image = decoder(encoder(x))} and {@code x}, both of which have runtime shape
+   * {@code (256, 784)} dtype {@code float32}. Direct call-site asserts aren't possible (they would
+   * perturb {@code run_optimization}'s count), so the runtime types are verified indirectly through
+   * the {@code batch_x} asserts at the training-loop call of {@code run_optimization}.
+   *
+   * <p>Expected tensor variable count: 5 (2 parameters + 3 intermediate ops {@code original -
+   * reconstructed}, {@code tf.pow}, {@code tf.reduce_mean}); raised from the baseline of 2.
+   */
   @Test
   public void testAutoencoder2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -1816,20 +1830,37 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "autoencoder.py",
         "mean_square",
         2,
-        2,
-        Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+        5,
+        Map.of(2, Set.of(TENSOR_256_784_FLOAT32), 3, Set.of(TENSOR_256_784_FLOAT32)));
   }
 
+  /**
+   * {@code run_optimization(x)} is called from the training loop with {@code batch_x} of shape
+   * {@code (256, 784)} dtype {@code float32} (verified by Python assert statements in {@code
+   * autoencoder.py}).
+   *
+   * <p>Expected tensor variable count: 6 (1 parameter + 5 intermediate ops {@code encoder(x)}
+   * result, {@code decoder(...) = reconstructed_image}, {@code mean_square(...) = loss}, {@code
+   * trainable_variables}, {@code gradients}); raised from the baseline of 3.
+   */
   @Test
   public void testAutoencoder3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("autoencoder.py", "run_optimization", 1, 3, Map.of(2, Set.of(MNIST_INPUT)));
+    test("autoencoder.py", "run_optimization", 1, 6, Map.of(2, Set.of(TENSOR_256_784_FLOAT32)));
   }
 
+  /**
+   * {@code decoder(x)} is called from the same two sites as {@code encoder} ({@link
+   * #testAutoencoder()}), but with {@code x} being the output of {@code encoder}. Since {@code
+   * encoder}'s layer 2 has dim {@code num_hidden_2 = 64}, {@code decoder} receives {@code (256, 64)
+   * float32} (verified by a Python assert in the test loop).
+   *
+   * <p>Expected tensor variable count: 18 (baseline; parallel to {@link #testAutoencoder()}).
+   */
   @Test
   public void testAutoencoder4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("autoencoder.py", "decoder", 1, 18, Map.of(2, Set.of(MNIST_INPUT)));
+    test("autoencoder.py", "decoder", 1, 18, Map.of(2, Set.of(TENSOR_256_64_FLOAT32)));
   }
 
   @Test
