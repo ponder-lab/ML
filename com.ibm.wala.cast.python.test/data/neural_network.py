@@ -108,6 +108,10 @@ neural_net = NeuralNet()
 # Cross-Entropy Loss.
 # Note that this will apply 'softmax' to the logits.
 def cross_entropy_loss(x, y):
+    assert x.shape == (256, 10)
+    assert x.dtype == tf.float32
+    assert y.shape == (256,)
+    assert y.dtype == tf.uint8
     # Convert labels to int 64 for tf cross-entropy function.
     y = tf.cast(y, tf.int64)
     # Apply softmax to logits and compute cross-entropy.

@@ -97,6 +97,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_256_784_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(256), new NumericDim(784)));
 
+  private static final TensorType TENSOR_256_10_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(256), new NumericDim(10)));
+
+  private static final TensorType TENSOR_256_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(256)));
+
   private static final TensorType TENSOR_32_28_28_UINT8 =
       new TensorType(UINT_8, asList(new NumericDim(32), new NumericDim(28), new NumericDim(28)));
 
@@ -1634,17 +1640,32 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("neural_network.py", "NeuralNet.call", 1, 3, Map.of(3, Set.of(TENSOR_256_784_FLOAT32)));
   }
 
+  /**
+   * {@code cross_entropy_loss(x, y)} receives logits {@code x} (value 2) and labels {@code y}
+   * (value 3). At runtime, {@code x} has shape {@code (256, 10)} dtype {@code float32} and {@code
+   * y} has shape {@code (256,)} dtype {@code uint8} (verified by Python assert statements in {@code
+   * neural_network.py}).
+   *
+   * <p>TODO: Value 2 ({@code x}) is not yet tracked as a tensor parameter. It flows from {@code
+   * pred = neural_net(batch_x, is_training=True)}, which dispatches through the summarized {@code
+   * Model.__call__} into user-defined {@code NeuralNet.call}. wala/ML#127 (now closed) was a
+   * necessary fix for this dispatch to work at all, but is insufficient on its own &mdash; value 2
+   * remains untracked until the same reshape/tuple-routing gap blocking {@link
+   * #testNeuralNetwork()} is resolved. See wala/ML#378.
+   *
+   * <p>TODO: The actual {@code y} type today is {@code {(256,) uint8, (?) uint8}} due to the same
+   * seeding/generator tension as {@code testNeuralNetwork} (wala/ML#385). Tighten to {@code
+   * TENSOR_256_UINT8} once the extra {@code (?)} is gone.
+   */
   @Test
   public void testNeuralNetwork2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "neural_network.py",
         "cross_entropy_loss",
-        1,
+        2,
         8,
-        Map.of(3, Set.of(MNIST_INPUT))); // NOTE: Change to 2 tensor parameters once
-    // https://github.com/wala/ML/issues/127 is
-    // fixed. Values 2 and 3 will correspond to the tensor parameters.
+        Map.of(2, Set.of(TENSOR_256_10_FLOAT32), 3, Set.of(TENSOR_256_UINT8)));
   }
 
   @Test
