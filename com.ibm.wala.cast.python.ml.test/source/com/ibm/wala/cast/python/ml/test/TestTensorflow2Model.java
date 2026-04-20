@@ -1709,7 +1709,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * <p>With the count check passing, the test now fails on value 3's type: actual {@code {(32,)
    * uint8, (16,) uint8}} &mdash; the {@code y_*} labels' types (shapes only showing the batch dim)
    * leak into the {@code x} parameter's slot. Same tuple-routing bug as {@link
-   * #testNeuralNetwork()} (wala/ML#385) applied to the {@code (x_train, y_train)} / {@code (x_test,
+   * #testNeuralNetwork()} (wala/ML#396) applied to the {@code (x_train, y_train)} / {@code (x_test,
    * y_test)} tuples consumed by {@code from_tensor_slices}.
    */
   @Test
@@ -1733,9 +1733,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * (?) uint8}} instead of {@code x_train}'s {@code (256, 784) float32}. Two contributing root
    * causes: (1) a missing generator for ndarray {@code .reshape()} breaks {@code x_train}'s PA
    * chain through {@code np.array(x_train, np.float32).reshape([-1, 784])}; (2) per-index {@code
-   * TupleElementProvider} routing doesn't survive the {@code .shuffle().batch()} chain because
-   * {@code DatasetBatchGenerator} and the shuffle-generated {@code DatasetGenerator} don't
-   * implement {@code DelegatingTensorGenerator} (wala/ML#385).
+   * TupleElementProvider} routing doesn't survive the {@code for images, labels in dataset}
+   * destructuring on a chained dataset, swapping/confusing the per-index types (wala/ML#396).
    *
    * <p>Rule-based tensor variable count is 5 (1 parameter {@code x} + 4 intermediate ops {@code
    * fc1}, {@code fc2}, {@code out}, {@code softmax}). The analysis currently registers 3; the
@@ -1764,7 +1763,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    *
    * <p>Once value 2 is tracked, the test will also fail on value 3: the actual {@code y} type
    * includes a spurious {@code (?) uint8} in the union ({@code {(256,) uint8, (?) uint8}}) &mdash;
-   * same seeding/generator tension as {@link #testNeuralNetwork()} (wala/ML#385).
+   * same tuple-routing gap as {@link #testNeuralNetwork()} (wala/ML#396).
    *
    * <p>The rule-based tensor variable count is 5 (2 parameters {@code x}, {@code y} + 3
    * intermediate ops {@code cast-to-int64}, {@code sparse_softmax_cross_entropy_with_logits},
@@ -1791,8 +1790,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    *
    * <p>The test currently fails because value 2 (slot 0 of the tuple, same as {@link
    * #testNeuralNetwork()}) receives {@code y_train}'s types instead of {@code x_train}'s, and value
-   * 3 additionally carries a spurious {@code (?) uint8} in its union. Same tuple-routing and
-   * reshape root causes as {@link #testNeuralNetwork()} (wala/ML#385).
+   * 3 additionally carries a spurious {@code (?) uint8} in its union. Same tuple-routing root cause
+   * as {@link #testNeuralNetwork()} (wala/ML#396).
    *
    * <p>Rule-based tensor variable count is 6 (2 parameters {@code x}, {@code y} + 4 intermediate
    * ops {@code pred}, {@code loss}, {@code trainable_variables}, {@code gradients}). The analysis
@@ -1835,10 +1834,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * exposes type bugs; when #386 and #387 are fixed, the count should rise and trigger the test
    * with a clear signal.
    *
-   * <p>Value 2 ({@code y_pred}) may also be subject to the same reshape/tuple-routing gap blocking
-   * {@link #testNeuralNetwork()} (wala/ML#385); wala/ML#127 (closed) was a
-   * necessary-but-insufficient prerequisite for value 2 tracking through the {@code Model.__call__}
-   * dispatch chain.
+   * <p>Value 2 ({@code y_pred}) may also be subject to the same tuple-routing gap blocking {@link
+   * #testNeuralNetwork()} (wala/ML#396); wala/ML#127 (closed) was a necessary-but-insufficient
+   * prerequisite for value 2 tracking through the {@code Model.__call__} dispatch chain.
    */
   @Test
   public void testNeuralNetwork4()
