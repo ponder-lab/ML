@@ -150,19 +150,31 @@ def run_optimization(x, y):
 # %%
 # Run training for the given number of steps.
 for step, (batch_x, batch_y) in enumerate(train_data.take(training_steps), 1):
+    # asserts before FUT neural_net (testNeuralNetwork) --- via run_optimization ---
+    # and before FUT run_optimization (testNeuralNetwork3).
     assert batch_x.shape == (256, 784)
     assert batch_x.dtype == tf.float32
     assert batch_y.shape == (256,)
     assert batch_y.dtype == tf.uint8
-
     # Run the optimization to update W and b values.
     run_optimization(batch_x, batch_y)
 
     if step % display_step == 0:
+        # asserts before FUT neural_net (testNeuralNetwork).
+        assert batch_x.shape == (256, 784)
+        assert batch_x.dtype == tf.float32
         pred = neural_net(batch_x, is_training=True)
+        # asserts before FUT cross_entropy_loss (testNeuralNetwork2).
         assert pred.shape == (256, 10)
         assert pred.dtype == tf.float32
+        assert batch_y.shape == (256,)
+        assert batch_y.dtype == tf.uint8
         loss = cross_entropy_loss(pred, batch_y)
+        # asserts before FUT accuracy (testNeuralNetwork4).
+        assert pred.shape == (256, 10)
+        assert pred.dtype == tf.float32
+        assert batch_y.shape == (256,)
+        assert batch_y.dtype == tf.uint8
         acc = accuracy(pred, batch_y)
         print_time = timeit.default_timer()
         print("step: %i, loss: %f, accuracy: %f" % (step, loss, acc))
@@ -170,13 +182,18 @@ for step, (batch_x, batch_y) in enumerate(train_data.take(training_steps), 1):
 
 # %%
 # Test model on validation set.
+# asserts before FUT neural_net (testNeuralNetwork).
+assert x_test.shape == (10000, 784)
+assert x_test.dtype == tf.float32
 pred = neural_net(x_test, is_training=False)
+# asserts before FUT accuracy (testNeuralNetwork4).
 assert pred.shape == (10000, 10)
 assert pred.dtype == tf.float32
 assert y_test.shape == (10000,)
 assert y_test.dtype == tf.uint8
+acc = accuracy(pred, y_test)
 print_time = timeit.default_timer()
-print("Test Accuracy: %f" % accuracy(pred, y_test))
+print("Test Accuracy: %f" % acc)
 skipped_time += timeit.default_timer() - print_time
 
 # %%
