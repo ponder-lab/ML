@@ -353,6 +353,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
           FLOAT_32,
           asList(new NumericDim(256), new NumericDim(28), new NumericDim(28), new NumericDim(1)));
 
+  private static final TensorType TENSOR_32_28_28_1_FLOAT32 =
+      new TensorType(
+          FLOAT_32,
+          asList(new NumericDim(32), new NumericDim(28), new NumericDim(28), new NumericDim(1)));
+
+  private static final TensorType TENSOR_16_28_28_1_FLOAT32 =
+      new TensorType(
+          FLOAT_32,
+          asList(new NumericDim(16), new NumericDim(28), new NumericDim(28), new NumericDim(1)));
+
   private static final TensorType TENSOR_96_28_28_1_FLOAT32 =
       new TensorType(
           FLOAT_32,
@@ -1623,10 +1633,32 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_256_28_28_1_FLOAT32, TENSOR_96_28_28_1_FLOAT32)));
   }
 
+  /**
+   * {@code MyModel.call(self, x)} receives {@code x} from {@code model(images)} calls inside {@code
+   * train_step} and {@code test_step}. {@code images} comes from iterating {@code train_ds}, {@code
+   * valid_ds}, or {@code test_ds} &mdash; all created from mnist data via {@code
+   * .astype(np.float32) / 255.0} and {@code [..., tf.newaxis]}, then batched by 32. At runtime
+   * {@code x} has shape {@code (32, 28, 28, 1)} dtype {@code float32} (verified by Python assert
+   * statements in {@code tensorflow_eager_execution.py}).
+   *
+   * <p>Note: {@code test_ds} yields mostly {@code (32, 28, 28, 1)} batches plus one trailing
+   * partial batch of shape {@code (16, 28, 28, 1)} (since {@code 10000 % 32 == 16}), so the
+   * aspirational union for value 3 includes both shapes.
+   *
+   * <p>The test currently fails on local tensor variable count (expected 5 &mdash; param plus four
+   * layer-call intermediates {@code conv1}, {@code flatten}, {@code d1}, {@code d2} &mdash; actual
+   * 4). Like {@link #testNeuralNetwork4()}, one intermediate is missing; root cause likely related
+   * to wala/ML#386 / wala/ML#387 but not yet confirmed for this test.
+   */
   @Test
   public void testEagerExecution()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tensorflow_eager_execution.py", "MyModel.call", 1, 2, Map.of(3, Set.of(MNIST_INPUT)));
+    test(
+        "tensorflow_eager_execution.py",
+        "MyModel.call",
+        1,
+        5,
+        Map.of(3, Set.of(TENSOR_32_28_28_1_FLOAT32, TENSOR_16_28_28_1_FLOAT32)));
   }
 
   /**
@@ -1711,13 +1743,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Python assert statements in {@code neural_network.py}). The static analysis should union these
    * types for each parameter.
    *
-   * <p>The test currently fails on local tensor variable count (expected 5, actual 4). Two related
-   * bugs contribute: (1) wala/ML#386 &mdash; {@code tf.argmax} and {@code tf.equal} resolve to
-   * empty points-to sets because they are defined under {@code <package name="tensorflow/math">} in
-   * {@code tensorflow.xml} but called as {@code tf.argmax} / {@code tf.equal} in the Python code;
-   * (2) wala/ML#387 &mdash; {@code TensorGeneratorFactory} throws {@code IAE: Unknown call:
-   * pass_through} for empty-PTS sources, so neither {@code tf.cast} call contributes a tensor
-   * variable (cascading from #386 in this test).
+   * <p>Expected tensor variable count: 7 (2 parameters {@code y_pred}, {@code y_true} + 5
+   * intermediate ops {@code argmax}, {@code cast-to-int64}, {@code equal}, {@code cast-to-float32},
+   * {@code reduce_mean}). Actual: 4. Contributing bugs: (1) wala/ML#386 &mdash; {@code tf.argmax}
+   * and {@code tf.equal} resolve to empty points-to sets because they are defined under {@code
+   * <package name="tensorflow/math">} in {@code tensorflow.xml} but called as {@code tf.argmax} /
+   * {@code tf.equal} in the Python code; (2) wala/ML#387 &mdash; {@code TensorGeneratorFactory}
+   * throws {@code IAE: Unknown call: pass_through} for empty-PTS sources, so neither {@code
+   * tf.cast} call contributes a tensor variable (cascading from #386 in this test).
    *
    * <p>Value 2 ({@code y_pred}) may also be subject to the same reshape/tuple-routing gap blocking
    * {@link #testNeuralNetwork()} (wala/ML#385); wala/ML#127 (closed) was a
@@ -1731,7 +1764,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "neural_network.py",
         "accuracy",
         2,
-        5,
+        7,
         Map.of(
             2,
             Set.of(TENSOR_256_10_FLOAT32, TENSOR_10000_10_FLOAT32),
