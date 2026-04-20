@@ -1791,10 +1791,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             Set.of(TENSOR_256_UINT8, TENSOR_10000_UINT8)));
   }
 
+  /**
+   * {@code encoder(x)} receives {@code x} from call sites {@code decoder(encoder(x))} inside {@code
+   * run_optimization} (training loop) and {@code decoder(encoder(batch_x))} at the module-level
+   * test loop. Both call sites pass batches of shape {@code (256, 784)} dtype {@code float32}
+   * (verified by Python assert statements in {@code autoencoder.py}).
+   *
+   * <p>Expected tensor variable count: 18 (baseline). The rule-based count is lower (1 param plus
+   * ~10 intermediate ops including dict lookups for {@code weights[...]} and {@code biases[...]}),
+   * but the analysis registers 18 due to per-context duplication across the two call sites. Per the
+   * "never decrease" principle, we keep 18 to preserve regression detection (see wala/ML#388 for
+   * the general count-accounting discrepancy).
+   */
   @Test
   public void testAutoencoder()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("autoencoder.py", "encoder", 1, 18, Map.of(2, Set.of(MNIST_INPUT)));
+    test("autoencoder.py", "encoder", 1, 18, Map.of(2, Set.of(TENSOR_256_784_FLOAT32)));
   }
 
   @Test
