@@ -1,14 +1,17 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.types.PythonTypes.ELLIPSIS;
+import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
+import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
@@ -19,6 +22,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
@@ -200,12 +204,9 @@ public class NdarraySubscriptOperation extends TensorGenerator {
       Integer fieldIndex = getFieldIndex(ck);
       if (fieldIndex == null || fieldIndex < 0 || fieldIndex >= fieldCount) return null;
 
-      com.ibm.wala.types.FieldReference subscriptField =
-          com.ibm.wala.types.FieldReference.findOrCreate(
-              com.ibm.wala.cast.python.types.PythonTypes.Root,
-              com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom(fieldIndex.toString()),
-              com.ibm.wala.cast.python.types.PythonTypes.Root);
-      com.ibm.wala.classLoader.IField f = builder.getClassHierarchy().resolveField(subscriptField);
+      FieldReference subscriptField =
+          FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+      IField f = builder.getClassHierarchy().resolveField(subscriptField);
       if (f == null) return null;
 
       PointerKey fieldPk = builder.getPointerKeyForInstanceField(tupleAsin, f);
