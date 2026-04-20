@@ -139,6 +139,14 @@
         <new def="reduce_mean" class="Ltensorflow/math/reduce_mean" />
         <putfield class="LRoot" field="reduce_mean" fieldType="LRoot" ref="x" value="reduce_mean" />
         <putfield class="LRoot" field="reduce_mean" fieldType="LRoot" ref="math" value="reduce_mean" />
+        <!-- `tf.argmax` is an alias for `tf.math.argmax` in real TensorFlow. Expose the same `tensorflow/math/argmax` class under both the top-level `tensorflow` namespace and `tensorflow.math` so attribute lookups on either path resolve. See wala/ML#386. -->
+        <new def="argmax" class="Ltensorflow/math/argmax" />
+        <putfield class="LRoot" field="argmax" fieldType="LRoot" ref="x" value="argmax" />
+        <putfield class="LRoot" field="argmax" fieldType="LRoot" ref="math" value="argmax" />
+        <!-- Same aliasing for `tf.equal` / `tf.math.equal`. -->
+        <new def="equal" class="Ltensorflow/math/equal" />
+        <putfield class="LRoot" field="equal" fieldType="LRoot" ref="x" value="equal" />
+        <putfield class="LRoot" field="equal" fieldType="LRoot" ref="math" value="equal" />
         <new def="placeholder" class="Ltensorflow/functions/placeholder" />
         <putfield class="LRoot" field="placeholder" fieldType="LRoot" ref="x" value="placeholder" />
         <new def="examples" class="Lobject" />
