@@ -372,6 +372,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
           FLOAT_32,
           asList(new NumericDim(96), new NumericDim(28), new NumericDim(28), new NumericDim(1)));
 
+  private static final TensorType TENSOR_4096_32_32_3_FLOAT32 =
+      new TensorType(
+          FLOAT_32,
+          asList(new NumericDim(4096), new NumericDim(32), new NumericDim(32), new NumericDim(3)));
+
+  private static final TensorType TENSOR_4096_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(4096)));
+
   @Test
   public void testValueIndex()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -3613,23 +3621,32 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * {@code run_optimization(x, y)} receives batched cifar10 data (not mnist despite the file's
-   * docstring); {@code x} has shape {@code (4096, 32, 32, 3)} dtype {@code float32} and {@code y}
-   * has shape {@code (4096,)} dtype {@code uint8} at runtime (not currently verified by Python
-   * asserts &mdash; types kept as master-baseline {@code MNIST_INPUT} placeholder since switching
-   * to aspirational types would require running the file to verify).
+   * {@code run_optimization(x, y)} receives batched CIFAR-10 data (not MNIST despite the file's
+   * docstring). At runtime {@code x} has shape {@code (4096, 32, 32, 3)} dtype {@code float32} and
+   * {@code y} has shape {@code (4096,)} dtype {@code uint8} (verified by Python assert statements
+   * in {@code multigpu_training.py}).
    *
-   * <p>Master baseline count is 4; branch registers 5 &mdash; an extra spurious tensor variable at
-   * {@code vn=44} with type {@code {[] of int32}} that corresponds to {@code gpu_batch_size =
-   * int(batch_size / num_gpus)} at line 222, a pure Python {@code int} used as a slice index
-   * (wala/ML#392). The branch's analysis misclassifies this as a scalar int32 tensor &mdash; a
-   * false positive, not an advance. Per the "clients rely on master's tensor identification"
-   * principle, a false positive is as much a regression as a missing tensor.
+   * <p>Master's types for values 2 and 3 are {@code MNIST_INPUT} &mdash; the MNIST shape {@code (n,
+   * 28, 28)} &mdash; which is <em>confidently wrong</em> for CIFAR-10 data (wala/ML#393: {@code
+   * keras.datasets.X.load_data()} is seeded uniformly as MNIST-shaped regardless of which dataset
+   * module {@code X} is). On branch, values 2 and 3 register as {@code {? unknown}}, which is less
+   * specific but more correct &mdash; admitting ignorance beats lying confidently. For tensor shape
+   * inference, the correctness ordering is <em>correct specific shape &gt; unknown (⊤) &gt; wrong
+   * specific shape</em>. So branch's shift from master's {@code MNIST_INPUT} to {@code {? unknown}}
+   * is an accuracy improvement on this test, not a regression.
    *
-   * <p>TODO: Expected count temporarily set to 5 (branch actual) so the count check passes and the
-   * downstream parameter-type check can surface any additional regressions that were previously
-   * masked by the count failure. Once wala/ML#392 is resolved and the spurious int32 classification
-   * is fixed, restore count to master baseline 4.
+   * <p>Branch also registers an extra spurious tensor variable at {@code vn=44} with type {@code
+   * {[] of int32}} corresponding to {@code gpu_batch_size = int(batch_size / num_gpus)} at line
+   * 222, a pure Python {@code int} used as a slice index (wala/ML#392). That false positive is a
+   * separate, genuine regression.
+   *
+   * <p>Expected tensor variable count: 5 (branch actual). TODO: restore to master baseline 4 once
+   * wala/ML#392 is resolved. Expected types are the runtime-verified CIFAR-10 shapes
+   * (aspirational); both master and branch fail this check, but for different reasons &mdash;
+   * master reports MNIST_INPUT (wrong confident answer; wala/ML#393), branch reports {@code {?
+   * unknown}} (honest ⊤, awaiting CIFAR-10 modeling). Unblocks when both wala/ML#392 and
+   * wala/ML#393 are resolved; see also wala/ML#361 (MNIST modeling) and the broader "hardcode
+   * bundled Keras datasets as intrinsics" direction that branch 267 targets.
    */
   @Test
   public void testMultiGPUTraining()
@@ -3639,7 +3656,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "run_optimization",
         2,
         5,
-        Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_4096_32_32_3_FLOAT32), 3, Set.of(TENSOR_4096_UINT8)));
   }
 
   @Test
