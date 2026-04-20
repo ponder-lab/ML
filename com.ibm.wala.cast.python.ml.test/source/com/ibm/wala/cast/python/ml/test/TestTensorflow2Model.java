@@ -1675,13 +1675,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * {@code DatasetBatchGenerator} and the shuffle-generated {@code DatasetGenerator} don't
    * implement {@code DelegatingTensorGenerator} (wala/ML#385).
    *
-   * <p>TODO: Revisit the tensor variable count once wala/ML#371 decides whether the test helper
-   * should count {@code (CGNode, vn)} pairs (current: 3) or deduplicate by {@code vn} (would be 2).
+   * <p>Expected tensor variable count: 5 (1 parameter {@code x} + 4 intermediate ops {@code fc1},
+   * {@code fc2}, {@code out}, {@code softmax}). The {@code softmax} op is in the {@code
+   * is_training=False} branch; at runtime, call sites exercise both branches and the return is
+   * phi-merged. Not counting the phi-merged return as a separate variable.
+   *
+   * <p>TODO: Revisit the count once wala/ML#371 decides whether the test helper should count {@code
+   * (CGNode, vn)} pairs or deduplicate by {@code vn}, which could affect whether the phi-merged
+   * return contributes an additional variable.
    */
   @Test
   public void testNeuralNetwork()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("neural_network.py", "NeuralNet.call", 1, 3, Map.of(3, Set.of(TENSOR_256_784_FLOAT32)));
+    test("neural_network.py", "NeuralNet.call", 1, 5, Map.of(3, Set.of(TENSOR_256_784_FLOAT32)));
   }
 
   /**
@@ -1700,6 +1706,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * <p>Once value 2 is tracked, the test will also fail on value 3: the actual {@code y} type
    * includes a spurious {@code (?) uint8} in the union ({@code {(256,) uint8, (?) uint8}}) &mdash;
    * same seeding/generator tension as {@link #testNeuralNetwork()} (wala/ML#385).
+   *
+   * <p>Expected tensor variable count: 5 (2 parameters {@code x}, {@code y} + 3 intermediate ops
+   * {@code cast-to-int64}, {@code sparse_softmax_cross_entropy_with_logits}, {@code reduce_mean}).
    */
   @Test
   public void testNeuralNetwork2()
@@ -1708,7 +1717,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "neural_network.py",
         "cross_entropy_loss",
         2,
-        8,
+        5,
         Map.of(2, Set.of(TENSOR_256_10_FLOAT32), 3, Set.of(TENSOR_256_UINT8)));
   }
 
@@ -1722,6 +1731,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * #testNeuralNetwork()}) receives {@code y_train}'s types instead of {@code x_train}'s, and value
    * 3 additionally carries a spurious {@code (?) uint8} in its union. Same tuple-routing and
    * reshape root causes as {@link #testNeuralNetwork()} (wala/ML#385).
+   *
+   * <p>Expected tensor variable count: 6 (2 parameters {@code x}, {@code y} + 4 intermediate ops
+   * {@code pred}, {@code loss}, {@code trainable_variables}, {@code gradients}).
+   *
+   * <p>TODO: {@code trainable_variables} and {@code gradients} are lists of tensors rather than
+   * single tensors; the count may need to be adjusted downward if list-of-tensors doesn't register
+   * as a {@code TensorVariable}.
    */
   @Test
   public void testNeuralNetwork3()
@@ -1730,7 +1746,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "neural_network.py",
         "run_optimization",
         2,
-        3,
+        6,
         Map.of(2, Set.of(TENSOR_256_784_FLOAT32), 3, Set.of(TENSOR_256_UINT8)));
   }
 
