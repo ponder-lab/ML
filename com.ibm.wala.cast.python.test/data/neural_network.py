@@ -122,6 +122,12 @@ def cross_entropy_loss(x, y):
 
 # Accuracy metric.
 def accuracy(y_pred, y_true):
+    # Called twice: from the training loop with (256, 10) float32 / (256,) uint8, and from the
+    # test-set evaluation with (10000, 10) float32 / (10000,) uint8.
+    assert y_pred.shape in ((256, 10), (10000, 10))
+    assert y_pred.dtype == tf.float32
+    assert y_true.shape in ((256,), (10000,))
+    assert y_true.dtype == tf.uint8
     # Predicted class is the index of highest score in prediction vector (i.e. argmax).
     correct_prediction = tf.equal(tf.argmax(y_pred, 1), tf.cast(y_true, tf.int64))
     return tf.reduce_mean(tf.cast(correct_prediction, tf.float32), axis=-1)

@@ -103,6 +103,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_256_UINT8 =
       new TensorType(UINT_8, asList(new NumericDim(256)));
 
+  private static final TensorType TENSOR_10000_10_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(10000), new NumericDim(10)));
+
+  private static final TensorType TENSOR_10000_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(10000)));
+
   private static final TensorType TENSOR_32_28_28_UINT8 =
       new TensorType(UINT_8, asList(new NumericDim(32), new NumericDim(28), new NumericDim(28)));
 
@@ -1692,20 +1698,39 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_256_784_FLOAT32), 3, Set.of(TENSOR_256_UINT8)));
   }
 
+  /**
+   * {@code accuracy(y_pred, y_true)} is called from two sites: the training loop with {@code
+   * accuracy(pred, batch_y)} where {@code pred} has shape {@code (256, 10)} dtype {@code float32}
+   * and {@code batch_y} has shape {@code (256,)} dtype {@code uint8}; and the test-set evaluation
+   * with {@code accuracy(pred, y_test)} where {@code pred} has shape {@code (10000, 10)} dtype
+   * {@code float32} and {@code y_test} has shape {@code (10000,)} dtype {@code uint8} (verified by
+   * Python assert statements in {@code neural_network.py}). The static analysis should union these
+   * types for each parameter.
+   *
+   * <p>TODO: Value 2 ({@code y_pred}) is not yet tracked as a tensor parameter. Like {@code
+   * testNeuralNetwork2}, it flows from {@code pred = neural_net(...)}, which dispatches through the
+   * summarized {@code Model.__call__} into user-defined {@code NeuralNet.call}. wala/ML#127 (now
+   * closed) was a necessary but insufficient fix; the same reshape/tuple-routing gap blocking
+   * {@link #testNeuralNetwork()} also blocks value 2 here. Bump the tensor parameter count to 2 and
+   * add {@code TENSOR_256_10_FLOAT32} and {@code TENSOR_10000_10_FLOAT32} for value 2 once that
+   * lands. See wala/ML#378.
+   *
+   * <p>TODO: The expected tensor local count is 5 (five intermediate tensors: {@code argmax},
+   * {@code cast-to-int64}, {@code equal}, {@code cast-to-float32}, {@code reduce_mean}).
+   */
   @Test
   public void testNeuralNetwork4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "neural_network.py",
         "accuracy",
-        1,
-        3,
+        2,
+        5,
         Map.of(
+            2,
+            Set.of(TENSOR_256_10_FLOAT32, TENSOR_10000_10_FLOAT32),
             3,
-            Set.of(
-                MNIST_INPUT))); // NOTE: Change to 2 tensor parameters and 5 tensor variables once
-    // https://github.com/wala/ML/issues/127 is fixed. Values 2 and 3 will correspond to the
-    // tensor parameters.
+            Set.of(TENSOR_256_UINT8, TENSOR_10000_UINT8)));
   }
 
   @Test
