@@ -143,20 +143,35 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
     OrdinalSet<InstanceKey> tensorsPTS =
         this.getArgumentPointsToSet(
             builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName());
+
+    Set<List<Dimension<?>>> inputShapes = null;
     if (tensorsPTS != null && !tensorsPTS.isEmpty()) {
-      Set<List<Dimension<?>>> inputShapes = getShapesOfTensorsArgument(builder, tensorsPTS);
-      Set<Long> ret = HashSetFactory.make();
-      for (List<Dimension<?>> shape : inputShapes) {
-        if (!shape.isEmpty()) {
-          Dimension<?> firstDim = shape.get(0);
-          if (firstDim instanceof NumericDim) {
-            ret.add(Long.valueOf(((NumericDim) firstDim).value()));
-          }
+      inputShapes = getShapesOfTensorsArgument(builder, tensorsPTS);
+    }
+
+    // Fallback mirroring `getDefaultShapes`: when the `tensors` argument has empty PTS (e.g.,
+    // it's the SSA result of a binop chain feeding `from_tensor_slices`), walk callers to
+    // resolve its shape. Without this, partial-batch size computation in
+    // `DatasetBatchGenerator` degrades to a symbolic `?` even though the dataset's size is
+    // statically knowable. See wala/ML#357.
+    if (inputShapes == null || inputShapes.isEmpty()) {
+      inputShapes =
+          this.getArgumentShapesViaCallers(
+              builder, Parameters.TENSORS.getIndex(), Parameters.TENSORS.getName());
+    }
+
+    if (inputShapes == null) return Collections.emptySet();
+
+    Set<Long> ret = HashSetFactory.make();
+    for (List<Dimension<?>> shape : inputShapes) {
+      if (!shape.isEmpty()) {
+        Dimension<?> firstDim = shape.get(0);
+        if (firstDim instanceof NumericDim) {
+          ret.add(Long.valueOf(((NumericDim) firstDim).value()));
         }
       }
-      return ret;
     }
-    return Collections.emptySet();
+    return ret;
   }
 
   @Override

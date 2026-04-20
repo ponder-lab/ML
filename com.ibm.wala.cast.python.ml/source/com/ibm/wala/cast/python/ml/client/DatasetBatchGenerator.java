@@ -18,6 +18,7 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -127,9 +128,12 @@ public class DatasetBatchGenerator extends DatasetGenerator {
       } else {
         for (Long batchSize : batchSizes) {
           if (batchSize != null) {
-            boolean canHaveFullBatch = true;
-            boolean canHavePartialBatch = false;
-            long partialBatchSize = 0;
+            boolean canHaveFullBatch;
+            // Accumulate every possible partial-batch size across the dataset sizes instead of
+            // overwriting (previously only the last non-divisor remainder was retained). See
+            // wala/ML#357.
+            Set<Long> partialBatchSizes = new HashSet<>();
+            boolean partialBatchSizeUnknown = false;
 
             if (!datasetSizes.isEmpty()) {
               canHaveFullBatch = false;
@@ -139,13 +143,14 @@ public class DatasetBatchGenerator extends DatasetGenerator {
                 }
                 long rem = dsSize % batchSize;
                 if (rem != 0) {
-                  canHavePartialBatch = true;
-                  partialBatchSize = rem;
+                  partialBatchSizes.add(rem);
                 }
               }
             } else {
-              canHavePartialBatch = true;
-              partialBatchSize = -1;
+              // We don't know the dataset size; assume both a full batch and a symbolic partial
+              // batch are possible.
+              canHaveFullBatch = true;
+              partialBatchSizeUnknown = true;
             }
 
             if (canHaveFullBatch) {
@@ -155,13 +160,16 @@ public class DatasetBatchGenerator extends DatasetGenerator {
               ret.add(newShape);
             }
 
-            if (canHavePartialBatch) {
+            for (Long partialBatchSize : partialBatchSizes) {
               List<Dimension<?>> newShape = new ArrayList<>();
-              if (partialBatchSize > 0) {
-                newShape.add(new NumericDim((int) partialBatchSize));
-              } else {
-                newShape.add(new SymbolicDim("?"));
-              }
+              newShape.add(new NumericDim(partialBatchSize.intValue()));
+              newShape.addAll(shape);
+              ret.add(newShape);
+            }
+
+            if (partialBatchSizeUnknown) {
+              List<Dimension<?>> newShape = new ArrayList<>();
+              newShape.add(new SymbolicDim("?"));
               newShape.addAll(shape);
               ret.add(newShape);
             }
