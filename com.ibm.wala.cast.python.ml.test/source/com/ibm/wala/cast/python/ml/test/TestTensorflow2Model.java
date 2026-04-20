@@ -3612,6 +3612,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_sparse_add6.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
+  /**
+   * {@code run_optimization(x, y)} receives batched cifar10 data (not mnist despite the file's
+   * docstring); {@code x} has shape {@code (4096, 32, 32, 3)} dtype {@code float32} and {@code y}
+   * has shape {@code (4096,)} dtype {@code uint8} at runtime (not currently verified by Python
+   * asserts &mdash; types kept as master-baseline {@code MNIST_INPUT} placeholder since switching
+   * to aspirational types would require running the file to verify).
+   *
+   * <p>Expected tensor variable count: 4 (master baseline). Branch registers 5 &mdash; an extra
+   * spurious tensor variable at {@code vn=44} with type {@code {[] of int32}} that corresponds to
+   * {@code gpu_batch_size = int(batch_size / num_gpus)} at line 222, a pure Python {@code int} used
+   * as a slice index (wala/ML#392). The branch's analysis misclassifies this as a scalar int32
+   * tensor &mdash; a false positive, not an advance in tensor identification. Keeping expected at
+   * master's 4 so the failing count check (expected 4, was 5) serves as the regression signal. Per
+   * the "clients rely on master's tensor identification" principle, a false positive is as much a
+   * regression as a missing tensor.
+   */
   @Test
   public void testMultiGPUTraining()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
