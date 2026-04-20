@@ -1624,6 +1624,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_callbacks2.py", "replica_fn", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
+  /**
+   * {@code train_step(images, generator, discriminator, ...)} receives {@code image_batch} from the
+   * training loop inside {@code train}. {@code image_batch} comes from iterating a dataset built
+   * from mnist data via {@code train_images[..., None].astype(np.float32)} and {@code
+   * from_tensor_slices(...).shuffle(...).batch(256)}. At runtime {@code image_batch} has shape in
+   * {@code {(256, 28, 28, 1), (96, 28, 28, 1)}} dtype {@code float32} (60000 training images / 256
+   * = 234 full batches + 1 partial batch of 96; verified by Python assert statements in {@code
+   * tensorflow_gan_tutorial.py}).
+   *
+   * <p>Expected tensor variable count: 5 (matches master baseline and branch actual; no count
+   * regression or advance). The test fails only on types: value 2 ({@code images}) registers as
+   * {@code {? float32}} because the mnist data pipeline loses shape information through {@code
+   * mnist.load_data()} and the subsequent ndarray operations (wala/ML#361). Types are aspirational;
+   * hardcoding {@code mnist.load_data()} as an intrinsic (per the plan discussed on branch 267)
+   * would unblock this test without needing the general annotation framework (wala/ML#370).
+   */
   @Test
   public void testGanTutorial()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -1635,6 +1651,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_256_28_28_1_FLOAT32, TENSOR_96_28_28_1_FLOAT32)));
   }
 
+  /**
+   * Same structure as {@link #testGanTutorial()} but with {@code @tf.function} applied to {@code
+   * train_step}. Runtime types for {@code image_batch} are identical and are verified via the
+   * Python assert statements in {@code tensorflow_gan_tutorial.py} (not duplicated in {@code
+   * tensorflow_gan_tutorial2.py} since the two files are structurally identical apart from the
+   * decorator): shape in {@code {(256, 28, 28, 1), (96, 28, 28, 1)}}, dtype {@code float32}.
+   * Expected count 5 matches master baseline and branch actual; same mnist modeling gap
+   * (wala/ML#361) blocks type inference on value 2.
+   */
   @Test
   public void testGanTutorial2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {

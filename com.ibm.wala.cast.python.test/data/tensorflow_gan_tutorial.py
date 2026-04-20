@@ -104,6 +104,7 @@ def train(
         start = time.time()
 
         for image_batch in dataset:
+            # asserts before FUT train_step (testGanTutorial).
             assert image_batch.shape == (256, 28, 28, 1) or image_batch.shape == (
                 96,
                 28,
