@@ -108,10 +108,6 @@ neural_net = NeuralNet()
 # Cross-Entropy Loss.
 # Note that this will apply 'softmax' to the logits.
 def cross_entropy_loss(x, y):
-    assert x.shape == (256, 10)
-    assert x.dtype == tf.float32
-    assert y.shape == (256,)
-    assert y.dtype == tf.uint8
     # Convert labels to int 64 for tf cross-entropy function.
     y = tf.cast(y, tf.int64)
     # Apply softmax to logits and compute cross-entropy.
@@ -122,12 +118,6 @@ def cross_entropy_loss(x, y):
 
 # Accuracy metric.
 def accuracy(y_pred, y_true):
-    # Called twice: from the training loop with (256, 10) float32 / (256,) uint8, and from the
-    # test-set evaluation with (10000, 10) float32 / (10000,) uint8.
-    assert y_pred.shape in ((256, 10), (10000, 10))
-    assert y_pred.dtype == tf.float32
-    assert y_true.shape in ((256,), (10000,))
-    assert y_true.dtype == tf.uint8
     # Predicted class is the index of highest score in prediction vector (i.e. argmax).
     correct_prediction = tf.equal(tf.argmax(y_pred, 1), tf.cast(y_true, tf.int64))
     return tf.reduce_mean(tf.cast(correct_prediction, tf.float32), axis=-1)
@@ -140,10 +130,6 @@ optimizer = tf.optimizers.SGD(learning_rate)
 # %%
 # Optimization process.
 def run_optimization(x, y):
-    assert x.shape == (256, 784)
-    assert x.dtype == tf.float32
-    assert y.shape == (256,)
-    assert y.dtype == tf.uint8
     # Wrap computation inside a GradientTape for automatic differentiation.
     with tf.GradientTape() as g:
         # Forward pass.
@@ -174,6 +160,8 @@ for step, (batch_x, batch_y) in enumerate(train_data.take(training_steps), 1):
 
     if step % display_step == 0:
         pred = neural_net(batch_x, is_training=True)
+        assert pred.shape == (256, 10)
+        assert pred.dtype == tf.float32
         loss = cross_entropy_loss(pred, batch_y)
         acc = accuracy(pred, batch_y)
         print_time = timeit.default_timer()
@@ -183,6 +171,10 @@ for step, (batch_x, batch_y) in enumerate(train_data.take(training_steps), 1):
 # %%
 # Test model on validation set.
 pred = neural_net(x_test, is_training=False)
+assert pred.shape == (10000, 10)
+assert pred.dtype == tf.float32
+assert y_test.shape == (10000,)
+assert y_test.dtype == tf.uint8
 print_time = timeit.default_timer()
 print("Test Accuracy: %f" % accuracy(pred, y_test))
 skipped_time += timeit.default_timer() - print_time
