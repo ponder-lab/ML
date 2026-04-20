@@ -1711,16 +1711,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Python assert statements in {@code neural_network.py}). The static analysis should union these
    * types for each parameter.
    *
-   * <p>The test currently fails on local tensor variable count: expected 5 (the five intermediate
-   * tensors {@code argmax}, {@code cast-to-int64}, {@code equal}, {@code cast-to-float32}, and
-   * {@code reduce_mean}), actual 4. One intermediate is missing; root cause not yet investigated.
+   * <p>The test currently fails on local tensor variable count (expected 5, actual 4). Two related
+   * bugs contribute: (1) wala/ML#386 &mdash; {@code tf.argmax} and {@code tf.equal} resolve to
+   * empty points-to sets because they are defined under {@code <package name="tensorflow/math">} in
+   * {@code tensorflow.xml} but called as {@code tf.argmax} / {@code tf.equal} in the Python code;
+   * (2) wala/ML#387 &mdash; {@code TensorGeneratorFactory} throws {@code IAE: Unknown call:
+   * pass_through} for empty-PTS sources, so neither {@code tf.cast} call contributes a tensor
+   * variable (cascading from #386 in this test).
    *
-   * <p>Once the local count clears, value 2 ({@code y_pred}) may also be blocked: it flows from
-   * {@code pred = neural_net(...)} through the summarized {@code Model.__call__} into user-defined
-   * {@code NeuralNet.call}, the same dispatch chain that blocks {@link #testNeuralNetwork2()}.
-   * wala/ML#127 (closed) was a necessary-but-insufficient prerequisite; the same
-   * reshape/tuple-routing gap blocking {@link #testNeuralNetwork()} (wala/ML#385) may apply here
-   * too.
+   * <p>Value 2 ({@code y_pred}) may also be subject to the same reshape/tuple-routing gap blocking
+   * {@link #testNeuralNetwork()} (wala/ML#385); wala/ML#127 (closed) was a
+   * necessary-but-insufficient prerequisite for value 2 tracking through the {@code Model.__call__}
+   * dispatch chain.
    */
   @Test
   public void testNeuralNetwork4()
