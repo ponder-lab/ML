@@ -134,6 +134,10 @@ optimizer = tf.optimizers.SGD(learning_rate)
 # %%
 # Optimization process.
 def run_optimization(x, y):
+    assert x.shape == (256, 784)
+    assert x.dtype == tf.float32
+    assert y.shape == (256,)
+    assert y.dtype == tf.uint8
     # Wrap computation inside a GradientTape for automatic differentiation.
     with tf.GradientTape() as g:
         # Forward pass.

@@ -1668,6 +1668,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_256_10_FLOAT32), 3, Set.of(TENSOR_256_UINT8)));
   }
 
+  /**
+   * {@code run_optimization(x, y)} is called with {@code batch_x} and {@code batch_y} from the
+   * dataset iteration chain. At runtime, {@code x} has shape {@code (256, 784)} dtype {@code
+   * float32} and {@code y} has shape {@code (256,)} dtype {@code uint8} (verified by Python assert
+   * statements in {@code neural_network.py}).
+   *
+   * <p>TODO: Once a generator for ndarray {@code .reshape()} is added (wala/ML#385), tighten value
+   * 2's expected types to {@code TENSOR_256_784_FLOAT32}.
+   *
+   * <p>TODO: The actual {@code y} type today is {@code {(256,) uint8, (?) uint8}} due to the same
+   * seeding/generator tension as {@code testNeuralNetwork} (wala/ML#385). Tighten to {@code
+   * TENSOR_256_UINT8} once the extra {@code (?)} is gone.
+   */
   @Test
   public void testNeuralNetwork3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -1676,7 +1689,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "run_optimization",
         2,
         3,
-        Map.of(2, Set.of(MNIST_INPUT), 3, Set.of(MNIST_INPUT)));
+        Map.of(2, Set.of(TENSOR_256_784_FLOAT32), 3, Set.of(TENSOR_256_UINT8)));
   }
 
   @Test
