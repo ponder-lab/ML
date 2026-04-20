@@ -991,7 +991,12 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
     @Override
     public CAstNode visitEllipsis(Ellipsis arg0) throws Exception {
-      return fail(arg0);
+      // Emit a distinct constant node for `...` so downstream analyses (e.g., ndarray subscript
+      // shape inference) can tell ellipsis apart from `None`, which `visitNameConstant` currently
+      // translates to Java `null`. Prior behavior returned `CAstNode.EMPTY` via `fail(arg0)`,
+      // which collapsed ellipsis and `None` into indistinguishable IR. See wala/ML#356.
+      return notePosition(
+          Ast.makeConstant(com.ibm.wala.cast.python.types.PythonTypes.ELLIPSIS), arg0);
     }
 
     @Override

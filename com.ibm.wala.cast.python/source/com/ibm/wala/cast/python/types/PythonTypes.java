@@ -139,6 +139,14 @@ public class PythonTypes extends AstTypeReference {
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("L" + CLASS_METHOD_ANNOTATION_NAME));
 
+  /**
+   * Sentinel constant used as the {@code CAstNode} value for Python's ellipsis literal ({@code
+   * ...}). Emitted by the parser's {@code visitEllipsis} so that downstream analyses can
+   * distinguish ellipsis from other {@code null}-valued subscript components (notably {@code
+   * None}). See wala/ML#356 for the motivating GAN-tutorial subscript case.
+   */
+  public static final String ELLIPSIS = "<python:Ellipsis>";
+
   /** A {@link CAstType} representing a dynamic annotation (decorator). */
   public static final CAstType CAST_DYNAMIC_ANNOTATION =
       new CAstType() {

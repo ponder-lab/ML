@@ -701,6 +701,14 @@ public class TensorGeneratorFactory {
               .getUnderlying(); // Return the underlying dataset generator for the second element.
         }
 
+        // Ndarray subscript with ellipsis/newaxis only (`x[..., None]`, `x[None, ...]`,
+        // `x[None]`, etc.) — dim-adding patterns that preserve the receiver's tensor-ness.
+        // Dispatches ahead of the generic `TensorElementGenerator` fallthrough, which would
+        // incorrectly peel the receiver's first dimension for these patterns. See wala/ML#356.
+        if (NdarraySubscriptOperation.isApplicable(source, builder)) {
+          return new NdarraySubscriptOperation(source);
+        }
+
         // Similar to `EachElementGet`, we check if the container generator represents elements
         // (`Dataset`) or the tensor itself (peeling needed).
         if (propertyName == null || !isNonTensorAttribute(propertyName)) {
