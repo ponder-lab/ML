@@ -183,6 +183,10 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
       if (!ret.isEmpty()) {
         return ret;
       }
+      // Per-index lookup saw a tuple but the requested field's PTS was empty — return unknown (⊤)
+      // rather than falling through to the aggregate, which would silently return sibling fields'
+      // shapes. See wala/ML#396.
+      return null;
     }
     return this.getShapes(builder);
   }
@@ -233,6 +237,9 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
       if (!ret.isEmpty()) {
         return ret;
       }
+      // Per-index lookup saw a tuple but the requested field's PTS was empty — return UNKNOWN (⊤)
+      // rather than falling through to the aggregate. See wala/ML#396.
+      return EnumSet.of(DType.UNKNOWN);
     }
     return this.getDTypes(builder);
   }
@@ -244,6 +251,11 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
     Set<DType> dTypes = this.getDTypesForIndex(builder, index);
 
     Set<TensorType> ret = HashSetFactory.make();
+
+    if (shapes == null) {
+      for (DType dtype : dTypes) ret.add(new TensorType(dtype.name().toLowerCase(), null));
+      return ret;
+    }
 
     for (List<Dimension<?>> dimensionList : shapes)
       for (DType dtype : dTypes) ret.add(new TensorType(dtype.name().toLowerCase(), dimensionList));

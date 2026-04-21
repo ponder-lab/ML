@@ -101,7 +101,13 @@ public class DatasetBatchGenerator extends DatasetGenerator {
     TensorGenerator receiver = getReceiverGenerator(builder);
     if (receiver instanceof TupleElementProvider tep) {
       Set<List<Dimension<?>>> perIndexShapes = tep.getShapesForIndex(builder, index);
-      if (perIndexShapes != null && !perIndexShapes.isEmpty()) {
+      // Receiver signals "unknown per-index shape" (⊤) via null. Propagate rather than falling
+      // through to the aggregate, which would silently leak sibling fields' shapes through the
+      // receiver chain. See wala/ML#396.
+      if (perIndexShapes == null) {
+        return null;
+      }
+      if (!perIndexShapes.isEmpty()) {
         return applyBatching(perIndexShapes, builder);
       }
     }
