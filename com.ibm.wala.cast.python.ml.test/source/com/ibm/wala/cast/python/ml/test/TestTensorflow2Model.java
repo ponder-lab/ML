@@ -1682,6 +1682,37 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Isolated repro for wala/ML#398 (binop drops PA allocation, bites through dataset). Python
+   * {@code c = a + b; from_tensor_slices((c, y)); for x, _ in ds: consume(x)} — the binop result
+   * {@code c} has no PA allocation, the tuple's field-0 PTS is empty, and the dataset's per-index
+   * walk returns ⊤ (via path 1) so {@code consume}'s parameter has no recoverable tensor shape.
+   *
+   * <p>TODO: When wala/ML#398 lands, flip the annotation to plain {@code @Test} and remove this
+   * TODO line.
+   */
+  @Test(expected = AssertionError.class)
+  public void testBinopThroughDataset()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_iso_binop_ds.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Isolated repro for the slice-subscript PA-allocation gap — parallel to wala/ML#398 but for
+   * subscript instead of binop. Python {@code a_sliced = a[:2, ..., tf.newaxis];
+   * from_tensor_slices((a_sliced, y))} — the slice-subscript result has no PA allocation
+   * (NdarraySubscriptOperation only matches pure ellipsis+None patterns, a leading slice
+   * disqualifies), so the dataset's per-index walk returns ⊤.
+   *
+   * <p>TODO: When wala/ML#400 is fixed, flip the annotation to plain {@code @Test} and remove this
+   * TODO line.
+   */
+  @Test(expected = AssertionError.class)
+  public void testSliceSubscriptThroughDataset()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_iso_slicesub_ds.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_1_FLOAT32)));
+  }
+
+  /**
    * {@code train_step(images, generator, discriminator, ...)} receives {@code image_batch} from the
    * training loop inside {@code train}. {@code image_batch} comes from iterating a dataset built
    * from mnist data via {@code train_images[..., None].astype(np.float32)} and {@code
