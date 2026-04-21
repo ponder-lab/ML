@@ -300,6 +300,9 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
 
     Set<TensorType> ret = HashSetFactory.make();
 
+    // Null shapes signal "unknown per-index shape" (⊤). Emit one ⊤-shaped TensorType per dtype
+    // rather than falling through to the aggregate {@code getTensorTypes}, which would silently
+    // leak sibling fields' shapes. See wala/ML#396.
     if (shapes == null) {
       for (DType dtype : dTypes) ret.add(new TensorType(dtype.name().toLowerCase(), null));
       return ret;
