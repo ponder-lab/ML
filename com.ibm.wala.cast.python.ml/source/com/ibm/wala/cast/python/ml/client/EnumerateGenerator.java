@@ -5,6 +5,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -43,7 +44,7 @@ public class EnumerateGenerator extends TensorGenerator implements DelegatingTen
     // iterable's source (see wala/ML#363). Return empty set (⊥ / not-a-tensor) so the source is
     // effectively dropped from tensor analysis, matching the pre-audit behaviour where the IAE
     // bubbled up through the wrapper constructor and the source never got added to the init map.
-    if (underlying == null) return java.util.Collections.emptySet();
+    if (underlying == null) return Collections.emptySet();
     return underlying.getTensorTypes(builder);
   }
 

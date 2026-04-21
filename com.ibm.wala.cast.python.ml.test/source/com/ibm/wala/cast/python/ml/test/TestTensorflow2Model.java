@@ -1379,7 +1379,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * <p>{@code summarize_weights(step)} takes only an {@code int} step counter (not a tensor, hence
    * parameter count 0). Inside the function, dict lookups {@code weights[w]} and {@code biases[b]}
    * feed the tensor variables to {@code tf.summary.histogram}. Expected tensor variable count: 4
-   * (master baseline). Branch currently registers 3 &mdash; a regression. Keeping expected at the
+   * (master baseline). Branch currently registers 5 &mdash; the 4 master entries plus a spurious
+   * {@code v2} (the {@code step} parameter) typed ⊤ via tuple-field-0 dataflow propagation from the
+   * {@code enumerate()} call at the caller: {@code for step, (x, y) in enumerate(ds, 1):}. {@link
+   * com.ibm.wala.cast.python.ml.client.EnumerateGenerator}'s {@code getTensorTypes} falls through
+   * to the underlying dataset's type, which then seeds the whole enumerate tuple and propagates to
+   * every field access on it &mdash; including field 0 (the integer index). Keeping expected at the
    * master baseline lets the failing count check serve as the regression signal; no separate issue
    * is needed because the test itself tracks the discrepancy. No Python asserts are added because
    * the function has no tensor parameters and the local tensor SSAs (dict lookups and subscript
