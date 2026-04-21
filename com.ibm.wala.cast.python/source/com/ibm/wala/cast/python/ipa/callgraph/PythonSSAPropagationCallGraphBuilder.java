@@ -304,16 +304,20 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      * `tf.data.Dataset.from_tensor_slices((c, y))`). The site is keyed by the instruction index
      * inside the current CGNode, so context-sensitive allocation is preserved per call-graph node.
      */
+    /**
+     * Binop allocation synthesis is intentionally a no-op. An earlier version of this method
+     * registered a per-instruction {@link NewSiteReference} (keyed by the SSA instruction index) so
+     * the pointer analysis could track binop results (wala/ML#398). That fixed {@code
+     * testBinopThroughDataset} but caused a regression elsewhere: seeding the binop def's PTS with
+     * a non-tensor-producing {@code Lobject} instance key suppressed tensor identification for
+     * downstream values, dropping counts on {@code testNeuralNetwork}, {@code testAutoencoder*},
+     * and similar. Preserving tensor identification is a merge-safety invariant against {@code
+     * master}, so the allocation is disabled pending a narrower approach. The {@link
+     * PythonBinaryOpInstruction} scaffolding and factory override remain in place so a future
+     * gated-allocation strategy can hook here. See wala/ML#398.
+     */
     @Override
-    public void visitPythonBinaryOp(PythonBinaryOpInstruction binop) {
-      NewSiteReference site = NewSiteReference.make(binop.iIndex(), PythonTypes.object);
-      InstanceKey iKey = getInstanceKeyForAllocation(site);
-      if (iKey == null) {
-        return;
-      }
-      PointerKey def = getPointerKeyForLocal(binop.getDef());
-      system.newConstraint(def, iKey);
-    }
+    public void visitPythonBinaryOp(PythonBinaryOpInstruction binop) {}
 
     @Override
     public void visitArrayLoad(SSAArrayLoadInstruction inst) {

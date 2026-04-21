@@ -47,6 +47,14 @@ public class PythonBinaryOpInstruction extends SSABinaryOpInstruction {
 
   @Override
   public void visit(IVisitor v) {
-    ((PythonInstructionVisitor) v).visitPythonBinaryOp(this);
+    if (v instanceof PythonInstructionVisitor) {
+      ((PythonInstructionVisitor) v).visitPythonBinaryOp(this);
+    } else {
+      // Non-Python visitors (e.g. WALA's `TypeInference`) only understand the generic
+      // `visitBinaryOp` contract. Routing them through the Python-specific dispatch would silently
+      // break type inference for binop results, which cascades into lost tensor identification
+      // for every downstream value that depends on a binop. See wala/ML#398.
+      super.visit(v);
+    }
   }
 }
