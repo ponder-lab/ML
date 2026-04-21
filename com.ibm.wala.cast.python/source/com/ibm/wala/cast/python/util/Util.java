@@ -12,6 +12,7 @@ import static java.util.stream.Collectors.toList;
 import com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKeys.ScopeMappingInstanceKey;
 import com.ibm.wala.cast.python.ipa.callgraph.PytestEntrypointBuilder;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
+import com.ibm.wala.cast.python.ssa.PythonBinaryOpInstruction;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.tree.CAstAnnotation;
@@ -75,12 +76,19 @@ public class Util {
    */
   public static int findDefinition(CGNode node, AllocationSiteInNode asin) {
     if (node.getIR() == null) return -1;
+    int sitePC = asin.getSite().getProgramCounter();
     for (SSAInstruction inst : node.getIR().getInstructions()) {
-      if (inst != null && inst instanceof SSANewInstruction) {
+      if (inst == null) continue;
+      if (inst instanceof SSANewInstruction) {
         SSANewInstruction newInst = (SSANewInstruction) inst;
         if (newInst.getNewSite().equals(asin.getSite())) {
           return newInst.getDef();
         }
+      } else if (inst instanceof PythonBinaryOpInstruction && inst.iIndex() == sitePC) {
+        // wala/ML#398: PythonBinaryOpInstruction synthesises a per-instruction allocation site
+        // keyed by iIndex so the PA can track binop results. Recognise that site here so shape
+        // inference can delegate to ElementWiseOperation via the defining SSA instruction.
+        return inst.getDef();
       }
     }
     return -1;

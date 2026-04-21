@@ -17,4 +17,6 @@ public interface PythonInstructionVisitor extends AstInstructionVisitor {
   default void visitPythonInvoke(PythonInvokeInstruction inst) {}
 
   default void visitForElementGet(ForElementGetInstruction forElementGet) {}
+
+  default void visitPythonBinaryOp(PythonBinaryOpInstruction binop) {}
 }

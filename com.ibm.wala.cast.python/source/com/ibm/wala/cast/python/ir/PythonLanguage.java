@@ -24,6 +24,7 @@ import com.ibm.wala.cast.java.loader.JavaSourceLoaderImpl;
 import com.ibm.wala.cast.python.cfg.PythonInducedCFG;
 import com.ibm.wala.cast.python.modref.PythonModRef.PythonModVisitor;
 import com.ibm.wala.cast.python.modref.PythonModRef.PythonRefVisitor;
+import com.ibm.wala.cast.python.ssa.PythonBinaryOpInstruction;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
@@ -48,8 +49,10 @@ import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ipa.modref.ExtendedHeapModel;
 import com.ibm.wala.ipa.modref.ModRef.ModVisitor;
 import com.ibm.wala.ipa.modref.ModRef.RefVisitor;
+import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.shrike.shrikeCT.BootstrapMethodsReader.BootstrapMethod;
 import com.ibm.wala.shrike.shrikeCT.InvalidClassFileException;
+import com.ibm.wala.ssa.SSAAbstractBinaryInstruction;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.types.FieldReference;
@@ -270,6 +273,19 @@ public class PythonLanguage implements Language {
       @Override
       public AstYieldInstruction YieldInstruction(int iindex, int[] rvals) {
         return new AstYieldInstruction(iindex, rvals);
+      }
+
+      @Override
+      public SSAAbstractBinaryInstruction BinaryOpInstruction(
+          int iindex,
+          IBinaryOpInstruction.IOperator operator,
+          boolean overflow,
+          boolean unsigned,
+          int result,
+          int val1,
+          int val2,
+          boolean mayBeInteger) {
+        return new PythonBinaryOpInstruction(iindex, operator, result, val1, val2, mayBeInteger);
       }
     };
   }

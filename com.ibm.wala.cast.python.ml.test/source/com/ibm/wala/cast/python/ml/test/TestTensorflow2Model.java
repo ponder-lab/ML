@@ -1682,15 +1682,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Isolated repro for wala/ML#398 (binop drops PA allocation, bites through dataset). Python
-   * {@code c = a + b; from_tensor_slices((c, y)); for x, _ in ds: consume(x)} — the binop result
-   * {@code c} has no PA allocation, the tuple's field-0 PTS is empty, and the dataset's per-index
-   * walk returns ⊤ (via path 1) so {@code consume}'s parameter has no recoverable tensor shape.
-   *
-   * <p>TODO: When wala/ML#398 lands, flip the annotation to plain {@code @Test} and remove this
-   * TODO line.
+   * Positive regression guard for wala/ML#398. Python {@code c = a + b; from_tensor_slices((c, y));
+   * for x, _ in ds: consume(x)} — the binop result {@code c} gets a per-instruction PA allocation
+   * via {@link com.ibm.wala.cast.python.ssa.PythonBinaryOpInstruction}, so the tuple's field-0 PTS
+   * is non-empty and the dataset's per-index walk recovers the shape via {@code
+   * ElementWiseOperation}.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testBinopThroughDataset()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_iso_binop_ds.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));

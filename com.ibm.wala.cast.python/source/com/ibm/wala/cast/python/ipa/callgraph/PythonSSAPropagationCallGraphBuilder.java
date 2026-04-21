@@ -24,6 +24,7 @@ import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.ssa.ForElementGetInstruction;
+import com.ibm.wala.cast.python.ssa.PythonBinaryOpInstruction;
 import com.ibm.wala.cast.python.ssa.PythonInstructionVisitor;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
@@ -294,6 +295,24 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public void visitPythonInvoke(PythonInvokeInstruction inst) {
       visitInvokeInternal(inst, new DefaultInvariantComputer());
+    }
+
+    /**
+     * Synthesise a per-instruction allocation site for the binop result so the pointer analysis can
+     * track it (wala/ML#398). Without this, `c = a + b` leaves `c`'s PTS empty, which breaks every
+     * downstream consumer that walks the PA (e.g. tuple field reads in
+     * `tf.data.Dataset.from_tensor_slices((c, y))`). The site is keyed by the instruction index
+     * inside the current CGNode, so context-sensitive allocation is preserved per call-graph node.
+     */
+    @Override
+    public void visitPythonBinaryOp(PythonBinaryOpInstruction binop) {
+      NewSiteReference site = NewSiteReference.make(binop.iIndex(), PythonTypes.object);
+      InstanceKey iKey = getInstanceKeyForAllocation(site);
+      if (iKey == null) {
+        return;
+      }
+      PointerKey def = getPointerKeyForLocal(binop.getDef());
+      system.newConstraint(def, iKey);
     }
 
     @Override
@@ -840,6 +859,11 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
     @Override
     public void visitBinaryOp(final SSABinaryOpInstruction instruction) {
+      bingo = true;
+    }
+
+    @Override
+    public void visitPythonBinaryOp(PythonBinaryOpInstruction binop) {
       bingo = true;
     }
 
