@@ -6,7 +6,11 @@ import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
+import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ssa.SSAInstruction;
@@ -31,18 +35,81 @@ import java.util.logging.Logger;
  */
 public class NdarrayReshape extends TensorGenerator {
 
-  @SuppressWarnings("unused")
   private static final Logger LOGGER = Logger.getLogger(NdarrayReshape.class.getName());
 
-  /** Position of the shape argument in the invoke (first positional argument). */
-  private static final int SHAPE_ARG_POSITION = 0;
+  /**
+   * Positional parameters of the {@code ndarray.reshape(shape)} invocation. The receiver (the
+   * tensor being reshaped) is captured in the function's closure, not an explicit argument, so only
+   * the target-shape argument is listed here.
+   */
+  private enum Parameters {
+    /**
+     * The target shape. A list/tuple of integers; may contain {@code -1} for a single inferred dim.
+     */
+    SHAPE;
 
-  private static final String SHAPE_ARG_NAME = "shape";
+    public String getName() {
+      return name().toLowerCase();
+    }
+
+    public int getIndex() {
+      return ordinal();
+    }
+  }
 
   public NdarrayReshape(PointsToSetVariable source) {
     super(source);
   }
 
+  /**
+   * Syntactic check: is {@code source} the result of a method-style {@code x.reshape(shape)} call?
+   * Mirrors {@link NdarraySubscriptOperation#isApplicable} — used to dispatch this generator
+   * without relying on PTS (which is lost through tuple unpacking chains like {@code x_train,
+   * x_test = x_train.astype(...), x_test.astype(...)}).
+   *
+   * <p>Discriminates from {@code tf.reshape(x, shape)} (a function call with 2 tensor arguments) by
+   * requiring the invoke to have exactly 2 uses (function object + shape), matching the method-call
+   * ABI where the tensor is the captured receiver rather than an explicit arg.
+   */
+  public static boolean isApplicable(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    if (!(source.getPointerKey() instanceof LocalPointerKey)) return false;
+    LocalPointerKey lpk = (LocalPointerKey) source.getPointerKey();
+    CGNode node = lpk.getNode();
+    SSAInstruction def = node.getDU().getDef(lpk.getValueNumber());
+    if (!(def instanceof PythonInvokeInstruction)) return false;
+    PythonInvokeInstruction call = (PythonInvokeInstruction) def;
+    // `x.reshape(shape)` → 2 uses (func object, shape). `tf.reshape(x, shape)` → 3 uses.
+    if (call.getNumberOfUses() != 2) return false;
+    SSAInstruction funcDef = node.getDU().getDef(call.getUse(0));
+    if (!(funcDef instanceof PythonPropertyRead)) return false;
+    PythonPropertyRead propRead = (PythonPropertyRead) funcDef;
+    PointerKey memberKey =
+        builder
+            .getPointerAnalysis()
+            .getHeapModel()
+            .getPointerKeyForLocal(node, propRead.getMemberRef());
+    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(memberKey)) {
+      if (!(ik instanceof ConstantKey)) continue;
+      Object value = ((ConstantKey<?>) ik).getValue();
+      if ("reshape".equals(value)) {
+        LOGGER.fine(() -> "NdarrayReshape.isApplicable: matched for source=" + source);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Resolves the value number of the receiver (the tensor being reshaped). For method-style calls
+   * {@code x.reshape(shape)}, the receiver is captured in the function-object's closure rather than
+   * appearing as an explicit argument. We read it from the {@link PythonPropertyRead} whose member
+   * is {@code reshape}: the property read's {@code objectRef} is the receiver's value number in the
+   * caller's IR. Mirrors the pattern in {@link AstypeOperation#getReceiverVn}.
+   *
+   * @return The SSA value number of the receiver in the containing node, or {@code -1} if the
+   *     invoke's function object isn't a property read (defensive fallback).
+   */
   private int getReceiverVn() {
     PythonInvokeInstruction call = getInvokeInstruction();
     if (call != null) {
@@ -60,7 +127,8 @@ public class NdarrayReshape extends TensorGenerator {
     // Resolve the target shape from the `shape` argument, applying the `-1` inference rule by
     // dividing the receiver's known total size by the product of the explicit dims.
     OrdinalSet<InstanceKey> shapePts =
-        this.getArgumentPointsToSet(builder, SHAPE_ARG_POSITION, SHAPE_ARG_NAME);
+        this.getArgumentPointsToSet(
+            builder, Parameters.SHAPE.getIndex(), Parameters.SHAPE.getName());
     if (shapePts == null || shapePts.isEmpty()) return getDefaultShapes(builder);
 
     Set<List<Dimension<?>>> rawShapes = this.getShapesFromShapeArgument(builder, shapePts);
@@ -167,12 +235,12 @@ public class NdarrayReshape extends TensorGenerator {
 
   @Override
   protected int getShapeParameterPosition() {
-    return SHAPE_ARG_POSITION;
+    return Parameters.SHAPE.getIndex();
   }
 
   @Override
   protected String getShapeParameterName() {
-    return SHAPE_ARG_NAME;
+    return Parameters.SHAPE.getName();
   }
 
   @Override

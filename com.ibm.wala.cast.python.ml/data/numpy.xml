@@ -17,9 +17,12 @@
       </method>
     </class>
     <package name="numpy/ndarray">
+      <!-- NOTE: This block of ndarray method-field populations (`astype`, `reshape`, ...) is duplicated intentionally in every ndarray-producing method's `do()` (both here and in the mnist `x_train`/`y_train`/`x_test`/`y_test` outputs in `tensorflow.xml`). Because WALA uses 1-CFA context sensitivity
+        for general methods, if we were to centralise this into a single shared helper method, 1-CFA would merge all calls to that helper and cause massive aliasing — every ndarray in the program would share internal field values, losing precision for shapes/dtypes in chained operations. Inlining the field populations
+        at each endpoint's `do()` gives each ndarray allocation a unique site and preserves call-site context. Mirrors the Dataset-method pattern in `tensorflow.xml`; if WALA ever lets us declare class-level field summaries once without the 1-CFA collision, this duplication should be consolidated. TODO: file
+        a WALA-side issue for class-level field summaries. -->
       <!-- https://numpy.org/doc/stable/reference/generated/numpy.ndarray.astype.html -->
       <!-- Modeled as a class-per-function (same pattern as `tensorflow/data/shuffle`, etc.) so that attribute access `x.astype` on an ndarray-like value resolves to this class via a field lookup, and the subsequent invocation dispatches to its `do` method. -->
-      <!-- Each ndarray-producing method populates all ndarray method fields on its return so chained method calls (e.g. `x.astype(...).reshape(...)`) resolve cleanly via class-type dispatch. Mirrors the Dataset-method pattern in `tensorflow.xml`. -->
       <class name="astype" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self ndarray dtype">
           <new def="ret" class="Lnumpy/ndarray" />
