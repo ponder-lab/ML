@@ -1642,6 +1642,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Positive regression guard for chained-binop shape inference. The Python expression {@code (x +
+   * y) * z} produces two nested {@code SSABinaryOpInstruction}s; shape inference for the outer
+   * binop's inner-binop operand works via {@code ElementWiseOperation}'s recursive nested dispatch
+   * (see {@code getOperandShapes} and wala/ML#395). If that recursive dispatch ever regresses, the
+   * outer binop's operand shape lookup will fall to ⊤ and this test will fail.
+   *
+   * <p>Unrelated to wala/ML#398, which concerns PA-level allocation tracking for binop results (a
+   * different failure mode that only manifests when a binop result flows through a PA-mediated
+   * mechanism such as a field store).
+   */
+  @Test
+  public void testChainedBinop()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_chained_binop.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
    * {@code train_step(images, generator, discriminator, ...)} receives {@code image_batch} from the
    * training loop inside {@code train}. {@code image_batch} comes from iterating a dataset built
    * from mnist data via {@code train_images[..., None].astype(np.float32)} and {@code
