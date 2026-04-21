@@ -28,10 +28,24 @@ import java.util.logging.Logger;
  * argument is the first positional argument to the call.
  *
  * <p>Resolves {@code -1} in the target shape by dividing the receiver's total element count by the
- * product of known dims, matching {@link Reshape}'s algorithm. Dispatched via class-type check in
- * {@link TensorGeneratorFactory#getGenerator} keyed on {@code
- * NumpyTypes.RESHAPE_METHOD.getDeclaringClass()}, which keeps the dispatch disjoint from {@code
- * tf.reshape} despite the shared method name.
+ * product of known dims, matching {@link Reshape}'s algorithm.
+ *
+ * <p>Dispatch goes through two paths in {@link TensorGeneratorFactory#getGenerator}, in order:
+ *
+ * <ol>
+ *   <li>Class-type dispatch keyed on {@code NumpyTypes.RESHAPE_METHOD.getDeclaringClass()}. Fires
+ *       when the call graph resolves the callee via the summary-populated receiver fields (see
+ *       {@code numpy.xml}'s {@code astype}/{@code reshape} classes). This is the preferred path.
+ *   <li>Syntactic {@link #isApplicable} predicate on the invoke shape. Fires when the receiver's
+ *       PTS is implicit (typically when it originated from a synthetic-method return &mdash; e.g.
+ *       {@code mnist.load_data()}'s tuple fields &mdash; which WALA does not materialise into a
+ *       concrete {@code PointsToSetVariable}). Follows the established precedent of {@link
+ *       NdarraySubscriptOperation#isApplicable} from wala/ML#356.
+ * </ol>
+ *
+ * <p>The class-type path is disjoint from {@code tf.reshape} by virtue of distinct declaring
+ * classes ({@code Lnumpy/ndarray/reshape} vs {@code Ltensorflow/functions/reshape}); the syntactic
+ * path is disjoint by argument count (method-style 2-use calls vs function-style 3-use calls).
  */
 public class NdarrayReshape extends TensorGenerator {
 
