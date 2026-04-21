@@ -61,19 +61,16 @@ public class NdarraySubscriptOperation extends TensorGenerator {
    */
   public static boolean isApplicable(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
-    if (!(source.getPointerKey() instanceof LocalPointerKey)) return false;
-    LocalPointerKey lpk = (LocalPointerKey) source.getPointerKey();
-    CGNode node = lpk.getNode();
-    SSAInstruction def = node.getDU().getDef(lpk.getValueNumber());
-    if (!(def instanceof PythonPropertyRead)) return false;
-    PythonPropertyRead propRead = (PythonPropertyRead) def;
+    PythonPropertyRead propRead = getPropertyRead(source);
+    if (propRead == null) return false;
+    CGNode node = ((LocalPointerKey) source.getPointerKey()).getNode();
     List<SubscriptField> fields = extractSubscriptFields(propRead, node, builder);
     return fields != null && !fields.isEmpty();
   }
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    PythonPropertyRead propRead = getPropertyRead();
+    PythonPropertyRead propRead = getPropertyRead(source);
     if (propRead == null) return null;
 
     List<SubscriptField> fields = extractSubscriptFields(propRead, getNode(), builder);
@@ -99,7 +96,7 @@ public class NdarraySubscriptOperation extends TensorGenerator {
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    PythonPropertyRead propRead = getPropertyRead();
+    PythonPropertyRead propRead = getPropertyRead(source);
     if (propRead == null) return null;
     int objRef = propRead.getObjectRef();
     Set<DType> ret = getDTypes(builder, objRef);
@@ -241,7 +238,7 @@ public class NdarraySubscriptOperation extends TensorGenerator {
     return null;
   }
 
-  private PythonPropertyRead getPropertyRead() {
+  private static PythonPropertyRead getPropertyRead(PointsToSetVariable source) {
     if (!(source.getPointerKey() instanceof LocalPointerKey)) return null;
     LocalPointerKey lpk = (LocalPointerKey) source.getPointerKey();
     SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
