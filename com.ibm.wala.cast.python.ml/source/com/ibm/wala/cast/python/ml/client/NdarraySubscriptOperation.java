@@ -238,6 +238,13 @@ public class NdarraySubscriptOperation extends TensorGenerator {
     return null;
   }
 
+  /**
+   * Returns the {@link PythonPropertyRead} that defines {@code source}'s value number, or {@code
+   * null} if {@code source} isn't a {@link LocalPointerKey} or its defining instruction isn't a
+   * property read. Shared by {@link #isApplicable(PointsToSetVariable,
+   * PropagationCallGraphBuilder)} and the {@code getDefault*} overrides; callers treat a {@code
+   * null} return as "this generator does not apply."
+   */
   private static PythonPropertyRead getPropertyRead(PointsToSetVariable source) {
     if (!(source.getPointerKey() instanceof LocalPointerKey)) return null;
     LocalPointerKey lpk = (LocalPointerKey) source.getPointerKey();
