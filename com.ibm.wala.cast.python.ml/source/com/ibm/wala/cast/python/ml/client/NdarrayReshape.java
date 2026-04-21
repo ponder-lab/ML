@@ -70,6 +70,14 @@ public class NdarrayReshape extends TensorGenerator {
    * <p>Discriminates from {@code tf.reshape(x, shape)} (a function call with 2 tensor arguments) by
    * requiring the invoke to have exactly 2 uses (function object + shape), matching the method-call
    * ABI where the tensor is the captured receiver rather than an explicit arg.
+   *
+   * @param source The {@link PointsToSetVariable} whose defining invoke instruction is being
+   *     inspected.
+   * @param builder The propagation call graph builder used to resolve the function-object property
+   *     read's member ref.
+   * @return {@code true} iff {@code source}'s def is a 2-use {@link PythonInvokeInstruction} whose
+   *     function object is a {@link PythonPropertyRead} with the constant-string member {@code
+   *     "reshape"}.
    */
   public static boolean isApplicable(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
