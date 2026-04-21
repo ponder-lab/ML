@@ -1659,6 +1659,29 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Positive regression guard for binop-to-tuple-literal-to-subscript shape propagation. A Python
+   * binop result {@code c = a + b} is stored into a tuple literal {@code (c,)} and read back via
+   * subscript {@code t[0]}. The element type flows through SSA tracing (tuple-subscript dispatch
+   * inspects the tuple's construction expression to resolve the element VN, then queries that VN's
+   * tensor type via the standard generator path).
+   *
+   * <p>Notably, this works despite the binop producing no PA allocation — the tuple's field-0 PTS
+   * is empty today, but the SSA-level path bypasses the PA field lookup. This is a different
+   * recovery mechanism from {@code testChainedBinop}'s (recursive binop dispatch inside {@code
+   * ElementWiseOperation}); both are worth guarding independently.
+   *
+   * <p>Contrasts with wala/ML#398: framework consumers like {@code
+   * DatasetFromTensorSlicesGenerator} commit to PA field reads rather than SSA tracing, which is
+   * where the binop-no-allocation gap actually bites. A test isolating that gap needs to route
+   * through the dataset machinery.
+   */
+  @Test
+  public void testBinopTupleStore()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_binop_tuple_store.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
    * {@code train_step(images, generator, discriminator, ...)} receives {@code image_batch} from the
    * training loop inside {@code train}. {@code image_batch} comes from iterating a dataset built
    * from mnist data via {@code train_images[..., None].astype(np.float32)} and {@code
