@@ -128,6 +128,12 @@ public class ElementWiseOperation extends ZerosLike {
 
     Set<DType> dtypes = this.getOperandDTypes(builder, vn);
     LOGGER.fine(() -> "ElementWiseOperation getDefaultDTypes dtypes: " + dtypes);
+    // An element-wise op always produces a tensor. If operand resolution returned ⊥ (empty set)
+    // or null, that represents "unable to resolve the operand's dtype," not "not a tensor." Emit
+    // ⊤ (UNKNOWN) so `TensorTypeAnalysis` still tracks the result — otherwise chained ops like
+    // `layer_2 = tf.nn.sigmoid(tf.add(tf.matmul(layer_1, ...), ...))` silently lose tensor
+    // identification across the chain even though every step is demonstrably a tensor producer.
+    if (dtypes == null || dtypes.isEmpty()) return EnumSet.of(DType.UNKNOWN);
     return dtypes;
   }
 

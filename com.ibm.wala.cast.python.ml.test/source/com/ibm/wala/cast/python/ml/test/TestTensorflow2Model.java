@@ -1944,7 +1944,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testAutoencoder()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("autoencoder.py", "encoder", 1, 18, Map.of(2, Set.of(TENSOR_256_784_FLOAT32)));
+    test("autoencoder.py", "encoder", 1, 20, Map.of(2, Set.of(TENSOR_256_784_FLOAT32)));
   }
 
   /**
