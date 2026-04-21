@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.types.NumpyTypes.ASTYPE;
 import static com.ibm.wala.cast.python.ml.types.NumpyTypes.ASTYPE_METHOD_NAME;
+import static com.ibm.wala.cast.python.ml.types.NumpyTypes.RESHAPE_METHOD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARRAY_OPS_RESHAPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
@@ -483,6 +484,25 @@ public class TensorGeneratorFactory {
                         + vn
                         + " to AstypeOperation.");
             return new AstypeOperation(source);
+          }
+
+          // If we're calling `numpy.ndarray.reshape`, the result has the shape specified by the
+          // shape argument (resolving `-1` via the receiver's size) and preserves the receiver's
+          // dtype. Class-type dispatch rather than property-name dispatch keeps this disjoint
+          // from {@code tf.reshape}.
+          if (callee
+              .getMethod()
+              .getReference()
+              .getDeclaringClass()
+              .equals(RESHAPE_METHOD.getDeclaringClass())) {
+            LOGGER.fine(
+                () ->
+                    "TensorGeneratorFactory: dispatching ndarray.reshape call at "
+                        + node
+                        + " v"
+                        + vn
+                        + " to NdarrayReshape.");
+            return new NdarrayReshape(source);
           }
 
           // If we're calling `next`, the result is an element of the collection.

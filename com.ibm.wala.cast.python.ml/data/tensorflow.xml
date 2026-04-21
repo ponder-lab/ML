@@ -1794,24 +1794,41 @@
       <class name="x_train" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
           <new def="ret" class="Ltensorflow/keras/datasets/mnist/x_train" />
+          <!-- Populate ndarray method fields so `x_train.astype(...)` / `x_train.reshape(...)` calls resolve via class-type dispatch (mirrors the Dataset-method pattern). -->
+          <new def="astype_fn" class="Lnumpy/ndarray/astype" />
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn" />
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape" />
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn" />
           <return value="ret" />
         </method>
       </class>
       <class name="y_train" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
           <new def="ret" class="Ltensorflow/keras/datasets/mnist/y_train" />
+          <new def="astype_fn" class="Lnumpy/ndarray/astype" />
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn" />
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape" />
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn" />
           <return value="ret" />
         </method>
       </class>
       <class name="x_test" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
           <new def="ret" class="Ltensorflow/keras/datasets/mnist/x_test" />
+          <new def="astype_fn" class="Lnumpy/ndarray/astype" />
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn" />
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape" />
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn" />
           <return value="ret" />
         </method>
       </class>
       <class name="y_test" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
           <new def="ret" class="Ltensorflow/keras/datasets/mnist/y_test" />
+          <new def="astype_fn" class="Lnumpy/ndarray/astype" />
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn" />
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape" />
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn" />
           <return value="ret" />
         </method>
       </class>

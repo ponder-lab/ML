@@ -93,6 +93,15 @@ public class NumpyTypes extends PythonTypes {
 
   private static final String RESHAPE_SIGNATURE = "numpy.reshape()";
 
+  /** https://numpy.org/doc/stable/reference/generated/numpy.ndarray.reshape.html */
+  public static final MethodReference RESHAPE_METHOD =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/ndarray/reshape")),
+          AstMethodReference.fnSelector);
+
+  private static final String RESHAPE_METHOD_SIGNATURE = "numpy.ndarray.reshape()";
+
   /** Method name used in {@code numpy.xml} for {@link #ASTYPE}. */
   public static final String ASTYPE_METHOD_NAME = "astype";
 
@@ -112,6 +121,7 @@ public class NumpyTypes extends PythonTypes {
           Map.entry(ZEROS.getDeclaringClass(), ZEROS_SIGNATURE),
           Map.entry(ONES.getDeclaringClass(), ONES_SIGNATURE),
           Map.entry(RESHAPE.getDeclaringClass(), RESHAPE_SIGNATURE),
+          Map.entry(RESHAPE_METHOD.getDeclaringClass(), RESHAPE_METHOD_SIGNATURE),
           Map.entry(ASTYPE.getDeclaringClass(), ASTYPE_SIGNATURE));
 
   public static final FieldReference FLOAT_32 =
