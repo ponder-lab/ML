@@ -85,6 +85,12 @@ public class NdarrayReshape extends TensorGenerator {
    * requiring the invoke to have exactly 2 uses (function object + shape), matching the method-call
    * ABI where the tensor is the captured receiver rather than an explicit arg.
    *
+   * <p>TODO(wala/WALA#1889): This whole path exists to work around WALA representing
+   * synthetic-method return values as implicit {@code PointerKey}s, which breaks class-type
+   * dispatch through the call graph. Once that upstream bug is fixed, class-type dispatch keyed on
+   * {@code NumpyTypes.RESHAPE_METHOD.getDeclaringClass()} will fire for these calls and this
+   * syntactic-pattern check can be deleted.
+   *
    * @param source The {@link PointsToSetVariable} whose defining invoke instruction is being
    *     inspected.
    * @param builder The propagation call graph builder used to resolve the function-object property

@@ -59,6 +59,11 @@ public class NdarraySubscriptOperation extends TensorGenerator {
    * member ref is a tuple allocation that contains only ellipsis and {@code None} elements (i.e., a
    * dim-adding subscript). Callers use this to decide whether to dispatch to this generator.
    *
+   * <p>TODO(wala/WALA#1889): This syntactic dispatch pattern exists to work around WALA
+   * representing synthetic-method return values as implicit {@code PointerKey}s, which breaks
+   * class-type dispatch through the call graph for post-unpack receivers. Once that upstream bug is
+   * fixed, this whole static predicate and its associated dispatch site can be deleted.
+   *
    * @param source The {@link PointsToSetVariable} whose defining instruction is being inspected.
    * @param builder The propagation call graph builder used to resolve the subscript's member ref.
    * @return {@code true} if this generator's modeling applies to {@code source}, {@code false}
