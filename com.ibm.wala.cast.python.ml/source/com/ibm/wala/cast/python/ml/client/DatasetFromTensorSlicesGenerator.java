@@ -331,6 +331,11 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
    * treats nested tuples as multi-dim). For non-tuple top-level values it falls through to the base
    * implementation unchanged, so list literals and single-tensor arguments keep their current
    * behavior. See wala/ML#366.
+   *
+   * @param builder The propagation call graph builder used to resolve field pointer keys.
+   * @param valuePointsToSet The points-to set of the {@code tensors} argument.
+   * @return The union of per-field shapes when the argument is a top-level tuple, or the base
+   *     {@link TensorGenerator#getShapesOfValue} result otherwise.
    */
   private Set<List<Dimension<?>>> getShapesOfTensorsArgument(
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
@@ -378,6 +383,11 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
 
   /**
    * Dtype counterpart of {@link #getShapesOfTensorsArgument}. See that method for the rationale.
+   *
+   * @param builder The propagation call graph builder used to resolve field pointer keys.
+   * @param valuePointsToSet The points-to set of the {@code tensors} argument.
+   * @return The union of per-field dtypes when the argument is a top-level tuple, or the base
+   *     {@link TensorGenerator#getDTypesOfValue} result otherwise.
    */
   private Set<DType> getDTypesOfTensorsArgument(
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {

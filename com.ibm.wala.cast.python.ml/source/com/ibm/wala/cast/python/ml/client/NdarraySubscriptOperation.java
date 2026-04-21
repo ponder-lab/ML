@@ -58,6 +58,11 @@ public class NdarraySubscriptOperation extends TensorGenerator {
    * Checks whether {@code source}'s defining instruction is a {@link PythonPropertyRead} whose
    * member ref is a tuple allocation that contains only ellipsis and {@code None} elements (i.e., a
    * dim-adding subscript). Callers use this to decide whether to dispatch to this generator.
+   *
+   * @param source The {@link PointsToSetVariable} whose defining instruction is being inspected.
+   * @param builder The propagation call graph builder used to resolve the subscript's member ref.
+   * @return {@code true} if this generator's modeling applies to {@code source}, {@code false}
+   *     otherwise.
    */
   public static boolean isApplicable(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
@@ -136,6 +141,11 @@ public class NdarraySubscriptOperation extends TensorGenerator {
    *   <li>If no ellipsis is present, one is implicitly appended (i.e., {@code x[None]} behaves like
    *       {@code x[None, ...]}).
    * </ul>
+   *
+   * @param input The receiver's shape dims, in order.
+   * @param fields The parsed subscript tuple elements, in order.
+   * @return The output shape dims, or {@code null} if the subscript contains a dimension-consuming
+   *     element (more than one ellipsis, or any shape not handled by this generator).
    */
   private static List<Dimension<?>> applySubscript(
       List<Dimension<?>> input, List<SubscriptField> fields) {
@@ -167,6 +177,12 @@ public class NdarraySubscriptOperation extends TensorGenerator {
    * Extracts the subscript tuple's fields if they are all ellipsis or {@code None}. Returns {@code
    * null} if the subscript contains anything else (integer index, slice, etc.), signaling that this
    * generator does not apply.
+   *
+   * @param propRead The subscript's {@link PythonPropertyRead} instruction.
+   * @param node The {@link CGNode} containing {@code propRead}.
+   * @param builder The propagation call graph builder used to resolve the subscript's member ref.
+   * @return The parsed subscript tuple elements in order, or {@code null} if any element is
+   *     unsupported (integer index, slice, variable, etc.).
    */
   private static List<SubscriptField> extractSubscriptFields(
       PythonPropertyRead propRead, CGNode node, PropagationCallGraphBuilder builder) {
@@ -220,6 +236,10 @@ public class NdarraySubscriptOperation extends TensorGenerator {
   /**
    * Classifies a single subscript tuple element as ellipsis, newaxis ({@code None}), or an
    * unsupported value (integer index, slice, variable, etc.).
+   *
+   * @param pts The points-to set of the tuple element being classified.
+   * @return {@link SubscriptField#ELLIPSIS} or {@link SubscriptField#NEWAXIS} for a supported
+   *     value; {@code null} if the element is empty, non-constant, or any other unsupported value.
    */
   private static SubscriptField classifyField(OrdinalSet<InstanceKey> pts) {
     if (pts.isEmpty()) return null; // empty PTS is not None; unknown value
@@ -240,10 +260,6 @@ public class NdarraySubscriptOperation extends TensorGenerator {
 
   /**
    * Returns the {@link PythonPropertyRead} that defines {@code source}'s value number.
-   *
-   * <p>Shared by {@link #isApplicable(PointsToSetVariable, PropagationCallGraphBuilder)} and the
-   * {@code getDefault*} overrides; callers treat a {@code null} return as "this generator does not
-   * apply."
    *
    * @param source The {@link PointsToSetVariable} whose defining instruction is being inspected.
    * @return The defining {@link PythonPropertyRead}, or {@code null} if {@code source} isn't a
