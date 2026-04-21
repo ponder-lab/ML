@@ -234,6 +234,16 @@ public class NdarrayReshape extends TensorGenerator {
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     // Used to resolve `-1` in the target shape — look up the receiver's shape.
+    //
+    // TODO(wala/ML#402): When the receiver's PTS is implicit (e.g., post-unpack `x_train` fed from
+    // `mnist.load_data()`'s tuple-field synthetic return), `getShapes(builder, node, vn)` falls
+    // through to a path that prints a WALA "Did not expect to findOrCreatePointsToSet for
+    // implicitly represented PointerKey" warning and returns `null`, leaving `-1` unresolved as a
+    // `SymbolicDim("?")`. Next chain-link: use `TensorGeneratorFactory.findCreator` here to walk
+    // the assignment graph backward past the implicit key to a concrete creator instruction
+    // (e.g., the astype invoke's Ret-V), then recurse on that creator's shape. This should let
+    // the full mnist chain resolve concrete shapes end-to-end for tests like `testAutoencoder`.
+    // Upstream fix wala/WALA#1889 would also address this root cause.
     int receiverVn = getReceiverVn();
     if (receiverVn > 0) {
       try {
