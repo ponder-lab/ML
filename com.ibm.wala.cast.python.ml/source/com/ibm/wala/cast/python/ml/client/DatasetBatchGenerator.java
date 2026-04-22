@@ -125,8 +125,15 @@ public class DatasetBatchGenerator extends DatasetGenerator {
 
     Set<Long> datasetSizes = this.getDatasetSizes(builder);
 
+    // If the upstream chain contains `.repeat()` (with no `.take(N)` between it and this batch),
+    // the stream is infinite and partial batches never occur at runtime. Suppress the partial
+    // and symbolic siblings below so the analyzer's output matches Python's actual behaviour.
+    boolean upstreamInfinite = this.upstreamIsInfinite(builder);
+
     for (List<Dimension<?>> shape : inputShapes) {
       if (batchSizes.isEmpty()) {
+        // Unknown batch size: single symbolic-dim shape. The upstream-infinite guard doesn't
+        // apply here because there's no concrete size to contrast against a partial.
         List<Dimension<?>> newShape = new ArrayList<>();
         newShape.add(new SymbolicDim("?"));
         newShape.addAll(shape);
@@ -153,8 +160,9 @@ public class DatasetBatchGenerator extends DatasetGenerator {
                 }
               }
             } else {
-              // We don't know the dataset size; assume both a full batch and a symbolic partial
-              // batch are possible.
+              // We don't know the dataset size; assume a full batch is possible. The partial
+              // branch below is guarded by `!upstreamInfinite` so that `.repeat()` chains don't
+              // get a spurious symbolic partial sibling.
               canHaveFullBatch = true;
               partialBatchSizeUnknown = true;
             }
@@ -166,18 +174,20 @@ public class DatasetBatchGenerator extends DatasetGenerator {
               ret.add(newShape);
             }
 
-            for (Long partialBatchSize : partialBatchSizes) {
-              List<Dimension<?>> newShape = new ArrayList<>();
-              newShape.add(new NumericDim(partialBatchSize.intValue()));
-              newShape.addAll(shape);
-              ret.add(newShape);
-            }
+            if (!upstreamInfinite) {
+              for (Long partialBatchSize : partialBatchSizes) {
+                List<Dimension<?>> newShape = new ArrayList<>();
+                newShape.add(new NumericDim(partialBatchSize.intValue()));
+                newShape.addAll(shape);
+                ret.add(newShape);
+              }
 
-            if (partialBatchSizeUnknown) {
-              List<Dimension<?>> newShape = new ArrayList<>();
-              newShape.add(new SymbolicDim("?"));
-              newShape.addAll(shape);
-              ret.add(newShape);
+              if (partialBatchSizeUnknown) {
+                List<Dimension<?>> newShape = new ArrayList<>();
+                newShape.add(new SymbolicDim("?"));
+                newShape.addAll(shape);
+                ret.add(newShape);
+              }
             }
 
           } else {
