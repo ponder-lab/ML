@@ -1692,18 +1692,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Isolated repro for wala/ML#398 (binop drops PA allocation, bites through dataset). Python
    * {@code c = a + b; from_tensor_slices((c, y)); for x, _ in ds: consume(x)} — the binop result
-   * {@code c} has no PA allocation, the tuple's field-0 PTS is empty, and the dataset's per-index
-   * walk returns ⊤ so {@code consume}'s parameter has no recoverable tensor shape.
-   *
-   * <p>An earlier allocation-synthesis fix passed this test but suppressed tensor identification
-   * for downstream values in MNIST models (testNeuralNetwork, testAutoencoder*), violating the "≥
-   * master" identification invariant. The allocation is currently disabled; the fix needs a
-   * narrower approach.
-   *
-   * <p>TODO: When wala/ML#398 lands (with a non-regressing allocation strategy), flip the
-   * annotation to plain {@code @Test} and remove this TODO line.
+   * {@code c} has no PA allocation and the tuple's field-0 PTS is empty. Passes without allocation
+   * synthesis because {@link DatasetFromTensorSlicesGenerator#getShapesForIndex} and its dtype
+   * counterpart now fall back to the SSA-chain helper on {@link TensorGenerator}, which walks the
+   * DU from the tuple putfield's stored vn back to the concrete creator. See wala/WALA#1889 for the
+   * upstream root-cause fix that would materialise PTS at synthetic-method return keys and make
+   * this fallback unnecessary.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testBinopThroughDataset()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_iso_binop_ds.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));

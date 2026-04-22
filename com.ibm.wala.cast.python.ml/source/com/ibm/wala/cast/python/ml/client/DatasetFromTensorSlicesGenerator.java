@@ -224,6 +224,23 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
                 Set<List<Dimension<?>>> fieldShapes =
                     this.getShapesOfValue(builder, builder.getPointerAnalysis().getPointsToSet(pk));
+                if (fieldShapes == null || fieldShapes.isEmpty()) {
+                  // Implicit-PK fallback mirroring `getShapesOfTensorsArgument`: when the
+                  // tuple-field's PTS is empty because the stored value is a synthetic-method
+                  // return (e.g., `x_train / 255.0`), walk the SSA chain to recover the shape.
+                  // See wala/WALA#1889.
+                  int storedVn =
+                      findTupleFieldStoreForIndex(asin.getNode(), asin, fieldIndex, builder);
+                  if (storedVn > 0) {
+                    try {
+                      Set<List<Dimension<?>>> viaChain =
+                          this.getShapesOrSSAChain(builder, asin.getNode(), storedVn);
+                      if (viaChain != null && !viaChain.isEmpty()) fieldShapes = viaChain;
+                    } catch (IllegalArgumentException e) {
+                      // leave as null/empty
+                    }
+                  }
+                }
                 if (fieldShapes != null)
                   for (List<Dimension<?>> shape : fieldShapes) {
                     if (shape.size() > 0) {
@@ -279,6 +296,21 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
                 Set<DType> fieldDTypes =
                     this.getDTypesOfValue(builder, builder.getPointerAnalysis().getPointsToSet(pk));
+                if (fieldDTypes == null || fieldDTypes.isEmpty()) {
+                  // Implicit-PK fallback mirroring `getDTypesOfTensorsArgument`. See
+                  // wala/WALA#1889.
+                  int storedVn =
+                      findTupleFieldStoreForIndex(asin.getNode(), asin, fieldIndex, builder);
+                  if (storedVn > 0) {
+                    try {
+                      Set<DType> viaChain =
+                          this.getDTypesOrSSAChain(builder, asin.getNode(), storedVn);
+                      if (viaChain != null && !viaChain.isEmpty()) fieldDTypes = viaChain;
+                    } catch (IllegalArgumentException e) {
+                      // leave as null/empty
+                    }
+                  }
+                }
                 if (fieldDTypes != null) ret.addAll(fieldDTypes);
               }
             }
