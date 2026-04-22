@@ -75,7 +75,18 @@ public class NdarraySubscriptOperation extends TensorGenerator {
     if (propRead == null) return false;
     CGNode node = ((LocalPointerKey) source.getPointerKey()).getNode();
     List<SubscriptField> fields = extractSubscriptFields(propRead, node, builder);
-    return fields != null && !fields.isEmpty();
+    boolean applies = fields != null && !fields.isEmpty();
+    LOGGER.fine(
+        () ->
+            "isApplicable: source="
+                + source
+                + " propRead="
+                + propRead
+                + " fields="
+                + fields
+                + " applies="
+                + applies);
+    return applies;
   }
 
   @Override
@@ -204,7 +215,16 @@ public class NdarraySubscriptOperation extends TensorGenerator {
         break;
       }
     }
-    if (tupleAsin == null) return null;
+    if (tupleAsin == null) {
+      LOGGER.fine(
+          () ->
+              "extractSubscriptFields: memberVn="
+                  + memberVn
+                  + " no tuple alloc in PTS (size="
+                  + memberPts.size()
+                  + ") — subscript isn't a compound `[..., None]`-style access");
+      return null;
+    }
 
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     AstPointerKeyFactory pkf = (AstPointerKeyFactory) builder.getPointerKeyFactory();
