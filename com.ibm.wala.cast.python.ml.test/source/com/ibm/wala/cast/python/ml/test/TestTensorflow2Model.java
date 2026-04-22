@@ -98,6 +98,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_256_784_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(256), new NumericDim(784)));
 
+  private static final TensorType TENSOR_60000_784_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(60000), new NumericDim(784)));
+
   private static final TensorType TENSOR_256_10_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(256), new NumericDim(10)));
 
@@ -7019,6 +7022,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testAstype()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_astype.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_60000_28_28_FLOAT32)));
+  }
+
+  /**
+   * Exercise {@link NdarrayReshape#getDefaultShapes}'s SSA-substrate DU walk: resolves the {@code
+   * -1} in {@code x_train.reshape([-1, 784])} by tracing the receiver back to {@code mnist.x_train}
+   * ({@code (60000, 28, 28)}). Guards {@link TensorGenerator#getShapesOrSSAChain} against
+   * regression.
+   *
+   * <p>Dtype propagation ({@code uint8}) uses the existing {@code getDTypes(builder, receiverVn)}
+   * path, which resolves through the normal PA because {@code x_train}'s dtype is carried on the
+   * {@link MnistInputData}-manufactured allocation.
+   */
+  @Test
+  public void testNdarrayReshape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_ndarray_reshape.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_60000_784_UINT8)));
   }
 
   /**

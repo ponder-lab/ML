@@ -40,10 +40,15 @@ public class AstypeOperation extends TensorGenerator {
           return shapes;
         }
       } catch (IllegalArgumentException e) {
-        // `getShapes` throws when the receiver's call chain ends at a generator the factory
-        // doesn't recognise (e.g., `mnist.load_data` whose outputs aren't shape-typed). Catch
-        // and return `null` (⊤ unknown shape) so dtype inference still proceeds and the result
-        // flows downstream as a tensor instead of being dropped entirely. See wala/ML#356.
+        // `getShapes` throws when the receiver's PTS is empty AND its PointerKey is implicit —
+        // e.g., a chained `x.astype(int32).astype(float32)` where the inner call's return value
+        // is a synthetic-method return (implicit PK, no materialised PTS). The multi-stage
+        // helper in `TensorGenerator.getShapes(builder, node, vn)` skips the factory-recursion
+        // branch for implicit keys and falls through to IAE. Catch and return `null` (⊤ unknown
+        // shape) so dtype inference still proceeds and the result flows downstream as a tensor
+        // instead of being dropped entirely. For the non-chained mnist case, the factory
+        // recursion fires successfully via `MnistInputData`, so the shape is recovered and this
+        // catch doesn't fire. See wala/ML#356, wala/WALA#1889.
         LOGGER.log(
             Level.FINE,
             "AstypeOperation.getDefaultShapes: receiver shape lookup failed for receiverVn="

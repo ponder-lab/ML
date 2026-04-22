@@ -122,19 +122,36 @@ public class ElementWiseOperation extends ZerosLike {
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    int vn = this.getXArgumentValueNumber(builder);
-    LOGGER.fine(() -> "ElementWiseOperation getDefaultDTypes vn: " + vn);
-    if (vn <= 0) return EnumSet.of(DType.UNKNOWN);
+    int xVn = this.getXArgumentValueNumber(builder);
+    int yVn = this.getYArgumentValueNumber(builder);
+    LOGGER.fine("ElementWiseOperation getDefaultDTypes xVn: " + xVn + ", yVn: " + yVn);
+    if (xVn <= 0) return EnumSet.of(DType.UNKNOWN);
 
-    Set<DType> dtypes = this.getOperandDTypes(builder, vn);
-    LOGGER.fine(() -> "ElementWiseOperation getDefaultDTypes dtypes: " + dtypes);
+    // Type promotion for scalar-literal operands: NumPy/TF rules promote `int_tensor op
+    // float_literal` to float32 (e.g., `x_train.astype(uint8) / 255.0` → float32). Check for
+    // literals BEFORE calling getOperandDTypes to avoid short-circuiting via exception on
+    // an implicit-PK operand (see wala/WALA#1889).
+    CGNode node = this.getNode();
+    if (yVn > 0 && isFloatLiteralVn(node, yVn)) {
+      LOGGER.fine(
+          "ElementWiseOperation getDefaultDTypes: promoting to FLOAT32 (y is float literal)");
+      return EnumSet.of(DType.FLOAT32);
+    }
+    if (isFloatLiteralVn(node, xVn)) {
+      LOGGER.fine(
+          "ElementWiseOperation getDefaultDTypes: promoting to FLOAT32 (x is float literal)");
+      return EnumSet.of(DType.FLOAT32);
+    }
+
+    Set<DType> xDTypes = this.getOperandDTypes(builder, xVn);
+    LOGGER.fine("ElementWiseOperation getDefaultDTypes dtypes: " + xDTypes);
     // An element-wise op always produces a tensor. If operand resolution returned ⊥ (empty set)
     // or null, that represents "unable to resolve the operand's dtype," not "not a tensor." Emit
     // ⊤ (UNKNOWN) so `TensorTypeAnalysis` still tracks the result — otherwise chained ops like
     // `layer_2 = tf.nn.sigmoid(tf.add(tf.matmul(layer_1, ...), ...))` silently lose tensor
     // identification across the chain even though every step is demonstrably a tensor producer.
-    if (dtypes == null || dtypes.isEmpty()) return EnumSet.of(DType.UNKNOWN);
-    return dtypes;
+    if (xDTypes == null || xDTypes.isEmpty()) return EnumSet.of(DType.UNKNOWN);
+    return xDTypes;
   }
 
   /**
@@ -165,7 +182,9 @@ public class ElementWiseOperation extends ZerosLike {
     if (isScalarLiteral(builder, vn)) {
       return singleton(emptyList());
     }
-    return this.getShapes(builder, vn);
+    // PTS-first with SSA-DU fallback — handles operands whose def is a synthetic-method
+    // return (implicit PK) by walking the DU chain. See wala/WALA#1889.
+    return this.getShapesOrSSAChain(builder, this.getNode(), vn);
   }
 
   /** Dtype counterpart of {@link #getOperandShapes(PropagationCallGraphBuilder, int)}. */

@@ -27,6 +27,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
+import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
@@ -34,6 +35,8 @@ import com.ibm.wala.cast.python.ml.types.TensorType.CompoundDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
+import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
+import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
@@ -560,6 +563,315 @@ public abstract class TensorGenerator {
             + " in: "
             + node
             + ".");
+  }
+
+  /**
+   * PTS-first wrapper: tries {@link #getShapes(PropagationCallGraphBuilder, CGNode, int)} and falls
+   * back to the SSA-substrate DU walk in {@link #shapesFromSSAChain} if that throws {@link
+   * IllegalArgumentException} (implicit PK with empty PTS).
+   *
+   * <p>Every recursive step re-enters this wrapper so non-implicit intermediates (e.g., mnist
+   * receivers reachable via factory dispatch) shortcut the walk.
+   *
+   * <p>If {@code getShapes} threw IAE and the DU walk doesn't find a concrete shape either, the IAE
+   * is rethrown so callers relying on it to fail identification aren't misled.
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The CG node whose IR contains {@code vn}.
+   * @param vn The SSA value number to resolve.
+   * @return The resolved shapes (non-empty) from either path, or {@code null} / the empty set if
+   *     {@code getShapes} returned those and the DU walk didn't help either. Rethrows IAE when
+   *     {@code getShapes} throws and the DU walk doesn't help.
+   */
+  protected Set<List<Dimension<?>>> getShapesOrSSAChain(
+      PropagationCallGraphBuilder builder, CGNode node, int vn) {
+    try {
+      Set<List<Dimension<?>>> shapes = getShapes(builder, node, vn);
+      if (shapes != null && !shapes.isEmpty()) return shapes;
+      // `getShapes` returned null/empty without throwing — either "tensor with unknown shape"
+      // (null) or "not a tensor" (empty). Try the DU walk for a concrete shape; fall through
+      // to the original result if the walk doesn't help.
+      Set<List<Dimension<?>>> chain = shapesFromSSAChain(builder, node, vn);
+      if (chain != null && !chain.isEmpty()) return chain;
+      return shapes;
+    } catch (IllegalArgumentException e) {
+      // IAE means "empty PTS and couldn't trace properties" — the caller is relying on this
+      // to fail identification. Only override it if the SSA chain actually recovers a
+      // concrete shape; otherwise rethrow so callers aren't misled into identifying
+      // non-tensor parameters as tensors.
+      Set<List<Dimension<?>>> chain = shapesFromSSAChain(builder, node, vn);
+      if (chain != null && !chain.isEmpty()) return chain;
+      throw e;
+    }
+  }
+
+  /**
+   * SSA-substrate shape lookup: walks the DU chain from {@code vn} backward, peeling tuple-unpack
+   * {@link PythonPropertyRead}s and stopping at invokes it recognises.
+   *
+   * <p>Handles: mnist x_train/y_train/x_test/y_test invokes (hardcoded shapes via {@link
+   * MnistInputData}); astype invokes (shape-preserving, recurses on the astype receiver);
+   * tuple-field reads (peel via {@link #findTupleFieldStore}). Returns {@code null} for any other
+   * creator kind — preserves today's ⊤-fallback rather than guessing.
+   *
+   * <p>Complements {@link #getShapes(PropagationCallGraphBuilder, CGNode, int)}'s assignment-graph
+   * walk: that one walks PTS propagation edges; this one walks SSA def-use edges. Where PTS is
+   * implicit (summary-method returns), the PTS walk crashes on {@code findOrCreatePointsToSet} and
+   * the DU walk is the only viable path.
+   *
+   * <p>TODO(wala/ML#402): delete once wala/WALA#1889 lands and summary-method returns materialise
+   * concrete PTS — the normal PTS path will then recover these shapes via factory recursion.
+   *
+   * @param builder The propagation call graph builder used to resolve callees.
+   * @param node The CG node whose IR contains {@code vn}.
+   * @param vn The SSA value number whose shape we need.
+   * @return The resolved shapes, or {@code null} if the DU walk doesn't recognise the creator.
+   */
+  protected Set<List<Dimension<?>>> shapesFromSSAChain(
+      PropagationCallGraphBuilder builder, CGNode node, int vn) {
+    return shapesFromSSAChain(builder, node, vn, HashSetFactory.make());
+  }
+
+  /**
+   * Recursive worker for {@link #shapesFromSSAChain(PropagationCallGraphBuilder, CGNode, int)}.
+   *
+   * @param builder The propagation call graph builder used to resolve callees.
+   * @param node The CG node whose IR contains {@code vn}.
+   * @param vn The SSA value number whose shape we need.
+   * @param visited The set of value numbers already visited on this walk; used to break cycles when
+   *     the DU chain loops through phi nodes or self-referential definitions.
+   * @return The resolved shapes, or {@code null} if the DU walk doesn't recognise the creator or
+   *     has already visited {@code vn} on this walk (cycle guard).
+   */
+  private Set<List<Dimension<?>>> shapesFromSSAChain(
+      PropagationCallGraphBuilder builder, CGNode node, int vn, Set<Integer> visited) {
+    if (!visited.add(vn)) return null; // cycle guard
+    SSAInstruction def = node.getDU().getDef(vn);
+    LOGGER.fine(
+        () ->
+            "shapesFromSSAChain: entered, vn="
+                + vn
+                + ", def="
+                + (def == null ? "null" : def.getClass().getSimpleName()));
+
+    // Peel tuple-unpack: `x, y = a, b` lowers to `tmp = Tuple(a, b); x = tmp[0]; y = tmp[1]`.
+    // Find the store that wrote the matching field on the same tuple and trace its stored vn.
+    if (def instanceof PythonPropertyRead) {
+      PythonPropertyRead propRead = (PythonPropertyRead) def;
+      int storedVn = findTupleFieldStore(node, propRead);
+      if (storedVn > 0) {
+        LOGGER.fine(
+            () ->
+                "shapesFromSSAChain: peeled PythonPropertyRead at vn="
+                    + vn
+                    + " to storedVn="
+                    + storedVn);
+        try {
+          Set<List<Dimension<?>>> viaPts = getShapes(builder, node, storedVn);
+          if (viaPts != null && !viaPts.isEmpty()) return viaPts;
+        } catch (IllegalArgumentException e) {
+          // fall through
+        }
+        return shapesFromSSAChain(builder, node, storedVn, visited);
+      }
+      return null;
+    }
+
+    if (!(def instanceof SSAAbstractInvokeInstruction)) return null;
+    SSAAbstractInvokeInstruction call = (SSAAbstractInvokeInstruction) def;
+    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, call.getCallSite())) {
+      TypeReference declaring = callee.getMethod().getReference().getDeclaringClass();
+      if (declaring.equals(TensorFlowTypes.MNIST_X_TRAIN))
+        return Set.of(MnistInputData.X_TRAIN_SHAPE);
+      if (declaring.equals(TensorFlowTypes.MNIST_Y_TRAIN))
+        return Set.of(MnistInputData.Y_TRAIN_SHAPE);
+      if (declaring.equals(TensorFlowTypes.MNIST_X_TEST))
+        return Set.of(MnistInputData.X_TEST_SHAPE);
+      if (declaring.equals(TensorFlowTypes.MNIST_Y_TEST))
+        return Set.of(MnistInputData.Y_TEST_SHAPE);
+      if (declaring.equals(NumpyTypes.ASTYPE.getDeclaringClass())) {
+        // astype preserves shape; recurse on its receiver.
+        int astypeReceiverVn = propertyReadObjectRef(node, call);
+        if (astypeReceiverVn > 0) {
+          try {
+            Set<List<Dimension<?>>> viaPts = getShapes(builder, node, astypeReceiverVn);
+            if (viaPts != null && !viaPts.isEmpty()) return viaPts;
+          } catch (IllegalArgumentException e) {
+            // fall through
+          }
+          return shapesFromSSAChain(builder, node, astypeReceiverVn, visited);
+        }
+      }
+      // Nested reshape is intentionally not handled here — the outer NdarrayReshape, if
+      // present, computes its own shape via `getShapes`. In practice the chains we care
+      // about ({reshape → EWO → from_tensor_slices}) route through EWO's binop handling,
+      // which in turn re-enters this walk on its operand.
+    }
+    return null;
+  }
+
+  /**
+   * Dtype counterpart to {@link #getShapesOrSSAChain(PropagationCallGraphBuilder, CGNode, int)}.
+   * PTS-first via {@link #getDTypes(PropagationCallGraphBuilder, CGNode, int)}, SSA-DU fallback via
+   * {@link #dtypesFromSSAChain}. Rethrows {@link IllegalArgumentException} from {@code getDTypes}
+   * when the DU walk doesn't help, so callers that rely on IAE to fail identification are not
+   * misled.
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The CG node whose IR contains {@code vn}.
+   * @param vn The SSA value number whose dtype we need.
+   * @return The resolved dtypes, or {@code null} if neither path finds a concrete dtype and {@code
+   *     getDTypes} didn't throw.
+   */
+  protected Set<DType> getDTypesOrSSAChain(
+      PropagationCallGraphBuilder builder, CGNode node, int vn) {
+    try {
+      Set<DType> dtypes = getDTypes(builder, node, vn);
+      if (dtypes != null && !dtypes.isEmpty()) return dtypes;
+      Set<DType> chain = dtypesFromSSAChain(builder, node, vn);
+      if (chain != null && !chain.isEmpty()) return chain;
+      return dtypes;
+    } catch (IllegalArgumentException e) {
+      Set<DType> chain = dtypesFromSSAChain(builder, node, vn);
+      if (chain != null && !chain.isEmpty()) return chain;
+      throw e;
+    }
+  }
+
+  /**
+   * Dtype counterpart to {@link #shapesFromSSAChain(PropagationCallGraphBuilder, CGNode, int)}.
+   * Handles: mnist invokes (all uint8); astype invokes (use astype's dtype arg — FLOAT32 default if
+   * we can't resolve); tuple-unpack reads (peel via {@link #findTupleFieldStore}); binops involving
+   * a float scalar literal (FLOAT32 promotion).
+   *
+   * <p>Returns {@code null} if the DU walk doesn't recognise the creator.
+   */
+  protected Set<DType> dtypesFromSSAChain(
+      PropagationCallGraphBuilder builder, CGNode node, int vn) {
+    return dtypesFromSSAChain(builder, node, vn, HashSetFactory.make());
+  }
+
+  /**
+   * Recursive worker for {@link #dtypesFromSSAChain(PropagationCallGraphBuilder, CGNode, int)}.
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The CG node whose IR contains {@code vn}.
+   * @param vn The SSA value number whose dtype we need.
+   * @param visited The set of value numbers already visited on this walk; used to break cycles.
+   * @return The resolved dtypes, or {@code null} if the DU walk doesn't recognise the creator or
+   *     has already visited {@code vn} on this walk (cycle guard).
+   */
+  private Set<DType> dtypesFromSSAChain(
+      PropagationCallGraphBuilder builder, CGNode node, int vn, Set<Integer> visited) {
+    if (!visited.add(vn)) return null;
+    SSAInstruction def = node.getDU().getDef(vn);
+
+    if (def instanceof PythonPropertyRead) {
+      PythonPropertyRead propRead = (PythonPropertyRead) def;
+      int storedVn = findTupleFieldStore(node, propRead);
+      if (storedVn > 0) {
+        try {
+          Set<DType> viaPts = getDTypes(builder, node, storedVn);
+          if (viaPts != null && !viaPts.isEmpty()) return viaPts;
+        } catch (IllegalArgumentException e) {
+          // fall through
+        }
+        return dtypesFromSSAChain(builder, node, storedVn, visited);
+      }
+      return null;
+    }
+
+    if (def instanceof SSABinaryOpInstruction) {
+      // Binop: check for float-literal promotion. If either operand is a Python Double/Float
+      // constant, the result is FLOAT32 — same promotion rule as
+      // `ElementWiseOperation.getDefaultDTypes` applies.
+      int xVn = def.getUse(0);
+      int yVn = def.getUse(1);
+      if (isFloatLiteralVn(node, xVn) || isFloatLiteralVn(node, yVn)) {
+        return EnumSet.of(DType.FLOAT32);
+      }
+      // Otherwise take the first operand's dtype.
+      return dtypesFromSSAChain(builder, node, xVn, visited);
+    }
+
+    if (!(def instanceof SSAAbstractInvokeInstruction)) return null;
+    SSAAbstractInvokeInstruction call = (SSAAbstractInvokeInstruction) def;
+    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, call.getCallSite())) {
+      TypeReference declaring = callee.getMethod().getReference().getDeclaringClass();
+      if (declaring.equals(TensorFlowTypes.MNIST_X_TRAIN)
+          || declaring.equals(TensorFlowTypes.MNIST_Y_TRAIN)
+          || declaring.equals(TensorFlowTypes.MNIST_X_TEST)
+          || declaring.equals(TensorFlowTypes.MNIST_Y_TEST)) {
+        return EnumSet.of(DType.UINT8);
+      }
+      if (declaring.equals(NumpyTypes.ASTYPE.getDeclaringClass())) {
+        // astype result takes its target dtype from the call's dtype arg. For now we return
+        // FLOAT32, which is the astype-use we see in practice (`x.astype(np.float32)` in the
+        // mnist chain) and also `AstypeOperation`'s fallback default. A precise lookup would
+        // resolve the arg via `FIELD_REFERENCE_TO_DTYPE` — not yet implemented here.
+        return EnumSet.of(DType.FLOAT32);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Returns true iff {@code vn} is a Python float-literal constant in {@code node}'s symbol table
+   * &mdash; i.e., a {@link Double} or {@link Float} value with no defining instruction. Used for
+   * scalar-literal dtype-promotion in binops ({@code int_tensor / 255.0} → float32).
+   *
+   * @param node The CG node whose symbol table to query.
+   * @param vn The SSA value number to check.
+   * @return {@code true} iff {@code vn} is a {@link Double} or {@link Float} literal constant.
+   */
+  protected static boolean isFloatLiteralVn(CGNode node, int vn) {
+    if (vn <= 0) return false;
+    if (node.getDU().getDef(vn) != null) return false;
+    if (!node.getIR().getSymbolTable().isConstant(vn)) return false;
+    Object val = node.getIR().getSymbolTable().getConstantValue(vn);
+    return val instanceof Double || val instanceof Float;
+  }
+
+  /**
+   * Scans {@code node}'s IR for a {@link PythonPropertyWrite} whose {@code objectRef} and member
+   * value match {@code propRead}'s. Used to peel tuple-unpack patterns like {@code x, y = a, b}.
+   *
+   * @param node The CG node whose IR to scan.
+   * @param propRead The read whose matching store we seek.
+   * @return The stored value's SSA value number, or {@code -1} if no unique match is found.
+   */
+  protected static int findTupleFieldStore(CGNode node, PythonPropertyRead propRead) {
+    int objectRef = propRead.getObjectRef();
+    int memberRef = propRead.getMemberRef();
+    int found = -1;
+    for (SSAInstruction inst : node.getIR().getInstructions()) {
+      if (!(inst instanceof PythonPropertyWrite)) continue;
+      PythonPropertyWrite write = (PythonPropertyWrite) inst;
+      if (write.getUse(0) != objectRef) continue;
+      if (write.getUse(1) != memberRef) continue;
+      int stored = write.getUse(2);
+      if (found != -1 && found != stored) return -1; // ambiguous
+      found = stored;
+    }
+    return found;
+  }
+
+  /**
+   * For a method-style invoke {@code x.m(...)}, returns the receiver's SSA value number by reading
+   * the {@code objectRef} of the {@link PythonPropertyRead} that def'd the invoke's function
+   * object.
+   *
+   * @param node The CG node whose IR contains {@code call}.
+   * @param call The invoke instruction to inspect.
+   * @return The receiver's SSA value number, or {@code -1} if the invoke isn't a method-style call.
+   */
+  protected static int propertyReadObjectRef(CGNode node, SSAAbstractInvokeInstruction call) {
+    if (call.getNumberOfUses() < 1) return -1;
+    SSAInstruction funcDef = node.getDU().getDef(call.getUse(0));
+    if (funcDef instanceof PythonPropertyRead) {
+      return ((PythonPropertyRead) funcDef).getObjectRef();
+    }
+    return -1;
   }
 
   /**
@@ -2161,13 +2473,13 @@ public abstract class TensorGenerator {
     TypeReference sanitized = sanitize(allocationType);
 
     if (sanitized.equals(TensorFlowTypes.MNIST_X_TRAIN)) {
-      return new MnistInputData(node, MnistInputData.imagesShape(60000));
+      return new MnistInputData(node, MnistInputData.X_TRAIN_SHAPE);
     } else if (sanitized.equals(TensorFlowTypes.MNIST_Y_TRAIN)) {
-      return new MnistInputData(node, MnistInputData.labelsShape(60000));
+      return new MnistInputData(node, MnistInputData.Y_TRAIN_SHAPE);
     } else if (sanitized.equals(TensorFlowTypes.MNIST_X_TEST)) {
-      return new MnistInputData(node, MnistInputData.imagesShape(10000));
+      return new MnistInputData(node, MnistInputData.X_TEST_SHAPE);
     } else if (sanitized.equals(TensorFlowTypes.MNIST_Y_TEST)) {
-      return new MnistInputData(node, MnistInputData.labelsShape(10000));
+      return new MnistInputData(node, MnistInputData.Y_TEST_SHAPE);
     }
 
     return createManualGenerator(node, builder);
@@ -2230,13 +2542,13 @@ public abstract class TensorGenerator {
     } else if (type.equals(TensorFlowTypes.IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE)) {
       return new FlowFromDirectoryGenerator(node);
     } else if (type.equals(TensorFlowTypes.MNIST_X_TRAIN)) {
-      return new MnistInputData(node, MnistInputData.imagesShape(60000));
+      return new MnistInputData(node, MnistInputData.X_TRAIN_SHAPE);
     } else if (type.equals(TensorFlowTypes.MNIST_Y_TRAIN)) {
-      return new MnistInputData(node, MnistInputData.labelsShape(60000));
+      return new MnistInputData(node, MnistInputData.Y_TRAIN_SHAPE);
     } else if (type.equals(TensorFlowTypes.MNIST_X_TEST)) {
-      return new MnistInputData(node, MnistInputData.imagesShape(10000));
+      return new MnistInputData(node, MnistInputData.X_TEST_SHAPE);
     } else if (type.equals(TensorFlowTypes.MNIST_Y_TEST)) {
-      return new MnistInputData(node, MnistInputData.labelsShape(10000));
+      return new MnistInputData(node, MnistInputData.Y_TEST_SHAPE);
     } else if (type.getName().toString().startsWith(TensorFlowTypes.DATA_PACKAGE_PREFIX)) {
       return new DatasetGenerator(node);
     } else if (type.equals(TensorFlowTypes.MATMUL.getDeclaringClass())) {

@@ -845,13 +845,13 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, READ_DATA_SETS.getDeclaringClass()))
       return new ReadDataSets(source);
     else if (isType(calledFunction, MNIST_X_TRAIN))
-      return new MnistInputData(source, MnistInputData.imagesShape(60000));
+      return new MnistInputData(source, MnistInputData.X_TRAIN_SHAPE);
     else if (isType(calledFunction, MNIST_Y_TRAIN))
-      return new MnistInputData(source, MnistInputData.labelsShape(60000));
+      return new MnistInputData(source, MnistInputData.Y_TRAIN_SHAPE);
     else if (isType(calledFunction, MNIST_X_TEST))
-      return new MnistInputData(source, MnistInputData.imagesShape(10000));
+      return new MnistInputData(source, MnistInputData.X_TEST_SHAPE);
     else if (isType(calledFunction, MNIST_Y_TEST))
-      return new MnistInputData(source, MnistInputData.labelsShape(10000));
+      return new MnistInputData(source, MnistInputData.Y_TEST_SHAPE);
     else if (isType(calledFunction, REDUCE_MEAN.getDeclaringClass())) return new ReduceMean(source);
     else if (isType(calledFunction, PLACEHOLDER.getDeclaringClass()))
       return new Placeholder(source);

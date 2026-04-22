@@ -65,13 +65,34 @@ public class MnistInputData extends TensorGenerator {
     return null;
   }
 
+  /** Number of training examples in MNIST's {@code load_data()} output. */
+  public static final int NUM_TRAIN_EXAMPLES = 60000;
+
+  /** Number of test examples in MNIST's {@code load_data()} output. */
+  public static final int NUM_TEST_EXAMPLES = 10000;
+
+  /** Side length (height and width) of each MNIST image, in pixels. */
+  public static final int IMAGE_SIDE = 28;
+
   /** MNIST training/test images: {@code (N, 28, 28)} of {@code uint8}. */
   public static List<Dimension<?>> imagesShape(int n) {
-    return List.of(new NumericDim(n), new NumericDim(28), new NumericDim(28));
+    return List.of(new NumericDim(n), new NumericDim(IMAGE_SIDE), new NumericDim(IMAGE_SIDE));
   }
 
   /** MNIST training/test labels: {@code (N,)} of {@code uint8}. */
   public static List<Dimension<?>> labelsShape(int n) {
     return List.of(new NumericDim(n));
   }
+
+  /** Shape of {@code mnist.load_data()[0][0]}: {@code (60000, 28, 28)} of {@code uint8}. */
+  public static final List<Dimension<?>> X_TRAIN_SHAPE = imagesShape(NUM_TRAIN_EXAMPLES);
+
+  /** Shape of {@code mnist.load_data()[0][1]}: {@code (60000,)} of {@code uint8}. */
+  public static final List<Dimension<?>> Y_TRAIN_SHAPE = labelsShape(NUM_TRAIN_EXAMPLES);
+
+  /** Shape of {@code mnist.load_data()[1][0]}: {@code (10000, 28, 28)} of {@code uint8}. */
+  public static final List<Dimension<?>> X_TEST_SHAPE = imagesShape(NUM_TEST_EXAMPLES);
+
+  /** Shape of {@code mnist.load_data()[1][1]}: {@code (10000,)} of {@code uint8}. */
+  public static final List<Dimension<?>> Y_TEST_SHAPE = labelsShape(NUM_TEST_EXAMPLES);
 }

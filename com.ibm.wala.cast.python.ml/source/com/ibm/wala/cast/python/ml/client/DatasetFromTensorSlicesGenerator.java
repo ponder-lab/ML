@@ -10,6 +10,7 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -18,6 +19,7 @@ import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
@@ -371,6 +373,31 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
         PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
         OrdinalSet<InstanceKey> fieldPts = builder.getPointerAnalysis().getPointsToSet(pk);
         Set<List<Dimension<?>>> fieldShapes = this.getShapesOfValue(builder, fieldPts);
+        if (fieldShapes == null || fieldShapes.isEmpty()) {
+          // Fallback: fieldPts is empty because the stored value has an implicit PK (e.g.,
+          // a division-result post reshape chain: `x_train / 255.0`). Locate the tuple-field
+          // putfield in the allocation node's IR and walk the stored vn via the shared
+          // SSA-chain helper. See wala/WALA#1889.
+          int storedVn = findTupleFieldStoreForIndex(asin.getNode(), asin, fieldIndex, builder);
+          if (storedVn > 0) {
+            try {
+              Set<List<Dimension<?>>> viaChain =
+                  this.getShapesOrSSAChain(builder, asin.getNode(), storedVn);
+              if (viaChain != null && !viaChain.isEmpty()) {
+                fieldShapes = viaChain;
+                final int fi = fieldIndex;
+                LOGGER.fine(
+                    () ->
+                        "getShapesOfTensorsArgument: recovered field="
+                            + fi
+                            + " via SSA-chain on storedVn="
+                            + storedVn);
+              }
+            } catch (IllegalArgumentException e) {
+              // leave as null/empty
+            }
+          }
+        }
         if (fieldShapes != null) ret.addAll(fieldShapes);
       }
     }
@@ -379,6 +406,73 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
       return this.getShapesOfValue(builder, valuePointsToSet);
     }
     return ret;
+  }
+
+  /**
+   * Locates a {@link PythonPropertyWrite} in {@code node}'s IR that stores to the tuple-like
+   * allocation {@code asin} at the given {@code fieldIndex}. Returns the stored SSA value number.
+   *
+   * <p>Used as a fallback when the tuple-field's points-to set is empty (the stored value has an
+   * implicit PK from a summary-method return). The stored vn's shape can then be recovered via
+   * {@link #shapesFromSSAChain(PropagationCallGraphBuilder, CGNode, int)}.
+   *
+   * @param node The CG node whose IR to scan.
+   * @param asin The tuple-like allocation whose field was stored to.
+   * @param fieldIndex The integer field index ({@code 0}, {@code 1}, ...).
+   * @param builder The propagation call graph builder for PTS lookups.
+   * @return The stored value's SSA value number, or {@code -1} if no matching store was found.
+   */
+  private static int findTupleFieldStoreForIndex(
+      CGNode node, AllocationSiteInNode asin, int fieldIndex, PropagationCallGraphBuilder builder) {
+    // Match writes by PTS (not by SSA vn) because the tuple's allocation site and the
+    // putfield's objectRef may be different SSA values even in the same node — both point
+    // to `asin` via PA but carry different vns. Same reasoning for the member constant.
+    String targetMember = String.valueOf(fieldIndex);
+    int found = -1;
+    for (SSAInstruction inst : node.getIR().getInstructions()) {
+      if (!(inst instanceof PythonPropertyWrite)) continue;
+      PythonPropertyWrite write = (PythonPropertyWrite) inst;
+
+      // Phase 1: does the write target `asin`? Check via PTS membership on the objectRef.
+      int objectVn = write.getUse(0);
+      PointerKey objPk =
+          builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, objectVn);
+      OrdinalSet<InstanceKey> objPts = builder.getPointerAnalysis().getPointsToSet(objPk);
+      if (objPts.isEmpty()) continue;
+      boolean matchesAsin = false;
+      for (InstanceKey ik : objPts) {
+        if (ik.equals(asin)) {
+          matchesAsin = true;
+          break;
+        }
+      }
+      if (!matchesAsin) continue;
+
+      // Phase 2: does the write's member match `fieldIndex`? Python tuple-store lowers the
+      // field index (0, 1, ...) to a `ConstantKey<Integer>` (or `<String>` of the digits)
+      // pointed to by the memberRef vn. Compare by `toString` so both representations match.
+      int memberVn = write.getUse(1);
+      PointerKey memberPk =
+          builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, memberVn);
+      boolean memberMatches = false;
+      for (InstanceKey memberIk : builder.getPointerAnalysis().getPointsToSet(memberPk)) {
+        if (!(memberIk instanceof ConstantKey)) continue;
+        Object value = ((ConstantKey<?>) memberIk).getValue();
+        if (value != null && targetMember.equals(value.toString())) {
+          memberMatches = true;
+          break;
+        }
+      }
+      if (!memberMatches) continue;
+
+      // Phase 3: record the stored value. If we see multiple distinct stores to the same
+      // field (unlikely in straight-line tuple construction, but possible with conditional
+      // writes), treat as ambiguous — the caller falls back to ⊤ rather than pick one.
+      int stored = write.getUse(2);
+      if (found != -1 && found != stored) return -1;
+      found = stored;
+    }
+    return found;
   }
 
   /**
@@ -418,6 +512,18 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
         PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
         OrdinalSet<InstanceKey> fieldPts = builder.getPointerAnalysis().getPointsToSet(pk);
         Set<DType> fieldDTypes = this.getDTypesOfValue(builder, fieldPts);
+        if (fieldDTypes == null || fieldDTypes.isEmpty()) {
+          // Same fallback as for shapes: implicit-PK stored value, walk DU chain.
+          int storedVn = findTupleFieldStoreForIndex(asin.getNode(), asin, fieldIndex, builder);
+          if (storedVn > 0) {
+            try {
+              Set<DType> viaChain = this.getDTypesOrSSAChain(builder, asin.getNode(), storedVn);
+              if (viaChain != null && !viaChain.isEmpty()) fieldDTypes = viaChain;
+            } catch (IllegalArgumentException e) {
+              // leave as null/empty
+            }
+          }
+        }
         if (fieldDTypes != null) ret.addAll(fieldDTypes);
       }
     }
