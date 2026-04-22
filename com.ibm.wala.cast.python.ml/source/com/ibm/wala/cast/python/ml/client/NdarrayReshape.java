@@ -237,10 +237,18 @@ public class NdarrayReshape extends TensorGenerator {
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     // Used to resolve `-1` in the target shape — look up the receiver's shape. Uses the
     // PTS-first-then-SSA-DU helper inherited from `TensorGenerator`, which handles the
-    // implicit-PK case (wala/WALA#1889) without materialising PTS.
+    // implicit-PK case (wala/WALA#1889) without materialising PTS. IAE from the helper means
+    // "empty PTS and SSA walk didn't recognise the creator"; for the reshape receiver that just
+    // means we can't resolve `-1`, not that the receiver isn't a tensor — the caller in {@link
+    // #getShapes} is expected to fall back to a partial shape (SymbolicDim for the `-1` slot).
     int receiverVn = getReceiverVn();
     if (receiverVn <= 0) return null;
-    return getShapesOrSSAChain(builder, getNode(), receiverVn);
+    try {
+      return getShapesOrSSAChain(builder, getNode(), receiverVn);
+    } catch (IllegalArgumentException e) {
+      LOGGER.fine("NdarrayReshape.getDefaultShapes: IAE on receiver vn=" + receiverVn);
+      return null;
+    }
   }
 
   @Override
