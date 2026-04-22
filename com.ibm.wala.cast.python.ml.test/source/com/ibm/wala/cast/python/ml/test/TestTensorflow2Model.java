@@ -1835,17 +1835,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * wildcard for the varying first dimension, so the union &mdash; not any individual shape &mdash;
    * is the correct source-level specification.
    *
-   * <p>Value 3 is currently partially resolved: shape inference through {@code np.array(x_train,
+   * <p>Value 3 is currently partially resolved. Shape inference through {@code np.array(x_train,
    * np.float32).reshape([-1, 784]) / 255.0} recovers a partial {@code (?, 784)} (the {@code -1}
-   * slot becomes symbolic when the receiver's shape is implicit-PK), and the batched shape {@code
+   * slot stays symbolic when the receiver's shape is implicit-PK), and the batched shape {@code
    * (256, 784)} follows from {@code from_tensor_slices}'s per-index slice + {@code .batch(256)}.
-   * The analysis currently emits {@code {(256, 784) float32, (?, 784) float32}} in one context and
-   * {@code {(?, 784) float32}} in the other; neither the concrete test-set shape {@code (10000,
-   * 784)} nor the visualization slice shape {@code (5, 784)} is recovered, and the {@code (?, 784)}
-   * entries are coarse approximations of those call sites. Additionally, the test helper applies
-   * the same expected set to every context (rather than comparing the union across contexts), which
-   * is itself a #371 symptom &mdash; when that is fixed the assertion should be expressed as
-   * union-across-contexts, matching the {@code input_signature} semantics above.
+   * Under the now-union-across-contexts helper, the aggregated actual for vn=3 is {@code {(?, 784)
+   * float32, (256, 784) float32}} &mdash; one element per flow family, roughly one per trampoline
+   * context. The test fails on types because the concrete test-set shape {@code (10000, 784)} and
+   * the visualization slice shape {@code (5, 784)} never fall out of the reshape-{@code -1} slot:
+   * the {@code (?, 784)} actual is a coarse approximation that covers both call sites. The
+   * remaining analyzer gaps are (a) resolve {@code -1} in {@code reshape([-1, 784])} against the
+   * source's concrete mnist-test shape {@code (10000, 28, 28)} to yield {@code (10000, 784)}, and
+   * (b) propagate the constant-step slice {@code x_test[:n_images]} so {@code (5, 784)} falls out
+   * of {@code (10000, 784)}.
    *
    * <p>Rule-based tensor variable count is 5 (1 parameter {@code x} + 4 intermediate ops {@code
    * fc1}, {@code fc2}, {@code out}, {@code softmax}). The analysis currently registers 4; the
