@@ -118,7 +118,7 @@ public abstract class TensorGenerator {
 
   protected static final int UNDEFINED_PARAMETER_POSITION = -1;
 
-  protected static final Logger LOGGER = Logger.getLogger(TensorGenerator.class.getName());
+  private static final Logger LOGGER = Logger.getLogger(TensorGenerator.class.getName());
 
   /** The source of the tensor, represented by a points-to set variable. */
   protected PointsToSetVariable source;

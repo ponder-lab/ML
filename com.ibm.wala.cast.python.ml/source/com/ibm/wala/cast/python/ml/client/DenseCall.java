@@ -21,6 +21,7 @@ import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Logger;
 
 /**
  * A generator for invocations of {@code tf.keras.layers.Dense}.
@@ -30,6 +31,8 @@ import java.util.Set;
  * @author <a href="mailto:khatchad@hunter.cuny.edu>">Raffi Khatchadourian</a>
  */
 public class DenseCall extends TensorGenerator {
+
+  private static final Logger LOGGER = Logger.getLogger(DenseCall.class.getName());
 
   private static final String DENSE_UNITS_FIELD_NAME = "units";
 

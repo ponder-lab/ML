@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Logger;
 
 /**
  * A generator for tensors created by {@code tf.data.Dataset.from_tensors}.
@@ -34,6 +35,9 @@ import java.util.Set;
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
 public class DatasetFromTensorsGenerator extends DatasetGenerator implements TupleElementProvider {
+
+  private static final Logger LOGGER =
+      Logger.getLogger(DatasetFromTensorsGenerator.class.getName());
 
   /** Parameter indices for {@code tf.data.Dataset.from_tensors}. */
   protected enum Parameters {

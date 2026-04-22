@@ -31,6 +31,7 @@ import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Logger;
 
 /**
  * A generator for tensors created by {@code tf.data.Dataset.choose_from_datasets}.
@@ -38,6 +39,9 @@ import java.util.Set;
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
 public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
+
+  private static final Logger LOGGER =
+      Logger.getLogger(DatasetChooseFromDatasetsGenerator.class.getName());
 
   /** Parameter indices for {@code tf.data.Dataset.choose_from_datasets}. */
   protected enum Parameters {
