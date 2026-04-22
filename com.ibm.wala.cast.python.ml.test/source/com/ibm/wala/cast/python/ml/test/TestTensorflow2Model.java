@@ -98,6 +98,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_256_784_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(256), new NumericDim(784)));
 
+  private static final TensorType TENSOR_10000_784_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(10000), new NumericDim(784)));
+
+  private static final TensorType TENSOR_5_784_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(5), new NumericDim(784)));
+
   private static final TensorType TENSOR_60000_784_UINT8 =
       new TensorType(UINT_8, asList(new NumericDim(60000), new NumericDim(784)));
 
@@ -1809,20 +1815,37 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Parameter {@code x} of {@code NeuralNet.call} receives {@code batch_x} from the dataset
-   * iteration chain. At runtime, {@code batch_x} has shape {@code (256, 784)} and dtype {@code
-   * float32} (verified by Python assert statements in {@code neural_network.py}).
+   * Parameter {@code x} of {@code NeuralNet.call} receives tensors from <b>four</b> source-level
+   * call sites of {@code neural_net}, with three distinct runtime shapes (all {@code float32},
+   * verified by Python {@code assert} statements in {@code neural_network.py}):
    *
-   * <p>Value 3 is now partially resolved: shape inference through {@code np.array(x_train,
+   * <ul>
+   *   <li>line 136 ({@code neural_net(x, ...)} inside {@code run_optimization}) &mdash; {@code
+   *       (256, 784)} via {@code batch_x} forwarded through {@code x};
+   *   <li>line 167 ({@code neural_net(batch_x, ...)} in the training loop) &mdash; {@code (256,
+   *       784)};
+   *   <li>line 189 ({@code neural_net(x_test, ...)}) &mdash; {@code (10000, 784)};
+   *   <li>line 207 ({@code neural_net(test_images)} in the visualization block) &mdash; {@code (5,
+   *       784)} via {@code x_test[:n_images]}.
+   * </ul>
+   *
+   * <p>The aspirational expected set for value 3 is therefore the union {@code {(256, 784), (10000,
+   * 784), (5, 784) float32}}. A downstream {@code @tf.function(input_signature=...)} consumer would
+   * merge these into a single {@code tf.TensorSpec(shape=(None, 784), dtype=tf.float32)} using a
+   * wildcard for the varying first dimension, so the union &mdash; not any individual shape &mdash;
+   * is the correct source-level specification.
+   *
+   * <p>Value 3 is currently partially resolved: shape inference through {@code np.array(x_train,
    * np.float32).reshape([-1, 784]) / 255.0} recovers a partial {@code (?, 784)} (the {@code -1}
    * slot becomes symbolic when the receiver's shape is implicit-PK), and the batched shape {@code
    * (256, 784)} follows from {@code from_tensor_slices}'s per-index slice + {@code .batch(256)}.
-   * The test currently fails on types because the analysis emits both shapes in a single context
-   * ({@code {(256, 784) float32, (?, 784) float32}}) and only the partial in the other context
-   * ({@code {(?, 784) float32}}); no single expected set matches both. The legitimate aspirational
-   * set is {@code {(256, 784) float32}} for the batch call site and {@code {(10000, 784) float32}}
-   * for the test-set call site &mdash; but the per-context assertion currently applies the same
-   * expected set to every context, which is itself a #371 symptom (see below).
+   * The analysis currently emits {@code {(256, 784) float32, (?, 784) float32}} in one context and
+   * {@code {(?, 784) float32}} in the other; neither the concrete test-set shape {@code (10000,
+   * 784)} nor the visualization slice shape {@code (5, 784)} is recovered, and the {@code (?, 784)}
+   * entries are coarse approximations of those call sites. Additionally, the test helper applies
+   * the same expected set to every context (rather than comparing the union across contexts), which
+   * is itself a #371 symptom &mdash; when that is fixed the assertion should be expressed as
+   * union-across-contexts, matching the {@code input_signature} semantics above.
    *
    * <p>Rule-based tensor variable count is 5 (1 parameter {@code x} + 4 intermediate ops {@code
    * fc1}, {@code fc2}, {@code out}, {@code softmax}). The analysis currently registers 4; the
@@ -1838,7 +1861,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testNeuralNetwork()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("neural_network.py", "NeuralNet.call", 1, 4, Map.of(3, Set.of(TENSOR_256_784_FLOAT32)));
+    test(
+        "neural_network.py",
+        "NeuralNet.call",
+        1,
+        4,
+        Map.of(3, Set.of(TENSOR_256_784_FLOAT32, TENSOR_10000_784_FLOAT32, TENSOR_5_784_FLOAT32)));
   }
 
   /**
