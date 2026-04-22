@@ -204,6 +204,9 @@ import matplotlib.pyplot as plt
 # Predict 5 images from validation set.
 n_images = 5
 test_images = x_test[:n_images]
+# asserts before FUT neural_net (testNeuralNetwork) --- visualization call site.
+assert test_images.shape == (5, 784)
+assert test_images.dtype == tf.float32
 predictions = neural_net(test_images)
 
 print("Elapsed time: ", timeit.default_timer() - start_time - skipped_time)
