@@ -7,6 +7,7 @@ import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -259,8 +260,13 @@ public class NdarraySubscriptOperation extends TensorGenerator {
   }
 
   /**
-   * Classifies a single subscript tuple element as ellipsis, newaxis ({@code None}), or an
-   * unsupported value (integer index, slice, variable, etc.).
+   * Classifies a single subscript tuple element as ellipsis, newaxis ({@code None} or {@code
+   * tf.newaxis}), or an unsupported value (integer index, slice, variable, etc.).
+   *
+   * <p>Recognises {@code tf.newaxis} via its modeled type {@link TensorFlowTypes#NEWAXIS} (see
+   * {@code tensorflow.xml}'s {@code <new def="newaxis" class="Ltensorflow/newaxis">}). At Python
+   * runtime {@code tf.newaxis is None}, but WALA sees it as an attribute-access result with a
+   * synthetic allocation rather than a {@code ConstantKey<null>} — hence the separate branch.
    *
    * @param pts The points-to set of the tuple element being classified.
    * @return {@link SubscriptField#ELLIPSIS} or {@link SubscriptField#NEWAXIS} for a supported
@@ -271,11 +277,25 @@ public class NdarraySubscriptOperation extends TensorGenerator {
     boolean sawEllipsis = false;
     boolean sawNone = false;
     for (InstanceKey ik : pts) {
-      if (!(ik instanceof ConstantKey)) return null;
-      Object v = ((ConstantKey<?>) ik).getValue();
-      if (ELLIPSIS.equals(v)) sawEllipsis = true;
-      else if (v == null) sawNone = true;
-      else return null; // integer index, string, etc. — not supported
+      if (ik instanceof ConstantKey) {
+        Object v = ((ConstantKey<?>) ik).getValue();
+        if (ELLIPSIS.equals(v)) {
+          sawEllipsis = true;
+          continue;
+        }
+        if (v == null) {
+          sawNone = true;
+          continue;
+        }
+        return null; // integer index, string, etc. — not supported
+      }
+      // Non-constant InstanceKey: accept it only if it's the modeled `tf.newaxis` allocation.
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      if (asin != null && asin.getConcreteType().getReference().equals(TensorFlowTypes.NEWAXIS)) {
+        sawNone = true;
+        continue;
+      }
+      return null; // unknown non-constant — bail
     }
     if (sawEllipsis && sawNone) return null; // ambiguous; bail
     if (sawEllipsis) return SubscriptField.ELLIPSIS;

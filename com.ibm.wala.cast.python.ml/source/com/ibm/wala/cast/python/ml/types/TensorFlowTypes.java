@@ -145,6 +145,15 @@ public class TensorFlowTypes extends PythonTypes {
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/python/ops/variables/Variable"));
 
+  /**
+   * Modeled type for {@code tf.newaxis} (see {@code tensorflow.xml}). At Python runtime {@code
+   * tf.newaxis is None}, but WALA represents attribute access as a synthetic allocation, so we give
+   * it a distinct sentinel class that {@link
+   * com.ibm.wala.cast.python.ml.client.NdarraySubscriptOperation#classifyField} can match.
+   */
+  public static final TypeReference NEWAXIS =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/newaxis"));
+
   public static final TypeReference DATASET_SHUFFLE_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/shuffle"));
 
