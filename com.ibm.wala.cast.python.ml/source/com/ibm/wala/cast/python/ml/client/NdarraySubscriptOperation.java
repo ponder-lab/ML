@@ -217,13 +217,20 @@ public class NdarraySubscriptOperation extends TensorGenerator {
       }
     }
     if (tupleAsin == null) {
+      StringBuilder ptsDesc = new StringBuilder();
+      for (InstanceKey ik : memberPts) {
+        ptsDesc.append(" ").append(ik.getClass().getSimpleName());
+        AllocationSiteInNode a = getAllocationSiteInNode(ik);
+        if (a != null) ptsDesc.append("@").append(a.getConcreteType().getReference().getName());
+      }
       LOGGER.fine(
           () ->
               "extractSubscriptFields: memberVn="
                   + memberVn
                   + " no tuple alloc in PTS (size="
                   + memberPts.size()
-                  + ") — subscript isn't a compound `[..., None]`-style access");
+                  + ") — pts-kinds:"
+                  + ptsDesc);
       return null;
     }
 
