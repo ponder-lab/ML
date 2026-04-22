@@ -7087,6 +7087,36 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Guards function-style {@code np.array(x, dtype)} shape-preservation. Mirrors {@link
+   * #testAstype}'s shape/dtype contract but through the function-call path rather than the
+   * method-call path: {@code np.array(x_train, np.float32)} should yield a tensor with {@code
+   * x_train}'s shape {@code (60000, 28, 28)} and dtype {@code float32}.
+   *
+   * <p>As of writing, {@code np.array} is modeled in {@code tensorflow.xml} as a fresh {@code
+   * Ltensorflow/python/framework/ops/ndarray} allocation with no shape transfer from the input, so
+   * the analysis reports {@code {? unknown}} for the output. This is the same root cause as the
+   * missing {@code (10000, 784)} shape in {@link #testNeuralNetwork} &mdash; in that test, {@code
+   * np.array(x_test, np.float32).reshape([-1, 784])} can't resolve its {@code -1} slot concretely
+   * because the receiver's shape is dropped by {@code np.array}. Fixing this test fixes that
+   * downstream symptom.
+   *
+   * <p>TODO: Currently suppressed because the branch actual registers 0 tensor parameters for
+   * {@code consume} (its argument isn't seeded as a tensor since {@code np.array}'s output has no
+   * shape). Flip to plain {@code @Test} once wala/ML#404 lands a generator that preserves the first
+   * argument's shape.
+   */
+  @Test(expected = AssertionError.class)
+  public void testNpArrayPreservesShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_array_preserves_shape.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_60000_28_28_FLOAT32)));
+  }
+
+  /**
    * Test https://github.com/wala/ML/issues/358.
    *
    * <p>Derived from {@link #testModelCall()} (see {@code tf2_test_model_call.py}) by adding a
