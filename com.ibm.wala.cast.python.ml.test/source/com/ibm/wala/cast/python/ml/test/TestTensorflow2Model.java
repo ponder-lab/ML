@@ -1786,11 +1786,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * actual) so the count check passes and the test exposes the type check; a legitimate future rise
    * to 5 would trigger a re-evaluation via the resulting count mismatch.
    *
-   * <p>With the count check passing, the test now fails on value 3's type: actual {@code {(32,)
-   * uint8, (16,) uint8}} &mdash; the {@code y_*} labels' types (shapes only showing the batch dim)
-   * leak into the {@code x} parameter's slot. Same tuple-routing bug as {@link
-   * #testNeuralNetwork()} (wala/ML#396) applied to the {@code (x_train, y_train)} / {@code (x_test,
-   * y_test)} tuples consumed by {@code from_tensor_slices}.
+   * <p>With the count check passing, the test now fails on value 3's type: actual {@code {(32, 28)
+   * float32, (16, 28) float32, (28, 28) float32, ? unknown}} &mdash; a union that contains an
+   * over-peeled shape ({@code (32, 28)} / {@code (16, 28)} = batch applied to a peeled {@code
+   * (28,)}), the unbatched source shape {@code (28, 28)}, and a ⊤ entry. The {@code float32} dtype
+   * on three of the four entries indicates that per-index dtype dispatch routes {@code x_train}'s
+   * dtype to slot 0 correctly; what is missing is (a) the shape contribution from the {@code
+   * x_train[..., tf.newaxis]} subscript that would add the trailing {@code 1} dim, and (b)
+   * suppression of the erroneous over-peel path. The earlier labels-swap symptom (shape {@code
+   * (32,)} uint8) described under wala/ML#396 appears to have been resolved by the per-index dtype
+   * delegation work landed on this branch; the remaining shape mismatch is shape-only.
    */
   @Test
   public void testEagerExecution()
@@ -1808,13 +1813,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * iteration chain. At runtime, {@code batch_x} has shape {@code (256, 784)} and dtype {@code
    * float32} (verified by Python assert statements in {@code neural_network.py}).
    *
-   * <p>The test currently fails because value 3 (slot 0 of the {@code (x_train, y_train)} tuple
-   * consumed by {@code from_tensor_slices}) receives {@code y_train}'s types {@code {(256,) uint8,
-   * (?) uint8}} instead of {@code x_train}'s {@code (256, 784) float32}. Two contributing root
-   * causes: (1) a missing generator for ndarray {@code .reshape()} breaks {@code x_train}'s PA
-   * chain through {@code np.array(x_train, np.float32).reshape([-1, 784])}; (2) per-index {@code
-   * TupleElementProvider} routing doesn't survive the {@code for images, labels in dataset}
-   * destructuring on a chained dataset, swapping/confusing the per-index types (wala/ML#396).
+   * <p>The test currently fails on value 3's shape only: actual {@code {? of float32}} vs. expected
+   * {@code {(256, 784) of float32}}. Dtype routing for slot 0 of the {@code (x_train, y_train)}
+   * tuple is correct (the earlier labels-swap symptom reported under wala/ML#396 &mdash; actual
+   * {@code {(256,) uint8, (?) uint8}} &mdash; appears to have been resolved by the per-index
+   * delegation work landed on this branch). What remains is shape-only: the {@code x_train} chain
+   * {@code np.array(x_train, np.float32).reshape([-1, 784]) / 255.0} does not propagate a concrete
+   * shape through {@code from_tensor_slices}'s per-index lookup by the time {@code batch_x} flows
+   * into {@code NeuralNet.call}'s {@code x}. Iteration here is an {@code enumerate(train_data.take(
+   * training_steps), 1)} wrapping a nested destructure {@code for step, (batch_x, batch_y) in
+   * ...:}, which may also contribute to the shape loss.
    *
    * <p>Rule-based tensor variable count is 5 (1 parameter {@code x} + 4 intermediate ops {@code
    * fc1}, {@code fc2}, {@code out}, {@code softmax}). The analysis currently registers 3; the
@@ -1838,12 +1846,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * pred = neural_net(batch_x, is_training=True)}, which dispatches through the summarized {@code
    * Model.__call__} into user-defined {@code NeuralNet.call}. wala/ML#127 (now closed) was a
    * necessary fix for this dispatch to work at all, but is insufficient on its own &mdash; value 2
-   * remains untracked until the same reshape/tuple-routing gap blocking {@link
-   * #testNeuralNetwork()} is resolved. See wala/ML#378.
+   * remains untracked until the shape-propagation gap blocking {@link #testNeuralNetwork()} is
+   * resolved. See wala/ML#378. The current failure mode manifests as a parameter-count mismatch
+   * ({@code expected:<2> but was:<1>}) because only {@code y} is recognized as a tensor parameter.
    *
-   * <p>Once value 2 is tracked, the test will also fail on value 3: the actual {@code y} type
-   * includes a spurious {@code (?) uint8} in the union ({@code {(256,) uint8, (?) uint8}}) &mdash;
-   * same tuple-routing gap as {@link #testNeuralNetwork()} (wala/ML#396).
+   * <p>Once value 2 is tracked, the test will also need value 3 to be compared: at the time this
+   * Javadoc was updated, the labels-swap symptom reported under wala/ML#396 ({@code {(256,) uint8,
+   * (?) uint8}}) has been resolved for analogous sites by per-index delegation, but value 3 cannot
+   * be observed here until the parameter-count check passes.
    *
    * <p>The rule-based tensor variable count is 5 (2 parameters {@code x}, {@code y} + 3
    * intermediate ops {@code cast-to-int64}, {@code sparse_softmax_cross_entropy_with_logits},
@@ -1868,10 +1878,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * float32} and {@code y} has shape {@code (256,)} dtype {@code uint8} (verified by Python assert
    * statements in {@code neural_network.py}).
    *
-   * <p>The test currently fails because value 2 (slot 0 of the tuple, same as {@link
-   * #testNeuralNetwork()}) receives {@code y_train}'s types instead of {@code x_train}'s, and value
-   * 3 additionally carries a spurious {@code (?) uint8} in its union. Same tuple-routing root cause
-   * as {@link #testNeuralNetwork()} (wala/ML#396).
+   * <p>The test currently fails on value 2's shape only: actual {@code {? of float32}} vs. expected
+   * {@code {(256, 784) of float32}}. Dtype routing for slot 0 of the tuple is correct (same state
+   * as {@link #testNeuralNetwork()} &mdash; the labels-swap symptom originally reported under
+   * wala/ML#396 appears to have been resolved by the per-index delegation work on this branch).
+   * What remains is the same shape-propagation gap as {@link #testNeuralNetwork()}: the {@code
+   * x_train} chain does not yield a concrete per-index shape through {@code from_tensor_slices} by
+   * the time {@code batch_x} reaches {@code run_optimization}'s {@code x}.
    *
    * <p>Rule-based tensor variable count is 6 (2 parameters {@code x}, {@code y} + 4 intermediate
    * ops {@code pred}, {@code loss}, {@code trainable_variables}, {@code gradients}). The analysis
@@ -1914,9 +1927,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * exposes type bugs; when #386 and #387 are fixed, the count should rise and trigger the test
    * with a clear signal.
    *
-   * <p>Value 2 ({@code y_pred}) may also be subject to the same tuple-routing gap blocking {@link
-   * #testNeuralNetwork()} (wala/ML#396); wala/ML#127 (closed) was a necessary-but-insufficient
-   * prerequisite for value 2 tracking through the {@code Model.__call__} dispatch chain.
+   * <p>Value 2 ({@code y_pred}) may also be subject to the same shape-propagation gap blocking
+   * {@link #testNeuralNetwork()} (wala/ML#396); wala/ML#127 (closed) was a
+   * necessary-but-insufficient prerequisite for value 2 tracking through the {@code Model.__call__}
+   * dispatch chain. The current failure manifests as a parameter-count mismatch ({@code
+   * expected:<2> but was:<1>}) since only {@code y_true} is recognized as a tensor parameter.
    */
   @Test
   public void testNeuralNetwork4()
