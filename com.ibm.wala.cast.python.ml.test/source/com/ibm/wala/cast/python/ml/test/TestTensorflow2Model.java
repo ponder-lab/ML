@@ -7288,6 +7288,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             + " calling context if we are expecting at least one tensor parameter.",
         expectedNumberOfTensorParameters <= 0 || contextToFunctionParameterPointerKeys.size() > 0);
 
+    // Union actual types per source-level vn across all contexts. The downstream consumer for this
+    // analysis is `@tf.function(input_signature=...)`, which is indexed by source-level parameter
+    // position — so the comparison that matches the use case is "union of per-context actuals for
+    // vn equals expected set", not "every context individually contains the full expected set".
+    // The same framing grounds wala/ML#371 Option 2 on the count axis.
+    Map<Integer, Set<TensorType>> actualTypesByValueNumber = new HashMap<>();
+
     for (Context ctx : contextToFunctionParameterPointerKeys.keySet()) {
       // check tensor parameters.
       Set<LocalPointerKey> functionParameterPointerKeys =
@@ -7304,37 +7311,37 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       assertEquals(
           expectedTensorParameterValueNumberToTypes.keySet(), actualParameterValueNumberSet);
 
-      // check types.
-      functionParameterPointerKeys.stream()
-          .forEach(
-              lpk -> {
-                TensorVariable tensorVariable = pointerKeyToTensorVariable.get(lpk);
-                assertNotNull(
-                    "Checking tensor variable for pointer key: " + lpk + ".", tensorVariable);
+      // accumulate per-vn types across contexts.
+      for (LocalPointerKey lpk : functionParameterPointerKeys) {
+        TensorVariable tensorVariable = pointerKeyToTensorVariable.get(lpk);
+        assertNotNull("Checking tensor variable for pointer key: " + lpk + ".", tensorVariable);
 
-                Set<TensorType> types = tensorVariable.getTypes();
-                assertNotNull("Checking tensor variable for pointer key: " + lpk + ".", types);
+        Set<TensorType> types = tensorVariable.getTypes();
+        assertNotNull("Checking tensor variable for pointer key: " + lpk + ".", types);
 
-                Set<TensorType> expectedTypes =
-                    expectedTensorParameterValueNumberToTypes.get(lpk.getValueNumber());
-                assertNotNull(
-                    "Checking expected types for value number: " + lpk.getValueNumber() + ".",
-                    expectedTypes);
+        actualTypesByValueNumber
+            .computeIfAbsent(lpk.getValueNumber(), k -> new HashSet<>())
+            .addAll(types);
+      }
+    }
 
-                // check that the types are the same.
-                if (LOGGER.isLoggable(Level.INFO) && !expectedTypes.equals(types)) {
-                  LOGGER.info("Assertion failure for lpk: " + lpk);
-                  LOGGER.info("  Node: " + lpk.getNode());
-                  LOGGER.info("  Context: " + lpk.getNode().getContext());
-                  LOGGER.info("  Expected: " + expectedTypes);
-                  LOGGER.info("  Actual: " + types);
-                }
+    // compare expected against the union across contexts, per vn.
+    for (Map.Entry<Integer, Set<TensorType>> entry :
+        expectedTensorParameterValueNumberToTypes.entrySet()) {
+      int vn = entry.getKey();
+      Set<TensorType> expectedTypes = entry.getValue();
+      Set<TensorType> actualUnion = actualTypesByValueNumber.getOrDefault(vn, emptySet());
 
-                assertEquals(
-                    "Comparing expected types for value number: " + lpk.getValueNumber() + ".",
-                    expectedTypes,
-                    types);
-              });
+      if (LOGGER.isLoggable(Level.INFO) && !expectedTypes.equals(actualUnion)) {
+        LOGGER.info("Type-union mismatch for value number: " + vn + ".");
+        LOGGER.info("  Expected: " + expectedTypes);
+        LOGGER.info("  Actual (union across contexts): " + actualUnion);
+      }
+
+      assertEquals(
+          "Comparing expected types for value number: " + vn + " (union across contexts).",
+          expectedTypes,
+          actualUnion);
     }
   }
 
