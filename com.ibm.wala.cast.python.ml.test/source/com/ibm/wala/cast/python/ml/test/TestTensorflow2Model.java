@@ -1813,27 +1813,32 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * iteration chain. At runtime, {@code batch_x} has shape {@code (256, 784)} and dtype {@code
    * float32} (verified by Python assert statements in {@code neural_network.py}).
    *
-   * <p>The test currently fails on value 3's shape only: actual {@code {? of float32}} vs. expected
-   * {@code {(256, 784) of float32}}. Dtype routing for slot 0 of the {@code (x_train, y_train)}
-   * tuple is correct (the earlier labels-swap symptom reported under wala/ML#396 &mdash; actual
-   * {@code {(256,) uint8, (?) uint8}} &mdash; appears to have been resolved by the per-index
-   * delegation work landed on this branch). What remains is shape-only: the {@code x_train} chain
-   * {@code np.array(x_train, np.float32).reshape([-1, 784]) / 255.0} does not propagate a concrete
-   * shape through {@code from_tensor_slices}'s per-index lookup by the time {@code batch_x} flows
-   * into {@code NeuralNet.call}'s {@code x}. Iteration here is an {@code enumerate(train_data.take(
-   * training_steps), 1)} wrapping a nested destructure {@code for step, (batch_x, batch_y) in
-   * ...:}, which may also contribute to the shape loss.
+   * <p>Value 3 is now partially resolved: shape inference through {@code np.array(x_train,
+   * np.float32).reshape([-1, 784]) / 255.0} recovers a partial {@code (?, 784)} (the {@code -1}
+   * slot becomes symbolic when the receiver's shape is implicit-PK), and the batched shape {@code
+   * (256, 784)} follows from {@code from_tensor_slices}'s per-index slice + {@code .batch(256)}.
+   * The test currently fails on types because the analysis emits both shapes in a single context
+   * ({@code {(256, 784) float32, (?, 784) float32}}) and only the partial in the other context
+   * ({@code {(?, 784) float32}}); no single expected set matches both. The legitimate aspirational
+   * set is {@code {(256, 784) float32}} for the batch call site and {@code {(10000, 784) float32}}
+   * for the test-set call site &mdash; but the per-context assertion currently applies the same
+   * expected set to every context, which is itself a #371 symptom (see below).
    *
    * <p>Rule-based tensor variable count is 5 (1 parameter {@code x} + 4 intermediate ops {@code
-   * fc1}, {@code fc2}, {@code out}, {@code softmax}). The analysis currently registers 3; the
-   * discrepancy is unaccounted for (wala/ML#390). Count set to 3 (branch actual) so the count check
-   * passes and the remaining failure exposes type bugs; a future fix that legitimately raises the
-   * count will trigger the test with a clear signal.
+   * fc1}, {@code fc2}, {@code out}, {@code softmax}). The analysis currently registers 4; the
+   * discrepancy is partly accounted for by wala/ML#390 (missing intermediate) and partly by
+   * wala/ML#371 (the same source-level {@code vn} appears under multiple CGNode contexts and the
+   * test helper counts context-multiplied rather than source-level &mdash; see
+   * https://github.com/wala/ML/issues/371#issuecomment-4300120524 for the design-principle
+   * resolution). Count set to 4 (branch actual under the current helper) so the count check passes
+   * and the remaining failure exposes the per-context type mismatch; when #371 lands Option 2, this
+   * count will drop to the source-level number and need re-baselining along with every other count
+   * expectation.
    */
   @Test
   public void testNeuralNetwork()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("neural_network.py", "NeuralNet.call", 1, 3, Map.of(3, Set.of(TENSOR_256_784_FLOAT32)));
+    test("neural_network.py", "NeuralNet.call", 1, 4, Map.of(3, Set.of(TENSOR_256_784_FLOAT32)));
   }
 
   /**
