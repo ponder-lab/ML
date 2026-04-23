@@ -163,6 +163,8 @@ public class SliceBuiltinOperation extends TensorGenerator {
    *       than risk a wrong union.
    * </ul>
    *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph and IR are consulted to
+   *     locate the call site.
    * @return A {@link CallSiteView} with the caller's node and the four arg value numbers, or {@code
    *     null} if the call site cannot be uniquely resolved.
    */
@@ -188,6 +190,17 @@ public class SliceBuiltinOperation extends TensorGenerator {
     return findViaCalleeNode(builder, getNode());
   }
 
+  /**
+   * Walks the call graph's predecessors of the given callee CGNode to find the unique caller-side
+   * invoke that produced it. Shared by the {@link ReturnValueKey} source case (the summary's
+   * synthetic return) and the manual-node case (dispatch from {@code createManualGenerator}).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph to search.
+   * @param callee The {@code Lwala/builtin/slice.do()} callee {@link CGNode}.
+   * @return A {@link CallSiteView} pinned to the unique caller and its four argument value numbers,
+   *     or {@code null} when no invoke resolves or when there are multiple call sites with
+   *     divergent args (ambiguous &mdash; union would be wrong).
+   */
   private static CallSiteView findViaCalleeNode(
       PropagationCallGraphBuilder builder, CGNode callee) {
     CallGraph cg = builder.getCallGraph();
@@ -209,11 +222,32 @@ public class SliceBuiltinOperation extends TensorGenerator {
     return unique;
   }
 
+  /**
+   * Constructs a {@link CallSiteView} for a {@code slice(x, start, stop, step)} invoke. Returns
+   * {@code null} if the invoke doesn't have the expected 4-arg shape (self + 4 positional args = 5
+   * uses); this defends against malformed invokes without throwing.
+   *
+   * @param caller The caller {@link CGNode} whose IR contains the invoke.
+   * @param call The {@link SSAAbstractInvokeInstruction} for the slice call.
+   * @return A {@link CallSiteView} populated with the caller and the four arg value numbers, or
+   *     {@code null} if the invoke's use count is smaller than expected.
+   */
   private static CallSiteView viewOf(CGNode caller, SSAAbstractInvokeInstruction call) {
     if (call.getNumberOfUses() < 5) return null;
     return new CallSiteView(caller, call.getUse(1), call.getUse(2), call.getUse(3), call.getUse(4));
   }
 
+  /**
+   * Checks whether the points-to set of {@code vn} in {@code node} consists solely of the Python
+   * {@code None} constant. Used to recognize the canonical {@code [:k]} shape where {@code start}
+   * and {@code step} are absent.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} providing the pointer analysis.
+   * @param node The {@link CGNode} whose IR contains {@code vn}.
+   * @param vn The SSA value number to inspect.
+   * @return {@code true} iff {@code vn}'s points-to set is non-empty and every element is a {@link
+   *     ConstantKey} whose value is {@code null}; {@code false} otherwise.
+   */
   private static boolean isNone(PropagationCallGraphBuilder builder, CGNode node, int vn) {
     if (vn <= 0) return false;
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
@@ -226,12 +260,35 @@ public class SliceBuiltinOperation extends TensorGenerator {
     return true;
   }
 
+  /**
+   * Convenience wrapper that returns {@code true} iff {@link #constInt} resolves {@code vn} to a
+   * constant integer equal to {@code target}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} providing the pointer analysis.
+   * @param node The {@link CGNode} whose IR contains {@code vn}.
+   * @param vn The SSA value number to inspect.
+   * @param target The integer value to compare against.
+   * @return {@code true} iff {@code vn}'s resolved constant value exists and equals {@code target};
+   *     {@code false} otherwise.
+   */
   private static boolean constIntEquals(
       PropagationCallGraphBuilder builder, CGNode node, int vn, int target) {
     Integer v = constInt(builder, node, vn);
     return v != null && v == target;
   }
 
+  /**
+   * Resolves the points-to set of {@code vn} to a single constant integer value, accepting both
+   * {@link Integer} and {@link Long} {@link ConstantKey} payloads. Returns {@code null} when the
+   * set is empty, contains a non-constant, contains a non-integer constant, or contains multiple
+   * distinct integer constants (ambiguity is a {@code null}, not an arbitrary pick).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} providing the pointer analysis.
+   * @param node The {@link CGNode} whose IR contains {@code vn}.
+   * @param vn The SSA value number to inspect.
+   * @return The resolved constant integer, or {@code null} if the set isn't a single-valued integer
+   *     constant.
+   */
   private static Integer constInt(PropagationCallGraphBuilder builder, CGNode node, int vn) {
     if (vn <= 0) return null;
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
