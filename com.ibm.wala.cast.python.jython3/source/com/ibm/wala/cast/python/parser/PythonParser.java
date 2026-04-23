@@ -1979,32 +1979,15 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
         }
       } else if (s instanceof Slice) {
         Slice S = (Slice) s;
-        // Emit `x[lower:upper:step]` as `OBJECT_REF(x, tuple(list(lower, upper, step)))` so
-        // `NdarraySubscriptOperation`'s PropertyRead+tuple path handles it (mirroring the
-        // `x[..., None]` representation). Routing through a PropertyRead avoids the leak
-        // introduced by the old `slice(x, lower, upper, step)` CALL form: the `slice` builtin's
-        // argSummary (`Either.forRight(2)`) passes through the receiver, which causes the
-        // receiver's tensor type to merge into the slice result via `TensorTypeAnalysis`'s
-        // union meet. The PropertyRead path has no such passthrough. See wala/ML#405.
-        CAstNode sliceLiteral =
-            Ast.makeNode(
-                CAstNode.OBJECT_LITERAL,
-                Ast.makeNode(CAstNode.NEW, Ast.makeConstant("list")),
-                Ast.makeConstant(0),
-                acceptOrNull(S.getInternalLower()),
-                Ast.makeConstant(1),
-                acceptOrNull(S.getInternalUpper()),
-                Ast.makeConstant(2),
-                acceptOrNull(S.getInternalStep()));
-        CAstNode tupleWithSlice =
-            Ast.makeNode(
-                CAstNode.OBJECT_LITERAL,
-                Ast.makeNode(CAstNode.NEW, Ast.makeConstant("tuple")),
-                Ast.makeConstant(0),
-                sliceLiteral);
         return notePosition(
             Ast.makeNode(
-                CAstNode.OBJECT_REF, acceptOrNull(arg0.getInternalValue()), tupleWithSlice),
+                CAstNode.CALL,
+                Ast.makeNode(CAstNode.VAR, Ast.makeConstant("slice")),
+                Ast.makeNode(CAstNode.EMPTY),
+                acceptOrNull(arg0.getInternalValue()),
+                acceptOrNull(S.getInternalLower()),
+                acceptOrNull(S.getInternalUpper()),
+                acceptOrNull(S.getInternalStep())),
             arg0);
       } else if (s instanceof ExtSlice) {
         // Build a tuple-valued subscript matching the Index-with-List case above so

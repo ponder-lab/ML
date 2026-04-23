@@ -2,7 +2,6 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.types.PythonTypes.ELLIPSIS;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
-import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
@@ -168,34 +167,25 @@ public class NdarraySubscriptOperation extends TensorGenerator {
   private static List<Dimension<?>> applySubscript(
       List<Dimension<?>> input, List<SubscriptField> fields) {
     int ellipsisCount = 0;
-    for (SubscriptField f : fields) if (f instanceof Ellipsis) ellipsisCount++;
+    for (SubscriptField f : fields) if (f == SubscriptField.ELLIPSIS) ellipsisCount++;
     if (ellipsisCount > 1) return null;
 
     List<Dimension<?>> out = new ArrayList<>();
-    int inputConsumed = 0;
     boolean ellipsisSeen = false;
     for (SubscriptField f : fields) {
-      if (f instanceof Ellipsis) {
-        out.addAll(input);
-        inputConsumed = input.size();
-        ellipsisSeen = true;
-      } else if (f instanceof Newaxis) {
-        out.add(new NumericDim(1));
-      } else if (f instanceof Slice) {
-        // `[:k]` with constant `k` and default start/step: replace the leading input dim with
-        // `NumericDim(k)` and preserve the rest. Broader slice patterns (`[a:b]`, `[::s]`, etc.)
-        // are out of scope — see wala/ML#406.
-        Slice sl = (Slice) f;
-        if (!sl.isCanonicalStopOnly() || inputConsumed >= input.size()) return null;
-        out.add(new NumericDim(sl.stop));
-        inputConsumed++;
-      } else {
-        return null;
+      switch (f) {
+        case ELLIPSIS:
+          out.addAll(input);
+          ellipsisSeen = true;
+          break;
+        case NEWAXIS:
+          out.add(new NumericDim(1));
+          break;
       }
     }
     if (!ellipsisSeen) {
       // Implicit trailing ellipsis: append any remaining input dims.
-      for (int i = inputConsumed; i < input.size(); i++) out.add(input.get(i));
+      out.addAll(input);
     }
     return out;
   }
@@ -268,7 +258,7 @@ public class NdarraySubscriptOperation extends TensorGenerator {
       PointerKey fieldPk = builder.getPointerKeyForInstanceField(tupleAsin, f);
       OrdinalSet<InstanceKey> fieldPts = pa.getPointsToSet(fieldPk);
 
-      SubscriptField classified = classifyField(fieldPts, builder);
+      SubscriptField classified = classifyField(fieldPts);
       if (classified == null) return null; // unsupported element
       out.set(fieldIndex, classified);
     }
@@ -278,33 +268,21 @@ public class NdarraySubscriptOperation extends TensorGenerator {
 
   /**
    * Classifies a single subscript tuple element as ellipsis, newaxis ({@code None} or {@code
-   * tf.newaxis}), a canonical {@code [:k]} slice (three-element list with {@code None} / constant
-   * integer / {@code None}), or an unsupported value.
+   * tf.newaxis}), or an unsupported value (integer index, slice, variable, etc.).
    *
    * <p>Recognises {@code tf.newaxis} via its modeled type {@link TensorFlowTypes#NEWAXIS} (see
    * {@code tensorflow.xml}'s {@code <new def="newaxis" class="Ltensorflow/newaxis">}). At Python
    * runtime {@code tf.newaxis is None}, but WALA sees it as an attribute-access result with a
    * synthetic allocation rather than a {@code ConstantKey<null>} — hence the separate branch.
    *
-   * <p>Recognises slice expressions via the front-end's lowering of {@code x[lower:upper:step]}
-   * into {@code OBJECT_REF(x, tuple(list(lower, upper, step)))}: the tuple element's PTS contains a
-   * {@link com.ibm.wala.cast.python.types.PythonTypes#list} allocation whose fields {@code 0},
-   * {@code 1}, {@code 2} hold the bounds. Only the canonical {@code [:k]} shape (start/step both
-   * {@code None}, stop a constant integer) is accepted; other slice vocabulary is out of scope per
-   * wala/ML#406.
-   *
    * @param pts The points-to set of the tuple element being classified.
-   * @param builder The propagation call graph builder, needed to resolve the list's field PTS when
-   *     the element is a slice literal.
-   * @return An {@link Ellipsis}, {@link Newaxis}, or {@link Slice} instance for a supported value;
-   *     {@code null} if the element is empty, non-constant, or any other unsupported value.
+   * @return {@link SubscriptField#ELLIPSIS} or {@link SubscriptField#NEWAXIS} for a supported
+   *     value; {@code null} if the element is empty, non-constant, or any other unsupported value.
    */
-  private static SubscriptField classifyField(
-      OrdinalSet<InstanceKey> pts, PropagationCallGraphBuilder builder) {
+  private static SubscriptField classifyField(OrdinalSet<InstanceKey> pts) {
     if (pts.isEmpty()) return null; // empty PTS is not None; unknown value
     boolean sawEllipsis = false;
     boolean sawNone = false;
-    Slice sawSlice = null;
     for (InstanceKey ik : pts) {
       if (ik instanceof ConstantKey) {
         Object v = ((ConstantKey<?>) ik).getValue();
@@ -318,84 +296,18 @@ public class NdarraySubscriptOperation extends TensorGenerator {
         }
         return null; // integer index, string, etc. — not supported
       }
-      // Non-constant InstanceKey: `tf.newaxis` allocation (modeled) or a slice literal list.
+      // Non-constant InstanceKey: accept it only if it's the modeled `tf.newaxis` allocation.
       AllocationSiteInNode asin = getAllocationSiteInNode(ik);
       if (asin != null && asin.getConcreteType().getReference().equals(TensorFlowTypes.NEWAXIS)) {
         sawNone = true;
         continue;
       }
-      if (asin != null && asin.getConcreteType().getReference().equals(list)) {
-        Slice slice = classifyListAsSlice(asin, builder);
-        if (slice == null) return null;
-        if (sawSlice != null) return null; // multiple list allocations — ambiguous.
-        sawSlice = slice;
-        continue;
-      }
       return null; // unknown non-constant — bail
     }
-    int kinds = (sawEllipsis ? 1 : 0) + (sawNone ? 1 : 0) + (sawSlice != null ? 1 : 0);
-    if (kinds != 1) return null; // empty or ambiguous mix
-    if (sawEllipsis) return Ellipsis.INSTANCE;
-    if (sawNone) return Newaxis.INSTANCE;
-    return sawSlice;
-  }
-
-  /**
-   * Interprets a {@code list} allocation with fields {@code 0}, {@code 1}, {@code 2} as a slice
-   * literal {@code [lower, upper, step]}. Returns a {@link Slice} only for the canonical {@code
-   * [:k]} shape &mdash; {@code lower} is {@code None}, {@code upper} is a constant integer, and
-   * {@code step} is either absent, {@code None}, or the constant {@code 1}.
-   */
-  private static Slice classifyListAsSlice(
-      AllocationSiteInNode listAsin, PropagationCallGraphBuilder builder) {
-    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
-    OrdinalSet<InstanceKey> catalog =
-        pa.getPointsToSet(
-            ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                .getPointerKeyForObjectCatalog(listAsin));
-    Integer[] fieldValues = new Integer[3]; // 0 = lower, 1 = upper, 2 = step
-    boolean[] isNone = new boolean[3];
-    boolean[] seen = new boolean[3];
-    for (InstanceKey catalogIK : catalog) {
-      ConstantKey<?> ck = (ConstantKey<?>) catalogIK;
-      Integer fieldIndex = getFieldIndex(ck);
-      if (fieldIndex == null || fieldIndex < 0 || fieldIndex > 2) return null;
-      FieldReference fieldRef =
-          FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
-      IField f = builder.getClassHierarchy().resolveField(fieldRef);
-      if (f == null) return null;
-      OrdinalSet<InstanceKey> fieldPts =
-          pa.getPointsToSet(builder.getPointerKeyForInstanceField(listAsin, f));
-      if (fieldPts == null) return null;
-      seen[fieldIndex] = true;
-      for (InstanceKey ik : fieldPts) {
-        if (!(ik instanceof ConstantKey)) return null;
-        Object v = ((ConstantKey<?>) ik).getValue();
-        if (v == null) {
-          isNone[fieldIndex] = true;
-        } else if (v instanceof Integer) {
-          if (fieldValues[fieldIndex] != null && !fieldValues[fieldIndex].equals(v)) return null;
-          fieldValues[fieldIndex] = (Integer) v;
-        } else if (v instanceof Long) {
-          int asInt = ((Long) v).intValue();
-          if (fieldValues[fieldIndex] != null && fieldValues[fieldIndex] != asInt) return null;
-          fieldValues[fieldIndex] = asInt;
-        } else {
-          return null;
-        }
-      }
-    }
-    if (!seen[0] || !seen[1]) return null;
-    // Canonical `[:k]` shape.
-    boolean lowerOK = isNone[0] && fieldValues[0] == null;
-    if (!lowerOK) return null;
-    if (fieldValues[1] == null) return null; // non-constant upper bound
-    boolean stepOK =
-        !seen[2]
-            || (isNone[2] && fieldValues[2] == null)
-            || (fieldValues[2] != null && fieldValues[2] == 1);
-    if (!stepOK) return null;
-    return new Slice(fieldValues[1]);
+    if (sawEllipsis && sawNone) return null; // ambiguous; bail
+    if (sawEllipsis) return SubscriptField.ELLIPSIS;
+    if (sawNone) return SubscriptField.NEWAXIS;
+    return null;
   }
 
   /**
@@ -412,55 +324,8 @@ public class NdarraySubscriptOperation extends TensorGenerator {
     return def instanceof PythonPropertyRead ? (PythonPropertyRead) def : null;
   }
 
-  /**
-   * Kind of a single element in the subscript tuple. Concrete subclasses {@link Ellipsis}, {@link
-   * Newaxis}, and {@link Slice} cover the currently-supported vocabulary. Any other subscript shape
-   * (integer index, variable, non-canonical slice) causes {@link #classifyField(OrdinalSet,
-   * PropagationCallGraphBuilder)} to return {@code null} and the generator declines to apply.
-   */
-  private abstract static class SubscriptField {}
-
-  private static final class Ellipsis extends SubscriptField {
-    static final Ellipsis INSTANCE = new Ellipsis();
-
-    private Ellipsis() {}
-
-    @Override
-    public String toString() {
-      return "...";
-    }
-  }
-
-  private static final class Newaxis extends SubscriptField {
-    static final Newaxis INSTANCE = new Newaxis();
-
-    private Newaxis() {}
-
-    @Override
-    public String toString() {
-      return "None";
-    }
-  }
-
-  /**
-   * A canonical {@code [:k]} slice: start and step are both {@code None}/{@code 0}/{@code 1} and
-   * {@code stop} is a constant integer. Broader slice vocabulary (non-zero start, non-unit step,
-   * non-constant bounds, negative bounds) is out of scope here &mdash; see wala/ML#406.
-   */
-  private static final class Slice extends SubscriptField {
-    final int stop;
-
-    Slice(int stop) {
-      this.stop = stop;
-    }
-
-    boolean isCanonicalStopOnly() {
-      return true;
-    }
-
-    @Override
-    public String toString() {
-      return ":" + stop;
-    }
+  private enum SubscriptField {
+    ELLIPSIS,
+    NEWAXIS
   }
 }

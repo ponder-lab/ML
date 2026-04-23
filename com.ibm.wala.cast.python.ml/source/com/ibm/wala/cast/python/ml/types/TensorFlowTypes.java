@@ -68,6 +68,9 @@ public class TensorFlowTypes extends PythonTypes {
   public static final TypeReference NUMPY_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lnumpy"));
 
+  public static final TypeReference SLICE_BUILTIN =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lwala/builtin/slice"));
+
   public static final String DATA_PACKAGE_PREFIX = "Ltensorflow/data/";
 
   public static final TypeReference DATASET =
