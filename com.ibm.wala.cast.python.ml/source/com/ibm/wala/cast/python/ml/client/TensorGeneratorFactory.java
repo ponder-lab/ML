@@ -66,6 +66,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.POISSON;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.POISSON_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_RANGE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANDOM_NORMAL_INIT_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.READ_DATA_SETS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MEAN;
@@ -763,6 +764,8 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, RANGE.getDeclaringClass())) return new Range(source);
     else if (isType(calledFunction, UNIFORM.getDeclaringClass())
         || isType(calledFunction, UNIFORM_OP)) return new Uniform(source);
+    else if (isType(calledFunction, RANDOM_NORMAL_INIT_CALL.getDeclaringClass()))
+      return new RandomNormalCall(source);
     else if (isType(calledFunction, NORMAL.getDeclaringClass())
         || isType(calledFunction, NORMAL_OP)) return new Normal(source);
     else if (isType(calledFunction, TRUNCATED_NORMAL.getDeclaringClass())

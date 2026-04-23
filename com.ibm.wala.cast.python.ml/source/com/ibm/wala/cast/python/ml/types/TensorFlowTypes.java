@@ -377,6 +377,14 @@ public class TensorFlowTypes extends PythonTypes {
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/python/ops/random_ops/normal"));
 
+  public static final MethodReference RANDOM_NORMAL_INIT_CALL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName(
+                  "Ltensorflow/initializers/RandomNormal/" + CALLABLE_METHOD_NAME)),
+          AstMethodReference.fnSelector);
+
   private static final String NORMAL_SIGNATURE = "tf.random.normal()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/random/truncated_normal. */

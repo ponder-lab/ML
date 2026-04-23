@@ -83,6 +83,10 @@
           as NEWAXIS, parallel to how the literal `None` produces a `ConstantKey<null>`. -->
         <new def="newaxis" class="Ltensorflow/newaxis" />
         <putfield class="LRoot" field="newaxis" fieldType="LRoot" ref="x" value="newaxis" />
+        <new def="initializers" class="Lobject" />
+        <putfield class="LRoot" field="initializers" fieldType="LRoot" ref="x" value="initializers" />
+        <new def="RandomNormal" class="Ltensorflow/initializers/class/RandomNormal" />
+        <putfield class="LRoot" field="RandomNormal" fieldType="LRoot" ref="initializers" value="RandomNormal" />
         <new def="Dataset" class="Ltensorflow/data/Dataset" />
         <putfield class="LRoot" field="Dataset" fieldType="LRoot" ref="data" value="Dataset" />
         <new def="MirroredStrategy" class="Ltensorflow/distribute/MirroredStrategy" />
@@ -1009,6 +1013,22 @@
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <!-- https://github.com/keras-team/keras/blob/07e13740fd181fc3ddec7d9a594d8a08666645f6/keras/layers/core/dense.py#L166-L240 -->
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="out" />
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/initializers/class">
+      <class name="RandomNormal" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self mean stddev seed">
+          <new def="res" class="Ltensorflow/initializers/RandomNormal" />
+          <return value="res" />
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/initializers">
+      <class name="RandomNormal" allocatable="true">
+        <method name="__call__" descriptor="()LRoot;" numArgs="4" paramNames="func self shape dtype">
+          <new def="out" class="Ltensorflow/python/ops/random_ops/normal" />
           <return value="out" />
         </method>
       </class>

@@ -60,7 +60,14 @@ public class Variable extends TensorGenerator {
       // Shape cannot be determined from initial_value.
       return null;
 
-    return this.getShapesOfValue(builder, initialValuePts);
+    // If the chain from `initialValuePts` resolves to concrete shapes, use them. Otherwise return
+    // `null` (⊤) — matching the empty-PTS path, so downstream stays tensor-typed at ⊤ rather than
+    // dropping to ⊥. Needed because `getShapesOfValue` returns empty (not `null`) when the
+    // value's allocation is in a `__call__` summary that `getShapesFromTensor`'s do-only branch
+    // can't trace (wala/ML#407).
+    Set<List<Dimension<?>>> result = this.getShapesOfValue(builder, initialValuePts);
+    if (result == null || result.isEmpty()) return null;
+    return result;
   }
 
   @Override
@@ -79,7 +86,14 @@ public class Variable extends TensorGenerator {
       // Dtype cannot be determined.
       return EnumSet.of(DType.UNKNOWN);
 
-    return this.getDTypesOfValue(builder, initialValuePts);
+    // If the chain from `initialValuePts` resolves to a concrete dtype, use it. Otherwise fall
+    // back to `{UNKNOWN}` — matching the empty-PTS path, so downstream stays tensor-typed at ⊤
+    // rather than dropping to ⊥. Needed because `getDTypesOfValue` returns empty (not
+    // `{UNKNOWN}`) when the value's allocation is in a `__call__` summary that
+    // `getDTypesFromTensor`'s do-only branch can't trace (wala/ML#407).
+    Set<DType> result = this.getDTypesOfValue(builder, initialValuePts);
+    if (result == null || result.isEmpty()) return EnumSet.of(DType.UNKNOWN);
+    return result;
   }
 
   @Override
