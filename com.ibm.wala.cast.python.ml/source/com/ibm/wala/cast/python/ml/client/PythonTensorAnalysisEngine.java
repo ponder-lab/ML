@@ -276,6 +276,17 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               processInstruction(
                   def, du, localPointerKeyNode, src, sources, callGraph, pointerAnalysis);
           }
+
+          // Subscript patterns that transform a tensor receiver (e.g., `x[..., None]`,
+          // `x[:k]`) are tensor sources in their own right: their result is a tensor whose
+          // shape is derived from the receiver. `NdarraySubscriptOperation.isApplicable`
+          // recognizes the front-end's PropertyRead+tuple lowering for these patterns; when
+          // it matches, seed the result so `TensorTypeAnalysis` picks up the generator's
+          // shape even without a downstream TF op forcing the dispatch. See wala/ML#405.
+          if (!sources.contains(src) && NdarraySubscriptOperation.isApplicable(src, builder)) {
+            sources.add(src);
+            LOGGER.info("Added dataflow source from ndarray subscript: " + src + ".");
+          }
         }
       }
     }

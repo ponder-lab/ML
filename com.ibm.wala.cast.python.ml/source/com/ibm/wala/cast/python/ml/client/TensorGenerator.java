@@ -2598,8 +2598,6 @@ public abstract class TensorGenerator {
           return "dtype";
         }
       };
-    } else if (type.equals(TensorFlowTypes.SLICE_BUILTIN)) {
-      return new SliceBuiltinOperation(node);
     } else if (type.equals(PLACEHOLDER.getDeclaringClass())) {
       return new Placeholder(node);
     } else if (type.equals(TensorFlowTypes.DENSE_CALL.getDeclaringClass())) {
