@@ -123,6 +123,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_32_28_28_UINT8 =
       new TensorType(UINT_8, asList(new NumericDim(32), new NumericDim(28), new NumericDim(28)));
 
+  private static final TensorType TENSOR_5_28_28_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(5), new NumericDim(28), new NumericDim(28)));
+
   private static final TensorType TENSOR_1_2_INT32 =
       new TensorType(INT_32, asList(new NumericDim(1), new NumericDim(2)));
 
@@ -7088,6 +7091,27 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TENSOR_60000_28_28_FLOAT32)));
+  }
+
+  /**
+   * Guards constant-step subscript-slice shape propagation on ndarrays: {@code x_train[:5]} on a
+   * {@code (60000, 28, 28) uint8} ndarray should yield a {@code (5, 28, 28) uint8} tensor.
+   *
+   * <p>TODO: Currently suppressed because {@code NdarraySubscriptOperation} doesn't propagate the
+   * receiver's shape through a constant slice &mdash; the sliced tensor registers as {@code {?
+   * unknown}}. Flip to plain {@code @Test} once wala/ML#405 lands the slice-shape propagation. This
+   * is the last remaining gap in {@link #testNeuralNetwork} (missing {@code (5, 784)} from {@code
+   * x_test[:n_images]} at the visualization call site).
+   */
+  @Test(expected = AssertionError.class)
+  public void testSubscriptSlicePreservesShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_subscript_slice_preserves_shape.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_5_28_28_UINT8)));
   }
 
   /**
