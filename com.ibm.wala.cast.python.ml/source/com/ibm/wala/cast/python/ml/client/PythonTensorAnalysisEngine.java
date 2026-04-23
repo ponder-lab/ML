@@ -825,6 +825,26 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       setCalls.put(builder.getPropagationSystem().findOrCreatePointsToSet(setKey), x.getValue());
     }
 
+    // Route subscript results through `setCalls` so `TensorTypeAnalysis`'s edge-transfer replaces
+    // predecessor types rather than unioning them — the receiver's pre-subscript shape would
+    // otherwise leak in via the PA assignment graph (wala/ML#405).
+    for (PointsToSetVariable src : sources) {
+      if (!(src.getPointerKey() instanceof LocalPointerKey)) continue;
+      TensorGenerator generator;
+      try {
+        generator = getGenerator(src, builder);
+      } catch (IllegalArgumentException e) {
+        continue;
+      }
+      if (!(generator instanceof SliceBuiltinOperation)
+          && !(generator instanceof NdarraySubscriptOperation)) continue;
+      Set<TensorType> types = init.get(src);
+      if (types == null || types.size() != 1) continue;
+      TensorType onlyType = types.iterator().next();
+      if (onlyType.getDims() == null) continue;
+      setCalls.put(src, onlyType);
+    }
+
     Map<PointsToSetVariable, TensorType> shapeOps = HashMapFactory.make();
 
     try {
