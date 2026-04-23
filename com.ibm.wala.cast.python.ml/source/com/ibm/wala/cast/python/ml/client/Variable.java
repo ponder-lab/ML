@@ -9,6 +9,7 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Logger;
 
 /**
  * A representation of the `tf.Variable` call in TensorFlow.
@@ -16,6 +17,8 @@ import java.util.Set;
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/Variable">tf.Variable</a>.
  */
 public class Variable extends TensorGenerator {
+
+  private static final Logger LOGGER = Logger.getLogger(Variable.class.getName());
 
   protected enum Parameters {
     INITIAL_VALUE,
@@ -66,7 +69,14 @@ public class Variable extends TensorGenerator {
     // value's allocation is in a `__call__` summary that `getShapesFromTensor`'s do-only branch
     // can't trace (wala/ML#407).
     Set<List<Dimension<?>>> result = this.getShapesOfValue(builder, initialValuePts);
-    if (result == null || result.isEmpty()) return null;
+    if (result == null || result.isEmpty()) {
+      LOGGER.fine(
+          () ->
+              "Empty shapes from initial_value PTS (size="
+                  + initialValuePts.size()
+                  + "); falling back to ⊤.");
+      return null;
+    }
     return result;
   }
 
@@ -92,7 +102,14 @@ public class Variable extends TensorGenerator {
     // `{UNKNOWN}`) when the value's allocation is in a `__call__` summary that
     // `getDTypesFromTensor`'s do-only branch can't trace (wala/ML#407).
     Set<DType> result = this.getDTypesOfValue(builder, initialValuePts);
-    if (result == null || result.isEmpty()) return EnumSet.of(DType.UNKNOWN);
+    if (result == null || result.isEmpty()) {
+      LOGGER.fine(
+          () ->
+              "Empty dtypes from initial_value PTS (size="
+                  + initialValuePts.size()
+                  + "); falling back to {UNKNOWN}.");
+      return EnumSet.of(DType.UNKNOWN);
+    }
     return result;
   }
 

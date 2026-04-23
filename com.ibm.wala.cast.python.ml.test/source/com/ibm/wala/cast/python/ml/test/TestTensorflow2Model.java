@@ -1994,11 +1994,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * test loop. Both call sites pass batches of shape {@code (256, 784)} dtype {@code float32}
    * (verified by Python assert statements in {@code autoencoder.py}).
    *
-   * <p>Expected tensor variable count: 18 (baseline). The rule-based count is lower (1 param plus
-   * ~10 intermediate ops including dict lookups for {@code weights[...]} and {@code biases[...]}),
-   * but the analysis registers 18 due to per-context duplication across the two call sites. Per the
-   * "never decrease" principle, we keep 18 to preserve regression detection (see wala/ML#388 for
-   * the general count-accounting discrepancy).
+   * <p>Expected tensor variable count: 20 (full-suite). In isolation {@code encoder} registers 18
+   * (9 distinct vns &mdash; the parameter plus 8 intermediate ops &mdash; times 2 source-level call
+   * sites). Running in the full suite inflates this to 20 via extra context instances that spill in
+   * from other tests; per the "never decrease" principle we track the higher count. An expectation
+   * of 18 would pass isolated-runs but silently drop regression coverage for the extra-context path
+   * the full suite exercises.
    */
   @Test
   public void testAutoencoder()
