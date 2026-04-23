@@ -377,6 +377,13 @@ public class TensorFlowTypes extends PythonTypes {
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/python/ops/random_ops/normal"));
 
+  /**
+   * https://www.tensorflow.org/api_docs/python/tf/keras/initializers/RandomNormal#__call__.
+   *
+   * <p>The {@code __call__} method on a {@code tf.initializers.RandomNormal} instance: {@code
+   * instance(shape, dtype=None)} returns a tensor of the requested shape drawn from the normal
+   * distribution.
+   */
   public static final MethodReference RANDOM_NORMAL_INIT_CALL =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
