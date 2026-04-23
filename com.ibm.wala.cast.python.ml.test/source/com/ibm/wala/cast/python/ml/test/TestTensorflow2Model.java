@@ -25,6 +25,7 @@ import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
 import com.ibm.wala.cast.python.ml.client.NonBroadcastableShapesException;
 import com.ibm.wala.cast.python.ml.client.NpArray;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
+import com.ibm.wala.cast.python.ml.client.SliceBuiltinOperation;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -7094,14 +7095,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Guards constant-step subscript-slice shape propagation on ndarrays: {@code x_train[:5]} on a
-   * {@code (60000, 28, 28) uint8} ndarray should yield a {@code (5, 28, 28) uint8} tensor.
+   * Guards constant-step subscript-slice shape propagation on ndarrays (wala/ML#405): {@code
+   * x_train[:5]} on a {@code (60000, 28, 28) uint8} ndarray should yield a {@code (5, 28, 28)
+   * uint8} tensor. Implemented via {@link SliceBuiltinOperation}.
    *
-   * <p>TODO: Currently suppressed because {@code NdarraySubscriptOperation} doesn't propagate the
-   * receiver's shape through a constant slice &mdash; the sliced tensor registers as {@code {?
-   * unknown}}. Flip to plain {@code @Test} once wala/ML#405 lands the slice-shape propagation. This
-   * is the last remaining gap in {@link #testNeuralNetwork} (missing {@code (5, 784)} from {@code
-   * x_test[:n_images]} at the visualization call site).
+   * <p>TODO: Currently suppressed because the actual union also contains the receiver's pre-slice
+   * shape {@code (60000, 28, 28) uint8}. The extra shape leaks in through the {@code slice}
+   * builtin's summary in {@code BuiltinFunctions} ({@code Either.forRight(2)}, which returns the
+   * second-position argument &mdash; the receiver). The meet operator in {@link
+   * com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis} then unions this predecessor type into
+   * the slice result alongside {@link SliceBuiltinOperation}'s {@code (5, 28, 28)} seed. Flipping
+   * the summary to {@code Either.forLeft(PythonTypes.object)} breaks the leak but also regresses
+   * {@code testNeuralNetwork}'s tensor-variable count because downstream code in {@code
+   * neural_network.py} relies on the passthrough for PTS propagation. Flip to plain {@code @Test}
+   * once wala/ML#405 has a narrower fix (e.g., a set-shape-style edge transfer function that drops
+   * the receiver's type only for slice-result destinations).
    */
   @Test(expected = AssertionError.class)
   public void testSubscriptSlicePreservesShape()
