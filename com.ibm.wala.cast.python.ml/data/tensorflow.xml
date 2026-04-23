@@ -1019,6 +1019,7 @@
     </package>
     <package name="tensorflow/initializers/class">
       <class name="RandomNormal" allocatable="true">
+        <!-- Constructor for `tf.initializers.RandomNormal(mean, stddev, seed)`. Returns the callable initializer instance (modeled as `Ltensorflow/initializers/RandomNormal`, whose `__call__` is in the sibling package below). https://www.tensorflow.org/api_docs/python/tf/keras/initializers/RandomNormal -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self mean stddev seed">
           <new def="res" class="Ltensorflow/initializers/RandomNormal" />
           <return value="res" />
@@ -1027,6 +1028,8 @@
     </package>
     <package name="tensorflow/initializers">
       <class name="RandomNormal" allocatable="true">
+        <!-- Instance `__call__` for `tf.initializers.RandomNormal`: `instance(shape, dtype=None)` returns a tensor of the requested shape drawn from the normal distribution. Allocates a `random_ops/normal` result so the factory dispatches to the existing `Normal`-family generator (via `RandomNormalCall`,
+          which handles the extra `self` offset). https://www.tensorflow.org/api_docs/python/tf/keras/initializers/RandomNormal#__call__ -->
         <method name="__call__" descriptor="()LRoot;" numArgs="4" paramNames="func self shape dtype">
           <new def="out" class="Ltensorflow/python/ops/random_ops/normal" />
           <return value="out" />
