@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -53,21 +54,34 @@ public class SliceBuiltinOperation extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    LOGGER.fine(() -> "Entered getDefaultShapes for source=" + source);
     CallSiteView view = findCallSite(builder);
     if (view == null) {
-      LOGGER.fine(() -> "SliceBuiltinOperation: no call site resolved for " + source);
+      LOGGER.fine(() -> "No call site resolved for " + source);
       return null;
     }
 
-    Set<List<Dimension<?>>> receiverShapes = getShapes(builder, view.callerNode, view.receiverVn);
+    Set<List<Dimension<?>>> receiverShapes;
+    try {
+      // `getShapesOrSSAChain` falls back to an SSA DU walk when the PTS walk hits an implicit
+      // PK (e.g., the chained `x_test.reshape(...).astype(...)` path in `neural_network.py`).
+      // The SSA chain walker recognises mnist sources, astype, reshape, etc. See wala/ML#405.
+      receiverShapes = getShapesOrSSAChain(builder, view.callerNode, view.receiverVn);
+    } catch (IllegalArgumentException e) {
+      // Both paths failed — treat as ⊤ (null) so dtype inference still proceeds.
+      LOGGER.log(
+          Level.FINE, "Receiver shape lookup threw IAE for receiverVn=" + view.receiverVn, e);
+      receiverShapes = null;
+    }
+    final Set<List<Dimension<?>>> capturedReceiverShapes = receiverShapes;
     LOGGER.fine(
         () ->
-            "SliceBuiltinOperation: callerNode="
+            "Resolved callerNode="
                 + view.callerNode
                 + " receiverVn="
                 + view.receiverVn
                 + " receiverShapes="
-                + receiverShapes);
+                + capturedReceiverShapes);
     if (receiverShapes == null || receiverShapes.isEmpty()) return null;
 
     boolean startOK =
@@ -77,6 +91,7 @@ public class SliceBuiltinOperation extends TensorGenerator {
         isNone(builder, view.callerNode, view.stepVn)
             || constIntEquals(builder, view.callerNode, view.stepVn, 1);
     Integer stop = constInt(builder, view.callerNode, view.stopVn);
+    LOGGER.fine(() -> "Classified startOK=" + startOK + " stepOK=" + stepOK + " stop=" + stop);
 
     if (startOK && stepOK && stop != null) {
       Set<List<Dimension<?>>> ret = HashSetFactory.make();
@@ -90,11 +105,11 @@ public class SliceBuiltinOperation extends TensorGenerator {
         ret.add(out);
       }
       final int boundedStop = stop;
-      LOGGER.fine(() -> "SliceBuiltinOperation: [:k] pattern with k=" + boundedStop + " → " + ret);
+      LOGGER.fine(() -> "Matched [:k] pattern with k=" + boundedStop + " → " + ret);
       return ret;
     }
 
-    LOGGER.fine(() -> "SliceBuiltinOperation: non-[:k] pattern, passing receiver shape through");
+    LOGGER.fine(() -> "Non-[:k] pattern; passing receiver shape through");
     return receiverShapes;
   }
 
@@ -102,7 +117,16 @@ public class SliceBuiltinOperation extends TensorGenerator {
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     CallSiteView view = findCallSite(builder);
     if (view == null) return Set.of(DType.UNKNOWN);
-    Set<DType> dtypes = getDTypes(builder, view.callerNode, view.receiverVn);
+    Set<DType> dtypes;
+    try {
+      // Parallel to the shape path: use the SSA-DU fallback so chained sources (mnist → astype
+      // → reshape → divide → slice) still recover a concrete dtype. See wala/ML#405.
+      dtypes = getDTypesOrSSAChain(builder, view.callerNode, view.receiverVn);
+    } catch (IllegalArgumentException e) {
+      LOGGER.log(
+          Level.FINE, "Receiver dtype lookup threw IAE for receiverVn=" + view.receiverVn, e);
+      dtypes = Set.of();
+    }
     return dtypes.isEmpty() ? Set.of(DType.UNKNOWN) : dtypes;
   }
 
