@@ -1,10 +1,14 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
+import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
@@ -109,8 +113,56 @@ public class SliceBuiltinOperation extends TensorGenerator {
       return ret;
     }
 
-    LOGGER.fine(() -> "Non-[:k] pattern; passing receiver shape through");
-    return receiverShapes;
+    // The invoke didn't match the canonical `[:k]` pattern, so we don't know the exact output
+    // shape. If the compound subscript includes `tf.newaxis` tokens (e.g., `x[:n, ..., newaxis]`),
+    // each one inserts a size-1 dim. Append them to the receiver shape — better than dropping the
+    // size-1 dim entirely, which otherwise leaks the pre-subscript shape downstream.
+    int newaxisCount = countNewaxisArgs(builder, view.callerNode(), view.call());
+    if (newaxisCount == 0) {
+      LOGGER.fine(() -> "Non-[:k] pattern; passing receiver shape through");
+      return receiverShapes;
+    }
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    for (List<Dimension<?>> shape : receiverShapes) {
+      List<Dimension<?>> out = new ArrayList<>(shape);
+      for (int i = 0; i < newaxisCount; i++) out.add(new NumericDim(1));
+      ret.add(out);
+    }
+    final int capturedCount = newaxisCount;
+    LOGGER.fine(() -> "Non-[:k] pattern; appended " + capturedCount + " newaxis dim(s) → " + ret);
+    return ret;
+  }
+
+  /**
+   * Counts how many args beyond the canonical {@code (x, start, stop, step)} resolve to a {@code
+   * tf.newaxis} allocation (declared as {@code Ltensorflow/newaxis} in {@code tensorflow.xml}).
+   * Used to extend the passthrough shape when the front-end lowers a compound subscript like {@code
+   * x[:n, ..., tf.newaxis]} into a {@code slice(...)} invoke with extra tokens.
+   *
+   * @param builder The propagation call graph builder whose PA we query.
+   * @param caller The caller {@link CGNode}.
+   * @param call The slice invoke whose args we scan.
+   * @return The number of newaxis-typed args across all use positions.
+   */
+  private static int countNewaxisArgs(
+      PropagationCallGraphBuilder builder, CGNode caller, SSAAbstractInvokeInstruction call) {
+    int count = 0;
+    for (int i = 1; i < call.getNumberOfUses(); i++) {
+      int useVn = call.getUse(i);
+      if (useVn <= 0) continue;
+      PointerKey pk =
+          builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, useVn);
+      OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
+      if (pts == null || pts.isEmpty()) continue;
+      for (InstanceKey ik : pts) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        if (asin != null && asin.getConcreteType().getReference().equals(TensorFlowTypes.NEWAXIS)) {
+          count++;
+          break;
+        }
+      }
+    }
+    return count;
   }
 
   @Override
@@ -234,7 +286,8 @@ public class SliceBuiltinOperation extends TensorGenerator {
    */
   private static CallSiteView viewOf(CGNode caller, SSAAbstractInvokeInstruction call) {
     if (call.getNumberOfUses() < 5) return null;
-    return new CallSiteView(caller, call.getUse(1), call.getUse(2), call.getUse(3), call.getUse(4));
+    return new CallSiteView(
+        caller, call, call.getUse(1), call.getUse(2), call.getUse(3), call.getUse(4));
   }
 
   /**
@@ -316,11 +369,18 @@ public class SliceBuiltinOperation extends TensorGenerator {
    * #getDefaultDTypes} can resolve them against the caller's SSA.
    *
    * @param callerNode The caller {@link CGNode} whose IR contains the invoke.
+   * @param call The {@link SSAAbstractInvokeInstruction} itself, kept so callers can scan args
+   *     beyond the canonical four for compound-subscript tokens (e.g., {@code tf.newaxis}).
    * @param receiverVn SSA value number of the receiver ({@code x}) in {@code callerNode}.
    * @param startVn SSA value number of the {@code start} argument.
    * @param stopVn SSA value number of the {@code stop} argument.
    * @param stepVn SSA value number of the {@code step} argument.
    */
   private record CallSiteView(
-      CGNode callerNode, int receiverVn, int startVn, int stopVn, int stepVn) {}
+      CGNode callerNode,
+      SSAAbstractInvokeInstruction call,
+      int receiverVn,
+      int startVn,
+      int stopVn,
+      int stepVn) {}
 }
