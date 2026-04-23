@@ -66,11 +66,11 @@ public class SliceBuiltinOperation extends TensorGenerator {
       // `getShapesOrSSAChain` falls back to an SSA DU walk when the PTS walk hits an implicit
       // PK (e.g., the chained `x_test.reshape(...).astype(...)` path in `neural_network.py`).
       // The SSA chain walker recognises mnist sources, astype, reshape, etc. See wala/ML#405.
-      receiverShapes = getShapesOrSSAChain(builder, view.callerNode, view.receiverVn);
+      receiverShapes = getShapesOrSSAChain(builder, view.callerNode(), view.receiverVn);
     } catch (IllegalArgumentException e) {
       // Both paths failed — treat as ⊤ (null) so dtype inference still proceeds.
       LOGGER.log(
-          Level.FINE, "Receiver shape lookup threw IAE for receiverVn=" + view.receiverVn, e);
+          Level.FINE, "Receiver shape lookup threw IAE for receiverVn=" + view.receiverVn(), e);
       receiverShapes = null;
     }
     final Set<List<Dimension<?>>> capturedReceiverShapes = receiverShapes;
@@ -85,12 +85,12 @@ public class SliceBuiltinOperation extends TensorGenerator {
     if (receiverShapes == null || receiverShapes.isEmpty()) return null;
 
     boolean startOK =
-        isNone(builder, view.callerNode, view.startVn)
-            || constIntEquals(builder, view.callerNode, view.startVn, 0);
+        isNone(builder, view.callerNode(), view.startVn())
+            || constIntEquals(builder, view.callerNode(), view.startVn(), 0);
     boolean stepOK =
-        isNone(builder, view.callerNode, view.stepVn)
-            || constIntEquals(builder, view.callerNode, view.stepVn, 1);
-    Integer stop = constInt(builder, view.callerNode, view.stopVn);
+        isNone(builder, view.callerNode(), view.stepVn())
+            || constIntEquals(builder, view.callerNode(), view.stepVn(), 1);
+    Integer stop = constInt(builder, view.callerNode(), view.stopVn());
     LOGGER.fine(() -> "Classified startOK=" + startOK + " stepOK=" + stepOK + " stop=" + stop);
 
     if (startOK && stepOK && stop != null) {
@@ -121,10 +121,10 @@ public class SliceBuiltinOperation extends TensorGenerator {
     try {
       // Parallel to the shape path: use the SSA-DU fallback so chained sources (mnist → astype
       // → reshape → divide → slice) still recover a concrete dtype. See wala/ML#405.
-      dtypes = getDTypesOrSSAChain(builder, view.callerNode, view.receiverVn);
+      dtypes = getDTypesOrSSAChain(builder, view.callerNode(), view.receiverVn);
     } catch (IllegalArgumentException e) {
       LOGGER.log(
-          Level.FINE, "Receiver dtype lookup threw IAE for receiverVn=" + view.receiverVn, e);
+          Level.FINE, "Receiver dtype lookup threw IAE for receiverVn=" + view.receiverVn(), e);
       dtypes = Set.of();
     }
     return dtypes.isEmpty() ? Set.of(DType.UNKNOWN) : dtypes;
@@ -310,42 +310,17 @@ public class SliceBuiltinOperation extends TensorGenerator {
 
   /**
    * A positional snapshot of a {@code slice(x, start, stop, step)} invoke, pinned to the caller
-   * whose IR contains it. Used to bridge the gap between a generator source (which may be either a
-   * {@link LocalPointerKey} in the caller or a {@link ReturnValueKey} from the slice summary) and
-   * the value numbers of the four actual args, so {@link #getDefaultShapes} and {@link
+   * whose IR contains it. Bridges the gap between a generator source (either a {@link
+   * LocalPointerKey} in the caller or a {@link ReturnValueKey} from the slice summary) and the
+   * value numbers of the four actual args, so {@link #getDefaultShapes} and {@link
    * #getDefaultDTypes} can resolve them against the caller's SSA.
+   *
+   * @param callerNode The caller {@link CGNode} whose IR contains the invoke.
+   * @param receiverVn SSA value number of the receiver ({@code x}) in {@code callerNode}.
+   * @param startVn SSA value number of the {@code start} argument.
+   * @param stopVn SSA value number of the {@code stop} argument.
+   * @param stepVn SSA value number of the {@code step} argument.
    */
-  private static final class CallSiteView {
-    /** The caller {@link CGNode} whose IR contains the slice invoke. */
-    final CGNode callerNode;
-
-    /** SSA value number of the receiver ({@code x}) in {@code callerNode}. */
-    final int receiverVn;
-
-    /** SSA value number of the {@code start} argument in {@code callerNode}. */
-    final int startVn;
-
-    /** SSA value number of the {@code stop} argument in {@code callerNode}. */
-    final int stopVn;
-
-    /** SSA value number of the {@code step} argument in {@code callerNode}. */
-    final int stepVn;
-
-    /**
-     * Constructs a snapshot of a slice invoke.
-     *
-     * @param callerNode The caller {@link CGNode} whose IR contains the invoke.
-     * @param receiverVn SSA value number of the receiver ({@code x}) in {@code callerNode}.
-     * @param startVn SSA value number of the {@code start} argument.
-     * @param stopVn SSA value number of the {@code stop} argument.
-     * @param stepVn SSA value number of the {@code step} argument.
-     */
-    CallSiteView(CGNode callerNode, int receiverVn, int startVn, int stopVn, int stepVn) {
-      this.callerNode = callerNode;
-      this.receiverVn = receiverVn;
-      this.startVn = startVn;
-      this.stopVn = stopVn;
-      this.stepVn = stepVn;
-    }
-  }
+  private record CallSiteView(
+      CGNode callerNode, int receiverVn, int startVn, int stopVn, int stepVn) {}
 }
