@@ -308,13 +308,38 @@ public class SliceBuiltinOperation extends TensorGenerator {
     return result;
   }
 
+  /**
+   * A positional snapshot of a {@code slice(x, start, stop, step)} invoke, pinned to the caller
+   * whose IR contains it. Used to bridge the gap between a generator source (which may be either a
+   * {@link LocalPointerKey} in the caller or a {@link ReturnValueKey} from the slice summary) and
+   * the value numbers of the four actual args, so {@link #getDefaultShapes} and {@link
+   * #getDefaultDTypes} can resolve them against the caller's SSA.
+   */
   private static final class CallSiteView {
+    /** The caller {@link CGNode} whose IR contains the slice invoke. */
     final CGNode callerNode;
+
+    /** SSA value number of the receiver ({@code x}) in {@code callerNode}. */
     final int receiverVn;
+
+    /** SSA value number of the {@code start} argument in {@code callerNode}. */
     final int startVn;
+
+    /** SSA value number of the {@code stop} argument in {@code callerNode}. */
     final int stopVn;
+
+    /** SSA value number of the {@code step} argument in {@code callerNode}. */
     final int stepVn;
 
+    /**
+     * Constructs a snapshot of a slice invoke.
+     *
+     * @param callerNode The caller {@link CGNode} whose IR contains the invoke.
+     * @param receiverVn SSA value number of the receiver ({@code x}) in {@code callerNode}.
+     * @param startVn SSA value number of the {@code start} argument.
+     * @param stopVn SSA value number of the {@code stop} argument.
+     * @param stepVn SSA value number of the {@code step} argument.
+     */
     CallSiteView(CGNode callerNode, int receiverVn, int startVn, int stopVn, int stepVn) {
       this.callerNode = callerNode;
       this.receiverVn = receiverVn;
