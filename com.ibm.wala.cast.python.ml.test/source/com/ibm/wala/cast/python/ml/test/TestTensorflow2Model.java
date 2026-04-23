@@ -1994,12 +1994,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * test loop. Both call sites pass batches of shape {@code (256, 784)} dtype {@code float32}
    * (verified by Python assert statements in {@code autoencoder.py}).
    *
-   * <p>Expected tensor variable count: 20 (full-suite). In isolation {@code encoder} registers 18
-   * (9 distinct vns &mdash; the parameter plus 8 intermediate ops &mdash; times 2 source-level call
-   * sites). Running in the full suite inflates this to 20 via extra context instances that spill in
-   * from other tests; per the "never decrease" principle we track the higher count. An expectation
-   * of 18 would pass isolated-runs but silently drop regression coverage for the extra-context path
-   * the full suite exercises.
+   * <p>Expected tensor variable count: 20. 10 distinct SSA vns in {@code encoder}'s body get tensor
+   * types (the parameter plus 9 intermediate ops: 4 dict-fieldref results for {@code
+   * weights[...]}/{@code biases[...]} plus 5 matmul/add/sigmoid results across the two layers),
+   * each duplicated across the 2 source-level call sites for 20 total.
    */
   @Test
   public void testAutoencoder()
