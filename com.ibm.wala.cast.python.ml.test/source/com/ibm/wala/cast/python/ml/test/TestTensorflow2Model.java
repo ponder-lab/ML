@@ -23,6 +23,7 @@ import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuild
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
 import com.ibm.wala.cast.python.ml.client.NonBroadcastableShapesException;
+import com.ibm.wala.cast.python.ml.client.NpArray;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
@@ -7092,20 +7093,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * method-call path: {@code np.array(x_train, np.float32)} should yield a tensor with {@code
    * x_train}'s shape {@code (60000, 28, 28)} and dtype {@code float32}.
    *
-   * <p>As of writing, {@code np.array} is modeled in {@code tensorflow.xml} as a fresh {@code
-   * Ltensorflow/python/framework/ops/ndarray} allocation with no shape transfer from the input, so
-   * the analysis reports {@code {? unknown}} for the output. This is the same root cause as the
-   * missing {@code (10000, 784)} shape in {@link #testNeuralNetwork} &mdash; in that test, {@code
-   * np.array(x_test, np.float32).reshape([-1, 784])} can't resolve its {@code -1} slot concretely
-   * because the receiver's shape is dropped by {@code np.array}. Fixing this test fixes that
-   * downstream symptom.
-   *
-   * <p>TODO: Currently suppressed because the branch actual registers 0 tensor parameters for
-   * {@code consume} (its argument isn't seeded as a tensor since {@code np.array}'s output has no
-   * shape). Flip to plain {@code @Test} once wala/ML#404 lands a generator that preserves the first
-   * argument's shape.
+   * <p>Positive regression guard for wala/ML#404: {@code np.array} is modeled in {@code numpy.xml}
+   * as a {@code Lnumpy/array} class whose {@code do} method returns a fresh {@code Lnumpy/ndarray},
+   * and {@link NpArray} reads shape from arg 0 ({@code x}) and dtype from arg 1 ({@code dtype}).
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testNpArrayPreservesShape()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(

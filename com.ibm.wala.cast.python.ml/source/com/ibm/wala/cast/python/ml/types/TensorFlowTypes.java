@@ -65,6 +65,9 @@ public class TensorFlowTypes extends PythonTypes {
   public static final TypeReference TENSORFLOW_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow"));
 
+  public static final TypeReference NUMPY_TYPE =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lnumpy"));
+
   public static final String DATA_PACKAGE_PREFIX = "Ltensorflow/data/";
 
   public static final TypeReference DATASET =
@@ -700,6 +703,14 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String NDARRAY_SIGNATURE = "tf.ndarray()";
 
+  public static final MethodReference NUMPY_ARRAY =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/array")),
+          AstMethodReference.fnSelector);
+
+  private static final String NUMPY_ARRAY_SIGNATURE = "numpy.array()";
+
   public static final MethodReference READ_DATA_SETS =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
@@ -964,6 +975,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(MODEL_CALL.getDeclaringClass(), MODEL_CALL_SIGNATURE),
           Map.entry(TENSOR.getDeclaringClass(), TENSOR_SIGNATURE),
           Map.entry(NDARRAY.getDeclaringClass(), NDARRAY_SIGNATURE),
+          Map.entry(NUMPY_ARRAY.getDeclaringClass(), NUMPY_ARRAY_SIGNATURE),
           Map.entry(READ_DATA_SETS.getDeclaringClass(), READ_DATA_SETS_SIGNATURE),
           Map.entry(MNIST_X_TRAIN, MNIST_X_TRAIN_SIGNATURE),
           Map.entry(MNIST_Y_TRAIN, MNIST_Y_TRAIN_SIGNATURE),

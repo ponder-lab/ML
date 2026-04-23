@@ -1146,46 +1146,52 @@ public abstract class TensorGenerator {
         }
       }
 
-      // Check if it matches a known DType field (e.g., tf.float32).
+      // Check if it matches a known DType field (e.g., tf.float32 or np.float32). The owner
+      // allocation may be a TENSORFLOW_TYPE (when the dtype came from `tf.float32`) or a
+      // NUMPY_TYPE (when it came from `np.float32`); both are allocated in the same synthetic
+      // import-method node that allocates the dtype itself.
       boolean found = false;
       if (instanceKey instanceof AllocationSiteInNode) {
         CGNode importNode = ((AllocationSiteInNode) instanceKey).getNode();
 
         if (importNode != null) {
           LOGGER.fine("Found import node of interest: " + importNode + ".");
-          InstanceKey tensorFlowIK =
-              pointerAnalysis
-                  .getHeapModel()
-                  .getInstanceKeyForAllocation(
-                      importNode, NewSiteReference.make(0, TENSORFLOW_TYPE));
+          for (TypeReference ownerType :
+              new TypeReference[] {TENSORFLOW_TYPE, TensorFlowTypes.NUMPY_TYPE}) {
+            InstanceKey ownerIK =
+                pointerAnalysis
+                    .getHeapModel()
+                    .getInstanceKeyForAllocation(importNode, NewSiteReference.make(0, ownerType));
 
-          // Check dtype literals.
-          for (Entry<FieldReference, DType> entry : FIELD_REFERENCE_TO_DTYPE.entrySet()) {
-            FieldReference fieldRef = entry.getKey();
-            DType dtype = entry.getValue();
-            IField field = builder.getClassHierarchy().resolveField(fieldRef);
+            // Check dtype literals.
+            for (Entry<FieldReference, DType> entry : FIELD_REFERENCE_TO_DTYPE.entrySet()) {
+              FieldReference fieldRef = entry.getKey();
+              DType dtype = entry.getValue();
+              IField field = builder.getClassHierarchy().resolveField(fieldRef);
 
-            if (field != null) {
-              PointerKey pk =
-                  pointerAnalysis.getHeapModel().getPointerKeyForInstanceField(tensorFlowIK, field);
+              if (field != null) {
+                PointerKey pk =
+                    pointerAnalysis.getHeapModel().getPointerKeyForInstanceField(ownerIK, field);
 
-              OrdinalSet<InstanceKey> pts = pointerAnalysis.getPointsToSet(pk);
-              if (pts != null) {
-                for (InstanceKey ik : pts)
-                  if (ik.equals(instanceKey)) {
-                    ret.add(dtype);
-                    LOGGER.info(
-                        "Found dtype: "
-                            + dtype
-                            + " for source: "
-                            + this.getSource()
-                            + " from dType: "
-                            + instanceKey
-                            + ".");
-                    found = true;
-                    break;
-                  }
+                OrdinalSet<InstanceKey> pts = pointerAnalysis.getPointsToSet(pk);
+                if (pts != null) {
+                  for (InstanceKey ik : pts)
+                    if (ik.equals(instanceKey)) {
+                      ret.add(dtype);
+                      LOGGER.info(
+                          "Found dtype: "
+                              + dtype
+                              + " for source: "
+                              + this.getSource()
+                              + " from dType: "
+                              + instanceKey
+                              + ".");
+                      found = true;
+                      break;
+                    }
+                }
               }
+              if (found) break;
             }
             if (found) break;
           }
