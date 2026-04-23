@@ -1994,15 +1994,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * test loop. Both call sites pass batches of shape {@code (256, 784)} dtype {@code float32}
    * (verified by Python assert statements in {@code autoencoder.py}).
    *
-   * <p>Expected tensor variable count: 20. 10 distinct SSA vns in {@code encoder}'s body get tensor
-   * types (the parameter plus 9 intermediate ops: 4 dict-fieldref results for {@code
-   * weights[...]}/{@code biases[...]} plus 5 matmul/add/sigmoid results across the two layers),
-   * each duplicated across the 2 source-level call sites for 20 total.
+   * <p>Expected tensor variable count: 22. 11 distinct SSA vns in {@code encoder}'s body get tensor
+   * types &mdash; the parameter {@code x} (vn=2) plus the full layer-1 and layer-2 computation:
+   * {@code weights['encoder_h1']} (vn=19), {@code biases['encoder_b1']} (vn=24), layer-1 matmul
+   * (vn=15), layer-1 add (vn=11), {@code layer_1} sigmoid (vn=4), and the corresponding layer-2
+   * values {@code weights['encoder_h2']} (vn=41), {@code biases['encoder_b2']} (vn=45), layer-2
+   * matmul (vn=38), layer-2 add (vn=35), {@code layer_2} sigmoid (vn=31, returned). Each vn
+   * duplicated across the 2 source-level call sites for 22 total.
    */
   @Test
   public void testAutoencoder()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("autoencoder.py", "encoder", 1, 20, Map.of(2, Set.of(TENSOR_256_784_FLOAT32)));
+    test("autoencoder.py", "encoder", 1, 22, Map.of(2, Set.of(TENSOR_256_784_FLOAT32)));
   }
 
   /**
@@ -2054,12 +2057,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * encoder}'s layer 2 has dim {@code num_hidden_2 = 64}, {@code decoder} receives {@code (256, 64)
    * float32} (verified by a Python assert in the test loop).
    *
-   * <p>Expected tensor variable count: 18 (baseline; parallel to {@link #testAutoencoder()}).
+   * <p>Expected tensor variable count: 22 (parallel to {@link #testAutoencoder()}). Same body
+   * structure: 11 distinct SSA vns covering the parameter plus the two-layer {@code
+   * weights[...]}/{@code biases[...]} / matmul / add / sigmoid chain, each duplicated across the 2
+   * source-level call sites.
    */
   @Test
   public void testAutoencoder4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("autoencoder.py", "decoder", 1, 18, Map.of(2, Set.of(TENSOR_256_64_FLOAT32)));
+    test("autoencoder.py", "decoder", 1, 22, Map.of(2, Set.of(TENSOR_256_64_FLOAT32)));
   }
 
   @Test
