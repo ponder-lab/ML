@@ -5997,12 +5997,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_reshape.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_6_FLOAT32)));
   }
 
-  /**
-   * Test https://github.com/wala/ML/issues/195.
-   *
-   * <p>FIXME: Should not throw an {@link IllegalArgumentException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
+  /** Test https://github.com/wala/ML/issues/195. */
   @Test
   public void testReshape2() throws ClassHierarchyException, CancelException, IOException {
     TensorType expectedType =
@@ -6265,10 +6260,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_eye5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_2_2_3_FLOAT32)));
   }
 
-  /**
-   * FIXME: Should not throw an {@link IllegalArgumentException} once
-   * https://github.com/wala/ML/issues/340 is fixed.
-   */
   @Test
   public void testEye6()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -6893,15 +6884,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_variable_positional_dtype.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT64)));
   }
 
-  /**
-   * FIXME: Should not throw a {@link NullPointerException} once
-   * https://github.com/wala/ML/issues/340 is resolved.
-   *
-   * @throws ClassHierarchyException
-   * @throws IllegalArgumentException
-   * @throws CancelException
-   * @throws IOException
-   */
   @Test
   public void testModelInit()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
