@@ -1014,6 +1014,9 @@
       </class>
     </package>
     <package name="tensorflow">
+      <!-- Sentinel class for `tf.newaxis` (aliased as `None` at runtime) so the allocation emitted during the tensorflow import (see the `new Ltensorflow/newaxis` above) registers as an allocatable type. `NdarraySubscriptOperation.classifyField` pattern-matches on `TensorFlowTypes.NEWAXIS` (= `Ltensorflow/newaxis`)
+        to distinguish it from other non-constant subscript elements. -->
+      <class name="newaxis" allocatable="true" />
       <class name="GradientTape" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/GradientTape -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self persistent watch_accessed_variables">
