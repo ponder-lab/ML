@@ -782,6 +782,77 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     return lvals;
   }
 
+  /**
+   * Reports whether {@code v}'s defining instruction is the first-field read of the tuple yielded
+   * by Python's {@code enumerate} builtin &mdash; i.e., the {@code step} slot in {@code for step, x
+   * in enumerate(iterable)}. Such variables are integer indices, not tensors, even though the
+   * underlying PA graph aliases their field-0 pointer key with the iterable's element type. See
+   * wala/ML#409.
+   *
+   * <p>Structural detection, matching the dispatch pattern in {@link
+   * TensorGeneratorFactory#getGenerator}:
+   *
+   * <ol>
+   *   <li>{@code v}'s def is a {@link PythonPropertyRead} whose {@code memberRef} PTS contains the
+   *       integer constant {@code 0}.
+   *   <li>Its {@code objectRef}'s def is itself a {@link PythonPropertyRead} (the iterator-element
+   *       fetch).
+   *   <li>That inner read's {@code objectRef}'s def is an invoke of {@link
+   *       PythonTypes#ENUMERATE_BUILTIN}.
+   * </ol>
+   *
+   * @param v The candidate points-to-set variable.
+   * @param builder The propagation call graph builder.
+   * @return {@code true} iff {@code v} is the enumerate-first-field read.
+   */
+  private static boolean isEnumerateFirstFieldRead(
+      PointsToSetVariable v, PropagationCallGraphBuilder builder) {
+    if (!(v.getPointerKey() instanceof LocalPointerKey)) return false;
+    LocalPointerKey lpk = (LocalPointerKey) v.getPointerKey();
+    CGNode node = lpk.getNode();
+    SSAInstruction def = node.getDU().getDef(lpk.getValueNumber());
+    if (!(def instanceof PythonPropertyRead)) return false;
+    PythonPropertyRead outer = (PythonPropertyRead) def;
+
+    // Member ref must be constant 0.
+    PointerKey memberKey =
+        builder
+            .getPointerAnalysis()
+            .getHeapModel()
+            .getPointerKeyForLocal(node, outer.getMemberRef());
+    boolean isFirstElement = false;
+    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(memberKey)) {
+      if (ik instanceof ConstantKey
+          && Integer.valueOf(0).equals(((ConstantKey<?>) ik).getValue())) {
+        isFirstElement = true;
+        break;
+      }
+    }
+    if (!isFirstElement) return false;
+
+    // Object ref must be another PropertyRead (the iterator-element fetch).
+    SSAInstruction objDef = node.getDU().getDef(outer.getObjectRef());
+    if (!(objDef instanceof PythonPropertyRead)) return false;
+    PythonPropertyRead inner = (PythonPropertyRead) objDef;
+
+    // Inner's object ref must be an invoke of `enumerate`. The declared target is a generic
+    // trampoline (`LCodeBody`), so resolve via `getPossibleTargets` — matching the factory's
+    // dispatch pattern in `TensorGeneratorFactory.getGenerator`.
+    SSAInstruction innerObjDef = node.getDU().getDef(inner.getObjectRef());
+    if (!(innerObjDef instanceof PythonInvokeInstruction)) return false;
+    PythonInvokeInstruction invoke = (PythonInvokeInstruction) innerObjDef;
+    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite())) {
+      if (callee
+          .getMethod()
+          .getReference()
+          .getDeclaringClass()
+          .equals(PythonTypes.ENUMERATE_BUILTIN)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   @Override
   public TensorTypeAnalysis performAnalysis(PropagationCallGraphBuilder builder)
       throws CancelException {
@@ -859,8 +930,23 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
     Set<PointsToSetVariable> conv3ds = getKeysDefinedByCall(conv3d, builder);
 
+    // Detect enumerate-first-field reads (the `step` slot of `for step, x in enumerate(...)`) and
+    // pin their tensor-type state to empty via a `DropOp` edge transfer. Without this, the
+    // PA assignment graph leaks the underlying dataset's field-0 tensor type into the integer
+    // index slot, which then propagates to any function that receives `step` as an argument.
+    // The factory already throws `IllegalArgumentException` for these PropertyReads in
+    // `TensorGeneratorFactory.getGenerator`, but that only prevents generator-level seeding; it
+    // doesn't block the PTS-graph edge. See wala/ML#409.
+    Set<PointsToSetVariable> drops = HashSetFactory.make();
+    for (PointsToSetVariable v : dataflow) {
+      if (isEnumerateFirstFieldRead(v, builder)) drops.add(v);
+    }
+    LOGGER.fine(() -> "wala/ML#409 drops (enumerate-first-field): " + drops.size());
+    for (PointsToSetVariable d : drops) LOGGER.fine(() -> "  drop: " + d.getPointerKey());
+
     TensorTypeAnalysis tt =
-        new TensorTypeAnalysis(dataflow, init, shapeOps, setCalls, conv2ds, conv3ds, errorLog);
+        new TensorTypeAnalysis(
+            dataflow, init, shapeOps, setCalls, conv2ds, conv3ds, drops, errorLog);
 
     tt.solve(new NullProgressMonitor());
 

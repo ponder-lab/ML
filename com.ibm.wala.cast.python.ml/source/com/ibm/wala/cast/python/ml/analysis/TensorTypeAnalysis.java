@@ -172,12 +172,50 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
     }
   }
 
+  /**
+   * A transfer function that pins its destination's state to empty and fixed &mdash; blocks any
+   * predecessor contributions from propagating into {@code lhs}. Used for PointsToSetVariables that
+   * are semantically non-tensor (e.g., the integer index of {@code enumerate()}'s first tuple
+   * field) but whose PA-graph predecessors would otherwise leak tensor types in via the assignment
+   * graph's union semantics. See wala/ML#409.
+   */
+  static final class DropOp extends UnaryOperator<TensorVariable> {
+    static final DropOp INSTANCE = new DropOp();
+
+    private DropOp() {}
+
+    @Override
+    public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
+      if (lhs != null && lhs.state != null && !lhs.state.isEmpty()) {
+        lhs.state.clear();
+        return CHANGED_AND_FIXED;
+      }
+      return NOT_CHANGED_AND_FIXED;
+    }
+
+    @Override
+    public int hashCode() {
+      return 0x7E9D50FF; // arbitrary constant; this is a singleton
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof DropOp;
+    }
+
+    @Override
+    public String toString() {
+      return "drop tensor types (enumerate first-field / non-tensor pin)";
+    }
+  }
+
   private static IKilldallFramework<PointsToSetVariable, TensorVariable> createProblem(
       Graph<PointsToSetVariable> G,
       Map<PointsToSetVariable, TensorType> reshapeNodes,
       Map<PointsToSetVariable, TensorType> set_shapes,
       Set<PointsToSetVariable> conv2ds,
       Set<PointsToSetVariable> conv3ds,
+      Set<PointsToSetVariable> drops,
       Map<PointerKey, AnalysisError> errorLog) {
     return new IKilldallFramework<PointsToSetVariable, TensorVariable>() {
 
@@ -419,7 +457,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
 
           @Override
           public UnaryOperator<TensorVariable> getNodeTransferFunction(PointsToSetVariable node) {
-            if (reshapeNodes.containsKey(node)) {
+            if (drops.contains(node)) {
+              return DropOp.INSTANCE;
+            } else if (reshapeNodes.containsKey(node)) {
               return new ReshapeOp(reshapeNodes.get(node), node);
             } else if (conv2ds.contains(node)) {
               return new ConvOp(2, node);
@@ -438,7 +478,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
           @Override
           public UnaryOperator<TensorVariable> getEdgeTransferFunction(
               PointsToSetVariable src, PointsToSetVariable dst) {
-            if (set_shapes.containsKey(dst)) {
+            if (drops.contains(dst)) {
+              return DropOp.INSTANCE;
+            } else if (set_shapes.containsKey(dst)) {
               return new SetShapeOp(set_shapes.get(dst));
             } else {
               return nodeOp;
@@ -493,8 +535,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Map<PointsToSetVariable, TensorType> set_shapes,
       Set<PointsToSetVariable> conv2ds,
       Set<PointsToSetVariable> conv3ds,
+      Set<PointsToSetVariable> drops,
       Map<PointerKey, AnalysisError> errorLog) {
-    super(createProblem(G, reshapeTypes, set_shapes, conv2ds, conv3ds, errorLog));
+    super(createProblem(G, reshapeTypes, set_shapes, conv2ds, conv3ds, drops, errorLog));
     System.err.println("TensorTypeAnalysis reshapeNodes size: " + reshapeTypes.size());
     for (PointsToSetVariable v : reshapeTypes.keySet()) {
       System.err.println("reshapeNode: " + v.getPointerKey());

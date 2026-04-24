@@ -1392,20 +1392,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    *
    * <p>{@code summarize_weights(step)} takes only an {@code int} step counter (not a tensor, hence
    * parameter count 0). Inside the function, dict lookups {@code weights[w]} and {@code biases[b]}
-   * feed the tensor variables to {@code tf.summary.histogram}. Expected tensor variable count: 4
-   * (master baseline). Branch currently registers 5 &mdash; the 4 master entries plus a spurious
-   * {@code v2} (the {@code step} parameter) typed ⊤ via tuple-field-0 dataflow propagation from the
-   * {@code enumerate()} call at the caller: {@code for step, (x, y) in enumerate(ds, 1):}. The leak
-   * is at the PA substrate (tensor types flow to the enumerate tuple's field-0 slot through the
-   * PTS-graph edge), not at generator dispatch &mdash; verified empirically that changing {@link
-   * com.ibm.wala.cast.python.ml.client.EnumerateGenerator}'s {@code getTensorTypes} to return
-   * {@code ⊥} does not close the gap. Tracked as <a
-   * href="https://github.com/wala/ML/issues/409">wala/ML#409</a>, a sibling of <a
-   * href="https://github.com/wala/WALA/issues/1889">wala/WALA#1889</a> at a different PTS-graph
-   * pattern. Keeping expected at the master baseline lets the failing count check serve as the
-   * regression signal. No Python asserts are added because the function has no tensor parameters
-   * and the local tensor SSAs (dict lookups and subscript reads) are not named at positions where
-   * asserts can live without restructuring the original program.
+   * feed 4 tensor variables to {@code tf.summary.histogram}. Previously this test registered 5: the
+   * extra was a spurious {@code v2} (the {@code step} parameter) typed {@code {(256, 784) float32}}
+   * via PA-graph propagation from the {@code enumerate()} call at the caller ({@code for step, (x,
+   * y) in enumerate(ds, 1):}). The leak was at the PA substrate &mdash; tensor types flowing to the
+   * enumerate tuple's field-0 slot through the PTS-graph edge, not at generator dispatch.
+   *
+   * <p>Closed by wala/ML#409: {@link com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine}
+   * now detects enumerate-first-field reads structurally and pins their {@link
+   * com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis} state to empty via a {@code DropOp}
+   * edge transfer that both clears existing leaked state and FIXes the slot against further
+   * predecessor updates. Count correctly reports 4.
    */
   @Test
   public void testTensorboardExample()
