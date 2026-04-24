@@ -510,10 +510,17 @@ public abstract class TensorGenerator {
     Map<Pair<CGNode, Integer>, Set<List<Dimension<?>>>> cache =
         SHAPES_CACHE.computeIfAbsent(builder, b -> Collections.synchronizedMap(new HashMap<>()));
     Pair<CGNode, Integer> key = Pair.make(node, valueNumber);
-    if (cache.containsKey(key)) return cache.get(key);
-    Set<List<Dimension<?>>> result = computeShapes(builder, node, valueNumber);
-    cache.put(key, result);
-    return result;
+    // Atomic check-compute-put: concurrent threads hitting the same key will serialize on the
+    // cache's mutex so exactly one `computeShapes` call runs. The null result is cached too
+    // (null = ⊤), which `Map.computeIfAbsent` cannot express, so we use `containsKey` instead.
+    // Reentrant synchronization: `SynchronizedMap`'s own methods acquire the same mutex, so the
+    // inner `containsKey` / `get` / `put` calls are no-op re-entries.
+    synchronized (cache) {
+      if (cache.containsKey(key)) return cache.get(key);
+      Set<List<Dimension<?>>> result = computeShapes(builder, node, valueNumber);
+      cache.put(key, result);
+      return result;
+    }
   }
 
   private Set<List<Dimension<?>>> computeShapes(
@@ -1429,10 +1436,13 @@ public abstract class TensorGenerator {
     Map<Pair<CGNode, Integer>, Set<DType>> cache =
         DTYPES_CACHE.computeIfAbsent(builder, b -> Collections.synchronizedMap(new HashMap<>()));
     Pair<CGNode, Integer> key = Pair.make(node, valueNumber);
-    if (cache.containsKey(key)) return cache.get(key);
-    Set<DType> result = computeDTypes(builder, node, valueNumber);
-    cache.put(key, result);
-    return result;
+    // See `getShapes` above — same atomic check-compute-put pattern, same null-cache rationale.
+    synchronized (cache) {
+      if (cache.containsKey(key)) return cache.get(key);
+      Set<DType> result = computeDTypes(builder, node, valueNumber);
+      cache.put(key, result);
+      return result;
+    }
   }
 
   private Set<DType> computeDTypes(
