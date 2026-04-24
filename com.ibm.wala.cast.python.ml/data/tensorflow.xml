@@ -922,9 +922,10 @@
         </method>
       </class>
       <class name="softmax" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/softmax -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/softmax. Fresh allocation (not pass-through); shape / dtype inferred from `logits` by the `Softmax` generator. See the rationale on `sigmoid.do()` in this file. -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self logits axis name">
-          <return value="logits" />
+          <new def="res" class="Ltensorflow/functions/softmax" />
+          <return value="res" />
         </method>
       </class>
       <class name="sparse_softmax_cross_entropy_with_logits" allocatable="true">
