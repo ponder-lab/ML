@@ -59,14 +59,18 @@ import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -110,8 +114,6 @@ import java.util.logging.Logger;
  * {@code getDefaultShapes} and {@code getDefaultDTypes} against the table above — the most common
  * mistake is returning {@code Collections.emptySet()} when the intended meaning is "unknown."
  *
- * <p>TODO: Revisit caching of shapes and dtypes.
- *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
 public abstract class TensorGenerator {
@@ -119,6 +121,26 @@ public abstract class TensorGenerator {
   protected static final int UNDEFINED_PARAMETER_POSITION = -1;
 
   private static final Logger LOGGER = Logger.getLogger(TensorGenerator.class.getName());
+
+  /**
+   * Per-builder memoization cache for {@link #getShapes(PropagationCallGraphBuilder, CGNode, int)}.
+   * Branch-267's caller-walk + SSA-DU chain fallback paths recursively re-query the same {@code
+   * (node, vn)} pairs many times during a single analysis (e.g., autoencoder's chained layers
+   * trigger a walk from the final Dense that repeatedly lands on the same intermediate vns). Since
+   * the pointer analysis is already stable by the time {@link TensorGenerator} methods run, {@code
+   * getShapes(builder, node, vn)} is a pure function of its inputs for the duration of a single
+   * analysis, so caching is safe and gives a substantial speedup on shape-chained tests.
+   *
+   * <p>Keyed by builder so different analyses don't share state; {@link WeakHashMap} ensures
+   * entries are reclaimed when the builder is GC'd. Single-threaded access assumed.
+   */
+  private static final Map<
+          PropagationCallGraphBuilder, Map<Pair<CGNode, Integer>, Set<List<Dimension<?>>>>>
+      SHAPES_CACHE = new WeakHashMap<>();
+
+  /** Dtype counterpart of {@link #SHAPES_CACHE}. */
+  private static final Map<PropagationCallGraphBuilder, Map<Pair<CGNode, Integer>, Set<DType>>>
+      DTYPES_CACHE = new WeakHashMap<>();
 
   /** The source of the tensor, represented by a points-to set variable. */
   protected PointsToSetVariable source;
@@ -455,8 +477,23 @@ public abstract class TensorGenerator {
    * Returns the possible shapes of the tensor represented by the given value number in the
    * specified node. This method uses a multi-staged approach, falling back to interprocedural
    * generator-based tracing if standard points-to analysis fails.
+   *
+   * <p>Memoized on {@code (node, valueNumber)} per builder via {@link #SHAPES_CACHE} to eliminate
+   * redundant recomputation across caller-walk / SSA-DU chain fallback recursion. The PA is stable
+   * when {@link TensorGenerator} runs, so caching is correctness-safe.
    */
   protected Set<List<Dimension<?>>> getShapes(
+      PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
+    Map<Pair<CGNode, Integer>, Set<List<Dimension<?>>>> cache =
+        SHAPES_CACHE.computeIfAbsent(builder, b -> new HashMap<>());
+    Pair<CGNode, Integer> key = Pair.make(node, valueNumber);
+    if (cache.containsKey(key)) return cache.get(key);
+    Set<List<Dimension<?>>> result = computeShapes(builder, node, valueNumber);
+    cache.put(key, result);
+    return result;
+  }
+
+  private Set<List<Dimension<?>>> computeShapes(
       PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
     PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
@@ -1361,9 +1398,21 @@ public abstract class TensorGenerator {
 
   /**
    * Returns the possible dtypes of the tensor represented by the given value number in the
-   * specified node.
+   * specified node. Memoized on {@code (node, valueNumber)} per builder via {@link #DTYPES_CACHE};
+   * see {@link #getShapes(PropagationCallGraphBuilder, CGNode, int)} for the rationale.
    */
   protected Set<DType> getDTypes(
+      PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
+    Map<Pair<CGNode, Integer>, Set<DType>> cache =
+        DTYPES_CACHE.computeIfAbsent(builder, b -> new HashMap<>());
+    Pair<CGNode, Integer> key = Pair.make(node, valueNumber);
+    if (cache.containsKey(key)) return cache.get(key);
+    Set<DType> result = computeDTypes(builder, node, valueNumber);
+    cache.put(key, result);
+    return result;
+  }
+
+  private Set<DType> computeDTypes(
       PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
     PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
