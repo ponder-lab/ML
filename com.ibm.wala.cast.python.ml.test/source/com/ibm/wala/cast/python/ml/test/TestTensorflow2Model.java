@@ -1454,18 +1454,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_tensor_list5.py", "add", 0, 0);
   }
 
+  /**
+   * Four tensor variables in {@code SequentialModel.__call__}: the {@code x} parameter (vn=3, shape
+   * {@code (20, 28, 28) f32}) plus three intermediate SSA values produced by the {@code
+   * self.flatten(x) → 100× Dense(64) → self.dropout(x) → self.dense_2(x)} chain. The Flatten result
+   * is concrete {@code (20, 784)} via {@link com.ibm.wala.cast.python.ml.client.FlattenCall}; the
+   * two downstream vns are currently also {@code (20, 784)} &mdash; a pre-existing Dense-chain
+   * shape-propagation imprecision (neither {@code Dense(64)} in the loop nor the final {@code
+   * Dense(10)} narrows along the {@code units} axis). Tracked separately; unrelated to the
+   * Flatten/Dropout modeling that added these two vns to the tensor set in the first place.
+   */
   @Test
   public void testModelCall()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    // Two tensor variables in __call__: the `x` parameter (value number 3) and the float32 result
-    // of an internal `DenseCall` whose concrete shape cannot currently be inferred through the
-    // chained layer calls — tracked as `{? of float32}`. See wala/ML#356 for the underlying PTS
-    // propagation gap.
     test(
         "tf2_test_model_call.py",
         "SequentialModel.__call__",
         1,
-        2,
+        4,
         Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
@@ -1476,7 +1482,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_model_call2.py",
         "SequentialModel.call",
         1,
-        2,
+        4,
         Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
@@ -1487,7 +1493,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_model_call3.py",
         "SequentialModel.call",
         1,
-        2,
+        4,
         Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
@@ -1498,7 +1504,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_model_call4.py",
         "SequentialModel.__call__",
         1,
-        2,
+        4,
         Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
@@ -1551,7 +1557,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_model_call6.py",
         "SequentialModel.__call__",
         1,
-        2,
+        4,
         Map.of(3, Set.of(TENSOR_20_28_28_INT32)));
   }
 

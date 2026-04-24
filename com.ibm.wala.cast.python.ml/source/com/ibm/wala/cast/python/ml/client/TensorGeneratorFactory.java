@@ -33,6 +33,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLATTEN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLATTEN_LAYER_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_ROW_LENGTHS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_ROW_SPLITS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_VALUE_ROWIDS;
@@ -873,6 +874,8 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, DENSE_CALL.getDeclaringClass())) return new DenseCall(source);
     else if (isType(calledFunction, MODEL_CALL.getDeclaringClass())) return new ModelCall(source);
     else if (isType(calledFunction, FLATTEN.getDeclaringClass())) return new Flatten(source);
+    else if (isType(calledFunction, FLATTEN_LAYER_CALL.getDeclaringClass()))
+      return new FlattenCall(source);
     else if (isType(calledFunction, MAX_POOL.getDeclaringClass())) return new MaxPool(source);
     else if (isType(calledFunction, SLICE_BUILTIN)) return new SliceBuiltinOperation(source);
     else {

@@ -872,6 +872,19 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String FLATTEN_SIGNATURE = "tf.layers.flatten()";
 
+  /**
+   * The {@code __call__} synthetic method on a {@code tf.keras.layers.Flatten} instance.
+   *
+   * @see <a
+   *     href="https://www.tensorflow.org/api_docs/python/tf/keras/layers/Flatten">tf.keras.layers.Flatten</a>
+   */
+  public static final MethodReference FLATTEN_LAYER_CALL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/keras/layers/Flatten/" + CALLABLE_METHOD_NAME)),
+          AstMethodReference.fnSelector);
+
   /** https://www.tensorflow.org/api_docs/python/tf/nn/max_pool. */
   public static final MethodReference MAX_POOL =
       MethodReference.findOrCreate(
