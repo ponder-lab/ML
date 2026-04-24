@@ -2589,6 +2589,8 @@ public abstract class TensorGenerator {
       return new DatasetGenerator(node);
     } else if (type.equals(TensorFlowTypes.MATMUL.getDeclaringClass())) {
       return new MatMul(node);
+    } else if (type.equals(TensorFlowTypes.SIGMOID.getDeclaringClass())) {
+      return new Sigmoid(node);
     } else if (type.equals(CONSTANT.getDeclaringClass())) {
       return new TensorGenerator(node) {
         @Override

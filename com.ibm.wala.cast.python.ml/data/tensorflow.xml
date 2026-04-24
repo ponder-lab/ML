@@ -444,9 +444,11 @@
     </package>
     <package name="tensorflow/math">
       <class name="sigmoid" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/sigmoid -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/sigmoid. Modeled as `<new>+<return>` (fresh allocation, not pass-through) to match add/matmul and reflect actual TF semantics: sigmoid returns a new tensor with the same shape/dtype as its input, not the input object itself.
+          Shape/dtype inference lives in the `Sigmoid` generator. -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
-          <return value="x" />
+          <new def="res" class="Ltensorflow/math/sigmoid" />
+          <return value="res" />
         </method>
       </class>
       <class name="add" allocatable="true">
