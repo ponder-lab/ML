@@ -932,8 +932,10 @@
       </class>
       <class name="sparse_softmax_cross_entropy_with_logits" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/sparse_softmax_cross_entropy_with_logits -->
+        <!-- Returns a fresh loss tensor of shape `logits.shape[:-1]` and dtype float32 — does NOT return `labels`. `SoftmaxCrossEntropy` computes the output type. -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self labels logits name">
-          <return value="labels" />
+          <new def="res" class="Ltensorflow/functions/sparse_softmax_cross_entropy_with_logits" />
+          <return value="res" />
         </method>
       </class>
     </package>

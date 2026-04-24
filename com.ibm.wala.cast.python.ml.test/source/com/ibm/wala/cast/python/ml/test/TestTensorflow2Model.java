@@ -3931,6 +3931,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_multiply7.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
   }
 
+  /**
+   * {@code tf.nn.sparse_softmax_cross_entropy_with_logits(labels, logits)} returns a fresh loss
+   * tensor of shape {@code logits.shape[:-1]} and dtype {@code float32}. For this test, logits is
+   * {@code (3, 4) float32} so the loss is {@code (3,) float32} &mdash; not {@code (3,) int32} as
+   * the pre-wala/ML#412 modeling reported (that was an artefact of the XML {@code <return
+   * value="labels"/>} pass-through, which made the call's result share {@code labels}' type).
+   */
   @Test
   public void testSparseSoftmaxCrossEntropyWithLogits()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -3939,7 +3946,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "f",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_3_INT32)));
+        Map.of(2, Set.of(TENSOR_3_FLOAT32)));
   }
 
   @Test

@@ -2593,6 +2593,10 @@ public abstract class TensorGenerator {
       return new Sigmoid(node);
     } else if (type.equals(TensorFlowTypes.SOFTMAX.getDeclaringClass())) {
       return new Softmax(node);
+    } else if (type.equals(TensorFlowTypes.SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass())
+        || type.equals(
+            TensorFlowTypes.SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass())) {
+      return new SoftmaxCrossEntropy(node);
     } else if (type.equals(CONSTANT.getDeclaringClass())) {
       return new TensorGenerator(node) {
         @Override
