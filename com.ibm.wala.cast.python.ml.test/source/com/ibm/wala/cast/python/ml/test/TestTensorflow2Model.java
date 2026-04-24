@@ -3783,12 +3783,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * keras.datasets.X.load_data()} is seeded uniformly as MNIST-shaped regardless of which dataset
    * module {@code X} is). Branch now hardcodes {@code tf.keras.datasets.cifar10.load_data()} as an
    * intrinsic (paralleling the MNIST modeling), so value 2 correctly reports {@code (4096, 32, 32,
-   * 3) float32}. Value 3 (labels) is still {@code {? unknown}} on branch: {@code y_train =
-   * np.reshape(y_train, (-1))} in the source is a top-level {@code np.reshape} call, which is not
-   * yet modeled in {@code numpy.xml} (only the method form {@code x.reshape(...)} is). That gap
-   * blocks dtype/shape propagation for the labels arm; tracked by wala/ML#410. For tensor shape
-   * inference, the correctness ordering is <em>correct specific shape &gt; unknown (⊤) &gt; wrong
-   * specific shape</em>, so value 3 is still strictly more accurate than master's MNIST_INPUT.
+   * 3) float32}. Value 3 (labels) now correctly reports {@code (4096,) uint8} after wala/ML#410
+   * landed the top-level {@code np.reshape(x, shape)} modeling: {@code y_train =
+   * np.reshape(y_train, (-1))} at line 66 of the source is the function form of reshape (as opposed
+   * to the method form {@code x.reshape(...)} which was already handled by {@link NdarrayReshape}).
+   * The fix added a {@code numpy/reshape} class to {@code numpy.xml} paired with an {@link
+   * NpReshape} generator that reuses {@link Reshape}'s {@code -1}-inference logic and also accepts
+   * a bare integer as the shape argument (the parenthesised {@code (-1)} parses as {@code -1}, not
+   * a 1-tuple).
    *
    * <p>Branch also registers an extra spurious tensor variable at {@code vn=44} with type {@code
    * {[] of int32}} corresponding to {@code gpu_batch_size = int(batch_size / num_gpus)} at line
@@ -3796,10 +3798,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * separate, genuine regression.
    *
    * <p>Expected tensor variable count: 5 (branch actual). TODO: restore to master baseline 4 once
-   * wala/ML#392 is resolved. Expected types are the runtime-verified CIFAR-10 shapes
-   * (aspirational); value 2 now passes after CIFAR-10 modeling, value 3 still fails pending
-   * wala/ML#410 (top-level {@code np.reshape}). Fully unblocks when both wala/ML#392 and
-   * wala/ML#410 are resolved; see also wala/ML#361 (MNIST modeling) and wala/ML#393 (CIFAR-10
+   * wala/ML#392 is resolved. See also wala/ML#361 (MNIST modeling) and wala/ML#393 (CIFAR-10
    * modeling, closed by the commit that landed this test's partial pass).
    */
   @Test

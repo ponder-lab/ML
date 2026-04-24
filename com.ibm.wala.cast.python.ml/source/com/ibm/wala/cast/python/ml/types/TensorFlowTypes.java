@@ -729,6 +729,14 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String NUMPY_ARRAY_SIGNATURE = "numpy.array()";
 
+  public static final MethodReference NUMPY_RESHAPE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/reshape")),
+          AstMethodReference.fnSelector);
+
+  private static final String NUMPY_RESHAPE_SIGNATURE = "numpy.reshape()";
+
   public static final MethodReference READ_DATA_SETS =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
@@ -1053,6 +1061,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(TENSOR.getDeclaringClass(), TENSOR_SIGNATURE),
           Map.entry(NDARRAY.getDeclaringClass(), NDARRAY_SIGNATURE),
           Map.entry(NUMPY_ARRAY.getDeclaringClass(), NUMPY_ARRAY_SIGNATURE),
+          Map.entry(NUMPY_RESHAPE.getDeclaringClass(), NUMPY_RESHAPE_SIGNATURE),
           Map.entry(READ_DATA_SETS.getDeclaringClass(), READ_DATA_SETS_SIGNATURE),
           Map.entry(MNIST_X_TRAIN, MNIST_X_TRAIN_SIGNATURE),
           Map.entry(MNIST_Y_TRAIN, MNIST_Y_TRAIN_SIGNATURE),

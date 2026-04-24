@@ -64,6 +64,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NDARRAY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NUMPY_ARRAY;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NUMPY_RESHAPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONES;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONE_HOT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.PLACEHOLDER;
@@ -819,6 +820,8 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, TENSOR.getDeclaringClass())
         || isType(calledFunction, NDARRAY.getDeclaringClass())) return new TensorCall(source);
     else if (isType(calledFunction, NUMPY_ARRAY.getDeclaringClass())) return new NpArray(source);
+    else if (isType(calledFunction, NUMPY_RESHAPE.getDeclaringClass()))
+      return new NpReshape(source);
     else if (isType(calledFunction, DATASET_FROM_TENSOR_SLICES_TYPE))
       return new DatasetFromTensorSlicesGenerator(source);
     else if (isType(calledFunction, DATASET_FROM_TENSORS_TYPE))

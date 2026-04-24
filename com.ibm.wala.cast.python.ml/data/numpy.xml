@@ -15,6 +15,8 @@
         <putfield class="LRoot" field="int64" fieldType="LRoot" ref="x" value="int64" />
         <new def="array_fn" class="Lnumpy/array" />
         <putfield class="LRoot" field="array" fieldType="LRoot" ref="x" value="array_fn" />
+        <new def="reshape_fn" class="Lnumpy/reshape" />
+        <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="x" value="reshape_fn" />
         <return value="x" />
       </method>
     </class>
@@ -35,6 +37,19 @@
         `null`, `getInvariantContents` returns empty, and `visitReturn` never adds the iKey to the caller-side `PointerKey`. Same pattern as the wala/WALA#1889 fix for `tensorflow/python/ops/variables/Variable`. The class has no body because it is only referenced as a `<new>` target, not invoked directly; avoiding
         `read_data` here prevents the class from being picked up by `TensorTypeAnalysis`'s syntactic seeding. -->
       <class name="ndarray" allocatable="true"></class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.reshape.html -->
+      <!-- Function-form counterpart of `numpy/ndarray/reshape`: `np.reshape(x, shape)` rather than `x.reshape(shape)`. Modeled as a class-per-function so that `np.reshape` resolves to this class via a field lookup on the numpy module, and the invocation dispatches to its `do` method. Shape comes from
+        arg 1 (target shape); dtype is preserved from arg 0 (input tensor); see `NpReshape`. -->
+      <class name="reshape" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x shape">
+          <new def="ret" class="Lnumpy/ndarray" />
+          <new def="astype_fn" class="Lnumpy/ndarray/astype" />
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn" />
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape" />
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn" />
+          <return value="ret" />
+        </method>
+      </class>
     </package>
     <package name="numpy/ndarray">
       <!-- NOTE: This block of ndarray method-field populations (`astype`, `reshape`, ...) is duplicated intentionally in every ndarray-producing method's `do()` (both here and in the mnist `x_train`/`y_train`/`x_test`/`y_test` outputs in `tensorflow.xml`). Because WALA uses 1-CFA context sensitivity
