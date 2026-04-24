@@ -437,7 +437,7 @@
         </method>
       </class>
       <class name="sparse_eye" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self num_rows num_columns dtype name">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self num_rows num_columns dtype name">
           <return value="self" />
         </method>
       </class>
@@ -627,7 +627,7 @@
         </method>
       </class>
       <class name="matmul" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self a b transpose_a transpose_b adjoint_a adjoint_b a_is_sparse b_is_sparse name">
+        <method name="do" descriptor="()LRoot;" numArgs="10" paramNames="self a b transpose_a transpose_b adjoint_a adjoint_b a_is_sparse b_is_sparse name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <new def="op" class="Ltensorflow/python/framework/ops/Operation" />
           <putfield class="Ltensorflow/python/framework/ops/Tensor" field="op" fieldType="LRoot" ref="res" value="op" />
@@ -651,7 +651,7 @@
         </method>
       </class>
       <class name="shuffle_batch" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self data">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self data">
           <return value="data" />
         </method>
       </class>
@@ -794,7 +794,7 @@
         </method>
       </class>
       <class name="ragged_constant" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self pylist dtype ragged_rank inner_shape name row_splits_dtype">
+        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self pylist dtype ragged_rank inner_shape name row_splits_dtype">
           <new def="x" class="Ltensorflow/python/ops/ragged/ragged_factory_ops/constant" />
           <putfield class="Ltensorflow/python/ops/ragged/ragged_factory_ops/constant" field="value" fieldType="LRoot" ref="x" value="pylist" />
           <return value="x" />
@@ -1208,7 +1208,7 @@
       </class>
       <class name="repeat" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#repeat -->
-        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self count name">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self count name">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. See shuffle/do() for rationale. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle" />
