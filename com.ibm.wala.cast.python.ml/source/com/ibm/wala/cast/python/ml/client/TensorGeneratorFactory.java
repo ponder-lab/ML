@@ -445,14 +445,6 @@ public class TensorGeneratorFactory {
         TensorGenerator byPropertyName = dispatchByPropertyName(source, call, node, vn, builder);
         if (byPropertyName != null) return byPropertyName;
 
-        // Method-style `x.reshape(shape)` where the receiver's PTS is empty (typically because
-        // it was lost through a tuple-unpack chain like `x_train, _ = x_train.astype(...), _`).
-        // Syntactic discrimination on argument count (2 uses = method call; `tf.reshape(x,
-        // shape)` has 3) keeps this disjoint from the `tf.reshape` dispatch path below.
-        if (NdarrayReshape.isApplicable(source, builder)) {
-          return new NdarrayReshape(source);
-        }
-
         for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, call.getCallSite())) {
           // If we're calling the `enumerate` builtin, we want to return the generator for the
           // underlying iterable (the second element of each tuple returned by the enumerator).
