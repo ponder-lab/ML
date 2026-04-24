@@ -950,6 +950,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
     tt.solve(new NullProgressMonitor());
 
+    // `TensorGenerator.getShapes`/`getDTypes` memoize per-builder. Clear those caches now that
+    // the analysis is done rather than waiting for the builder to be garbage-collected &mdash;
+    // this keeps memory predictable in long-running clients (LSP server, repeated-analysis
+    // daemons) where builders may be held in other caches after their analysis completes.
+    TensorGenerator.clearCaches(builder);
+
     return tt;
   }
 

@@ -129,18 +129,41 @@ public abstract class TensorGenerator {
    * trigger a walk from the final Dense that repeatedly lands on the same intermediate vns). Since
    * the pointer analysis is already stable by the time {@link TensorGenerator} methods run, {@code
    * getShapes(builder, node, vn)} is a pure function of its inputs for the duration of a single
-   * analysis, so caching is safe and gives a substantial speedup on shape-chained tests.
+   * analysis, so caching is safe.
    *
-   * <p>Keyed by builder so different analyses don't share state; {@link WeakHashMap} ensures
-   * entries are reclaimed when the builder is GC'd. Single-threaded access assumed.
+   * <p>Lifecycle:
+   *
+   * <ul>
+   *   <li>Keyed by the {@link PropagationCallGraphBuilder} so distinct analyses do not share state.
+   *   <li>Wrapped in {@link Collections#synchronizedMap} to accommodate clients that invoke {@link
+   *       #getShapes(PropagationCallGraphBuilder, CGNode, int)} from multiple threads (rare but not
+   *       unreasonable for a long-running analysis service).
+   *   <li>Stored in a {@link WeakHashMap} so builder entries become eligible for GC automatically,
+   *       but clients should prefer the explicit {@link #clearCaches(PropagationCallGraphBuilder)}
+   *       hook at analysis end for deterministic cleanup (especially important in long-running
+   *       processes where builders may be retained beyond their analysis). {@link
+   *       PythonTensorAnalysisEngine#performAnalysis} invokes it.
+   * </ul>
    */
   private static final Map<
           PropagationCallGraphBuilder, Map<Pair<CGNode, Integer>, Set<List<Dimension<?>>>>>
-      SHAPES_CACHE = new WeakHashMap<>();
+      SHAPES_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
 
   /** Dtype counterpart of {@link #SHAPES_CACHE}. */
   private static final Map<PropagationCallGraphBuilder, Map<Pair<CGNode, Integer>, Set<DType>>>
-      DTYPES_CACHE = new WeakHashMap<>();
+      DTYPES_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
+   * Drops the shape/dtype caches for the given builder. Intended to be called at the end of an
+   * analysis to release cache memory deterministically, rather than waiting for the builder to be
+   * garbage-collected. Safe to call more than once.
+   *
+   * @param builder The builder whose cache entries should be cleared.
+   */
+  public static void clearCaches(PropagationCallGraphBuilder builder) {
+    SHAPES_CACHE.remove(builder);
+    DTYPES_CACHE.remove(builder);
+  }
 
   /** The source of the tensor, represented by a points-to set variable. */
   protected PointsToSetVariable source;
@@ -485,7 +508,7 @@ public abstract class TensorGenerator {
   protected Set<List<Dimension<?>>> getShapes(
       PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
     Map<Pair<CGNode, Integer>, Set<List<Dimension<?>>>> cache =
-        SHAPES_CACHE.computeIfAbsent(builder, b -> new HashMap<>());
+        SHAPES_CACHE.computeIfAbsent(builder, b -> Collections.synchronizedMap(new HashMap<>()));
     Pair<CGNode, Integer> key = Pair.make(node, valueNumber);
     if (cache.containsKey(key)) return cache.get(key);
     Set<List<Dimension<?>>> result = computeShapes(builder, node, valueNumber);
@@ -1404,7 +1427,7 @@ public abstract class TensorGenerator {
   protected Set<DType> getDTypes(
       PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
     Map<Pair<CGNode, Integer>, Set<DType>> cache =
-        DTYPES_CACHE.computeIfAbsent(builder, b -> new HashMap<>());
+        DTYPES_CACHE.computeIfAbsent(builder, b -> Collections.synchronizedMap(new HashMap<>()));
     Pair<CGNode, Integer> key = Pair.make(node, valueNumber);
     if (cache.containsKey(key)) return cache.get(key);
     Set<DType> result = computeDTypes(builder, node, valueNumber);
