@@ -2013,6 +2013,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * branch currently registers 1 &mdash; a regression from master. Keeping expected at the master
    * baseline lets the failing count check serve as the regression signal; no separate issue is
    * needed because the test itself tracks the discrepancy.
+   *
+   * <p>The type-map check on value 2 ({@code reconstructed}) fails because {@code decoder}'s return
+   * shape cannot reach this parameter. Blocked by <a
+   * href="https://github.com/wala/WALA/issues/1889">wala/WALA#1889</a>: the shape has to flow
+   * through the {@code matmul → add → sigmoid → user-function-return} chain of XML-summary
+   * synthetic methods, each of whose return has an implicit {@code PointerKey} with empty PTS.
+   * Until #1889 lands so summary returns materialise concrete PTS, the cascade loses the shape at
+   * one of those hops regardless of where a downstream workaround is inserted (see <a
+   * href="https://github.com/wala/WALA/issues/1889#issuecomment-4310297954">the autoencoder
+   * reproducer</a> posted against #1889 for the concrete analyser trace).
    */
   @Test
   public void testAutoencoder2()
@@ -2053,6 +2063,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * structure: 11 distinct SSA vns covering the parameter plus the two-layer {@code
    * weights[...]}/{@code biases[...]} / matmul / add / sigmoid chain, each duplicated across the 2
    * source-level call sites.
+   *
+   * <p>The type-map check on value 2 ({@code decoder}'s {@code x} parameter) fails because {@code
+   * encoder}'s return shape cannot propagate into {@code decoder}'s parameter. Blocked by <a
+   * href="https://github.com/wala/WALA/issues/1889">wala/WALA#1889</a>: at the call site {@code
+   * decoder(encoder(batch_x))}, the actual arg is the return of the user-defined {@code encoder}
+   * function, which in turn ends in an XML-summary synthetic {@code sigmoid.do()}. That chain's
+   * return has an implicit {@code PointerKey} with empty PTS, so the shape never reaches {@code
+   * decoder}'s parameter slot. Same root cause as {@link #testAutoencoder2()} &mdash; a different
+   * layer in the same cascade.
    */
   @Test
   public void testAutoencoder4()
