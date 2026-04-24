@@ -31,6 +31,14 @@
           <return value="ret" />
         </method>
       </class>
+      <!-- Must be declared `allocatable="true"` so that `<new class="Lnumpy/ndarray"/>` in the various array-producing `do()` methods (both here and in `tensorflow.xml`) resolves to a concrete `InstanceKey` in the heap model. Without this declaration, `HeapModel.getInstanceKeyForAllocation` returns
+        `null`, `getInvariantContents` returns empty, and `visitReturn` never adds the iKey to the caller-side `PointerKey`. Same pattern as the wala/WALA#1889 fix for `tensorflow/python/ops/variables/Variable`. -->
+      <class name="ndarray" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Lnumpy/ndarray" />
+          <return value="x" />
+        </method>
+      </class>
     </package>
     <package name="numpy/ndarray">
       <!-- NOTE: This block of ndarray method-field populations (`astype`, `reshape`, ...) is duplicated intentionally in every ndarray-producing method's `do()` (both here and in the mnist `x_train`/`y_train`/`x_test`/`y_test` outputs in `tensorflow.xml`). Because WALA uses 1-CFA context sensitivity
