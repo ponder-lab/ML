@@ -736,8 +736,10 @@
         </method>
       </class>
       <class name="sparse_add" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/sparse/add. Fresh allocation, not pass-through; shape / dtype inference lives in the `SparseAdd` generator. -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self a b threshold name">
-          <return value="a" />
+          <new def="res" class="Ltensorflow/functions/sparse_add" />
+          <return value="res" />
         </method>
       </class>
       <class name="fill" allocatable="true">
