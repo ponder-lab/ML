@@ -3936,9 +3936,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * {@code tf.nn.sparse_softmax_cross_entropy_with_logits(labels, logits)} returns a fresh loss
    * tensor of shape {@code logits.shape[:-1]} and dtype {@code float32}. For this test, logits is
-   * {@code (3, 4) float32} so the loss is {@code (3,) float32} &mdash; not {@code (3,) int32} as
-   * the pre-wala/ML#412 modeling reported (that was an artefact of the XML {@code <return
-   * value="labels"/>} pass-through, which made the call's result share {@code labels}' type).
+   * {@code (3, 4) float32} so the loss is {@code (3,) float32} (verified by out-of-band TF runtime
+   * probe).
+   *
+   * <p>Expectation evolution:
+   *
+   * <ul>
+   *   <li>Master: {@code MNIST_INPUT} &mdash; a generic tensor sentinel from before the analyzer
+   *       was specific enough to narrow to a rank-1 shape for this sink.
+   *   <li>Earlier on branch 267 ({@code 13c7ec0a}): narrowed to {@code TENSOR_3_INT32}, matching
+   *       the pass-through bug's behaviour &mdash; the XML {@code <return value="labels"/>} on
+   *       {@code sparse_softmax_cross_entropy_with_logits.do()} made the call's result share {@code
+   *       labels}' shape and dtype ({@code (3,) int32}). Specific but semantically wrong.
+   *   <li>Now (post-wala/ML#412, {@code 0cfdadc4}): {@code TENSOR_3_FLOAT32}. Runtime-correct.
+   * </ul>
    */
   @Test
   public void testSparseSoftmaxCrossEntropyWithLogits()
