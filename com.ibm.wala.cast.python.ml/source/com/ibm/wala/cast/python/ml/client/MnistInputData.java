@@ -23,13 +23,33 @@ import java.util.Set;
  */
 public class MnistInputData extends TensorGenerator {
 
+  /**
+   * The MNIST shape this generator reports for its source. One of the four canonical shapes exposed
+   * by {@code tf.keras.datasets.mnist.load_data()}: {@link #X_TRAIN_SHAPE} ({@code (60000, 28,
+   * 28)}), {@link #Y_TRAIN_SHAPE} ({@code (60000,)}), {@link #X_TEST_SHAPE} ({@code (10000, 28,
+   * 28)}), or {@link #Y_TEST_SHAPE} ({@code (10000,)}).
+   */
   private final List<Dimension<?>> shape;
 
+  /**
+   * Constructs an MNIST input data generator bound to an existing points-to source.
+   *
+   * @param source The points-to set variable representing the tensor whose shape/dtype this
+   *     generator produces.
+   * @param shape The MNIST shape to report for {@code source}.
+   */
   public MnistInputData(PointsToSetVariable source, List<Dimension<?>> shape) {
     super(source);
     this.shape = shape;
   }
 
+  /**
+   * Constructs an MNIST input data generator bound to a call-graph node (manual-generator path,
+   * used when no points-to source is available).
+   *
+   * @param node The CG node the generator is anchored at.
+   * @param shape The MNIST shape to report for the node's tensor.
+   */
   public MnistInputData(CGNode node, List<Dimension<?>> shape) {
     super(node);
     this.shape = shape;

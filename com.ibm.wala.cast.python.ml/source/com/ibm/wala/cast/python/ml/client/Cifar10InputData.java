@@ -29,6 +29,12 @@ import java.util.Set;
  */
 public class Cifar10InputData extends TensorGenerator {
 
+  /**
+   * The CIFAR-10 shape this generator reports for its source. One of the four canonical shapes
+   * exposed by {@code tf.keras.datasets.cifar10.load_data()}: {@code (50000, 32, 32, 3)} for {@code
+   * x_train}, {@code (50000, 1)} for {@code y_train}, {@code (10000, 32, 32, 3)} for {@code
+   * x_test}, or {@code (10000, 1)} for {@code y_test}.
+   */
   private final List<Dimension<?>> shape;
 
   /**
