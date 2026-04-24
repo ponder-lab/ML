@@ -47,6 +47,19 @@ public class Variable extends TensorGenerator {
     super(source);
   }
 
+  /**
+   * Constructs a manual-node Variable generator for {@link TensorGenerator#createManualGenerator}
+   * dispatch. Used when the analyzer reaches a {@code Ltensorflow/python/ops/variables/Variable}
+   * allocation inside the {@code Variable.do()} summary without a caller-side {@link
+   * PointsToSetVariable}; the caller-walk in {@link #getDefaultShapes}/{@link #getDefaultDTypes}
+   * then recovers the initial-value shape/dtype from the script's {@code tf.Variable(...)} invoke.
+   *
+   * @param node The {@link com.ibm.wala.ipa.callgraph.CGNode} for {@code Variable.do()}.
+   */
+  public Variable(com.ibm.wala.ipa.callgraph.CGNode node) {
+    super(node);
+  }
+
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     // If explicit shape is missing, try inferring from initial_value
@@ -69,15 +82,25 @@ public class Variable extends TensorGenerator {
     // value's allocation is in a `__call__` summary that `getShapesFromTensor`'s do-only branch
     // can't trace (wala/ML#407).
     Set<List<Dimension<?>>> result = this.getShapesOfValue(builder, initialValuePts);
-    if (result == null || result.isEmpty()) {
-      LOGGER.fine(
-          () ->
-              "Empty shapes from initial_value PTS (size="
-                  + initialValuePts.size()
-                  + "); falling back to ⊤.");
-      return null;
+    if (result != null && !result.isEmpty()) return result;
+
+    // `getShapesOfValue` couldn't resolve (typically because the value's allocation is in a
+    // `__call__` summary that `getShapesFromTensor`'s do-only branch can't trace). Walk callers
+    // directly for the `initial_value` arg's shape.
+    Set<List<Dimension<?>>> viaCallers =
+        this.getArgumentShapesViaCallers(
+            builder, Parameters.INITIAL_VALUE.getIndex(), Parameters.INITIAL_VALUE.getName());
+    if (viaCallers != null && !viaCallers.isEmpty()) {
+      LOGGER.fine(() -> "Recovered initial_value shapes via caller walk: " + viaCallers);
+      return viaCallers;
     }
-    return result;
+
+    LOGGER.fine(
+        () ->
+            "Empty shapes from initial_value PTS (size="
+                + initialValuePts.size()
+                + ") and caller walk; falling back to ⊤.");
+    return null;
   }
 
   @Override
@@ -102,15 +125,22 @@ public class Variable extends TensorGenerator {
     // `{UNKNOWN}`) when the value's allocation is in a `__call__` summary that
     // `getDTypesFromTensor`'s do-only branch can't trace (wala/ML#407).
     Set<DType> result = this.getDTypesOfValue(builder, initialValuePts);
-    if (result == null || result.isEmpty()) {
-      LOGGER.fine(
-          () ->
-              "Empty dtypes from initial_value PTS (size="
-                  + initialValuePts.size()
-                  + "); falling back to {UNKNOWN}.");
-      return EnumSet.of(DType.UNKNOWN);
+    if (result != null && !result.isEmpty()) return result;
+
+    Set<DType> viaCallers =
+        this.getArgumentDTypesViaCallers(
+            builder, Parameters.INITIAL_VALUE.getIndex(), Parameters.INITIAL_VALUE.getName());
+    if (viaCallers != null && !viaCallers.isEmpty()) {
+      LOGGER.fine(() -> "Recovered initial_value dtypes via caller walk: " + viaCallers);
+      return viaCallers;
     }
-    return result;
+
+    LOGGER.fine(
+        () ->
+            "Empty dtypes from initial_value PTS (size="
+                + initialValuePts.size()
+                + ") and caller walk; falling back to {UNKNOWN}.");
+    return EnumSet.of(DType.UNKNOWN);
   }
 
   @Override

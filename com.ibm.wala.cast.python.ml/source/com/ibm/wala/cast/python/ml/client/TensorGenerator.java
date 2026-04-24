@@ -2525,6 +2525,8 @@ public abstract class TensorGenerator {
       return new Gamma(node);
     } else if (type.equals(TensorFlowTypes.POISSON.getDeclaringClass())) {
       return new Poisson(node);
+    } else if (type.equals(TensorFlowTypes.VARIABLE.getDeclaringClass())) {
+      return new Variable(node);
     } else if (type.equals(TensorFlowTypes.DATASET_FROM_TENSOR_SLICES_TYPE)
         || type.getName().toString().equals("Ltensorflow/data/from_tensor_slices")) {
       return new DatasetFromTensorSlicesGenerator(node);
