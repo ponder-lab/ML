@@ -37,13 +37,31 @@ public class SoftmaxCrossEntropy extends TensorGenerator {
    * {@code labels logits name}.
    */
   private enum Parameters {
+    /**
+     * The class-label tensor. Integer class indices of shape {@code labels.shape} for the sparse
+     * variant; one-hot / soft labels of shape {@code labels.shape} (same as {@code logits}) for the
+     * non-sparse variant.
+     */
     LABELS,
+
+    /**
+     * The unnormalized log-probabilities tensor. Shape {@code [batch..., num_classes]}; the last
+     * axis (the class axis) is reduced in the output.
+     */
     LOGITS;
 
+    /**
+     * @return The lowercase keyword-parameter name (e.g., {@code "labels"}), suitable for {@link
+     *     TensorGenerator#getArgumentPointsToSet}.
+     */
     public String getName() {
       return name().toLowerCase();
     }
 
+    /**
+     * @return The zero-based positional index (after {@code self}), suitable for {@link
+     *     TensorGenerator#getArgumentPointsToSet}.
+     */
     public int getIndex() {
       return ordinal();
     }
