@@ -34,8 +34,8 @@
         </method>
       </class>
       <!-- Must be declared `allocatable="true"` so that `<new class="Lnumpy/ndarray"/>` in the various array-producing `do()` methods (both here and in `tensorflow.xml`) resolves to a concrete `InstanceKey` in the heap model. Without this declaration, `HeapModel.getInstanceKeyForAllocation` returns
-        `null`, `getInvariantContents` returns empty, and `visitReturn` never adds the iKey to the caller-side `PointerKey`. Same pattern as the wala/WALA#1889 fix for `tensorflow/python/ops/variables/Variable`. The class has no body because it is only referenced as a `<new>` target, not invoked directly; avoiding
-        `read_data` here prevents the class from being picked up by `TensorTypeAnalysis`'s syntactic seeding. -->
+        `null`, `getInvariantContents` returns empty, and `visitReturn` never adds the iKey to the caller-side `PointerKey`. Same pattern as the wala/WALA#1889 fix for `tensorflow/python/ops/variables/Variable`. The class deliberately has no method body because it is only referenced as a `<new>` target, not
+        invoked directly. -->
       <class name="ndarray" allocatable="true"></class>
       <!-- https://numpy.org/doc/stable/reference/generated/numpy.reshape.html -->
       <!-- Function-form counterpart of `numpy/ndarray/reshape`: `np.reshape(x, shape)` rather than `x.reshape(shape)`. Modeled as a class-per-function so that `np.reshape` resolves to this class via a field lookup on the numpy module, and the invocation dispatches to its `do` method. Shape comes from
