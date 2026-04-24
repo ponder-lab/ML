@@ -612,6 +612,25 @@
         </method>
       </class>
     </package>
+    <package name="tensorflow/python/ops/ragged/ragged_math_ops">
+      <!-- Must be declared `allocatable="true"` so that `<new class="Ltensorflow/python/ops/ragged/ragged_math_ops/range"/>` in `tensorflow/functions/ragged_range.do()` resolves to a concrete `InstanceKey` in the heap model. Without this declaration, `HeapModel.getInstanceKeyForAllocation` returns `null`,
+        `getInvariantContents` returns empty, and `visitReturn` never adds the iKey to the caller-side `PointerKey`. Same pattern as the wala/WALA#1889 fix for `tensorflow/python/ops/variables/Variable`. -->
+      <class name="range" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/ragged/ragged_math_ops/range" />
+          <return value="x" />
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/python/ops/ragged/ragged_factory_ops">
+      <!-- Must be declared `allocatable="true"` so that `<new class="Ltensorflow/python/ops/ragged/ragged_factory_ops/constant"/>` in `tensorflow/functions/ragged_constant.do()` resolves to a concrete `InstanceKey` in the heap model. Same pattern as the wala/WALA#1889 fix for `tensorflow/python/ops/variables/Variable`. -->
+      <class name="constant" allocatable="true">
+        <method name="read_data" descriptor="()LRoot;" numArgs="1">
+          <new def="x" class="Ltensorflow/python/ops/ragged/ragged_factory_ops/constant" />
+          <return value="x" />
+        </method>
+      </class>
+    </package>
     <package name="tensorflow/functions">
       <class name="from_nested_value_rowids" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self flat_values nested_value_rowids nested_nrows name validate">
