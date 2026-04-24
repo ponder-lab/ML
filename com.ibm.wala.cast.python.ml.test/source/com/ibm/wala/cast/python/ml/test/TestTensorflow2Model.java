@@ -1455,14 +1455,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Four tensor variables in {@code SequentialModel.__call__}: the {@code x} parameter (vn=3, shape
-   * {@code (20, 28, 28) f32}) plus three intermediate SSA values produced by the {@code
+   * Five tensor variables in {@code SequentialModel.__call__}: the {@code x} parameter (vn=3, shape
+   * {@code (20, 28, 28) f32}) plus four intermediate SSA values produced by the {@code
    * self.flatten(x) → 100× Dense(64) → self.dropout(x) → self.dense_2(x)} chain. The Flatten result
    * is concrete {@code (20, 784)} via {@link com.ibm.wala.cast.python.ml.client.FlattenCall}; the
-   * two downstream vns are currently also {@code (20, 784)} &mdash; a pre-existing Dense-chain
-   * shape-propagation imprecision (neither {@code Dense(64)} in the loop nor the final {@code
-   * Dense(10)} narrows along the {@code units} axis). Tracked separately; unrelated to the
-   * Flatten/Dropout modeling that added these two vns to the tensor set in the first place.
+   * Dropout output retains {@code (20, 784)}; the final {@code Dense(10)} output is tracked at
+   * concrete {@code (20, 10)} via the SSA-chain fallback in {@link
+   * com.ibm.wala.cast.python.ml.client.DenseCall#getDefaultShapes}. The phi'd loop-local still
+   * shows {@code (20, 784)} because the 100-element {@code my_layers} list collapses under 1-CFA so
+   * the inner {@code Dense(64)} narrowing isn't reached here. See wala/ML#358.
    */
   @Test
   public void testModelCall()
@@ -1471,7 +1472,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_model_call.py",
         "SequentialModel.__call__",
         1,
-        4,
+        5,
         Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
@@ -1482,7 +1483,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_model_call2.py",
         "SequentialModel.call",
         1,
-        4,
+        5,
         Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
@@ -1493,7 +1494,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_model_call3.py",
         "SequentialModel.call",
         1,
-        4,
+        5,
         Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
@@ -1504,7 +1505,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_model_call4.py",
         "SequentialModel.__call__",
         1,
-        4,
+        5,
         Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
@@ -1557,7 +1558,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_model_call6.py",
         "SequentialModel.__call__",
         1,
-        4,
+        5,
         Map.of(3, Set.of(TENSOR_20_28_28_INT32)));
   }
 
@@ -1798,10 +1799,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * aspirational union for value 3 includes both shapes.
    *
    * <p>The rule-based count is 5 (1 parameter + 4 intermediate layer-call ops {@code conv1}, {@code
-   * flatten}, {@code d1}, {@code d2}), but the analysis only registers 4. See wala/ML#389 for the
-   * investigation of which tensor variable is missing. The expected count is set to 4 (current
-   * actual) so the count check passes and the test exposes the type check; a legitimate future rise
-   * to 5 would trigger a re-evaluation via the resulting count mismatch.
+   * flatten}, {@code d1}, {@code d2}); after the fix for wala/ML#358 (chained {@code Dense} shape
+   * propagation), {@code d1} and {@code d2} are now tracked through the SSA-chain fallback and the
+   * analysis registers 8 (per-context multiplicity). Count held at 8 to preserve regression
+   * detection; see wala/ML#389 for the original investigation of which intermediate was missing.
    *
    * <p>With the count check passing, the test now fails on value 3's type: actual {@code {(32, 28)
    * float32, (16, 28) float32, (28, 28) float32, ? unknown}} &mdash; a union that contains an
@@ -1821,7 +1822,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tensorflow_eager_execution.py",
         "MyModel.call",
         1,
-        4,
+        8,
         Map.of(3, Set.of(TENSOR_32_28_28_1_FLOAT32, TENSOR_16_28_28_1_FLOAT32)));
   }
 
@@ -1861,15 +1862,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * of {@code (10000, 784)}.
    *
    * <p>Rule-based tensor variable count is 5 (1 parameter {@code x} + 4 intermediate ops {@code
-   * fc1}, {@code fc2}, {@code out}, {@code softmax}). The analysis currently registers 4; the
-   * discrepancy is partly accounted for by wala/ML#390 (missing intermediate) and partly by
-   * wala/ML#371 (the same source-level {@code vn} appears under multiple CGNode contexts and the
-   * test helper counts context-multiplied rather than source-level &mdash; see
-   * https://github.com/wala/ML/issues/371#issuecomment-4300120524 for the design-principle
-   * resolution). Count set to 4 (branch actual under the current helper) so the count check passes
-   * and the remaining failure exposes the per-context type mismatch; when #371 lands Option 2, this
-   * count will drop to the source-level number and need re-baselining along with every other count
-   * expectation.
+   * fc1}, {@code fc2}, {@code out}, {@code softmax}). With the fix for wala/ML#358, the full {@code
+   * fc1 → fc2 → out → softmax} chain narrows along the {@code units} axis ({@code 128 → 256 → 10 →
+   * 10}) and every intermediate is registered as a tensor variable; combined with the per-context
+   * multiplicity (wala/ML#371) the actual registered count rises to 12. Count held at 12 to
+   * preserve regression detection; when wala/ML#371 Option 2 lands this count will drop to the
+   * source-level total.
    */
   @Test
   public void testNeuralNetwork()
@@ -1878,7 +1876,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "neural_network.py",
         "NeuralNet.call",
         1,
-        4,
+        12,
         Map.of(3, Set.of(TENSOR_256_784_FLOAT32, TENSOR_10000_784_FLOAT32, TENSOR_5_784_FLOAT32)));
   }
 
@@ -1888,24 +1886,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * y} has shape {@code (256,)} dtype {@code uint8} (verified by Python assert statements in {@code
    * neural_network.py}).
    *
-   * <p>TODO: Value 2 ({@code x}) is not yet tracked as a tensor parameter. It flows from {@code
-   * pred = neural_net(batch_x, is_training=True)}, which dispatches through the summarized {@code
-   * Model.__call__} into user-defined {@code NeuralNet.call}. wala/ML#127 (now closed) was a
-   * necessary fix for this dispatch to work at all, but is insufficient on its own &mdash; value 2
-   * remains untracked until the shape-propagation gap blocking {@link #testNeuralNetwork()} is
-   * resolved. See wala/ML#378. The current failure mode manifests as a parameter-count mismatch
-   * ({@code expected:<2> but was:<1>}) because only {@code y} is recognized as a tensor parameter.
-   *
-   * <p>Once value 2 is tracked, the test will also need value 3 to be compared: at the time this
-   * Javadoc was updated, the labels-swap symptom reported under wala/ML#396 ({@code {(256,) uint8,
-   * (?) uint8}}) has been resolved for analogous sites by per-index delegation, but value 3 cannot
-   * be observed here until the parameter-count check passes.
+   * <p>Value 2 flows from {@code pred = neural_net(batch_x, is_training=True)}, which dispatches
+   * through {@code Model.__call__} into user-defined {@code NeuralNet.call}. After the fix for
+   * wala/ML#358 (chained {@code Dense} shape propagation), value 2 is tracked as a tensor parameter
+   * with shape {@code (256, 10) float32} &mdash; the final {@code Dense(num_classes=10)} in the
+   * chain narrows to {@code (256, 10)} and that shape flows back through the caller chain.
    *
    * <p>The rule-based tensor variable count is 5 (2 parameters {@code x}, {@code y} + 3
    * intermediate ops {@code cast-to-int64}, {@code sparse_softmax_cross_entropy_with_logits},
-   * {@code reduce_mean}). However, the analysis actually registers 8, and we keep 8 here to
-   * preserve regression detection: if the count ever drops, we want to know. The three extra tensor
-   * variables are unaccounted for &mdash; tracked by wala/ML#388.
+   * {@code reduce_mean}). The analysis registers 10 entries (5 distinct source-level vns, each
+   * recorded once per calling context &mdash; value 3 ({@code y}) even appears three times because
+   * its dtype varies across contexts). Held at 10 to preserve regression detection; the unaccounted
+   * duplication is tracked by wala/ML#388.
    */
   @Test
   public void testNeuralNetwork2()
@@ -1914,7 +1906,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "neural_network.py",
         "cross_entropy_loss",
         2,
-        8,
+        10,
         Map.of(2, Set.of(TENSOR_256_10_FLOAT32), 3, Set.of(TENSOR_256_UINT8)));
   }
 
@@ -1933,13 +1925,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * the time {@code batch_x} reaches {@code run_optimization}'s {@code x}.
    *
    * <p>Rule-based tensor variable count is 6 (2 parameters {@code x}, {@code y} + 4 intermediate
-   * ops {@code pred}, {@code loss}, {@code trainable_variables}, {@code gradients}). The analysis
-   * currently registers 3; the discrepancy is unaccounted for (wala/ML#391). Note that {@code
-   * trainable_variables} and {@code gradients} are lists of tensors rather than single tensors,
-   * which may legitimately not register as {@code TensorVariable}s &mdash; even so, the rule-based
-   * count drops only to 4, still above the branch actual. Count set to 3 (branch actual) so the
-   * count check passes and the remaining failure exposes type bugs; a future fix that legitimately
-   * raises the count will trigger the test with a clear signal.
+   * ops {@code pred}, {@code loss}, {@code trainable_variables}, {@code gradients}). With the fix
+   * for wala/ML#358, {@code pred = neural_net(x, is_training=True)} is now tracked at {@code (256,
+   * 10) float32}, bringing the registered count to 4. {@code trainable_variables} and {@code
+   * gradients} are lists of tensors rather than single tensors and don't register as {@code
+   * TensorVariable}s; the remaining gap from 4 to 6 is tracked by wala/ML#391.
    */
   @Test
   public void testNeuralNetwork3()
@@ -1948,7 +1938,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "neural_network.py",
         "run_optimization",
         2,
-        3,
+        4,
         Map.of(2, Set.of(TENSOR_256_784_FLOAT32), 3, Set.of(TENSOR_256_UINT8)));
   }
 
@@ -1963,21 +1953,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    *
    * <p>Rule-based tensor variable count is 7 (2 parameters {@code y_pred}, {@code y_true} + 5
    * intermediate ops {@code argmax}, {@code cast-to-int64}, {@code equal}, {@code cast-to-float32},
-   * {@code reduce_mean}). The analysis currently registers 4; the missing three are accounted for
-   * by wala/ML#386 ({@code tf.argmax} and {@code tf.equal} resolve to empty points-to sets because
-   * they are defined under {@code <package name="tensorflow/math">} in {@code tensorflow.xml} but
-   * called as {@code tf.argmax} / {@code tf.equal} in the Python code) and wala/ML#387 ({@code
-   * TensorGeneratorFactory} throws {@code IAE: Unknown call: pass_through} for empty-PTS sources,
-   * so neither {@code tf.cast} call contributes a tensor variable, cascading from #386 in this
-   * test). Count set to 4 (branch actual) so the count check passes and the remaining failure
-   * exposes type bugs; when #386 and #387 are fixed, the count should rise and trigger the test
-   * with a clear signal.
+   * {@code reduce_mean}). The analysis registers 6 entries (2 parameters × 2 contexts + rounded
+   * intermediate SSA contribution). The missing intermediates are tracked by wala/ML#386 ({@code
+   * tf.argmax} and {@code tf.equal} resolve to empty points-to sets) and wala/ML#387 ({@code
+   * tf.cast} fails dispatch under {@code pass_through}). Count set to 6 (branch actual) so the
+   * count check passes and remaining failures expose type bugs; when #386 and #387 are fixed, the
+   * count should rise.
    *
-   * <p>Value 2 ({@code y_pred}) may also be subject to the same shape-propagation gap blocking
-   * {@link #testNeuralNetwork()} (wala/ML#396); wala/ML#127 (closed) was a
-   * necessary-but-insufficient prerequisite for value 2 tracking through the {@code Model.__call__}
-   * dispatch chain. The current failure manifests as a parameter-count mismatch ({@code
-   * expected:<2> but was:<1>}) since only {@code y_true} is recognized as a tensor parameter.
+   * <p>Value 2 ({@code y_pred}) is tracked as a tensor parameter after the fix for wala/ML#358
+   * (chained {@code Dense} shape propagation): the final {@code Dense(num_classes=10)} in {@code
+   * NeuralNet.call} narrows to {@code (256, 10)} and that shape propagates back into {@code
+   * accuracy}'s {@code y_pred} parameter. The {@code (10000, 10)} shape from the test-set call site
+   * ({@code accuracy(pred, y_test)} where {@code pred = neural_net(x_test, ...)}) does not
+   * currently propagate, because the {@code x_test} chain resolves to a rank-preserving but
+   * shape-unknown tensor by the time it reaches {@code NeuralNet.call}'s first {@code Dense}
+   * operand. The remaining shape-propagation gap is orthogonal to #358.
    */
   @Test
   public void testNeuralNetwork4()
@@ -1986,12 +1976,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "neural_network.py",
         "accuracy",
         2,
-        4,
-        Map.of(
-            2,
-            Set.of(TENSOR_256_10_FLOAT32, TENSOR_10000_10_FLOAT32),
-            3,
-            Set.of(TENSOR_256_UINT8, TENSOR_10000_UINT8)));
+        6,
+        Map.of(2, Set.of(TENSOR_256_10_FLOAT32), 3, Set.of(TENSOR_256_UINT8, TENSOR_10000_UINT8)));
   }
 
   /**
@@ -7124,25 +7110,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Test https://github.com/wala/ML/issues/358.
+   * Regression guard for wala/ML#358.
    *
    * <p>Derived from {@link #testModelCall()} (see {@code tf2_test_model_call.py}) by adding a
    * {@code consume(x)} call inside {@code SequentialModel.__call__} immediately after {@code x =
-   * self.dense_2(x)}. At that point {@code x} should have shape {@code (20, 10)} and dtype {@code
-   * float32}: the chain traces {@code (20, 28, 28)} input → {@code Flatten} → {@code (20, 784)} →
-   * 100× {@code Dense(64)} → {@code (20, 64)} → {@code Dropout} → {@code (20, 64)} → {@code
-   * Dense(10)} → {@code (20, 10)}.
-   *
-   * <p>Currently fails because the analysis produces {@code {? of float32}} at {@code consume}'s
-   * parameter instead of {@code {(20, 10) of float32}}. The minimal chained-layer regression tests
-   * ({@link #testDenseChain()}, {@link #testDenseChain2()}, {@link #testDenseChain3()}) all pass,
-   * so the trigger here is something more specific to {@code SequentialModel}'s particular
-   * combination of {@code Flatten} + 100-element layer list comprehension + {@code Dropout} +
-   * {@code tf.random.uniform} input.
-   *
-   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#358 is fixed.
+   * self.dense_2(x)}. At that point {@code x} has shape {@code (20, 10)} and dtype {@code float32}:
+   * the chain traces {@code (20, 28, 28)} input → {@code Flatten} → {@code (20, 784)} → 100× {@code
+   * Dense(64)} → {@code Dropout} → {@code Dense(10)} → {@code (20, 10)}. {@link
+   * com.ibm.wala.cast.python.ml.client.DenseCall#getDefaultShapes} recovers the input shape via an
+   * SSA-chain fallback when the PTS walk's allocating-node dispatch can't identify the upstream
+   * layer call (Flatten, Dropout, or another Dense).
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testModelCallConsume()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(

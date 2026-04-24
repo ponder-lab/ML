@@ -124,59 +124,108 @@ public class DenseCall extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    LOGGER.info("Deriving shape for Dense call at: " + this.getNode());
-    // Derive shape from the input tensor.
+    LOGGER.fine(() -> "Deriving shape for Dense call at: " + this.getNode());
+
+    Set<List<Dimension<?>>> inputShapes = this.getInputShapes(builder);
+    if (inputShapes == null || inputShapes.isEmpty()) return null;
+
+    Set<Long> unitValues = this.getPossibleUnits(builder);
+    if (unitValues.isEmpty()) return inputShapes; // Preserve input shapes if units unknown.
+
+    Set<List<Dimension<?>>> outputShapes = new HashSet<>();
+    for (List<Dimension<?>> inputShape : inputShapes) {
+      if (inputShape.isEmpty()) continue;
+
+      // For each possible value of 'units', set the last dimension of the output
+      // shape to that value.
+      for (Long units : unitValues)
+        if (units != null) {
+          // Create a new output shape based on the input shape, but with the last
+          // dimension set to 'units'.
+          List<Dimension<?>> outShape = new ArrayList<>(inputShape);
+          outShape.set(outShape.size() - 1, new NumericDim(units.intValue()));
+          outputShapes.add(outShape);
+        }
+    }
+
+    return outputShapes;
+  }
+
+  /**
+   * Resolves the input tensor shapes for this {@code Dense.__call__} invocation.
+   *
+   * <p>Primary path: walks the {@code inputs} argument's points-to set and dispatches the
+   * allocating node through {@link #createManualGenerator(CGNode, PropagationCallGraphBuilder)}.
+   * This works when the input is a producer recognized by the manual-dispatch path (e.g., {@code
+   * tf.keras.Input}, {@code tf.random.uniform}, {@code tf.ones}).
+   *
+   * <p>Fallback path: when the primary path yields nothing — typically because the input is the
+   * result of another layer call (e.g., {@code Flatten.__call__}, {@code Dense.__call__}, {@code
+   * Dropout.__call__}), whose allocating node type is not in {@link #createManualGenerator(CGNode,
+   * PropagationCallGraphBuilder)}'s switch — walks to the {@code inputs} value number in this
+   * summary method's IR and delegates to {@link #getShapesOrSSAChain(PropagationCallGraphBuilder,
+   * CGNode, int)}. That path re-enters the factory via {@link TensorGeneratorFactory#getGenerator}
+   * on the upstream call's result, which knows {@code FLATTEN_LAYER_CALL}, {@code DENSE_CALL}, etc.
+   * See wala/ML#358.
+   *
+   * @param builder The propagation call graph builder used for points-to analysis and factory
+   *     dispatch.
+   * @return The set of possible input shapes, or {@code null} if neither path resolves a shape.
+   */
+  private Set<List<Dimension<?>>> getInputShapes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> inputPts =
         this.getArgumentPointsToSet(
             builder, Parameters.INPUTS.getIndex(), Parameters.INPUTS.getName());
 
-    if (inputPts.isEmpty()) return null;
-
-    Set<List<Dimension<?>>> outputShapes = new HashSet<>();
-    Set<Long> unitValues = this.getPossibleUnits(builder);
+    Set<List<Dimension<?>>> ret = new HashSet<>();
 
     for (InstanceKey inputIK : inputPts) {
-      LOGGER.fine("Found input tensor instance key: " + inputIK);
+      LOGGER.fine(() -> "Found input tensor instance key: " + inputIK);
       AllocationSiteInNode inputASIN = getAllocationSiteInNode(inputIK);
+      if (inputASIN == null) continue;
 
-      if (inputASIN != null) {
-        CGNode node = inputASIN.getNode();
-        TensorGenerator generator = createManualGenerator(node, builder);
+      CGNode node = inputASIN.getNode();
+      TensorGenerator generator = createManualGenerator(node, builder);
+      LOGGER.fine(
+          () ->
+              "Found input tensor generator: "
+                  + generator
+                  + " for instance key: "
+                  + inputIK
+                  + " at node: "
+                  + node
+                  + ".");
+
+      if (generator != null) {
+        Set<List<Dimension<?>>> generatorShapes = generator.getShapes(builder);
+        LOGGER.fine(() -> "Found input shapes: " + generatorShapes + ".");
+        if (generatorShapes != null) ret.addAll(generatorShapes);
+      } else {
         LOGGER.fine(
-            "Found input tensor generator: "
-                + generator
-                + " for instance key: "
-                + inputIK
-                + " at node: "
-                + node
-                + ".");
-
-        if (generator != null) {
-          Set<List<Dimension<?>>> inputShapes = generator.getShapes(builder);
-          LOGGER.fine(() -> "Found input shapes: " + inputShapes + ".");
-
-          if (inputShapes != null)
-            for (List<Dimension<?>> inputShape : inputShapes) {
-              if (inputShape.isEmpty()) continue;
-
-              // For each possible value of 'units', set the last dimension of the output
-              // shape to that value.
-              for (Long units : unitValues)
-                if (units != null) {
-                  // Create a new output shape based on the input shape, but with the last
-                  // dimension set to 'units'.
-                  List<Dimension<?>> outShape = new ArrayList<>(inputShape);
-                  outShape.set(outShape.size() - 1, new NumericDim(units.intValue()));
-                  outputShapes.add(outShape);
-                }
-            }
-        } else
-          LOGGER.fine(
-              "No generator found for instance key: " + inputIK + " at node: " + node + ".");
+            () -> "No generator found for instance key: " + inputIK + " at node: " + node + ".");
       }
     }
 
-    return outputShapes;
+    if (!ret.isEmpty()) return ret;
+
+    // Fallback: chained layer calls. The input's allocating node is a layer `__call__` summary
+    // whose class isn't recognised by `createManualGenerator` (Flatten, Dense, Dropout, ...).
+    // Re-dispatch through `getShapesOrSSAChain` on the `inputs` value number so the factory's
+    // caller-side parameter trace-back can pick up the upstream generator. See wala/ML#358.
+    int inputsVn =
+        this.getArgumentValueNumber(
+            builder, Parameters.INPUTS.getIndex(), Parameters.INPUTS.getName(), true);
+    if (inputsVn <= 0) return null;
+    LOGGER.fine(
+        () -> "PTS walk produced no shapes; attempting SSA-chain fallback on vn=" + inputsVn + ".");
+    try {
+      Set<List<Dimension<?>>> viaSsa = this.getShapesOrSSAChain(builder, this.getNode(), inputsVn);
+      LOGGER.fine(() -> "SSA-chain fallback shapes for vn=" + inputsVn + ": " + viaSsa + ".");
+      if (viaSsa != null && !viaSsa.isEmpty()) return viaSsa;
+    } catch (IllegalArgumentException e) {
+      LOGGER.fine(() -> "SSA-chain fallback IAE for vn=" + inputsVn + ": " + e.getMessage() + ".");
+    }
+    return null;
   }
 
   @Override
