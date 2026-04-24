@@ -60,10 +60,19 @@ public class NdarraySubscriptOperation extends TensorGenerator {
    * member ref is a tuple allocation that contains only ellipsis and {@code None} elements (i.e., a
    * dim-adding subscript). Callers use this to decide whether to dispatch to this generator.
    *
-   * <p>TODO(wala/WALA#1889): This syntactic dispatch pattern exists to work around WALA
-   * representing synthetic-method return values as implicit {@code PointerKey}s, which breaks
-   * class-type dispatch through the call graph for post-unpack receivers. Once that upstream bug is
-   * fixed, this whole static predicate and its associated dispatch site can be deleted.
+   * <p>Why the predicate is necessary even after the wala/WALA#1889 / wala/ML#401 work closes the
+   * implicit-PTS gaps: the factory's default dispatch for a {@link PythonPropertyRead} that isn't a
+   * method-field lookup is {@link TensorElementGenerator}, which peels the first dimension (correct
+   * for iteration-element access like {@code for elt in x: ... elt[0]}, but **wrong** for
+   * dim-adding patterns like {@code x[..., None]}). Class-type dispatch keyed on the callee's
+   * declaring class does not apply here, because a {@code PythonPropertyRead} has no callee &mdash;
+   * it is a direct SSA instruction, not an invoke. Some discriminator must pick between "peel first
+   * dim" and "add new axis" semantics based on the subscript pattern, and this predicate is that
+   * discriminator. The {@code ellipsis} / {@code None}-tuple extraction in {@link
+   * #extractSubscriptFields} is the pattern match; class-type dispatch on a synthetic "newaxis
+   * subscript" class, or pushing the discrimination into {@code TensorElementGenerator} itself,
+   * would be alternatives but would require CAst-translator or XML changes. See wala/ML#402 for the
+   * broader cleanup plan.
    *
    * @param source The {@link PointsToSetVariable} whose defining instruction is being inspected.
    * @param builder The propagation call graph builder used to resolve the subscript's member ref.
