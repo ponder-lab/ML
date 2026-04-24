@@ -5,6 +5,10 @@ import static com.ibm.wala.cast.python.ml.types.NumpyTypes.ASTYPE_METHOD_NAME;
 import static com.ibm.wala.cast.python.ml.types.NumpyTypes.RESHAPE_METHOD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARRAY_OPS_RESHAPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_X_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_X_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_Y_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
@@ -859,6 +863,14 @@ public class TensorGeneratorFactory {
       return new MnistInputData(source, MnistInputData.X_TEST_SHAPE);
     else if (isType(calledFunction, MNIST_Y_TEST))
       return new MnistInputData(source, MnistInputData.Y_TEST_SHAPE);
+    else if (isType(calledFunction, CIFAR10_X_TRAIN))
+      return new Cifar10InputData(source, Cifar10InputData.X_TRAIN_SHAPE);
+    else if (isType(calledFunction, CIFAR10_Y_TRAIN))
+      return new Cifar10InputData(source, Cifar10InputData.Y_TRAIN_SHAPE);
+    else if (isType(calledFunction, CIFAR10_X_TEST))
+      return new Cifar10InputData(source, Cifar10InputData.X_TEST_SHAPE);
+    else if (isType(calledFunction, CIFAR10_Y_TEST))
+      return new Cifar10InputData(source, Cifar10InputData.Y_TEST_SHAPE);
     else if (isType(calledFunction, REDUCE_MEAN.getDeclaringClass())) return new ReduceMean(source);
     else if (isType(calledFunction, PLACEHOLDER.getDeclaringClass()))
       return new Placeholder(source);

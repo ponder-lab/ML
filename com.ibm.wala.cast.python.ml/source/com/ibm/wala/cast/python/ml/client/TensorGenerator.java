@@ -689,6 +689,14 @@ public abstract class TensorGenerator {
         return Set.of(MnistInputData.X_TEST_SHAPE);
       if (declaring.equals(TensorFlowTypes.MNIST_Y_TEST))
         return Set.of(MnistInputData.Y_TEST_SHAPE);
+      if (declaring.equals(TensorFlowTypes.CIFAR10_X_TRAIN))
+        return Set.of(Cifar10InputData.X_TRAIN_SHAPE);
+      if (declaring.equals(TensorFlowTypes.CIFAR10_Y_TRAIN))
+        return Set.of(Cifar10InputData.Y_TRAIN_SHAPE);
+      if (declaring.equals(TensorFlowTypes.CIFAR10_X_TEST))
+        return Set.of(Cifar10InputData.X_TEST_SHAPE);
+      if (declaring.equals(TensorFlowTypes.CIFAR10_Y_TEST))
+        return Set.of(Cifar10InputData.Y_TEST_SHAPE);
       if (declaring.equals(NumpyTypes.ASTYPE.getDeclaringClass())) {
         // astype preserves shape; recurse on its receiver.
         int astypeReceiverVn = propertyReadObjectRef(node, call);
@@ -801,7 +809,11 @@ public abstract class TensorGenerator {
       if (declaring.equals(TensorFlowTypes.MNIST_X_TRAIN)
           || declaring.equals(TensorFlowTypes.MNIST_Y_TRAIN)
           || declaring.equals(TensorFlowTypes.MNIST_X_TEST)
-          || declaring.equals(TensorFlowTypes.MNIST_Y_TEST)) {
+          || declaring.equals(TensorFlowTypes.MNIST_Y_TEST)
+          || declaring.equals(TensorFlowTypes.CIFAR10_X_TRAIN)
+          || declaring.equals(TensorFlowTypes.CIFAR10_Y_TRAIN)
+          || declaring.equals(TensorFlowTypes.CIFAR10_X_TEST)
+          || declaring.equals(TensorFlowTypes.CIFAR10_Y_TEST)) {
         return EnumSet.of(DType.UINT8);
       }
       if (declaring.equals(NumpyTypes.ASTYPE.getDeclaringClass())) {
@@ -2486,6 +2498,14 @@ public abstract class TensorGenerator {
       return new MnistInputData(node, MnistInputData.X_TEST_SHAPE);
     } else if (sanitized.equals(TensorFlowTypes.MNIST_Y_TEST)) {
       return new MnistInputData(node, MnistInputData.Y_TEST_SHAPE);
+    } else if (sanitized.equals(TensorFlowTypes.CIFAR10_X_TRAIN)) {
+      return new Cifar10InputData(node, Cifar10InputData.X_TRAIN_SHAPE);
+    } else if (sanitized.equals(TensorFlowTypes.CIFAR10_Y_TRAIN)) {
+      return new Cifar10InputData(node, Cifar10InputData.Y_TRAIN_SHAPE);
+    } else if (sanitized.equals(TensorFlowTypes.CIFAR10_X_TEST)) {
+      return new Cifar10InputData(node, Cifar10InputData.X_TEST_SHAPE);
+    } else if (sanitized.equals(TensorFlowTypes.CIFAR10_Y_TEST)) {
+      return new Cifar10InputData(node, Cifar10InputData.Y_TEST_SHAPE);
     }
 
     return createManualGenerator(node, builder);
@@ -2557,6 +2577,14 @@ public abstract class TensorGenerator {
       return new MnistInputData(node, MnistInputData.X_TEST_SHAPE);
     } else if (type.equals(TensorFlowTypes.MNIST_Y_TEST)) {
       return new MnistInputData(node, MnistInputData.Y_TEST_SHAPE);
+    } else if (type.equals(TensorFlowTypes.CIFAR10_X_TRAIN)) {
+      return new Cifar10InputData(node, Cifar10InputData.X_TRAIN_SHAPE);
+    } else if (type.equals(TensorFlowTypes.CIFAR10_Y_TRAIN)) {
+      return new Cifar10InputData(node, Cifar10InputData.Y_TRAIN_SHAPE);
+    } else if (type.equals(TensorFlowTypes.CIFAR10_X_TEST)) {
+      return new Cifar10InputData(node, Cifar10InputData.X_TEST_SHAPE);
+    } else if (type.equals(TensorFlowTypes.CIFAR10_Y_TEST)) {
+      return new Cifar10InputData(node, Cifar10InputData.Y_TEST_SHAPE);
     } else if (type.getName().toString().startsWith(TensorFlowTypes.DATA_PACKAGE_PREFIX)) {
       return new DatasetGenerator(node);
     } else if (type.equals(TensorFlowTypes.MATMUL.getDeclaringClass())) {

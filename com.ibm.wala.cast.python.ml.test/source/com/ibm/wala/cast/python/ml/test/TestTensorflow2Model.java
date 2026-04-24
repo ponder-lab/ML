@@ -3788,11 +3788,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * <p>Master's types for values 2 and 3 are {@code MNIST_INPUT} &mdash; the MNIST shape {@code (n,
    * 28, 28)} &mdash; which is <em>confidently wrong</em> for CIFAR-10 data (wala/ML#393: {@code
    * keras.datasets.X.load_data()} is seeded uniformly as MNIST-shaped regardless of which dataset
-   * module {@code X} is). On branch, values 2 and 3 register as {@code {? unknown}}, which is less
-   * specific but more correct &mdash; admitting ignorance beats lying confidently. For tensor shape
+   * module {@code X} is). Branch now hardcodes {@code tf.keras.datasets.cifar10.load_data()} as an
+   * intrinsic (paralleling the MNIST modeling), so value 2 correctly reports {@code (4096, 32, 32,
+   * 3) float32}. Value 3 (labels) is still {@code {? unknown}} on branch: {@code y_train =
+   * np.reshape(y_train, (-1))} in the source is a top-level {@code np.reshape} call, which is not
+   * yet modeled in {@code numpy.xml} (only the method form {@code x.reshape(...)} is). That gap
+   * blocks dtype/shape propagation for the labels arm; tracked by wala/ML#410. For tensor shape
    * inference, the correctness ordering is <em>correct specific shape &gt; unknown (⊤) &gt; wrong
-   * specific shape</em>. So branch's shift from master's {@code MNIST_INPUT} to {@code {? unknown}}
-   * is an accuracy improvement on this test, not a regression.
+   * specific shape</em>, so value 3 is still strictly more accurate than master's MNIST_INPUT.
    *
    * <p>Branch also registers an extra spurious tensor variable at {@code vn=44} with type {@code
    * {[] of int32}} corresponding to {@code gpu_batch_size = int(batch_size / num_gpus)} at line
@@ -3801,11 +3804,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    *
    * <p>Expected tensor variable count: 5 (branch actual). TODO: restore to master baseline 4 once
    * wala/ML#392 is resolved. Expected types are the runtime-verified CIFAR-10 shapes
-   * (aspirational); both master and branch fail this check, but for different reasons &mdash;
-   * master reports MNIST_INPUT (wrong confident answer; wala/ML#393), branch reports {@code {?
-   * unknown}} (honest ⊤, awaiting CIFAR-10 modeling). Unblocks when both wala/ML#392 and
-   * wala/ML#393 are resolved; see also wala/ML#361 (MNIST modeling) and the broader "hardcode
-   * bundled Keras datasets as intrinsics" direction that branch 267 targets.
+   * (aspirational); value 2 now passes after CIFAR-10 modeling, value 3 still fails pending
+   * wala/ML#410 (top-level {@code np.reshape}). Fully unblocks when both wala/ML#392 and
+   * wala/ML#410 are resolved; see also wala/ML#361 (MNIST modeling) and wala/ML#393 (CIFAR-10
+   * modeling, closed by the commit that landed this test's partial pass).
    */
   @Test
   public void testMultiGPUTraining()
