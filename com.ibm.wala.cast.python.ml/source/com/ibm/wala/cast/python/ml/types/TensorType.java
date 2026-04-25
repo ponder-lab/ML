@@ -10,6 +10,8 @@
  */
 package com.ibm.wala.cast.python.ml.types;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
+
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -27,8 +29,12 @@ import com.ibm.wala.ssa.SymbolTable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.TreeMap;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -109,6 +115,17 @@ public class TensorType implements Iterable<Dimension<?>> {
         if (other.v != null) return false;
       } else if (!v.equals(other.v)) return false;
       return true;
+    }
+
+    public static Dimension<?> max(Dimension<?> d1, Dimension<?> d2) {
+      if (d1 instanceof NumericDim && d2 instanceof NumericDim) {
+        Integer v1 = ((NumericDim) d1).value();
+        Integer v2 = ((NumericDim) d2).value();
+
+        return new NumericDim(Math.max(v1, v2));
+      } else
+        throw new IllegalArgumentException(
+            "Cannot compute max of non-numeric dimensions: " + d1 + ", " + d2);
     }
   }
 
@@ -235,7 +252,9 @@ public class TensorType implements Iterable<Dimension<?>> {
   private final List<Dimension<?>> dims;
 
   public TensorType(String cellType, List<Dimension<?>> dims) {
-    this.cellType = cellType;
+    // A TensorType with a null cellType is nonsensical: every tensor has a dtype, even if it is
+    // DType.UNKNOWN. Dims, on the other hand, may legitimately be null (unknown rank / ⊤ shape).
+    this.cellType = Objects.requireNonNull(cellType, "TensorType cellType must not be null");
     this.dims = dims;
   }
 
@@ -261,6 +280,13 @@ public class TensorType implements Iterable<Dimension<?>> {
       cellType.addProperty("description", "Elements of type " + this.getCellType());
     }
 
+    if (this.getDims() == null) {
+      JsonObject unknownShape = new JsonObject();
+      unknownShape.addProperty(
+          "description", "Unknown shape of elements of type " + this.getCellType());
+      return unknownShape;
+    }
+
     JsonElement inner = cellType;
     for (Dimension<?> dim : this.getDims()) {
       inner = dim.toJsonSchema(inner);
@@ -269,18 +295,27 @@ public class TensorType implements Iterable<Dimension<?>> {
   }
 
   public String toMDString() {
-    final String dimString =
-        getDims().stream().map(Dimension::toMDString).collect(Collectors.joining(" ; "));
+    final String dimString;
+    if (getDims() == null) {
+      dimString = "?";
+    } else {
+      dimString = getDims().stream().map(Dimension::toMDString).collect(Collectors.joining(" ; "));
+    }
 
     return "[ " + dimString + " **of** _" + getCellType() + "_ ]";
   }
 
   public String toCString(boolean useMarkdown) {
-    final String dimString =
-        getDims().stream()
-            .map(x -> x.toCString(useMarkdown))
-            .map(x -> "[" + x + "]")
-            .collect(Collectors.joining());
+    final String dimString;
+    if (getDims() == null) {
+      dimString = "[?]";
+    } else {
+      dimString =
+          getDims().stream()
+              .map(x -> x.toCString(useMarkdown))
+              .map(x -> "[" + x + "]")
+              .collect(Collectors.joining());
+    }
 
     final String ctypeString;
     if (useMarkdown) {
@@ -294,7 +329,7 @@ public class TensorType implements Iterable<Dimension<?>> {
 
   @Override
   public String toString() {
-    return "{" + getDims().toString() + " of " + getCellType() + "}";
+    return "{" + (getDims() == null ? "?" : getDims().toString()) + " of " + getCellType() + "}";
   }
 
   @Override
@@ -326,33 +361,63 @@ public class TensorType implements Iterable<Dimension<?>> {
     Dimension<Integer> x = new NumericDim(28);
     Dimension<Integer> y = new NumericDim(28);
     Dimension<List<Dimension<?>>> vec = new CompoundDim(Arrays.asList(x, y));
-    return new TensorType("pixel", Arrays.asList(batch, vec));
+    return new TensorType(FLOAT32.name().toLowerCase(), Arrays.asList(batch, vec));
   }
 
   public static TensorType shapeArg(CGNode node, int literalVn) throws IOException {
     logger.fine(() -> node.getIR().toString());
-    ArrayList<Dimension<?>> r = new ArrayList<>();
+    Map<Integer, Dimension<?>> dims = new TreeMap<>();
     DefUse du = node.getDU();
     SymbolTable S = node.getIR().getSymbolTable();
     for (Iterator<SSAInstruction> uses = du.getUses(literalVn); uses.hasNext(); ) {
       SSAInstruction use = uses.next();
       int val, ref;
+      Integer index = null;
+
       if (use instanceof SSAPutInstruction) {
-        val = ((SSAPutInstruction) use).getVal();
-        ref = ((SSAPutInstruction) use).getRef();
+        SSAPutInstruction put = (SSAPutInstruction) use;
+        if (put.isStatic()) continue;
+        val = put.getVal();
+        ref = put.getRef();
+        try {
+          index = Integer.parseInt(put.getDeclaredField().getName().toString());
+        } catch (NumberFormatException e) {
+          // ignore
+        }
       } else if (use instanceof PythonPropertyWrite) {
         val = ((PythonPropertyWrite) use).getValue();
         ref = ((PythonPropertyWrite) use).getObjectRef();
+        int indexVn = ((PythonPropertyWrite) use).getMemberRef();
+        if (S.isNumberConstant(indexVn)) {
+          index = ((Number) S.getConstantValue(indexVn)).intValue();
+        } else if (S.isStringConstant(indexVn)) {
+          try {
+            index = Integer.parseInt(S.getStringValue(indexVn));
+          } catch (NumberFormatException e) {
+            // ignore
+          }
+        }
       } else {
         continue;
       }
+
       if (ref != literalVn) {
         continue;
       }
+
+      if (index == null) {
+        // If we can't determine the index, we can't reliably build the shape.
+        // But maybe we should just skip this write?
+        // Previous behavior just added it.
+        // Let's log and skip.
+        logger.warning("Could not determine index for shape arg write: " + use);
+        continue;
+      }
+
       if (S.isNumberConstant(val)) {
         int v = ((Number) S.getConstantValue(val)).intValue();
         logger.fine("value: " + v);
-        r.add(v >= 0 ? new NumericDim((Integer) v) : new SymbolicDim("?"));
+        dims.put(index, v >= 0 ? new NumericDim((Integer) v) : new SymbolicDim("?"));
       } else {
         if (du.getDef(val) != null && node.getMethod() instanceof AstMethod) {
           Position p =
@@ -365,25 +430,27 @@ public class TensorType implements Iterable<Dimension<?>> {
           System.err.println(expr);
           Integer ival = PythonInterpreter.interpretAsInt(expr);
           if (ival != null) {
-            r.add(new NumericDim(ival));
+            dims.put(index, new NumericDim(ival));
             continue;
           }
         }
-        r.add(new SymbolicDim("?"));
+        dims.put(index, new SymbolicDim("?"));
       }
     }
-    return new TensorType("pixel", r);
+    return new TensorType(FLOAT32.name().toLowerCase(), new ArrayList<>(dims.values()));
   }
 
   @Override
   public Iterator<Dimension<?>> iterator() {
-    return getDims().iterator();
+    return getDims() == null ? Collections.emptyIterator() : getDims().iterator();
   }
 
   public int symbolicDims() {
     int sz = 0;
     for (Dimension<?> d : this) {
-      sz += d.symbolicDims();
+      if (d != null) {
+        sz += d.symbolicDims();
+      }
     }
     return sz;
   }
@@ -391,12 +458,14 @@ public class TensorType implements Iterable<Dimension<?>> {
   public int concreteSize() {
     int size = -1;
     for (Dimension<?> x : this) {
-      final int xs = x.concreteSize();
-      if (xs >= 0) {
-        if (size >= 0) {
-          size *= xs;
-        } else {
-          size = xs;
+      if (x != null) {
+        final int xs = x.concreteSize();
+        if (xs >= 0) {
+          if (size >= 0) {
+            size *= xs;
+          } else {
+            size = xs;
+          }
         }
       }
     }

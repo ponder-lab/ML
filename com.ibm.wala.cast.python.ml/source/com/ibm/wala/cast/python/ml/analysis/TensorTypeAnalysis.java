@@ -15,6 +15,7 @@ import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.CompoundDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
 import com.ibm.wala.cast.util.SourceBuffer;
@@ -32,8 +33,10 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.graph.Graph;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.eclipse.lsp4j.DiagnosticSeverity;
@@ -169,12 +172,50 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
     }
   }
 
+  /**
+   * A transfer function that pins its destination's state to empty and fixed &mdash; blocks any
+   * predecessor contributions from propagating into {@code lhs}. Used for PointsToSetVariables that
+   * are semantically non-tensor (e.g., the integer index of {@code enumerate()}'s first tuple
+   * field) but whose PA-graph predecessors would otherwise leak tensor types in via the assignment
+   * graph's union semantics. See wala/ML#409.
+   */
+  static final class DropOp extends UnaryOperator<TensorVariable> {
+    static final DropOp INSTANCE = new DropOp();
+
+    private DropOp() {}
+
+    @Override
+    public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
+      if (lhs != null && lhs.state != null && !lhs.state.isEmpty()) {
+        lhs.state.clear();
+        return CHANGED_AND_FIXED;
+      }
+      return NOT_CHANGED_AND_FIXED;
+    }
+
+    @Override
+    public int hashCode() {
+      return 0x7E9D50FF; // arbitrary constant; this is a singleton
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof DropOp;
+    }
+
+    @Override
+    public String toString() {
+      return "drop tensor types (enumerate first-field / non-tensor pin)";
+    }
+  }
+
   private static IKilldallFramework<PointsToSetVariable, TensorVariable> createProblem(
       Graph<PointsToSetVariable> G,
       Map<PointsToSetVariable, TensorType> reshapeNodes,
       Map<PointsToSetVariable, TensorType> set_shapes,
       Set<PointsToSetVariable> conv2ds,
       Set<PointsToSetVariable> conv3ds,
+      Set<PointsToSetVariable> drops,
       Map<PointerKey, AnalysisError> errorLog) {
     return new IKilldallFramework<PointsToSetVariable, TensorVariable>() {
 
@@ -265,8 +306,10 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               if (rhs != null && rhs.state != null) {
                 for (TensorType t : rhs.state) {
                   int dims = 0;
-                  for (@SuppressWarnings("unused") Dimension<?> d : t) {
-                    dims++;
+                  for (Dimension<?> d : t) {
+                    if (d != null) {
+                      dims++;
+                    }
                   }
                   if (dims == dimensions + 2) {
                     changed |= lhs.state.add(t);
@@ -313,11 +356,43 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               int csz = reshapeTo.concreteSize();
               if (rhs != null && rhs.state != null) {
                 for (TensorType t : rhs.state) {
+                  TensorType newType = reshapeTo;
+                  // If there is exactly one dynamic dimension (symbolic), try to resolve it by
+                  // comparing the total size of the input tensor with the concrete size of the
+                  // target shape.
+                  if (ssz == 1 && t.symbolicDims() == 0 && t.concreteSize() != -1) {
+                    int totalSize = t.concreteSize();
+                    int partialSize = 1;
+                    for (Dimension<?> d : reshapeTo.getDims()) {
+                      if (d instanceof NumericDim) {
+                        partialSize *= ((NumericDim) d).value();
+                      }
+                    }
+
+                    if (partialSize > 0 && totalSize % partialSize == 0) {
+                      int missingDim = totalSize / partialSize;
+                      List<Dimension<?>> newDims = new ArrayList<>();
+                      for (Dimension<?> d : reshapeTo.getDims()) {
+                        if (d instanceof SymbolicDim) {
+                          newDims.add(new NumericDim(missingDim));
+                        } else {
+                          newDims.add(d);
+                        }
+                      }
+                      // Use the source tensor's cell type to ensure precision in the reshaped type.
+                      newType = new TensorType(t.getCellType(), newDims);
+                    } else {
+                      newType = new TensorType(t.getCellType(), reshapeTo.getDims());
+                    }
+                  } else {
+                    newType = new TensorType(t.getCellType(), reshapeTo.getDims());
+                  }
+
                   // Process the reshape normally regardless of whether there is a shape mismatch so
                   // that tensor type propagation continues. The shape may be inaccurate, but users
                   // can inspect the error messages to find out about it. See
                   // https://github.com/wala/ML/issues/195.
-                  changed |= lhs.state.add(reshapeTo);
+                  changed |= lhs.state.add(newType);
 
                   if (t.symbolicDims() != ssz || t.concreteSize() != csz) {
                     Position pos = getTargetPos(v.getPointerKey());
@@ -382,7 +457,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
 
           @Override
           public UnaryOperator<TensorVariable> getNodeTransferFunction(PointsToSetVariable node) {
-            if (reshapeNodes.containsKey(node)) {
+            if (drops.contains(node)) {
+              return DropOp.INSTANCE;
+            } else if (reshapeNodes.containsKey(node)) {
               return new ReshapeOp(reshapeNodes.get(node), node);
             } else if (conv2ds.contains(node)) {
               return new ConvOp(2, node);
@@ -401,7 +478,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
           @Override
           public UnaryOperator<TensorVariable> getEdgeTransferFunction(
               PointsToSetVariable src, PointsToSetVariable dst) {
-            if (set_shapes.containsKey(dst)) {
+            if (drops.contains(dst)) {
+              return DropOp.INSTANCE;
+            } else if (set_shapes.containsKey(dst)) {
               return new SetShapeOp(set_shapes.get(dst));
             } else {
               return nodeOp;
@@ -447,17 +526,18 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
     };
   }
 
-  private final Map<PointsToSetVariable, TensorType> init;
+  private final Map<PointsToSetVariable, Set<TensorType>> init;
 
   public TensorTypeAnalysis(
       Graph<PointsToSetVariable> G,
-      Map<PointsToSetVariable, TensorType> init,
+      Map<PointsToSetVariable, Set<TensorType>> init,
       Map<PointsToSetVariable, TensorType> reshapeTypes,
       Map<PointsToSetVariable, TensorType> set_shapes,
       Set<PointsToSetVariable> conv2ds,
       Set<PointsToSetVariable> conv3ds,
+      Set<PointsToSetVariable> drops,
       Map<PointerKey, AnalysisError> errorLog) {
-    super(createProblem(G, reshapeTypes, set_shapes, conv2ds, conv3ds, errorLog));
+    super(createProblem(G, reshapeTypes, set_shapes, conv2ds, conv3ds, drops, errorLog));
     this.init = init;
   }
 
@@ -480,7 +560,12 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
   protected void initializeVariables() {
     super.initializeVariables();
     for (PointsToSetVariable src : init.keySet()) {
-      getOut(src).state.add(init.get(src));
+      Set<TensorType> types = init.get(src);
+      if (types != null) {
+        getOut(src).state.addAll(types);
+      } else {
+        getOut(src).state = null; // unknown tensor — distinguishable from empty (not-a-tensor)
+      }
     }
   }
 

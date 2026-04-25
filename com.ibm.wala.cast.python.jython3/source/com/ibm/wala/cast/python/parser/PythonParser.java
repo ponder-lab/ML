@@ -991,7 +991,11 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
     @Override
     public CAstNode visitEllipsis(Ellipsis arg0) throws Exception {
-      return fail(arg0);
+      // Emit a distinct constant node for `...` so downstream analyses (e.g., ndarray subscript
+      // shape inference) can tell ellipsis apart from `None`, which `visitNameConstant` currently
+      // translates to Java `null`. Prior behavior returned `CAstNode.EMPTY` via `fail(arg0)`,
+      // which collapsed ellipsis and `None` into indistinguishable IR. See wala/ML#356.
+      return notePosition(Ast.makeConstant(PythonTypes.ELLIPSIS), arg0);
     }
 
     @Override
@@ -1986,11 +1990,29 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
                 acceptOrNull(S.getInternalStep())),
             arg0);
       } else if (s instanceof ExtSlice) {
-        CAstNode res = notePosition(arg0.getInternalValue().accept(this), arg0);
-        for (slice d : ((ExtSlice) s).getInternalDims()) {
-          res = Ast.makeNode(CAstNode.OBJECT_REF, res, d.accept(this));
+        // Build a tuple-valued subscript matching the Index-with-List case above so
+        // downstream analyses (e.g., `NdarraySubscriptOperation`'s ellipsis/newaxis
+        // classification) see `x[d0, d1, ...]` as a single `slice(value, d0, d1, ...)` CALL
+        // whose member-ref allocation is a tuple. The previous chained-OBJECT_REF emission
+        // flattened `x[..., tf.newaxis]` into two sequential attribute accesses, hiding the
+        // tuple structure and breaking tuple-shape detection for any subscript routed through
+        // this branch. Python's AST uses `ExtSlice` for multi-element subscripts where at
+        // least one element isn't a pure-constant list literal (e.g., an attribute access
+        // like `tf.newaxis`); semantically it's still a tuple subscript and this restores
+        // that representation. Matches the precedent established for the pure-constant
+        // tuple case.
+        ExtSlice extSlice = (ExtSlice) s;
+        int numDims = extSlice.getInternalDims().size();
+        CAstNode[] cs = new CAstNode[numDims + 3];
+        cs[0] = Ast.makeNode(CAstNode.VAR, Ast.makeConstant("slice"));
+        cs[1] = Ast.makeNode(CAstNode.EMPTY);
+        cs[2] = acceptOrNull(arg0.getInternalValue());
+        int i = 0;
+        for (slice d : extSlice.getInternalDims()) {
+          cs[i + 3] = d.accept(this);
+          i++;
         }
-        return res;
+        return notePosition(Ast.makeNode(CAstNode.CALL, cs), arg0);
 
       } else {
         return acceptOrNull(arg0.getInternalValue());

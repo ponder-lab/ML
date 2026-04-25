@@ -1,0 +1,101 @@
+package com.ibm.wala.cast.python.ml.client;
+
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Represents a call to the <code>constant()</code> function in TensorFlow.
+ *
+ * @see <a href="https://www.tensorflow.org/api_docs/python/tf/constant">constant()</a>.
+ * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
+ */
+public class Constant extends TensorGenerator {
+
+  protected enum Parameters {
+    VALUE,
+    DTYPE,
+    SHAPE,
+    NAME,
+    VERIFY_SHAPE;
+
+    public String getName() {
+      return this.name().toLowerCase();
+    }
+
+    public int getIndex() {
+      return this.ordinal();
+    }
+  }
+
+  public Constant(PointsToSetVariable source) {
+    super(source);
+  }
+
+  @Override
+  protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    // If the shape argument is not specified, then the shape is inferred from the shape of value.
+    OrdinalSet<InstanceKey> pointsToSet =
+        this.getArgumentPointsToSet(
+            builder, this.getValueParameterPosition(), this.getValueParameterName());
+    Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, pointsToSet);
+    // An empty result means the shape could not be inferred — treat as unknown (null / ⊤).
+    return shapes.isEmpty() ? null : shapes;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * <p>If the <code>dtype</code> argument is not specified, then the type is inferred from the type
+   * of value.
+   */
+  @Override
+  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> pointsToSet =
+        this.getArgumentPointsToSet(
+            builder, this.getValueParameterPosition(), this.getValueParameterName());
+    Set<DType> dTypes = this.getDTypesOfValue(builder, pointsToSet);
+    // An empty result means the dtype could not be inferred — treat as unknown
+    // (⊤), mirroring the ⊤ treatment in getDefaultShapes. A `tf.constant` is
+    // always a tensor; we just cannot pin down its dtype.
+    return dTypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : dTypes;
+  }
+
+  protected int getValueArgumentValueNumber() {
+    return this.getArgumentValueNumber(this.getValueParameterPosition());
+  }
+
+  protected int getValueParameterPosition() {
+    return Parameters.VALUE.getIndex();
+  }
+
+  protected String getValueParameterName() {
+    return Parameters.VALUE.getName();
+  }
+
+  @Override
+  protected int getShapeParameterPosition() {
+    return Parameters.SHAPE.getIndex();
+  }
+
+  @Override
+  protected String getShapeParameterName() {
+    return Parameters.SHAPE.getName();
+  }
+
+  @Override
+  protected int getDTypeParameterPosition() {
+    return Parameters.DTYPE.getIndex();
+  }
+
+  @Override
+  protected String getDTypeParameterName() {
+    return Parameters.DTYPE.getName();
+  }
+}

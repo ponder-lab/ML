@@ -85,8 +85,8 @@ public class TestTensorflowModelParsing extends TestPythonMLCallGraphShape {
             logger.warning(() -> "Encountered pointer key type: " + pointerKey.getClass() + ".");
         });
 
-    // we should have 3 methods.
-    assertEquals(3, methodSignatureToPointerKeys.size());
+    // we should have 2 methods.
+    assertEquals(2, methodSignatureToPointerKeys.size());
 
     final String addFunctionSignature = "script " + filename + ".add.do()LRoot;";
 
@@ -94,22 +94,30 @@ public class TestTensorflowModelParsing extends TestPythonMLCallGraphShape {
     Set<LocalPointerKey> addFunctionPointerKeys =
         methodSignatureToPointerKeys.get(addFunctionSignature);
 
-    // two tensor parameters, a and b.
-    assertEquals(2, addFunctionPointerKeys.size());
+    // three tensor parameters, a, b, and the result of a + b.
+    assertEquals(3, addFunctionPointerKeys.size());
 
-    // should have value numbers of 2 and 3.
+    // should have value numbers of 2, 3, and 4.
     Set<Integer> valueNumberSet =
         addFunctionPointerKeys.stream()
             .map(LocalPointerKey::getValueNumber)
             .collect(Collectors.toSet());
-    assertEquals(2, valueNumberSet.size());
+    assertEquals(3, valueNumberSet.size());
     assertTrue(valueNumberSet.contains(2));
     assertTrue(valueNumberSet.contains(3));
+    assertTrue(valueNumberSet.contains(4));
 
     // check the source positions of each function parameter.
     for (LocalPointerKey lpk : addFunctionPointerKeys) {
       AstMethod method = (AstMethod) lpk.getNode().getIR().getMethod();
       int paramIndex = lpk.getValueNumber() - 1;
+
+      int numberOfParams = method.getNumberOfParameters();
+
+      if (paramIndex >= numberOfParams)
+        // only consider parameters.
+        continue;
+
       Position parameterPosition = method.getParameterPosition(paramIndex);
 
       // check the line.

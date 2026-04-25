@@ -1,0 +1,30 @@
+<?xml version="1.0" ?>
+<!DOCTYPE summary-spec>
+<summary-spec>
+  <classloader name="PythonLoader">
+    <class name="issue127f" allocatable="true">
+      <method name="import" static="true" descriptor="()Lissue127f;">
+        <new def="x" class="Lissue127f" />
+        <new def="c_class" class="Lissue127f/class/C" />
+        <putfield class="LRoot" field="C" fieldType="LRoot" ref="x" value="c_class" />
+        <return value="x" />
+      </method>
+    </class>
+    <package name="issue127f/class">
+      <class name="C" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="func val1">
+          <new def="c" class="Lissue127f/C" />
+          <putfield class="LRoot" field="f" fieldType="LRoot" ref="c" value="val1" />
+          <return value="c" />
+        </method>
+      </class>
+    </package>
+    <class name="issue127f/C" allocatable="true">
+      <method name="foo" descriptor="()LRoot;" numArgs="3" paramNames="func self val2">
+        <getfield def="f_val" class="LRoot" field="f" fieldType="LRoot" ref="self" />
+        <!-- We return val2 but the test will also inspect f_val via pointer analysis -->
+        <return value="val2" />
+      </method>
+    </class>
+  </classloader>
+</summary-spec>

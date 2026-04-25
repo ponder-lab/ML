@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ipa.callgraph;
 
+import static com.ibm.wala.cast.python.types.PythonTypes.TRAMPOLINE_METHOD_NAME;
+
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
@@ -10,6 +12,7 @@ import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.MethodTargetSelector;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.Pair;
@@ -36,13 +39,15 @@ public abstract class PythonMethodTrampolineTargetSelector<T> implements MethodT
 
       if (this.shouldProcess(caller, site, receiver)) {
         PythonInvokeInstruction call = this.getCall(caller, site);
+        if (call == null) return null;
         Pair<IClass, Integer> key = this.makeKey(receiver, call);
 
         if (!codeBodies.containsKey(key)) {
           MethodReference tr =
               MethodReference.findOrCreate(
                   receiver.getReference(),
-                  Atom.findOrCreateUnicodeAtom("trampoline" + call.getNumberOfTotalParameters()),
+                  Atom.findOrCreateUnicodeAtom(
+                      TRAMPOLINE_METHOD_NAME + call.getNumberOfTotalParameters()),
                   AstMethodReference.fnDesc);
           PythonSummary x = new PythonSummary(tr, call.getNumberOfTotalParameters());
           int v = call.getNumberOfTotalParameters() + 1;
@@ -69,7 +74,11 @@ public abstract class PythonMethodTrampolineTargetSelector<T> implements MethodT
    *     given {@link CGNode}.
    */
   protected PythonInvokeInstruction getCall(CGNode caller, CallSiteReference site) {
-    return (PythonInvokeInstruction) caller.getIR().getCalls(site)[0];
+    SSAAbstractInvokeInstruction inst = caller.getIR().getCalls(site)[0];
+    if (inst instanceof PythonInvokeInstruction) {
+      return (PythonInvokeInstruction) inst;
+    }
+    return null;
   }
 
   /**

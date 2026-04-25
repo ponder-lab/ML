@@ -99,11 +99,11 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
     }
   }
 
-  public class PythonClass extends CoreClass {
-    java.util.Set<IField> staticFields = HashSetFactory.make();
-    java.util.Set<MethodReference> methodTypes = HashSetFactory.make();
+  public class PythonClass extends CoreClass implements IPythonClass {
+    Set<IField> staticFields = HashSetFactory.make();
+    Set<MethodReference> methodTypes = HashSetFactory.make();
     private java.util.Set<TypeReference> innerTypes = HashSetFactory.make();
-    java.util.Set<String> missingTypeNames;
+    Set<String> missingTypeNames;
 
     public PythonClass(
         TypeName name,
@@ -125,7 +125,7 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
       }
     }
 
-    public java.util.Set<String> getMissingTypeNames() {
+    public Set<String> getMissingTypeNames() {
       return missingTypeNames;
     }
 

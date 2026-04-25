@@ -12,6 +12,9 @@ def func():
     b = tensorflow.constant([[1.0, 1.0], [0.0, 1.0]])
     c = tensorflow.matmul(a, b)
     tensor = Tensor(c.op, 0, tensorflow.float32)
+    assert isinstance(tensor, Tensor)
+    assert tensor.dtype == tensorflow.float32
+    assert tensor.shape == (2, 2)
     func2(tensor)
 
 

@@ -62,18 +62,50 @@ b = tf.data.Dataset.range(4, 7)  # ==> [ 4, 5, 6 ]
 ds = tf.data.Dataset.zip((a, b))
 
 for element in ds:
+    assert isinstance(element, tuple)
+    assert len(element) == 2
+    assert isinstance(element[0], tf.Tensor)
+    assert isinstance(element[1], tf.Tensor)
+    assert element[0].shape == ()
+    assert element[1].shape == ()
+    assert element[0].dtype == tf.int64
+    assert element[1].dtype == tf.int64
     f(element)
     assert len(element) == 2
-    g1(element[0])
-    g2(element[1])
+    arg = element[0]
+    assert isinstance(arg, tf.Tensor)
+    assert arg.shape == ()
+    assert arg.dtype == tf.int64
+    g1(arg)
+    arg2 = element[1]
+    assert isinstance(arg2, tf.Tensor)
+    assert arg2.shape == ()
+    assert arg2.dtype == tf.int64
+    g2(arg2)
 
 ds = tf.data.Dataset.zip((b, a))
 
 for element in ds:
+    assert isinstance(element, tuple)
+    assert len(element) == 2
+    assert isinstance(element[0], tf.Tensor)
+    assert isinstance(element[1], tf.Tensor)
+    assert element[0].shape == ()
+    assert element[1].shape == ()
+    assert element[0].dtype == tf.int64
+    assert element[1].dtype == tf.int64
     h(element)
     assert len(element) == 2
-    i1(element[0])
-    i2(element[1])
+    arg = element[0]
+    assert isinstance(arg, tf.Tensor)
+    assert arg.shape == ()
+    assert arg.dtype == tf.int64
+    i1(arg)
+    arg2 = element[1]
+    assert isinstance(arg2, tf.Tensor)
+    assert arg2.shape == ()
+    assert arg2.dtype == tf.int64
+    i2(arg2)
 
 # The `datasets` argument may contain an arbitrary number of datasets.
 c = tf.data.Dataset.range(7, 13).batch(2)  # ==> [ [7, 8],
@@ -82,6 +114,17 @@ c = tf.data.Dataset.range(7, 13).batch(2)  # ==> [ [7, 8],
 ds = tf.data.Dataset.zip((a, b, c))
 
 for element in ds:
+    assert isinstance(element, tuple)
+    assert len(element) == 3
+    assert isinstance(element[0], tf.Tensor)
+    assert isinstance(element[1], tf.Tensor)
+    assert isinstance(element[2], tf.Tensor)
+    assert element[0].shape == ()
+    assert element[1].shape == ()
+    assert element[2].shape == (2,)
+    assert element[0].dtype == tf.int64
+    assert element[1].dtype == tf.int64
+    assert element[2].dtype == tf.int64
     j(element)
     assert len(element) == 3
     k1(element[0])
@@ -94,6 +137,14 @@ d = tf.data.Dataset.range(13, 15)  # ==> [ 13, 14 ]
 ds = tf.data.Dataset.zip((a, d))
 
 for element in ds:
+    assert isinstance(element, tuple)
+    assert len(element) == 2
+    assert isinstance(element[0], tf.Tensor)
+    assert isinstance(element[1], tf.Tensor)
+    assert element[0].shape == ()
+    assert element[1].shape == ()
+    assert element[0].dtype == tf.int64
+    assert element[1].dtype == tf.int64
     l(element)
     assert len(element) == 2
     m1(element[0])

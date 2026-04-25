@@ -8,4 +8,7 @@ def f(a):
 
 
 x = tf.constant(([1, 2, 3, 4]))
-f(tf.math.multiply(x, x))
+z = tf.math.multiply(x, x)
+assert z.shape.as_list() == [4]
+assert z.dtype == tf.int32
+f(z)

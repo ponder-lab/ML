@@ -1,0 +1,29 @@
+<?xml version="1.0" ?>
+<!DOCTYPE summary-spec>
+<summary-spec>
+  <!-- Isolated reproduction for https://github.com/wala/ML/issues/127. This summary defines a synthetic class 'issue127/C' with a '__call__' method. The test verifies that WALA can resolve implicit calls (e.g., 'obj()') to this synthetic method. -->
+  <classloader name="PythonLoader">
+    <class name="issue127" allocatable="true">
+      <method name="import" static="true" descriptor="()Lissue127;">
+        <new def="x" class="Lissue127" />
+        <new def="c_class" class="Lissue127/class/C" />
+        <putfield class="LRoot" field="C" fieldType="LRoot" ref="x" value="c_class" />
+        <return value="x" />
+      </method>
+    </class>
+    <package name="issue127/class">
+      <class name="C" allocatable="true">
+        <!-- The constructor -->
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="c" class="Lissue127/C" />
+          <return value="c" />
+        </method>
+      </class>
+    </package>
+    <class name="issue127/C" allocatable="true">
+      <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self x">
+        <return value="x" />
+      </method>
+    </class>
+  </classloader>
+</summary-spec>

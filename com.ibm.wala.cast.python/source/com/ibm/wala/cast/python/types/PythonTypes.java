@@ -31,6 +31,37 @@ public class PythonTypes extends AstTypeReference {
   /** The name of the type used for CAst dynamic annotations (decorators). */
   private static final String DYNAMIC_ANNOTATION_TYPE_NAME = "DYNAMIC_ANNOTATION";
 
+  /**
+   * The method name that is used for Python callables.
+   *
+   * @see <a href="https://docs.python.org/3/reference/datamodel.html#class-instances">Python
+   *     documentation</a>.
+   */
+  public static final String CALLABLE_METHOD_NAME = "__call__";
+
+  /**
+   * The method name that is used for tf.keras.Models callables. This is a workaround for
+   * https://github.com/wala/ML/issues/106.
+   *
+   * @see <a
+   *     href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Model#call">TensorFlow
+   *     documentation</a>.
+   */
+  public static final String CALLABLE_METHOD_NAME_FOR_KERAS_MODELS = "call";
+
+  /** The method name that is used for summarized methods . */
+  public static final String DO_METHOD_NAME = "do";
+
+  /** The method name used for trampoline methods. */
+  public static final String TRAMPOLINE_METHOD_NAME = "trampoline";
+
+  /**
+   * The suffix used for synthetic classes that are assigned generated trampolines. By default,
+   * synthetic (summarized) classes do not receive trampolines. This suffix is used in the summary
+   * to avoid naming conflicts during trampoline generation.
+   */
+  public static final String ARTIFICIAL_SUFFIX_FOR_TRAMPOLINED_SYNTHETIC_CLASSES = "class";
+
   public static final Atom pythonName = Atom.findOrCreateUnicodeAtom(pythonNameStr);
 
   public static final Atom pythonLoaderName = Atom.findOrCreateUnicodeAtom(pythonLoaderNameStr);
@@ -79,6 +110,15 @@ public class PythonTypes extends AstTypeReference {
   public static final TypeReference enumerate =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lenumerate"));
 
+  public static final TypeReference ENUMERATE_BUILTIN =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lwala/builtin/enumerate"));
+
+  public static final TypeReference ITER_BUILTIN =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lwala/builtin/iter"));
+
+  public static final TypeReference NEXT_BUILTIN =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lwala/builtin/next"));
+
   public static final TypeReference trampoline =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltrampoline"));
 
@@ -99,6 +139,14 @@ public class PythonTypes extends AstTypeReference {
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("L" + CLASS_METHOD_ANNOTATION_NAME));
 
+  /**
+   * Sentinel constant used as the {@code CAstNode} value for Python's ellipsis literal ({@code
+   * ...}). Emitted by the parser's {@code visitEllipsis} so that downstream analyses can
+   * distinguish ellipsis from other {@code null}-valued subscript components (notably {@code
+   * None}). See wala/ML#356 for the motivating GAN-tutorial subscript case.
+   */
+  public static final String ELLIPSIS = "<python:Ellipsis>";
+
   /** A {@link CAstType} representing a dynamic annotation (decorator). */
   public static final CAstType CAST_DYNAMIC_ANNOTATION =
       new CAstType() {
@@ -112,4 +160,6 @@ public class PythonTypes extends AstTypeReference {
           return new HashSet<>();
         }
       };
+
+  protected PythonTypes() {}
 }

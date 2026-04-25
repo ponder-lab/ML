@@ -92,9 +92,15 @@ EPOCHS = 10
 min_loss = sys.float_info.max
 for epoch in range(EPOCHS):
     for images, labels in train_ds:
+        # asserts before FUT MyModel.call (testEagerExecution) via train_step -> model(images).
+        assert images.shape == (32, 28, 28, 1)
+        assert images.dtype == tf.float32
         train_step(model, train_loss, train_accuracy, images, labels)
 
     for valid_images, valid_labels in valid_ds:
+        # asserts before FUT MyModel.call (testEagerExecution) via test_step -> model(valid_images).
+        assert valid_images.shape == (32, 28, 28, 1)
+        assert valid_images.dtype == tf.float32
         test_step(model, valid_loss, valid_accuracy, valid_images, valid_labels)
 
     if valid_loss.result() < min_loss:
@@ -121,6 +127,10 @@ for epoch in range(EPOCHS):
 model.set_weights(min_weights)
 
 for test_images, test_labels in test_ds:
+    # asserts before FUT MyModel.call (testEagerExecution) via test_step -> model(test_images).
+    # test_ds has 10000 / 32 = 312 full batches + 1 partial batch of 16.
+    assert test_images.shape in ((32, 28, 28, 1), (16, 28, 28, 1))
+    assert test_images.dtype == tf.float32
     test_step(model, test_loss, test_accuracy, test_images, test_labels)
 
 print(

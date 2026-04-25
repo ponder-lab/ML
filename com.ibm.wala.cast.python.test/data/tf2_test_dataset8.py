@@ -11,4 +11,10 @@ dataset = (
 )
 
 for images, labels in dataset:
+    assert isinstance(images, tf.Tensor)
+    assert isinstance(labels, tf.Tensor)
+    assert images.shape == (32, 28, 28)
+    assert labels.shape == (32,)
+    assert images.dtype == tf.uint8
+    assert labels.dtype == tf.uint8
     c = add(images, labels)

@@ -155,6 +155,11 @@ def run_optimization(x):
 # %%
 # Run training for the given number of steps.
 for step, (batch_x, _) in enumerate(train_data.take(training_steps + 1)):
+    # asserts before FUT run_optimization (testAutoencoder3), which internally invokes
+    # FUT encoder (testAutoencoder), FUT decoder (testAutoencoder4), FUT mean_square
+    # (testAutoencoder2).
+    assert batch_x.shape == (256, 784)
+    assert batch_x.dtype == tf.float32
     # Run the optimization.
     loss = run_optimization(batch_x)
 
@@ -171,6 +176,9 @@ n = 4
 canvas_orig = np.empty((28 * n, 28 * n))
 canvas_recon = np.empty((28 * n, 28 * n))
 for i, (batch_x, _) in enumerate(test_data.take(n)):
+    # asserts before FUT encoder (testAutoencoder) and FUT decoder (testAutoencoder4).
+    assert batch_x.shape == (256, 784)
+    assert batch_x.dtype == tf.float32
     # Encode and decode the digit image.
     reconstructed_images = decoder(encoder(batch_x))
     # Display original images.
