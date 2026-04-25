@@ -7107,6 +7107,28 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression guard for wala/ML#403: chained {@code x.astype(int32).astype(float32)} on an mnist
+   * receiver. The first cast's result is a synthetic-method return whose PointerKey is implicit, so
+   * the receiver-shape lookup for the second {@code astype} call exercises the {@code
+   * IllegalArgumentException}-catch fallback path in {@link AstypeOperation#getDefaultShapes},
+   * which today returns {@code null} (⊤) for shape — dtype still resolves to {@code float32} but
+   * the runtime-correct {@code (60000, 28, 28)} shape isn't recovered. Tracked by wala/ML#403; the
+   * underlying receiver-shape gap is wala/ML#402 / wala/WALA#1889.
+   *
+   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#403 is fixed.
+   */
+  @Test(expected = AssertionError.class)
+  public void testAstypeChained()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_astype_chained.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_60000_28_28_FLOAT32)));
+  }
+
+  /**
    * Exercise {@link NdarrayReshape#getDefaultShapes}'s SSA-substrate DU walk: resolves the {@code
    * -1} in {@code x_train.reshape([-1, 784])} by tracing the receiver back to {@code mnist.x_train}
    * ({@code (60000, 28, 28)}). Guards {@link TensorGenerator#getShapesOrSSAChain} against
