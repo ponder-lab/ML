@@ -1,6 +1,5 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static java.util.Collections.emptySet;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -57,7 +56,10 @@ public class Input extends Ones {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    return emptySet();
+    // `tf.keras.Input(...)` is always a tensor; if the `shape` argument is unresolvable, the right
+    // signal is ⊤ (unknown shape), not ⊥ (not a tensor). See wala/ML#355 and the lattice
+    // conventions in `CONTRIBUTING.md`.
+    return null;
   }
 
   @Override
@@ -135,6 +137,10 @@ public class Input extends Ones {
     else
       LOGGER.info(
           "Found possible batch sizes: " + batchSizes + " for source: " + this.getSource() + ".");
+
+    // If the base shape is ⊤ (unknown), the prepended batch dim doesn't recover enough info to
+    // synthesize a meaningful shape — propagate ⊤ outward. Avoids NPE on the iteration below.
+    if (shapes == null) return null;
 
     Set<List<Dimension<?>>> newShapes = HashSetFactory.make();
 
