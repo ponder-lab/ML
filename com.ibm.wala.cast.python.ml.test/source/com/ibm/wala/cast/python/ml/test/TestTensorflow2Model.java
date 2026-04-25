@@ -7109,15 +7109,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Regression guard for wala/ML#403: chained {@code x.astype(int32).astype(float32)} on an mnist
    * receiver. The first cast's result is a synthetic-method return whose PointerKey is implicit, so
-   * the receiver-shape lookup for the second {@code astype} call exercises the {@code
+   * the receiver-shape lookup for the second {@code astype} call hits the {@code
    * IllegalArgumentException}-catch fallback path in {@link AstypeOperation#getDefaultShapes},
-   * which today returns {@code null} (⊤) for shape — dtype still resolves to {@code float32} but
-   * the runtime-correct {@code (60000, 28, 28)} shape isn't recovered. Tracked by wala/ML#403; the
-   * underlying receiver-shape gap is wala/ML#402 / wala/WALA#1889.
+   * which returns {@code null} (⊤) for shape while dtype still resolves to {@code float32}.
    *
-   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#403 is fixed.
+   * <p>The runtime-vs-analyzer asymmetry here ({@code (60000, 28, 28) float32} at runtime vs.
+   * {@code TensorType(float32, null)} from the analyzer) is the same kind of deliberate limitation
+   * as {@link #testInputUnresolvableShape}: traversing implicit-PK chains across synthetic-method
+   * returns is a known architectural gap (wala/ML#402 / wala/WALA#1889), and returning ⊤ rather
+   * than ⊥ is the lattice-correct response in the meantime — dtype still carries through, so
+   * downstream analysis isn't dropped. The test asserts the analyzer's lattice-correct output
+   * rather than suppressing it as a would-be-fixed failure; if and when the implicit-PK chain
+   * traversal lands, this expectation flips to {@code TENSOR_60000_28_28_FLOAT32} as part of that
+   * change.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testAstypeChained()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -7125,7 +7131,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_60000_28_28_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
