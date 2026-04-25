@@ -92,6 +92,22 @@ Shapes and dtypes are orthogonal. When the shape is unknown but the dtype is kno
 - [ ] Prefer `EnumSet.of(DType.UNKNOWN)` over `EnumSet.noneOf(DType.class)` / `Collections.emptySet()` for unknown dtypes.
 - [ ] If your generator's result is accumulated into a `ret` set inside a loop, verify the final `return ret` cannot return an empty set when you actually meant "unknown." Add `return ret.isEmpty() ? null : ret;` if it can.
 
+## Modeling APIs in `tensorflow.xml`
+
+When adding or modifying an API summary in `tensorflow.xml` / `numpy.xml`:
+
+- **Allocating ops** — APIs that return a fresh tensor (e.g., `tf.matmul`, `tf.nn.sigmoid`, `tf.nn.softmax`, `tf.sparse.add`, `tf.nn.sparse_softmax_cross_entropy_with_logits`, `np.array`, `np.reshape`) should use `<new def="res" class="..."/>` followed by `<return value="res"/>`. Pair the XML with a `TensorGenerator` subclass that computes the output shape/dtype from the inputs. **Never** use `<return value="param"/>` for an allocating op — that aliases the call's result with an input and silently propagates the wrong shape/dtype downstream (this is a recurring bug class; see closed wala/ML#412 and predecessors).
+- **Genuinely pass-through ops** — only methods that semantically return one of their inputs unchanged (e.g., builder-style `Dataset.shuffle`/`batch` chain that returns the same dataset object, or identity-like ops) should use `<return value="param"/>`. Document the choice with a comment.
+- **Allocatable classes** — `<new class="L..."/>` requires the target class to be declared `<class name="..." allocatable="true">` somewhere in the XML, otherwise `HeapModel.getInstanceKeyForAllocation` returns `null` and the iKey never reaches the caller (see wala/WALA#1889 history). When a new `<new>` target class is added, audit existing ones in the same area for the declaration.
+- **`numArgs` / `paramNames` consistency** — every `<method numArgs="N" paramNames="...">` must have exactly `N` whitespace-separated names in `paramNames`. Mismatches silently break parameter resolution; audit when changing signatures.
+
+## Pinning shapes / blocking PA leaks
+
+When the PA assignment graph propagates a tensor type into a destination that semantically isn't a tensor, use one of these `TensorTypeAnalysis` mechanisms (both threaded through `PythonTensorAnalysisEngine.performAnalysis`):
+
+- **`setCalls`** (consumed as `set_shapes` in `TensorTypeAnalysis`) — pins a destination's shape to a specific value. Use for intentional shape overrides like `tf.set_shape`, slice-results, or subscript-results that need their receiver's shape blocked from leaking through (precedent: wala/ML#405).
+- **`drops`** — pins a destination's tensor-type set to **empty + FIXED** via a `DropOp` edge transfer. Use for slots that are never tensors at runtime but get aliased to one through the PA graph (precedent: wala/ML#409 — `enumerate(...)`'s integer-index field).
+
 ## Java Testing
 
 - Always run `mvn test` to ensure all Java tests pass before committing changes.

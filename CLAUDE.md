@@ -75,6 +75,10 @@ PythonTensorAnalysisEngine.performAnalysis()
 
 - **TF/Keras modeling lives in `tensorflow.xml`** (in `com.ibm.wala.cast.python.ml/data/`) — this is a WALA XML summary file describing synthetic method bodies for TF APIs. Changing the XML requires `mvn clean` because of resource caching. Generators in `client/` read from the call graph built against these summaries.
 
+**`<new>+<return>` vs `<return value="x"/>`:** when modeling an API that *allocates* a new tensor, use `<new def="res" class="..."/><return value="res"/>` and pair it with a generator that computes the output type (precedents: sigmoid, softmax, sparse_add, sparse_softmax_cross_entropy_with_logits, np.array, np.reshape). Use `<return value="x"/>` pass-through only for genuinely-pass-through APIs (e.g., builder-style methods that return `self`). Mixing these up causes subtle bugs where the call's output aliases an input — see wala/ML#412 for an example fix.
+
+- **Memoization layer** — `TensorGenerator.getShapes(builder, node, vn)` and `getDTypes(builder, node, vn)` are memoized per-builder via static `WeakHashMap` caches with explicit cleanup at the end of `PythonTensorAnalysisEngine.performAnalysis` (call `TensorGenerator.clearCaches(builder)`). Atomic check-compute-put under a per-builder lock; thread-safe. Tracked by wala/ML#365 (currently partial — covers the 3-arg recursive layer; 1-arg / `getTensorTypes` overrides not yet covered). Important to note when adding new generators: if your override calls `super.getShapes(...)`, that goes through the cache; calls to `this.getShapes(builder, node, vn)` are also cached. The cache is correctness-safe because the PA is stable when generators run.
+
 ### PTS vs `TensorTypeAnalysis` — two separate systems
 
 WALA's Pointer Analysis (PA) and `TensorTypeAnalysis` serve different roles:
@@ -83,6 +87,11 @@ WALA's Pointer Analysis (PA) and `TensorTypeAnalysis` serve different roles:
 - **`TensorTypeAnalysis`** is a parallel type system that uses the PA's assignment graph as its flow graph but seeds tensor types independently via syntactic markers (`read_data`/`read_dataset` method names in `tensorflow.xml`). Variables with empty PTS can still have tensor types in this analysis.
 
 When debugging why a tensor variable isn't recognized, check the `TensorTypeAnalysis` seeding path (`getDataflowSources`, `processInstruction`, `definesTensorIterable`), not just the PTS. An empty PTS doesn't mean the variable isn't a tensor — it means the seeding didn't reach it.
+
+**Override-the-PA-leak mechanisms:** when the PA assignment graph propagates a tensor type into a slot that semantically isn't a tensor, the analysis offers two pin mechanisms:
+
+- `set_shapes` (passed to `TensorTypeAnalysis` as `setCalls`) — pins a destination's tensor type to a specific value via a `SetShapeOp` edge transfer. Used for slice-result and subscript-result destinations to block receiver-shape leaks (wala/ML#405).
+- `drops` (also passed to `TensorTypeAnalysis`) — pins a destination's state to **empty and FIXED** via a `DropOp` edge transfer that clears any leaked state and prevents further predecessor updates. Used for the integer index slot of `enumerate(...)`'s tuple-field-0, which the PA aliases with the iterable's element type (wala/ML#409). When you encounter a similar PA-substrate leak, the recipe is: detect the destination structurally in `PythonTensorAnalysisEngine.performAnalysis`, add it to `drops`, and the rest is wired.
 
 ### Lattice conventions for `getDefaultShapes` / `getDefaultDTypes`
 
@@ -112,7 +121,7 @@ Chained layer calls (e.g., `x = self.layer1(x); x = self.layer2(x)`) are analyse
 
 ## Test suite
 
-`TestTensorflow2Model` (in `com.ibm.wala.cast.python.ml.test`) is the main test class (~6800 lines, hundreds of `@Test` methods). Each test calls a `test(...)` helper with four-to-five parameters:
+`TestTensorflow2Model` (in `com.ibm.wala.cast.python.ml.test`) is the main test class (~7400 lines, ~590 `@Test` methods). Each test calls a `test(...)` helper with four-to-five parameters:
 
 ```java
 test(
