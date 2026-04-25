@@ -6647,6 +6647,26 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_input2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_NONE_NONE_STRING)));
   }
 
+  /**
+   * Regression guard for wala/ML#355: when the {@code shape} argument to {@code tf.keras.Input} is
+   * unresolvable from the static analyzer's perspective (here, sourced from {@code json.loads},
+   * which Ariadne does not model), {@code Input.getDefaultShapes} must return {@code null} (⊤,
+   * tensor with unknown shape) rather than {@code Collections.emptySet()} (⊥, not a tensor). The ⊥
+   * return previously made the call's result silently disappear from the tensor analysis despite
+   * being a tensor at runtime; the fix in ponder-lab/ML@078208f6 restores ⊤ propagation, so the
+   * call site is recognized as a tensor with concrete dtype but unknown shape.
+   */
+  @Test
+  public void testInputUnresolvableShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_input_unresolvable_shape.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
   @Test
   public void testRaggedFromNestedRowLengths()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
