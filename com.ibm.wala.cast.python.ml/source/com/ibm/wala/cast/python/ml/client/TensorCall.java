@@ -38,7 +38,7 @@ public class TensorCall extends TensorGenerator {
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> opPointsToSet =
         this.getArgumentPointsToSet(builder, Parameters.OP.getIndex(), Parameters.OP.getName());
-    if (opPointsToSet.isEmpty()) {
+    if (opPointsToSet == null || opPointsToSet.isEmpty()) {
       // `tf.Tensor(...)` is always a tensor; we just can't determine its shape
       // from an unresolvable `op` argument. Return ⊤ (null), not ⊥ (empty set).
       return null;

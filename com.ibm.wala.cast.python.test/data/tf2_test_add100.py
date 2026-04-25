@@ -11,8 +11,8 @@ assert a.shape == (10, 2)
 assert a.dtype == tf.float32
 
 b = tf.random.gamma([10], [1, 2.5])
-assert isinstance(a, tf.Tensor)
+assert isinstance(b, tf.Tensor)
 assert b.shape == (10, 2)
-assert a.dtype == tf.float32
+assert b.dtype == tf.float32
 
 c = add(a, b)

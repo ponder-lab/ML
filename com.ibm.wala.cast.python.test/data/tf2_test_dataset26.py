@@ -42,7 +42,7 @@ for element in dataset:
     assert arg2.shape == (2,)
     g1(arg2)
 
-    assert len(element[1] == 2)
+    assert len(element[1]) == 2
     arg3 = element[1][0]
     assert isinstance(arg3, tf.Tensor)
     assert arg3.dtype == tf.int32
