@@ -7,18 +7,23 @@ def f(a):
     pass
 
 
-# `json.loads` is not modeled by the static analyzer — its return value has empty PTS, so the
-# resulting `tf.keras.Input(shape=...)` call's `shape` argument is unresolvable from Ariadne's
-# perspective. This drives `Input.getShapes` through the default-shape path that wala/ML#355 fixed.
+# Regression vehicle for wala/ML#355: drives `Input.getShapes` through the unresolvable-shape
+# default path. `json.loads` is intentionally chosen because Ariadne does not model it (its
+# return-value PTS is empty), so the static analyzer cannot resolve the `shape` argument here even
+# though the runtime trivially can.
 #
-# The static-analysis expectation is `TensorType(float32, null)` — a tensor with concrete dtype
-# and ⊤ shape, NOT ⊥ (which would silently drop the variable from downstream analysis). We
-# deliberately do NOT assert `arg.shape` here: the runtime shape is `(None, 32)`, but the analyzer
-# legitimately cannot recover this (the whole point of the test is the unresolvable-shape path),
-# so a runtime shape assert would mismatch the JUnit expectation. Only `dtype` is asserted because
-# both runtime and analyzer agree there.
+# The asymmetry between the runtime shape `(None, 32)` and the JUnit expectation
+# `TENSOR_UNKNOWN_SHAPE_FLOAT32` (⊤-dims, float32) is therefore *deliberate* — it documents the
+# graceful-degradation property of the lattice: when one axis (here, shape) is unresolvable, the
+# orthogonal axis (dtype) still carries `float32` rather than collapsing to ⊥. wala/ML#355 was
+# specifically about ensuring `Input.getDefaultShapes` returns ⊤ in this case, not ⊥.
+#
+# Both asserts are kept (and run): the shape assert documents the runtime truth so a future
+# reader can gauge how much the analyzer is leaving on the table; the dtype assert is the part
+# that the JUnit expectation matches.
 shape = json.loads("[32]")
 arg = tf.keras.Input(shape=shape)
+assert arg.shape == (None, 32)
 assert arg.dtype == tf.float32
 
 f(arg)
