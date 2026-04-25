@@ -11,13 +11,14 @@ def f(a):
 # resulting `tf.keras.Input(shape=...)` call's `shape` argument is unresolvable from Ariadne's
 # perspective. This drives `Input.getShapes` through the default-shape path that wala/ML#355 fixed.
 #
-# Runtime: `arg.shape == (None, 32)` and `arg.dtype == tf.float32`. Analyzer expectation
-# (post-#355): the call result is recognized as a tensor with ⊤ shape (`null` dims) and known
-# `float32` dtype — i.e. `TensorType(float32, null)`, NOT ⊥ (which would silently drop the
-# variable from downstream analysis).
+# The static-analysis expectation is `TensorType(float32, null)` — a tensor with concrete dtype
+# and ⊤ shape, NOT ⊥ (which would silently drop the variable from downstream analysis). We
+# deliberately do NOT assert `arg.shape` here: the runtime shape is `(None, 32)`, but the analyzer
+# legitimately cannot recover this (the whole point of the test is the unresolvable-shape path),
+# so a runtime shape assert would mismatch the JUnit expectation. Only `dtype` is asserted because
+# both runtime and analyzer agree there.
 shape = json.loads("[32]")
 arg = tf.keras.Input(shape=shape)
-assert arg.shape == (None, 32)
 assert arg.dtype == tf.float32
 
 f(arg)
