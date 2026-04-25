@@ -538,10 +538,6 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> drops,
       Map<PointerKey, AnalysisError> errorLog) {
     super(createProblem(G, reshapeTypes, set_shapes, conv2ds, conv3ds, drops, errorLog));
-    System.err.println("TensorTypeAnalysis reshapeNodes size: " + reshapeTypes.size());
-    for (PointsToSetVariable v : reshapeTypes.keySet()) {
-      System.err.println("reshapeNode: " + v.getPointerKey());
-    }
     this.init = init;
   }
 

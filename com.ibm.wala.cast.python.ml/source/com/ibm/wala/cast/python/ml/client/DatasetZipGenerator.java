@@ -60,7 +60,6 @@ public class DatasetZipGenerator extends DatasetGenerator implements TupleElemen
             builder, Parameters.DATASETS.getIndex(), Parameters.DATASETS.getName());
 
     if (datasetsPTS != null && !datasetsPTS.isEmpty()) {
-      System.out.println("datasetsPTS is NOT empty");
       for (InstanceKey ik : datasetsPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin != null
@@ -114,7 +113,6 @@ public class DatasetZipGenerator extends DatasetGenerator implements TupleElemen
             builder, Parameters.DATASETS.getIndex(), Parameters.DATASETS.getName());
 
     if (datasetsPTS != null && !datasetsPTS.isEmpty()) {
-      System.out.println("datasetsPTS is NOT empty");
       Set<TensorType> ret = HashSetFactory.make();
       for (InstanceKey ik : datasetsPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
