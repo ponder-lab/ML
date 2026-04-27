@@ -151,6 +151,11 @@
         <new def="reduce_mean" class="Ltensorflow/math/reduce_mean" />
         <putfield class="LRoot" field="reduce_mean" fieldType="LRoot" ref="x" value="reduce_mean" />
         <putfield class="LRoot" field="reduce_mean" fieldType="LRoot" ref="math" value="reduce_mean" />
+        <!-- `tf.reduce_sum` is an alias for `tf.math.reduce_sum`. Mirror the `reduce_mean` pattern (alias under both `tensorflow` and `tensorflow.math`) so attribute lookups on either path resolve to the same `Ltensorflow/math/reduce_sum` class — which `ReduceSum.java` (registered in `TensorGeneratorFactory`)
+          dispatches on. -->
+        <new def="reduce_sum" class="Ltensorflow/math/reduce_sum" />
+        <putfield class="LRoot" field="reduce_sum" fieldType="LRoot" ref="x" value="reduce_sum" />
+        <putfield class="LRoot" field="reduce_sum" fieldType="LRoot" ref="math" value="reduce_sum" />
         <!-- `tf.argmax` is an alias for `tf.math.argmax` in real TensorFlow. Expose the same `tensorflow/math/argmax` class under both the top-level `tensorflow` namespace and `tensorflow.math` so attribute lookups on either path resolve. See wala/ML#386. -->
         <new def="argmax" class="Ltensorflow/math/argmax" />
         <putfield class="LRoot" field="argmax" fieldType="LRoot" ref="x" value="argmax" />
