@@ -75,6 +75,8 @@
                 <exclude>META-INF/*.SF</exclude>
                 <exclude>META-INF/*.DSA</exclude>
                 <exclude>META-INF/*.RSA</exclude>
+                <!-- Default-package classes break OSGi bundle wrapping in downstream consumers (Tycho 5+ bnd rejects them); ProxyDeserialization is an unused orphan from jython3. -->
+                <exclude>ProxyDeserialization.class</exclude>
               </excludes>
             </filter>
           </filters>
