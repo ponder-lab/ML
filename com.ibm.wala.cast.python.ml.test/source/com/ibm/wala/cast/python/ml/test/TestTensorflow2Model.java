@@ -3827,6 +3827,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_reduce_mean.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
+  /**
+   * Verifies that {@code tf.estimator.EstimatorSpec(...)} produces a fresh allocation with each
+   * named parameter stored as a field on the result. The test reads {@code spec.loss} and asserts
+   * that it round-trips back to the original {@code loss_tensor} (a scalar float32). If
+   * EstimatorSpec is mis-modeled as "return one of the inputs" instead of "fresh allocation with
+   * field sets," the read would either return the wrong dtype or fail to resolve. Exercises the
+   * binding + body fix from wala/ML#429.
+   */
+  @Test
+  public void testEstimatorSpec()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_estimator_spec.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
   @Test
   public void testReduceMean2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {

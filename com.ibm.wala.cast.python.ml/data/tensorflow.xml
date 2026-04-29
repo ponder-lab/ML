@@ -81,6 +81,9 @@
         <putfield class="LRoot" field="run" fieldType="LRoot" ref="app" value="run" />
         <new def="Estimator" class="Ltensorflow/estimator/Estimator" />
         <putfield class="LRoot" field="Estimator" fieldType="LRoot" ref="estimator" value="Estimator" />
+        <!-- https://www.tensorflow.org/api_docs/python/tf/estimator/EstimatorSpec — return type of model_fn. -->
+        <new def="EstimatorSpec" class="Ltensorflow/estimator/EstimatorSpec" />
+        <putfield class="LRoot" field="EstimatorSpec" fieldType="LRoot" ref="estimator" value="EstimatorSpec" />
         <new def="GradientTape" class="Ltensorflow/GradientTape" />
         <putfield class="LRoot" field="GradientTape" fieldType="LRoot" ref="x" value="GradientTape" />
         <!-- https://www.tensorflow.org/api_docs/python/tf#newaxis — at runtime this is `None` (used in subscripts like `x[..., tf.newaxis]` to insert a size-1 dimension). Modeled as an allocation of the sentinel class `Ltensorflow/newaxis` so `NdarraySubscriptOperation.classifyField` can recognize it
@@ -950,8 +953,16 @@
         </method>
       </class>
       <class name="EstimatorSpec" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/estimator/EstimatorSpec — fresh allocation (not pass-through) so the resulting spec is a distinct object from any input. Each named parameter is stored as a field on the result, mirroring the namedtuple shape of the real API. See wala/ML#429. -->
         <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self mode predictions loss train_op eval_metric_ops export_outputs">
-          <return value="eval_metric_ops" />
+          <new def="res" class="Ltensorflow/estimator/EstimatorSpec" />
+          <putfield class="LRoot" field="mode" fieldType="LRoot" ref="res" value="mode" />
+          <putfield class="LRoot" field="predictions" fieldType="LRoot" ref="res" value="predictions" />
+          <putfield class="LRoot" field="loss" fieldType="LRoot" ref="res" value="loss" />
+          <putfield class="LRoot" field="train_op" fieldType="LRoot" ref="res" value="train_op" />
+          <putfield class="LRoot" field="eval_metric_ops" fieldType="LRoot" ref="res" value="eval_metric_ops" />
+          <putfield class="LRoot" field="export_outputs" fieldType="LRoot" ref="res" value="export_outputs" />
+          <return value="res" />
         </method>
       </class>
       <class name="numpy_input_fn" allocatable="true">
