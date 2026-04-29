@@ -13,10 +13,35 @@ public class Python3Interpreter extends com.ibm.wala.cast.python.util.PythonInte
 
   private static PythonInterpreter interp;
 
+  /**
+   * Memoizes a failed Jython init so subsequent {@link #getInterp()} calls return {@code null}
+   * cheaply instead of re-running {@code new PythonInterpreter()} (which can be expensive when it
+   * fails — site-import walks the Jython resource path on every attempt). When a single failure has
+   * occurred, callers receive {@code null} and can degrade their behavior (e.g., {@link
+   * com.ibm.wala.cast.python.loader.Python3Loader} skips constant folding).
+   */
+  private static volatile boolean initFailed = false;
+
   public static PythonInterpreter getInterp() {
+    if (initFailed) return null;
     if (interp == null) {
-      PySystemState.initialize();
-      interp = new PythonInterpreter();
+      try {
+        PySystemState.initialize();
+        interp = new PythonInterpreter();
+      } catch (Throwable t) {
+        // Jython init can fail when bootstrap resources (e.g., the embedded
+        // _frozen_importlib bytecode used by org.python.core.imp) aren't reachable from the
+        // current classloader/working directory. This is environment-dependent (e.g., happens
+        // under Tycho-OSGi but not under plain Maven-surefire). Treat as a recoverable failure:
+        // log once, memoize, and let callers degrade gracefully.
+        initFailed = true;
+        LOGGER.log(
+            Level.WARNING,
+            t,
+            () ->
+                "Jython interpreter init failed; constant folding will be disabled for this run.");
+        return null;
+      }
     }
     return interp;
   }

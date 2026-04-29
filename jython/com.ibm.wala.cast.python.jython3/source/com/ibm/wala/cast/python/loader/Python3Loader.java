@@ -108,8 +108,15 @@ public class Python3Loader extends PythonLoader {
                 PyUnicode unicode = new PyUnicode(s);
                 PyObject x;
 
+                org.python.util.PythonInterpreter ip = Python3Interpreter.getInterp();
+                if (ip == null) {
+                  // Jython init failed (memoized in Python3Interpreter). Skip constant folding
+                  // for this expression; analysis remains correct, just less precise.
+                  return null;
+                }
+
                 try {
-                  x = Python3Interpreter.getInterp().eval(unicode);
+                  x = ip.eval(unicode);
                 } catch (PySyntaxError e) {
                   // Handle syntax errors gracefully.
                   logger.log(WARNING, e, () -> "Syntax error in expression: " + unicode);
