@@ -75,6 +75,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final String UINT_8 = DType.UINT8.name().toLowerCase();
 
+  private static final String BOOL = DType.BOOL.name().toLowerCase();
+
   private static final String STRING = DType.STRING.name().toLowerCase();
 
   private static final TensorType MNIST_INPUT = mnistInput();
@@ -324,6 +326,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_4_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(4)));
+
+  private static final TensorType TENSOR_2_2_BOOL =
+      new TensorType(BOOL, asList(new NumericDim(2), new NumericDim(2)));
 
   private static final TensorType TENSOR_4_FLOAT64 =
       new TensorType(FLOAT_64, asList(new NumericDim(4)));
@@ -2081,6 +2086,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testSigmoid2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_sigmoid2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32)));
+  }
+
+  /**
+   * Verifies that {@code tf.equal} returns a {@code tf.bool}-dtype tensor with the broadcasted
+   * shape of its inputs, regardless of input dtype. Exercises the {@link ComparisonOperation}
+   * generator (introduced for wala/ML#427) — the dtype must be BOOL even though both operands are
+   * float32.
+   */
+  @Test
+  public void testEqual()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_equal.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_BOOL)));
   }
 
   @Test

@@ -872,7 +872,7 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, PLACEHOLDER.getDeclaringClass()))
       return new Placeholder(source);
     else if (isType(calledFunction, EQUAL.getDeclaringClass()))
-      return new ElementWiseOperation(source);
+      return new ComparisonOperation(source);
     else if (isType(calledFunction, SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass())
         || isType(calledFunction, SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass()))
       return new SoftmaxCrossEntropy(source);
