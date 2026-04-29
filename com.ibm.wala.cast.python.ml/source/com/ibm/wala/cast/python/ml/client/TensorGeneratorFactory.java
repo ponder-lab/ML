@@ -445,12 +445,11 @@ public class TensorGeneratorFactory {
    * PropagationCallGraphBuilder)}. Threads a set of already-visited sources through the recursive
    * walk so that self-referential functions (e.g. an {@code @tf.function}-decorated Python function
    * that returns a recursive call to itself) don't drive {@code getGenerator} into unbounded
-   * recursion via the return-value follow-through ({@link
-   * #getGeneratorForInvoke(PointsToSetVariable, SSAAbstractInvokeInstruction, CGNode, int,
-   * PropagationCallGraphBuilder, Set)} body) and the assignment-graph predecessor walk (the {@code
-   * ReturnValueKey} fallback). When a {@link PointsToSetVariable} is re-encountered along a single
-   * dispatch chain, this method returns {@code null} so the outer dispatch loop can try other
-   * candidate callees / predecessors. See wala/ML#435.
+   * recursion via the return-value follow-through in this method's {@code
+   * SSAAbstractInvokeInstruction} handling branch and the assignment-graph predecessor walk (the
+   * {@code ReturnValueKey} fallback). When a {@link PointsToSetVariable} is re-encountered along a
+   * single dispatch chain, this method returns {@code null} so the outer dispatch loop can try
+   * other candidate callees / predecessors. See wala/ML#435.
    */
   private static TensorGenerator getGenerator(
       PointsToSetVariable source,

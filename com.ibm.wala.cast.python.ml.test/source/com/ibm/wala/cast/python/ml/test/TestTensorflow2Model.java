@@ -2112,6 +2112,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_not_equal.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_BOOL)));
   }
 
+  /**
+   * Regression test for wala/ML#435: a {@code @tf.function}-decorated Python function that returns
+   * a recursive call to itself used to drive {@link
+   * com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory#getGenerator(
+   * com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable,
+   * com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder)} into unbounded recursion
+   * via the return-value follow-through and the assignment-graph predecessor walk, ending in {@code
+   * StackOverflowError}. The cycle guard added in this PR returns {@code null} when a {@code
+   * PointsToSetVariable} is re-encountered along a single dispatch chain. With the cycle guard in
+   * place, the recursive call's return value still resolves through its base-case branch — the
+   * input {@code tf.constant(1)} (a scalar int32 tensor) flows back to {@code f}'s parameter.
+   */
+  @Test
+  public void testRecursiveFunction()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_recursive_function.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
   @Test
   public void testAdd()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
