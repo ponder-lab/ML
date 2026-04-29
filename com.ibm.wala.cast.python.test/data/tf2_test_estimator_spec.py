@@ -12,7 +12,7 @@ assert loss_tensor.shape == ()
 assert loss_tensor.dtype == tf.float32
 
 spec = tf.estimator.EstimatorSpec(
-    mode="train",
+    mode=tf.estimator.ModeKeys.EVAL,
     predictions=None,
     loss=loss_tensor,
     train_op=None,
