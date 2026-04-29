@@ -22,18 +22,22 @@ public class Python3Interpreter extends com.ibm.wala.cast.python.util.PythonInte
    */
   private static volatile boolean initFailed = false;
 
-  public static PythonInterpreter getInterp() {
+  public static synchronized PythonInterpreter getInterp() {
     if (initFailed) return null;
     if (interp == null) {
       try {
         PySystemState.initialize();
         interp = new PythonInterpreter();
-      } catch (Throwable t) {
+      } catch (Exception t) {
         // Jython init can fail when bootstrap resources (e.g., the embedded
         // _frozen_importlib bytecode used by org.python.core.imp) aren't reachable from the
         // current classloader/working directory. This is environment-dependent (e.g., happens
         // under Tycho-OSGi but not under plain Maven-surefire). Treat as a recoverable failure:
         // log once, memoize, and let callers degrade gracefully.
+        //
+        // We catch {@link Exception} (not {@link Throwable}) so that {@link Error} types
+        // (OOM, stack overflow, linkage errors) keep propagating to the caller — those signal
+        // serious VM problems we don't want to silently swallow and continue past.
         initFailed = true;
         LOGGER.log(
             Level.WARNING,
@@ -47,8 +51,15 @@ public class Python3Interpreter extends com.ibm.wala.cast.python.util.PythonInte
   }
 
   public Integer evalAsInteger(String expr) {
+    PythonInterpreter ip = getInterp();
+    if (ip == null) {
+      throw new IllegalStateException(
+          "Jython interpreter unavailable (init failed earlier); cannot evaluate expression: "
+              + expr
+              + ".");
+    }
     try {
-      PyObject val = getInterp().eval(expr);
+      PyObject val = ip.eval(expr);
       if (val.isInteger()) {
         return val.asInt();
       } else
