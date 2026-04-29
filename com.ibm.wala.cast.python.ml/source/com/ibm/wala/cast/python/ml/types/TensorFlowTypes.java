@@ -34,6 +34,7 @@ public class TensorFlowTypes extends PythonTypes {
     INT32(true, false, 32),
     INT64(true, false, 64),
     UINT8(true, false, 8),
+    BOOL(false, false, 1),
     STRING(false, false, 0),
     UNKNOWN(false, false, 0);
 
@@ -827,6 +828,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String EQUAL_SIGNATURE = "tf.equal()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/math/not_equal. */
+  public static final MethodReference NOT_EQUAL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/not_equal")),
+          AstMethodReference.fnSelector);
+
+  private static final String NOT_EQUAL_SIGNATURE = "tf.not_equal()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/cast. */
   public static final MethodReference CAST =
       MethodReference.findOrCreate(
@@ -1074,6 +1084,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(PLACEHOLDER.getDeclaringClass(), PLACEHOLDER_SIGNATURE),
           Map.entry(ARGMAX.getDeclaringClass(), ARGMAX_SIGNATURE),
           Map.entry(EQUAL.getDeclaringClass(), EQUAL_SIGNATURE),
+          Map.entry(NOT_EQUAL.getDeclaringClass(), NOT_EQUAL_SIGNATURE),
           Map.entry(CAST.getDeclaringClass(), CAST_SIGNATURE),
           Map.entry(
               SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass(),
