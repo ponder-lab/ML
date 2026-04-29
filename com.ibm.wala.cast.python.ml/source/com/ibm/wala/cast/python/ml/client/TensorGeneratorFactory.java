@@ -63,6 +63,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MULTIPLY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NDARRAY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL_OP;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NOT_EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NUMPY_ARRAY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NUMPY_RESHAPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONES;
@@ -872,6 +873,8 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, PLACEHOLDER.getDeclaringClass()))
       return new Placeholder(source);
     else if (isType(calledFunction, EQUAL.getDeclaringClass()))
+      return new ComparisonOperation(source);
+    else if (isType(calledFunction, NOT_EQUAL.getDeclaringClass()))
       return new ComparisonOperation(source);
     else if (isType(calledFunction, SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass())
         || isType(calledFunction, SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass()))

@@ -2100,6 +2100,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_equal.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_BOOL)));
   }
 
+  /**
+   * Same as {@link #testEqual} but for {@code tf.not_equal} — verifies the {@link
+   * ComparisonOperation} dispatch scales beyond a single op. Establishes the pattern for the
+   * remaining comparison ops ({@code tf.less}, {@code tf.less_equal}, {@code tf.greater}, {@code
+   * tf.greater_equal}).
+   */
+  @Test
+  public void testNotEqual()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_not_equal.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_BOOL)));
+  }
+
   @Test
   public void testAdd()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
