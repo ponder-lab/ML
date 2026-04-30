@@ -89,6 +89,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType SCALAR_TENSOR_OF_STRING = new TensorType(STRING, emptyList());
 
+  private static final TensorType SCALAR_TENSOR_OF_BOOL = new TensorType(BOOL, emptyList());
+
+  private static final TensorType TENSOR_3_BOOL = new TensorType(BOOL, asList(new NumericDim(3)));
+
   private static final TensorType TENSOR_1_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(2)));
 
@@ -3953,6 +3957,27 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testReduceSum3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_reduce_sum.py", "h", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+  }
+
+  /**
+   * Regression test for `wala/ML#447`: scalar `tf.constant(<bool>)` exercises the {@link
+   * java.lang.Boolean} arm of {@code TensorGenerator.getDTypesOfValue}. Without it, dtype inference
+   * threw {@code IllegalStateException: Unknown constant type: class java.lang.Boolean}.
+   */
+  @Test
+  public void testBoolConstant()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_bool_constant.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_BOOL)));
+  }
+
+  /**
+   * List-of-bool form of {@link #testBoolConstant} — exercises the recursive {@code
+   * getDTypesOfValue} call (line 1625) on a list whose elements are `Boolean` constants.
+   */
+  @Test
+  public void testBoolConstant2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_bool_constant.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_3_BOOL)));
   }
 
   @Test

@@ -5,6 +5,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT_OP_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CHOOSE_FROM_DATASETS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SAMPLE_FROM_DATASETS_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.BOOL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
@@ -1583,6 +1584,16 @@ public abstract class TensorGenerator {
           LOGGER.info(
               "Inferred dtype: "
                   + STRING
+                  + " for source: "
+                  + this.getSource()
+                  + " from value: "
+                  + value
+                  + ".");
+        } else if (value instanceof Boolean) {
+          ret.add(BOOL);
+          LOGGER.info(
+              "Inferred dtype: "
+                  + BOOL
                   + " for source: "
                   + this.getSource()
                   + " from value: "
