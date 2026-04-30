@@ -403,9 +403,11 @@ public class TensorGeneratorFactory {
    * source. See wala/ML#363.
    */
   private static TensorGenerator tryGetGenerator(
-      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+      PointsToSetVariable source,
+      PropagationCallGraphBuilder builder,
+      Set<PointsToSetVariable> visited) {
     try {
-      return getGenerator(source, builder);
+      return getGenerator(source, builder, visited);
     } catch (IllegalArgumentException e) {
       LOGGER.log(Level.FINE, "tryGetGenerator: swallowed IAE for source=" + source, e);
       return null;
@@ -435,7 +437,57 @@ public class TensorGeneratorFactory {
    */
   public static TensorGenerator getGenerator(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    return getGenerator(source, builder, HashSetFactory.make());
+  }
+
+  /**
+   * Cycle-guarded internal version of {@link #getGenerator(PointsToSetVariable,
+   * PropagationCallGraphBuilder)}. Threads a set of already-visited sources through the recursive
+   * walk so that self-referential functions (e.g. a recursive Python function whose return value
+   * flows back into itself) don't drive {@code getGenerator} into unbounded recursion via the
+   * return-value follow-through in this method's {@code SSAAbstractInvokeInstruction} handling
+   * branch and the assignment-graph predecessor walk (the {@code ReturnValueKey} fallback). When a
+   * {@link PointsToSetVariable} is re-encountered along the current call chain, this method returns
+   * {@code null} so the outer dispatch loop can try other candidate callees / predecessors. See
+   * wala/ML#435.
+   *
+   * @implNote {@code visited} is used as a DFS recursion-stack set: a source is added on entry and
+   *     removed in a {@code finally} block before returning. This means only true cycles on the
+   *     current call path short-circuit; sibling sub-dispatches in the same top-level call can
+   *     re-visit a source freely without losing precision.
+   */
+  private static TensorGenerator getGenerator(
+      PointsToSetVariable source,
+      PropagationCallGraphBuilder builder,
+      Set<PointsToSetVariable> visited) {
     source = findCreator(source, builder);
+    if (!visited.add(source)) {
+      final PointsToSetVariable cycleSource = source;
+      LOGGER.log(
+          Level.FINE,
+          () ->
+              "getGenerator: cycle detected at source="
+                  + cycleSource
+                  + "; returning null so dispatch can try other branches.");
+      return null;
+    }
+    final PointsToSetVariable visitedSource = source;
+    try {
+      return getGeneratorBody(source, builder, visited);
+    } finally {
+      visited.remove(visitedSource);
+    }
+  }
+
+  /**
+   * Body of the cycle-guarded {@link #getGenerator(PointsToSetVariable,
+   * PropagationCallGraphBuilder, Set)}, extracted so the cycle guard can wrap the entire dispatch
+   * in a single {@code try}/{@code finally} (add on entry, remove on exit).
+   */
+  private static TensorGenerator getGeneratorBody(
+      PointsToSetVariable source,
+      PropagationCallGraphBuilder builder,
+      Set<PointsToSetVariable> visited) {
     PointerKey k = source.getPointerKey();
     if (k instanceof LocalPointerKey) {
       LocalPointerKey lpk = (LocalPointerKey) k;
@@ -462,7 +514,7 @@ public class TensorGeneratorFactory {
                 builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
             PointsToSetVariable iterableSrc = getPointsToSetVariable(iterableKey, builder);
             return (iterableSrc != null)
-                ? new EnumerateGenerator(source, tryGetGenerator(iterableSrc, builder))
+                ? new EnumerateGenerator(source, tryGetGenerator(iterableSrc, builder, visited))
                 : null;
           }
 
@@ -477,7 +529,7 @@ public class TensorGeneratorFactory {
                 builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
             PointsToSetVariable iterableSrc = getPointsToSetVariable(iterableKey, builder);
             return (iterableSrc != null)
-                ? new IteratorGenerator(source, tryGetGenerator(iterableSrc, builder))
+                ? new IteratorGenerator(source, tryGetGenerator(iterableSrc, builder, visited))
                 : null;
           }
 
@@ -528,7 +580,7 @@ public class TensorGeneratorFactory {
                 builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
             PointsToSetVariable iterableSrc = getPointsToSetVariable(iterableKey, builder);
             if (iterableSrc == null) return null;
-            TensorGenerator containerGenerator = tryGetGenerator(iterableSrc, builder);
+            TensorGenerator containerGenerator = tryGetGenerator(iterableSrc, builder, visited);
 
             while (containerGenerator instanceof DelegatingTensorGenerator) {
               containerGenerator = ((DelegatingTensorGenerator) containerGenerator).getUnderlying();
@@ -564,7 +616,7 @@ public class TensorGeneratorFactory {
                             .getPointerKeyForLocal(creatorNode, 2);
                     PointsToSetVariable iterArgSrc = getPointsToSetVariable(iterArgKey, builder);
                     if (iterArgSrc != null) {
-                      containerGenerator = tryGetGenerator(iterArgSrc, builder);
+                      containerGenerator = tryGetGenerator(iterArgSrc, builder, visited);
                       if (containerGenerator != null) break;
                     }
                   }
@@ -584,7 +636,7 @@ public class TensorGeneratorFactory {
             // unresolved callee doesn't abort dispatch for the whole source — the outer
             // loop should try the remaining candidate callees, and failing that fall through
             // to the `ReturnValueKey` / assignment-graph fallback below. See wala/ML#363.
-            TensorGenerator fromRet = tryGetGenerator(retSrc, builder);
+            TensorGenerator fromRet = tryGetGenerator(retSrc, builder, visited);
             if (fromRet != null) return fromRet;
           }
         }
@@ -596,7 +648,7 @@ public class TensorGeneratorFactory {
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, iterableVn);
         PointsToSetVariable iterableSrc = getPointsToSetVariable(iterableKey, builder);
         if (iterableSrc == null) return null;
-        TensorGenerator containerGenerator = tryGetGenerator(iterableSrc, builder);
+        TensorGenerator containerGenerator = tryGetGenerator(iterableSrc, builder, visited);
 
         // We have a generator for the container (the object being iterated over).
         // If the container is a `Dataset` (e.g., `tf.data.Dataset`), its generator
@@ -617,7 +669,7 @@ public class TensorGeneratorFactory {
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, objRef);
         PointsToSetVariable objSrc = getPointsToSetVariable(objKey, builder);
         if (objSrc == null) return null;
-        TensorGenerator containerGenerator = tryGetGenerator(objSrc, builder);
+        TensorGenerator containerGenerator = tryGetGenerator(objSrc, builder, visited);
 
         TensorGenerator effectiveGenerator = containerGenerator;
         boolean changed = true;
@@ -900,7 +952,7 @@ public class TensorGeneratorFactory {
             it.hasNext(); ) {
           PointsToSetVariable pred = it.next();
           try {
-            TensorGenerator gen = getGenerator(pred, builder);
+            TensorGenerator gen = getGenerator(pred, builder, visited);
             if (gen != null) {
               return gen;
             }
