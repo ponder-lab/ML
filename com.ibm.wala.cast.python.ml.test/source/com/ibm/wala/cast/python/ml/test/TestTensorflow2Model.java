@@ -75,6 +75,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final String UINT_8 = DType.UINT8.name().toLowerCase();
 
+  private static final String BOOL = DType.BOOL.name().toLowerCase();
+
   private static final String STRING = DType.STRING.name().toLowerCase();
 
   private static final TensorType MNIST_INPUT = mnistInput();
@@ -324,6 +326,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_4_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(4)));
+
+  private static final TensorType TENSOR_2_2_BOOL =
+      new TensorType(BOOL, asList(new NumericDim(2), new NumericDim(2)));
 
   private static final TensorType TENSOR_4_FLOAT64 =
       new TensorType(FLOAT_64, asList(new NumericDim(4)));
@@ -2083,6 +2088,55 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_sigmoid2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32)));
   }
 
+  /**
+   * Verifies that {@code tf.equal} returns a {@code tf.bool}-dtype tensor with the broadcasted
+   * shape of its inputs, regardless of input dtype. Exercises the {@link ComparisonOperation}
+   * generator (introduced for wala/ML#427) — the dtype must be BOOL even though both operands are
+   * float32.
+   */
+  @Test
+  public void testEqual()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_equal.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_BOOL)));
+  }
+
+  /**
+   * Same as {@link #testEqual} but for {@code tf.not_equal} — verifies the {@link
+   * ComparisonOperation} dispatch scales beyond a single op. Establishes the pattern for the
+   * remaining comparison ops ({@code tf.less}, {@code tf.less_equal}, {@code tf.greater}, {@code
+   * tf.greater_equal}).
+   */
+  @Test
+  public void testNotEqual()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_not_equal.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_BOOL)));
+  }
+
+  /**
+   * Regression test for wala/ML#435: a recursive Python function whose return value flows back into
+   * itself used to drive {@link
+   * com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory#getGenerator(
+   * com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable,
+   * com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder)} into unbounded recursion
+   * via the return-value follow-through and the assignment-graph predecessor walk, ending in {@code
+   * StackOverflowError}. The cycle guard added in this PR returns {@code null} when a {@code
+   * PointsToSetVariable} is re-encountered along the current call chain. With the cycle guard in
+   * place, the recursive call's return value still resolves through its base-case branch — the
+   * input {@code tf.constant(1)} (a scalar int32 tensor) flows back to {@code f}'s parameter.
+   *
+   * <p>The Python test deliberately omits the {@code @tf.function} decorator. Empirically, the
+   * regression reproduces without it (verified by reverting the cycle guard locally — this test
+   * still SOes), and the decorated form would re-trace the recursive call at runtime and hit
+   * Python's recursion limit before the assertions could run. The undecorated form lets {@code
+   * python3.10} execute the file to completion with the {@code shape}/{@code dtype} assertions on
+   * {@code result} exercised.
+   */
+  @Test
+  public void testRecursiveFunction()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_recursive_function.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
   @Test
   public void testAdd()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -3825,6 +3879,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testReduceMean()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_reduce_mean.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  /**
+   * Verifies that {@code tf.estimator.EstimatorSpec(...)} produces a fresh allocation with each
+   * named parameter stored as a field on the result. The test reads {@code spec.loss} and asserts
+   * that it round-trips back to the original {@code loss_tensor} (a scalar float32). If
+   * EstimatorSpec is mis-modeled as "return one of the inputs" instead of "fresh allocation with
+   * field sets," the read would either return the wrong dtype or fail to resolve. Exercises the
+   * binding + body fix from wala/ML#429.
+   */
+  @Test
+  public void testEstimatorSpec()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_estimator_spec.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
   @Test

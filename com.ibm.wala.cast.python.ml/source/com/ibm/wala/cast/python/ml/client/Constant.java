@@ -46,7 +46,9 @@ public class Constant extends TensorGenerator {
             builder, this.getValueParameterPosition(), this.getValueParameterName());
     Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, pointsToSet);
     // An empty result means the shape could not be inferred — treat as unknown (null / ⊤).
-    return shapes.isEmpty() ? null : shapes;
+    // `getShapesOfValue` documents that it returns `null` (not an empty set) when the
+    // value's points-to set is empty; honor that contract instead of NPE-ing.
+    return (shapes == null || shapes.isEmpty()) ? null : shapes;
   }
 
   /**
@@ -64,7 +66,9 @@ public class Constant extends TensorGenerator {
     // An empty result means the dtype could not be inferred — treat as unknown
     // (⊤), mirroring the ⊤ treatment in getDefaultShapes. A `tf.constant` is
     // always a tensor; we just cannot pin down its dtype.
-    return dTypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : dTypes;
+    // `getDTypesOfValue` documents that it returns `null` (not an empty set) when
+    // the value's points-to set is empty; honor that contract instead of NPE-ing.
+    return (dTypes == null || dTypes.isEmpty()) ? EnumSet.of(DType.UNKNOWN) : dTypes;
   }
 
   protected int getValueArgumentValueNumber() {
