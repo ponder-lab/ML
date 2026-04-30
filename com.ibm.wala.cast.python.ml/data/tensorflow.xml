@@ -100,7 +100,8 @@
         <new def="Dataset" class="Ltensorflow/data/Dataset" />
         <putfield class="LRoot" field="Dataset" fieldType="LRoot" ref="data" value="Dataset" />
         <!--https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/TextLineDataset -->
-        <new def="TextLineDataset" class="Ltensorflow/data/Dataset" /> <!-- FIXME: Should *extend* `Dataset` -->
+        <!-- Distinct class type so the factory can dispatch to `TextLineDatasetGenerator` and seed iteration elements as 0-D string tensors (wala/ML#452). -->
+        <new def="TextLineDataset" class="Ltensorflow/data/TextLineDataset" />
         <putfield class="LRoot" field="TextLineDataset" fieldType="LRoot" ref="data" value="TextLineDataset" />
         <!--https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/TFRecordDataset -->
         <new def="TFRecordDataset" class="Ltensorflow/data/Dataset" /> <!-- FIXME: Should *extend* `Dataset` -->
@@ -2042,6 +2043,22 @@
         <method name="next" descriptor="()LRoot;" numArgs="1" paramNames="self">
           <getfield class="LRoot" field="dataset" fieldType="LRoot" ref="self" def="ds" />
           <return value="ds" />
+        </method>
+      </class>
+      <!-- Distinct type for `tf.data.TextLineDataset` so the factory dispatches to `TextLineDatasetGenerator` (intrinsic 0-D string element type). Mirrors `Dataset`'s iteration substrate (`__iter__` / `read_dataset` markers, `do` body) so iteration still materializes through `Ltensorflow/data/iterator`.
+        See wala/ML#452. -->
+      <class name="TextLineDataset" allocatable="true">
+        <method name="read_dataset" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <return value="self" />
+        </method>
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self filenames compression_type">
+          <call class="LRoot" name="read_dataset" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
+          <return value="x" />
+        </method>
+        <method name="__iter__" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="it" class="Ltensorflow/data/iterator" />
+          <putfield class="LRoot" field="dataset" fieldType="LRoot" ref="it" value="self" />
+          <return value="it" />
         </method>
       </class>
       <class name="shuffle" allocatable="true">

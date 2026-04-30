@@ -945,6 +945,26 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_dataset29.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_STRING)));
   }
 
+  /**
+   * Regression test for wala/ML#452: iterating a {@code tf.data.TextLineDataset} via {@code for
+   * element in dataset:} should classify each element as a 0-D string tensor. The receiving
+   * function {@code func}'s parameter at {@code vn=2} must therefore have type {@code
+   * SCALAR_TENSOR_OF_STRING}. Pre-fix, the analyzer's {@code TextLineDataset} model didn't preserve
+   * the per-element tensor type through the iteration substrate, leaving {@code func} with no
+   * tensor classification at all (downstream {@code Function.getHasTensorParameter()} reported
+   * false).
+   */
+  @Test
+  public void testTextLineDatasetIterationElementType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_textlinedataset_iter.py",
+        "func",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_STRING)));
+  }
+
   @Test
   public void testDataset30()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {

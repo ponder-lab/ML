@@ -305,6 +305,12 @@ public class TensorFlowTypes extends PythonTypes {
 
   public static final String DATASET_RANGE_SIGNATURE = "tf.data.Dataset.range()";
 
+  public static final TypeReference TEXT_LINE_DATASET_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/data/TextLineDataset"));
+
+  public static final String TEXT_LINE_DATASET_SIGNATURE = "tf.data.TextLineDataset()";
+
   public static final TypeReference DATASET_FROM_TENSOR_SLICES_TYPE =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset/from_tensor_slices"));
@@ -1020,6 +1026,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(DATASET_FILTER_TYPE, DATASET_FILTER_SIGNATURE),
           Map.entry(DATASET_FROM_TENSOR_SLICES_TYPE, DATASET_FROM_TENSOR_SLICES_SIGNATURE),
           Map.entry(DATASET_RANGE_TYPE, DATASET_RANGE_SIGNATURE),
+          Map.entry(TEXT_LINE_DATASET_TYPE, TEXT_LINE_DATASET_SIGNATURE),
           Map.entry(IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE, FLOW_FROM_DIRECTORY_SIGNATURE),
           Map.entry(DATASET_FROM_GENERATOR_TYPE, DATASET_FROM_GENERATOR_SIGNATURE),
           Map.entry(DATASET_FROM_TENSORS_TYPE, DATASET_FROM_TENSORS_SIGNATURE),
