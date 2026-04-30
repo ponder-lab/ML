@@ -38,6 +38,7 @@ import java.util.logging.Logger;
 import org.python.core.PyObject;
 import org.python.core.PySyntaxError;
 import org.python.core.PyUnicode;
+import org.python.util.PythonInterpreter;
 
 public class Python3Loader extends PythonLoader {
 
@@ -108,7 +109,7 @@ public class Python3Loader extends PythonLoader {
                 PyUnicode unicode = new PyUnicode(s);
                 PyObject x;
 
-                org.python.util.PythonInterpreter ip = Python3Interpreter.getInterp();
+                PythonInterpreter ip = Python3Interpreter.getInterp();
                 if (ip == null) {
                   // Jython init failed (memoized in Python3Interpreter). Skip constant folding
                   // for this expression; analysis remains correct, just less precise.
