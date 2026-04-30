@@ -9,6 +9,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.BOOL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.UNKNOWN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FIELD_REFERENCE_TO_DTYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.PLACEHOLDER;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW_TYPE;
@@ -1600,12 +1601,12 @@ public abstract class TensorGenerator {
                   + value
                   + ".");
         } else if (value != null) {
-          // Unrecognized value type. Return UNKNOWN to match the existing
-          // dtype-lattice contract (UNKNOWN = ⊤) instead of aborting the
-          // analysis with IllegalStateException. Same shape as the prior
-          // Boolean-case fix (#447): missing types should fall through to
-          // ⊤ in the lattice rather than terminate the analysis.
-          ret.add(com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.UNKNOWN);
+          // Unrecognized value type. ⊤ subsumes any concrete dtype already
+          // accumulated, so short-circuit with EnumSet.of(UNKNOWN) instead of
+          // adding UNKNOWN to `ret` (which would yield mixed sets like
+          // `{INT32, UNKNOWN}` and mislead downstream consumers). Same shape
+          // as the prior Boolean-case fix (#447): missing types should fall
+          // through to ⊤ in the lattice rather than terminate the analysis.
           final Object capturedValue = value;
           LOGGER.fine(
               () ->
@@ -1615,7 +1616,8 @@ public abstract class TensorGenerator {
                       + capturedValue
                       + " ("
                       + capturedValue.getClass()
-                      + "); using UNKNOWN dtype.");
+                      + "); collapsing to ⊤ (UNKNOWN dtype).");
+          return EnumSet.of(UNKNOWN);
         }
       } else if (valueIK instanceof AllocationSiteInNode) {
         AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
