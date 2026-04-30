@@ -22,6 +22,15 @@ public class Python3Interpreter extends com.ibm.wala.cast.python.util.PythonInte
    */
   private static volatile boolean initFailed = false;
 
+  /**
+   * Memoizes whether the "interpreter unavailable" warning has already been emitted from {@link
+   * #evalAsInteger(String)}. Without this, callers like {@code interpretAsInt} (invoked many times
+   * during shape inference) would flood logs with one WARNING per call after the first init
+   * failure. The first failure is already announced by the catch block in {@link #getInterp()};
+   * subsequent calls log at FINE level only.
+   */
+  private static volatile boolean unavailableWarned = false;
+
   public static synchronized PythonInterpreter getInterp() {
     if (initFailed) return null;
     if (interp == null) {
@@ -43,7 +52,9 @@ public class Python3Interpreter extends com.ibm.wala.cast.python.util.PythonInte
             Level.WARNING,
             t,
             () ->
-                "Jython interpreter init failed; constant folding will be disabled for this run.");
+                "Jython interpreter init failed; all interpreter-based evaluation will be disabled"
+                    + " for this run (constant folding in Python3Loader, shape-argument"
+                    + " evaluation via interpretAsInt/evalAsInteger, etc.).");
         return null;
       }
     }
@@ -59,12 +70,21 @@ public class Python3Interpreter extends com.ibm.wala.cast.python.util.PythonInte
       // nullable {@link Integer} and don't catch checked or runtime exceptions — degrade
       // gracefully in the same OSGi-classloader environments that triggered the {@link
       // #getInterp()} init failure in the first place.
-      LOGGER.log(
-          Level.WARNING,
-          () ->
-              "Jython interpreter unavailable (init failed earlier); cannot evaluate expression: "
-                  + expr
-                  + ". Returning null.");
+      //
+      // Log the first such call at WARNING (so operators see that some shape inference is being
+      // skipped because of the earlier init failure); subsequent calls log at FINE only, since
+      // the underlying init failure has already been announced from {@link #getInterp()}.
+      if (!unavailableWarned) {
+        unavailableWarned = true;
+        LOGGER.log(
+            Level.WARNING,
+            () ->
+                "Jython interpreter unavailable (init failed earlier); evalAsInteger will return"
+                    + " null for this and any subsequent calls. First skipped expression: "
+                    + expr);
+      } else {
+        LOGGER.log(Level.FINE, () -> "evalAsInteger returning null (interp unavailable): " + expr);
+      }
       return null;
     }
     try {
