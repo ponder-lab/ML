@@ -90,6 +90,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_SOFTMAX_C
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SUBTRACT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TEXT_LINE_DATASET_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TF_RESHAPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL_OP;
@@ -1008,6 +1009,8 @@ public class TensorGeneratorFactory {
       return new DatasetFromTensorsGenerator(source);
     else if (isType(calledFunction, DATASET_BATCH_TYPE)) return new DatasetBatchGenerator(source);
     else if (isType(calledFunction, DATASET_RANGE_TYPE)) return new DatasetRangeGenerator(source);
+    else if (isType(calledFunction, TEXT_LINE_DATASET_TYPE))
+      return new TextLineDatasetGenerator(source);
     else if (isType(calledFunction, DATASET_RANDOM_TYPE)) return new DatasetRandomGenerator(source);
     else if (isType(calledFunction, DATASET_FROM_GENERATOR_TYPE))
       return new DatasetFromGeneratorGenerator(source);
