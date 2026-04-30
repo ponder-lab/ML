@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.util;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.python.core.PyException;
@@ -28,8 +29,13 @@ public class Python3Interpreter extends com.ibm.wala.cast.python.util.PythonInte
    * during shape inference) would flood logs with one WARNING per call after the first init
    * failure. The first failure is already announced by the catch block in {@link #getInterp()};
    * subsequent calls log at FINE level only.
+   *
+   * <p>Uses {@link AtomicBoolean#compareAndSet} so the check-and-set is atomic — under concurrent
+   * call graph construction, multiple threads can race into the {@code if (ip == null)} branch
+   * simultaneously, and a non-atomic {@code volatile boolean} flag would let several of them all
+   * pass the check before any sets it, defeating the "log once" intent.
    */
-  private static volatile boolean unavailableWarned = false;
+  private static final AtomicBoolean unavailableWarned = new AtomicBoolean(false);
 
   public static synchronized PythonInterpreter getInterp() {
     if (initFailed) return null;
@@ -74,8 +80,7 @@ public class Python3Interpreter extends com.ibm.wala.cast.python.util.PythonInte
       // Log the first such call at WARNING (so operators see that some shape inference is being
       // skipped because of the earlier init failure); subsequent calls log at FINE only, since
       // the underlying init failure has already been announced from {@link #getInterp()}.
-      if (!unavailableWarned) {
-        unavailableWarned = true;
+      if (unavailableWarned.compareAndSet(false, true)) {
         LOGGER.log(
             Level.WARNING,
             () ->
