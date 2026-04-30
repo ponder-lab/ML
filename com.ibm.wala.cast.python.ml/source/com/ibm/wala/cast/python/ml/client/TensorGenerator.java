@@ -9,6 +9,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.BOOL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.UNKNOWN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FIELD_REFERENCE_TO_DTYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.PLACEHOLDER;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW_TYPE;
@@ -1599,8 +1600,23 @@ public abstract class TensorGenerator {
                   + " from value: "
                   + value
                   + ".");
-        } else if (value != null)
-          throw new IllegalStateException("Unknown constant type: " + value.getClass() + ".");
+        } else if (value != null) {
+          // Unrecognized value type. Add UNKNOWN to `ret` and let the
+          // end-of-function lattice-collapse normalize: if any path produces
+          // UNKNOWN, the final result is {UNKNOWN} regardless of what other
+          // iterations contributed. Same shape as the prior Boolean-case fix
+          // (#447): missing types should fall through to ⊤ in the lattice
+          // rather than terminate the analysis.
+          ret.add(UNKNOWN);
+          LOGGER.info(
+              "Unrecognized constant type for source: "
+                  + this.getSource()
+                  + " value: "
+                  + value
+                  + " ("
+                  + value.getClass()
+                  + "); contributing UNKNOWN dtype.");
+        }
       } else if (valueIK instanceof AllocationSiteInNode) {
         AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
         TypeReference reference = asin.getConcreteType().getReference();
@@ -1679,6 +1695,14 @@ public abstract class TensorGenerator {
       }
     }
 
+    // Normalize the lattice: ⊤ subsumes any concrete dtype, so if any
+    // contributing path produced UNKNOWN (either directly via the
+    // unrecognized-constant short-circuit above, or via a recursive call
+    // for list/tuple element dtypes that propagated UNKNOWN through
+    // `ret.addAll(...)`), collapse to {UNKNOWN}. Without this, recursive
+    // accumulation could yield mixed sets like `{INT32, UNKNOWN}` and
+    // mislead downstream consumers.
+    if (ret.contains(UNKNOWN)) return EnumSet.of(UNKNOWN);
     return ret;
   }
 
