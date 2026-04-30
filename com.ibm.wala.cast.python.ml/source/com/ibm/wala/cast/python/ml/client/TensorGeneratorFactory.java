@@ -138,6 +138,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -1047,8 +1048,8 @@ public class TensorGeneratorFactory {
    * single class-hierarchy scan and reused thereafter so the {@code read_data}-pattern fallback's
    * predicate check is O(1) per call instead of O(|CHA|).
    */
-  private static final java.util.WeakHashMap<IClassHierarchy, Set<String>>
-      TENSORFLOW_READ_DATA_PROPERTY_NAMES_CACHE = new java.util.WeakHashMap<>();
+  private static final WeakHashMap<IClassHierarchy, Set<String>>
+      TENSORFLOW_READ_DATA_PROPERTY_NAMES_CACHE = new WeakHashMap<>();
 
   /**
    * Returns the set of property names whose {@code Ltensorflow/.../<name>/read_data} trampoline
