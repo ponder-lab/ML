@@ -443,13 +443,18 @@ public class TensorGeneratorFactory {
   /**
    * Cycle-guarded internal version of {@link #getGenerator(PointsToSetVariable,
    * PropagationCallGraphBuilder)}. Threads a set of already-visited sources through the recursive
-   * walk so that self-referential functions (e.g. an {@code @tf.function}-decorated Python function
-   * that returns a recursive call to itself) don't drive {@code getGenerator} into unbounded
-   * recursion via the return-value follow-through in this method's {@code
-   * SSAAbstractInvokeInstruction} handling branch and the assignment-graph predecessor walk (the
-   * {@code ReturnValueKey} fallback). When a {@link PointsToSetVariable} is re-encountered along a
-   * single dispatch chain, this method returns {@code null} so the outer dispatch loop can try
-   * other candidate callees / predecessors. See wala/ML#435.
+   * walk so that self-referential functions (e.g. a recursive Python function whose return value
+   * flows back into itself) don't drive {@code getGenerator} into unbounded recursion via the
+   * return-value follow-through in this method's {@code SSAAbstractInvokeInstruction} handling
+   * branch and the assignment-graph predecessor walk (the {@code ReturnValueKey} fallback). When a
+   * {@link PointsToSetVariable} is re-encountered along the current call chain, this method returns
+   * {@code null} so the outer dispatch loop can try other candidate callees / predecessors. See
+   * wala/ML#435.
+   *
+   * @implNote {@code visited} is used as a DFS recursion-stack set: a source is added on entry and
+   *     removed in a {@code finally} block before returning. This means only true cycles on the
+   *     current call path short-circuit; sibling sub-dispatches in the same top-level call can
+   *     re-visit a source freely without losing precision.
    */
   private static TensorGenerator getGenerator(
       PointsToSetVariable source,
@@ -466,6 +471,23 @@ public class TensorGeneratorFactory {
                   + "; returning null so dispatch can try other branches.");
       return null;
     }
+    final PointsToSetVariable visitedSource = source;
+    try {
+      return getGeneratorBody(source, builder, visited);
+    } finally {
+      visited.remove(visitedSource);
+    }
+  }
+
+  /**
+   * Body of the cycle-guarded {@link #getGenerator(PointsToSetVariable,
+   * PropagationCallGraphBuilder, Set)}, extracted so the cycle guard can wrap the entire dispatch
+   * in a single {@code try}/{@code finally} (add on entry, remove on exit).
+   */
+  private static TensorGenerator getGeneratorBody(
+      PointsToSetVariable source,
+      PropagationCallGraphBuilder builder,
+      Set<PointsToSetVariable> visited) {
     PointerKey k = source.getPointerKey();
     if (k instanceof LocalPointerKey) {
       LocalPointerKey lpk = (LocalPointerKey) k;

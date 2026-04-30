@@ -2113,16 +2113,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Regression test for wala/ML#435: a {@code @tf.function}-decorated Python function that returns
-   * a recursive call to itself used to drive {@link
+   * Regression test for wala/ML#435: a recursive Python function whose return value flows back into
+   * itself used to drive {@link
    * com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory#getGenerator(
    * com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable,
    * com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder)} into unbounded recursion
    * via the return-value follow-through and the assignment-graph predecessor walk, ending in {@code
    * StackOverflowError}. The cycle guard added in this PR returns {@code null} when a {@code
-   * PointsToSetVariable} is re-encountered along a single dispatch chain. With the cycle guard in
+   * PointsToSetVariable} is re-encountered along the current call chain. With the cycle guard in
    * place, the recursive call's return value still resolves through its base-case branch — the
    * input {@code tf.constant(1)} (a scalar int32 tensor) flows back to {@code f}'s parameter.
+   *
+   * <p>The Python test deliberately omits the {@code @tf.function} decorator. Empirically, the
+   * regression reproduces without it (verified by reverting the cycle guard locally — this test
+   * still SOes), and the decorated form would re-trace the recursive call at runtime and hit
+   * Python's recursion limit before the assertions could run. The undecorated form lets {@code
+   * python3.10} execute the file to completion with the {@code shape}/{@code dtype} assertions on
+   * {@code result} exercised.
    */
   @Test
   public void testRecursiveFunction()
