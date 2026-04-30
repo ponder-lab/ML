@@ -120,6 +120,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey;
+import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
@@ -129,6 +130,7 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.graph.Graph;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -970,13 +972,21 @@ public class TensorGeneratorFactory {
       // Fallback for `read_data`-pattern XML classes (#437, #380): when the
       // dispatch chain above has no entry, check whether the call's
       // function-object came from a `PythonPropertyRead` whose member-name
-      // is the parent of a `read_data` trampoline. If so, classify as a
-      // generic ⊤-shape / UNKNOWN-dtype tensor source — restoring
-      // pre-branch-267 identification semantics for ops not yet ported to
-      // dedicated `TensorGenerator` subclasses. Specific dispatch entries
-      // are checked first; this only fires when nothing in the table matched.
-      String propertyName = getPropertyReadMemberName(source, builder);
-      if (propertyName != null && classHasReadDataMethod(propertyName, builder)) {
+      // matches the parent class of an `Ltensorflow/.../<name>/read_data`
+      // trampoline. If so, classify as a generic ⊤-shape / UNKNOWN-dtype
+      // tensor source — restoring pre-branch-267 identification semantics
+      // for ops not yet ported to dedicated `TensorGenerator` subclasses.
+      // Specific dispatch entries are checked first; this only fires when
+      // nothing in the table matched.
+      //
+      // The trampoline lookup is restricted to the `Ltensorflow/` namespace
+      // so that `np.argmax(...)` and similar non-TF property reads aren't
+      // misclassified even if a future numpy.xml ever introduces an
+      // `argmax` class. All candidate constant-string member-names from the
+      // points-to set are checked, not just the first, to avoid
+      // iteration-order-dependent behavior on multi-candidate sites.
+      for (String propertyName : getPropertyReadMemberNames(source, builder)) {
+        if (!getTensorflowReadDataPropertyNames(builder).contains(propertyName)) continue;
         final String capturedName = propertyName;
         final TypeReference capturedFunction = calledFunction;
         LOGGER.fine(
@@ -996,43 +1006,53 @@ public class TensorGeneratorFactory {
   }
 
   /**
-   * If the given source's call's function object came from a {@link PythonPropertyRead} whose
-   * member-ref is a constant string, return that string. Otherwise return {@code null}.
+   * Returns the set of constant-string member-names that the call's function-object could resolve
+   * to via a {@link PythonPropertyRead}. Empty if the call's function-object isn't a property read
+   * or no constant strings are in the member-ref points-to set.
    *
    * <p>Used by the `read_data`-pattern fallback to walk back from a call site to the property-read
-   * that resolved its function object. Tolerant of empty points-to sets and
-   * non-`PythonPropertyRead` defs (returns {@code null}).
+   * that resolved its function object. Returns all candidate names rather than just the first, so
+   * downstream predicate checks are not iteration-order-dependent on multi-candidate sites.
    */
-  private static String getPropertyReadMemberName(
+  private static Set<String> getPropertyReadMemberNames(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
     PointerKey k = source.getPointerKey();
-    if (!(k instanceof LocalPointerKey)) return null;
+    if (!(k instanceof LocalPointerKey)) return Collections.emptySet();
     LocalPointerKey lpk = (LocalPointerKey) k;
     CGNode node = lpk.getNode();
     SSAInstruction def = node.getDU().getDef(lpk.getValueNumber());
-    if (!(def instanceof SSAAbstractInvokeInstruction)) return null;
+    if (!(def instanceof SSAAbstractInvokeInstruction)) return Collections.emptySet();
     SSAAbstractInvokeInstruction call = (SSAAbstractInvokeInstruction) def;
-    if (call.getNumberOfUses() == 0) return null;
+    if (call.getNumberOfUses() == 0) return Collections.emptySet();
     SSAInstruction funcDef = node.getDU().getDef(call.getUse(0));
-    if (!(funcDef instanceof PythonPropertyRead)) return null;
+    if (!(funcDef instanceof PythonPropertyRead)) return Collections.emptySet();
     PythonPropertyRead funcRead = (PythonPropertyRead) funcDef;
     PointerKey memberKey =
         builder
             .getPointerAnalysis()
             .getHeapModel()
             .getPointerKeyForLocal(node, funcRead.getMemberRef());
+    Set<String> names = HashSetFactory.make();
     for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(memberKey)) {
       if (!(ik instanceof ConstantKey)) continue;
       Object value = ((ConstantKey<?>) ik).getValue();
-      if (value instanceof String) return (String) value;
+      if (value instanceof String) names.add((String) value);
     }
-    return null;
+    return names;
   }
 
   /**
-   * Returns {@code true} iff the class hierarchy contains a synthetic trampoline class for an
-   * XML-registered {@code read_data} method whose parent class's simple name matches {@code
-   * propertyName}.
+   * Per-{@link IClassHierarchy} memoized cache of property names whose {@code read_data} trampoline
+   * classes exist in the {@code Ltensorflow/} namespace. Computed once per analysis builder via a
+   * single class-hierarchy scan and reused thereafter so the {@code read_data}-pattern fallback's
+   * predicate check is O(1) per call instead of O(|CHA|).
+   */
+  private static final java.util.WeakHashMap<IClassHierarchy, Set<String>>
+      TENSORFLOW_READ_DATA_PROPERTY_NAMES_CACHE = new java.util.WeakHashMap<>();
+
+  /**
+   * Returns the set of property names whose {@code Ltensorflow/.../<name>/read_data} trampoline
+   * class exists in the given {@link PropagationCallGraphBuilder}'s class hierarchy.
    *
    * <p>XML-registered helper methods like {@code read_data} get transformed by {@link
    * com.ibm.wala.cast.python.client.PythonAnalysisEngine#addSummaryBypassLogic} into synthetic
@@ -1041,18 +1061,34 @@ public class TensorGeneratorFactory {
    * class with a {@code do} method. So a class-hierarchy scan for a {@code read_data} method on the
    * parent class via {@link IClass#getDeclaredMethods()} returns nothing — we have to look for the
    * trampoline class instead.
+   *
+   * <p>Restricted to the {@code Ltensorflow/} namespace so non-TF property reads (e.g. {@code
+   * np.argmax(...)}) aren't misclassified even if a future {@code numpy.xml} introduces a class
+   * with the same simple name. Memoized via {@link #TENSORFLOW_READ_DATA_PROPERTY_NAMES_CACHE} to
+   * avoid repeating the O(|CHA|) scan on every fallback check.
    */
-  private static boolean classHasReadDataMethod(
-      String propertyName, PropagationCallGraphBuilder builder) {
-    String trampolineSuffix =
-        "/"
-            + propertyName
-            + "/"
-            + PythonTensorAnalysisEngine.TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME;
-    for (IClass cls : builder.getClassHierarchy()) {
-      if (cls.getName().toString().endsWith(trampolineSuffix)) return true;
+  private static Set<String> getTensorflowReadDataPropertyNames(
+      PropagationCallGraphBuilder builder) {
+    IClassHierarchy cha = builder.getClassHierarchy();
+    synchronized (TENSORFLOW_READ_DATA_PROPERTY_NAMES_CACHE) {
+      Set<String> cached = TENSORFLOW_READ_DATA_PROPERTY_NAMES_CACHE.get(cha);
+      if (cached != null) return cached;
     }
-    return false;
+    String suffix = "/" + PythonTensorAnalysisEngine.TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME;
+    Set<String> names = HashSetFactory.make();
+    for (IClass cls : cha) {
+      String typeName = cls.getName().toString();
+      if (!typeName.startsWith("Ltensorflow/")) continue;
+      if (!typeName.endsWith(suffix)) continue;
+      int suffixStart = typeName.length() - suffix.length();
+      int sep = typeName.lastIndexOf('/', suffixStart - 1);
+      if (sep < 0) continue;
+      names.add(typeName.substring(sep + 1, suffixStart));
+    }
+    synchronized (TENSORFLOW_READ_DATA_PROPERTY_NAMES_CACHE) {
+      TENSORFLOW_READ_DATA_PROPERTY_NAMES_CACHE.put(cha, names);
+    }
+    return names;
   }
 
   /**
