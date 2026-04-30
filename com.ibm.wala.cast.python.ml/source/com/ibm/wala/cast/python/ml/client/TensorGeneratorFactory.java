@@ -1102,6 +1102,11 @@ public class TensorGeneratorFactory {
    * actual output dimensions, giving misleading precision for ops where {@code Constant}'s value
    * model doesn't apply. Per-op subclasses with proper precision can replace this fallback as
    * they're added; the fallback is just the safety net during the migration.
+   *
+   * <p>TODO: remove this class (and its callers in {@link #getGeneratorBody}, plus the helper
+   * methods {@link #getPropertyReadMemberNames} and {@link #getTensorflowReadDataPropertyNames})
+   * once every op currently routed through here has a dedicated {@link TensorGenerator} subclass
+   * with proper precision. Tracked in #449.
    */
   private static final class ReadDataFallback extends TensorGenerator {
     ReadDataFallback(PointsToSetVariable source) {
