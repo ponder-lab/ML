@@ -1599,8 +1599,24 @@ public abstract class TensorGenerator {
                   + " from value: "
                   + value
                   + ".");
-        } else if (value != null)
-          throw new IllegalStateException("Unknown constant type: " + value.getClass() + ".");
+        } else if (value != null) {
+          // Unrecognized value type. Return UNKNOWN to match the existing
+          // dtype-lattice contract (UNKNOWN = ⊤) instead of aborting the
+          // analysis with IllegalStateException. Same shape as the prior
+          // Boolean-case fix (#447): missing types should fall through to
+          // ⊤ in the lattice rather than terminate the analysis.
+          ret.add(com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.UNKNOWN);
+          final Object capturedValue = value;
+          LOGGER.fine(
+              () ->
+                  "Unrecognized constant type for source: "
+                      + this.getSource()
+                      + " value: "
+                      + capturedValue
+                      + " ("
+                      + capturedValue.getClass()
+                      + "); using UNKNOWN dtype.");
+        }
       } else if (valueIK instanceof AllocationSiteInNode) {
         AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
         TypeReference reference = asin.getConcreteType().getReference();
