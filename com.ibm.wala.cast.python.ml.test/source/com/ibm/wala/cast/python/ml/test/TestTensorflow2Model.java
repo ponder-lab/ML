@@ -2021,11 +2021,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * perturb {@code run_optimization}'s count), so the runtime types are verified indirectly through
    * the {@code batch_x} asserts at the training-loop call of {@code run_optimization}.
    *
-   * <p>Expected tensor variable count: 2 (master baseline). Rule-based would be 5 (2 parameters + 3
-   * intermediate ops {@code original - reconstructed}, {@code tf.pow}, {@code tf.reduce_mean}), but
-   * branch currently registers 1 &mdash; a regression from master. Keeping expected at the master
-   * baseline lets the failing count check serve as the regression signal; no separate issue is
-   * needed because the test itself tracks the discrepancy.
+   * <p>Expected tensor variable count: 4 — 2 parameters plus 2 intermediate-op tensors picked up by
+   * #196's {@code ReadDataFallback}: {@code original - reconstructed} (vn=9) and {@code tf.pow}
+   * (vn=13), both flow-through {@code (256, 784) float32}. {@code tf.reduce_mean}'s scalar result
+   * is the function's return and isn't tracked as a separate variable. Per-op generators tracked in
+   * #449 would tighten the asserted types from ⊤-shape/UNKNOWN-dtype to concrete shapes without
+   * changing the count.
    *
    * <p>Value 2 ({@code reconstructed}) resolves to concrete {@code (256, 784) float32} after the
    * {@code tensorflow/python/ops/variables/Variable} allocatable-class declaration was added in
@@ -2041,7 +2042,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "autoencoder.py",
         "mean_square",
         2,
-        2,
+        4,
         Map.of(2, Set.of(TENSOR_256_784_FLOAT32), 3, Set.of(TENSOR_256_784_FLOAT32)));
   }
 
@@ -3881,7 +3882,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "multigpu_training.py",
         "average_gradients",
         0,
-        0); // NOTE: Change to 1, 1, 2 once https://github.com/wala/ML/issues/136 is fixed.
+        2); // 0/2: parameter is a list of tensors so the parameter-count stays 0 until wala/ML#136
+    // (losing tensors in lists) lands; the 2 tensor variables are `tf.expand_dims(g, 0)`
+    // and `tf.concat(axis=0, values=grads)` flowing through #196's `ReadDataFallback`.
+    // Eventual fully-fixed shape would be 1, 1, 2 (per-op generators in #449 don't change
+    // the count, only the asserted types).
   }
 
   @Test
