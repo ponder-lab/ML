@@ -254,6 +254,7 @@
         <putfield class="LRoot" field="exp" fieldType="LRoot" ref="x" value="exp" />
         <putfield class="LRoot" field="exp" fieldType="LRoot" ref="math" value="exp" />
         <putfield class="LRoot" field="exp" fieldType="LRoot" ref="math_ops" value="exp" />
+        <!-- `tf.not_equal` is the elementwise inverse of `tf.equal`; same alias structure. -->
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/not_equal -->
         <new def="not_equal" class="Ltensorflow/math/not_equal" />
         <putfield class="LRoot" field="not_equal" fieldType="LRoot" ref="x" value="not_equal" />
@@ -987,7 +988,7 @@
         </method>
       </class>
       <class name="not_equal" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/not_equal — body aligned with Ariadne master `6897a49d` (`wala/ML#427`) so `ComparisonOperation` recognizes the call by allocating `Ltensorflow/python/framework/ops/Tensor`. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/not_equal -->
         <method name="read_data" descriptor="()LRoot;" numArgs="1">
           <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
