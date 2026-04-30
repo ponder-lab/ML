@@ -978,6 +978,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       TensorGenerator generator = getGenerator(source, builder);
       LOGGER.fine("Using tensor generator: " + generator + ".");
 
+      // `getGenerator` returns `null` when the cycle guard added in
+      // `wala/ML#435` / `ponder-lab/ML#192` re-encounters a `PointsToSetVariable`
+      // along a single dispatch chain. `null` means "unknown / ⊤"; return
+      // `null` here to preserve this method's documented semantics
+      // (`null` = unknown / ⊤; empty set = ⊥ / not a recognized tensor source)
+      // and avoid NPE-ing on the subsequent `getTensorTypes` dispatch.
+      if (generator == null) return null;
+
       Set<TensorType> tensorTypes = generator.getTensorTypes(builder);
       LOGGER.fine(() -> "Found tensor types: " + tensorTypes + ".");
 
