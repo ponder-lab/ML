@@ -53,10 +53,19 @@ public class Python3Interpreter extends com.ibm.wala.cast.python.util.PythonInte
   public Integer evalAsInteger(String expr) {
     PythonInterpreter ip = getInterp();
     if (ip == null) {
-      throw new IllegalStateException(
-          "Jython interpreter unavailable (init failed earlier); cannot evaluate expression: "
-              + expr
-              + ".");
+      // Return {@code null} (the same "cannot evaluate" signal used elsewhere in this method's
+      // contract) rather than throwing, so callers like
+      // {@code com.ibm.wala.cast.python.util.PythonInterpreter#interpretAsInt} — which expect a
+      // nullable {@link Integer} and don't catch checked or runtime exceptions — degrade
+      // gracefully in the same OSGi-classloader environments that triggered the {@link
+      // #getInterp()} init failure in the first place.
+      LOGGER.log(
+          Level.WARNING,
+          () ->
+              "Jython interpreter unavailable (init failed earlier); cannot evaluate expression: "
+                  + expr
+                  + ". Returning null.");
+      return null;
     }
     try {
       PyObject val = ip.eval(expr);
