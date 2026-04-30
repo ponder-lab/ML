@@ -1760,6 +1760,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * would unblock this test without needing the general annotation framework (wala/ML#370).
    */
   @Test
+  public void testCallbacks3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_callbacks3.py", "dataset_fn", 0, 0);
+  }
+
+  @Test
   public void testGanTutorial()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
