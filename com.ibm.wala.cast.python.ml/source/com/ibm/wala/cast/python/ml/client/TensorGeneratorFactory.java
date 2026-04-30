@@ -972,21 +972,23 @@ public class TensorGeneratorFactory {
         || isType(calledFunction, SUBTRACT.getDeclaringClass())
         || isType(calledFunction, DIVIDE.getDeclaringClass())) {
       // For SSABinaryOp sources (`a - b` rather than `tf.subtract(a, b)`), gate
-      // ElementWiseOperation dispatch on at least one operand resolving to a
-      // TensorGenerator. Without this, every Python-int arithmetic expression
-      // (e.g. `n - 1` in a recursive function whose only call sites pass ints)
-      // gets classified as a tensor — `getDataflowSources` adds every binary-op
-      // result as a candidate source, and EWO's "always a tensor" assumption
-      // turns Integer constants in operand PTS into INT32 dtypes, which then
-      // back-propagate to parameters via the PA assignment graph at the
-      // recursive-call edge. The TF-API path (`tf.add(...)`, etc.) is
-      // unaffected: those are SSAAbstractInvoke, not SSABinaryOp, so the
+      // ElementWiseOperation dispatch on at least one operand showing tensor
+      // evidence — see {@link #operandHasTensorEvidence} for the three-axis
+      // definition (implicit PK / structural `tryGetGenerator` resolution /
+      // non-`ConstantKey` PTS content). Without this gate, every Python-int
+      // arithmetic expression (e.g. `n - 1` in a recursive function whose only
+      // call sites pass ints) gets classified as a tensor — `getDataflowSources`
+      // adds every binary-op result as a candidate source, and EWO's "always a
+      // tensor" assumption turns Integer constants in operand PTS into INT32
+      // dtypes, which then back-propagate to parameters via the PA assignment
+      // graph at the recursive-call edge. The TF-API path (`tf.add(...)`, etc.)
+      // is unaffected: those are SSAAbstractInvoke, not SSABinaryOp, so the
       // structural check below skips them. See wala/ML#451.
       if (isBinopWithoutTensorOperand(source, builder, visited)) {
         LOGGER.fine(
             () ->
-                "Rejecting ElementWiseOperation dispatch — no operand resolves"
-                    + " to a TensorGenerator. source="
+                "Rejecting ElementWiseOperation dispatch — no operand has tensor"
+                    + " evidence. source="
                     + source);
         throw new IllegalArgumentException("Binary op with no tensor operand: " + source + ".");
       }
