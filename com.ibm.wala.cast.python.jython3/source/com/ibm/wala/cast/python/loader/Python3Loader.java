@@ -103,18 +103,20 @@ public class Python3Loader extends PythonLoader {
               @Override
               protected Object eval(CAstOperator op, Object lhs, Object rhs) {
                 String s = lhs + " " + op.getValue() + " " + rhs;
+
+                PythonInterpreter ip = Python3Interpreter.getInterp();
+                if (ip == null) {
+                  // Jython init failed (memoized in Python3Interpreter). Skip constant folding
+                  // for this expression; analysis remains correct, just less precise. Don't log
+                  // an "Evaluating:" entry — nothing is actually evaluated, and the underlying
+                  // init failure was already announced from getInterp().
+                  return null;
+                }
                 logger.info(() -> "Evaluating: " + s);
 
                 // Use the Python interpreter to evaluate the expression.
                 PyUnicode unicode = new PyUnicode(s);
                 PyObject x;
-
-                PythonInterpreter ip = Python3Interpreter.getInterp();
-                if (ip == null) {
-                  // Jython init failed (memoized in Python3Interpreter). Skip constant folding
-                  // for this expression; analysis remains correct, just less precise.
-                  return null;
-                }
 
                 try {
                   x = ip.eval(unicode);
