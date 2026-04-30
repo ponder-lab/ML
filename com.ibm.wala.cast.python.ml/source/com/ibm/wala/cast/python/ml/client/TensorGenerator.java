@@ -1607,16 +1607,14 @@ public abstract class TensorGenerator {
           // `{INT32, UNKNOWN}` and mislead downstream consumers). Same shape
           // as the prior Boolean-case fix (#447): missing types should fall
           // through to ⊤ in the lattice rather than terminate the analysis.
-          final Object capturedValue = value;
           LOGGER.fine(
-              () ->
-                  "Unrecognized constant type for source: "
-                      + this.getSource()
-                      + " value: "
-                      + capturedValue
-                      + " ("
-                      + capturedValue.getClass()
-                      + "); collapsing to ⊤ (UNKNOWN dtype).");
+              "Unrecognized constant type for source: "
+                  + this.getSource()
+                  + " value: "
+                  + value
+                  + " ("
+                  + value.getClass()
+                  + "); collapsing to ⊤ (UNKNOWN dtype).");
           return EnumSet.of(UNKNOWN);
         }
       } else if (valueIK instanceof AllocationSiteInNode) {
