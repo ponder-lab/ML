@@ -1069,8 +1069,7 @@ public class TensorGeneratorFactory {
     }
 
     @Override
-    protected Set<List<com.ibm.wala.cast.python.ml.types.TensorType.Dimension<?>>> getDefaultShapes(
-        PropagationCallGraphBuilder builder) {
+    protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
       return null;
     }
 
@@ -1085,9 +1084,8 @@ public class TensorGeneratorFactory {
     }
 
     @Override
-    protected Set<com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType> getDefaultDTypes(
-        PropagationCallGraphBuilder builder) {
-      return java.util.EnumSet.of(com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.UNKNOWN);
+    protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+      return EnumSet.of(UNKNOWN);
     }
 
     @Override
