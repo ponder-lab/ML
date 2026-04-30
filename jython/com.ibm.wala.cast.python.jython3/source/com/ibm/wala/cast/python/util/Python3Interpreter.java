@@ -30,10 +30,10 @@ public class Python3Interpreter extends com.ibm.wala.cast.python.util.PythonInte
    * failure. The first failure is already announced by the catch block in {@link #getInterp()};
    * subsequent calls log at FINE level only.
    *
-   * <p>Uses {@link AtomicBoolean#compareAndSet} so the check-and-set is atomic — under concurrent
-   * call graph construction, multiple threads can race into the {@code if (ip == null)} branch
-   * simultaneously, and a non-atomic {@code volatile boolean} flag would let several of them all
-   * pass the check before any sets it, defeating the "log once" intent.
+   * @implNote Uses {@link AtomicBoolean#compareAndSet} so the check-and-set is atomic. Under
+   *     concurrent call graph construction, multiple threads can race into the {@code if (ip ==
+   *     null)} branch simultaneously; a non-atomic {@code volatile boolean} flag would let several
+   *     of them all pass the check before any sets it, defeating the "log once" intent.
    */
   private static final AtomicBoolean unavailableWarned = new AtomicBoolean(false);
 
