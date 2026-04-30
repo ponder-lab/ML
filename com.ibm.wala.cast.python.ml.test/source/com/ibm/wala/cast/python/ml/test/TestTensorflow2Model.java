@@ -1980,11 +1980,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testNeuralNetwork4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    // Count bumped 6 → 14 by `ReadDataFallback` (#437): `accuracy()` uses
+    // `tf.argmax(...)` which is a legitimate tensor source per #380 but
+    // wasn't being classified pre-fix. The 8 additional tensor variables
+    // are the argmax call sites and their downstream uses across the call
+    // graph. Parameter-type expectations (`y_pred`, `y_true`) unchanged.
     test(
         "neural_network.py",
         "accuracy",
         2,
-        6,
+        14,
         Map.of(2, Set.of(TENSOR_256_10_FLOAT32), 3, Set.of(TENSOR_256_UINT8, TENSOR_10000_UINT8)));
   }
 

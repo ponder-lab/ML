@@ -33,6 +33,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_WITH_OPT
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_ZIP_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DENSE_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIVIDE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.UNKNOWN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
@@ -103,9 +104,12 @@ import static java.util.Map.entry;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.python.util.Util;
+import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConcreteTypeKey;
@@ -116,6 +120,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey;
+import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
@@ -125,11 +130,15 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.graph.Graph;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -961,8 +970,179 @@ public class TensorGeneratorFactory {
           }
         }
       }
+      // Fallback for `read_data`-pattern XML classes (#437, #380): when the
+      // dispatch chain above has no entry, check whether the call's
+      // function-object came from a `PythonPropertyRead` whose member-name
+      // matches the parent class of an `Ltensorflow/.../<name>/read_data`
+      // trampoline. If so, classify as a generic ⊤-shape / UNKNOWN-dtype
+      // tensor source — restoring pre-branch-267 identification semantics
+      // for ops not yet ported to dedicated `TensorGenerator` subclasses.
+      // Specific dispatch entries are checked first; this only fires when
+      // nothing in the table matched.
+      //
+      // The trampoline lookup is restricted to the `Ltensorflow/` namespace
+      // so that `np.argmax(...)` and similar non-TF property reads aren't
+      // misclassified even if a future numpy.xml ever introduces an
+      // `argmax` class. All candidate constant-string member-names from the
+      // points-to set are checked, not just the first, to avoid
+      // iteration-order-dependent behavior on multi-candidate sites.
+      for (String propertyName : getPropertyReadMemberNames(source, builder)) {
+        if (!getTensorflowReadDataPropertyNames(builder).contains(propertyName)) continue;
+        final String capturedName = propertyName;
+        final TypeReference capturedFunction = calledFunction;
+        LOGGER.fine(
+            () ->
+                "TensorGeneratorFactory: dispatching `."
+                    + capturedName
+                    + "(...)` (calledFunction="
+                    + capturedFunction
+                    + ") via `read_data`-pattern trampoline-class lookup;"
+                    + " no dispatch-table entry — falling back to generic ⊤-shape /"
+                    + " UNKNOWN-dtype tensor source.");
+        return new ReadDataFallback(source);
+      }
       throw new IllegalArgumentException(
           "Unknown call: " + calledFunction + " for source: " + source + ".");
+    }
+  }
+
+  /**
+   * Returns the set of constant-string member-names that the call's function-object could resolve
+   * to via a {@link PythonPropertyRead}. Empty if the call's function-object isn't a property read
+   * or no constant strings are in the member-ref points-to set.
+   *
+   * <p>Used by the `read_data`-pattern fallback to walk back from a call site to the property-read
+   * that resolved its function object. Returns all candidate names rather than just the first, so
+   * downstream predicate checks are not iteration-order-dependent on multi-candidate sites.
+   */
+  private static Set<String> getPropertyReadMemberNames(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    PointerKey k = source.getPointerKey();
+    if (!(k instanceof LocalPointerKey)) return Collections.emptySet();
+    LocalPointerKey lpk = (LocalPointerKey) k;
+    CGNode node = lpk.getNode();
+    SSAInstruction def = node.getDU().getDef(lpk.getValueNumber());
+    if (!(def instanceof SSAAbstractInvokeInstruction)) return Collections.emptySet();
+    SSAAbstractInvokeInstruction call = (SSAAbstractInvokeInstruction) def;
+    if (call.getNumberOfUses() == 0) return Collections.emptySet();
+    SSAInstruction funcDef = node.getDU().getDef(call.getUse(0));
+    if (!(funcDef instanceof PythonPropertyRead)) return Collections.emptySet();
+    PythonPropertyRead funcRead = (PythonPropertyRead) funcDef;
+    PointerKey memberKey =
+        builder
+            .getPointerAnalysis()
+            .getHeapModel()
+            .getPointerKeyForLocal(node, funcRead.getMemberRef());
+    Set<String> names = HashSetFactory.make();
+    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(memberKey)) {
+      if (!(ik instanceof ConstantKey)) continue;
+      Object value = ((ConstantKey<?>) ik).getValue();
+      if (value instanceof String) names.add((String) value);
+    }
+    return names;
+  }
+
+  /**
+   * Per-{@link IClassHierarchy} memoized cache of property names whose {@code read_data} trampoline
+   * classes exist in the {@code Ltensorflow/} namespace. Computed once per analysis builder via a
+   * single class-hierarchy scan and reused thereafter so the {@code read_data}-pattern fallback's
+   * predicate check is O(1) per call instead of O(|CHA|).
+   */
+  private static final WeakHashMap<IClassHierarchy, Set<String>>
+      TENSORFLOW_READ_DATA_PROPERTY_NAMES_CACHE = new WeakHashMap<>();
+
+  /**
+   * Returns the set of property names whose {@code Ltensorflow/.../<name>/read_data} trampoline
+   * class exists in the given {@link PropagationCallGraphBuilder}'s class hierarchy.
+   *
+   * <p>XML-registered helper methods like {@code read_data} get transformed by {@link
+   * com.ibm.wala.cast.python.client.PythonAnalysisEngine#addSummaryBypassLogic} into synthetic
+   * trampoline classes nested under the parent (per the {@code /class/}-namespace trampoline
+   * pattern): {@code <class>.read_data} becomes a new {@code Ltensorflow/.../<class>/read_data}
+   * class with a {@code do} method. So a class-hierarchy scan for a {@code read_data} method on the
+   * parent class via {@link IClass#getDeclaredMethods()} returns nothing — we have to look for the
+   * trampoline class instead.
+   *
+   * <p>Restricted to the {@code Ltensorflow/} namespace so non-TF property reads (e.g. {@code
+   * np.argmax(...)}) aren't misclassified even if a future {@code numpy.xml} introduces a class
+   * with the same simple name. Memoized via {@link #TENSORFLOW_READ_DATA_PROPERTY_NAMES_CACHE} to
+   * avoid repeating the O(|CHA|) scan on every fallback check.
+   */
+  private static Set<String> getTensorflowReadDataPropertyNames(
+      PropagationCallGraphBuilder builder) {
+    IClassHierarchy cha = builder.getClassHierarchy();
+    synchronized (TENSORFLOW_READ_DATA_PROPERTY_NAMES_CACHE) {
+      Set<String> cached = TENSORFLOW_READ_DATA_PROPERTY_NAMES_CACHE.get(cha);
+      if (cached != null) return cached;
+    }
+    String suffix = "/" + PythonTensorAnalysisEngine.TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME;
+    Set<String> names = HashSetFactory.make();
+    for (IClass cls : cha) {
+      String typeName = cls.getName().toString();
+      if (!typeName.startsWith("Ltensorflow/")) continue;
+      if (!typeName.endsWith(suffix)) continue;
+      int suffixStart = typeName.length() - suffix.length();
+      int sep = typeName.lastIndexOf('/', suffixStart - 1);
+      if (sep < 0) continue;
+      names.add(typeName.substring(sep + 1, suffixStart));
+    }
+    synchronized (TENSORFLOW_READ_DATA_PROPERTY_NAMES_CACHE) {
+      TENSORFLOW_READ_DATA_PROPERTY_NAMES_CACHE.put(cha, names);
+    }
+    return names;
+  }
+
+  /**
+   * Generic fallback {@link TensorGenerator} for XML-modeled tensor-producing APIs that follow the
+   * {@code read_data} pattern but don't have a dedicated subclass yet (per #380). Returns ⊤ shape
+   * and {@code UNKNOWN} dtype — the API is identified as a tensor source, but no precise type is
+   * claimed.
+   *
+   * <p>Distinct from {@link Constant}, which inspects the call's value parameter to infer
+   * shape/dtype: that inspection can return the input tensor's dimensions rather than the op's
+   * actual output dimensions, giving misleading precision for ops where {@code Constant}'s value
+   * model doesn't apply. Per-op subclasses with proper precision can replace this fallback as
+   * they're added; the fallback is just the safety net during the migration.
+   *
+   * <p>TODO: remove this class (and its callers in {@link #getGeneratorBody}, plus the helper
+   * methods {@link #getPropertyReadMemberNames} and {@link #getTensorflowReadDataPropertyNames})
+   * once the {@code read_data} pattern is fully migrated out of {@code tensorflow.xml} — at that
+   * point the {@code Ltensorflow/.../<op>/read_data} trampoline classes this fallback keys off
+   * disappear from the class hierarchy and the predicate becomes a no-op anyway. Tracked in #380.
+   */
+  private static final class ReadDataFallback extends TensorGenerator {
+    ReadDataFallback(PointsToSetVariable source) {
+      super(source);
+    }
+
+    @Override
+    protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+      return null;
+    }
+
+    @Override
+    protected int getShapeParameterPosition() {
+      return -1;
+    }
+
+    @Override
+    protected String getShapeParameterName() {
+      return null;
+    }
+
+    @Override
+    protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+      return EnumSet.of(UNKNOWN);
+    }
+
+    @Override
+    protected int getDTypeParameterPosition() {
+      return -1;
+    }
+
+    @Override
+    protected String getDTypeParameterName() {
+      return null;
     }
   }
 }
