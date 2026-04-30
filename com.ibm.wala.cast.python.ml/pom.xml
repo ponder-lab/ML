@@ -57,15 +57,16 @@
     </dependency>
     <!-- `jython3` references `jnr/constants/Constant` (and other `jnr/...`)
       from its `org.python.modules.posix.PosixModule`. The `0.0.1-SNAPSHOT`
-      `jython3.jar` published to consumers is a slim jar (no transitive POM
-      deps because it's `install:install-file`-installed without
-      `generatePom=false`'s implications), so neither the Maven dependency
-      graph nor the shaded fat-jar pulls `jnr-constants` in unless we
-      declare it here. Declaring it makes `maven-shade-plugin` include
-      `jnr/constants/*` in the published fat-jar that downstream consumers
-      (e.g. `ponder-lab/Hybridize-Functions-Refactoring`) load through
-      Tycho — without it, code paths that reach `PosixModule` (e.g. the
-      TensorFlow GAN tutorial fixture) fail at runtime with
+      `jython3.jar` is registered via `mvn install:install-file
+      -DgeneratePom=true` (see `CONTRIBUTING.md` and the CI workflow),
+      which synthesizes a minimal POM that declares zero dependencies. So
+      neither the Maven dependency graph nor the shaded fat-jar pulls
+      `jnr-constants` in unless we declare it here. Declaring it makes
+      `maven-shade-plugin` include `jnr/constants/*` in the published
+      fat-jar that downstream consumers (e.g.
+      `ponder-lab/Hybridize-Functions-Refactoring`) load through Tycho —
+      without it, code paths that reach `PosixModule` (e.g. the TensorFlow
+      GAN tutorial fixture) fail at runtime with
       `NoClassDefFoundError: jnr/constants/Constant`. See wala/ML#453. -->
     <dependency>
       <groupId>com.github.jnr</groupId>
