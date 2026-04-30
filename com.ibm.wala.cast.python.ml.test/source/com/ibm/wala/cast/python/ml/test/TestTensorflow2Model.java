@@ -2147,6 +2147,43 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_recursive_function.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
+  /**
+   * Regression test for wala/ML#451 (reproducer 1): a recursive Python function whose only call
+   * sites are {@code recursive_fn(5)} (a Python int literal) and {@code recursive_fn(n - 1)} (still
+   * a Python int) must not classify its parameter as a tensor. There is no {@code tf.constant}, no
+   * decorator, and no tensor anywhere in the program — the analysis should report zero tensor
+   * parameters and zero function-local tensor variables.
+   */
+  @Test
+  public void testRecursionIntOnly()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_recursion_int_only.py", "recursive_fn", 0, 0);
+  }
+
+  /**
+   * Regression test for wala/ML#451 (reproducer 2): a recursive function whose external call site
+   * passes a real tensor ({@code recursive_fn(tf.constant(5))}). The parameter {@code n} should be
+   * classified as a scalar int32 tensor (the {@code tf.constant} flows through the assignment graph
+   * from the caller), and {@code n - 1} inside the body is a tensor binop too — the binop
+   * operand-tensor gate in {@link TensorGeneratorFactory} dispatches {@code n - 1} to {@link
+   * ElementWiseOperation} because at least one operand ({@code n}) has tensor evidence in its PTS.
+   *
+   * <p>Tensor-variable count breakdown: {@code vn=2} (parameter) is seen across two analysis
+   * contexts (the top-level call and the recursive self-call), and {@code vn=10} ({@code n - 1}) is
+   * the binop result in the top-level context. The Set-based counting in the test helper preserves
+   * these as three distinct entries.
+   */
+  @Test
+  public void testRecursionTensorOnly()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_recursion_tensor_only.py",
+        "recursive_fn",
+        1,
+        3,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
   @Test
   public void testAdd()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -3855,14 +3892,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * a bare integer as the shape argument (the parenthesised {@code (-1)} parses as {@code -1}, not
    * a 1-tuple).
    *
-   * <p>Branch also registers an extra spurious tensor variable at {@code vn=44} with type {@code
-   * {[] of int32}} corresponding to {@code gpu_batch_size = int(batch_size / num_gpus)} at line
-   * 222, a pure Python {@code int} used as a slice index (wala/ML#392). That false positive is a
-   * separate, genuine regression.
-   *
-   * <p>Expected tensor variable count: 5 (branch actual). TODO: restore to master baseline 4 once
-   * wala/ML#392 is resolved. See also wala/ML#361 (MNIST modeling) and wala/ML#393 (CIFAR-10
-   * modeling, closed by the commit that landed this test's partial pass).
+   * <p>Expected tensor variable count: 4. Previously 5 — branch carried a spurious classification
+   * at {@code vn=44} ({@code gpu_batch_size = int(batch_size / num_gpus)} at line 222) where {@code
+   * batch_size / num_gpus} is a binop on Python ints, dispatched to {@link ElementWiseOperation}
+   * and typed {@code [] of int32} via {@link TensorGenerator#getDTypesOfValue}'s Integer-constant →
+   * INT32 path. Now correctly rejected by {@link TensorGeneratorFactory}'s binop operand-tensor
+   * gate (wala/ML#451), restoring the master-baseline count of 4. See also wala/ML#361 (MNIST
+   * modeling) and wala/ML#393 (CIFAR-10 modeling, closed by the commit that landed this test's
+   * partial pass).
    */
   @Test
   public void testMultiGPUTraining()
@@ -3871,7 +3908,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "multigpu_training.py",
         "run_optimization",
         2,
-        5,
+        4,
         Map.of(2, Set.of(TENSOR_4096_32_32_3_FLOAT32), 3, Set.of(TENSOR_4096_UINT8)));
   }
 
@@ -4124,6 +4161,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testRange()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_range.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  /**
+   * Regression test for wala/ML#451 (reproducer 3): each element {@code i} from {@code for i in
+   * tf.range(...)} is a 0-D scalar int32 tensor. The receiving function {@code f}'s parameter must
+   * be tensor-classified — never primitive-co-classified downstream. Differs from {@link
+   * #testRange()} in being a stripped-down fixture that mirrors the issue body verbatim (no
+   * intermediate {@code start}/{@code limit}/{@code delta} variables, no Python {@code assert}s
+   * intervening between the {@code tf.range} call and the {@code for}-loop). Pre-fix, certain binop
+   * sources at iteration time could shadow the element's tensor classification with spurious
+   * primitive entries (the same {@link ElementWiseOperation} over-dispatch fixed by the binop
+   * operand-tensor gate); the cleaner fixture here exercises that path directly.
+   */
+  @Test
+  public void testRangeIterationElementType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_range_iter.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test

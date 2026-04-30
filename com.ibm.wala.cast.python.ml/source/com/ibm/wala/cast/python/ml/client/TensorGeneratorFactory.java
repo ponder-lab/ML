@@ -424,6 +424,103 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * Returns {@code true} iff {@code source}'s defining instruction is an {@link
+   * SSABinaryOpInstruction} and none of its operands have any tensor evidence.
+   *
+   * <p>Used by {@link #getGeneratorBody} to gate the {@code ElementWiseOperation} dispatch for
+   * binop-defined sources: the TF semantics of element-wise add/sub/mul/div only apply when at
+   * least one operand is itself a tensor. Without this gate, expressions like {@code n - 1} on
+   * Python ints (or comparisons / arithmetic at any non-tensor binop site that happens to also land
+   * in {@link #getDataflowSources}'s {@code SSABinaryOpInstruction} branch) get spuriously
+   * classified as scalar tensors via the operand-PTS Integer-constant → INT32-dtype path in {@link
+   * TensorGenerator#getDTypesOfValue}; under recursion, the spurious type back-propagates to the
+   * parameter via the PA assignment graph at the recursive-call edge.
+   *
+   * <p>Tensor evidence is checked along three axes (per operand):
+   *
+   * <ol>
+   *   <li><b>Implicit PK.</b> Summary-method returns whose PTS hasn't been materialised manifest as
+   *       implicit pointer keys. Treat as tensor-relevant — gating on these would over-reject
+   *       legitimate tensor binops chained through summary-returning ops.
+   *   <li><b>Structural ({@link #tryGetGenerator}).</b> If the operand's own dispatch resolves to a
+   *       generator (its def is a TF call, an EachElementGet over a tensor iterable, etc.), the
+   *       binop is tensor-relevant.
+   *   <li><b>PTS content.</b> If the operand's PTS contains any non-{@link ConstantKey} instance
+   *       key (i.e. anything beyond Python {@code int}/{@code float}/{@code bool}/{@code str}
+   *       literals), treat as tensor-relevant. This catches parameters whose PTS contains a tensor
+   *       allocation flowed in from the caller (e.g. {@code replica_fn(tf.constant(3.0))} makes
+   *       {@code input}'s PTS the {@code constant_op}'s {@link AllocationSiteInNode}); also keeps
+   *       list/tuple-wrapped tensor flows working without re-implementing the catalog walk here.
+   * </ol>
+   *
+   * <p>Returns {@code false} (i.e. <i>does</i> dispatch to {@code ElementWiseOperation}) for
+   * non-binop sources: those reach this gate via the {@code tf.add}/{@code tf.subtract}/etc. TF API
+   * path (whose calls have ADD/SUB/MUL/DIV declaring classes), and that path is the pre-existing
+   * positive-identification entry that should not be restricted by this fix.
+   *
+   * @param source The candidate {@link ElementWiseOperation} source.
+   * @param builder The propagation call graph builder, used to materialise operand {@link
+   *     PointsToSetVariable}s and recurse into their generator dispatch.
+   * @param visited The DFS recursion-stack set threaded through {@link #getGenerator}; passed
+   *     unchanged to {@link #tryGetGenerator} so operand-side recursion participates in the same
+   *     cycle guard as the parent dispatch.
+   * @return {@code true} iff {@code source} is binop-defined and no operand has tensor evidence.
+   */
+  private static boolean isBinopWithoutTensorOperand(
+      PointsToSetVariable source,
+      PropagationCallGraphBuilder builder,
+      Set<PointsToSetVariable> visited) {
+    if (!(source.getPointerKey() instanceof LocalPointerKey)) return false;
+    LocalPointerKey lpk = (LocalPointerKey) source.getPointerKey();
+    CGNode node = lpk.getNode();
+    SSAInstruction def = node.getDU().getDef(lpk.getValueNumber());
+    if (!(def instanceof SSABinaryOpInstruction)) return false;
+    for (int i = 0; i < def.getNumberOfUses(); i++) {
+      int operandVn = def.getUse(i);
+      if (operandHasTensorEvidence(operandVn, node, builder, visited)) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Returns {@code true} iff the operand at {@code operandVn} in {@code node} shows any sign of
+   * being a tensor. Used by {@link #isBinopWithoutTensorOperand} to gate the binop → EWO dispatch.
+   * See that method's Javadoc for the three-axis tensor-evidence definition.
+   *
+   * @param operandVn The operand SSA value number.
+   * @param node The {@link CGNode} containing the binop.
+   * @param builder The propagation call graph builder.
+   * @param visited The DFS recursion-stack set threaded through {@link #getGenerator}.
+   * @return {@code true} if the operand has tensor evidence; {@code false} otherwise.
+   */
+  private static boolean operandHasTensorEvidence(
+      int operandVn,
+      CGNode node,
+      PropagationCallGraphBuilder builder,
+      Set<PointsToSetVariable> visited) {
+    // Python literal constant in the IR symbol table (e.g. `1` in `n - 1`,
+    // `2.0` in `input * 2.0`) — not a tensor on its own. The companion operand
+    // is what carries any tensor evidence. Check this BEFORE PTS-based
+    // tensor-evidence inference: literals can have implicit/empty PTS
+    // (depending on the substrate) that would otherwise be misread as
+    // "summary-method return — conservatively a tensor."
+    if (node.getIR().getSymbolTable().isConstant(operandVn)) return false;
+    PointerKey pk =
+        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, operandVn);
+    // Implicit pointer keys flag values whose PTS hasn't been materialised by
+    // the propagation system — most commonly summary-method returns. Treat
+    // those as potential tensors so legitimate chained tensor binops (e.g.
+    // `tf.constant(...) - some_summary_op_result`) aren't over-rejected.
+    if (builder.getPropagationSystem().isImplicit(pk)) return true;
+    PointsToSetVariable operandSrc = getPointsToSetVariable(pk, builder);
+    if (operandSrc != null && tryGetGenerator(operandSrc, builder, visited) != null) return true;
+    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(pk)) {
+      if (!(ik instanceof ConstantKey)) return true;
+    }
+    return false;
+  }
+
+  /**
    * Returns a {@link TensorGenerator} instance for the given source and call graph builder.
    *
    * <p>This method identifies the specific TensorFlow function or operation that produced the value
@@ -873,9 +970,28 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, MULTIPLY.getDeclaringClass())
         || isType(calledFunction, ADD.getDeclaringClass())
         || isType(calledFunction, SUBTRACT.getDeclaringClass())
-        || isType(calledFunction, DIVIDE.getDeclaringClass()))
+        || isType(calledFunction, DIVIDE.getDeclaringClass())) {
+      // For SSABinaryOp sources (`a - b` rather than `tf.subtract(a, b)`), gate
+      // ElementWiseOperation dispatch on at least one operand resolving to a
+      // TensorGenerator. Without this, every Python-int arithmetic expression
+      // (e.g. `n - 1` in a recursive function whose only call sites pass ints)
+      // gets classified as a tensor — `getDataflowSources` adds every binary-op
+      // result as a candidate source, and EWO's "always a tensor" assumption
+      // turns Integer constants in operand PTS into INT32 dtypes, which then
+      // back-propagate to parameters via the PA assignment graph at the
+      // recursive-call edge. The TF-API path (`tf.add(...)`, etc.) is
+      // unaffected: those are SSAAbstractInvoke, not SSABinaryOp, so the
+      // structural check below skips them. See wala/ML#451.
+      if (isBinopWithoutTensorOperand(source, builder, visited)) {
+        LOGGER.fine(
+            () ->
+                "Rejecting ElementWiseOperation dispatch — no operand resolves"
+                    + " to a TensorGenerator. source="
+                    + source);
+        throw new IllegalArgumentException("Binary op with no tensor operand: " + source + ".");
+      }
       return new ElementWiseOperation(source);
-    else if (isType(calledFunction, SPARSE_ADD.getDeclaringClass())) return new SparseAdd(source);
+    } else if (isType(calledFunction, SPARSE_ADD.getDeclaringClass())) return new SparseAdd(source);
     else if (isType(calledFunction, SPARSE_FROM_DENSE.getDeclaringClass()))
       return new SparseFromDense(source);
     else if (isType(calledFunction, MODEL.getDeclaringClass())) return new Model(source);
