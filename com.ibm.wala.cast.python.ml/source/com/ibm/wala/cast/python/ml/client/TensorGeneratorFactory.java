@@ -1106,8 +1106,9 @@ public class TensorGeneratorFactory {
    *
    * <p>TODO: remove this class (and its callers in {@link #getGeneratorBody}, plus the helper
    * methods {@link #getPropertyReadMemberNames} and {@link #getTensorflowReadDataPropertyNames})
-   * once every op currently routed through here has a dedicated {@link TensorGenerator} subclass
-   * with proper precision. Tracked in #449.
+   * once the {@code read_data} pattern is fully migrated out of {@code tensorflow.xml} — at that
+   * point the {@code Ltensorflow/.../<op>/read_data} trampoline classes this fallback keys off
+   * disappear from the class hierarchy and the predicate becomes a no-op anyway. Tracked in #380.
    */
   private static final class ReadDataFallback extends TensorGenerator {
     ReadDataFallback(PointsToSetVariable source) {
