@@ -101,7 +101,7 @@
         <putfield class="LRoot" field="Dataset" fieldType="LRoot" ref="data" value="Dataset" />
         <!--https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/TextLineDataset -->
         <new def="TextLineDataset" class="Ltensorflow/data/Dataset" /> <!-- FIXME: Should *extend* `Dataset` -->
-        <putfield class="LRoot" field="TextLineDataset" fieldType="LRoot" ref="data" value="Dataset" />
+        <putfield class="LRoot" field="TextLineDataset" fieldType="LRoot" ref="data" value="TextLineDataset" />
         <!--https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/TFRecordDataset -->
         <new def="TFRecordDataset" class="Ltensorflow/data/Dataset" /> <!-- FIXME: Should *extend* `Dataset` -->
         <putfield class="LRoot" field="TFRecordDataset" fieldType="LRoot" ref="data" value="TFRecordDataset" />
