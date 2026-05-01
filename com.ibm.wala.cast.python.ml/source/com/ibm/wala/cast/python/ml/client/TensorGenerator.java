@@ -45,6 +45,7 @@ import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.classLoader.NewSiteReference;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -386,11 +387,27 @@ public abstract class TensorGenerator {
             ret.add(asList(dimensions));
           }
       } else if (reference.equals(CONSTANT_OP_CONSTANT)) {
-        // We have a constant tensor. We recurse into its value field.
-        IField valueField =
-            builder.getClassHierarchy().resolveField(TensorFlowTypes.CONSTANT_VALUE);
-        PointerKey valuePK = builder.getPointerKeyForInstanceField(instanceKey, valueField);
-        OrdinalSet<InstanceKey> valuePts = pointerAnalysis.getPointsToSet(valuePK);
+        // We have a constant tensor. We need the user-supplied value PTS to
+        // recurse into. The XML no longer binds it to the alloc's `value`
+        // field (wala/ML#451 reopen — that binding caused Hybridize's
+        // `Function.containsPrimitive` to traverse the alloc's fields and
+        // find a primitive `ConstantKey` for `tf.constant(N)`-style calls,
+        // classifying receiving parameters as primitive). Fall back to
+        // walking back from the alloc's `do` CGNode to its calling sites and
+        // unioning each call's value-arg PTS. Use the already-unwrapped
+        // {@code asin} from the loop header so wrapping {@link InstanceKey}s
+        // (e.g. {@link com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKey})
+        // route through the CG-walk just like raw {@link AllocationSiteInNode}s.
+        OrdinalSet<InstanceKey> valuePts = getConstantCallValueArgPTS(asin, builder);
+        if (valuePts == null || valuePts.isEmpty()) {
+          // Defensive fallback in case the `value` field happens to be bound
+          // in some other path (e.g. a future XML model that re-introduces
+          // it for a sibling endpoint).
+          IField valueField =
+              builder.getClassHierarchy().resolveField(TensorFlowTypes.CONSTANT_VALUE);
+          PointerKey valuePK = builder.getPointerKeyForInstanceField(asin, valueField);
+          valuePts = pointerAnalysis.getPointsToSet(valuePK);
+        }
         ret.addAll(this.getShapesFromShapeArgument(builder, valuePts));
       } else if (reference.equals(TensorFlowTypes.TENSOR_SPEC)
           || reference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)) {
@@ -422,6 +439,62 @@ public abstract class TensorGenerator {
     else if (constantKeyValue instanceof String) return Integer.parseInt((String) constantKeyValue);
 
     return null;
+  }
+
+  /**
+   * Returns the union of {@code value}-argument points-to sets across every caller call site that
+   * resolved to the {@code do} {@link CGNode} of the given {@code tf.constant} allocation. Used by
+   * {@link #getShapesFromShapeArgument} as a fallback when the alloc's {@code value} field PTS is
+   * empty &mdash; which it now always is, since {@code tensorflow.xml} stopped binding the user's
+   * value to that field to keep Hybridize's {@code Function.containsPrimitive} from finding a
+   * primitive {@link ConstantKey} through the alloc's instance-field chain (wala/ML#451 reopen).
+   *
+   * <p>The walk is structural: {@code asin.getNode()} is the synthetic {@code constant_op.constant
+   * .do} CGNode where the {@code <new>} fired; its CG predecessors are the user-side CGNodes that
+   * called {@code tf.constant(...)}. For each such predecessor, every {@link CallSiteReference}
+   * resolving to {@code asin.getNode()} contributes the value argument's PTS via {@code
+   * call.getUse(1)} (use 0 is the function-object self).
+   *
+   * @param constAlloc The {@link AllocationSiteInNode} of a {@code Ltensorflow/python/framework/
+   *     constant_op/constant} allocation.
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @return The union of value-arg points-to sets across all matching caller sites; an empty {@link
+   *     OrdinalSet} if the alloc's CGNode has no callers (defensive — shouldn't happen in practice
+   *     for a reachable alloc).
+   */
+  protected OrdinalSet<InstanceKey> getConstantCallValueArgPTS(
+      AllocationSiteInNode constAlloc, PropagationCallGraphBuilder builder) {
+    CGNode allocNode = constAlloc.getNode();
+    CallGraph cg = builder.getCallGraph();
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    Set<InstanceKey> all = HashSetFactory.make();
+    for (Iterator<CGNode> it = cg.getPredNodes(allocNode); it.hasNext(); ) {
+      CGNode caller = it.next();
+      com.ibm.wala.ssa.IR callerIR = caller.getIR();
+      if (callerIR == null) continue;
+      for (SSAInstruction inst : callerIR.getInstructions()) {
+        if (!(inst instanceof SSAAbstractInvokeInstruction call)) continue;
+        // Check whether this call site resolves to allocNode. Iterating
+        // `getPossibleSites(caller, allocNode)` and matching by `CallSiteReference`
+        // sometimes returns empty under Python's CG modeling (the trampoline
+        // target selector dispatches dynamically); the structural per-instruction
+        // walk via `getPossibleTargets` is the reliable check.
+        boolean targets = false;
+        for (CGNode target : cg.getPossibleTargets(caller, call.getCallSite())) {
+          if (target.equals(allocNode)) {
+            targets = true;
+            break;
+          }
+        }
+        if (!targets) continue;
+        // use(0) is the function-object (self); use(1) is the user's `value` argument.
+        if (call.getNumberOfUses() < 2) continue;
+        int valueVn = call.getUse(1);
+        PointerKey pk = pa.getHeapModel().getPointerKeyForLocal(caller, valueVn);
+        for (InstanceKey ik : pa.getPointsToSet(pk)) all.add(ik);
+      }
+    }
+    return OrdinalSet.toOrdinalSet(all, pa.getInstanceKeyMapping());
   }
 
   /**

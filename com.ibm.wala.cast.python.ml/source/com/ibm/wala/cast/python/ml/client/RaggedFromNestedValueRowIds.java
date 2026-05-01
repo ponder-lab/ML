@@ -290,9 +290,18 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
     for (InstanceKey ik : pts) {
       AllocationSiteInNode asin = getAllocationSiteInNode(ik);
       if (asin != null && asin.getConcreteType().getReference().equals(CONSTANT_OP_CONSTANT)) {
+        // Try the alloc's `value` field PTS first, then fall back to the
+        // allocating call's value-arg PTS. The XML stopped binding the value
+        // to the field (wala/ML#451 reopen) to keep Hybridize's
+        // `Function.containsPrimitive` from finding primitives through the
+        // alloc's instance-field chain; the fallback is the structural
+        // CG-walk equivalent that recovers the same PTS.
         IField f = builder.getClassHierarchy().resolveField(CONSTANT_VALUE);
         PointerKey pk = builder.getPointerKeyForInstanceField(ik, f);
         OrdinalSet<InstanceKey> valuePts = builder.getPointerAnalysis().getPointsToSet(pk);
+        if (valuePts == null || valuePts.isEmpty()) {
+          valuePts = getConstantCallValueArgPTS(asin, builder);
+        }
         result.addAll(getEffectiveInstances(builder, valuePts));
       } else {
         result.add(ik);

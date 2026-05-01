@@ -30,17 +30,25 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
+import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.core.util.io.FileProvider;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.Context;
+import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConcreteTypeKey;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceFieldPointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.SSAPropagationCallGraphBuilder;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import com.ibm.wala.util.debug.UnimplementedError;
+import com.ibm.wala.util.intset.OrdinalSet;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -2202,6 +2210,109 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         3,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  /**
+   * Regression test for wala/ML#451 (reopen): asserts the underlying PA state that Hybridize's
+   * {@code Function.inferPrimitiveParameters} consumes &mdash; specifically, that no primitive
+   * {@link ConstantKey} is reachable through the parameter's points-to set when traversed
+   * transitively through instance fields. The traversal here mirrors the recursion in {@code
+   * Function.containsPrimitive(InstanceKey, ...)}: a {@code ConstantKey} with a non-null value
+   * (excluding bools) is "primitive"; an {@link AllocationSiteInNode} or {@link ConcreteTypeKey} is
+   * recursively examined through its declared instance fields.
+   *
+   * <p>The fixture is the same as {@link #testRecursionTensorOnly()} ({@code recursive_fn(tf
+   * .constant(5))}). Pre-fix, this assertion failed because {@code tensorflow.xml}'s {@code
+   * tf.constant.do} method bound the user's {@code value} argument to the alloc's {@code value}
+   * field via {@code <putfield>}, so the field-traversal walk found the user's {@code
+   * ConstantKey<Integer:5>} and classified the parameter as primitive even though the alloc IS a
+   * tensor producer. The XML now omits that binding (the {@link
+   * com.ibm.wala.cast.python.ml.client.Constant} generator reads dtype/shape directly from the
+   * call's value-arg PTS rather than from the alloc's field), and a CG-walk fallback in {@code
+   * TensorGenerator.getShapesFromShapeArgument} keeps shape inference working for cases like {@code
+   * tf.constant([2, 3])} as a shape argument.
+   */
+  @Test
+  public void testRecursionTensorOnlyHasNoPrimitiveInPTS()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonTensorAnalysisEngine engine =
+        makeEngine(emptyList(), new String[] {"tf2_test_recursion_tensor_only.py"});
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    addPytestEntrypoints(builder);
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+    assertNotNull(CG);
+    engine.performAnalysis(builder);
+
+    String functionSignature = "script tf2_test_recursion_tensor_only.py.recursive_fn.do()LRoot;";
+    boolean checkedAtLeastOneContext = false;
+
+    for (CGNode node : CG) {
+      if (!node.getMethod().getSignature().equals(functionSignature)) continue;
+      // Parameter `n` is at vn=2 (vn=1 is `self`/function object).
+      PointerKey paramPK =
+          builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, 2);
+      OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(paramPK);
+      if (pts == null || pts.isEmpty()) continue;
+      checkedAtLeastOneContext = true;
+      for (InstanceKey ik : pts) {
+        Set<InstanceKey> seen = new HashSet<>();
+        assertTrue(
+            "Parameter `n` of recursive_fn(tf.constant(5)) should not have any primitive"
+                + " ConstantKey reachable through PA field traversal in context "
+                + node.getContext()
+                + " (instance="
+                + ik
+                + "). This is the underlying state that Hybridize's"
+                + " Function.containsPrimitive consumes (wala/ML#451 reopen).",
+            !containsPrimitiveByFieldWalk(ik, builder.getPointerAnalysis(), seen));
+      }
+    }
+    assertTrue(
+        "Expected to check at least one CGNode/context for recursive_fn with non-empty PTS"
+            + " for vn=2; if this assertion fails, the test setup may not have produced any"
+            + " analyzable parameter.",
+        checkedAtLeastOneContext);
+  }
+
+  /**
+   * Mirrors the recursion in Hybridize's {@code Function.containsPrimitive(InstanceKey, boolean,
+   * PointerAnalysis, Set, IProgressMonitor)}: returns {@code true} iff a non-boolean primitive
+   * {@link ConstantKey} value is reachable from {@code ik} through transitive instance field PTS
+   * lookup. Used by the {@link #testRecursionTensorOnlyHasNoPrimitiveInPTS} regression test to
+   * assert the underlying PA state Hybridize consumes.
+   *
+   * @param ik The {@link InstanceKey} to inspect.
+   * @param pa The {@link PointerAnalysis} for instance-field PTS lookups.
+   * @param seen The cycle-guard set of already-visited instance keys.
+   * @return {@code true} iff a primitive ConstantKey is reachable.
+   */
+  private static boolean containsPrimitiveByFieldWalk(
+      InstanceKey ik, PointerAnalysis<InstanceKey> pa, Set<InstanceKey> seen) {
+    if (!seen.add(ik)) return false;
+    if (ik instanceof ConstantKey<?>) {
+      Object v = ((ConstantKey<?>) ik).getValue();
+      if (v == null) return false;
+      // Match Hybridize's "ignore booleans" mode: bool literals don't count as primitive
+      // for the purpose of `getHasPrimitiveParameter`.
+      if (v.equals(Boolean.TRUE) || v.equals(Boolean.FALSE)) return false;
+      return true;
+    }
+    if (!(ik instanceof AllocationSiteInNode || ik instanceof ConcreteTypeKey)) return false;
+    InstanceKey toProcess = ik;
+    if (ik instanceof AllocationSiteInNode) {
+      // Already a concrete alloc; use as-is.
+    }
+    for (IField field : toProcess.getConcreteType().getAllInstanceFields()) {
+      InstanceFieldPointerKey fk =
+          (InstanceFieldPointerKey)
+              pa.getHeapModel().getPointerKeyForInstanceField(toProcess, field);
+      OrdinalSet<InstanceKey> fieldPTS = pa.getPointsToSet(fk);
+      if (fieldPTS == null) continue;
+      for (InstanceKey k : fieldPTS) {
+        if (containsPrimitiveByFieldWalk(k, pa, seen)) return true;
+      }
+    }
+    return false;
   }
 
   @Test
