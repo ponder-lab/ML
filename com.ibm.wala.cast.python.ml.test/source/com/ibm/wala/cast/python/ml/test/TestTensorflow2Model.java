@@ -2120,6 +2120,82 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_sigmoid.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32)));
   }
 
+  // wala/ML#449 Tier 2: element-wise unary math ops. Each preserves shape and dtype from the
+  // input. Same `Sigmoid`-shape pass-through pattern; the receiving function's parameter at
+  // vn=2 carries `tf.constant([1.0, 2.0, 3.0])`'s `(3,) float32`.
+
+  @Test
+  public void testAbs()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_abs.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  @Test
+  public void testAcos()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_acos.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  @Test
+  public void testExp()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_exp.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testExp()} exercising the keyword-argument call site {@code
+   * tf.math.exp(x=...)}. {@link com.ibm.wala.cast.python.ml.client.PassThroughUnaryTensorGenerator}
+   * routes argument resolution through {@code getArgumentPointsToSet(builder, paramPos, paramName)}
+   * which resolves keyword args via {@code paramName}; without a kwarg fixture that branch is
+   * dead-on-arrival in the test data.
+   */
+  @Test
+  public void testExpKwarg()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_exp_kwarg.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  @Test
+  public void testTanh()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_tanh.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  @Test
+  public void testRsqrt()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_rsqrt.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Companion to {@link #testRsqrt()} exercising the keyword-argument call site. */
+  @Test
+  public void testRsqrtKwarg()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_rsqrt_kwarg.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  @Test
+  public void testLogSoftmax()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_log_softmax.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testLogSoftmax()} exercising the keyword-argument call site {@code
+   * tf.nn.log_softmax(logits=...)}.
+   */
+  @Test
+  public void testLogSoftmaxKwarg()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_log_softmax_kwarg.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  @Test
+  public void testL2Normalize()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_l2_normalize.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
   @Test
   public void testSigmoid2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -4150,6 +4226,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testReduceSum()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_reduce_sum.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  // wala/ML#449 Tier 4: intrinsic-API ops with fixed output shape and dtype. Both `tf.rank` and
+  // `tf.size` return scalar int32 regardless of input. Same hardcoded-output shape as
+  // `DatasetRangeGenerator`'s `[] of int64`.
+
+  @Test
+  public void testRank()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_rank.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  @Test
+  public void testSize()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_size.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
   @Test
@@ -6431,6 +6523,44 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testConvertToTensor()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_convert_to_tensor.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  /**
+   * Tier-1 generator (wala/ML#449): {@code tf.identity(input)} returns a fresh tensor with the same
+   * shape and dtype as {@code input}. Pre-fix this routed via {@code identity}'s synthetic XML
+   * which ultimately allocates a {@code Ltensorflow/python/framework/ops/convert_to_tensor} —
+   * {@link com.ibm.wala.cast.python.ml.client.ConvertToTensor} handles dtype/shape, but the extra
+   * indirection through {@code identity}'s wrapper class can be tightened.
+   */
+  @Test
+  public void testIdentity()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_identity.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_INT32)));
+  }
+
+  /**
+   * Tier-1 generator (wala/ML#449): {@code tf.stop_gradient(input)} returns a fresh tensor with the
+   * same shape and dtype as {@code input}. Pre-fix this routed through {@code ReadDataFallback}
+   * (the alloc has no value/dtype field bindings, just a {@code read_data} marker) and emitted
+   * {@code [{? of unknown}]}; the {@link com.ibm.wala.cast.python.ml.client.StopGradient} generator
+   * now reads {@code input}'s shape/dtype directly via the same {@code shapesOfArg} / {@code
+   * dtypesOfArg} pattern as {@link com.ibm.wala.cast.python.ml.client.Sigmoid}.
+   */
+  @Test
+  public void testStopGradient()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_stop_gradient.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Tier-1 generator (wala/ML#449): {@code tf.nn.bias_add(value, bias)} returns a fresh tensor with
+   * the same shape and dtype as {@code value} (bias is broadcast-added but doesn't change the
+   * receiver's shape).
+   */
+  @Test
+  public void testBiasAdd()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_bias_add.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
   }
 
   /**
