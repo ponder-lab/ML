@@ -975,6 +975,24 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String LOG_SOFTMAX_SIGNATURE = "tf.nn.log_softmax()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/rank. */
+  public static final MethodReference RANK =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/rank")),
+          AstMethodReference.fnSelector);
+
+  private static final String RANK_SIGNATURE = "tf.rank()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/size. */
+  public static final MethodReference SIZE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/size")),
+          AstMethodReference.fnSelector);
+
+  private static final String SIZE_SIGNATURE = "tf.size()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/identity. */
   public static final MethodReference IDENTITY =
       MethodReference.findOrCreate(
@@ -1193,6 +1211,8 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(EXP.getDeclaringClass(), EXP_SIGNATURE),
           Map.entry(RSQRT.getDeclaringClass(), RSQRT_SIGNATURE),
           Map.entry(LOG_SOFTMAX.getDeclaringClass(), LOG_SOFTMAX_SIGNATURE),
+          Map.entry(RANK.getDeclaringClass(), RANK_SIGNATURE),
+          Map.entry(SIZE.getDeclaringClass(), SIZE_SIGNATURE),
           Map.entry(IDENTITY.getDeclaringClass(), IDENTITY_SIGNATURE),
           Map.entry(STOP_GRADIENT.getDeclaringClass(), STOP_GRADIENT_SIGNATURE),
           Map.entry(SOFTMAX.getDeclaringClass(), SOFTMAX_SIGNATURE),

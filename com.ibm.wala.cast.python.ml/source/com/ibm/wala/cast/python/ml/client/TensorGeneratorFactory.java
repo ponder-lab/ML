@@ -79,6 +79,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANDOM_NORMAL_INIT_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANGE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.READ_DATA_SETS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_ALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_LOGSUMEXP;
@@ -88,6 +89,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_PROD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_SUM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RSQRT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIGMOID;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIZE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SLICE_BUILTIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SOFTMAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SOFTMAX_CROSS_ENTROPY_WITH_LOGITS;
@@ -1083,6 +1085,8 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, EXP.getDeclaringClass())) return new Exp(source);
     else if (isType(calledFunction, RSQRT.getDeclaringClass())) return new Rsqrt(source);
     else if (isType(calledFunction, LOG_SOFTMAX.getDeclaringClass())) return new LogSoftmax(source);
+    else if (isType(calledFunction, RANK.getDeclaringClass())) return new Rank(source);
+    else if (isType(calledFunction, SIZE.getDeclaringClass())) return new Size(source);
     else if (isType(calledFunction, IDENTITY.getDeclaringClass())) return new Identity(source);
     else if (isType(calledFunction, STOP_GRADIENT.getDeclaringClass()))
       return new StopGradient(source);

@@ -1425,27 +1425,19 @@
         </method>
       </class>
       <class name="rank" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/rank -->
-        <method name="read_data" descriptor="()LRoot;">
-          <new def="z" class="Ltensorflow/functions/constant" />
-          <call class="Ltensorflow/functions/constant" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="1" numArgs="2" def="x" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="input name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="x" />
-          <return value="x" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/rank. Modeled as `<new>+<return>` so the factory dispatches to the dedicated `Rank` generator (wala/ML#449 Tier 4); pre-fix routed through the `read_data → constant.do(z, 1)` materialization chain which gave ⊤ via `ReadDataFallback`.
+          Output is intrinsic to the API (scalar int32 = number of dims of `input`); shape/dtype are hardcoded in the generator rather than read from any arg. Param shape `self input name` matches `sigmoid`. -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self input name">
+          <new def="res" class="Ltensorflow/functions/rank" />
+          <return value="res" />
         </method>
       </class>
       <class name="size" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/size -->
-        <method name="read_data" descriptor="()LRoot;">
-          <new def="z" class="Ltensorflow/functions/constant" />
-          <call class="Ltensorflow/functions/constant" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="1" numArgs="2" def="x" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="input out_type name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="x" />
-          <return value="x" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/size. Modeled as `<new>+<return>` for the same reason as `rank` — wala/ML#449 Tier 4. Output is intrinsic (scalar = total number of elements). Default dtype is int32; the `out_type` arg can override to int64 (the analysis' DType
+          lattice models int32, int64, and a handful of others — uint32/uint64 from the runtime API aren't in the lattice). The generator currently hardcodes int32 — extending to honor `out_type` is a clean follow-up if a fixture surfaces the need. -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self input out_type name">
+          <new def="res" class="Ltensorflow/functions/size" />
+          <return value="res" />
         </method>
       </class>
       <class name="tensor_scatter_nd_update" allocatable="true">
