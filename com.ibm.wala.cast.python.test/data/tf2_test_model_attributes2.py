@@ -13,4 +13,6 @@ outputs = tf.keras.layers.Dense(5, activation=tf.nn.softmax)(x)
 model = tf.keras.Model(inputs=inputs, outputs=outputs)
 
 for i in model.trainable_weights:
+    assert i.dtype == tf.float32
+    assert i.shape in [(3, 4), (4,), (4, 5), (5,)]
     f(i)

@@ -11,7 +11,15 @@ nested_row_lengths = [
     tensorflow.constant([2, 0, 3, 1, 1], tensorflow.int64),
 ]
 x = tensorflow.keras.Input(shape=[None], dtype=tensorflow.string)
+arg1 = RaggedTensor.from_nested_row_lengths(x, nested_row_lengths)
+assert arg1.shape == (4, None, None, None)
+assert arg1.dtype == tensorflow.string
+
+arg2 = RaggedTensor.from_nested_row_lengths(x, nested_row_lengths)
+assert arg2.shape == (4, None, None, None)
+assert arg2.dtype == tensorflow.string
+
 y = add(
-    RaggedTensor.from_nested_row_lengths(x, nested_row_lengths),
-    RaggedTensor.from_nested_row_lengths(x, nested_row_lengths),
+    arg1,
+    arg2,
 )
