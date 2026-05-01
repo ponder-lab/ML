@@ -6422,6 +6422,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_convert_to_tensor.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
+  /**
+   * Lock-in test for wala/ML#456: {@code tf.data.Dataset.reduce(initial_state, reduce_func)}
+   * returns a tensor with the same shape/dtype as {@code initial_state}. Pre-fix the {@code
+   * tensorflow/data/reduce.do()} XML called {@code read_data} virtually on its receiver, but the
+   * {@code reduce} class didn't define {@code read_data} — the call was unresolved and {@code
+   * def="xx"} bound to nothing. Pre/post-fix this test produces the same observable type ({@code
+   * [{[] of int32}]}) for {@code f}'s parameter at {@code vn=2} because the initial-state's tensor
+   * type still propagates via PA assignment edges; the test serves as a regression lock so a future
+   * XML/PA refactor that breaks the propagation surfaces here instead of regressing silently. The
+   * XML cleanup itself is hygiene — it removes the unresolved virtual call and aligns the model
+   * with TF runtime semantics ({@code reduce(...)} returns {@code initial_state}'s shape/dtype).
+   */
+  @Test
+  public void testDatasetReduce()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset_reduce.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
   @Test
   public void testConvertToTensor2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
