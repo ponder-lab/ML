@@ -12,11 +12,18 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Common base for tensor generators that produce a fresh tensor with the same shape and dtype as a
- * single input argument. Covers element-wise unary math ops ({@code tf.math.abs}, {@code
- * tf.math.tanh}, {@code tf.math.exp}, etc.), pure pass-throughs ({@code tf.identity}, {@code
- * tf.stop_gradient}), and shape-preserving normalizers ({@code tf.math.l2_normalize}, {@code
- * tf.nn.log_softmax}). See wala/ML#449 (Tier 1 + Tier 2).
+ * Common base for tensor generators that produce a fresh tensor with the same shape as a single
+ * input argument, and (for the ops currently using this base) the same dtype. Covers
+ * shape-preserving unary ops including pure pass-throughs ({@code tf.identity}, {@code
+ * tf.stop_gradient}), real-input element-wise unary math ({@code tf.math.tanh}, {@code
+ * tf.math.exp}, {@code tf.math.rsqrt}), and shape-preserving normalizers ({@code
+ * tf.math.l2_normalize}, {@code tf.nn.log_softmax}). See wala/ML#449 (Tier 1 + Tier 2).
+ *
+ * <p>Note on dtype: TensorFlow has unary ops that are shape-preserving but <em>not</em>
+ * dtype-preserving for some input dtypes — e.g., {@code tf.math.abs} returns a real dtype when
+ * given a complex input. Such ops should not extend this base directly; they need their own dtype
+ * logic or a more specialized base. The current subclasses are all dtype-preserving for the inputs
+ * they accept.
  *
  * <p>Subclasses identify the input argument via {@link #getInputParameterPosition()} and {@link
  * #getInputParameterName()}; everything else is shared. The arg-resolution itself uses the same
