@@ -10,6 +10,9 @@
  */
 package com.ibm.wala.cast.python.ipa.callgraph;
 
+import static com.ibm.wala.cast.python.types.PythonTypes.CALLABLE_METHOD_NAME;
+import static com.ibm.wala.cast.python.types.PythonTypes.CALLABLE_METHOD_NAME_FOR_KERAS_MODELS;
+import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
 import static com.ibm.wala.cast.python.util.Util.IMPORT_WILDCARD_CHARACTER;
 import static com.ibm.wala.cast.python.util.Util.MODULE_INITIALIZATION_FILENAME;
 import static com.ibm.wala.cast.python.util.Util.PYTHON_FILE_EXTENSION;
@@ -21,6 +24,7 @@ import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.ssa.ForElementGetInstruction;
+import com.ibm.wala.cast.python.ssa.PythonBinaryOpInstruction;
 import com.ibm.wala.cast.python.ssa.PythonInstructionVisitor;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
@@ -59,7 +63,6 @@ import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.CancelException;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.IntIterator;
-import com.ibm.wala.util.intset.IntSet;
 import com.ibm.wala.util.intset.IntSetUtil;
 import com.ibm.wala.util.intset.MutableIntSet;
 import com.ibm.wala.util.intset.OrdinalSet;
@@ -294,6 +297,21 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       visitInvokeInternal(inst, new DefaultInvariantComputer());
     }
 
+    /**
+     * Binop allocation synthesis is intentionally a no-op. An earlier version of this method
+     * registered a per-instruction {@link NewSiteReference} (keyed by the SSA instruction index) so
+     * the pointer analysis could track binop results (wala/ML#398). That fixed {@code
+     * testBinopThroughDataset} but caused a regression elsewhere: seeding the binop def's PTS with
+     * a non-tensor-producing {@code Lobject} instance key suppressed tensor identification for
+     * downstream values, dropping counts on {@code testNeuralNetwork}, {@code testAutoencoder*},
+     * and similar. Preserving tensor identification is a merge-safety invariant against {@code
+     * master}, so the allocation is disabled pending a narrower approach. The {@link
+     * PythonBinaryOpInstruction} scaffolding and factory override remain in place so a future
+     * gated-allocation strategy can hook here. See wala/ML#398.
+     */
+    @Override
+    public void visitPythonBinaryOp(PythonBinaryOpInstruction binop) {}
+
     @Override
     public void visitArrayLoad(SSAArrayLoadInstruction inst) {
       newFieldRead(node, inst.getArrayRef(), inst.getIndex(), inst.getDef());
@@ -454,7 +472,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
       return MethodReference.findOrCreate(
           typeReference,
-          Atom.findOrCreateAsciiAtom("do"),
+          Atom.findOrCreateAsciiAtom(DO_METHOD_NAME),
           Descriptor.findOrCreate(null, PythonTypes.rootTypeName));
     }
 
@@ -645,16 +663,69 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           PointerKey rval = getPointerKeyForLocal(caller, call.getUse(i));
 
           // If we are looking at the implicit parameter of a callable.
-          if (call.getCallSite().isDispatch() && i == 0 && refersToAnObject(rval)) {
-            // Ensure that lval's variable refers to the callable method instead of callable object.
-            IClass callable = target.getMethod().getDeclaringClass();
-            IntSet instanceKeysForCallable = this.getSystem().getInstanceKeysForClass(callable);
+          if (call.getCallSite().isDispatch()
+              && isCallable(target.getMethod().getReference())
+              && i == 0
+              && refersToAnObject(rval)) {
+            // Ensure that lval's variable refers to the callable method instead of callable object,
+            // precisely linking the object to its trampoline using the `__call__` (or similar)
+            // field.
+            IClassHierarchy cha = getClassHierarchy();
 
-            for (IntIterator it = instanceKeysForCallable.intIterator(); it.hasNext(); ) {
-              int instanceKeyIndex = it.next();
-              InstanceKey instanceKey = this.getSystem().getInstanceKey(instanceKeyIndex);
-              this.getSystem().newConstraint(lval, instanceKey);
-            }
+            Atom[] possibleFields = {
+              Atom.findOrCreateUnicodeAtom(CALLABLE_METHOD_NAME),
+              Atom.findOrCreateUnicodeAtom(CALLABLE_METHOD_NAME_FOR_KERAS_MODELS),
+              Atom.findOrCreateUnicodeAtom(DO_METHOD_NAME)
+            };
+
+            getSystem()
+                .newSideEffect(
+                    new AbstractOperator<PointsToSetVariable>() {
+                      @Override
+                      public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable[] rhs) {
+                        if (rhs[0].getValue() != null) {
+                          rhs[0]
+                              .getValue()
+                              .foreach(
+                                  i -> {
+                                    InstanceKey ik = getSystem().getInstanceKey(i);
+
+                                    for (Atom fieldName : possibleFields) {
+                                      FieldReference fieldRef =
+                                          FieldReference.findOrCreate(
+                                              PythonTypes.Root, fieldName, PythonTypes.Root);
+
+                                      IField f = cha.resolveField(fieldRef);
+
+                                      if (f != null) {
+                                        PointerKey fieldPK =
+                                            getPointerKeyFactory()
+                                                .getPointerKeyForInstanceField(ik, f);
+
+                                        getSystem().newConstraint(lval, assignOperator, fieldPK);
+                                      }
+                                    }
+                                  });
+                        }
+                        return NOT_CHANGED;
+                      }
+
+                      @Override
+                      public int hashCode() {
+                        return lval.hashCode() ^ rval.hashCode();
+                      }
+
+                      @Override
+                      public boolean equals(Object o) {
+                        return this == o;
+                      }
+
+                      @Override
+                      public String toString() {
+                        return "precise trampoline link for " + rval;
+                      }
+                    },
+                    new PointerKey[] {rval});
           } else {
             getSystem().newConstraint(lval, assignOperator, rval);
           }
@@ -722,6 +793,19 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
   }
 
   /**
+   * Returns true iff the given {@link MethodReference} is a "callable" method, i.e., a method that
+   * is used to implement the __call__ functionality of a callable object.
+   *
+   * @param methodReference The {@link MethodReference} in question.
+   * @return True iff the given {@link MethodReference} is a "callable" method.
+   */
+  private static boolean isCallable(MethodReference methodReference) {
+    String name = methodReference.getDeclaringClass().getName().toString();
+    return name.endsWith(CALLABLE_METHOD_NAME)
+        || name.endsWith(CALLABLE_METHOD_NAME_FOR_KERAS_MODELS);
+  }
+
+  /**
    * Returns true iff the given {@link PointerKey} points to at least one instance whose concrete
    * type equals {@link PythonTypes#object}.
    *
@@ -739,6 +823,21 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
       // If it's an "object" method.
       if (reference.equals(PythonTypes.object)) return true;
+
+      // Handle synthetic classes (e.g., from XML summaries) which inherit from object
+      // but are not functions or trampolines.
+      IClassHierarchy cha = pointerAnalysis.getClassHierarchy();
+      IClass objClass = cha.lookupClass(PythonTypes.object);
+      IClass trampClass = cha.lookupClass(PythonTypes.trampoline);
+
+      if (objClass != null && cha.isSubclassOf(concreteType, objClass)) {
+        if (trampClass == null || !cha.isSubclassOf(concreteType, trampClass)) {
+          // Do not treat generated trampoline classes (which contain '$') as generic objects
+          if (!concreteType.getName().toString().contains("$")) {
+            return true;
+          }
+        }
+      }
     }
 
     return false;
@@ -757,6 +856,11 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
     @Override
     public void visitBinaryOp(final SSABinaryOpInstruction instruction) {
+      bingo = true;
+    }
+
+    @Override
+    public void visitPythonBinaryOp(PythonBinaryOpInstruction binop) {
       bingo = true;
     }
 

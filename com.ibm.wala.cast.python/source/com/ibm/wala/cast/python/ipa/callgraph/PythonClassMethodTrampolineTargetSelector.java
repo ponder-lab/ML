@@ -10,6 +10,7 @@
  */
 package com.ibm.wala.cast.python.ipa.callgraph;
 
+import static com.ibm.wala.cast.python.types.PythonTypes.TRAMPOLINE_METHOD_NAME;
 import static com.ibm.wala.cast.python.types.Util.getGlobalName;
 import static com.ibm.wala.cast.python.types.Util.makeGlobalRef;
 import static com.ibm.wala.cast.python.util.Util.isClassMethod;
@@ -63,7 +64,7 @@ public class PythonClassMethodTrampolineTargetSelector<T>
             .getMethod()
             .getSelector()
             .getName()
-            .startsWith(Atom.findOrCreateAsciiAtom("trampoline"));
+            .startsWith(Atom.findOrCreateAsciiAtom(TRAMPOLINE_METHOD_NAME));
 
     return classMethodReceiver
         && !cha.isSubclassOf(receiver, cha.lookupClass(PythonTypes.trampoline))

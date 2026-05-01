@@ -15,4 +15,7 @@ sample_dataset = tf.data.Dataset.sample_from_datasets(
 )
 
 for element in sample_dataset:
+    assert isinstance(element, tf.Tensor)
+    assert element.dtype == tf.int64
+    assert element.shape == ()
     f(element)

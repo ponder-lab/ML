@@ -13,7 +13,12 @@ def g(a):
 
 def h(eds):
     for step, element in eds:
+        assert isinstance(step, int)
         f(step)
+
+        assert isinstance(element, tf.Tensor)
+        assert element.dtype == tf.int32
+        assert element.shape == ()
         g(element)
 
 
