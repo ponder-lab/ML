@@ -16,6 +16,12 @@
     <module>com.ibm.wala.cast.python.ml.test</module>
     <module>com.ibm.wala.cast.python.report</module>
   </modules>
+  <scm>
+    <connection>scm:git:https://github.com/ponder-lab/ML.git</connection>
+    <developerConnection>scm:git:git@github.com:ponder-lab/ML.git</developerConnection>
+    <tag>HEAD</tag>
+    <url>https://github.com/ponder-lab/ML</url>
+  </scm>
   <distributionManagement>
     <repository>
       <id>github</id>
