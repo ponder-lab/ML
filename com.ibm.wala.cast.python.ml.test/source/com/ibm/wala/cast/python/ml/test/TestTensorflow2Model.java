@@ -6463,6 +6463,56 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_convert_to_tensor3.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
+  /**
+   * Diagnostic for the existing {@code add_n} XML pattern (read list field 0 → {@code
+   * convert_to_tensor}). Captures the observable static-analysis output for {@code tf.add_n([t1,
+   * t2])} where both list elements are {@code tf.constant} tensors. If this test passes with {@code
+   * TENSOR_3_INT32}, the list-element-PTS path through {@code <getfield class="Llist" field="0">}
+   * works and Tier 5 ops ({@code concat}/{@code stack}/{@code meshgrid}) can use the same pattern
+   * cheaply. If it produces {@code ? of unknown}, the pattern doesn't propagate types and Tier 5
+   * needs Java-side list-element traversal logic.
+   */
+  @Test
+  public void testAddN()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_add_n.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_INT32)));
+  }
+
+  /**
+   * Tier-5 generator (wala/ML#449): {@code tf.concat(values, axis)}. Pre-fix the {@code concat} XML
+   * routed through a {@code read_data} marker that allocated a non-tensor wrapper class ({@code
+   * Ltensorflow/python/ops/array_ops/concat}), giving {@code [{? of unknown}]} via {@code
+   * ReadDataFallback}. Post-fix the XML mirrors {@code add_n}'s pattern: read field 0 of {@code
+   * values} (the input tensor list) and route through {@code convert_to_tensor}, propagating the
+   * first input's shape and dtype. Dtype propagation is sound (concat preserves dtype). Shape is
+   * conservatively inherited from the first input — runtime concat changes the {@code axis}
+   * dimension, so this is a known soundness gap; a future generator can read {@code axis} and the
+   * full {@code values} list to produce a precise shape. The lock-in here pins the observable
+   * static-analysis output.
+   */
+  @Test
+  public void testConcat()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_concat.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_INT32)));
+  }
+
+  /**
+   * Tier-5 generator (wala/ML#449): {@code tf.stack(values, axis)}. Pre-fix the {@code stack} XML
+   * routed through a {@code read_data} marker that allocated a non-tensor wrapper class ({@code
+   * Ltensorflow/python/functions/stack}), giving {@code [{? of unknown}]} via {@code
+   * ReadDataFallback}. Post-fix the XML mirrors {@code add_n} / {@code concat}'s pattern — read
+   * field 0 of {@code values} and route through {@code convert_to_tensor}. Dtype propagation is
+   * sound (stack preserves dtype). Shape is conservatively inherited from the first input — runtime
+   * stack adds a new axis (rank+1), so this is a known soundness gap; a future generator can read
+   * the {@code values} list length and {@code axis} to produce a precise shape. The lock-in here
+   * pins the observable static-analysis output.
+   */
+  @Test
+  public void testStack()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_stack.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_INT32)));
+  }
+
   @Test
   public void testConvertToTensor4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
