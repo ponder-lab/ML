@@ -62,4 +62,15 @@ jobs:
       env:
         GITHUB_USERNAME: ${{ secrets.GITHUB_USERNAME }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+      # Master pushes deploy SNAPSHOT versions; tag pushes deploy release
+      # versions. Tag pushes are critical for releases: the canonical
+      # `mvn release:prepare` flow lands two consecutive master commits
+      # ("Prepare for release X.Y.0." and "Set version for next development
+      # iteration to ...") in quick succession, and `concurrency:
+      # cancel-in-progress` cancels the first one — so the release version
+      # is only ever briefly on master and the SNAPSHOT-bump's run cancels
+      # the release run before its deploy step completes. Tag pushes are
+      # exempt from `cancel-in-progress` (per the workflow's `concurrency`
+      # block) and therefore reliably finish the deploy. Restricted to
+      # version-like tags (`0.*`) so legacy/non-release tags don't re-deploy.
+      if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/0.')) }}
