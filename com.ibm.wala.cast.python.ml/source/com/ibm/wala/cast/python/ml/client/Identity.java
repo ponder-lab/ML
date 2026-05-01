@@ -25,7 +25,12 @@ import java.util.Set;
  */
 public class Identity extends TensorGenerator {
 
-  /** Positional parameters of {@code tf.identity.do()}: {@code input name}. */
+  /**
+   * Positional parameters of {@code tf.identity.do()}, excluding the modeled {@code self} (the
+   * function-object receiver). Modeled as {@code self input name} in the XML — same shape as {@code
+   * Sigmoid} — but the enum indices map to argument positions <em>after</em> {@code self}, which
+   * {@link TensorGenerator#getArgumentValueNumber(int)} skips automatically for non-static methods.
+   */
   private enum Parameters {
     /** The input tensor. */
     INPUT;

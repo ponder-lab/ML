@@ -27,7 +27,13 @@ import java.util.Set;
  */
 public class StopGradient extends TensorGenerator {
 
-  /** Positional parameters of {@code tf.stop_gradient.do()}: {@code input name}. */
+  /**
+   * Positional parameters of {@code tf.stop_gradient.do()}, excluding the modeled {@code self} (the
+   * function-object receiver). Modeled as {@code self input name} in the XML — same shape as {@code
+   * Identity} / {@code Sigmoid} — but the enum indices map to argument positions <em>after</em>
+   * {@code self}, which {@link TensorGenerator#getArgumentValueNumber(int)} skips automatically for
+   * non-static methods.
+   */
   private enum Parameters {
     /** The input tensor. */
     INPUT;
@@ -54,8 +60,9 @@ public class StopGradient extends TensorGenerator {
    * Constructs a {@code StopGradient} anchored to a manual node. Used by {@link
    * TensorGenerator#createManualGenerator}.
    *
-   * @param node The {@link CGNode} for the {@code stop_gradient.do()} or {@code
-   *     stop_gradient.read_data()} synthetic method.
+   * @param node The {@link CGNode} for the {@code stop_gradient.do()} synthetic method. (Pre-fix
+   *     this could also be the {@code read_data()} synthetic, but the new XML model uses {@code
+   *     <new>+<return>} in {@code do()} directly — no {@code read_data} entry point.)
    */
   public StopGradient(CGNode node) {
     super(node);
