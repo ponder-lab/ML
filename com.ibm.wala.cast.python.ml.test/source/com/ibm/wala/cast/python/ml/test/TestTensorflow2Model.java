@@ -6447,6 +6447,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Companion to {@link #testIdentity()} exercising the keyword-argument call site {@code
+   * tf.identity(input=...)}. The arg-resolution helpers in {@link
+   * com.ibm.wala.cast.python.ml.client.Identity} (and the underlying {@code
+   * getArgumentPointsToSet(builder, paramPos, paramName)}) resolve keyword args via {@code
+   * paramName}; without a kwarg fixture that branch is dead-on-arrival in the test data.
+   */
+  @Test
+  public void testIdentityKwarg()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_identity_kwarg.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_INT32)));
+  }
+
+  /**
    * Tier-1 generator (wala/ML#449): {@code tf.stop_gradient(input)} returns a fresh tensor with the
    * same shape and dtype as {@code input}. Pre-fix this routed through {@code ReadDataFallback}
    * (the alloc has no value/dtype field bindings, just a {@code read_data} marker) and emitted
@@ -6460,6 +6473,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_stop_gradient.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
   }
 
+  /** Companion to {@link #testStopGradient()} exercising the keyword-argument call site. */
+  @Test
+  public void testStopGradientKwarg()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_stop_gradient_kwarg.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
   /**
    * Tier-1 generator (wala/ML#449): {@code tf.nn.bias_add(value, bias)} returns a fresh tensor with
    * the same shape and dtype as {@code value} (bias is broadcast-added but doesn't change the
@@ -6469,6 +6489,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testBiasAdd()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_bias_add.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testBiasAdd()} exercising the all-keyword call site {@code
+   * tf.nn.bias_add(value=..., bias=...)}.
+   */
+  @Test
+  public void testBiasAddKwarg()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_bias_add_kwarg.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
   }
 
   /**
