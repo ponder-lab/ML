@@ -1023,19 +1023,18 @@
         </method>
       </class>
       <class name="reduce_all" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/reduce_all -->
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self input_tensor axis keepdims name">
-          <new def="z" class="Ltensorflow/functions/convert_to_tensor" />
-          <call class="Ltensorflow/functions/convert_to_tensor" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="input_tensor" numArgs="2" def="y" />
-          <return value="y" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_all. Modeled as `<new>+<return>` so the factory dispatches to the dedicated `ReduceAll` generator (wala/ML#449 Tier 3); the `convert_to_tensor` chain preserved input's shape, but reductions collapse dims along `axis`.
+          Shape logic lives in `ReduceMean`'s axis/keepdims handling, which `ReduceAll` reuses by inheritance; dtype is always `BOOL`. -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
+          <new def="res" class="Ltensorflow/math/reduce_all" />
+          <return value="res" />
         </method>
       </class>
       <class name="reduce_prod" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/reduce_prod -->
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self input_tensor axis keepdims name">
-          <new def="z" class="Ltensorflow/functions/convert_to_tensor" />
-          <call class="Ltensorflow/functions/convert_to_tensor" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="input_tensor" numArgs="2" def="y" />
-          <return value="y" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_prod. Modeled as `<new>+<return>` for the same reason — wala/ML#449 Tier 3. Output dtype inherits from input (no int→float32 promotion like `reduce_mean`). -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
+          <new def="res" class="Ltensorflow/math/reduce_prod" />
+          <return value="res" />
         </method>
       </class>
       <class name="tanh" allocatable="true">
@@ -1055,19 +1054,18 @@
         </method>
       </class>
       <class name="reduce_max" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/reduce_max -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_max. Modeled as `<new>+<return>` for the same reason as `reduce_all`/`reduce_prod` — wala/ML#449 Tier 3. Output dtype inherits from input (no int→float32 promotion like `reduce_mean`). -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
-          <new def="z" class="Ltensorflow/functions/convert_to_tensor" />
-          <call class="Ltensorflow/functions/convert_to_tensor" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="input_tensor" numArgs="2" def="y" />
-          <return value="y" />
+          <new def="res" class="Ltensorflow/math/reduce_max" />
+          <return value="res" />
         </method>
       </class>
       <class name="reduce_logsumexp" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/reduce_logsumexp -->
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self input_tensor axis keepdims name">
-          <new def="z" class="Ltensorflow/functions/convert_to_tensor" />
-          <call class="Ltensorflow/functions/convert_to_tensor" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="input_tensor" numArgs="2" def="y" />
-          <return value="y" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_logsumexp. Modeled as `<new>+<return>` for the same reason — wala/ML#449 Tier 3. Output dtype inherits from input (`reduce_logsumexp` requires float input at runtime; static analysis just preserves whatever the input
+          dtype was). -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
+          <new def="res" class="Ltensorflow/math/reduce_logsumexp" />
+          <return value="res" />
         </method>
       </class>
       <class name="acos" allocatable="true">
