@@ -690,6 +690,43 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String REDUCE_MEAN_SIGNATURE = "tf.reduce_mean()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/math/reduce_max. */
+  public static final MethodReference REDUCE_MAX =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/reduce_max")),
+          AstMethodReference.fnSelector);
+
+  private static final String REDUCE_MAX_SIGNATURE = "tf.reduce_max()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/reduce_prod. */
+  public static final MethodReference REDUCE_PROD =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/reduce_prod")),
+          AstMethodReference.fnSelector);
+
+  private static final String REDUCE_PROD_SIGNATURE = "tf.reduce_prod()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/reduce_logsumexp. */
+  public static final MethodReference REDUCE_LOGSUMEXP =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/math/reduce_logsumexp")),
+          AstMethodReference.fnSelector);
+
+  private static final String REDUCE_LOGSUMEXP_SIGNATURE = "tf.reduce_logsumexp()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/reduce_all. */
+  public static final MethodReference REDUCE_ALL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/reduce_all")),
+          AstMethodReference.fnSelector);
+
+  private static final String REDUCE_ALL_SIGNATURE = "tf.reduce_all()";
+
   public static final MethodReference MODEL =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
@@ -1100,6 +1137,10 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(SUBTRACT.getDeclaringClass(), SUBTRACT_SIGNATURE),
           Map.entry(DIVIDE.getDeclaringClass(), DIVIDE_SIGNATURE),
           Map.entry(REDUCE_MEAN.getDeclaringClass(), REDUCE_MEAN_SIGNATURE),
+          Map.entry(REDUCE_MAX.getDeclaringClass(), REDUCE_MAX_SIGNATURE),
+          Map.entry(REDUCE_PROD.getDeclaringClass(), REDUCE_PROD_SIGNATURE),
+          Map.entry(REDUCE_LOGSUMEXP.getDeclaringClass(), REDUCE_LOGSUMEXP_SIGNATURE),
+          Map.entry(REDUCE_ALL.getDeclaringClass(), REDUCE_ALL_SIGNATURE),
           Map.entry(MODEL.getDeclaringClass(), MODEL_SIGNATURE),
           Map.entry(MODEL_CALL.getDeclaringClass(), MODEL_CALL_SIGNATURE),
           Map.entry(TENSOR.getDeclaringClass(), TENSOR_SIGNATURE),
