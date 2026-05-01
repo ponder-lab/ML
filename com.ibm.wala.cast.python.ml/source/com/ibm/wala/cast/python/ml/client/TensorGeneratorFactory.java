@@ -50,6 +50,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_ROW_STARTS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_VALUE_ROWIDS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA_OP;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IDENTITY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG;
@@ -95,6 +96,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_FROM_DENSE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.STOP_GRADIENT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SUBTRACT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TEXT_LINE_DATASET_TYPE;
@@ -1081,6 +1083,9 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, EXP.getDeclaringClass())) return new Exp(source);
     else if (isType(calledFunction, RSQRT.getDeclaringClass())) return new Rsqrt(source);
     else if (isType(calledFunction, LOG_SOFTMAX.getDeclaringClass())) return new LogSoftmax(source);
+    else if (isType(calledFunction, IDENTITY.getDeclaringClass())) return new Identity(source);
+    else if (isType(calledFunction, STOP_GRADIENT.getDeclaringClass()))
+      return new StopGradient(source);
     else if (isType(calledFunction, SOFTMAX.getDeclaringClass())) return new Softmax(source);
     else if (isType(calledFunction, DENSE_CALL.getDeclaringClass())) return new DenseCall(source);
     else if (isType(calledFunction, MODEL_CALL.getDeclaringClass())) return new ModelCall(source);
