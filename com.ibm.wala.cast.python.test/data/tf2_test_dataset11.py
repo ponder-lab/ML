@@ -14,5 +14,10 @@ def g(a):
 dataset = tf.data.Dataset.from_tensor_slices([1, 2, 3])
 
 for step, element in enumerate(dataset, 1):
+    assert isinstance(step, int)
     f(step)
+
+    assert isinstance(element, tf.Tensor)
+    assert element.shape == ()
+    assert element.dtype == tf.int32
     g(element)

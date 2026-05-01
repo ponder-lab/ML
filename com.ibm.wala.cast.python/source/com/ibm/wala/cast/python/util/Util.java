@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.util;
 
 import static com.google.common.collect.Iterables.concat;
 import static com.google.common.io.Files.getNameWithoutExtension;
+import static com.ibm.wala.cast.python.types.PythonTypes.ARTIFICIAL_SUFFIX_FOR_TRAMPOLINED_SYNTHETIC_CLASSES;
 import static com.ibm.wala.cast.python.types.PythonTypes.CAST_DYNAMIC_ANNOTATION;
 import static com.ibm.wala.cast.python.types.PythonTypes.CLASS_METHOD;
 import static com.ibm.wala.types.annotations.Annotation.make;
@@ -11,14 +12,26 @@ import static java.util.stream.Collectors.toList;
 import com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKeys.ScopeMappingInstanceKey;
 import com.ibm.wala.cast.python.ipa.callgraph.PytestEntrypointBuilder;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
+import com.ibm.wala.cast.python.ssa.PythonBinaryOpInstruction;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
+import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.tree.CAstAnnotation;
 import com.ibm.wala.cast.tree.CAstNode;
 import com.ibm.wala.classLoader.IClass;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.Entrypoint;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey;
+import com.ibm.wala.ssa.SSAGetInstruction;
+import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSANewInstruction;
+import com.ibm.wala.types.TypeReference;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -34,6 +47,52 @@ public class Util {
 
   /** Key used to map annotations (decorators) to names. */
   public static final String DYNAMIC_ANNOTATION_KEY = "dynamicAnnotation";
+
+  /**
+   * Retrieves the value number of the receiver object for a method call.
+   *
+   * @param node The call graph node containing the instruction.
+   * @param call The invocation instruction.
+   * @return The value number of the receiver, or -1 if not found.
+   */
+  public static int getReceiverValueNumber(CGNode node, PythonInvokeInstruction call) {
+    int funcVn = call.getUse(0);
+    SSAInstruction funcDef = node.getDU().getDef(funcVn);
+    if (funcDef instanceof SSAGetInstruction) {
+      return ((SSAGetInstruction) funcDef).getRef();
+    } else if (funcDef instanceof PythonPropertyRead) {
+      return ((PythonPropertyRead) funcDef).getObjectRef();
+    }
+    return -1;
+  }
+
+  /**
+   * Finds the value number of the definition corresponding to the given allocation site in the
+   * given call graph node.
+   *
+   * @param node The call graph node to search.
+   * @param asin The allocation site in question.
+   * @return The value number of the definition, or -1 if not found.
+   */
+  public static int findDefinition(CGNode node, AllocationSiteInNode asin) {
+    if (node.getIR() == null) return -1;
+    int sitePC = asin.getSite().getProgramCounter();
+    for (SSAInstruction inst : node.getIR().getInstructions()) {
+      if (inst == null) continue;
+      if (inst instanceof SSANewInstruction) {
+        SSANewInstruction newInst = (SSANewInstruction) inst;
+        if (newInst.getNewSite().equals(asin.getSite())) {
+          return newInst.getDef();
+        }
+      } else if (inst instanceof PythonBinaryOpInstruction && inst.iIndex() == sitePC) {
+        // wala/ML#398: PythonBinaryOpInstruction synthesises a per-instruction allocation site
+        // keyed by iIndex so the PA can track binop results. Recognise that site here so shape
+        // inference can delegate to ElementWiseOperation via the defining SSA instruction.
+        return inst.getDef();
+      }
+    }
+    return -1;
+  }
 
   /** Name of the annotation (decorator) that marks methods as static. */
   public static final String STATIC_METHOD_ANNOTATION_NAME = "staticmethod";
@@ -229,5 +288,46 @@ public class Util {
               + ". Not expecting: "
               + instanceKey.getClass()
               + ".");
+  }
+
+  /**
+   * Returns the {@link TypeReference} of the function represented by the {@link CGNode} associated
+   * with the given {@link PointsToSetVariable}.
+   *
+   * @param source The {@link PointsToSetVariable} whose associated {@link CGNode}'s function {@link
+   *     TypeReference} is to be retrieved.
+   * @return The {@link TypeReference} of the function represented by the {@link CGNode} associated
+   *     with the given {@link PointsToSetVariable}.
+   */
+  public static TypeReference getFunction(PointsToSetVariable source) {
+    PointerKey k = source.getPointerKey();
+
+    if (k instanceof LocalPointerKey)
+      return sanitize(
+          ((LocalPointerKey) k).getNode().getMethod().getDeclaringClass().getReference());
+    else if (k instanceof ReturnValueKey)
+      return sanitize(
+          ((ReturnValueKey) k).getNode().getMethod().getDeclaringClass().getReference());
+
+    throw new IllegalArgumentException("Unsupported PointerKey type: " + k.getClass() + ".");
+  }
+
+  /**
+   * Removes the artificial "/class" suffix from the given {@link TypeReference} if it is present.
+   *
+   * <p>This suffix is used to generate trampolines for synthetic (summarized) instance methods, but
+   * it is not part of the actual type reference for the method's class.
+   *
+   * @param reference The {@link TypeReference} to sanitize.
+   * @return The sanitized {@link TypeReference} with the "/class" suffix removed if it was present,
+   *     or the original {@link TypeReference} if the suffix was not present.
+   */
+  public static TypeReference sanitize(TypeReference reference) {
+    return TypeReference.findOrCreate(
+        reference.getClassLoader(),
+        reference
+            .getName()
+            .toString()
+            .replace("/" + ARTIFICIAL_SUFFIX_FOR_TRAMPOLINED_SYNTHETIC_CLASSES, ""));
   }
 }
