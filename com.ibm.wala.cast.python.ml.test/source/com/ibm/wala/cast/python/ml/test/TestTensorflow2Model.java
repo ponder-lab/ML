@@ -2142,6 +2142,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_exp.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
   }
 
+  /**
+   * Companion to {@link #testExp()} exercising the keyword-argument call site {@code
+   * tf.math.exp(x=...)}. {@link com.ibm.wala.cast.python.ml.client.PassThroughUnaryTensorGenerator}
+   * routes argument resolution through {@code getArgumentPointsToSet(builder, paramPos, paramName)}
+   * which resolves keyword args via {@code paramName}; without a kwarg fixture that branch is
+   * dead-on-arrival in the test data.
+   */
+  @Test
+  public void testExpKwarg()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_exp_kwarg.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
   @Test
   public void testTanh()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -2154,10 +2167,27 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_rsqrt.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
   }
 
+  /** Companion to {@link #testRsqrt()} exercising the keyword-argument call site. */
+  @Test
+  public void testRsqrtKwarg()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_rsqrt_kwarg.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
   @Test
   public void testLogSoftmax()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_log_softmax.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testLogSoftmax()} exercising the keyword-argument call site {@code
+   * tf.nn.log_softmax(logits=...)}.
+   */
+  @Test
+  public void testLogSoftmaxKwarg()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_log_softmax_kwarg.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
   }
 
   @Test
