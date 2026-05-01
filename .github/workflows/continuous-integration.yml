@@ -57,20 +57,34 @@ jobs:
         slug: ponder-lab/ML
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    # Verify any tag-push deploy is on a commit that's an ancestor of master
+    # (per wala/ML#421). Without this, a feature-branch tag could trigger a
+    # release deploy. The actions/checkout above is shallow so we need a
+    # fetch first to get master's history available locally.
+    - name: Verify tag is on master
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        git fetch --no-tags --depth=1 origin master
+        git merge-base --is-ancestor ${{ github.sha }} origin/master
     - name: Deploy with Maven
       run: mvn -s .ci.settings.xml -Dgithub.username=$GITHUB_USERNAME -Dgithub.password=$GITHUB_TOKEN deploy -DskipTests -B
       env:
         GITHUB_USERNAME: ${{ secrets.GITHUB_USERNAME }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # Master pushes deploy SNAPSHOT versions; tag pushes deploy release
-      # versions. Tag pushes are critical for releases: the canonical
-      # `mvn release:prepare` flow lands two consecutive master commits
-      # ("Prepare for release X.Y.0." and "Set version for next development
-      # iteration to ...") in quick succession, and `concurrency:
-      # cancel-in-progress` cancels the first one — so the release version
-      # is only ever briefly on master and the SNAPSHOT-bump's run cancels
-      # the release run before its deploy step completes. Tag pushes are
-      # exempt from `cancel-in-progress` (per the workflow's `concurrency`
-      # block) and therefore reliably finish the deploy. Restricted to
-      # version-like tags (`0.*`) so legacy/non-release tags don't re-deploy.
+      # Hybrid deploy gate (per wala/ML#421). Master pushes deploy SNAPSHOT
+      # versions (continuous SNAPSHOT publishing for downstream consumers
+      # like ponder-lab/Hybridize-Functions-Refactoring). Tag pushes deploy
+      # the immutable release. Tag pushes are critical for releases: the
+      # canonical `mvn release:prepare` flow lands two consecutive master
+      # commits ("Prepare for release X.Y.0." and "Set version for next
+      # development iteration to ...") in quick succession, and
+      # `concurrency: cancel-in-progress` cancels the first one — so the
+      # release version is only ever briefly on master and the
+      # SNAPSHOT-bump's run cancels the release run before its deploy step
+      # completes. Tag pushes are exempt from `cancel-in-progress` (per the
+      # workflow's `concurrency` block) and therefore reliably finish the
+      # deploy. Restricted to version-like tags (`0.*`) so legacy/non-release
+      # tags don't re-deploy. The ancestor-of-master check above further
+      # filters to tags that are on master — feature-branch tags don't
+      # publish.
       if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/0.')) }}
