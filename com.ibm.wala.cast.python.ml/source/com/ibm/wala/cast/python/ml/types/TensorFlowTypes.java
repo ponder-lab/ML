@@ -697,7 +697,7 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/reduce_max")),
           AstMethodReference.fnSelector);
 
-  private static final String REDUCE_MAX_SIGNATURE = "tf.math.reduce_max()";
+  private static final String REDUCE_MAX_SIGNATURE = "tf.reduce_max()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/math/reduce_prod. */
   public static final MethodReference REDUCE_PROD =
@@ -706,7 +706,7 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/reduce_prod")),
           AstMethodReference.fnSelector);
 
-  private static final String REDUCE_PROD_SIGNATURE = "tf.math.reduce_prod()";
+  private static final String REDUCE_PROD_SIGNATURE = "tf.reduce_prod()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/math/reduce_logsumexp. */
   public static final MethodReference REDUCE_LOGSUMEXP =
@@ -716,7 +716,7 @@ public class TensorFlowTypes extends PythonTypes {
               TypeName.string2TypeName("Ltensorflow/math/reduce_logsumexp")),
           AstMethodReference.fnSelector);
 
-  private static final String REDUCE_LOGSUMEXP_SIGNATURE = "tf.math.reduce_logsumexp()";
+  private static final String REDUCE_LOGSUMEXP_SIGNATURE = "tf.reduce_logsumexp()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/math/reduce_all. */
   public static final MethodReference REDUCE_ALL =
@@ -725,7 +725,7 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/reduce_all")),
           AstMethodReference.fnSelector);
 
-  private static final String REDUCE_ALL_SIGNATURE = "tf.math.reduce_all()";
+  private static final String REDUCE_ALL_SIGNATURE = "tf.reduce_all()";
 
   public static final MethodReference MODEL =
       MethodReference.findOrCreate(
