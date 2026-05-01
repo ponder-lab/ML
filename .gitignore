@@ -14,6 +14,7 @@ Sessionx.vim
 # Temporary
 .netrwhist
 *~
+.~lock.*#
 # Auto-generated tag files
 tags
 # Persistent undo
@@ -65,14 +66,17 @@ buildNumber.properties
 # Temporary output
 callgraph.pdf
 temp.dt
+maven_build_stats.csv
 
 # Log output
 *.log
 
 bin/
 
-# gemini-cli settings
-.gemini/
+
 
 # GitHub App credentials
 gha-creds-*.json
+
+# Claude Code local settings
+.claude/

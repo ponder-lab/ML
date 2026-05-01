@@ -19,4 +19,7 @@ choice_dataset = tf.data.Dataset.range(3).repeat(3)
 result = tf.data.Dataset.choose_from_datasets(datasets, choice_dataset)
 
 for element in result:
+    assert isinstance(element, tf.Tensor)
+    assert element.shape == ()
+    assert element.dtype == tf.string
     f(element)

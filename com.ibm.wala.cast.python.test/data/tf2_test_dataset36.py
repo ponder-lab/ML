@@ -30,5 +30,11 @@ length = 1
 
 for _ in range(length):
     x, y = next(c.some_iter)
+    assert isinstance(x, tf.Tensor)
+    assert x.shape == ()
+    assert x.dtype == tf.string
     id1(x)
+    assert isinstance(y, tf.Tensor)
+    assert y.shape == ()
+    assert y.dtype == tf.string
     id2(y)

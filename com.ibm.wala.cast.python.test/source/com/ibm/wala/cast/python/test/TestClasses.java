@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.test;
 
+import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.SSAPropagationCallGraphBuilder;
@@ -34,7 +35,15 @@ public class TestClasses extends TestJythonCallGraphShape {
   @Test
   public void testClasses1()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    CallGraph CG = process("classes1.py");
+    PythonAnalysisEngine<?> engine = makeEngine("classes1.py");
+    SSAPropagationCallGraphBuilder builder =
+        (SSAPropagationCallGraphBuilder) engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+
+    CAstCallGraphUtil.AVOID_DUMP.set(false);
+    CAstCallGraphUtil.dumpCG(builder.getCFAContextInterpreter(), builder.getPointerAnalysis(), CG);
+    System.err.println("Call graph:\n" + CG);
+
     verifyGraphAssertions(CG, assertionsClasses1);
   }
 

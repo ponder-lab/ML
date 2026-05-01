@@ -13,7 +13,12 @@ with g.as_default():
     c = tf.constant(30.0)
     assert c.graph is g
 
-result = value_index(
-    numpy.ndarray(g.get_operations()[0], 0, tf.float32),
-    numpy.ndarray(g.get_operations()[0], 0, tf.float32),
-)
+arg1 = numpy.ndarray(g.get_operations()[0], 0, tf.float32)
+assert arg1.shape == []
+assert arg1.dtype == tf.float32
+
+arg2 = numpy.ndarray(g.get_operations()[0], 0, tf.float32)
+assert arg2.shape == []
+assert arg2.dtype == tf.float32
+
+result = value_index(arg1, arg2)

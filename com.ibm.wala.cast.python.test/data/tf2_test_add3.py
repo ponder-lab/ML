@@ -8,4 +8,6 @@ def f(a):
 x = [1, 2, 3, 4, 5]
 y = tf.constant([1, 2, 3, 4, 5])
 z = tf.add(x, y)
+assert z.shape.as_list() == [5]
+assert z.dtype == tf.int32
 f(z)

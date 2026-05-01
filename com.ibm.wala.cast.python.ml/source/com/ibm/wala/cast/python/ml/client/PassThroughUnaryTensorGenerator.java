@@ -1,0 +1,141 @@
+package com.ibm.wala.cast.python.ml.client;
+
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Common base for tensor generators that produce a fresh tensor with the same shape as a single
+ * input argument, and (for the ops currently using this base) the same dtype. Currently extended by
+ * {@link Exp}, {@link Rsqrt}, and {@link LogSoftmax}. {@link Identity} and {@link StopGradient}
+ * (added in PR #202) follow the same pattern by hand and should be refactored onto this base once
+ * #202 lands. The base is intended for shape-preserving unary ops more broadly — including
+ * additional real-input element-wise unary math ({@code tf.math.tanh}) and shape-preserving
+ * normalizers ({@code tf.math.l2_normalize}) — but those generators don't yet extend this base. See
+ * wala/ML#449 (Tier 1 + Tier 2).
+ *
+ * <p>Note on dtype: TensorFlow has unary ops that are shape-preserving but <em>not</em>
+ * dtype-preserving for some input dtypes — e.g., {@code tf.math.abs} returns a real dtype when
+ * given a complex input. Such ops should not extend this base directly; they need their own dtype
+ * logic or a more specialized base. The current subclasses are all dtype-preserving for the inputs
+ * they accept.
+ *
+ * <p>Subclasses identify the input argument via {@link #getInputParameterPosition()} and {@link
+ * #getInputParameterName()}; everything else is shared. The arg-resolution itself uses the same
+ * PTS-first-with-caller-walk-fallback pattern as {@link Sigmoid} (which predates this base and
+ * still has its own copy — left untouched here to keep this change reviewable; refactoring {@code
+ * Sigmoid}/{@code Identity}/{@code StopGradient} onto this base is a clean follow-up once {@code
+ * #202} lands).
+ *
+ * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
+ */
+public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
+
+  /**
+   * Constructs from a caller-side {@link PointsToSetVariable}.
+   *
+   * @param source The {@link PointsToSetVariable} whose defining instruction is the invoke.
+   */
+  protected PassThroughUnaryTensorGenerator(PointsToSetVariable source) {
+    super(source);
+  }
+
+  /**
+   * Constructs anchored to a manual node.
+   *
+   * @param node The {@link CGNode} for the synthetic {@code do()} method.
+   */
+  protected PassThroughUnaryTensorGenerator(CGNode node) {
+    super(node);
+  }
+
+  /**
+   * Positional index of the input argument, <em>excluding</em> the modeled {@code self} receiver.
+   * Almost always {@code 0} (the first user-facing positional after {@code self}).
+   *
+   * @return The input arg's positional index.
+   */
+  protected abstract int getInputParameterPosition();
+
+  /**
+   * Keyword name of the input argument as declared in the XML (e.g. {@code "x"}, {@code "input"},
+   * {@code "logits"}). Used for keyword-argument resolution when the call site uses kwargs.
+   *
+   * @return The input arg's keyword name.
+   */
+  protected abstract String getInputParameterName();
+
+  @Override
+  protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    return shapesOfArg(builder, getInputParameterPosition(), getInputParameterName());
+  }
+
+  @Override
+  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    Set<DType> dtypes = dtypesOfArg(builder, getInputParameterPosition(), getInputParameterName());
+    return dtypes == null || dtypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : dtypes;
+  }
+
+  /**
+   * PTS-first arg-shape resolver with caller-walk fallback. Mirrors {@link Sigmoid#shapesOfArg}.
+   *
+   * @param builder The propagation call graph builder.
+   * @param paramPos The positional index of the arg.
+   * @param paramName The keyword parameter name.
+   * @return The resolved shapes, or {@code null} if neither path recovers.
+   */
+  private Set<List<Dimension<?>>> shapesOfArg(
+      PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPos, paramName);
+    if (pts != null && !pts.isEmpty()) {
+      Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, pts);
+      if (shapes != null && !shapes.isEmpty()) return shapes;
+    }
+    return this.getArgumentShapesViaCallers(builder, paramPos, paramName);
+  }
+
+  /**
+   * Dtype counterpart of {@link #shapesOfArg}.
+   *
+   * @param builder The propagation call graph builder.
+   * @param paramPos The positional index of the arg.
+   * @param paramName The keyword parameter name.
+   * @return The resolved dtypes, or {@code null} if neither path recovers.
+   */
+  private Set<DType> dtypesOfArg(
+      PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPos, paramName);
+    if (pts != null && !pts.isEmpty()) {
+      Set<DType> dtypes = this.getDTypesOfValue(builder, pts);
+      if (dtypes != null && !dtypes.isEmpty()) return dtypes;
+    }
+    return this.getArgumentDTypesViaCallers(builder, paramPos, paramName);
+  }
+
+  @Override
+  protected int getShapeParameterPosition() {
+    return UNDEFINED_PARAMETER_POSITION;
+  }
+
+  @Override
+  protected String getShapeParameterName() {
+    return null;
+  }
+
+  @Override
+  protected int getDTypeParameterPosition() {
+    return UNDEFINED_PARAMETER_POSITION;
+  }
+
+  @Override
+  protected String getDTypeParameterName() {
+    return null;
+  }
+}
