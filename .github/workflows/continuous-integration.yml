@@ -59,13 +59,24 @@ jobs:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     # Verify any tag-push deploy is on a commit that's an ancestor of master
     # (per wala/ML#421). Without this, a feature-branch tag could trigger a
-    # release deploy. The actions/checkout above is shallow so we need a
-    # fetch first to get master's history available locally.
-    - name: Verify tag is on master
+    # release deploy. Also confirm the tag name is semver-shaped — the deploy
+    # step's `if:` does the same regex via `endsWith`/`startsWith`, but we
+    # additionally guard the ancestor check itself so non-semver tags don't
+    # error out the run on the merge-base call. The `actions/checkout` above
+    # is shallow so we need a fetch first to get master's history.
+    - name: Verify tag is a semver release tag on master
       if: startsWith(github.ref, 'refs/tags/')
       run: |
+        if ! [[ "${{ github.ref_name }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+          echo "Tag ${{ github.ref_name }} is not semver-shaped; skipping deploy gate."
+          echo "is_semver_release=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
         git fetch --no-tags --depth=1 origin master
         git merge-base --is-ancestor ${{ github.sha }} origin/master
+        echo "is_semver_release=true" >> "$GITHUB_OUTPUT"
+      id: tag_check
+      shell: bash
     - name: Deploy with Maven
       run: mvn -s .ci.settings.xml -Dgithub.username=$GITHUB_USERNAME -Dgithub.password=$GITHUB_TOKEN deploy -DskipTests -B
       env:
@@ -83,8 +94,8 @@ jobs:
       # SNAPSHOT-bump's run cancels the release run before its deploy step
       # completes. Tag pushes are exempt from `cancel-in-progress` (per the
       # workflow's `concurrency` block) and therefore reliably finish the
-      # deploy. Restricted to version-like tags (`0.*`) so legacy/non-release
-      # tags don't re-deploy. The ancestor-of-master check above further
-      # filters to tags that are on master — feature-branch tags don't
-      # publish.
-      if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/0.')) }}
+      # deploy. The semver-tag regex (in `tag_check` above) keeps legacy /
+      # non-release tags (`todo_review`, `jython3`, etc.) from re-deploying;
+      # the ancestor-of-master check in the same step blocks feature-branch
+      # tags from sneaking through.
+      if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/master' || (startsWith(github.ref, 'refs/tags/') && steps.tag_check.outputs.is_semver_release == 'true')) }}
