@@ -465,7 +465,7 @@ public class TurtleSummary {
             .NewInstruction(0, 10, NewSiteReference.make(0, turtleClassRef)));
     x.addStatement(
         PythonLanguage.Python.instructionFactory().PutInstruction(1, 10, 10, turtleFieldRef));
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     Pair<String, Integer>[] keywordParams = new Pair[0];
     x.addStatement(
         new PythonInvokeInstruction(
@@ -538,7 +538,7 @@ public class TurtleSummary {
       public SSAAbstractInvokeInstruction addCall(AbstractRootMethod m) {
         int paramValues[];
         paramValues = new int[getNumberOfParameters()];
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings({"unchecked", "rawtypes"})
         Pair<String, Integer>[] keywordParams = new Pair[0];
         for (int j = 0; j < paramValues.length; j++) {
           AstInstructionFactory insts = PythonLanguage.Python.instructionFactory();

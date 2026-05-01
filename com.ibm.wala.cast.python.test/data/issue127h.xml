@@ -1,0 +1,29 @@
+<?xml version="1.0" ?>
+<!DOCTYPE summary-spec>
+<summary-spec>
+  <classloader name="PythonLoader">
+    <class name="issue127h" allocatable="true">
+      <method name="import" static="true" descriptor="()Lissue127h;">
+        <new def="x" class="Lissue127h" />
+        <new def="c_class" class="Lissue127h/class/C" />
+        <putfield class="LRoot" field="C" fieldType="LRoot" ref="x" value="c_class" />
+        <return value="x" />
+      </method>
+    </class>
+    <package name="issue127h/class">
+      <class name="C" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="func val1">
+          <new def="c" class="Lissue127h/C" />
+          <putfield class="LRoot" field="f" fieldType="LRoot" ref="c" value="val1" />
+          <return value="c" />
+        </method>
+      </class>
+    </package>
+    <class name="issue127h/C" allocatable="true">
+      <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self val2">
+        <getfield def="res" class="LRoot" field="f" fieldType="LRoot" ref="self" />
+        <return value="val2" />
+      </method>
+    </class>
+  </classloader>
+</summary-spec>

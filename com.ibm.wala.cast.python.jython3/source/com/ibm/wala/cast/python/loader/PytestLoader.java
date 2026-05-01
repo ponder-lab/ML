@@ -122,7 +122,7 @@ public class PytestLoader extends Python3Loader {
           testParams.put(fnName, testArgValues);
 
           int idx = 0;
-          @SuppressWarnings("unchecked")
+          @SuppressWarnings({"unchecked", "rawtypes"})
           Pair<String, Integer>[] keys = new Pair[testArgValues.size()];
           Set<Entry<String, Integer>> parameters = testArgValues.entrySet();
           for (Entry<String, Integer> p : parameters) {

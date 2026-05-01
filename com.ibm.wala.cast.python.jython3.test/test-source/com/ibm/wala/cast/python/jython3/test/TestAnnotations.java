@@ -42,7 +42,7 @@ public class TestAnnotations extends TestJythonCallGraphShape {
     CAstCallGraphUtil.dumpCG(
         (SSAContextInterpreter) builder.getContextInterpreter(), builder.getPointerAnalysis(), CG);
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "cast"})
     PointerAnalysis<InstanceKey> ptr = (PointerAnalysis<InstanceKey>) bb.getPointerAnalysis();
     DataDependenceOptions data = DataDependenceOptions.NO_BASE_NO_HEAP_NO_EXCEPTIONS;
     ControlDependenceOptions control = ControlDependenceOptions.NONE;

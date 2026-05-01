@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.ipa.summaries;
 import com.ibm.wala.cast.ir.ssa.AstInstructionFactory;
 import com.ibm.wala.cast.loader.DynamicCallSiteReference;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
+import com.ibm.wala.cast.python.loader.IPythonClass;
 import com.ibm.wala.cast.python.loader.PythonLoader.PythonClass;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
@@ -44,7 +45,10 @@ import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.EmptyIntSet;
 import com.ibm.wala.util.intset.IntSet;
 import com.ibm.wala.util.intset.IntSetUtil;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -188,7 +192,7 @@ public class PythonSuper {
           CallSiteReference ref =
               new DynamicCallSiteReference(
                   AstMethodReference.fnReference(PythonTypes.superfun), pc++);
-          @SuppressWarnings("unchecked")
+          @SuppressWarnings({"unchecked", "rawtypes"})
           Pair<String, Integer>[] pairs = new Pair[0];
           Pair<String, Integer>[] keywordParams = pairs;
           ctor.addStatement(
@@ -209,7 +213,7 @@ public class PythonSuper {
         @SuppressWarnings("unchecked")
         IClass receiver =
             ((ContextItem.Value<IClass>) node.getContext().get(superClass)).getValue();
-        PythonClass x = (PythonClass) receiver.getSuperclass();
+        IClass x = receiver.getSuperclass();
 
         if (!ctors.containsKey(x)) {
           PythonSummary ctor = new PythonSummary(node.getMethod().getReference(), 3);
@@ -230,7 +234,24 @@ public class PythonSuper {
                       Atom.findOrCreateUnicodeAtom("global " + x.getName().toString().substring(1)),
                       PythonTypes.Root)));
 
-          for (TypeReference r : x.getInnerReferences()) {
+          Collection<TypeReference> innerReferences = Collections.emptyList();
+          Collection<MethodReference> methodReferences = new ArrayList<>();
+
+          if (x instanceof IPythonClass) {
+            IPythonClass px = (IPythonClass) x;
+            innerReferences = px.getInnerReferences();
+            methodReferences = px.getMethodReferences();
+          } else {
+            for (IMethod m : x.getDeclaredMethods()) {
+              if (!m.isInit()
+                  && !m.isClinit()
+                  && !m.getName().equals(AstMethodReference.fnSelector.getName())) {
+                methodReferences.add(m.getReference());
+              }
+            }
+          }
+
+          for (TypeReference r : innerReferences) {
             int orig_t = v++;
             String typeName = r.getName().toString();
             typeName = typeName.substring(typeName.lastIndexOf('/') + 1);
@@ -245,7 +266,7 @@ public class PythonSuper {
             pc++;
           }
 
-          for (MethodReference r : x.getMethodReferences()) {
+          for (MethodReference r : methodReferences) {
             int f = v++;
             ctor.addStatement(
                 insts.NewInstruction(

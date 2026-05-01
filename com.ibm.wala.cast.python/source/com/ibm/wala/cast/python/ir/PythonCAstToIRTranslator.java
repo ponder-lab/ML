@@ -1,4 +1,4 @@
-/******************************************************************************
+/*
  * Copyright (c) 2018 IBM Corporation.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -7,7 +7,7 @@
  *
  * Contributors:
  *     IBM Corporation - initial API and implementation
- *****************************************************************************/
+ */
 package com.ibm.wala.cast.python.ir;
 
 import static com.google.common.io.Files.getNameWithoutExtension;
@@ -382,7 +382,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                   visit(a, context, this);
                   int pos = context.cfg().getCurrentInstruction();
                   CallSiteReference site = new DynamicCallSiteReference(PythonTypes.CodeBody, pos);
-                  @SuppressWarnings("unchecked")
+                  @SuppressWarnings({"unchecked", "rawtypes"})
                   Pair<String, Integer>[] keywordParams = new Pair[0];
                   context
                       .cfg()
@@ -846,7 +846,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                     TypeReference.findOrCreate(PythonTypes.pythonLoader, "L" + type))));
   }
 
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"unchecked", "rawtypes"})
   @Override
   protected void doCall(
       WalkContext context,
@@ -1182,7 +1182,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
       CallSiteReference site = new DynamicCallSiteReference(PythonTypes.CodeBody, pos);
       int result = context.currentScope().allocateTempValue();
       int exception = context.currentScope().allocateTempValue();
-      @SuppressWarnings("unchecked")
+      @SuppressWarnings({"unchecked", "rawtypes"})
       Pair<String, Integer>[] keywordParams = new Pair[0];
       context
           .cfg()

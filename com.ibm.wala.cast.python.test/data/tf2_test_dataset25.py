@@ -21,6 +21,17 @@ dataset = dataset.enumerate(start=5)
 for element in dataset:
     assert isinstance(element, tuple)
     assert len(element) == 2
-    f(element[0])
-    g(element[1])
+
+    arg1 = element[0]
+    assert isinstance(arg1, tf.Tensor)
+    assert arg1.dtype == tf.int64
+    assert arg1.shape == ()
+    f(arg1)
+
+    arg2 = element[1]
+    assert isinstance(arg2, tf.Tensor)
+    assert arg2.dtype == tf.int32
+    assert arg2.shape == ()
+    g(arg2)
+
     h(element)

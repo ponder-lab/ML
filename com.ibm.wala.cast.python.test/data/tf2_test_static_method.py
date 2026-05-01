@@ -8,4 +8,9 @@ class MyClass:
         assert isinstance(x, tf.Tensor)
 
 
-MyClass.the_static_method(tf.constant(1))
+a = tf.constant(1)
+
+assert a.shape == ()  # scalar
+assert a.dtype == tf.int32
+
+MyClass.the_static_method(a)

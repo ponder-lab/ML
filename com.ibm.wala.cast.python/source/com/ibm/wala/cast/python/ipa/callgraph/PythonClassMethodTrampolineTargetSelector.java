@@ -1,4 +1,4 @@
-/******************************************************************************
+/*
  * Copyright (c) 2018 IBM Corporation.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -7,9 +7,10 @@
  *
  * Contributors:
  *     IBM Corporation - initial API and implementation
- *****************************************************************************/
+ */
 package com.ibm.wala.cast.python.ipa.callgraph;
 
+import static com.ibm.wala.cast.python.types.PythonTypes.TRAMPOLINE_METHOD_NAME;
 import static com.ibm.wala.cast.python.types.Util.getGlobalName;
 import static com.ibm.wala.cast.python.types.Util.makeGlobalRef;
 import static com.ibm.wala.cast.python.util.Util.isClassMethod;
@@ -63,14 +64,14 @@ public class PythonClassMethodTrampolineTargetSelector<T>
             .getMethod()
             .getSelector()
             .getName()
-            .startsWith(Atom.findOrCreateAsciiAtom("trampoline"));
+            .startsWith(Atom.findOrCreateAsciiAtom(TRAMPOLINE_METHOD_NAME));
 
     return classMethodReceiver
         && !cha.isSubclassOf(receiver, cha.lookupClass(PythonTypes.trampoline))
         && !trampoline;
   }
 
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"unchecked", "rawtypes"})
   @Override
   protected void populate(
       PythonSummary x, int v, IClass receiver, PythonInvokeInstruction call, Logger logger) {

@@ -29,4 +29,30 @@ for epoch in range(1, EPOCHS + 1):
     train_dataset = iter(train_generator)
 
     for _ in range(batchs_per_epoch):
-        batch_loss = distributed_train_step(next(train_dataset))
+        dataset_inputs = next(train_dataset)
+
+        assert isinstance(dataset_inputs, tuple)
+        assert len(dataset_inputs) == 2
+
+        images, labels = dataset_inputs
+
+        assert isinstance(images, tf.Tensor)
+        assert isinstance(labels, tf.Tensor)
+
+        # Check shapes
+        assert (
+            images.shape.as_list() == [None, 112, 112, 3]
+            or images.shape.as_list() == [1, 112, 112, 3]
+            or images.shape.as_list() == [BATCH_SIZE, 112, 112, 3]
+        )
+        assert (
+            labels.shape.as_list() == [None, 1]
+            or labels.shape.as_list() == [1, 1]
+            or labels.shape.as_list() == [BATCH_SIZE, 1]
+        )
+
+        # Check dtypes
+        assert images.dtype == tf.float32
+        assert labels.dtype == tf.float32
+
+        batch_loss = distributed_train_step(dataset_inputs)

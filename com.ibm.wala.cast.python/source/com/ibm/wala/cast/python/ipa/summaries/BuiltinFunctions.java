@@ -38,7 +38,7 @@ public class BuiltinFunctions {
 
   private static IMethod typeSummary(IClass cls, String name, TypeReference type) {
     PythonSummary S = typeSummary(cls, builtinFunction(name), type);
-    return new PythonSummarizedFunction((MethodReference) S.getMethod(), S, cls);
+    return new PythonSummarizedFunction(S.getMethod(), S, cls);
   }
 
   private static PythonSummary typeSummary(
@@ -55,7 +55,7 @@ public class BuiltinFunctions {
 
   private static IMethod argSummary(IClass cls, String name, int arg) {
     PythonSummary S = argSummary(cls, builtinFunction(name), arg);
-    return new PythonSummarizedFunction((MethodReference) S.getMethod(), S, cls);
+    return new PythonSummarizedFunction(S.getMethod(), S, cls);
   }
 
   private static PythonSummary argSummary(IClass cls, TypeReference type, int arg) {
@@ -70,7 +70,7 @@ public class BuiltinFunctions {
 
   private static IMethod noopSummary(IClass cls, String name) {
     PythonSummary S = noopSummary(cls, builtinFunction(name));
-    return new PythonSummarizedFunction((MethodReference) S.getMethod(), S, cls);
+    return new PythonSummarizedFunction(S.getMethod(), S, cls);
   }
 
   private static PythonSummary noopSummary(IClass cls, TypeReference type) {
@@ -289,7 +289,7 @@ public class BuiltinFunctions {
     // https://docs.python.org/3/library/functions.html#print
     builtinFunctions.put("print", Either.forLeft(TypeReference.Void));
     // https://docs.python.org/3/library/functions.html#iter
-    builtinFunctions.put("iter", Either.forRight(2));
+    builtinFunctions.put("iter", Either.forLeft(PythonTypes.iterator));
     // https://docs.python.org/3/library/functions.html#next
     builtinFunctions.put("next", Either.forLeft(PythonTypes.object));
     // https://docs.python.org/3/library/functions.html#isinstance
