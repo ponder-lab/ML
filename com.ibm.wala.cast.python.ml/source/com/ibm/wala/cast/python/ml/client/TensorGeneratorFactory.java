@@ -78,7 +78,11 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANDOM_NORMAL_INIT_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.READ_DATA_SETS;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_ALL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_LOGSUMEXP;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MEAN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_PROD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_SUM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIGMOID;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SLICE_BUILTIN;
@@ -1054,6 +1058,11 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, CIFAR10_Y_TEST))
       return new Cifar10InputData(source, Cifar10InputData.Y_TEST_SHAPE);
     else if (isType(calledFunction, REDUCE_MEAN.getDeclaringClass())) return new ReduceMean(source);
+    else if (isType(calledFunction, REDUCE_MAX.getDeclaringClass())) return new ReduceMax(source);
+    else if (isType(calledFunction, REDUCE_PROD.getDeclaringClass())) return new ReduceProd(source);
+    else if (isType(calledFunction, REDUCE_LOGSUMEXP.getDeclaringClass()))
+      return new ReduceLogSumExp(source);
+    else if (isType(calledFunction, REDUCE_ALL.getDeclaringClass())) return new ReduceAll(source);
     else if (isType(calledFunction, PLACEHOLDER.getDeclaringClass()))
       return new Placeholder(source);
     else if (isType(calledFunction, EQUAL.getDeclaringClass()))
