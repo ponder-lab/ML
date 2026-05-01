@@ -2,7 +2,7 @@ name: CodeQL
 
 # Triggers `pull_request` for PR checks, `push` to master for baseline analysis,
 # `merge_group` so PRs in the merge queue have their pre-merge runs reported,
-# and `schedule` for the weekly baseline GitHub default-setup used to do.
+# and `schedule` for the weekly baseline that GitHub default-setup used to do.
 
 on:
   push:
@@ -33,18 +33,41 @@ jobs:
           submodules: recursive
 
       - if: matrix.language == 'java-kotlin'
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "25"
+          cache: maven
 
       - uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
           queries: security-extended,security-and-quality
 
+      # The Java build needs the Jython3 submodule installed as a local
+      # Maven artifact before the main project can resolve. Mirrors the
+      # `Install Jython3` step in continuous-integration.yml.
       - if: matrix.language == 'java-kotlin'
-        uses: github/codeql-action/autobuild@v3
+        name: Install Jython3
+        shell: bash
+        run: |
+          pushd jython3
+          ant
+          pushd dist
+          mvn install:install-file -Dfile=./jython-dev.jar -DgroupId="org.python" -DartifactId="jython3" -Dversion="0.0.1-SNAPSHOT" -Dpackaging="jar" -DgeneratePom=true -B
+          popd
+          popd
+
+      - if: matrix.language == 'java-kotlin'
+        name: Install IDE
+        run: |
+          pushd IDE/com.ibm.wala.cast.lsp
+          mvn install -B -q -DskipTests
+          popd
+
+      - if: matrix.language == 'java-kotlin'
+        name: Build with Maven
+        run: mvn install -B -DskipTests
 
       - uses: github/codeql-action/analyze@v3
         with:
