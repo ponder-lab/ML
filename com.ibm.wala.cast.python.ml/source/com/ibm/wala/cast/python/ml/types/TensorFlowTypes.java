@@ -911,6 +911,24 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String SIGMOID_SIGNATURE = "tf.nn.sigmoid()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/rank. */
+  public static final MethodReference RANK =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/rank")),
+          AstMethodReference.fnSelector);
+
+  private static final String RANK_SIGNATURE = "tf.rank()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/size. */
+  public static final MethodReference SIZE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/size")),
+          AstMethodReference.fnSelector);
+
+  private static final String SIZE_SIGNATURE = "tf.size()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/nn/softmax. */
   public static final MethodReference SOFTMAX =
       MethodReference.findOrCreate(
@@ -1103,6 +1121,8 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(REDUCE_SUM.getDeclaringClass(), REDUCE_SUM_SIGNATURE),
           Map.entry(MATMUL.getDeclaringClass(), MATMUL_SIGNATURE),
           Map.entry(SIGMOID.getDeclaringClass(), SIGMOID_SIGNATURE),
+          Map.entry(RANK.getDeclaringClass(), RANK_SIGNATURE),
+          Map.entry(SIZE.getDeclaringClass(), SIZE_SIGNATURE),
           Map.entry(SOFTMAX.getDeclaringClass(), SOFTMAX_SIGNATURE),
           Map.entry(DENSE_CALL.getDeclaringClass(), DENSE_CALL_SIGNATURE),
           Map.entry(FLATTEN.getDeclaringClass(), FLATTEN_SIGNATURE),

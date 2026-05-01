@@ -4125,6 +4125,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_reduce_sum.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
+  // wala/ML#449 Tier 4: intrinsic-API ops with fixed output shape and dtype. Both `tf.rank` and
+  // `tf.size` return scalar int32 regardless of input. Same hardcoded-output shape as
+  // `DatasetRangeGenerator`'s `[] of int64`.
+
+  @Test
+  public void testRank()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_rank.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  @Test
+  public void testSize()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_size.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
   @Test
   public void testReduceSum2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
