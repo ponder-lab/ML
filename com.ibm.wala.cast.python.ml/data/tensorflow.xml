@@ -1253,8 +1253,8 @@
         </method>
       </class>
       <class name="concat" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/concat. Mirrors `add_n`'s pattern: read field 0 of the input list and route through `convert_to_tensor` so the dtype propagates from the first input element. Shape is conservatively inherited from the first input — runtime concat
-          changes the `axis` dimension, so this is a known soundness gap. See wala/ML#449 (Tier 5). -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/concat. Mirrors `add_n`'s pattern: read field 0 of the input list and route through `convert_to_tensor` so the dtype propagates from the first input element. Shape is approximated by inheriting from the first input — known unsoundness,
+          since runtime concat grows the `axis` dimension by the sum of the input dims. A future generator can read the full `values` list and `axis` to produce a precise (and sound) shape. See wala/ML#449 (Tier 5). -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self values axis name">
           <getfield class="Llist" field="0" fieldType="LRoot" ref="values" def="x" />
           <new def="z" class="Ltensorflow/functions/convert_to_tensor" />
@@ -1673,8 +1673,8 @@
         </method>
       </class>
       <class name="stack" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/stack. Mirrors `add_n` / `concat`'s pattern: read field 0 of the input list and route through `convert_to_tensor` so dtype propagates from the first input element. Shape is conservatively inherited from the first input — runtime
-          stack adds a new axis (rank+1), so this is a known soundness gap. See wala/ML#449 (Tier 5). -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/stack. Mirrors `add_n` / `concat`'s pattern: read field 0 of the input list and route through `convert_to_tensor` so dtype propagates from the first input element. Shape is approximated by inheriting from the first input — known
+          unsoundness, since runtime stack adds a new axis (rank+1). A future generator can compose the input shape with the `values` list length to produce a precise (and sound) shape. See wala/ML#449 (Tier 5). -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self values axis name">
           <getfield class="Llist" field="0" fieldType="LRoot" ref="values" def="x" />
           <new def="z" class="Ltensorflow/functions/convert_to_tensor" />

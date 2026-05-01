@@ -6615,10 +6615,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * ReadDataFallback}. Post-fix the XML mirrors {@code add_n}'s pattern: read field 0 of {@code
    * values} (the input tensor list) and route through {@code convert_to_tensor}, propagating the
    * first input's shape and dtype. Dtype propagation is sound (concat preserves dtype). Shape is
-   * conservatively inherited from the first input — runtime concat changes the {@code axis}
-   * dimension, so this is a known soundness gap; a future generator can read {@code axis} and the
-   * full {@code values} list to produce a precise shape. The lock-in here pins the observable
-   * static-analysis output.
+   * approximated by inheriting from the first input — this is <em>unsound</em>, since runtime
+   * concat grows the {@code axis} dimension by the sum of the input dims; a future generator can
+   * read {@code axis} and the full {@code values} list to produce a precise (and sound) shape. The
+   * lock-in here pins the observable static-analysis output as the current approximation.
    */
   @Test
   public void testConcat()
@@ -6632,10 +6632,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Ltensorflow/python/functions/stack}), giving {@code [{? of unknown}]} via {@code
    * ReadDataFallback}. Post-fix the XML mirrors {@code add_n} / {@code concat}'s pattern — read
    * field 0 of {@code values} and route through {@code convert_to_tensor}. Dtype propagation is
-   * sound (stack preserves dtype). Shape is conservatively inherited from the first input — runtime
-   * stack adds a new axis (rank+1), so this is a known soundness gap; a future generator can read
-   * the {@code values} list length and {@code axis} to produce a precise shape. The lock-in here
-   * pins the observable static-analysis output.
+   * sound (stack preserves dtype). Shape is approximated by inheriting from the first input — this
+   * is <em>unsound</em>, since runtime stack adds a new axis (rank+1); a future generator can
+   * compose the input shape with the {@code values} list length to produce a precise (and sound)
+   * shape. The lock-in here pins the observable static-analysis output as the current
+   * approximation.
    */
   @Test
   public void testStack()
