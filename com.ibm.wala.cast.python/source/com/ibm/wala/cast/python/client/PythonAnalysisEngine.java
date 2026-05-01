@@ -1,5 +1,18 @@
+/*
+ * Copyright (c) 2018 IBM Corporation.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ *
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ */
 package com.ibm.wala.cast.python.client;
 
+import static com.ibm.wala.cast.python.types.PythonTypes.CALLABLE_METHOD_NAME;
+import static com.ibm.wala.cast.python.types.PythonTypes.CALLABLE_METHOD_NAME_FOR_KERAS_MODELS;
+import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
 import static java.util.Collections.emptyList;
 import static java.util.logging.Level.SEVERE;
 
@@ -14,8 +27,12 @@ import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuild
 import com.ibm.wala.cast.python.ipa.callgraph.PythonScopeMappingInstanceKeys;
 import com.ibm.wala.cast.python.ipa.summaries.BuiltinFunctions;
 import com.ibm.wala.cast.python.ipa.summaries.PythonComprehensionTrampolines;
+import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
+import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
+import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSuper;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
+import com.ibm.wala.cast.python.loader.IPythonClass;
 import com.ibm.wala.cast.python.loader.PythonLoaderFactory;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
@@ -25,6 +42,7 @@ import com.ibm.wala.classLoader.IClassLoader;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.classLoader.Module;
+import com.ibm.wala.classLoader.NewSiteReference;
 import com.ibm.wala.classLoader.SyntheticClass;
 import com.ibm.wala.client.AbstractAnalysisEngine;
 import com.ibm.wala.core.util.strings.Atom;
@@ -49,13 +67,19 @@ import com.ibm.wala.ipa.cha.SeqClassHierarchyFactory;
 import com.ibm.wala.ipa.summaries.BypassClassTargetSelector;
 import com.ibm.wala.ipa.summaries.BypassMethodTargetSelector;
 import com.ibm.wala.ipa.summaries.BypassSyntheticClassLoader;
+import com.ibm.wala.ipa.summaries.MethodSummary;
 import com.ibm.wala.ipa.summaries.XMLMethodSummaryReader;
 import com.ibm.wala.shrike.shrikeBT.Constants;
 import com.ibm.wala.ssa.IRFactory;
+import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSAInstructionFactory;
+import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAOptions;
 import com.ibm.wala.ssa.SSAOptions.DefaultValues;
+import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.ClassLoaderReference;
+import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.Selector;
 import com.ibm.wala.types.TypeReference;
@@ -67,9 +91,13 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -185,132 +213,576 @@ public abstract class PythonAnalysisEngine<T>
     return cha;
   }
 
+  private abstract class AbstractPythonSyntheticClass extends SyntheticClass
+      implements IPythonClass {
+    public AbstractPythonSyntheticClass(TypeReference T, IClassHierarchy cha) {
+      super(T, cha);
+    }
+  }
+
   protected void addSummaryBypassLogic(AnalysisOptions options, String summary) {
     IClassHierarchy cha = getClassHierarchy();
     XMLMethodSummaryReader xml =
         new XMLMethodSummaryReader(getClass().getClassLoader().getResourceAsStream(summary), scope);
-    for (TypeReference t : xml.getAllocatableClasses()) {
-      BypassSyntheticClassLoader ldr =
-          (BypassSyntheticClassLoader) cha.getLoader(scope.getSyntheticLoader());
-      ldr.registerClass(
-          t.getName(),
-          new SyntheticClass(t, cha) {
-            private final Map<Atom, IField> fields = HashMapFactory.make();
 
-            @Override
-            public IClassLoader getClassLoader() {
-              return cha.getLoader(cha.getScope().getSyntheticLoader());
-            }
+    Map<MethodReference, MethodSummary> summaries = new HashMap<>(xml.getSummaries());
+    BypassSyntheticClassLoader ldr =
+        (BypassSyntheticClassLoader) cha.getLoader(scope.getSyntheticLoader());
 
-            @Override
-            public boolean isPublic() {
-              return true;
-            }
+    Map<TypeReference, List<MethodReference>> classToFunDoRefs = new HashMap<>();
 
-            @Override
-            public boolean isPrivate() {
-              return false;
-            }
+    // Pass 1: Transform methods to function classes
+    for (MethodSummary s : xml.getSummaries().values()) {
+      MethodReference mr = s.getMethod();
+      String methodName = mr.getName().toString();
+      if (!methodName.equals(DO_METHOD_NAME)
+          && !methodName.equals("import")
+          && !methodName.equals("__init__")) {
+        TypeReference t = mr.getDeclaringClass();
+        TypeReference funClsRef =
+            TypeReference.findOrCreate(
+                t.getClassLoader(), t.getName().toString() + "/" + methodName);
+        MethodReference funDoRef =
+            MethodReference.findOrCreate(funClsRef, AstMethodReference.fnSelector);
 
-            @Override
-            public int getModifiers() throws UnsupportedOperationException {
-              return Constants.ACC_PUBLIC;
-            }
+        List<MethodReference> funDoRefs =
+            classToFunDoRefs.computeIfAbsent(t, _ -> new ArrayList<>());
+        funDoRefs.add(funDoRef);
 
-            @Override
-            public IClass getSuperclass() {
-              return cha.lookupClass(PythonTypes.CodeBody);
-            }
+        PythonSummary funSummary = new PythonSummary(funDoRef, s.getNumberOfParameters());
+        for (SSAInstruction inst : s.getStatements())
+          if (inst != null) funSummary.addStatement(inst);
+        funSummary.setValueNames(s.getValueNames());
+        summaries.put(funDoRef, funSummary);
+        summaries.remove(mr);
 
-            @Override
-            public Collection<? extends IClass> getDirectInterfaces() {
-              return Collections.emptySet();
-            }
-
-            @Override
-            public Collection<IClass> getAllImplementedInterfaces() {
-              return Collections.emptySet();
-            }
-
-            @Override
-            public IMethod getMethod(Selector selector) {
-              // TODO Auto-generated method stub
-              return null;
-            }
-
-            @Override
-            public IField getField(Atom name) {
-              if (!fields.containsKey(name)) {
-                fields.put(
-                    name,
-                    new AstDynamicField(
-                        false, cha.lookupClass(PythonTypes.Root), name, PythonTypes.Root));
+        ldr.registerClass(
+            funClsRef.getName(),
+            new SyntheticClass(funClsRef, cha) {
+              @Override
+              public IClassLoader getClassLoader() {
+                return ldr;
               }
-              return fields.get(name);
+
+              @Override
+              public boolean isPublic() {
+                return true;
+              }
+
+              @Override
+              public int getModifiers() {
+                return Constants.ACC_PUBLIC;
+              }
+
+              @Override
+              public IClass getSuperclass() {
+                return cha.lookupClass(PythonTypes.CodeBody);
+              }
+
+              @Override
+              public Collection<? extends IClass> getDirectInterfaces() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public Collection<IClass> getAllImplementedInterfaces() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public IMethod getMethod(Selector selector) {
+                return selector.equals(AstMethodReference.fnSelector)
+                    ? new PythonSummarizedFunction(funDoRef, funSummary, this)
+                    : null;
+              }
+
+              @Override
+              public IField getField(Atom name) {
+                return null;
+              }
+
+              @Override
+              public IMethod getClassInitializer() {
+                return null;
+              }
+
+              @Override
+              public Collection<? extends IMethod> getDeclaredMethods() {
+                return Collections.singleton(getMethod(AstMethodReference.fnSelector));
+              }
+
+              @Override
+              public Collection<IField> getAllInstanceFields() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public Collection<IField> getAllStaticFields() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public Collection<IField> getAllFields() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public Collection<? extends IMethod> getAllMethods() {
+                return getDeclaredMethods();
+              }
+
+              @Override
+              public Collection<IField> getDeclaredInstanceFields() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public Collection<IField> getDeclaredStaticFields() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public boolean isReferenceType() {
+                return true;
+              }
+
+              @Override
+              public boolean isPrivate() {
+                return false;
+              }
+            });
+      }
+    }
+
+    // Pass 2: Identify and rewrite constructors to inject trampolines
+    for (MethodReference mr : new ArrayList<>(summaries.keySet())) {
+      if (mr.getName().toString().equals(DO_METHOD_NAME)) {
+        MethodSummary s = summaries.get(mr);
+        boolean hasMethods =
+            classToFunDoRefs.containsKey(mr.getDeclaringClass())
+                && !classToFunDoRefs.get(mr.getDeclaringClass()).isEmpty();
+
+        // Check if this method itself is auto-generated (just allocates its own class)
+        boolean isAutoGenerated = false;
+        if (hasMethods && s.getNumberOfParameters() <= 1) {
+          int stmtCount = 0;
+          TypeReference allocatedType = null;
+          for (SSAInstruction inst : s.getStatements()) {
+            if (inst != null) {
+              stmtCount++;
+              if (inst instanceof SSANewInstruction) {
+                allocatedType = ((SSANewInstruction) inst).getNewSite().getDeclaredType();
+              }
+            }
+          }
+          if (stmtCount <= 2
+              && allocatedType != null
+              && allocatedType.equals(mr.getDeclaringClass())) {
+            isAutoGenerated = true;
+          }
+        }
+
+        if (isAutoGenerated) {
+          summaries.remove(mr);
+          continue;
+        }
+
+        // Rewrite summary to inject trampolines for ALL allocations of classes with methods
+        PythonSummary newSummary = new PythonSummary(s.getMethod(), s.getNumberOfParameters());
+        newSummary.setValueNames(s.getValueNames());
+        boolean modified = false;
+        int v = 2000;
+        SSAInstructionFactory insts = PythonLanguage.Python.instructionFactory();
+
+        SSAReturnInstruction returnInst = null;
+        int returnedVn = -1;
+
+        for (SSAInstruction inst : s.getStatements()) {
+          if (inst == null) continue;
+          if (inst instanceof SSAReturnInstruction) {
+            returnInst = (SSAReturnInstruction) inst;
+            if (returnInst.getNumberOfUses() > 0) {
+              returnedVn = returnInst.getUse(0);
+            }
+            continue;
+          }
+          newSummary.addStatement(inst);
+        }
+
+        TypeReference returnedType = null;
+        int allocVn = -1;
+
+        // Find the allocation instruction that created the returned value.
+        // If the method returns a parameter, or we can't find the allocation, this will remain
+        // null.
+        for (SSAInstruction inst : s.getStatements()) {
+          if (inst == null) continue;
+          int def = -1;
+          TypeReference instanceType = null;
+
+          if (inst instanceof SSANewInstruction) {
+            def = ((SSANewInstruction) inst).getDef();
+            instanceType = ((SSANewInstruction) inst).getNewSite().getDeclaredType();
+          } else if (inst.toString().contains(" = new <")) {
+            try {
+              Method m = inst.getClass().getMethod("getDef");
+              def = (Integer) m.invoke(inst);
+              m = inst.getClass().getMethod("getNewSite");
+              NewSiteReference site = (NewSiteReference) m.invoke(inst);
+              instanceType = site.getDeclaredType();
+            } catch (Exception e) {
+            }
+          }
+
+          if (def == returnedVn && instanceType != null) {
+            returnedType = instanceType;
+            allocVn = def;
+            break;
+          }
+        }
+
+        // Fallback for methods that don't directly return the newly allocated object.
+        // We look for the last allocation that matches the declaring class.
+        if (returnedType == null) {
+          for (SSAInstruction inst : s.getStatements()) {
+            if (inst == null) continue;
+            int def = -1;
+            TypeReference instanceType = null;
+
+            if (inst instanceof SSANewInstruction) {
+              def = ((SSANewInstruction) inst).getDef();
+              instanceType = ((SSANewInstruction) inst).getNewSite().getDeclaredType();
+            } else if (inst.toString().contains(" = new <")) {
+              try {
+                Method m = inst.getClass().getMethod("getDef");
+                def = (Integer) m.invoke(inst);
+                m = inst.getClass().getMethod("getNewSite");
+                NewSiteReference site = (NewSiteReference) m.invoke(inst);
+                instanceType = site.getDeclaredType();
+              } catch (Exception e) {
+              }
             }
 
-            @Override
-            public IMethod getClassInitializer() {
-              // TODO Auto-generated method stub
-              return null;
+            if (instanceType != null && instanceType.equals(mr.getDeclaringClass())) {
+              returnedType = instanceType;
+              allocVn = def;
             }
+          }
+        }
 
-            @Override
-            public Collection<? extends IMethod> getDeclaredMethods() {
-              // TODO Auto-generated method stub
-              return null;
-            }
+        if (returnedType != null
+            && classToFunDoRefs.containsKey(returnedType)
+            && !classToFunDoRefs.get(returnedType).isEmpty()) {
+          modified = true;
+          for (MethodReference funDoRef : classToFunDoRefs.get(returnedType)) {
+            TypeReference funClsRef = funDoRef.getDeclaringClass();
+            int funObjVn = v++, trampVn = v++;
+            int pc = newSummary.getNumberOfStatements();
+            newSummary.addStatement(
+                insts.NewInstruction(pc, funObjVn, NewSiteReference.make(pc, funClsRef)));
+            pc = newSummary.getNumberOfStatements();
+            newSummary.addStatement(
+                insts.NewInstruction(
+                    pc,
+                    trampVn,
+                    NewSiteReference.make(
+                        pc, PythonInstanceMethodTrampoline.findOrCreate(funClsRef, cha))));
+            newSummary.addStatement(
+                insts.PutInstruction(
+                    pc++,
+                    trampVn,
+                    allocVn,
+                    FieldReference.findOrCreate(
+                        PythonTypes.Root,
+                        Atom.findOrCreateUnicodeAtom("$self"),
+                        PythonTypes.Root)));
+            newSummary.addStatement(
+                insts.PutInstruction(
+                    pc++,
+                    trampVn,
+                    funObjVn,
+                    FieldReference.findOrCreate(
+                        PythonTypes.Root,
+                        Atom.findOrCreateUnicodeAtom("$function"),
+                        PythonTypes.Root)));
 
-            @Override
-            public Collection<IField> getAllInstanceFields() {
-              return fields.values();
-            }
+            String fieldName =
+                funClsRef
+                    .getName()
+                    .toString()
+                    .substring(funClsRef.getName().toString().lastIndexOf('/') + 1);
+            newSummary.addStatement(
+                insts.PutInstruction(
+                    pc++,
+                    allocVn,
+                    trampVn,
+                    FieldReference.findOrCreate(
+                        PythonTypes.Root,
+                        Atom.findOrCreateUnicodeAtom(fieldName),
+                        PythonTypes.Root)));
 
-            @Override
-            public Collection<IField> getAllStaticFields() {
-              return Collections.emptySet();
+            if (fieldName.equals(CALLABLE_METHOD_NAME)
+                || fieldName.equals(CALLABLE_METHOD_NAME_FOR_KERAS_MODELS)
+                || fieldName.equals(DO_METHOD_NAME)) {
+              newSummary.addStatement(
+                  insts.PutInstruction(
+                      pc++,
+                      allocVn,
+                      trampVn,
+                      FieldReference.findOrCreate(
+                          PythonTypes.Root,
+                          Atom.findOrCreateUnicodeAtom(DO_METHOD_NAME),
+                          PythonTypes.Root)));
             }
+          }
+        }
 
-            @Override
-            public Collection<IField> getAllFields() {
-              return fields.values();
-            }
+        if (returnInst != null) {
+          int pc = newSummary.getNumberOfStatements();
+          if (returnInst.getNumberOfUses() > 0) {
+            newSummary.addStatement(insts.ReturnInstruction(pc, returnInst.getUse(0), false));
+          } else {
+            newSummary.addStatement(insts.ReturnInstruction(pc));
+          }
+        }
 
-            @Override
-            public Collection<? extends IMethod> getAllMethods() {
-              // TODO Auto-generated method stub
-              return null;
-            }
+        if (modified) {
+          summaries.put(s.getMethod(), newSummary);
+        }
+      }
+    }
+    // Pass 3: Register classes. Use AbstractPythonSyntheticClass only for classes with methods
+    // (requiring trampolines)
+    for (TypeReference t : xml.getAllocatableClasses()) {
+      if (classToFunDoRefs.containsKey(t) && !classToFunDoRefs.get(t).isEmpty()) {
+        ldr.registerClass(
+            t.getName(),
+            new AbstractPythonSyntheticClass(t, cha) {
+              private final Map<Atom, IField> fields = HashMapFactory.make();
 
-            @Override
-            public Collection<IField> getDeclaredInstanceFields() {
-              return fields.values();
-            }
+              @Override
+              public IClassLoader getClassLoader() {
+                return ldr;
+              }
 
-            @Override
-            public Collection<IField> getDeclaredStaticFields() {
-              return Collections.emptySet();
-            }
+              @Override
+              public boolean isPublic() {
+                return true;
+              }
 
-            @Override
-            public boolean isReferenceType() {
-              return true;
-            }
-          });
+              @Override
+              public boolean isPrivate() {
+                return false;
+              }
+
+              @Override
+              public int getModifiers() {
+                return Constants.ACC_PUBLIC;
+              }
+
+              @Override
+              public IClass getSuperclass() {
+                return cha.lookupClass(PythonTypes.object);
+              }
+
+              @Override
+              public Collection<? extends IClass> getDirectInterfaces() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public Collection<IClass> getAllImplementedInterfaces() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public IMethod getMethod(Selector selector) {
+                for (IMethod m : getDeclaredMethods())
+                  if (m.getSelector().equals(selector)) return m;
+                return null;
+              }
+
+              @Override
+              public IField getField(Atom name) {
+                if (!fields.containsKey(name))
+                  fields.put(
+                      name,
+                      new AstDynamicField(
+                          false, cha.lookupClass(PythonTypes.Root), name, PythonTypes.Root));
+                return fields.get(name);
+              }
+
+              @Override
+              public IMethod getClassInitializer() {
+                return null;
+              }
+
+              @Override
+              public Collection<? extends IMethod> getDeclaredMethods() {
+                Set<IMethod> methods = new HashSet<>();
+                for (MethodSummary s : summaries.values())
+                  if (s.getMethod().getDeclaringClass().equals(getReference()))
+                    methods.add(new PythonSummarizedFunction(s.getMethod(), s, this));
+                return methods;
+              }
+
+              @Override
+              public Collection<IField> getAllInstanceFields() {
+                return fields.values();
+              }
+
+              @Override
+              public Collection<IField> getAllStaticFields() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public Collection<IField> getAllFields() {
+                return fields.values();
+              }
+
+              @Override
+              public Collection<? extends IMethod> getAllMethods() {
+                return getDeclaredMethods();
+              }
+
+              @Override
+              public Collection<IField> getDeclaredInstanceFields() {
+                return fields.values();
+              }
+
+              @Override
+              public Collection<IField> getDeclaredStaticFields() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public boolean isReferenceType() {
+                return true;
+              }
+
+              @Override
+              public Collection<MethodReference> getMethodReferences() {
+                return classToFunDoRefs.getOrDefault(getReference(), Collections.emptyList());
+              }
+
+              @Override
+              public Collection<TypeReference> getInnerReferences() {
+                return Collections.emptySet();
+              }
+            });
+      } else {
+        ldr.registerClass(
+            t.getName(),
+            new SyntheticClass(t, cha) {
+              private final Map<Atom, IField> fields = HashMapFactory.make();
+
+              @Override
+              public IClassLoader getClassLoader() {
+                return ldr;
+              }
+
+              @Override
+              public boolean isPublic() {
+                return true;
+              }
+
+              @Override
+              public boolean isPrivate() {
+                return false;
+              }
+
+              @Override
+              public int getModifiers() {
+                return Constants.ACC_PUBLIC;
+              }
+
+              @Override
+              public IClass getSuperclass() {
+                return cha.lookupClass(PythonTypes.CodeBody);
+              }
+
+              @Override
+              public Collection<? extends IClass> getDirectInterfaces() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public Collection<IClass> getAllImplementedInterfaces() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public IMethod getMethod(Selector selector) {
+                return null;
+              }
+
+              @Override
+              public IField getField(Atom name) {
+                if (!fields.containsKey(name))
+                  fields.put(
+                      name,
+                      new AstDynamicField(
+                          false, cha.lookupClass(PythonTypes.Root), name, PythonTypes.Root));
+                return fields.get(name);
+              }
+
+              @Override
+              public IMethod getClassInitializer() {
+                return null;
+              }
+
+              @Override
+              public Collection<? extends IMethod> getDeclaredMethods() {
+                return null;
+              }
+
+              @Override
+              public Collection<IField> getAllInstanceFields() {
+                return fields.values();
+              }
+
+              @Override
+              public Collection<IField> getAllStaticFields() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public Collection<IField> getAllFields() {
+                return fields.values();
+              }
+
+              @Override
+              public Collection<? extends IMethod> getAllMethods() {
+                return null;
+              }
+
+              @Override
+              public Collection<IField> getDeclaredInstanceFields() {
+                return fields.values();
+              }
+
+              @Override
+              public Collection<IField> getDeclaredStaticFields() {
+                return Collections.emptySet();
+              }
+
+              @Override
+              public boolean isReferenceType() {
+                return true;
+              }
+            });
+      }
     }
 
     MethodTargetSelector targetSelector = options.getMethodTargetSelector();
     targetSelector =
-        new BypassMethodTargetSelector(
-            targetSelector, xml.getSummaries(), xml.getIgnoredPackages(), cha);
+        new BypassMethodTargetSelector(targetSelector, summaries, xml.getIgnoredPackages(), cha);
     options.setSelector(targetSelector);
 
     ClassTargetSelector cs =
         new BypassClassTargetSelector(
-            options.getClassTargetSelector(),
-            xml.getAllocatableClasses(),
-            cha,
-            cha.getLoader(scope.getSyntheticLoader()));
+            options.getClassTargetSelector(), xml.getAllocatableClasses(), cha, ldr);
     options.setSelector(cs);
   }
 
@@ -330,6 +802,10 @@ public abstract class PythonAnalysisEngine<T>
   }
 
   @Override
+  public IClassHierarchy getClassHierarchy() {
+    return super.getClassHierarchy();
+  }
+
   protected Iterable<Entrypoint> makeDefaultEntrypoints(IClassHierarchy cha) {
     Set<Entrypoint> result = HashSetFactory.make();
     cha.forEach(
@@ -341,6 +817,10 @@ public abstract class PythonAnalysisEngine<T>
           }
         });
     return result;
+  }
+
+  public PythonSSAPropagationCallGraphBuilder getCachedCallGraphBuilder() {
+    return this.builder;
   }
 
   @Override
@@ -381,10 +861,6 @@ public abstract class PythonAnalysisEngine<T>
     new PythonSuper(cha).handleSuperCalls(builder, options);
 
     return this.builder = builder;
-  }
-
-  public PythonSSAPropagationCallGraphBuilder getCachedCallGraphBuilder() {
-    return this.builder;
   }
 
   protected PythonSSAPropagationCallGraphBuilder makeBuilder(

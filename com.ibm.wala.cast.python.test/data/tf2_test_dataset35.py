@@ -16,4 +16,7 @@ length = len(dataset)
 
 for _ in range(length):
     element = next(my_iter)
+    assert isinstance(element, tf.Tensor)
+    assert element.shape == ()
+    assert element.dtype == tf.int32
     add(element, element)
