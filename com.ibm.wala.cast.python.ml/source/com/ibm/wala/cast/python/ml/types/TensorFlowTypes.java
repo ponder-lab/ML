@@ -911,6 +911,33 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String SIGMOID_SIGNATURE = "tf.nn.sigmoid()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/math/exp. */
+  public static final MethodReference EXP =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/exp")),
+          AstMethodReference.fnSelector);
+
+  private static final String EXP_SIGNATURE = "tf.math.exp()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/rsqrt. */
+  public static final MethodReference RSQRT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/rsqrt")),
+          AstMethodReference.fnSelector);
+
+  private static final String RSQRT_SIGNATURE = "tf.math.rsqrt()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/nn/log_softmax. */
+  public static final MethodReference LOG_SOFTMAX =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/log_softmax")),
+          AstMethodReference.fnSelector);
+
+  private static final String LOG_SOFTMAX_SIGNATURE = "tf.nn.log_softmax()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/nn/softmax. */
   public static final MethodReference SOFTMAX =
       MethodReference.findOrCreate(
@@ -1103,6 +1130,9 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(REDUCE_SUM.getDeclaringClass(), REDUCE_SUM_SIGNATURE),
           Map.entry(MATMUL.getDeclaringClass(), MATMUL_SIGNATURE),
           Map.entry(SIGMOID.getDeclaringClass(), SIGMOID_SIGNATURE),
+          Map.entry(EXP.getDeclaringClass(), EXP_SIGNATURE),
+          Map.entry(RSQRT.getDeclaringClass(), RSQRT_SIGNATURE),
+          Map.entry(LOG_SOFTMAX.getDeclaringClass(), LOG_SOFTMAX_SIGNATURE),
           Map.entry(SOFTMAX.getDeclaringClass(), SOFTMAX_SIGNATURE),
           Map.entry(DENSE_CALL.getDeclaringClass(), DENSE_CALL_SIGNATURE),
           Map.entry(FLATTEN.getDeclaringClass(), FLATTEN_SIGNATURE),
