@@ -13,11 +13,13 @@ import java.util.Set;
 
 /**
  * Common base for tensor generators that produce a fresh tensor with the same shape as a single
- * input argument, and (for the ops currently using this base) the same dtype. Covers
- * shape-preserving unary ops including pure pass-throughs ({@code tf.identity}, {@code
- * tf.stop_gradient}), real-input element-wise unary math ({@code tf.math.tanh}, {@code
- * tf.math.exp}, {@code tf.math.rsqrt}), and shape-preserving normalizers ({@code
- * tf.math.l2_normalize}, {@code tf.nn.log_softmax}). See wala/ML#449 (Tier 1 + Tier 2).
+ * input argument, and (for the ops currently using this base) the same dtype. Currently extended by
+ * {@link Exp}, {@link Rsqrt}, and {@link LogSoftmax}. {@link Identity} and {@link StopGradient}
+ * (added in PR #202) follow the same pattern by hand and should be refactored onto this base once
+ * #202 lands. The base is intended for shape-preserving unary ops more broadly — including
+ * additional real-input element-wise unary math ({@code tf.math.tanh}) and shape-preserving
+ * normalizers ({@code tf.math.l2_normalize}) — but those generators don't yet extend this base. See
+ * wala/ML#449 (Tier 1 + Tier 2).
  *
  * <p>Note on dtype: TensorFlow has unary ops that are shape-preserving but <em>not</em>
  * dtype-preserving for some input dtypes — e.g., {@code tf.math.abs} returns a real dtype when
