@@ -13,9 +13,11 @@ import java.util.Set;
 /**
  * Generator for {@code tf.size}. Returns a 0-D scalar {@code int32} tensor whose value is the total
  * number of elements of the input — output shape is intrinsic; dtype defaults to {@code int32} and
- * can be overridden via the {@code out_type} argument ({@code uint32}/{@code int64}). The current
- * generator hardcodes {@code int32}; honoring {@code out_type} is a clean follow-up if a fixture
- * surfaces the need. See wala/ML#449 (Tier 4 — fixed output).
+ * can be overridden via the {@code out_type} argument to {@code int64} (the {@link DType} lattice
+ * models {@code int32}, {@code int64}, and a handful of others — {@code uint32}/{@code uint64} from
+ * the runtime API aren't in the lattice). The current generator hardcodes {@code int32}; honoring
+ * {@code out_type} is a clean follow-up if a fixture surfaces the need. See wala/ML#449 (Tier 4 —
+ * fixed output).
  *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/size">tf.size</a>
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
