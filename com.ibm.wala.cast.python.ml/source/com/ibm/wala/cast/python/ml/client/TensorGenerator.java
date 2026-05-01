@@ -394,18 +394,18 @@ public abstract class TensorGenerator {
         // find a primitive `ConstantKey` for `tf.constant(N)`-style calls,
         // classifying receiving parameters as primitive). Fall back to
         // walking back from the alloc's `do` CGNode to its calling sites and
-        // unioning each call's value-arg PTS.
-        OrdinalSet<InstanceKey> valuePts =
-            (instanceKey instanceof AllocationSiteInNode)
-                ? getConstantCallValueArgPTS((AllocationSiteInNode) instanceKey, builder)
-                : null;
+        // unioning each call's value-arg PTS. Use the already-unwrapped
+        // {@code asin} from the loop header so wrapping {@link InstanceKey}s
+        // (e.g. {@link com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKey})
+        // route through the CG-walk just like raw {@link AllocationSiteInNode}s.
+        OrdinalSet<InstanceKey> valuePts = getConstantCallValueArgPTS(asin, builder);
         if (valuePts == null || valuePts.isEmpty()) {
           // Defensive fallback in case the `value` field happens to be bound
           // in some other path (e.g. a future XML model that re-introduces
           // it for a sibling endpoint).
           IField valueField =
               builder.getClassHierarchy().resolveField(TensorFlowTypes.CONSTANT_VALUE);
-          PointerKey valuePK = builder.getPointerKeyForInstanceField(instanceKey, valueField);
+          PointerKey valuePK = builder.getPointerKeyForInstanceField(asin, valueField);
           valuePts = pointerAnalysis.getPointsToSet(valuePK);
         }
         ret.addAll(this.getShapesFromShapeArgument(builder, valuePts));
