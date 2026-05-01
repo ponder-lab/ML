@@ -1,0 +1,51 @@
+name: CodeQL
+
+# Triggers `pull_request` for PR checks, `push` to master for baseline analysis,
+# `merge_group` so PRs in the merge queue have their pre-merge runs reported,
+# and `schedule` for the weekly baseline GitHub default-setup used to do.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  merge_group:
+  schedule:
+    - cron: "0 6 * * 1"
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
+jobs:
+  Analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, java-kotlin]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended,security-and-quality
+
+      - if: matrix.language == 'java-kotlin'
+        uses: github/codeql-action/autobuild@v3
+
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
