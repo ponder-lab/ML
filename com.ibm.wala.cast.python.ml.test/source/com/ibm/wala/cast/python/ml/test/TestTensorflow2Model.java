@@ -4063,6 +4063,33 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_reduce_mean.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
+  // wala/ML#449 Tier 3: reductions. Each collapses dims along `axis` (default `None` = all dims)
+  // and preserves dtype from input (except `reduce_all` which is always BOOL).
+
+  @Test
+  public void testReduceMax()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_reduce_max.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  @Test
+  public void testReduceProd()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_reduce_prod.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  @Test
+  public void testReduceLogSumExp()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_reduce_logsumexp.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  @Test
+  public void testReduceAll()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_reduce_all.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_BOOL)));
+  }
+
   /**
    * Verifies that {@code tf.estimator.EstimatorSpec(...)} produces a fresh allocation with each
    * named parameter stored as a field on the result. The test reads {@code spec.loss} and asserts
