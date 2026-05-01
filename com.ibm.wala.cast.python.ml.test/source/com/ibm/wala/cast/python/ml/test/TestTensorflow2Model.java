@@ -6450,6 +6450,44 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Tier-1 generator (wala/ML#449): {@code tf.identity(input)} returns a fresh tensor with the same
+   * shape and dtype as {@code input}. Pre-fix this routed via {@code identity}'s synthetic XML
+   * which ultimately allocates a {@code Ltensorflow/python/framework/ops/convert_to_tensor} —
+   * {@link com.ibm.wala.cast.python.ml.client.ConvertToTensor} handles dtype/shape, but the extra
+   * indirection through {@code identity}'s wrapper class can be tightened.
+   */
+  @Test
+  public void testIdentity()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_identity.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_INT32)));
+  }
+
+  /**
+   * Tier-1 generator (wala/ML#449): {@code tf.stop_gradient(input)} returns a fresh tensor with the
+   * same shape and dtype as {@code input}. Pre-fix this routed through {@code ReadDataFallback}
+   * (the alloc has no value/dtype field bindings, just a {@code read_data} marker) and emitted
+   * {@code [{? of unknown}]}; the {@link com.ibm.wala.cast.python.ml.client.StopGradient} generator
+   * now reads {@code input}'s shape/dtype directly via the same {@code shapesOfArg} / {@code
+   * dtypesOfArg} pattern as {@link com.ibm.wala.cast.python.ml.client.Sigmoid}.
+   */
+  @Test
+  public void testStopGradient()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_stop_gradient.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Tier-1 generator (wala/ML#449): {@code tf.nn.bias_add(value, bias)} returns a fresh tensor with
+   * the same shape and dtype as {@code value} (bias is broadcast-added but doesn't change the
+   * receiver's shape).
+   */
+  @Test
+  public void testBiasAdd()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_bias_add.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
    * Lock-in test for wala/ML#456: {@code tf.data.Dataset.reduce(initial_state, reduce_func)}
    * returns a tensor with the same shape/dtype as {@code initial_state}. Pre-fix the {@code
    * tensorflow/data/reduce.do()} XML called {@code read_data} virtually on its receiver, but the
