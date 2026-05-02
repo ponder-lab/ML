@@ -222,8 +222,14 @@ public abstract class PythonAnalysisEngine<T>
 
   protected void addSummaryBypassLogic(AnalysisOptions options, String summary) {
     IClassHierarchy cha = getClassHierarchy();
+    // Use `Class.getResourceAsStream` rather than `getClassLoader().getResourceAsStream`: the
+    // former uses the class's own classloader, which is more reliable when Ariadne is wrapped
+    // into an OSGi bundle and consumed as a library (the explicit `getClassLoader()` call can
+    // return a parent classloader that doesn't see the bundle's resources). Leading `/` makes
+    // the lookup absolute — matches where the summary XMLs live in the JAR (classpath root).
+    // See wala/ML#419.
     XMLMethodSummaryReader xml =
-        new XMLMethodSummaryReader(getClass().getClassLoader().getResourceAsStream(summary), scope);
+        new XMLMethodSummaryReader(getClass().getResourceAsStream("/" + summary), scope);
 
     Map<MethodReference, MethodSummary> summaries = new HashMap<>(xml.getSummaries());
     BypassSyntheticClassLoader ldr =
