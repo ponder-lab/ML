@@ -228,8 +228,22 @@ public abstract class PythonAnalysisEngine<T>
     // return a parent classloader that doesn't see the bundle's resources). Leading `/` makes
     // the lookup absolute — matches where the summary XMLs live in the JAR (classpath root).
     // See wala/ML#419.
-    XMLMethodSummaryReader xml =
-        new XMLMethodSummaryReader(getClass().getResourceAsStream("/" + summary), scope);
+    String resourcePath = "/" + summary;
+    java.io.InputStream xmlStream = getClass().getResourceAsStream(resourcePath);
+    if (xmlStream == null) {
+      // Without this check, the downstream `XMLMethodSummaryReader` constructor throws an
+      // `IllegalArgumentException: null xmlFile` that doesn't name the missing resource — exactly
+      // the unhelpful diagnostic that motivated wala/ML#419. Surface the actual context.
+      throw new IllegalStateException(
+          "Could not load summary XML resource '"
+              + resourcePath
+              + "' via "
+              + getClass().getName()
+              + "'s classloader. The summary file is expected at the classpath root; check JAR"
+              + " packaging (shading, OSGi bundle layout) if Ariadne is being consumed as a"
+              + " library.");
+    }
+    XMLMethodSummaryReader xml = new XMLMethodSummaryReader(xmlStream, scope);
 
     Map<MethodReference, MethodSummary> summaries = new HashMap<>(xml.getSummaries());
     BypassSyntheticClassLoader ldr =
