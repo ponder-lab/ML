@@ -1372,9 +1372,8 @@ public abstract class TensorGenerator {
 
       if (typeReference.equals(TensorFlowTypes.D_TYPE)) {
         throw new IllegalStateException("Unknown dtype: " + instanceKey + ".");
-      } else if (instanceKey instanceof AllocationSiteInNode
-          && ((AllocationSiteInNode) instanceKey)
-              .getNode()
+      } else if (asin != null
+          && asin.getNode()
               .getMethod()
               .getDeclaringClass()
               .getReference()
@@ -1386,6 +1385,13 @@ public abstract class TensorGenerator {
         // to be able to migrate to canonical `Ltensorflow/python/framework/ops/Tensor`
         // later (wala/ML#459 PR 2). Reading the containing method's declaring class
         // instead decouples this recognition from the alloc-class convention.
+        //
+        // Use the already-unwrapped {@code asin} from the loop header (line 1299) so
+        // wrapping {@link InstanceKey}s (e.g. {@link
+        // com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKey}) route through this
+        // branch correctly — the prior {@code instanceof AllocationSiteInNode} check
+        // would have skipped wrapped keys (Copilot review on PR #216).
+        //
         // Extract the alloc's `dtype` field and recurse to resolve the actual DType.
         IField valueField =
             builder.getClassHierarchy().resolveField(TensorFlowTypes.CONSTANT_DTYPE);
