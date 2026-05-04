@@ -2,7 +2,6 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine.TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT_OP_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CHOOSE_FROM_DATASETS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SAMPLE_FROM_DATASETS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.BOOL;
@@ -386,18 +385,32 @@ public abstract class TensorGenerator {
 
             ret.add(asList(dimensions));
           }
-      } else if (reference.equals(CONSTANT_OP_CONSTANT)) {
-        // We have a constant tensor. We need the user-supplied value PTS to
-        // recurse into. The XML no longer binds it to the alloc's `value`
-        // field (wala/ML#451 reopen — that binding caused Hybridize's
-        // `Function.containsPrimitive` to traverse the alloc's fields and
-        // find a primitive `ConstantKey` for `tf.constant(N)`-style calls,
-        // classifying receiving parameters as primitive). Fall back to
-        // walking back from the alloc's `do` CGNode to its calling sites and
-        // unioning each call's value-arg PTS. Use the already-unwrapped
-        // {@code asin} from the loop header so wrapping {@link InstanceKey}s
-        // (e.g. {@link com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKey})
-        // route through the CG-walk just like raw {@link AllocationSiteInNode}s.
+      } else if (asin.getNode()
+          .getMethod()
+          .getDeclaringClass()
+          .getReference()
+          .equals(CONSTANT.getDeclaringClass())) {
+        // We have a `tf.constant(...)` result. Detect this by checking the
+        // *containing method* of the allocation (the `tensorflow/functions/constant.do()`
+        // CGNode), not the alloc's concrete type — the latter is the function-name
+        // duplicate `Ltensorflow/python/framework/constant_op/constant`, which is a
+        // load-bearing function-type signal we want to be able to migrate to canonical
+        // `Ltensorflow/python/framework/ops/Tensor` later (wala/ML#459 PR 2). Reading
+        // the containing method's declaring class instead decouples this recognition
+        // from the alloc-class convention; the two are functionally equivalent today
+        // because the only place that allocates `CONSTANT_OP_CONSTANT` is inside
+        // `constant.do()`.
+        //
+        // We need the user-supplied value PTS to recurse into. The XML no longer
+        // binds it to the alloc's `value` field (wala/ML#451 reopen — that binding
+        // caused Hybridize's `Function.containsPrimitive` to traverse the alloc's
+        // fields and find a primitive `ConstantKey` for `tf.constant(N)`-style calls,
+        // classifying receiving parameters as primitive). Fall back to walking back
+        // from the alloc's `do` CGNode to its calling sites and unioning each call's
+        // value-arg PTS. Use the already-unwrapped {@code asin} from the loop header so
+        // wrapping {@link InstanceKey}s (e.g. {@link
+        // com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKey}) route through the
+        // CG-walk just like raw {@link AllocationSiteInNode}s.
         OrdinalSet<InstanceKey> valuePts = getConstantCallValueArgPTS(asin, builder);
         if (valuePts == null || valuePts.isEmpty()) {
           // Defensive fallback in case the `value` field happens to be bound
@@ -1359,9 +1372,21 @@ public abstract class TensorGenerator {
 
       if (typeReference.equals(TensorFlowTypes.D_TYPE)) {
         throw new IllegalStateException("Unknown dtype: " + instanceKey + ".");
-      } else if (typeReference.equals(TensorFlowTypes.CONSTANT_OP_CONSTANT)) {
-        // We have a constant tensor. We extract its 'dtype' field and recurse to
-        // resolve the actual DType value.
+      } else if (instanceKey instanceof AllocationSiteInNode
+          && ((AllocationSiteInNode) instanceKey)
+              .getNode()
+              .getMethod()
+              .getDeclaringClass()
+              .getReference()
+              .equals(CONSTANT.getDeclaringClass())) {
+        // We have a `tf.constant(...)` result. Detect this by checking the
+        // *containing method* of the allocation (the `tensorflow/functions/constant.do()`
+        // CGNode), not the alloc's concrete type. The latter is the function-name
+        // duplicate `Ltensorflow/python/framework/constant_op/constant`, which we want
+        // to be able to migrate to canonical `Ltensorflow/python/framework/ops/Tensor`
+        // later (wala/ML#459 PR 2). Reading the containing method's declaring class
+        // instead decouples this recognition from the alloc-class convention.
+        // Extract the alloc's `dtype` field and recurse to resolve the actual DType.
         IField valueField =
             builder.getClassHierarchy().resolveField(TensorFlowTypes.CONSTANT_DTYPE);
         PointerKey valuePK = builder.getPointerKeyForInstanceField(instanceKey, valueField);
