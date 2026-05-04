@@ -32,10 +32,10 @@ public class Argmax extends ReduceMean {
     return null;
   }
 
-  @Override
-  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    return EnumSet.of(DType.INT64);
-  }
+  // `getDefaultDTypes` is intentionally not overridden: the parent's `getDTypes(builder)` (which
+  // dispatches to `getDefaultDTypes` when there is no dtype argument) is itself overridden here to
+  // return INT64 unconditionally, bypassing the dtype-arg path entirely. Overriding
+  // `getDefaultDTypes` would be dead code.
 
   @Override
   protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
