@@ -52,6 +52,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_ROW_STARTS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_VALUE_ROWIDS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA_OP;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GRADIENT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IDENTITY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT;
@@ -1094,6 +1095,7 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, IDENTITY.getDeclaringClass())) return new Identity(source);
     else if (isType(calledFunction, STOP_GRADIENT.getDeclaringClass()))
       return new StopGradient(source);
+    else if (isType(calledFunction, GRADIENT.getDeclaringClass())) return new Gradient(source);
     else if (isType(calledFunction, SOFTMAX.getDeclaringClass())) return new Softmax(source);
     else if (isType(calledFunction, DENSE_CALL.getDeclaringClass())) return new DenseCall(source);
     else if (isType(calledFunction, MODEL_CALL.getDeclaringClass())) return new ModelCall(source);
