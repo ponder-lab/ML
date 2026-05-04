@@ -14,6 +14,35 @@
                 Often `LRoot` in synthetic models unless a specific class is needed.
   - fieldType : The type of the field itself (the type of the slot). Often `LRoot`.
 -->
+<!--
+  Allocation-class convention for <new> inside <method name="do"> bodies:
+
+  1. Object-typed API result (Estimator, Variable, Optimizer, Model, Layer,
+     Dataset, Tensor, SparseTensor, RaggedTensor, ...): per-op class. The
+     class declares the result's API surface (.train, .minimize, .batch,
+     .shape, etc.); virtual dispatch on the result resolves through the
+     class hierarchy.
+
+  2. Function-typed API producing a tensor result (sigmoid, add, reshape,
+     argmax, less, ...): canonical `Ltensorflow/python/framework/ops/Tensor`.
+     The function name is not a method dispatcher — Tensor methods (.shape,
+     .dtype, .numpy(), ...) are declared on `Tensor`. Per-op alloc classes
+     here would only duplicate the function name without carrying any
+     dispatchable members; PR #219 migrated 66 such allocations to canonical
+     `Tensor`.
+
+  3. Wrapper for callback storage + virtual dispatch (Estimator's `train`
+     class, future `Dataset.map`-style modeling): per-op class. The class
+     identity is load-bearing for the <getfield ... field="$callback" />
+     followed by <call type="virtual" arg0="..." /> invocation chain — the
+     virtual dispatch needs the alloc class to declare the invocable method.
+     Such allocations are structurally protected from migration: their `def`
+     is field-stored (via <putfield value="..."/>) rather than returned.
+
+  Background: wala/ML#459 (function-typed migration); Dolby et al., MAPL '18,
+  *Ariadne: Analysis for Machine Learning Programs* (the per-op alloc-class
+  pattern's original API-modeling rationale, Figures 7 and 8).
+-->
 <!-- spotless:on -->
 <summary-spec>
   <classloader name="PythonLoader">
