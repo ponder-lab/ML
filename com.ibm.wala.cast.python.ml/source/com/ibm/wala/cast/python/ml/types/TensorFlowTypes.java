@@ -862,6 +862,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String ARGMAX_SIGNATURE = "tf.argmax()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/math/argmin. */
+  public static final MethodReference ARGMIN =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/argmin")),
+          AstMethodReference.fnSelector);
+
+  private static final String ARGMIN_SIGNATURE = "tf.argmin()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/math/equal. */
   public static final MethodReference EQUAL =
       MethodReference.findOrCreate(
@@ -1195,6 +1204,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(CIFAR10_Y_TEST, CIFAR10_Y_TEST_SIGNATURE),
           Map.entry(PLACEHOLDER.getDeclaringClass(), PLACEHOLDER_SIGNATURE),
           Map.entry(ARGMAX.getDeclaringClass(), ARGMAX_SIGNATURE),
+          Map.entry(ARGMIN.getDeclaringClass(), ARGMIN_SIGNATURE),
           Map.entry(EQUAL.getDeclaringClass(), EQUAL_SIGNATURE),
           Map.entry(NOT_EQUAL.getDeclaringClass(), NOT_EQUAL_SIGNATURE),
           Map.entry(CAST.getDeclaringClass(), CAST_SIGNATURE),

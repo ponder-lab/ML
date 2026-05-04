@@ -330,6 +330,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_2_INT64 =
       new TensorType(INT_64, asList(new NumericDim(2)));
 
+  private static final TensorType TENSOR_INT64_UNKNOWN_SHAPE = new TensorType(INT_64, null);
+
   private static final TensorType TENSOR_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3)));
 
@@ -4242,6 +4244,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testSize()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_size.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  // wala/ML#449 Tier 6: argmax/argmin produce int64 indices. Output shape is left at ⊤ for now;
+  // see `Argmax.getDefaultShapes` for why precise shape inference regresses `testNeuralNetwork*`.
+
+  @Test
+  public void testArgmax()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_argmax.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT64_UNKNOWN_SHAPE)));
+  }
+
+  @Test
+  public void testArgmin()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_argmin.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT64_UNKNOWN_SHAPE)));
   }
 
   @Test
