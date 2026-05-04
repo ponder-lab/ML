@@ -330,6 +330,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_2_INT64 =
       new TensorType(INT_64, asList(new NumericDim(2)));
 
+  private static final TensorType TENSOR_INT64_UNKNOWN_SHAPE = new TensorType(INT_64, null);
+
   private static final TensorType TENSOR_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3)));
 
@@ -4242,6 +4244,41 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testSize()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_size.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  // wala/ML#449 Tier 6: argmax/argmin produce int64 indices. Output shape is left at ⊤ for now;
+  // see `Argmax.getDefaultShapes` for why precise shape inference regresses `testNeuralNetwork*`.
+
+  /**
+   * Verifies that {@code tf.math.argmax(x, axis=0)} routes through the dedicated {@link
+   * com.ibm.wala.cast.python.ml.client.Argmax} generator and emits the precise {@code int64} dtype
+   * (the TF default for argmax indices). Output shape is left at ⊤ in this Tier 6 PR — see
+   * wala/ML#462 for why.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgmax()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_argmax.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT64_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Counterpart of {@link #testArgmax()} for {@code tf.math.argmin}. Same semantics: dtype is fixed
+   * at {@code int64}, shape is left at ⊤. See {@link com.ibm.wala.cast.python.ml.client.Argmin}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgmin()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_argmin.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT64_UNKNOWN_SHAPE)));
   }
 
   @Test
