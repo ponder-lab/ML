@@ -1786,9 +1786,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * = 234 full batches + 1 partial batch of 96; verified by Python assert statements in {@code
    * tensorflow_gan_tutorial.py}).
    *
-   * <p>Expected tensor variable count: 5 (matches master baseline and branch actual; no count
-   * regression or advance). The test fails only on types: value 2 ({@code images}) registers as
-   * {@code {? float32}} because the mnist data pipeline loses shape information through {@code
+   * <p>Expected tensor variable count: 7. After wala/ML#430's {@code Gradient} generator allocates
+   * a fresh tensor per {@code tape.gradient(...)} call instead of aliasing {@code sources}, each of
+   * the two gradient calls in {@code train_step} (one for the generator, one for the discriminator)
+   * registers an additional local tensor variable, lifting the count from the prior master baseline
+   * of 5 to 7. The test still fails only on types: value 2 ({@code images}) registers as {@code {?
+   * float32}} because the mnist data pipeline loses shape information through {@code
    * mnist.load_data()} and the subsequent ndarray operations (wala/ML#361). Types are aspirational;
    * hardcoding {@code mnist.load_data()} as an intrinsic (per the plan discussed on branch 267)
    * would unblock this test without needing the general annotation framework (wala/ML#370).
@@ -1800,7 +1803,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tensorflow_gan_tutorial.py",
         "train_step",
         1,
-        5,
+        7,
         Map.of(2, Set.of(TENSOR_256_28_28_1_FLOAT32, TENSOR_96_28_28_1_FLOAT32)));
   }
 
@@ -1810,8 +1813,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Python assert statements in {@code tensorflow_gan_tutorial.py} (not duplicated in {@code
    * tensorflow_gan_tutorial2.py} since the two files are structurally identical apart from the
    * decorator): shape in {@code {(256, 28, 28, 1), (96, 28, 28, 1)}}, dtype {@code float32}.
-   * Expected count 5 matches master baseline and branch actual; same mnist modeling gap
-   * (wala/ML#361) blocks type inference on value 2.
+   * Expected count 7 — same accounting as {@link #testGanTutorial()}: the two `tape.gradient(...)`
+   * calls each contribute one fresh tensor variable post-wala/ML#430 (5 → 7). Same mnist modeling
+   * gap (wala/ML#361) blocks type inference on value 2.
    */
   @Test
   public void testGanTutorial2()
@@ -1820,7 +1824,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tensorflow_gan_tutorial2.py",
         "train_step",
         1,
-        5,
+        7,
         Map.of(2, Set.of(TENSOR_256_28_28_1_FLOAT32, TENSOR_96_28_28_1_FLOAT32)));
   }
 
@@ -1965,9 +1969,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * <p>Rule-based tensor variable count is 6 (2 parameters {@code x}, {@code y} + 4 intermediate
    * ops {@code pred}, {@code loss}, {@code trainable_variables}, {@code gradients}). With the fix
    * for wala/ML#358, {@code pred = neural_net(x, is_training=True)} is now tracked at {@code (256,
-   * 10) float32}, bringing the registered count to 4. {@code trainable_variables} and {@code
-   * gradients} are lists of tensors rather than single tensors and don't register as {@code
-   * TensorVariable}s; the remaining gap from 4 to 6 is tracked by wala/ML#391.
+   * 10) float32}, bringing the registered count to 4. After wala/ML#430's {@code Gradient}
+   * generator, {@code gradients} now registers as one fresh tensor variable (the generator
+   * allocates fresh per call rather than aliasing {@code sources}), lifting the count from 4 to 5.
+   * {@code trainable_variables} remains a list of tensors and still doesn't register; the residual
+   * gap from 5 to 6 is tracked by wala/ML#391.
    */
   @Test
   public void testNeuralNetwork3()
@@ -1976,7 +1982,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "neural_network.py",
         "run_optimization",
         2,
-        4,
+        5,
         Map.of(2, Set.of(TENSOR_256_784_FLOAT32), 3, Set.of(TENSOR_256_UINT8)));
   }
 
@@ -2081,17 +2087,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * {@code (256, 784)} dtype {@code float32} (verified by Python assert statements in {@code
    * autoencoder.py}).
    *
-   * <p>Expected tensor variable count: 3 (master baseline). Rule-based would be 6 (1 parameter + 5
-   * intermediate ops {@code encoder(x)} result, {@code decoder(...) = reconstructed_image}, {@code
-   * mean_square(...) = loss}, {@code trainable_variables}, {@code gradients}), dropping to 4 if
-   * list-of-tensors values don't register, but branch currently registers 1 &mdash; a regression
-   * from master. Keeping expected at the master baseline lets the failing count check serve as the
-   * regression signal; no separate issue is needed because the test itself tracks the discrepancy.
+   * <p>Expected tensor variable count: 4. Rule-based would be 6 (1 parameter + 5 intermediate ops
+   * {@code encoder(x)} result, {@code decoder(...) = reconstructed_image}, {@code mean_square(...)
+   * = loss}, {@code trainable_variables}, {@code gradients}), dropping to 4 if list-of-tensors
+   * values don't register. After wala/ML#430's {@code Gradient} generator, {@code gradients} now
+   * registers as one fresh tensor variable; combined with the previously-registered tensors the
+   * count reaches 4 — matching the rule-based-minus-{@code trainable_variables} ceiling. (Pre-#430
+   * the count was 1, so the master baseline of 3 had been deliberately preserved as a regression
+   * canary; that role is now superseded by reaching the rule-based ceiling.)
    */
   @Test
   public void testAutoencoder3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("autoencoder.py", "run_optimization", 1, 3, Map.of(2, Set.of(TENSOR_256_784_FLOAT32)));
+    test("autoencoder.py", "run_optimization", 1, 4, Map.of(2, Set.of(TENSOR_256_784_FLOAT32)));
   }
 
   /**
@@ -4101,14 +4109,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * a bare integer as the shape argument (the parenthesised {@code (-1)} parses as {@code -1}, not
    * a 1-tuple).
    *
-   * <p>Expected tensor variable count: 4. Previously 5 — branch carried a spurious classification
-   * at {@code vn=44} ({@code gpu_batch_size = int(batch_size / num_gpus)} at line 222) where {@code
-   * batch_size / num_gpus} is a binop on Python ints, dispatched to {@link ElementWiseOperation}
-   * and typed {@code [] of int32} via {@link TensorGenerator#getDTypesOfValue}'s Integer-constant →
-   * INT32 path. Now correctly rejected by {@link TensorGeneratorFactory}'s binop operand-tensor
-   * gate (wala/ML#451), restoring the master-baseline count of 4. See also wala/ML#361 (MNIST
-   * modeling) and wala/ML#393 (CIFAR-10 modeling, closed by the commit that landed this test's
-   * partial pass).
+   * <p>Expected tensor variable count: 5. The historical trajectory is: pre-wala/ML#451 the count
+   * was 5 because of a spurious classification at {@code vn=44} ({@code gpu_batch_size =
+   * int(batch_size / num_gpus)} at line 222) where {@code batch_size / num_gpus} is a binop on
+   * Python ints, dispatched to {@link ElementWiseOperation} and typed {@code [] of int32} via
+   * {@link TensorGenerator#getDTypesOfValue}'s Integer-constant → INT32 path. wala/ML#451's binop
+   * operand-tensor gate rejected that classification, dropping the count to the master baseline of
+   * 4. wala/ML#430's {@code Gradient} generator then added one fresh tensor per {@code
+   * tape.gradient(...)} call (one such call here), bringing the count back to 5 — but now backed by
+   * the legitimate registration of the gradient result rather than the spurious binop pickup. See
+   * also wala/ML#361 (MNIST modeling) and wala/ML#393 (CIFAR-10 modeling, closed by the commit that
+   * landed this test's partial pass).
    */
   @Test
   public void testMultiGPUTraining()
@@ -4117,7 +4128,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "multigpu_training.py",
         "run_optimization",
         2,
-        4,
+        5,
         Map.of(2, Set.of(TENSOR_4096_32_32_3_FLOAT32), 3, Set.of(TENSOR_4096_UINT8)));
   }
 
