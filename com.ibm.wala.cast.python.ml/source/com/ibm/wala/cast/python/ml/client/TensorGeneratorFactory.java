@@ -53,9 +53,13 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_VALUE_ROWID
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GRADIENT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GREATER;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GREATER_EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IDENTITY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LESS;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LESS_EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG_SOFTMAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MATMUL;
@@ -1076,6 +1080,14 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, EQUAL.getDeclaringClass()))
       return new ComparisonOperation(source);
     else if (isType(calledFunction, NOT_EQUAL.getDeclaringClass()))
+      return new ComparisonOperation(source);
+    else if (isType(calledFunction, LESS.getDeclaringClass()))
+      return new ComparisonOperation(source);
+    else if (isType(calledFunction, LESS_EQUAL.getDeclaringClass()))
+      return new ComparisonOperation(source);
+    else if (isType(calledFunction, GREATER.getDeclaringClass()))
+      return new ComparisonOperation(source);
+    else if (isType(calledFunction, GREATER_EQUAL.getDeclaringClass()))
       return new ComparisonOperation(source);
     else if (isType(calledFunction, SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass())
         || isType(calledFunction, SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass()))

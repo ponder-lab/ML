@@ -267,6 +267,24 @@
         <putfield class="LRoot" field="not_equal" fieldType="LRoot" ref="x" value="not_equal" />
         <putfield class="LRoot" field="not_equal" fieldType="LRoot" ref="math" value="not_equal" />
         <putfield class="LRoot" field="not_equal" fieldType="LRoot" ref="math_ops" value="not_equal" />
+        <!-- The four ordering comparison ops (`tf.less`, `tf.less_equal`, `tf.greater`, `tf.greater_equal`) round out the comparison family started by `equal`/`not_equal`; same alias structure (top-level `tf.X`, `tf.math.X`, `tf.math_ops.X`). Each routes to `ComparisonOperation` and emits `bool` per
+          wala/ML#427. -->
+        <new def="less" class="Ltensorflow/math/less" />
+        <putfield class="LRoot" field="less" fieldType="LRoot" ref="x" value="less" />
+        <putfield class="LRoot" field="less" fieldType="LRoot" ref="math" value="less" />
+        <putfield class="LRoot" field="less" fieldType="LRoot" ref="math_ops" value="less" />
+        <new def="less_equal" class="Ltensorflow/math/less_equal" />
+        <putfield class="LRoot" field="less_equal" fieldType="LRoot" ref="x" value="less_equal" />
+        <putfield class="LRoot" field="less_equal" fieldType="LRoot" ref="math" value="less_equal" />
+        <putfield class="LRoot" field="less_equal" fieldType="LRoot" ref="math_ops" value="less_equal" />
+        <new def="greater" class="Ltensorflow/math/greater" />
+        <putfield class="LRoot" field="greater" fieldType="LRoot" ref="x" value="greater" />
+        <putfield class="LRoot" field="greater" fieldType="LRoot" ref="math" value="greater" />
+        <putfield class="LRoot" field="greater" fieldType="LRoot" ref="math_ops" value="greater" />
+        <new def="greater_equal" class="Ltensorflow/math/greater_equal" />
+        <putfield class="LRoot" field="greater_equal" fieldType="LRoot" ref="x" value="greater_equal" />
+        <putfield class="LRoot" field="greater_equal" fieldType="LRoot" ref="math" value="greater_equal" />
+        <putfield class="LRoot" field="greater_equal" fieldType="LRoot" ref="math_ops" value="greater_equal" />
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/log -->
         <putfield class="LRoot" field="log" fieldType="LRoot" ref="math" value="pass_through" />
         <putfield class="LRoot" field="log" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
@@ -291,11 +309,7 @@
         <putfield class="LRoot" field="minimum" fieldType="LRoot" ref="x" value="pass_through" />
         <putfield class="LRoot" field="minimum" fieldType="LRoot" ref="math" value="pass_through" />
         <putfield class="LRoot" field="minimum" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/less -->
-        <!-- TODO: Return a dtype of bool instead of the input. -->
-        <putfield class="LRoot" field="less" fieldType="LRoot" ref="x" value="pass_through" />
-        <putfield class="LRoot" field="less" fieldType="LRoot" ref="math" value="pass_through" />
-        <putfield class="LRoot" field="less" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
+        <!-- `tf.less`'s legacy `pass_through` aliasing was removed: the modern `<class name="less">` block + `ComparisonOperation` dispatch (wala/ML#427) now handle bool dtype directly. -->
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/cos -->
         <putfield class="LRoot" field="cos" fieldType="LRoot" ref="x" value="pass_through" />
         <putfield class="LRoot" field="cos" fieldType="LRoot" ref="math" value="pass_through" />
@@ -1005,6 +1019,34 @@
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x y name">
           <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="xx" />
           <return value="xx" />
+        </method>
+      </class>
+      <class name="less" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/math/less — elementwise `x < y`. Direct `<new>+<return>` per wala/ML#380's preference (no `read_data` materialization chain). Routes to `ComparisonOperation` for bool output dtype (wala/ML#427). -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x y name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="less_equal" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/math/less_equal — elementwise `x <= y`. Direct `<new>+<return>` per wala/ML#380's preference. Routes to `ComparisonOperation` for bool output dtype (wala/ML#427). -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x y name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="greater" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/math/greater — elementwise `x > y`. Direct `<new>+<return>` per wala/ML#380's preference. Routes to `ComparisonOperation` for bool output dtype (wala/ML#427). -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x y name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="greater_equal" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/math/greater_equal — elementwise `x >= y`. Direct `<new>+<return>` per wala/ML#380's preference. Routes to `ComparisonOperation` for bool output dtype (wala/ML#427). -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x y name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="top_k" allocatable="true">
