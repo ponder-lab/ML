@@ -1012,6 +1012,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String STOP_GRADIENT_SIGNATURE = "tf.stop_gradient()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/GradientTape#gradient. */
+  public static final MethodReference GRADIENT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/gradient")),
+          AstMethodReference.fnSelector);
+
+  private static final String GRADIENT_SIGNATURE = "tf.GradientTape.gradient()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/nn/softmax. */
   public static final MethodReference SOFTMAX =
       MethodReference.findOrCreate(
@@ -1215,6 +1224,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(SIZE.getDeclaringClass(), SIZE_SIGNATURE),
           Map.entry(IDENTITY.getDeclaringClass(), IDENTITY_SIGNATURE),
           Map.entry(STOP_GRADIENT.getDeclaringClass(), STOP_GRADIENT_SIGNATURE),
+          Map.entry(GRADIENT.getDeclaringClass(), GRADIENT_SIGNATURE),
           Map.entry(SOFTMAX.getDeclaringClass(), SOFTMAX_SIGNATURE),
           Map.entry(DENSE_CALL.getDeclaringClass(), DENSE_CALL_SIGNATURE),
           Map.entry(FLATTEN.getDeclaringClass(), FLATTEN_SIGNATURE),

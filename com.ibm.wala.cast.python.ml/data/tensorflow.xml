@@ -1990,9 +1990,10 @@
         </method>
       </class>
       <class name="gradient" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/GradientTape#gradient -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/GradientTape#gradient — fresh allocation (not pass-through of `sources`). The dedicated `Gradient` generator inherits shape and dtype from the `sources` argument. See wala/ML#430. -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self target sources output_gradients unconnected_gradients">
-          <return value="sources" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
     </package>
