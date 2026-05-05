@@ -223,24 +223,33 @@ public abstract class PythonAnalysisEngine<T>
 
   protected void addSummaryBypassLogic(AnalysisOptions options, String summary) {
     IClassHierarchy cha = getClassHierarchy();
-    // Use `getClass().getResourceAsStream` (the *runtime* class's loader) rather than the
-    // declaring class's loader. This API is designed inversely from CodeQL's "Unsafe use of
-    // getResource" rule's mental model: subclasses such as `PythonTensorAnalysisEngine` (in the
-    // separate `com.ibm.wala.cast.python.ml` module) ship their own bundled summaries —
-    // `numpy.xml`, `tensorflow.xml`, etc. — and the only way to find those resources is
-    // through the subclass's classloader. Anchoring to `PythonAnalysisEngine.class` would
-    // route through the base engine's bundle, which doesn't see the subclass's resources under
-    // OSGi/module isolation. So `getClass()` is *correct* here, not unsafe; the CodeQL alert is
-    // a false positive for this design and is dismissed at the security tab. See PR
-    // ponder-lab/ML#209's discussion thread on this point.
+    // Two distinct loader sources need to find summary XMLs, and they pull from opposite
+    // directions under OSGi/module isolation:
     //
-    // The broader `Class.getResourceAsStream`-vs-`getClassLoader()` choice is for OSGi
-    // reliability per wala/ML#419: `Class.getResourceAsStream` uses the class's own
-    // classloader, while `getClassLoader()` can return a parent classloader that doesn't see
-    // the bundle's resources. Leading `/` makes the lookup absolute — matches where the
-    // summary XMLs live in the JAR (classpath root).
+    //   1. *Subclass-shipped summaries* (numpy.xml, tensorflow.xml, etc.) live in the subclass's
+    //      module (e.g., `com.ibm.wala.cast.python.ml`'s `PythonTensorAnalysisEngine`). Only the
+    //      subclass's classloader sees them; the base engine's classloader can't.
+    //   2. *Base-shipped summaries* (the LIBRARIES array — `pytest.xml`, `flask.xml`, etc.) live
+    //      in the base module (`com.ibm.wala.cast.python`'s `PythonAnalysisEngine`). When a
+    //      cross-module subclass like `PytestAnalysisEngine` (in
+    // `com.ibm.wala.cast.python.jython3`)
+    //      calls this inherited helper, the subclass's classloader doesn't see them; only the
+    //      base's does.
+    //
+    // Try `getClass()` first, then fall back to `PythonAnalysisEngine.class` if the resource
+    // wasn't found through the runtime class's loader. The fallback handles case (2) without
+    // breaking case (1). The broader `Class.getResourceAsStream`-vs-`getClassLoader()` choice
+    // is for OSGi reliability per wala/ML#419: the former uses the class's own classloader,
+    // while `getClassLoader()` can return a parent classloader that doesn't see the bundle's
+    // resources. Leading `/` makes the lookup absolute — matches where the summary XMLs live in
+    // the JAR (classpath root). CodeQL's "Unsafe use of getResource" rule fires on the first
+    // line below; that alert is dismissed as a false positive — the rule's mental model assumes
+    // a single resource source, but the API design intentionally has two.
     String resourcePath = "/" + summary;
     InputStream xmlStream = getClass().getResourceAsStream(resourcePath);
+    if (xmlStream == null) {
+      xmlStream = PythonAnalysisEngine.class.getResourceAsStream(resourcePath);
+    }
     if (xmlStream == null) {
       // Without this check, the downstream `XMLMethodSummaryReader` constructor throws an
       // `IllegalArgumentException: null xmlFile` that doesn't name the missing resource — exactly
@@ -248,19 +257,20 @@ public abstract class PythonAnalysisEngine<T>
       // message is intentionally generic — `addSummaryBypassLogic` is reused for caller-supplied
       // summaries (e.g., test fixtures resolving via a subclass), so the diagnostic should help
       // contributors identify whether the resource is one of Ariadne's bundled XMLs (which need
-      // to be on the subclass's classpath) or a caller-supplied one (which depends on the
-      // consumer's own resource layout). The runtime-class name (via `getClass()`) is more
-      // informative than the declaring class's because it tells the reader which subclass's
-      // classloader was actually consulted.
+      // to be on either the subclass's or the base engine's classpath) or a caller-supplied one
+      // (which depends on the consumer's own resource layout). Both loaders consulted in the
+      // fallback chain are named so the failure points at the right module.
       throw new IllegalStateException(
           "Could not load summary XML resource '"
               + resourcePath
               + "' via "
               + getClass().getName()
+              + "'s classloader or "
+              + PythonAnalysisEngine.class.getName()
               + "'s classloader. If this is one of Ariadne's bundled summaries (e.g., `tensorflow"
-              + ".xml`, `numpy.xml`), check the JAR packaging (shading, OSGi bundle layout). If"
-              + " this is a caller-supplied summary, verify it is on the consumer's classpath at"
-              + " the expected absolute path.");
+              + ".xml`, `numpy.xml`, `pytest.xml`), check the JAR packaging (shading, OSGi bundle"
+              + " layout). If this is a caller-supplied summary, verify it is on the consumer's"
+              + " classpath at the expected absolute path.");
     }
     XMLMethodSummaryReader xml = new XMLMethodSummaryReader(xmlStream, scope);
 
