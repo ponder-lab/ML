@@ -90,6 +90,7 @@ import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -222,26 +223,36 @@ public abstract class PythonAnalysisEngine<T>
 
   protected void addSummaryBypassLogic(AnalysisOptions options, String summary) {
     IClassHierarchy cha = getClassHierarchy();
-    // Use `Class.getResourceAsStream` rather than `getClassLoader().getResourceAsStream`: the
-    // former uses the class's own classloader, which is more reliable when Ariadne is wrapped
-    // into an OSGi bundle and consumed as a library (the explicit `getClassLoader()` call can
-    // return a parent classloader that doesn't see the bundle's resources). Leading `/` makes
-    // the lookup absolute — matches where the summary XMLs live in the JAR (classpath root).
-    // See wala/ML#419.
+    // Use `PythonAnalysisEngine.class.getResourceAsStream` rather than `getClass()` (avoids the
+    // CodeQL "Unsafe use of getResource" rule: a subclass calling this inherited method would
+    // resolve `getClass()` to the subclass and look up the resource through the subclass's
+    // classloader — possibly missing the summary XML carried by this class's bundle). Anchoring
+    // to `PythonAnalysisEngine.class` keeps the lookup on this class's classloader regardless of
+    // subclassing. Leading `/` makes the lookup absolute — matches where the summary XMLs live
+    // in the JAR (classpath root). The broader `Class.getResourceAsStream`-vs-`getClassLoader()`
+    // choice is for OSGi reliability per wala/ML#419: the former uses the class's own
+    // classloader, while `getClassLoader()` can return a parent classloader that doesn't see the
+    // bundle's resources.
     String resourcePath = "/" + summary;
-    java.io.InputStream xmlStream = getClass().getResourceAsStream(resourcePath);
+    InputStream xmlStream = PythonAnalysisEngine.class.getResourceAsStream(resourcePath);
     if (xmlStream == null) {
       // Without this check, the downstream `XMLMethodSummaryReader` constructor throws an
       // `IllegalArgumentException: null xmlFile` that doesn't name the missing resource — exactly
-      // the unhelpful diagnostic that motivated wala/ML#419. Surface the actual context.
+      // the unhelpful diagnostic that motivated wala/ML#419. Surface the actual context. The
+      // message is intentionally generic — `addSummaryBypassLogic` is reused for caller-supplied
+      // summaries (e.g., test fixtures resolving via a subclass), so the diagnostic should help
+      // contributors identify whether the resource is one of Ariadne's bundled XMLs (which need
+      // to be on `PythonAnalysisEngine`'s classpath) or a caller-supplied one (which depends on
+      // the consumer's own resource layout).
       throw new IllegalStateException(
           "Could not load summary XML resource '"
               + resourcePath
               + "' via "
-              + getClass().getName()
-              + "'s classloader. The summary file is expected at the classpath root; check JAR"
-              + " packaging (shading, OSGi bundle layout) if Ariadne is being consumed as a"
-              + " library.");
+              + PythonAnalysisEngine.class.getName()
+              + "'s classloader. If this is one of Ariadne's bundled summaries (e.g., `tensorflow"
+              + ".xml`, `numpy.xml`), check the JAR packaging (shading, OSGi bundle layout). If"
+              + " this is a caller-supplied summary, verify it is on the consumer's classpath at"
+              + " the expected absolute path.");
     }
     XMLMethodSummaryReader xml = new XMLMethodSummaryReader(xmlStream, scope);
 
