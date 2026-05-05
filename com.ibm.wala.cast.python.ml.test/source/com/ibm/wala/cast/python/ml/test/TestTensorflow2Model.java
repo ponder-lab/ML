@@ -22,6 +22,8 @@ import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
+import com.ibm.wala.cast.python.ml.client.BroadcastTo;
+import com.ibm.wala.cast.python.ml.client.Linspace;
 import com.ibm.wala.cast.python.ml.client.NonBroadcastableShapesException;
 import com.ibm.wala.cast.python.ml.client.NpArray;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
@@ -4347,6 +4349,41 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testArgmin()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_argmin.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT64_UNKNOWN_SHAPE)));
+  }
+
+  // wala/ML#449 Tier 7: linspace/broadcast_to. Shape derives from a shape-arg (`num`/`shape`),
+  // dtype derives from a value-arg (`start`/`input`).
+
+  /**
+   * Verifies that {@code tf.linspace(0.0, 10.0, 5)} routes through the dedicated {@link Linspace}
+   * generator and emits the precise rank-1 shape {@code (5,)} with {@code float32} dtype (derived
+   * from the float-typed {@code start} argument).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testLinspace()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_linspace.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_FLOAT32)));
+  }
+
+  /**
+   * Verifies that {@code tf.broadcast_to(x, [2, 3])} routes through the dedicated {@link
+   * BroadcastTo} generator and emits shape {@code (2, 3)} (read from the {@code shape} argument's
+   * literal list) with {@code float32} dtype (derived from the {@code input} tensor).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testBroadcastTo()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_broadcast_to.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
   }
 
   @Test

@@ -7,6 +7,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARGMAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARGMIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARRAY_OPS_RESHAPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BROADCAST_TO;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_X_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_X_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_Y_TEST;
@@ -60,6 +61,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMAGE_DATA_GENER
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LESS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LESS_EQUAL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LINSPACE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG_SOFTMAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MATMUL;
@@ -953,6 +955,9 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, ARRAY_OPS_RESHAPE)
         || calledFunction.getName().equals(TF_RESHAPE)) return new Reshape(source);
     else if (isType(calledFunction, FILL.getDeclaringClass())) return new Fill(source);
+    else if (isType(calledFunction, LINSPACE.getDeclaringClass())) return new Linspace(source);
+    else if (isType(calledFunction, BROADCAST_TO.getDeclaringClass()))
+      return new BroadcastTo(source);
     else if (isType(calledFunction, CONVERT_TO_TENSOR.getDeclaringClass()))
       return new ConvertToTensor(source);
     else if (isType(calledFunction, ONE_HOT.getDeclaringClass())) return new OneHot(source);

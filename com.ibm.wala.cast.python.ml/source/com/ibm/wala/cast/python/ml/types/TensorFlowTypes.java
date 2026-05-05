@@ -444,6 +444,25 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String FILL_SIGNATURE = "tf.fill()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/linspace. */
+  public static final MethodReference LINSPACE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/linspace")),
+          AstMethodReference.fnSelector);
+
+  private static final String LINSPACE_SIGNATURE = "tf.linspace()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/broadcast_to. */
+  public static final MethodReference BROADCAST_TO =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/broadcast_to")),
+          AstMethodReference.fnSelector);
+
+  private static final String BROADCAST_TO_SIGNATURE = "tf.broadcast_to()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/convert_to_tensor. */
   public static final MethodReference CONVERT_TO_TENSOR =
       MethodReference.findOrCreate(
@@ -1198,6 +1217,8 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(TRUNCATED_NORMAL.getDeclaringClass(), TRUNCATED_NORMAL_SIGNATURE),
           Map.entry(ZEROS_LIKE.getDeclaringClass(), ZEROS_LIKE_SIGNATURE),
           Map.entry(FILL.getDeclaringClass(), FILL_SIGNATURE),
+          Map.entry(LINSPACE.getDeclaringClass(), LINSPACE_SIGNATURE),
+          Map.entry(BROADCAST_TO.getDeclaringClass(), BROADCAST_TO_SIGNATURE),
           Map.entry(CONVERT_TO_TENSOR.getDeclaringClass(), CONVERT_TO_TENSOR_SIGNATURE),
           Map.entry(EYE.getDeclaringClass(), EYE_SIGNATURE),
           Map.entry(SPARSE_TENSOR.getDeclaringClass(), SPARSE_TENSOR_SIGNATURE),
