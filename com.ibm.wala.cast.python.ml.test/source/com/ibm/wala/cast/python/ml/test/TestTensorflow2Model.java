@@ -332,9 +332,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_INT64_UNKNOWN_SHAPE = new TensorType(INT_64, null);
 
-  private static final TensorType TENSOR_FLOAT32_UNKNOWN_SHAPE = new TensorType(FLOAT_32, null);
-
-  private static final TensorType TENSOR_BOOL_UNKNOWN_SHAPE = new TensorType(BOOL, null);
+  private static final TensorType TENSOR_UNKNOWN_SHAPE_BOOL = new TensorType(BOOL, null);
 
   private static final TensorType TENSOR_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3)));
@@ -4362,7 +4360,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testSequenceMask()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_sequence_mask.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_BOOL_UNKNOWN_SHAPE)));
+    test("tf2_test_sequence_mask.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_BOOL)));
   }
 
   /**
@@ -4374,7 +4372,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testEmbeddingLookup()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_embedding_lookup.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_FLOAT32_UNKNOWN_SHAPE)));
+        "tf2_test_embedding_lookup.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
@@ -4385,7 +4383,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testGatherNd()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_gather_nd.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_FLOAT32_UNKNOWN_SHAPE)));
+    test("tf2_test_gather_nd.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
@@ -4396,7 +4394,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testBooleanMask()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_boolean_mask.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_FLOAT32_UNKNOWN_SHAPE)));
+    test("tf2_test_boolean_mask.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
@@ -4407,7 +4405,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testExtractPatches()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_extract_patches.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_FLOAT32_UNKNOWN_SHAPE)));
+    test("tf2_test_extract_patches.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   @Test

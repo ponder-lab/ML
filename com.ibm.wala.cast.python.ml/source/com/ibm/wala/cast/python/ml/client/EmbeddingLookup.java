@@ -10,8 +10,10 @@ import java.util.Set;
 /**
  * Generator for {@code tf.nn.embedding_lookup}. Output dtype is inherited from the {@code params}
  * argument (the embedding table). Output shape is left at ⊤ for now: the precise shape is {@code
- * (*ids.shape, params.shape[-1])} which requires combining two inputs' shapes — wala/ML#449 (Tier
- * 8) covers refining this once a tier base for "shape derived from multiple inputs" is in place.
+ * ids.shape + params.shape[1:]} (each id selects a full row of the embedding table, then the result
+ * is reshaped around {@code ids.shape}), which requires combining two inputs' shapes — wala/ML#449
+ * (Tier 8) covers refining this once a tier base for "shape derived from multiple inputs" is in
+ * place.
  *
  * @see <a
  *     href="https://www.tensorflow.org/api_docs/python/tf/nn/embedding_lookup">tf.nn.embedding_lookup</a>
