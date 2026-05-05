@@ -353,6 +353,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_64_5_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(64), new NumericDim(5)));
 
+  private static final TensorType TENSOR_7_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(7)));
+
+  private static final TensorType TENSOR_32_7_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(32), new NumericDim(7)));
+
   private static final TensorType TENSOR_5_INT32 =
       new TensorType(INT_32, asList(new NumericDim(5)));
 
@@ -1683,6 +1689,41 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32)));
+  }
+
+  /**
+   * Multi-Model precision regression: two distinct {@code tf.keras.models.Model(...)} calls in one
+   * fixture, two sink functions, disjoint shapes per model. Validates that under the current
+   * modeling each sink's parameter sees only its own model's weight shapes (not the union across
+   * both models). See wala/ML#380's discussion of `Model.read_data` materialization. Companion to
+   * {@link #testModelAttributesMultiModel2()} (same fixture, second sink). Disjoint dim choices
+   * (64/5 vs 32/7) make a precision regression mechanically detectable: a "shapes unioned across
+   * models" failure mode produces the 4-element set, not a 2-element subset.
+   */
+  @Test
+  public void testModelAttributesMultiModel()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_attributes_multi.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testModelAttributesMultiModel()} — pins the second sink's parameter to the
+   * second model's weight shapes only.
+   */
+  @Test
+  public void testModelAttributesMultiModel2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_attributes_multi.py",
+        "g",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_32_7_FLOAT32, TENSOR_7_FLOAT32)));
   }
 
   /**
