@@ -11,17 +11,14 @@
 # coverage. The `actions/unpinned-tag` rule isn't applicable to Java code,
 # so no rule exclusion is needed here either.
 #
-# `paths-ignore` excludes the two Git submodules (`IDE/`, `jython3/`) — they
-# are third-party code (`wala/IDE` for LSP integration and the Jython runtime),
-# not part of the Ariadne codebase under change. Without this, CodeQL was
-# reporting ~4900 quality lint findings on `jython3/` alone, drowning the
-# ~85 alerts on Ariadne's own code in noise.
+# Submodule paths are excluded dynamically by the workflow (see the
+# "Append submodule paths to CodeQL paths-ignore" step in `codeql.yml`):
+# the workflow reads `.gitmodules` and appends a `paths-ignore` block to
+# this file at scan time. That avoids hard-coding submodule paths here,
+# so any future submodule additions are auto-excluded without a separate
+# CodeQL config edit.
 
 name: "ponder-lab/ML CodeQL config (java-kotlin)"
-
-paths-ignore:
-  - 'IDE/**'
-  - 'jython3/**'
 
 queries:
   - uses: security-extended
