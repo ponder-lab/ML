@@ -10,6 +10,19 @@ The following dependencies require Git submodules to be initialized and updated.
 git submodule update --init --recursive
 ```
 
+**When adding or removing a Git submodule, update every place that hardcodes the submodule list to match `.gitmodules`.** Submodules are third-party code outside the Ariadne codebase under change, and several tools have to be told explicitly to skip them. Audit checklist:
+
+- `pom.xml` — Spotless `<format>` blocks (search for `<!-- Exclude Git submodules -->`).
+- `.github/workflows/continuous-integration.yml` — the `black --fast --check --extend-exclude ... .` invocation under "Check formatting with Black."
+- `.github/codeql/codeql-config-java-kotlin.yml` — the `paths-ignore` block at the top.
+- Install steps in `continuous-integration.yml` and `codeql.yml` — the build needs each submodule installed as a local Maven artifact (or otherwise made available), so renames/removals propagate here too.
+
+To verify completeness, list current submodule paths and confirm each appears (or no longer appears) in every site above:
+
+```bash
+git config --file .gitmodules --get-regexp path | awk '{print $2}'
+```
+
 ### Installing Jython 3
 
 You must install the `jython-dev.jar` to your local maven repository.
