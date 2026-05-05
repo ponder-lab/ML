@@ -362,6 +362,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_64_7_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(64), new NumericDim(7)));
 
+  private static final TensorType TENSOR_20_5_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(20), new NumericDim(5)));
+
+  private static final TensorType TENSOR_20_7_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(20), new NumericDim(7)));
+
   private static final TensorType TENSOR_5_INT32 =
       new TensorType(INT_32, asList(new NumericDim(5)));
 
@@ -1773,6 +1779,38 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TENSOR_64_7_FLOAT32, TENSOR_7_FLOAT32)));
+  }
+
+  /**
+   * Multi-Model precision regression on the {@code model(x)} call-output path: two distinct Models
+   * constructed inside a {@code make_and_call(units, x)} helper that also performs the call. Each
+   * user-side {@code make_and_call(...)} returns the model's output, with disjoint shapes (5 vs 7)
+   * per call. Sink {@code f} should see only model1's output shape; companion {@link
+   * #testModelCallMultiModelWrapped2()} pins {@code g} to model2's. Under 2-CFA the two user-side
+   * {@code make_and_call} call sites collapse into one context for {@code Model.__call__}, so each
+   * sink ends up with the union ({@code {(20, 5), (20, 7)}}) rather than the per-Model shape — same
+   * precision-loss mechanism as {@link #testModelAttributesMultiModelWrapped()}, but on the
+   * call-output path instead of the trainable-weights path.
+   *
+   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#380 (or wala/ML#379's
+   * configurable-k work) lands a fix that distinguishes the per-Model contexts here.
+   */
+  @Test(expected = AssertionError.class)
+  public void testModelCallMultiModelWrapped()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_model_call_multi_wrapped.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_20_5_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testModelCallMultiModelWrapped()} — same fixture, second sink.
+   *
+   * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#380 (or wala/ML#379's
+   * configurable-k work) lands a fix.
+   */
+  @Test(expected = AssertionError.class)
+  public void testModelCallMultiModelWrapped2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_model_call_multi_wrapped.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_20_7_FLOAT32)));
   }
 
   /**
