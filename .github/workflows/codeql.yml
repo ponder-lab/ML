@@ -42,7 +42,7 @@ jobs:
       - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
-          config-file: ./.github/codeql/codeql-config.yml
+          config-file: ./.github/codeql/codeql-config-${{ matrix.language }}.yml
 
       # The Java build needs the Jython3 submodule installed as a local
       # Maven artifact before the main project can resolve. Mirrors the
