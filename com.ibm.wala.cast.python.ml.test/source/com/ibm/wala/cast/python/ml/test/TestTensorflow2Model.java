@@ -332,6 +332,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_INT64_UNKNOWN_SHAPE = new TensorType(INT_64, null);
 
+  private static final TensorType TENSOR_FLOAT32_UNKNOWN_SHAPE = new TensorType(FLOAT_32, null);
+
   private static final TensorType TENSOR_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3)));
 
@@ -4347,6 +4349,40 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testArgmin()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_argmin.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT64_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.linalg.tensordot}. Output dtype is inherited from the
+   * {@code a} input (here float32), shape is ⊤. See {@link
+   * com.ibm.wala.cast.python.ml.client.Tensordot} (wala/ML#449).
+   */
+  @Test
+  public void testTensordot()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_tensordot.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_FLOAT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.linalg.trace}. Output dtype is inherited from the {@code
+   * x} input (here float32), shape is ⊤. See {@link com.ibm.wala.cast.python.ml.client.Trace}
+   * (wala/ML#449).
+   */
+  @Test
+  public void testTrace()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_trace.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_FLOAT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.tensor_scatter_nd_update}. Output dtype AND shape are
+   * inherited from the {@code tensor} input — true shape-and-dtype passthrough on the first arg.
+   * Here the input is shape {@code (4,)} float32, so the result is the same. See {@link
+   * com.ibm.wala.cast.python.ml.client.TensorScatterNdUpdate} (wala/ML#449).
+   */
+  @Test
+  public void testTensorScatterNdUpdate()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_tensor_scatter_nd_update.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32)));
   }
 
   @Test
