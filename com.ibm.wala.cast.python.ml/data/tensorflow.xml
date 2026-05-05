@@ -14,6 +14,39 @@
                 Often `LRoot` in synthetic models unless a specific class is needed.
   - fieldType : The type of the field itself (the type of the slot). Often `LRoot`.
 -->
+<!--
+  Allocation-class convention for <new> inside <method name="do"> bodies:
+
+  1. Object-typed API result with its own method surface (Estimator, Variable,
+     Optimizer, Model, Layer, Dataset, SparseTensor, RaggedTensor, ...): the
+     class itself (i.e., `Ltensorflow/.../Variable`, `Ltensorflow/.../SparseTensor`,
+     etc.). The class declares the result's API surface (.train, .minimize,
+     .batch, .indices, .values, etc.); virtual dispatch on the result resolves
+     through the class hierarchy. `Tensor` belongs to case (2) below —
+     tensor-producing functions allocate canonical Tensor; the `Tensor` class
+     is itself the substrate that case (2) names.
+
+  2. Function-typed API producing a tensor result (e.g., tf.math.sigmoid,
+     tf.math.add, tf.reshape, tf.math.argmax, tf.math.less, ...): canonical
+     `Ltensorflow/python/framework/ops/Tensor`. The function name is not a
+     method dispatcher — Tensor methods (.shape, .dtype, .numpy(), ...) are
+     declared on `Tensor`. Per-op alloc classes here would only duplicate the
+     function name without carrying any dispatchable members; ponder-lab/ML#219
+     migrated 66 such allocations to canonical `Tensor`.
+
+  3. Wrapper for callback storage + virtual dispatch (Estimator's `train`
+     class, future `Dataset.map`-style modeling): per-op class. The class
+     identity is load-bearing for the <getfield ... field="$callback" />
+     followed by <call type="virtual" arg0="..." /> invocation chain — the
+     virtual dispatch needs the alloc class to declare the invocable method.
+     Such allocations are structurally protected from migration: their `def`
+     is field-stored (via <putfield value="..."/>) rather than returned.
+
+  Background: wala/ML#459 (function-typed migration; ponder-lab/ML#219 was
+  the migration PR); Dolby et al., MAPL '18, *Ariadne: Analysis for Machine
+  Learning Programs* (the per-op alloc-class pattern's original API-modeling
+  rationale, Figures 7 and 8).
+-->
 <!-- spotless:on -->
 <summary-spec>
   <classloader name="PythonLoader">
