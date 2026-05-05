@@ -4,6 +4,8 @@ import static com.ibm.wala.cast.python.ml.types.NumpyTypes.ASTYPE;
 import static com.ibm.wala.cast.python.ml.types.NumpyTypes.ASTYPE_METHOD_NAME;
 import static com.ibm.wala.cast.python.ml.types.NumpyTypes.RESHAPE_METHOD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARGMAX;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARGMIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARRAY_OPS_RESHAPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_X_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_X_TRAIN;
@@ -50,9 +52,14 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_ROW_STARTS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_VALUE_ROWIDS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA_OP;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GRADIENT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GREATER;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GREATER_EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IDENTITY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LESS;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LESS_EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG_SOFTMAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MATMUL;
@@ -1074,6 +1081,14 @@ public class TensorGeneratorFactory {
       return new ComparisonOperation(source);
     else if (isType(calledFunction, NOT_EQUAL.getDeclaringClass()))
       return new ComparisonOperation(source);
+    else if (isType(calledFunction, LESS.getDeclaringClass()))
+      return new ComparisonOperation(source);
+    else if (isType(calledFunction, LESS_EQUAL.getDeclaringClass()))
+      return new ComparisonOperation(source);
+    else if (isType(calledFunction, GREATER.getDeclaringClass()))
+      return new ComparisonOperation(source);
+    else if (isType(calledFunction, GREATER_EQUAL.getDeclaringClass()))
+      return new ComparisonOperation(source);
     else if (isType(calledFunction, SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass())
         || isType(calledFunction, SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass()))
       return new SoftmaxCrossEntropy(source);
@@ -1087,9 +1102,12 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, LOG_SOFTMAX.getDeclaringClass())) return new LogSoftmax(source);
     else if (isType(calledFunction, RANK.getDeclaringClass())) return new Rank(source);
     else if (isType(calledFunction, SIZE.getDeclaringClass())) return new Size(source);
+    else if (isType(calledFunction, ARGMAX.getDeclaringClass())) return new Argmax(source);
+    else if (isType(calledFunction, ARGMIN.getDeclaringClass())) return new Argmin(source);
     else if (isType(calledFunction, IDENTITY.getDeclaringClass())) return new Identity(source);
     else if (isType(calledFunction, STOP_GRADIENT.getDeclaringClass()))
       return new StopGradient(source);
+    else if (isType(calledFunction, GRADIENT.getDeclaringClass())) return new Gradient(source);
     else if (isType(calledFunction, SOFTMAX.getDeclaringClass())) return new Softmax(source);
     else if (isType(calledFunction, DENSE_CALL.getDeclaringClass())) return new DenseCall(source);
     else if (isType(calledFunction, MODEL_CALL.getDeclaringClass())) return new ModelCall(source);

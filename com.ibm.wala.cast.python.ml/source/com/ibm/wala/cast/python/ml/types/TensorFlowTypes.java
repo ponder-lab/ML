@@ -862,6 +862,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String ARGMAX_SIGNATURE = "tf.argmax()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/math/argmin. */
+  public static final MethodReference ARGMIN =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/argmin")),
+          AstMethodReference.fnSelector);
+
+  private static final String ARGMIN_SIGNATURE = "tf.argmin()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/math/equal. */
   public static final MethodReference EQUAL =
       MethodReference.findOrCreate(
@@ -879,6 +888,42 @@ public class TensorFlowTypes extends PythonTypes {
           AstMethodReference.fnSelector);
 
   private static final String NOT_EQUAL_SIGNATURE = "tf.not_equal()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/less. */
+  public static final MethodReference LESS =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/less")),
+          AstMethodReference.fnSelector);
+
+  private static final String LESS_SIGNATURE = "tf.less()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/less_equal. */
+  public static final MethodReference LESS_EQUAL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/less_equal")),
+          AstMethodReference.fnSelector);
+
+  private static final String LESS_EQUAL_SIGNATURE = "tf.less_equal()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/greater. */
+  public static final MethodReference GREATER =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/greater")),
+          AstMethodReference.fnSelector);
+
+  private static final String GREATER_SIGNATURE = "tf.greater()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/greater_equal. */
+  public static final MethodReference GREATER_EQUAL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/greater_equal")),
+          AstMethodReference.fnSelector);
+
+  private static final String GREATER_EQUAL_SIGNATURE = "tf.greater_equal()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/cast. */
   public static final MethodReference CAST =
@@ -1011,6 +1056,15 @@ public class TensorFlowTypes extends PythonTypes {
           AstMethodReference.fnSelector);
 
   private static final String STOP_GRADIENT_SIGNATURE = "tf.stop_gradient()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/GradientTape#gradient. */
+  public static final MethodReference GRADIENT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/gradient")),
+          AstMethodReference.fnSelector);
+
+  private static final String GRADIENT_SIGNATURE = "tf.GradientTape.gradient()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/nn/softmax. */
   public static final MethodReference SOFTMAX =
@@ -1195,8 +1249,13 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(CIFAR10_Y_TEST, CIFAR10_Y_TEST_SIGNATURE),
           Map.entry(PLACEHOLDER.getDeclaringClass(), PLACEHOLDER_SIGNATURE),
           Map.entry(ARGMAX.getDeclaringClass(), ARGMAX_SIGNATURE),
+          Map.entry(ARGMIN.getDeclaringClass(), ARGMIN_SIGNATURE),
           Map.entry(EQUAL.getDeclaringClass(), EQUAL_SIGNATURE),
           Map.entry(NOT_EQUAL.getDeclaringClass(), NOT_EQUAL_SIGNATURE),
+          Map.entry(LESS.getDeclaringClass(), LESS_SIGNATURE),
+          Map.entry(LESS_EQUAL.getDeclaringClass(), LESS_EQUAL_SIGNATURE),
+          Map.entry(GREATER.getDeclaringClass(), GREATER_SIGNATURE),
+          Map.entry(GREATER_EQUAL.getDeclaringClass(), GREATER_EQUAL_SIGNATURE),
           Map.entry(CAST.getDeclaringClass(), CAST_SIGNATURE),
           Map.entry(
               SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass(),
@@ -1215,6 +1274,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(SIZE.getDeclaringClass(), SIZE_SIGNATURE),
           Map.entry(IDENTITY.getDeclaringClass(), IDENTITY_SIGNATURE),
           Map.entry(STOP_GRADIENT.getDeclaringClass(), STOP_GRADIENT_SIGNATURE),
+          Map.entry(GRADIENT.getDeclaringClass(), GRADIENT_SIGNATURE),
           Map.entry(SOFTMAX.getDeclaringClass(), SOFTMAX_SIGNATURE),
           Map.entry(DENSE_CALL.getDeclaringClass(), DENSE_CALL_SIGNATURE),
           Map.entry(FLATTEN.getDeclaringClass(), FLATTEN_SIGNATURE),
