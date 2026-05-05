@@ -10,7 +10,14 @@ The following dependencies require Git submodules to be initialized and updated.
 git submodule update --init --recursive
 ```
 
-**When adding or removing a Git submodule, also update `.github/codeql/codeql-config-java-kotlin.yml`'s `paths-ignore` list to match.** Submodules are third-party code outside the Ariadne codebase under change; keeping them out of CodeQL analysis avoids drowning Ariadne's own findings in submodule-noise (see ponder-lab/ML#232).
+**When adding or removing a Git submodule, update every place that hardcodes the submodule list to match `.gitmodules`.** Submodules are third-party code outside the Ariadne codebase under change, and several tools have to be told explicitly to skip them. Audit checklist:
+
+- `pom.xml` — Spotless `<format>` blocks (search for `<!-- Exclude Git submodules -->`, currently two occurrences with `<exclude>IDE/</exclude>` and `<exclude>jython3/</exclude>`).
+- `.github/workflows/continuous-integration.yml` — the `black --fast --check --extend-exclude IDE --extend-exclude jython3 .` invocation under "Check formatting with Black."
+- `.github/codeql/codeql-config-java-kotlin.yml` — the `paths-ignore` block at the top.
+- Install steps in `continuous-integration.yml` and `codeql.yml` (`pushd jython3`, `pushd IDE/com.ibm.wala.cast.lsp`) — the build needs each submodule installed as a local Maven artifact, so renames/removals propagate here too.
+
+A `git grep -E '(IDE|jython3)' '*.yml' '*.xml' '*.md'` (excluding the submodule directories themselves) is the quick way to catch every site.
 
 ### Installing Jython 3
 
