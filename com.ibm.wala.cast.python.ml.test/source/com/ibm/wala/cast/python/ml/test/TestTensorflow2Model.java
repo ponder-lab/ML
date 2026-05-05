@@ -332,8 +332,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_INT64_UNKNOWN_SHAPE = new TensorType(INT_64, null);
 
-  private static final TensorType TENSOR_FLOAT32_UNKNOWN_SHAPE = new TensorType(FLOAT_32, null);
-
   private static final TensorType TENSOR_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3)));
 
@@ -4359,7 +4357,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testTensordot()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_tensordot.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_FLOAT32_UNKNOWN_SHAPE)));
+    test("tf2_test_tensordot.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
@@ -4370,7 +4368,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testTrace()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_trace.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_FLOAT32_UNKNOWN_SHAPE)));
+    test("tf2_test_trace.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**

@@ -14,6 +14,10 @@ import java.util.Set;
  * the last two dimensions" needs a small dim-list slice that isn't shared by the existing tier
  * bases. See wala/ML#449.
  *
+ * <p>Extends {@link PassThroughUnaryTensorGenerator} for the dtype-from-input path only — see
+ * {@link Tensordot}'s class-level Javadoc for the rationale (and the future-refactor note about
+ * extracting a shared {@code DTypePassThroughUnaryTensorGenerator} base).
+ *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/linalg/trace">tf.linalg.trace</a>
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
