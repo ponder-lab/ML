@@ -10,6 +10,8 @@ The following dependencies require Git submodules to be initialized and updated.
 git submodule update --init --recursive
 ```
 
+**When adding or removing a Git submodule, also update `.github/codeql/codeql-config-java-kotlin.yml`'s `paths-ignore` list to match.** Submodules are third-party code outside the Ariadne codebase under change; keeping them out of CodeQL analysis avoids drowning Ariadne's own findings in submodule-noise (see ponder-lab/ML#232).
+
 ### Installing Jython 3
 
 You must install the `jython-dev.jar` to your local maven repository.
