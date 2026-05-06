@@ -332,6 +332,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_INT64_UNKNOWN_SHAPE = new TensorType(INT_64, null);
 
+  private static final TensorType TENSOR_UNKNOWN_SHAPE_BOOL = new TensorType(BOOL, null);
+
   private static final TensorType TENSOR_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3)));
 
@@ -4347,6 +4349,64 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testArgmin()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_argmin.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT64_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.sequence_mask}. Output dtype is the TF-default {@code
+   * bool}; the optional {@code dtype} override is exposed in {@code tensorflow.xml}'s {@code
+   * paramNames} but is not yet honored by the {@link
+   * com.ibm.wala.cast.python.ml.client.SequenceMask} generator, which emits {@code bool}
+   * unconditionally. Shape is ⊤. (wala/ML#449 Tier 8.)
+   */
+  @Test
+  public void testSequenceMask()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_sequence_mask.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_BOOL)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.nn.embedding_lookup}. Output dtype is inherited from the
+   * {@code params} input (here float32), shape is ⊤. See {@link
+   * com.ibm.wala.cast.python.ml.client.EmbeddingLookup} (wala/ML#449 Tier 8).
+   */
+  @Test
+  public void testEmbeddingLookup()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_embedding_lookup.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.gather_nd}. Output dtype is inherited from the {@code
+   * params} input (here float32), shape is ⊤. See {@link
+   * com.ibm.wala.cast.python.ml.client.GatherNd} (wala/ML#449 Tier 8).
+   */
+  @Test
+  public void testGatherNd()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_gather_nd.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.boolean_mask}. Output dtype is inherited from the {@code
+   * tensor} input (here float32), shape is ⊤. See {@link
+   * com.ibm.wala.cast.python.ml.client.BooleanMask} (wala/ML#449 Tier 8).
+   */
+  @Test
+  public void testBooleanMask()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_boolean_mask.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.image.extract_patches}. Output dtype is inherited from
+   * the {@code images} input (here float32), shape is ⊤. See {@link
+   * com.ibm.wala.cast.python.ml.client.ExtractPatches} (wala/ML#449 Tier 8).
+   */
+  @Test
+  public void testExtractPatches()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_extract_patches.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   @Test
