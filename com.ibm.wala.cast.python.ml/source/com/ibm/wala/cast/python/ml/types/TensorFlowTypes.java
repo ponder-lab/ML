@@ -946,6 +946,34 @@ public class TensorFlowTypes extends PythonTypes {
   public static final String REUTERS_Y_TEST_SIGNATURE =
       "tf.keras.datasets.reuters.load_data/y_test";
 
+  public static final TypeReference BOSTON_HOUSING_X_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/boston_housing/x_train"));
+
+  public static final String BOSTON_HOUSING_X_TRAIN_SIGNATURE =
+      "tf.keras.datasets.boston_housing.load_data/x_train";
+
+  public static final TypeReference BOSTON_HOUSING_Y_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/boston_housing/y_train"));
+
+  public static final String BOSTON_HOUSING_Y_TRAIN_SIGNATURE =
+      "tf.keras.datasets.boston_housing.load_data/y_train";
+
+  public static final TypeReference BOSTON_HOUSING_X_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/boston_housing/x_test"));
+
+  public static final String BOSTON_HOUSING_X_TEST_SIGNATURE =
+      "tf.keras.datasets.boston_housing.load_data/x_test";
+
+  public static final TypeReference BOSTON_HOUSING_Y_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/boston_housing/y_test"));
+
+  public static final String BOSTON_HOUSING_Y_TEST_SIGNATURE =
+      "tf.keras.datasets.boston_housing.load_data/y_test";
+
   /** https://www.tensorflow.org/api_docs/python/tf/placeholder. */
   public static final MethodReference PLACEHOLDER =
       MethodReference.findOrCreate(
@@ -1442,6 +1470,10 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(REUTERS_Y_TRAIN, REUTERS_Y_TRAIN_SIGNATURE),
           Map.entry(REUTERS_X_TEST, REUTERS_X_TEST_SIGNATURE),
           Map.entry(REUTERS_Y_TEST, REUTERS_Y_TEST_SIGNATURE),
+          Map.entry(BOSTON_HOUSING_X_TRAIN, BOSTON_HOUSING_X_TRAIN_SIGNATURE),
+          Map.entry(BOSTON_HOUSING_Y_TRAIN, BOSTON_HOUSING_Y_TRAIN_SIGNATURE),
+          Map.entry(BOSTON_HOUSING_X_TEST, BOSTON_HOUSING_X_TEST_SIGNATURE),
+          Map.entry(BOSTON_HOUSING_Y_TEST, BOSTON_HOUSING_Y_TEST_SIGNATURE),
           Map.entry(PLACEHOLDER.getDeclaringClass(), PLACEHOLDER_SIGNATURE),
           Map.entry(ARGMAX.getDeclaringClass(), ARGMAX_SIGNATURE),
           Map.entry(ARGMIN.getDeclaringClass(), ARGMIN_SIGNATURE),

@@ -8,6 +8,10 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARGMAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARGMIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARRAY_OPS_RESHAPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOOLEAN_MASK;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOSTON_HOUSING_X_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOSTON_HOUSING_X_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOSTON_HOUSING_Y_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOSTON_HOUSING_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BROADCAST_TO;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR100_X_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR100_X_TRAIN;
@@ -1120,6 +1124,14 @@ public class TensorGeneratorFactory {
       return new ReutersInputData(source, ReutersInputData.X_TEST_SHAPE, ReutersInputData.X_DTYPES);
     else if (isType(calledFunction, REUTERS_Y_TEST))
       return new ReutersInputData(source, ReutersInputData.Y_TEST_SHAPE, ReutersInputData.Y_DTYPES);
+    else if (isType(calledFunction, BOSTON_HOUSING_X_TRAIN))
+      return new BostonHousingInputData(source, BostonHousingInputData.X_TRAIN_SHAPE);
+    else if (isType(calledFunction, BOSTON_HOUSING_Y_TRAIN))
+      return new BostonHousingInputData(source, BostonHousingInputData.Y_TRAIN_SHAPE);
+    else if (isType(calledFunction, BOSTON_HOUSING_X_TEST))
+      return new BostonHousingInputData(source, BostonHousingInputData.X_TEST_SHAPE);
+    else if (isType(calledFunction, BOSTON_HOUSING_Y_TEST))
+      return new BostonHousingInputData(source, BostonHousingInputData.Y_TEST_SHAPE);
     else if (isType(calledFunction, REDUCE_MEAN.getDeclaringClass())) return new ReduceMean(source);
     else if (isType(calledFunction, REDUCE_MAX.getDeclaringClass())) return new ReduceMax(source);
     else if (isType(calledFunction, REDUCE_PROD.getDeclaringClass())) return new ReduceProd(source);
