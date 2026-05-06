@@ -918,6 +918,34 @@ public class TensorFlowTypes extends PythonTypes {
   public static final String CIFAR100_Y_TEST_SIGNATURE =
       "tf.keras.datasets.cifar100.load_data/y_test";
 
+  public static final TypeReference REUTERS_X_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/reuters/x_train"));
+
+  public static final String REUTERS_X_TRAIN_SIGNATURE =
+      "tf.keras.datasets.reuters.load_data/x_train";
+
+  public static final TypeReference REUTERS_Y_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/reuters/y_train"));
+
+  public static final String REUTERS_Y_TRAIN_SIGNATURE =
+      "tf.keras.datasets.reuters.load_data/y_train";
+
+  public static final TypeReference REUTERS_X_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/reuters/x_test"));
+
+  public static final String REUTERS_X_TEST_SIGNATURE =
+      "tf.keras.datasets.reuters.load_data/x_test";
+
+  public static final TypeReference REUTERS_Y_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/reuters/y_test"));
+
+  public static final String REUTERS_Y_TEST_SIGNATURE =
+      "tf.keras.datasets.reuters.load_data/y_test";
+
   /** https://www.tensorflow.org/api_docs/python/tf/placeholder. */
   public static final MethodReference PLACEHOLDER =
       MethodReference.findOrCreate(
@@ -1410,6 +1438,10 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(CIFAR100_Y_TRAIN, CIFAR100_Y_TRAIN_SIGNATURE),
           Map.entry(CIFAR100_X_TEST, CIFAR100_X_TEST_SIGNATURE),
           Map.entry(CIFAR100_Y_TEST, CIFAR100_Y_TEST_SIGNATURE),
+          Map.entry(REUTERS_X_TRAIN, REUTERS_X_TRAIN_SIGNATURE),
+          Map.entry(REUTERS_Y_TRAIN, REUTERS_Y_TRAIN_SIGNATURE),
+          Map.entry(REUTERS_X_TEST, REUTERS_X_TEST_SIGNATURE),
+          Map.entry(REUTERS_Y_TEST, REUTERS_Y_TEST_SIGNATURE),
           Map.entry(PLACEHOLDER.getDeclaringClass(), PLACEHOLDER_SIGNATURE),
           Map.entry(ARGMAX.getDeclaringClass(), ARGMAX_SIGNATURE),
           Map.entry(ARGMIN.getDeclaringClass(), ARGMIN_SIGNATURE),

@@ -108,6 +108,10 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MEAN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_PROD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_SUM;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_X_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_X_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_Y_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RSQRT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SEQUENCE_MASK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIGMOID;
@@ -1106,6 +1110,16 @@ public class TensorGeneratorFactory {
       return new Cifar10InputData(source, Cifar10InputData.X_TEST_SHAPE);
     else if (isType(calledFunction, CIFAR100_Y_TEST))
       return new Cifar10InputData(source, Cifar10InputData.Y_TEST_SHAPE);
+    else if (isType(calledFunction, REUTERS_X_TRAIN))
+      return new ReutersInputData(
+          source, ReutersInputData.X_TRAIN_SHAPE, ReutersInputData.X_DTYPES);
+    else if (isType(calledFunction, REUTERS_Y_TRAIN))
+      return new ReutersInputData(
+          source, ReutersInputData.Y_TRAIN_SHAPE, ReutersInputData.Y_DTYPES);
+    else if (isType(calledFunction, REUTERS_X_TEST))
+      return new ReutersInputData(source, ReutersInputData.X_TEST_SHAPE, ReutersInputData.X_DTYPES);
+    else if (isType(calledFunction, REUTERS_Y_TEST))
+      return new ReutersInputData(source, ReutersInputData.Y_TEST_SHAPE, ReutersInputData.Y_DTYPES);
     else if (isType(calledFunction, REDUCE_MEAN.getDeclaringClass())) return new ReduceMean(source);
     else if (isType(calledFunction, REDUCE_MAX.getDeclaringClass())) return new ReduceMax(source);
     else if (isType(calledFunction, REDUCE_PROD.getDeclaringClass())) return new ReduceProd(source);

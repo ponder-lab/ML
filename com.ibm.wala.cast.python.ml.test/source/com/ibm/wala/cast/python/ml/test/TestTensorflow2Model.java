@@ -327,6 +327,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
           UINT_8,
           asList(new NumericDim(50000), new NumericDim(32), new NumericDim(32), new NumericDim(3)));
 
+  private static final TensorType TENSOR_8982_INT64 =
+      new TensorType(INT_64, asList(new NumericDim(8982)));
+
   /** A {@code float32} tensor whose shape cannot be statically inferred. */
   private static final TensorType TENSOR_UNKNOWN_SHAPE_FLOAT32 = new TensorType(FLOAT_32, null);
 
@@ -4725,6 +4728,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_cifar100_load_data.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_50000_32_32_3_UINT8)));
+  }
+
+  /**
+   * Generator test for {@code tf.keras.datasets.reuters.load_data()}. The {@code y_train} array has
+   * shape {@code (8982,)} of {@code int64} (newswire topic labels).
+   */
+  @Test
+  public void testReutersLoadData()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_reuters_load_data.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_8982_INT64)));
   }
 
   @Test
