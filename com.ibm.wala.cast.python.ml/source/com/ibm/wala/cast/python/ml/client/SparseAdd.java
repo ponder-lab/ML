@@ -92,7 +92,9 @@ public class SparseAdd extends ElementWiseOperation {
         if (field != null) {
           PointerKey pk = builder.getPointerKeyForInstanceField(ik, field);
           OrdinalSet<InstanceKey> fieldPointsTo = pointerAnalysis.getPointsToSet(pk);
-          ret.addAll(this.getShapesFromShapeArgument(builder, fieldPointsTo));
+          if (fieldPointsTo == null || fieldPointsTo.isEmpty()) continue;
+          Set<List<Dimension<?>>> sub = this.getShapesFromShapeArgument(builder, fieldPointsTo);
+          if (sub != null) ret.addAll(sub);
         }
       }
     }

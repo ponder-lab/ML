@@ -238,14 +238,27 @@ public abstract class TensorGenerator {
   /**
    * Returns the possible shapes of the tensor returned by this generator.
    *
+   * <p>Returns {@code null} when the shape argument's PTS contains forms this method does not
+   * recognize as a static shape — runtime tensors (e.g. the result of {@code tf.shape(y)}), opaque
+   * builder objects, or anything that isn't a list / tuple / {@code tf.constant} / {@code
+   * TensorSpec} / {@code RaggedTensorSpec}. The {@code null} return is the lattice signal for ⊤
+   * ("tensor of unknown shape") matching the convention documented in this class's class-level
+   * Javadoc and {@code CONTRIBUTING.md}'s "Tensor Type Generators" section. Callers that aggregate
+   * sub-shapes should propagate {@code null} upward rather than treating it as an empty result. See
+   * <a href="https://github.com/wala/ML/issues/471">wala/ML#471</a>.
+   *
+   * <p>Still throws {@link IllegalArgumentException} when the {@code pointsToSet} parameter itself
+   * is empty or {@code null} — that's a caller-contract violation (callers should check for empty
+   * PTS before invoking this helper), distinct from "shape was a runtime tensor".
+   *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param pointsToSet The points-to set of the shape argument. FIXME: Why not take a value number?
-   * @return A set of possible shapes of the tensor returned by this generator.
+   * @return A set of possible shapes of the tensor returned by this generator, or {@code null} when
+   *     no static shape can be recovered from {@code pointsToSet}.
    */
   protected Set<List<Dimension<?>>> getShapesFromShapeArgument(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
     if (pointsToSet == null || !pointsToSet.iterator().hasNext())
-      // TODO: The shape argument could be a tensor, in which case the points-to set would be empty.
       throw new IllegalArgumentException(
           "Empty points-to set for shape argument in source: " + this.getSource() + ".");
 
@@ -329,22 +342,27 @@ public abstract class TensorGenerator {
                     this.getShapesFromShapeArgument(
                         builder, Collections.singleton(instanceFieldIK));
 
+                if (nestedShapes == null) return null;
                 for (List<Dimension<?>> nestedShape : nestedShapes)
                   tensorDimensions.add(new CompoundDim(nestedShape));
-              } else
-                throw new IllegalStateException(
-                    "Expected a constant key or nested structure for instance field: "
+              } else {
+                LOGGER.fine(
+                    "Unrecognized instance-field allocation for shape arg: "
                         + pointerKeyForInstanceField
-                        + ", but got: "
+                        + " -> "
                         + instanceFieldIK
-                        + ".");
-            } else
-              throw new IllegalStateException(
-                  "Expected a constant key or nested structure for instance field: "
+                        + "; returning null (⊤).");
+                return null;
+              }
+            } else {
+              LOGGER.fine(
+                  "Unrecognized instance-field key for shape arg: "
                       + pointerKeyForInstanceField
-                      + ", but got: "
+                      + " -> "
                       + instanceFieldIK
-                      + ".");
+                      + "; returning null (⊤).");
+              return null;
+            }
           }
 
           LOGGER.info(
@@ -421,7 +439,10 @@ public abstract class TensorGenerator {
           PointerKey valuePK = builder.getPointerKeyForInstanceField(asin, valueField);
           valuePts = pointerAnalysis.getPointsToSet(valuePK);
         }
-        ret.addAll(this.getShapesFromShapeArgument(builder, valuePts));
+        if (valuePts == null || valuePts.isEmpty()) return null;
+        Set<List<Dimension<?>>> constantShapes = this.getShapesFromShapeArgument(builder, valuePts);
+        if (constantShapes == null) return null;
+        ret.addAll(constantShapes);
       } else if (reference.equals(TensorFlowTypes.TENSOR_SPEC)
           || reference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)) {
         // We have a TensorSpec or RaggedTensorSpec. These objects carry shape and dtype
@@ -436,10 +457,19 @@ public abstract class TensorGenerator {
                         : TensorFlowTypes.RAGGED_SPEC_SHAPE);
         PointerKey shapePK = builder.getPointerKeyForInstanceField(instanceKey, shapeField);
         OrdinalSet<InstanceKey> shapePts = pointerAnalysis.getPointsToSet(shapePK);
-        ret.addAll(this.getShapesFromShapeArgument(builder, shapePts));
-      } else
-        throw new IllegalStateException(
-            "Expected a " + list + " or " + tuple + " for the shape, but got: " + reference + ".");
+        if (shapePts == null || shapePts.isEmpty()) return null;
+        Set<List<Dimension<?>>> specShapes = this.getShapesFromShapeArgument(builder, shapePts);
+        if (specShapes == null) return null;
+        ret.addAll(specShapes);
+      } else {
+        LOGGER.fine(
+            "Unrecognized shape-argument allocation: "
+                + reference
+                + " for source "
+                + this.getSource()
+                + "; returning null (⊤).");
+        return null;
+      }
     }
 
     return ret;

@@ -147,9 +147,10 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
-                ret.addAll(
+                Set<List<Dimension<?>>> sub =
                     this.getShapesFromShapeArgument(
-                        builder, builder.getPointerAnalysis().getPointsToSet(pk)));
+                        builder, builder.getPointerAnalysis().getPointsToSet(pk));
+                if (sub != null) ret.addAll(sub);
               }
             }
           }
@@ -187,9 +188,10 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
-                ret.addAll(
+                Set<List<Dimension<?>>> sub =
                     this.getShapesFromShapeArgument(
-                        builder, builder.getPointerAnalysis().getPointsToSet(pk)));
+                        builder, builder.getPointerAnalysis().getPointsToSet(pk));
+                if (sub != null) ret.addAll(sub);
               }
             }
           }
@@ -243,14 +245,17 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
             IField f = builder.getClassHierarchy().resolveField(subscript);
             if (f != null) {
               PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
-              ret.addAll(
+              Set<List<Dimension<?>>> sub =
                   this.getShapesFromShapeArgument(
-                      builder, builder.getPointerAnalysis().getPointsToSet(pk)));
+                      builder, builder.getPointerAnalysis().getPointsToSet(pk));
+              if (sub != null) ret.addAll(sub);
             }
           }
         } else {
           // Case 1.2: Single spec object as signature.
-          ret.addAll(this.getShapesFromShapeArgument(builder, Collections.singleton(ik)));
+          Set<List<Dimension<?>>> sub =
+              this.getShapesFromShapeArgument(builder, Collections.singleton(ik));
+          if (sub != null) ret.addAll(sub);
         }
       }
       // If we found any shapes in the output_signature, return them.
@@ -267,7 +272,7 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
     if (outputShapesPts != null && !outputShapesPts.isEmpty()) {
       Set<List<Dimension<?>>> ret = this.getShapesFromShapeArgument(builder, outputShapesPts);
       // If we found any shapes in the output_shapes, return them.
-      if (!ret.isEmpty()) {
+      if (ret != null && !ret.isEmpty()) {
         return ret;
       }
     }

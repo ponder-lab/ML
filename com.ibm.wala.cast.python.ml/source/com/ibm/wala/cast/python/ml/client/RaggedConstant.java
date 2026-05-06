@@ -498,7 +498,12 @@ public class RaggedConstant extends Constant {
             builder, this.getInnerShapeParameterPosition(), getInnerShapeParameterName());
 
     if (pointsToSet != null && !pointsToSet.isEmpty()) {
-      return this.getShapesFromShapeArgument(builder, pointsToSet);
+      Set<List<Dimension<?>>> shapes = this.getShapesFromShapeArgument(builder, pointsToSet);
+      // After wala/ML#471 the helper can return null when the shape arg is
+      // an unrecognized form. The caller treats empty as "no inner shape
+      // info; use defaults", which matches the lattice meaning of null
+      // here, so collapse null to emptySet at the boundary.
+      return shapes == null ? emptySet() : shapes;
     } else return emptySet();
   }
 

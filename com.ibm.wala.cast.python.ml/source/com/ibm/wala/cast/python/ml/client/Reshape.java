@@ -67,7 +67,7 @@ public class Reshape extends TensorGenerator {
 
     if (shapePts != null && !shapePts.isEmpty()) {
       Set<List<Dimension<?>>> rawShapes = this.getShapesFromShapeArgument(builder, shapePts);
-      if (!rawShapes.isEmpty()) {
+      if (rawShapes != null && !rawShapes.isEmpty()) {
         Set<List<Dimension<?>>> refinedShapes = HashSetFactory.make();
 
         for (List<Dimension<?>> shape : rawShapes) {

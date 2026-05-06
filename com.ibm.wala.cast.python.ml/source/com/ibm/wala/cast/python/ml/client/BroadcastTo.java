@@ -72,18 +72,11 @@ public class BroadcastTo extends TensorGenerator {
         this.getArgumentPointsToSet(
             builder, Parameters.SHAPE.getIndex(), Parameters.SHAPE.getName());
     if (shapePts == null || shapePts.isEmpty()) return null;
-    Set<List<Dimension<?>>> shapes;
-    try {
-      // `getShapesFromShapeArgument` throws `IllegalStateException` for shape forms it doesn't
-      // recognize (notably when `shape` is itself a runtime tensor — e.g.
-      // `tf.broadcast_to(x, tf.shape(y))`). The lattice-correct response there is ⊤ ("tensor of
-      // unknown shape"), not aborting the analysis with an exception. The deeper fix is to change
-      // the helper's contract to return `null` rather than throw — see wala/ML#471 — but that
-      // touches every caller, so localize the catch here for now.
-      shapes = this.getShapesFromShapeArgument(builder, shapePts);
-    } catch (IllegalStateException e) {
-      return null;
-    }
+    // After wala/ML#471, `getShapesFromShapeArgument` returns `null` rather
+    // than throwing for shape forms it doesn't recognize (notably when
+    // `shape` is itself a runtime tensor — e.g. `tf.broadcast_to(x, tf.shape(y))`).
+    // The `null` return already encodes the lattice-correct ⊤.
+    Set<List<Dimension<?>>> shapes = this.getShapesFromShapeArgument(builder, shapePts);
     return shapes == null || shapes.isEmpty() ? null : shapes;
   }
 

@@ -97,7 +97,7 @@ public class NdarrayReshape extends TensorGenerator {
     if (shapePts == null || shapePts.isEmpty()) return getDefaultShapes(builder);
 
     Set<List<Dimension<?>>> rawShapes = this.getShapesFromShapeArgument(builder, shapePts);
-    if (rawShapes.isEmpty()) return getDefaultShapes(builder);
+    if (rawShapes == null || rawShapes.isEmpty()) return getDefaultShapes(builder);
 
     Set<List<Dimension<?>>> refinedShapes = HashSetFactory.make();
 

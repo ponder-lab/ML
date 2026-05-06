@@ -103,9 +103,10 @@ public class ReduceMean extends TensorGenerator {
             axisValues.add(s);
           }
         } else {
-          // Try to handle list/tuple of axes
+          // Try to handle list/tuple of axes.
           Set<List<Dimension<?>>> axesLists =
               this.getShapesFromShapeArgument(builder, Collections.singleton(ik));
+          if (axesLists == null) continue;
           for (List<Dimension<?>> axesList : axesLists) {
             Set<Integer> s = new HashSet<>();
             for (Dimension<?> d : axesList) {
