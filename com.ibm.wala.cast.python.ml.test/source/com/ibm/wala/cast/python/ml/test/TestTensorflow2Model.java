@@ -319,6 +319,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       new TensorType(
           FLOAT_32, asList(new NumericDim(60000), new NumericDim(28), new NumericDim(28)));
 
+  private static final TensorType TENSOR_60000_28_28_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(60000), new NumericDim(28), new NumericDim(28)));
+
   /** A {@code float32} tensor whose shape cannot be statically inferred. */
   private static final TensorType TENSOR_UNKNOWN_SHAPE_FLOAT32 = new TensorType(FLOAT_32, null);
 
@@ -4689,6 +4692,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testExtractPatches()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_extract_patches.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Generator test for {@code tf.keras.datasets.fashion_mnist.load_data()}. Shapes and dtype are
+   * identical to {@code mnist.load_data()}: {@code (60000, 28, 28)} of {@code uint8} for the
+   * training-image array.
+   */
+  @Test
+  public void testFashionMnistLoadData()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_fashion_mnist_load_data.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_60000_28_28_UINT8)));
   }
 
   @Test

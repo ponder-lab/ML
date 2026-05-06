@@ -862,6 +862,34 @@ public class TensorFlowTypes extends PythonTypes {
   public static final String CIFAR10_Y_TEST_SIGNATURE =
       "tf.keras.datasets.cifar10.load_data/y_test";
 
+  public static final TypeReference FASHION_MNIST_X_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/fashion_mnist/x_train"));
+
+  public static final String FASHION_MNIST_X_TRAIN_SIGNATURE =
+      "tf.keras.datasets.fashion_mnist.load_data/x_train";
+
+  public static final TypeReference FASHION_MNIST_Y_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/fashion_mnist/y_train"));
+
+  public static final String FASHION_MNIST_Y_TRAIN_SIGNATURE =
+      "tf.keras.datasets.fashion_mnist.load_data/y_train";
+
+  public static final TypeReference FASHION_MNIST_X_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/fashion_mnist/x_test"));
+
+  public static final String FASHION_MNIST_X_TEST_SIGNATURE =
+      "tf.keras.datasets.fashion_mnist.load_data/x_test";
+
+  public static final TypeReference FASHION_MNIST_Y_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/fashion_mnist/y_test"));
+
+  public static final String FASHION_MNIST_Y_TEST_SIGNATURE =
+      "tf.keras.datasets.fashion_mnist.load_data/y_test";
+
   /** https://www.tensorflow.org/api_docs/python/tf/placeholder. */
   public static final MethodReference PLACEHOLDER =
       MethodReference.findOrCreate(
@@ -1346,6 +1374,10 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(CIFAR10_Y_TRAIN, CIFAR10_Y_TRAIN_SIGNATURE),
           Map.entry(CIFAR10_X_TEST, CIFAR10_X_TEST_SIGNATURE),
           Map.entry(CIFAR10_Y_TEST, CIFAR10_Y_TEST_SIGNATURE),
+          Map.entry(FASHION_MNIST_X_TRAIN, FASHION_MNIST_X_TRAIN_SIGNATURE),
+          Map.entry(FASHION_MNIST_Y_TRAIN, FASHION_MNIST_Y_TRAIN_SIGNATURE),
+          Map.entry(FASHION_MNIST_X_TEST, FASHION_MNIST_X_TEST_SIGNATURE),
+          Map.entry(FASHION_MNIST_Y_TEST, FASHION_MNIST_Y_TEST_SIGNATURE),
           Map.entry(PLACEHOLDER.getDeclaringClass(), PLACEHOLDER_SIGNATURE),
           Map.entry(ARGMAX.getDeclaringClass(), ARGMAX_SIGNATURE),
           Map.entry(ARGMIN.getDeclaringClass(), ARGMIN_SIGNATURE),

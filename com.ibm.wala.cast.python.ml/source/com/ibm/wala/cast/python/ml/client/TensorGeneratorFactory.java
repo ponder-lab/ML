@@ -43,6 +43,10 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EXP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EXTRACT_PATCHES;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EYE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FASHION_MNIST_X_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FASHION_MNIST_X_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FASHION_MNIST_Y_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FASHION_MNIST_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLATTEN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLATTEN_LAYER_CALL;
@@ -1082,6 +1086,14 @@ public class TensorGeneratorFactory {
       return new Cifar10InputData(source, Cifar10InputData.X_TEST_SHAPE);
     else if (isType(calledFunction, CIFAR10_Y_TEST))
       return new Cifar10InputData(source, Cifar10InputData.Y_TEST_SHAPE);
+    else if (isType(calledFunction, FASHION_MNIST_X_TRAIN))
+      return new MnistInputData(source, MnistInputData.X_TRAIN_SHAPE);
+    else if (isType(calledFunction, FASHION_MNIST_Y_TRAIN))
+      return new MnistInputData(source, MnistInputData.Y_TRAIN_SHAPE);
+    else if (isType(calledFunction, FASHION_MNIST_X_TEST))
+      return new MnistInputData(source, MnistInputData.X_TEST_SHAPE);
+    else if (isType(calledFunction, FASHION_MNIST_Y_TEST))
+      return new MnistInputData(source, MnistInputData.Y_TEST_SHAPE);
     else if (isType(calledFunction, REDUCE_MEAN.getDeclaringClass())) return new ReduceMean(source);
     else if (isType(calledFunction, REDUCE_MAX.getDeclaringClass())) return new ReduceMax(source);
     else if (isType(calledFunction, REDUCE_PROD.getDeclaringClass())) return new ReduceProd(source);
