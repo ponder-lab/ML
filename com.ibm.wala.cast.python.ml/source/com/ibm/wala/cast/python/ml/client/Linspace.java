@@ -28,17 +28,46 @@ import java.util.Set;
  */
 public class Linspace extends TensorGenerator {
 
+  /**
+   * Parameter positions and keyword names for {@code tf.linspace(start, stop, num, name=None,
+   * axis=0)}. Ordinals match the position in the XML's {@code paramNames} after the implicit {@code
+   * self} receiver, so {@code Parameters.START.getIndex() == 0} resolves to the first user-facing
+   * positional argument.
+   */
   protected enum Parameters {
+    /** The starting value of the sequence. The output dtype follows {@code start}'s dtype. */
     START,
+
+    /** The end value of the sequence (inclusive). */
     STOP,
+
+    /** Number of values in the sequence; determines the output's leading dimension. */
     NUM,
+
+    /** Optional debug name for the op; not consumed by this generator. */
     NAME,
+
+    /**
+     * Axis along which the sequence is generated. Honored only at its default value of 0; non-zero
+     * axes require {@code start}/{@code stop} to be tensors and produce ⊤ shape.
+     */
     AXIS;
 
+    /**
+     * Lowercase keyword name used in {@link #getArgumentPointsToSet} / similar arg-resolution
+     * helpers when the call site uses {@code keyword=value} syntax.
+     *
+     * @return The lowercased enum name (e.g. {@code "start"}).
+     */
     public String getName() {
       return name().toLowerCase();
     }
 
+    /**
+     * Positional index of this parameter, excluding the implicit {@code self} receiver.
+     *
+     * @return The zero-based positional index.
+     */
     public int getIndex() {
       return ordinal();
     }
@@ -64,6 +93,11 @@ public class Linspace extends TensorGenerator {
         }
       }
     }
+    // Lattice convention: a `null` return signals ⊤ ("tensor of unknown shape"), while an empty
+    // set signals ⊥ ("not a tensor"). When `num`'s PTS contains only non-numeric or non-Constant
+    // keys we recovered no concrete shape, but we still know the call returns a tensor — so emit
+    // ⊤ rather than ⊥. See `TensorGenerator`'s class-level Javadoc and CONTRIBUTING.md's "Tensor
+    // Type Generators" section.
     return ret.isEmpty() ? null : ret;
   }
 

@@ -21,15 +21,37 @@ import java.util.Set;
  */
 public class BroadcastTo extends TensorGenerator {
 
+  /**
+   * Parameter positions and keyword names for {@code tf.broadcast_to(input, shape, name=None)}.
+   * Ordinals match the position in the XML's {@code paramNames} after the implicit {@code self}
+   * receiver, so {@code Parameters.INPUT.getIndex() == 0} resolves to the first user-facing
+   * positional argument.
+   */
   protected enum Parameters {
+    /** The tensor whose dtype is inherited by the output. */
     INPUT,
+
+    /** The target shape (1-D integer tensor or list-of-ints) the input is broadcast to. */
     SHAPE,
+
+    /** Optional debug name for the op; not consumed by this generator. */
     NAME;
 
+    /**
+     * Lowercase keyword name used in {@link #getArgumentPointsToSet} / similar arg-resolution
+     * helpers when the call site uses {@code keyword=value} syntax.
+     *
+     * @return The lowercased enum name (e.g. {@code "input"}).
+     */
     public String getName() {
       return name().toLowerCase();
     }
 
+    /**
+     * Positional index of this parameter, excluding the implicit {@code self} receiver.
+     *
+     * @return The zero-based positional index.
+     */
     public int getIndex() {
       return ordinal();
     }
