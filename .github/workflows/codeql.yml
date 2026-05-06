@@ -32,42 +32,27 @@ jobs:
         with:
           submodules: recursive
 
-      - if: matrix.language == 'java-kotlin'
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "25"
-          cache: maven
-
+      # Use `build-mode: none` for `java-kotlin` (added in CodeQL 2.16.5,
+      # March 2024). With `none`, the Java extractor scans source files
+      # directly instead of tracing a Maven/Ant build — which means the
+      # `paths-ignore` directive in `codeql-config-java-kotlin.yml` actually
+      # filters submodule paths (`IDE/`, `jython3/`) from the analysis. With
+      # the previous build-trace mode, `paths-ignore` translated to
+      # `LGTM_INDEX_FILTERS` but the Java extractor traced everything that
+      # got compiled by the Maven build (including submodules), so submodule
+      # alerts persisted regardless. See wala/ML#476.
+      #
+      # `build-mode: none` removes the need for `actions/setup-java`, the
+      # `Install Jython3` ant build, the `Install IDE` Maven install, and the
+      # `Build with Maven` step — none of those are needed when CodeQL works
+      # straight from sources. Builds for the other CI gates (regular
+      # `mvn test`, etc.) still happen in `continuous-integration.yml` — this
+      # change only affects the CodeQL job.
       - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.language == 'java-kotlin' && 'none' || '' }}
           config-file: ./.github/codeql/codeql-config-${{ matrix.language }}.yml
-
-      # The Java build needs the Jython3 submodule installed as a local
-      # Maven artifact before the main project can resolve. Mirrors the
-      # `Install Jython3` step in continuous-integration.yml.
-      - if: matrix.language == 'java-kotlin'
-        name: Install Jython3
-        shell: bash
-        run: |
-          pushd jython3
-          ant
-          pushd dist
-          mvn install:install-file -Dfile=./jython-dev.jar -DgroupId="org.python" -DartifactId="jython3" -Dversion="0.0.1-SNAPSHOT" -Dpackaging="jar" -DgeneratePom=true -B
-          popd
-          popd
-
-      - if: matrix.language == 'java-kotlin'
-        name: Install IDE
-        run: |
-          pushd IDE/com.ibm.wala.cast.lsp
-          mvn install -B -q -DskipTests
-          popd
-
-      - if: matrix.language == 'java-kotlin'
-        name: Build with Maven
-        run: mvn install -B -DskipTests
 
       - uses: github/codeql-action/analyze@v4
         with:

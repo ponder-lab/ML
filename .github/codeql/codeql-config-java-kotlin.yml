@@ -19,6 +19,14 @@
 # dozens of findings on Ariadne's own code in noise. **When adding or
 # removing a submodule, update this list to match `.gitmodules` — there is
 # no automatic discovery.**
+#
+# `paths-ignore` only filters source files when the Java extractor scans
+# sources directly — i.e., when `codeql.yml` sets `build-mode: none`. With
+# the old build-trace mode, `paths-ignore` translated to
+# `LGTM_INDEX_FILTERS` but the extractor still indexed everything compiled
+# by the Maven build (including submodule classes), so submodule alerts
+# persisted. The `build-mode: none` switch in `codeql.yml` is what makes
+# this filter effective. See wala/ML#476 for the diagnosis.
 
 name: "ponder-lab/ML CodeQL config (java-kotlin)"
 
