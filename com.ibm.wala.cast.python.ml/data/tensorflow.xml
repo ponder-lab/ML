@@ -784,6 +784,19 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/custom_gradient -->
         <new def="custom_gradient" class="Ltensorflow/class/custom_gradient" />
         <putfield class="LRoot" field="custom_gradient" fieldType="LRoot" ref="x" value="custom_gradient" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/relu -->
+        <new def="relu" class="Ltensorflow/functions/relu" />
+        <putfield class="LRoot" field="relu" fieldType="LRoot" ref="nn" value="relu" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/cast -->
+        <new def="cast" class="Ltensorflow/functions/cast" />
+        <putfield class="LRoot" field="cast" fieldType="LRoot" ref="x" value="cast" />
+        <putfield class="LRoot" field="cast" fieldType="LRoot" ref="dtypes" value="cast" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/expand_dims -->
+        <new def="expand_dims" class="Ltensorflow/functions/expand_dims" />
+        <putfield class="LRoot" field="expand_dims" fieldType="LRoot" ref="x" value="expand_dims" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/clip_by_value -->
+        <new def="clip_by_value" class="Ltensorflow/functions/clip_by_value" />
+        <putfield class="LRoot" field="clip_by_value" fieldType="LRoot" ref="x" value="clip_by_value" />
         <return value="x" />
       </method>
     </class>
@@ -1805,6 +1818,35 @@
           <new def="z" class="Ltensorflow/functions/convert_to_tensor" />
           <call class="Ltensorflow/functions/convert_to_tensor" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="value" numArgs="2" def="y" />
           <return value="y" />
+        </method>
+      </class>
+      <class name="relu" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/relu. Direct `<new>+<return>` paired with the dedicated `Relu` generator (full-passthrough on shape and dtype). -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self features name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="cast" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/cast. Direct `<new>+<return>` paired with the dedicated `Cast` generator: shape inherits from `x`; dtype is the explicit `dtype` argument. -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x dtype name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="expand_dims" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/expand_dims. Direct `<new>+<return>` paired with the dedicated `ExpandDims` generator: dtype inherits from `input`; shape is `input.shape` with a length-1 dim inserted at `axis` (currently emitted as ⊤ pending the axis-aware shape
+          composer). -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self input axis name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="clip_by_value" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/clip_by_value. Direct `<new>+<return>` paired with the dedicated `ClipByValue` generator (full-passthrough on shape and dtype of `t`). -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self t clip_value_min clip_value_max name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
     </package>

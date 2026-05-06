@@ -4854,6 +4854,65 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_relu.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
   }
 
+  /**
+   * Generator-dispatch test for {@code tf.cast(x, dtype)}. The dedicated {@link
+   * com.ibm.wala.cast.python.ml.client.Cast} generator extends {@link
+   * com.ibm.wala.cast.python.ml.client.PassThroughUnaryTensorGenerator} for shape and overrides the
+   * dtype-arg position to point at {@code dtype}, but the override doesn't take effect — see <a
+   * href="https://github.com/wala/ML/issues/481">wala/ML#481</a>. The static analysis currently
+   * reports the input's dtype rather than the cast target.
+   *
+   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/481">wala/ML#481</a> is fixed, narrow
+   * the assertion to {@code Set.of(TENSOR_3_INT32)} (precise cast-target dtype).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCast()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_cast.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.expand_dims(input, axis)}. The dedicated {@link
+   * com.ibm.wala.cast.python.ml.client.ExpandDims} generator overrides {@code getDefaultShapes} to
+   * ⊤ pending an axis-aware shape composer, but the override doesn't take effect — see <a
+   * href="https://github.com/wala/ML/issues/481">wala/ML#481</a>. The static analysis currently
+   * reports the input's full shape rather than ⊤.
+   *
+   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/481">wala/ML#481</a> is fixed, narrow
+   * the assertion to {@code Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)} (precise ⊤ shape) — and once the
+   * axis-aware composer lands as a separate follow-up, narrow further to {@code (1, 3)}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testExpandDims()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_expand_dims.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.clip_by_value(t, clip_value_min, clip_value_max)}. Pure
+   * passthrough — output shape and dtype both inherit from {@code t}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testClipByValue()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_clip_by_value.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
   @Test
   public void testRange()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
