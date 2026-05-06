@@ -784,6 +784,18 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/custom_gradient -->
         <new def="custom_gradient" class="Ltensorflow/class/custom_gradient" />
         <putfield class="LRoot" field="custom_gradient" fieldType="LRoot" ref="x" value="custom_gradient" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/leaky_relu -->
+        <new def="leaky_relu" class="Ltensorflow/functions/leaky_relu" />
+        <putfield class="LRoot" field="leaky_relu" fieldType="LRoot" ref="nn" value="leaky_relu" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_min -->
+        <new def="reduce_min" class="Ltensorflow/math/reduce_min" />
+        <putfield class="LRoot" field="reduce_min" fieldType="LRoot" ref="x" value="reduce_min" />
+        <putfield class="LRoot" field="reduce_min" fieldType="LRoot" ref="math" value="reduce_min" />
+        <putfield class="LRoot" field="reduce_min" fieldType="LRoot" ref="math_ops" value="reduce_min" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/pow -->
+        <new def="pow" class="Ltensorflow/math/pow" />
+        <putfield class="LRoot" field="pow" fieldType="LRoot" ref="x" value="pow" />
+        <putfield class="LRoot" field="pow" fieldType="LRoot" ref="math" value="pow" />
         <return value="x" />
       </method>
     </class>
@@ -1105,6 +1117,20 @@
       <class name="reduce_max" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_max. Modeled as `<new>+<return>` for the same reason as `reduce_all`/`reduce_prod` — wala/ML#449 Tier 3. Output dtype inherits from input (no int→float32 promotion like `reduce_mean`). -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="reduce_min" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_min. Mirrors reduce_max — same axis-collapse / keepdims shape semantics, dtype inherited from input. -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="pow" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/pow. Element-wise binary op (`x ** y`); routed through `ElementWiseOperation` for shape (broadcast) and dtype (unified). -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x y name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
@@ -1805,6 +1831,13 @@
           <new def="z" class="Ltensorflow/functions/convert_to_tensor" />
           <call class="Ltensorflow/functions/convert_to_tensor" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="value" numArgs="2" def="y" />
           <return value="y" />
+        </method>
+      </class>
+      <class name="leaky_relu" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/leaky_relu. Direct `<new>+<return>` paired with the dedicated `LeakyRelu` generator (full-passthrough on shape and dtype of `features`). -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self features alpha name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
     </package>
