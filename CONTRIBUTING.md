@@ -94,11 +94,11 @@ Within a single shape, use `new SymbolicDim("?")` for a known-rank-but-unknown-s
 
 Never return a bare empty set to mean "unknown dtype" — that collides with the "not a tensor" signal.
 
-### Tensor types — `getTensorTypes`
+### Tensor Types — `getTensorTypes`
 
 Shapes and dtypes are orthogonal. When the shape is unknown but the dtype is known, `getTensorTypes` emits `TensorType` instances with `null` dims so dtype information is preserved. `TensorType` is null-dims-safe; any code that consumes `TensorType`s must handle `getDims() == null`.
 
-### Checklist when adding a new generator
+### Checklist When Adding a New Generator
 
 - [ ] Audit every final-fallback return in `getDefaultShapes` and `getDefaultDTypes` against the tables above.
 - [ ] Prefer `null` over `Collections.emptySet()` when the intended meaning is "we know it's a tensor, we just can't figure out the shape."
@@ -115,7 +115,7 @@ When adding or modifying an API summary in `tensorflow.xml` / `numpy.xml`:
 - **Allocatable classes** — `<new class="L..."/>` requires the target class to be declared `<class name="..." allocatable="true">` somewhere in the XML, otherwise `HeapModel.getInstanceKeyForAllocation` returns `null` and the iKey never reaches the caller (see wala/WALA#1889 history). When a new `<new>` target class is added, audit existing ones in the same area for the declaration.
 - **`numArgs` / `paramNames` consistency** — every `<method numArgs="N" paramNames="...">` must have exactly `N` whitespace-separated names in `paramNames`. Mismatches silently break parameter resolution; audit when changing signatures.
 
-## Pinning shapes / blocking PA leaks
+## Pinning Shapes / Blocking PA Leaks
 
 When the PA assignment graph propagates a tensor type into a destination that semantically isn't a tensor, use one of these `TensorTypeAnalysis` mechanisms (both threaded through `PythonTensorAnalysisEngine.performAnalysis`):
 
