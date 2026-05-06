@@ -18,11 +18,12 @@ import java.util.Set;
 
 /**
  * Generator for {@code tf.linspace(start, stop, num, name=None, axis=0)}. Output is a 1-D tensor of
- * length {@code num}; output dtype follows {@code start} (with int → float32 promotion per TF
- * semantics: integer start/stop produce a float32 result). The {@code axis} parameter is honored
- * only at its default value of 0 (the rank-1 case); non-default axes return ⊤ shape since they
- * require start/stop to be tensors and the result-shape derivation depends on broadcasting that
- * isn't tracked here.
+ * length {@code num}; output dtype follows {@code start} (with int → float64 promotion per TF
+ * semantics — verified empirically on TF 2.9: {@code tf.linspace(tf.constant(0, dtype=tf.int32),
+ * tf.constant(10, dtype=tf.int32), 5).dtype} is {@code float64}, not {@code float32}). The {@code
+ * axis} parameter is honored only at its default value of 0 (the rank-1 case); non-default axes
+ * return ⊤ shape since they require start/stop to be tensors and the result-shape derivation
+ * depends on broadcasting that isn't tracked here.
  *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/linspace">tf.linspace</a>
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
@@ -115,8 +116,8 @@ public class Linspace extends TensorGenerator {
     if (startDTypes == null || startDTypes.isEmpty()) return EnumSet.of(DType.UNKNOWN);
     Set<DType> ret = new HashSet<>();
     for (DType dt : startDTypes) {
-      // tf.linspace promotes integer start/stop to float32.
-      if (dt == DType.INT32 || dt == DType.INT64) ret.add(DType.FLOAT32);
+      // tf.linspace promotes integer start/stop to float64 (verified on TF 2.9).
+      if (dt == DType.INT32 || dt == DType.INT64) ret.add(DType.FLOAT64);
       else ret.add(dt);
     }
     return ret;
