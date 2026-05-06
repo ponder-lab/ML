@@ -352,6 +352,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_5_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(5)));
 
+  private static final TensorType TENSOR_5_FLOAT64 =
+      new TensorType(FLOAT_64, asList(new NumericDim(5)));
+
   private static final TensorType TENSOR_64_5_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(64), new NumericDim(5)));
 
@@ -4368,6 +4371,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testLinspace()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_linspace.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testLinspace()} that exercises the integer-promotion branch in {@link
+   * com.ibm.wala.cast.python.ml.client.Linspace#getDefaultDTypes}. {@code tf.linspace} with integer
+   * {@code start}/{@code stop} promotes the output to {@code float64} (verified on TF 2.9), not
+   * {@code float32}. The float-input case is covered by {@link #testLinspace()}.
+   */
+  @Test
+  public void testLinspaceInt()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_linspace_int.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_FLOAT64)));
   }
 
   /**
