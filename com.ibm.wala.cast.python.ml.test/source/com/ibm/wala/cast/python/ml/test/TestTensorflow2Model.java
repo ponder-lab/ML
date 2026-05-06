@@ -4533,6 +4533,26 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Drives the {@code axis}-passed branch in {@link
+   * com.ibm.wala.cast.python.ml.client.Linspace#getDefaultShapes}. With {@code axis=1} and vector
+   * {@code start}/{@code stop}, {@code tf.linspace} interpolates along axis 1, producing a
+   * higher-rank result whose precise shape combines {@code start}'s rank with {@code num} — the
+   * static analysis can't recover this, so the generator returns ⊤ (unknown shape). Dtype is still
+   * derived from {@code start} (float32). Companion to {@link #testLinspace()} (covering the
+   * absent-axis branch).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testLinspaceAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_linspace_axis.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
    * Verifies that {@code tf.broadcast_to(x, [2, 3])} routes through the dedicated {@link
    * BroadcastTo} generator and emits shape {@code (2, 3)} (read from the {@code shape} argument's
    * literal list) with {@code float32} dtype (derived from the {@code input} tensor).
