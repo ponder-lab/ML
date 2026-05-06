@@ -140,7 +140,7 @@ When the PA assignment graph propagates a tensor type into a destination that se
 	 */
 	@Test
 	public void testModelAttributesMultiModelWrapped() {
-	test(..., Map.of(2, Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32, TENSOR_64_7_FLOAT32, TENSOR_7_FLOAT32)));
+		test(..., Map.of(2, Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32, TENSOR_64_7_FLOAT32, TENSOR_7_FLOAT32)));
 	}
 	```
 
