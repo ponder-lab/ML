@@ -61,12 +61,13 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
    * Almost always {@code 0} (the first user-facing positional after {@code self}).
    *
    * <p>Default is {@link #UNDEFINED_PARAMETER_POSITION}, signalling "no input arg" — appropriate
-   * for subclasses that override {@link #getDefaultShapes} and {@link #getDefaultDTypes} entirely
-   * and don't read from an input argument's PTS (mirrors the existing pattern for {@link
-   * #getShapeParameterPosition} / {@link #getDTypeParameterPosition} on {@link TensorGenerator}).
+   * <em>only</em> for subclasses that override both {@link #getDefaultShapes} and {@link
+   * #getDefaultDTypes} entirely and never reach {@link #shapesOfArg} / {@link #dtypesOfArg}. If the
+   * parent's default methods <em>are</em> reached with an undefined position, that's a
+   * misconfiguration: throw {@link IllegalStateException} rather than silently producing ⊤.
    *
-   * @return The input arg's positional index, or {@link #UNDEFINED_PARAMETER_POSITION} if not
-   *     applicable.
+   * @return The input arg's positional index, or {@link #UNDEFINED_PARAMETER_POSITION} if the
+   *     subclass doesn't read from an input argument.
    */
   protected int getInputParameterPosition() {
     return UNDEFINED_PARAMETER_POSITION;
@@ -77,9 +78,10 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
    * {@code "logits"}). Used for keyword-argument resolution when the call site uses kwargs.
    *
    * <p>Default is {@code null}, signalling "no input arg" — see {@link
-   * #getInputParameterPosition()}.
+   * #getInputParameterPosition()} for when this default is appropriate.
    *
-   * @return The input arg's keyword name, or {@code null} if not applicable.
+   * @return The input arg's keyword name, or {@code null} if the subclass doesn't read from an
+   *     input argument.
    */
   protected String getInputParameterName() {
     return null;
@@ -106,7 +108,14 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
    */
   private Set<List<Dimension<?>>> shapesOfArg(
       PropagationCallGraphBuilder builder, int paramPos, String paramName) {
-    if (paramPos == UNDEFINED_PARAMETER_POSITION) return null;
+    if (paramPos == UNDEFINED_PARAMETER_POSITION)
+      throw new IllegalStateException(
+          getClass().getSimpleName()
+              + " uses "
+              + PassThroughUnaryTensorGenerator.class.getSimpleName()
+              + "'s default `getDefaultShapes` (which reads from the input arg) but did not"
+              + " override `getInputParameterPosition`. Either override the input-arg getters or"
+              + " override `getDefaultShapes` entirely.");
     OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPos, paramName);
     if (pts != null && !pts.isEmpty()) {
       Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, pts);
@@ -125,7 +134,14 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
    */
   private Set<DType> dtypesOfArg(
       PropagationCallGraphBuilder builder, int paramPos, String paramName) {
-    if (paramPos == UNDEFINED_PARAMETER_POSITION) return null;
+    if (paramPos == UNDEFINED_PARAMETER_POSITION)
+      throw new IllegalStateException(
+          getClass().getSimpleName()
+              + " uses "
+              + PassThroughUnaryTensorGenerator.class.getSimpleName()
+              + "'s default `getDefaultDTypes` (which reads from the input arg) but did not"
+              + " override `getInputParameterPosition`. Either override the input-arg getters or"
+              + " override `getDefaultDTypes` entirely.");
     OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPos, paramName);
     if (pts != null && !pts.isEmpty()) {
       Set<DType> dtypes = this.getDTypesOfValue(builder, pts);
