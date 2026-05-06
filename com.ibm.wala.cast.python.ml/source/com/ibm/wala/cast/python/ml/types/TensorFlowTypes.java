@@ -968,6 +968,24 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String EXTRACT_PATCHES_SIGNATURE = "tf.image.extract_patches()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/math/top_k. */
+  public static final MethodReference TOP_K =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/top_k")),
+          AstMethodReference.fnSelector);
+
+  private static final String TOP_K_SIGNATURE = "tf.math.top_k()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/meshgrid. */
+  public static final MethodReference MESHGRID =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/meshgrid")),
+          AstMethodReference.fnSelector);
+
+  private static final String MESHGRID_SIGNATURE = "tf.meshgrid()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/math/equal. */
   public static final MethodReference EQUAL =
       MethodReference.findOrCreate(
@@ -1358,6 +1376,8 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(GATHER_ND.getDeclaringClass(), GATHER_ND_SIGNATURE),
           Map.entry(BOOLEAN_MASK.getDeclaringClass(), BOOLEAN_MASK_SIGNATURE),
           Map.entry(EXTRACT_PATCHES.getDeclaringClass(), EXTRACT_PATCHES_SIGNATURE),
+          Map.entry(TOP_K.getDeclaringClass(), TOP_K_SIGNATURE),
+          Map.entry(MESHGRID.getDeclaringClass(), MESHGRID_SIGNATURE),
           Map.entry(EQUAL.getDeclaringClass(), EQUAL_SIGNATURE),
           Map.entry(NOT_EQUAL.getDeclaringClass(), NOT_EQUAL_SIGNATURE),
           Map.entry(LESS.getDeclaringClass(), LESS_SIGNATURE),

@@ -340,6 +340,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_INT64_UNKNOWN_SHAPE = new TensorType(INT_64, null);
 
+  private static final TensorType TENSOR_INT32_UNKNOWN_SHAPE = new TensorType(INT_32, null);
+
   private static final TensorType TENSOR_UNKNOWN_SHAPE_BOOL = new TensorType(BOOL, null);
 
   private static final TensorType TENSOR_3_INT32 =
@@ -7089,6 +7091,90 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testStack()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_stack.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_INT32)));
+  }
+
+  /**
+   * Tier-5 generator (wala/ML#449): {@code tf.math.top_k(input, k)}. Returns a {@code (values,
+   * indices)} 2-tuple. The dedicated {@link com.ibm.wala.cast.python.ml.client.TopK} generator
+   * implements {@link com.ibm.wala.cast.python.ml.client.TupleElementProvider} with per-index dtype
+   * precision ({@code values} inherits input dtype; {@code indices} is fixed at {@code int32}), but
+   * the wrap-on-property-read dispatch in {@link
+   * com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory} doesn't fire for NamedTuple-style
+   * attribute access ({@code result.values} / {@code result.indices}). Until <a
+   * href="https://github.com/wala/ML/issues/480">wala/ML#480</a> is fixed, both destructured
+   * elements receive the aggregate union of per-element types.
+   *
+   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/480">wala/ML#480</a> lands, narrow the
+   * assertion to {@code Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)} (precise {@code values} dtype).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testTopKValues()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_top_k.py",
+        "f_values",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Counterpart of {@link #testTopKValues()} for the {@code indices} element of {@code
+   * tf.math.top_k}'s tuple result. Same wala/ML#480-driven imprecision: the assertion captures the
+   * observed aggregate union with a TODO to narrow once the per-index dispatch is fixed.
+   *
+   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/480">wala/ML#480</a> lands, narrow the
+   * assertion to {@code Set.of(TENSOR_INT32_UNKNOWN_SHAPE)} (precise {@code indices} dtype).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testTopKIndices()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_top_k.py",
+        "f_indices",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Tier-5 generator (wala/ML#449): {@code tf.meshgrid(*xi)}. Returns N tensors (one per input)
+   * sharing the broadcast of input shapes and the first input's dtype. The dedicated {@link
+   * com.ibm.wala.cast.python.ml.client.Meshgrid} generator implements {@link
+   * com.ibm.wala.cast.python.ml.client.TupleElementProvider}, but the XML only allocates one tuple
+   * slot (field 0); the second meshgrid output ({@code Y} in the fixture) doesn't have a backing
+   * alloc, so it falls through to ⊤/UNKNOWN and the aggregate union leaks the {@code
+   * float32}/{@code unknown} pair. See <a href="https://github.com/wala/ML/issues/480">
+   * wala/ML#480</a>.
+   *
+   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/480">wala/ML#480</a> lands (or the
+   * meshgrid XML is updated to allocate per-input tuple slots), narrow the assertion to {@code
+   * Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMeshgrid()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_meshgrid.py",
+        "f",
+        1,
+        2,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
 
   @Test
