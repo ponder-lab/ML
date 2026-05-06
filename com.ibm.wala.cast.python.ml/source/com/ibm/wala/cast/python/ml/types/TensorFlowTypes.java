@@ -890,6 +890,34 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String ARGMIN_SIGNATURE = "tf.argmin()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/linalg/tensordot. */
+  public static final MethodReference TENSORDOT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/tensordot")),
+          AstMethodReference.fnSelector);
+
+  private static final String TENSORDOT_SIGNATURE = "tf.linalg.tensordot()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/linalg/trace. */
+  public static final MethodReference TRACE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/trace")),
+          AstMethodReference.fnSelector);
+
+  private static final String TRACE_SIGNATURE = "tf.linalg.trace()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/tensor_scatter_nd_update. */
+  public static final MethodReference TENSOR_SCATTER_ND_UPDATE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/tensor_scatter_nd_update")),
+          AstMethodReference.fnSelector);
+
+  private static final String TENSOR_SCATTER_ND_UPDATE_SIGNATURE = "tf.tensor_scatter_nd_update()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/sequence_mask. */
   public static final MethodReference SEQUENCE_MASK =
       MethodReference.findOrCreate(
@@ -1321,6 +1349,10 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(PLACEHOLDER.getDeclaringClass(), PLACEHOLDER_SIGNATURE),
           Map.entry(ARGMAX.getDeclaringClass(), ARGMAX_SIGNATURE),
           Map.entry(ARGMIN.getDeclaringClass(), ARGMIN_SIGNATURE),
+          Map.entry(TENSORDOT.getDeclaringClass(), TENSORDOT_SIGNATURE),
+          Map.entry(TRACE.getDeclaringClass(), TRACE_SIGNATURE),
+          Map.entry(
+              TENSOR_SCATTER_ND_UPDATE.getDeclaringClass(), TENSOR_SCATTER_ND_UPDATE_SIGNATURE),
           Map.entry(SEQUENCE_MASK.getDeclaringClass(), SEQUENCE_MASK_SIGNATURE),
           Map.entry(EMBEDDING_LOOKUP.getDeclaringClass(), EMBEDDING_LOOKUP_SIGNATURE),
           Map.entry(GATHER_ND.getDeclaringClass(), GATHER_ND_SIGNATURE),
