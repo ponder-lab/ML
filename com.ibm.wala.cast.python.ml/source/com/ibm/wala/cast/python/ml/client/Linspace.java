@@ -87,13 +87,22 @@ public class Linspace extends TensorGenerator {
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     // The `(num,)` shape is only sound when `axis == 0` (the default rank-1 case). For non-default
     // axes the result rank depends on `start`/`stop` being tensors and on broadcasting we don't
-    // track here, so emit ⊤ rather than risk an unsound concrete shape. Resolve `axis` against its
-    // PTS: only proceed with the rank-1 shape when *every* `axis` instance key is a `ConstantKey`
-    // with value `0`. If `axis` isn't passed at all (default), `getArgumentPointsToSet` returns
-    // null/empty — that's also the rank-1 case and is allowed to proceed.
-    OrdinalSet<InstanceKey> axisPts =
-        this.getArgumentPointsToSet(builder, Parameters.AXIS.getIndex(), Parameters.AXIS.getName());
-    if (axisPts != null && !axisPts.isEmpty()) {
+    // track here, so emit ⊤ rather than risk an unsound concrete shape. Distinguish three cases:
+    //
+    // 1. `axis` not passed (omitted; defaults to 0) — safe to proceed with `(num,)`.
+    // 2. `axis` passed but PA can't resolve any instances — *unsound* to assume 0; return ⊤.
+    // 3. `axis` passed and resolved — proceed only when every instance key is a ConstantKey of 0.
+    //
+    // `getArgumentValueNumber(..., optional=true)` returns -1 when the kwarg is absent, which lets
+    // us tell case (1) apart from case (2) — the empty-PTS check alone conflates them.
+    int axisVn =
+        this.getArgumentValueNumber(
+            builder, Parameters.AXIS.getIndex(), Parameters.AXIS.getName(), true);
+    if (axisVn != -1) {
+      OrdinalSet<InstanceKey> axisPts =
+          this.getArgumentPointsToSet(
+              builder, Parameters.AXIS.getIndex(), Parameters.AXIS.getName());
+      if (axisPts == null || axisPts.isEmpty()) return null; // case (2)
       for (InstanceKey ik : axisPts) {
         if (!(ik instanceof ConstantKey)) return null;
         Object val = ((ConstantKey<?>) ik).getValue();
