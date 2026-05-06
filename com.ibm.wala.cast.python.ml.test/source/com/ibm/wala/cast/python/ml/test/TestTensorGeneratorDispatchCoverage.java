@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.Test;
 
@@ -67,9 +68,11 @@ public class TestTensorGeneratorDispatchCoverage {
       if (c.isAnonymousClass() || c.isSynthetic()) continue;
 
       String simpleName = c.getSimpleName();
-      String constructionPattern = "new " + simpleName + "(";
-      boolean inFactory = factorySource.contains(constructionPattern);
-      boolean inTensorGenerator = tensorGeneratorSource.contains(constructionPattern);
+      // Tolerate spotless/IDE formatting variants — `new X(...)`, `new\n        X(...)`, etc.
+      Pattern constructionPattern =
+          Pattern.compile("\\bnew\\s+" + Pattern.quote(simpleName) + "\\s*\\(");
+      boolean inFactory = constructionPattern.matcher(factorySource).find();
+      boolean inTensorGenerator = constructionPattern.matcher(tensorGeneratorSource).find();
 
       if (!inFactory && !inTensorGenerator) {
         orphans.add(simpleName);
@@ -88,8 +91,10 @@ public class TestTensorGeneratorDispatchCoverage {
   }
 
   /**
-   * Walks the ml module's source directory for {@link #CLIENT_PACKAGE}, deriving the class name
-   * from each {@code .java} filename and loading it via {@link Class#forName}. Returns the loaded
+   * Walks the ml module's source tree under {@link #CLIENT_PACKAGE} (recursively, including any
+   * future subpackages), deriving the FQN from each {@code .java} file's path relative to the
+   * source root and loading it via {@link Class#forName} <em>without</em> initialization (so static
+   * initializers in any subclass don't fire as a side effect of the meta-test). Returns the loaded
    * classes that are (non-{@link TensorGenerator}-itself) subclasses of {@link TensorGenerator}.
    *
    * <p>Walks the source tree (rather than the test classpath) because the ml module is packaged as
@@ -102,26 +107,28 @@ public class TestTensorGeneratorDispatchCoverage {
    */
   private static List<Class<? extends TensorGenerator>> enumerateTensorGeneratorSubclasses()
       throws IOException {
-    Path testModuleDir = Paths.get(System.getProperty("user.dir"));
-    Path mlModuleDir = testModuleDir.resolveSibling("com.ibm.wala.cast.python.ml");
-    Path packageDir = mlModuleDir.resolve("source").resolve(CLIENT_PACKAGE_PATH);
+    Path mlSourceRoot = locateMlSourceRoot();
+    Path packageDir = mlSourceRoot.resolve(CLIENT_PACKAGE_PATH);
     if (!Files.isDirectory(packageDir))
       throw new IllegalStateException(
           "Could not locate ml-module source package directory: " + packageDir);
 
     List<Class<? extends TensorGenerator>> subclasses = new ArrayList<>();
-    try (Stream<Path> entries = Files.list(packageDir)) {
+    ClassLoader cl = TestTensorGeneratorDispatchCoverage.class.getClassLoader();
+    try (Stream<Path> entries = Files.walk(packageDir)) {
       entries
+          .filter(Files::isRegularFile)
           .filter(p -> p.getFileName().toString().endsWith(".java"))
           .forEach(
               p -> {
-                String fileName = p.getFileName().toString();
+                Path relative = mlSourceRoot.relativize(p);
                 String className =
-                    CLIENT_PACKAGE
-                        + "."
-                        + fileName.substring(0, fileName.length() - ".java".length());
+                    relative
+                        .toString()
+                        .replace(java.io.File.separatorChar, '.')
+                        .replaceFirst("\\.java$", "");
                 try {
-                  Class<?> c = Class.forName(className);
+                  Class<?> c = Class.forName(className, false, cl);
                   if (TensorGenerator.class.isAssignableFrom(c)
                       && !TensorGenerator.class.equals(c)) {
                     subclasses.add(c.asSubclass(TensorGenerator.class));
@@ -136,19 +143,38 @@ public class TestTensorGeneratorDispatchCoverage {
   }
 
   /**
-   * Reads a source file from the {@code com.ibm.wala.cast.python.ml/source/...} module by relative
-   * path from the test module's working directory.
+   * Reads a source file from the {@code com.ibm.wala.cast.python.ml/source/...} module relative to
+   * the located ml-module source root.
    *
    * @param fileName The simple file name (e.g., {@code TensorGenerator.java}).
    * @return The file contents.
    * @throws IOException If the file can't be read.
    */
   private static String readDispatchSource(String fileName) throws IOException {
-    Path testModuleDir = Paths.get(System.getProperty("user.dir"));
-    Path mlModuleDir = testModuleDir.resolveSibling("com.ibm.wala.cast.python.ml");
-    Path src = mlModuleDir.resolve("source").resolve(CLIENT_PACKAGE_PATH).resolve(fileName);
+    Path src = locateMlSourceRoot().resolve(CLIENT_PACKAGE_PATH).resolve(fileName);
     if (!Files.exists(src))
       throw new IllegalStateException("Could not locate dispatch source: " + src);
     return Files.readString(src);
+  }
+
+  /**
+   * Locates the ml module's source root ({@code com.ibm.wala.cast.python.ml/source/}) by trying
+   * common Maven/IDE working-directory anchors, walking up the filesystem if necessary. Resilient
+   * to running from the test module directly (Maven's default), the parent project root (some IDE
+   * configurations), or other sibling locations.
+   *
+   * @return The {@link Path} of the ml source root.
+   */
+  private static Path locateMlSourceRoot() {
+    Path cwd = Paths.get(System.getProperty("user.dir"));
+    for (Path candidate = cwd; candidate != null; candidate = candidate.getParent()) {
+      Path direct = candidate.resolve("com.ibm.wala.cast.python.ml").resolve("source");
+      if (Files.isDirectory(direct)) return direct;
+      // If we're sitting in the test module itself, the ml module is a sibling.
+      Path sibling = candidate.resolveSibling("com.ibm.wala.cast.python.ml").resolve("source");
+      if (Files.isDirectory(sibling)) return sibling;
+    }
+    throw new IllegalStateException(
+        "Could not locate ml-module source root from cwd=" + cwd + " — check working directory.");
   }
 }
