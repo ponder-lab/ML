@@ -968,6 +968,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String EXTRACT_PATCHES_SIGNATURE = "tf.image.extract_patches()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/linalg/einsum. */
+  public static final MethodReference EINSUM =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/einsum")),
+          AstMethodReference.fnSelector);
+
+  private static final String EINSUM_SIGNATURE = "tf.einsum()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/math/equal. */
   public static final MethodReference EQUAL =
       MethodReference.findOrCreate(
@@ -1358,6 +1367,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(GATHER_ND.getDeclaringClass(), GATHER_ND_SIGNATURE),
           Map.entry(BOOLEAN_MASK.getDeclaringClass(), BOOLEAN_MASK_SIGNATURE),
           Map.entry(EXTRACT_PATCHES.getDeclaringClass(), EXTRACT_PATCHES_SIGNATURE),
+          Map.entry(EINSUM.getDeclaringClass(), EINSUM_SIGNATURE),
           Map.entry(EQUAL.getDeclaringClass(), EQUAL_SIGNATURE),
           Map.entry(NOT_EQUAL.getDeclaringClass(), NOT_EQUAL_SIGNATURE),
           Map.entry(LESS.getDeclaringClass(), LESS_SIGNATURE),

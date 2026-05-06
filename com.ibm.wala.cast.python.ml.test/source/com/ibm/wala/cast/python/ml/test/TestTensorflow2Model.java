@@ -7091,6 +7091,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_stack.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_INT32)));
   }
 
+  /**
+   * Generator-dispatch test for {@code tf.einsum(equation, *inputs)}. Output shape is left at ⊤
+   * pending equation-string parsing — the precise shape is derivable from the equation's output
+   * label sequence and each input's shape, but that requires an einsum-equation parser the
+   * generator doesn't yet implement. Output dtype inherits from the first tensor input ({@code
+   * float32} in the fixture). See {@link com.ibm.wala.cast.python.ml.client.Einsum} (wala/ML#449
+   * Tier 5).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsum()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_einsum.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
   @Test
   public void testConvertToTensor4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
