@@ -4352,10 +4352,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Generator-dispatch test for {@code tf.sequence_mask}. Output dtype is fixed at {@code bool}
-   * (the TF default; the {@code dtype} arg override isn't surfaced through {@code tensorflow.xml}
-   * yet), shape is ⊤. See {@link com.ibm.wala.cast.python.ml.client.SequenceMask} (wala/ML#449 Tier
-   * 8).
+   * Generator-dispatch test for {@code tf.sequence_mask}. Output dtype is the TF-default {@code
+   * bool}; the optional {@code dtype} override is exposed in {@code tensorflow.xml}'s {@code
+   * paramNames} but is not yet honored by the {@link
+   * com.ibm.wala.cast.python.ml.client.SequenceMask} generator, which emits {@code bool}
+   * unconditionally. Shape is ⊤. (wala/ML#449 Tier 8.)
    */
   @Test
   public void testSequenceMask()
