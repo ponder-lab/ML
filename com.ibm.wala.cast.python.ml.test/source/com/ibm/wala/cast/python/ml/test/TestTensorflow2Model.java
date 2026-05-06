@@ -4543,8 +4543,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * for soundness. The assertion encodes the observed result with a TODO pointing at the precision
    * improvement that would narrow it.
    *
-   * <p>TODO(wala/ML#475): Once {@code Linspace.getDefaultShapes} computes the precise output shape
-   * from {@code start.shape[:axis] + (num,) + start.shape[axis:]}, narrow the assertion to {@code
+   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/475">wala/ML#475</a> is fixed and
+   * {@code Linspace.getDefaultShapes} computes the precise output shape from {@code
+   * start.shape[:axis] + (num,) + start.shape[axis:]}, narrow the assertion to {@code
    * Set.of(TENSOR_2_5_FLOAT32)} (a new constant).
    *
    * <p>Companion to {@link #testLinspace()} (covering the absent-axis branch).
