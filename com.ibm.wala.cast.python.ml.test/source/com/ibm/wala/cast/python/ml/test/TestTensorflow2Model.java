@@ -7074,21 +7074,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Tier-5 generator (wala/ML#449): {@code tf.stack(values, axis)}. Pre-fix the {@code stack} XML
-   * routed through a {@code read_data} marker that allocated a non-tensor wrapper class ({@code
-   * Ltensorflow/python/functions/stack}), giving {@code [{? of unknown}]} via {@code
-   * ReadDataFallback}. Post-fix the XML mirrors {@code add_n} / {@code concat}'s pattern — read
-   * field 0 of {@code values} and route through {@code convert_to_tensor}. Dtype propagation is
-   * sound (stack preserves dtype). Shape is approximated by inheriting from the first input — this
-   * is <em>unsound</em>, since runtime stack adds a new axis (rank+1); a future generator can
-   * compose the input shape with the {@code values} list length to produce a precise (and sound)
-   * shape. The lock-in here pins the observable static-analysis output as the current
-   * approximation.
+   * Tier-5 generator (wala/ML#449): {@code tf.stack(values, axis)}. The dedicated {@link
+   * com.ibm.wala.cast.python.ml.client.Stack} generator computes the precise output shape by
+   * reading the {@code values} list's PTS-derived length {@code N} and inserting it at the resolved
+   * {@code axis} position into the first element's shape: {@code values[0].shape[:axis] + (N,) +
+   * values[0].shape[axis:]}. The fixture stacks two {@code (3,)} tensors with {@code axis=0}, so
+   * the precise output is {@code (2, 3)}; dtype is inherited from the first element ({@code
+   * int32}).
    */
   @Test
   public void testStack()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_stack.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_INT32)));
+    test("tf2_test_stack.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_INT32)));
   }
 
   @Test
