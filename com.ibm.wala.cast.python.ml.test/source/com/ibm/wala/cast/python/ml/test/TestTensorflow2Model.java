@@ -7091,6 +7091,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_stack.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_INT32)));
   }
 
+  /**
+   * Generator-dispatch test for the 3-arg form of {@code tf.where(condition, x, y)}. The dedicated
+   * {@link com.ibm.wala.cast.python.ml.client.Where} generator inherits shape and dtype from {@code
+   * x} (the second argument; {@code y} must have the same dtype as {@code x} per TF). The fixture
+   * has all three operands shape {@code (3,)} float32, so the precise output is {@code (3,)}
+   * float32. Fix for the wala/ML#422 listing.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testWhere()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_where.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
   @Test
   public void testConvertToTensor4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
