@@ -1112,8 +1112,6 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass())
         || isType(calledFunction, SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass()))
       return new SoftmaxCrossEntropy(source);
-    else if (isType(calledFunction, LOG.getDeclaringClass()))
-      return new ElementWiseOperation(source);
     else if (isType(calledFunction, REDUCE_SUM.getDeclaringClass())) return new ReduceSum(source);
     else if (isType(calledFunction, MATMUL.getDeclaringClass())) return new MatMul(source);
     else if (isType(calledFunction, SIGMOID.getDeclaringClass())) return new Sigmoid(source);
