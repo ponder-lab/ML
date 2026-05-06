@@ -85,6 +85,22 @@ public class Linspace extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    // The `(num,)` shape is only sound when `axis == 0` (the default rank-1 case). For non-default
+    // axes the result rank depends on `start`/`stop` being tensors and on broadcasting we don't
+    // track here, so emit ⊤ rather than risk an unsound concrete shape. Resolve `axis` against its
+    // PTS: only proceed with the rank-1 shape when *every* `axis` instance key is a `ConstantKey`
+    // with value `0`. If `axis` isn't passed at all (default), `getArgumentPointsToSet` returns
+    // null/empty — that's also the rank-1 case and is allowed to proceed.
+    OrdinalSet<InstanceKey> axisPts =
+        this.getArgumentPointsToSet(builder, Parameters.AXIS.getIndex(), Parameters.AXIS.getName());
+    if (axisPts != null && !axisPts.isEmpty()) {
+      for (InstanceKey ik : axisPts) {
+        if (!(ik instanceof ConstantKey)) return null;
+        Object val = ((ConstantKey<?>) ik).getValue();
+        if (!(val instanceof Number) || ((Number) val).intValue() != 0) return null;
+      }
+    }
+
     OrdinalSet<InstanceKey> numPts =
         this.getArgumentPointsToSet(builder, Parameters.NUM.getIndex(), Parameters.NUM.getName());
     if (numPts == null || numPts.isEmpty()) return null;
