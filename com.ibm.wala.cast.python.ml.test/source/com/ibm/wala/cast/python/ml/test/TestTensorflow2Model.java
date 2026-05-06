@@ -338,6 +338,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_INT64_UNKNOWN_SHAPE = new TensorType(INT_64, null);
 
+  private static final TensorType TENSOR_UNKNOWN_SHAPE_BOOL = new TensorType(BOOL, null);
+
   private static final TensorType TENSOR_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3)));
 
@@ -358,6 +360,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_64_5_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(64), new NumericDim(5)));
+
+  private static final TensorType TENSOR_7_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(7)));
+
+  private static final TensorType TENSOR_32_7_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(32), new NumericDim(7)));
+
+  private static final TensorType TENSOR_64_7_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(64), new NumericDim(7)));
+
+  private static final TensorType TENSOR_20_5_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(20), new NumericDim(5)));
+
+  private static final TensorType TENSOR_20_7_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(20), new NumericDim(7)));
 
   private static final TensorType TENSOR_5_INT32 =
       new TensorType(INT_32, asList(new NumericDim(5)));
@@ -1689,6 +1706,136 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32)));
+  }
+
+  /**
+   * Multi-Model precision regression: two distinct {@code tf.keras.models.Model(...)} calls in one
+   * fixture, two sink functions, disjoint shapes per model. Validates that under the current
+   * modeling each sink's parameter sees only its own model's weight shapes (not the union across
+   * both models). See wala/ML#380's discussion of `Model.read_data` materialization. Companion to
+   * {@link #testModelAttributesMultiModel2()} (same fixture, second sink). Disjoint dim choices
+   * (64/5 vs 32/7) make a precision regression mechanically detectable: a "shapes unioned across
+   * models" failure mode produces the 4-element set, not a 2-element subset.
+   */
+  @Test
+  public void testModelAttributesMultiModel()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_attributes_multi.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testModelAttributesMultiModel()} — pins the second sink's parameter to the
+   * second model's weight shapes only.
+   */
+  @Test
+  public void testModelAttributesMultiModel2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_attributes_multi.py",
+        "g",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_32_7_FLOAT32, TENSOR_7_FLOAT32)));
+  }
+
+  /**
+   * Multi-Model precision regression with one extra call-chain frame: both Models are constructed
+   * inside a {@code make_model(units)} helper, so both user-side calls of {@code make_model(...)}
+   * share the same call site for {@code Model.do} (the one inside {@code make_model}). Under {@code
+   * nCFAContextSelector(2)} the 2 most-recent call sites in the context for {@code
+   * Model.read_data}'s inner allocation are {@code (read_data_call_in_Model.do,
+   * Model.do_call_in_make_model)} — the user-side {@code make_model} call site falls outside those
+   * two frames, so both user models collapse to the same allocation context and each sink ends up
+   * with the union of both models' weight shapes. The assertion below pins that observed
+   * (imprecise) union, which makes a precision improvement detectable as a regression: when the fix
+   * lands, the actual set will shrink to the per-Model 2-element subset and this test will start
+   * failing with a clear "expected union, got per-Model" diff — the cue to update the assertion to
+   * its precise form.
+   *
+   * <p>TODO(wala/ML#380): When inlining of {@code Model.read_data} (or wala/ML#379's configurable-k
+   * work) distinguishes the per-Model contexts here, narrow the assertion to {@code
+   * Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32)} for {@code f} and the matching pair for {@code
+   * g} in {@link #testModelAttributesMultiModelWrapped2()}.
+   */
+  @Test
+  public void testModelAttributesMultiModelWrapped()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_attributes_multi_wrapped.py",
+        "f",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32, TENSOR_64_7_FLOAT32, TENSOR_7_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testModelAttributesMultiModelWrapped()} — same fixture, second sink. The
+   * assertion pins the same observed union; both sinks see the union under 2-CFA.
+   *
+   * <p>TODO(wala/ML#380): When the per-Model collapse is fixed, narrow the assertion to {@code
+   * Set.of(TENSOR_64_7_FLOAT32, TENSOR_7_FLOAT32)}.
+   */
+  @Test
+  public void testModelAttributesMultiModelWrapped2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_attributes_multi_wrapped.py",
+        "g",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32, TENSOR_64_7_FLOAT32, TENSOR_7_FLOAT32)));
+  }
+
+  /**
+   * Multi-Model precision regression on the {@code model(x)} call-output path: two distinct Models
+   * constructed inside a {@code make_and_call(units, x)} helper that also performs the call. Each
+   * user-side {@code make_and_call(...)} returns the model's output, with disjoint shapes (5 vs 7)
+   * per call. Under 2-CFA the two user-side {@code make_and_call} call sites collapse into one
+   * context for {@code Model.__call__}'s output allocation, so each sink ends up with the union
+   * {@code {(20, 5), (20, 7)}} rather than the per-Model shape — same precision-loss mechanism as
+   * {@link #testModelAttributesMultiModelWrapped()}, but on the call-output path instead of the
+   * trainable-weights path. The assertion pins the observed union; a precision improvement will
+   * narrow it.
+   *
+   * <p>TODO(wala/ML#380): When the per-Model collapse is fixed, narrow the assertion to {@code
+   * Set.of(TENSOR_20_5_FLOAT32)} for {@code f} and {@code Set.of(TENSOR_20_7_FLOAT32)} for {@code
+   * g} in {@link #testModelCallMultiModelWrapped2()}.
+   */
+  @Test
+  public void testModelCallMultiModelWrapped()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_call_multi_wrapped.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_20_5_FLOAT32, TENSOR_20_7_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testModelCallMultiModelWrapped()} — same fixture, second sink.
+   *
+   * <p>TODO(wala/ML#380): When the per-Model collapse is fixed, narrow the assertion to {@code
+   * Set.of(TENSOR_20_7_FLOAT32)}.
+   */
+  @Test
+  public void testModelCallMultiModelWrapped2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_call_multi_wrapped.py",
+        "g",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_20_5_FLOAT32, TENSOR_20_7_FLOAT32)));
   }
 
   /**
@@ -4403,6 +4550,64 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TENSOR_4_FLOAT32, TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.sequence_mask}. Output dtype is the TF-default {@code
+   * bool}; the optional {@code dtype} override is exposed in {@code tensorflow.xml}'s {@code
+   * paramNames} but is not yet honored by the {@link
+   * com.ibm.wala.cast.python.ml.client.SequenceMask} generator, which emits {@code bool}
+   * unconditionally. Shape is ⊤. (wala/ML#449 Tier 8.)
+   */
+  @Test
+  public void testSequenceMask()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_sequence_mask.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_BOOL)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.nn.embedding_lookup}. Output dtype is inherited from the
+   * {@code params} input (here float32), shape is ⊤. See {@link
+   * com.ibm.wala.cast.python.ml.client.EmbeddingLookup} (wala/ML#449 Tier 8).
+   */
+  @Test
+  public void testEmbeddingLookup()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_embedding_lookup.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.gather_nd}. Output dtype is inherited from the {@code
+   * params} input (here float32), shape is ⊤. See {@link
+   * com.ibm.wala.cast.python.ml.client.GatherNd} (wala/ML#449 Tier 8).
+   */
+  @Test
+  public void testGatherNd()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_gather_nd.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.boolean_mask}. Output dtype is inherited from the {@code
+   * tensor} input (here float32), shape is ⊤. See {@link
+   * com.ibm.wala.cast.python.ml.client.BooleanMask} (wala/ML#449 Tier 8).
+   */
+  @Test
+  public void testBooleanMask()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_boolean_mask.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.image.extract_patches}. Output dtype is inherited from
+   * the {@code images} input (here float32), shape is ⊤. See {@link
+   * com.ibm.wala.cast.python.ml.client.ExtractPatches} (wala/ML#449 Tier 8).
+   */
+  @Test
+  public void testExtractPatches()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_extract_patches.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   @Test

@@ -7,6 +7,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARGMAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARGMIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARRAY_OPS_RESHAPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOOLEAN_MASK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_X_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_X_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_Y_TEST;
@@ -36,8 +37,10 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_ZIP_TYPE
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DENSE_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIVIDE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.UNKNOWN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EMBEDDING_LOOKUP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EXP;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EXTRACT_PATCHES;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLATTEN;
@@ -52,6 +55,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_ROW_STARTS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_VALUE_ROWIDS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA_OP;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GATHER_ND;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GRADIENT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GREATER;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GREATER_EQUAL;
@@ -95,6 +99,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MEAN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_PROD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_SUM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RSQRT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SEQUENCE_MASK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIGMOID;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIZE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SLICE_BUILTIN;
@@ -1111,6 +1116,15 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, TRACE.getDeclaringClass())) return new Trace(source);
     else if (isType(calledFunction, TENSOR_SCATTER_ND_UPDATE.getDeclaringClass()))
       return new TensorScatterNdUpdate(source);
+    else if (isType(calledFunction, SEQUENCE_MASK.getDeclaringClass()))
+      return new SequenceMask(source);
+    else if (isType(calledFunction, EMBEDDING_LOOKUP.getDeclaringClass()))
+      return new EmbeddingLookup(source);
+    else if (isType(calledFunction, GATHER_ND.getDeclaringClass())) return new GatherNd(source);
+    else if (isType(calledFunction, BOOLEAN_MASK.getDeclaringClass()))
+      return new BooleanMask(source);
+    else if (isType(calledFunction, EXTRACT_PATCHES.getDeclaringClass()))
+      return new ExtractPatches(source);
     else if (isType(calledFunction, IDENTITY.getDeclaringClass())) return new Identity(source);
     else if (isType(calledFunction, STOP_GRADIENT.getDeclaringClass()))
       return new StopGradient(source);
