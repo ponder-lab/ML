@@ -22,6 +22,8 @@ import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
+import com.ibm.wala.cast.python.ml.client.BroadcastTo;
+import com.ibm.wala.cast.python.ml.client.Linspace;
 import com.ibm.wala.cast.python.ml.client.NonBroadcastableShapesException;
 import com.ibm.wala.cast.python.ml.client.NpArray;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
@@ -357,6 +359,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_5_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(5)));
+
+  private static final TensorType TENSOR_5_FLOAT64 =
+      new TensorType(FLOAT_64, asList(new NumericDim(5)));
 
   private static final TensorType TENSOR_64_5_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(64), new NumericDim(5)));
@@ -4500,6 +4505,82 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testArgmin()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_argmin.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT64_UNKNOWN_SHAPE)));
+  }
+
+  // wala/ML#449 Tier 7: linspace/broadcast_to. Shape derives from a shape-arg (`num`/`shape`),
+  // dtype derives from a value-arg (`start`/`input`).
+
+  /**
+   * Verifies that {@code tf.linspace(0.0, 10.0, 5)} routes through the dedicated {@link Linspace}
+   * generator and emits the precise rank-1 shape {@code (5,)} with {@code float32} dtype (derived
+   * from the float-typed {@code start} argument).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testLinspace()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_linspace.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testLinspace()} that exercises the integer-promotion branch in {@link
+   * com.ibm.wala.cast.python.ml.client.Linspace#getDefaultDTypes}. {@code tf.linspace} with integer
+   * {@code start}/{@code stop} promotes the output to {@code float64} (verified on TF 2.9), not
+   * {@code float32}. The float-input case is covered by {@link #testLinspace()}.
+   */
+  @Test
+  public void testLinspaceInt()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_linspace_int.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_FLOAT64)));
+  }
+
+  /**
+   * Drives the {@code axis}-passed branch in {@link
+   * com.ibm.wala.cast.python.ml.client.Linspace#getDefaultShapes}. With {@code axis=1} and vector
+   * {@code start}/{@code stop}, {@code tf.linspace} interpolates along axis 1, producing a
+   * higher-rank result whose runtime shape is {@code (2, 5)} with dtype {@code float32}.
+   *
+   * <p>The static analysis currently returns ⊤ (unknown shape) for any axis-passed call — combining
+   * {@code start}'s rank with {@code num} is not yet implemented; the generator trades precision
+   * for soundness. The assertion encodes the observed result with a TODO pointing at the precision
+   * improvement that would narrow it.
+   *
+   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/475">wala/ML#475</a> is fixed and
+   * {@code Linspace.getDefaultShapes} computes the precise output shape from {@code
+   * start.shape[:axis] + (num,) + start.shape[axis:]}, narrow the assertion to {@code
+   * Set.of(TENSOR_2_5_FLOAT32)} (a new constant).
+   *
+   * <p>Companion to {@link #testLinspace()} (covering the absent-axis branch).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testLinspaceAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_linspace_axis.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Verifies that {@code tf.broadcast_to(x, [2, 3])} routes through the dedicated {@link
+   * BroadcastTo} generator and emits shape {@code (2, 3)} (read from the {@code shape} argument's
+   * literal list) with {@code float32} dtype (derived from the {@code input} tensor).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testBroadcastTo()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_broadcast_to.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
   }
 
   /**
