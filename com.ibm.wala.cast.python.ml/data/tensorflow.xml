@@ -943,16 +943,16 @@
         </method>
       </class>
       <class name="argmax" allocatable="true">
-        <!-- https://www.tensorflow.org/api_docs/python/tf/math/argmax — index of the maximum value across an axis. The dedicated `Argmax` generator emits `int64` (the TF default) for the output dtype; output shape is currently ⊤ pending wala/ML#462. The legacy `dimension` parameter (a TF 1.x alias for
-          `axis`) is retained in `paramNames`; the modern `output_type` parameter isn't surfaced here yet — wala/ML#463 covers the migration. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
-        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input axis name dimension">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/math/argmax — index of the maximum value across an axis. The dedicated `Argmax` generator reads the `output_type` argument when explicitly passed (e.g. `output_type=tf.int32`) and falls back to the TF default of `int64` otherwise; output shape
+          is currently ⊤ pending wala/ML#462. The legacy `dimension` parameter (a TF 1.x alias for `axis`) is retained in `paramNames` for back-compat. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self input axis output_type name dimension">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
       <class name="argmin" allocatable="true">
-        <!-- https://www.tensorflow.org/api_docs/python/tf/math/argmin — index of the minimum value across an axis. Mirrors the `argmax` modeling above (same param signature, same direct `<new>+<return>` per wala/ML#380, same `int64` output dtype via the dedicated `Argmin` generator). -->
-        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input axis name dimension">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/math/argmin — index of the minimum value across an axis. Mirrors the `argmax` modeling above (same param signature, same direct `<new>+<return>` per wala/ML#380, same `output_type`-overrideable output dtype via the dedicated `Argmin` generator). -->
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self input axis output_type name dimension">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
