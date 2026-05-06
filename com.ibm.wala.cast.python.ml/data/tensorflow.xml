@@ -1053,13 +1053,17 @@
         </method>
       </class>
       <class name="top_k" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/top_k. Direct `<new>+<putfield>` per wala/ML#380 (was a `read_data` materialization chain). Returns a `(values, indices)` tuple — both fields point at fresh `Tensor` allocations. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/top_k. Direct `<new>+<putfield>` per wala/ML#380 (was a `read_data` materialization chain). Returns a `(values, indices)` NamedTuple — both fields point at fresh `Tensor` allocations. The `values`/`indices` named-field aliases
+          (in addition to the numeric `0`/`1` fields) handle the NamedTuple attribute-access pattern: `result.values` reads field `"values"` (a string property name) and the alias makes that resolve to the same `xx` alloc as field `0`. Without the alias, `result.values` reads an empty field-PTS and falls through
+          to ⊤, even though `values, indices = result` (numeric destructuring) worked fine. See wala/ML#480 for the full diagnosis. -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input k sorted name">
           <new def="x" class="Ltuple" />
           <new def="xx" class="Ltensorflow/python/framework/ops/Tensor" />
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="x" value="xx" />
+          <putfield class="LRoot" field="values" fieldType="LRoot" ref="x" value="xx" />
           <new def="yy" class="Ltensorflow/python/framework/ops/Tensor" />
           <putfield class="LRoot" field="1" fieldType="LRoot" ref="x" value="yy" />
+          <putfield class="LRoot" field="indices" fieldType="LRoot" ref="x" value="yy" />
           <return value="x" />
         </method>
       </class>
