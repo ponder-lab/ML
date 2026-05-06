@@ -357,6 +357,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_4_FLOAT64 =
       new TensorType(FLOAT_64, asList(new NumericDim(4)));
 
+  private static final TensorType TENSOR_3_STRING =
+      new TensorType(STRING, asList(new NumericDim(3)));
+
   private static final TensorType TENSOR_5_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(5)));
 
@@ -4689,6 +4692,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testExtractPatches()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_extract_patches.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Generator test for {@code tf.strings.as_string}. Output shape is the input's shape (here {@code
+   * (3,)}); output dtype is fixed to {@code string} (wala/ML#422).
+   */
+  @Test
+  public void testAsString()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_as_string.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_STRING)));
   }
 
   @Test
