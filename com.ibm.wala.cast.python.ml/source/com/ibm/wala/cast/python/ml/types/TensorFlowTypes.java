@@ -890,6 +890,34 @@ public class TensorFlowTypes extends PythonTypes {
   public static final String FASHION_MNIST_Y_TEST_SIGNATURE =
       "tf.keras.datasets.fashion_mnist.load_data/y_test";
 
+  public static final TypeReference CIFAR100_X_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/cifar100/x_train"));
+
+  public static final String CIFAR100_X_TRAIN_SIGNATURE =
+      "tf.keras.datasets.cifar100.load_data/x_train";
+
+  public static final TypeReference CIFAR100_Y_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/cifar100/y_train"));
+
+  public static final String CIFAR100_Y_TRAIN_SIGNATURE =
+      "tf.keras.datasets.cifar100.load_data/y_train";
+
+  public static final TypeReference CIFAR100_X_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/cifar100/x_test"));
+
+  public static final String CIFAR100_X_TEST_SIGNATURE =
+      "tf.keras.datasets.cifar100.load_data/x_test";
+
+  public static final TypeReference CIFAR100_Y_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/cifar100/y_test"));
+
+  public static final String CIFAR100_Y_TEST_SIGNATURE =
+      "tf.keras.datasets.cifar100.load_data/y_test";
+
   /** https://www.tensorflow.org/api_docs/python/tf/placeholder. */
   public static final MethodReference PLACEHOLDER =
       MethodReference.findOrCreate(
@@ -1378,6 +1406,10 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(FASHION_MNIST_Y_TRAIN, FASHION_MNIST_Y_TRAIN_SIGNATURE),
           Map.entry(FASHION_MNIST_X_TEST, FASHION_MNIST_X_TEST_SIGNATURE),
           Map.entry(FASHION_MNIST_Y_TEST, FASHION_MNIST_Y_TEST_SIGNATURE),
+          Map.entry(CIFAR100_X_TRAIN, CIFAR100_X_TRAIN_SIGNATURE),
+          Map.entry(CIFAR100_Y_TRAIN, CIFAR100_Y_TRAIN_SIGNATURE),
+          Map.entry(CIFAR100_X_TEST, CIFAR100_X_TEST_SIGNATURE),
+          Map.entry(CIFAR100_Y_TEST, CIFAR100_Y_TEST_SIGNATURE),
           Map.entry(PLACEHOLDER.getDeclaringClass(), PLACEHOLDER_SIGNATURE),
           Map.entry(ARGMAX.getDeclaringClass(), ARGMAX_SIGNATURE),
           Map.entry(ARGMIN.getDeclaringClass(), ARGMIN_SIGNATURE),

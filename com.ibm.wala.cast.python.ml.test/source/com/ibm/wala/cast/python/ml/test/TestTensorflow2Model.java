@@ -322,6 +322,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_60000_28_28_UINT8 =
       new TensorType(UINT_8, asList(new NumericDim(60000), new NumericDim(28), new NumericDim(28)));
 
+  private static final TensorType TENSOR_50000_32_32_3_UINT8 =
+      new TensorType(
+          UINT_8,
+          asList(new NumericDim(50000), new NumericDim(32), new NumericDim(32), new NumericDim(3)));
+
   /** A {@code float32} tensor whose shape cannot be statically inferred. */
   private static final TensorType TENSOR_UNKNOWN_SHAPE_FLOAT32 = new TensorType(FLOAT_32, null);
 
@@ -4708,6 +4713,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TENSOR_60000_28_28_UINT8)));
+  }
+
+  /**
+   * Generator test for {@code tf.keras.datasets.cifar100.load_data()}. Shapes and dtype are
+   * identical to {@code cifar10.load_data()}: {@code (50000, 32, 32, 3)} of {@code uint8} for the
+   * training-image array.
+   */
+  @Test
+  public void testCifar100LoadData()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_cifar100_load_data.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_50000_32_32_3_UINT8)));
   }
 
   @Test
