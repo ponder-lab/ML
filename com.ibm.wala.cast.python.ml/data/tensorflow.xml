@@ -784,6 +784,32 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/custom_gradient -->
         <new def="custom_gradient" class="Ltensorflow/class/custom_gradient" />
         <putfield class="LRoot" field="custom_gradient" fieldType="LRoot" ref="x" value="custom_gradient" />
+        <!-- Tier-A pure-passthrough math ops (wala/ML#422). Each modeled with direct `<new>+<return>` and a per-op Java generator extending `PassThroughUnaryTensorGenerator`; output shape and dtype both inherit from `x`. Without these, `ReadDataFallback` produces ⊤/UNKNOWN, which blocks dtype propagation
+          through any function whose parameters flow from these ops. -->
+        <new def="sqrt" class="Ltensorflow/math/sqrt" />
+        <putfield class="LRoot" field="sqrt" fieldType="LRoot" ref="x" value="sqrt" />
+        <putfield class="LRoot" field="sqrt" fieldType="LRoot" ref="math" value="sqrt" />
+        <new def="log" class="Ltensorflow/math/log" />
+        <putfield class="LRoot" field="log" fieldType="LRoot" ref="x" value="log" />
+        <putfield class="LRoot" field="log" fieldType="LRoot" ref="math" value="log" />
+        <new def="negative" class="Ltensorflow/math/negative" />
+        <putfield class="LRoot" field="negative" fieldType="LRoot" ref="x" value="negative" />
+        <putfield class="LRoot" field="negative" fieldType="LRoot" ref="math" value="negative" />
+        <new def="sin" class="Ltensorflow/math/sin" />
+        <putfield class="LRoot" field="sin" fieldType="LRoot" ref="x" value="sin" />
+        <putfield class="LRoot" field="sin" fieldType="LRoot" ref="math" value="sin" />
+        <new def="cos" class="Ltensorflow/math/cos" />
+        <putfield class="LRoot" field="cos" fieldType="LRoot" ref="x" value="cos" />
+        <putfield class="LRoot" field="cos" fieldType="LRoot" ref="math" value="cos" />
+        <new def="floor" class="Ltensorflow/math/floor" />
+        <putfield class="LRoot" field="floor" fieldType="LRoot" ref="x" value="floor" />
+        <putfield class="LRoot" field="floor" fieldType="LRoot" ref="math" value="floor" />
+        <new def="ceil" class="Ltensorflow/math/ceil" />
+        <putfield class="LRoot" field="ceil" fieldType="LRoot" ref="x" value="ceil" />
+        <putfield class="LRoot" field="ceil" fieldType="LRoot" ref="math" value="ceil" />
+        <new def="sign" class="Ltensorflow/math/sign" />
+        <putfield class="LRoot" field="sign" fieldType="LRoot" ref="x" value="sign" />
+        <putfield class="LRoot" field="sign" fieldType="LRoot" ref="math" value="sign" />
         <return value="x" />
       </method>
     </class>
@@ -1105,6 +1131,55 @@
       <class name="reduce_max" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_max. Modeled as `<new>+<return>` for the same reason as `reduce_all`/`reduce_prod` — wala/ML#449 Tier 3. Output dtype inherits from input (no int→float32 promotion like `reduce_mean`). -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <!-- Tier-A pure-passthrough math ops (wala/ML#422). Each is shape and dtype passthrough on `x`. -->
+      <class name="sqrt" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="log" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="negative" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="sin" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="cos" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="floor" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="ceil" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="sign" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
