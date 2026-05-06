@@ -115,6 +115,10 @@
         <putfield class="LRoot" field="cifar10" fieldType="LRoot" ref="datasets" value="keras_cifar10" />
         <new def="cifar10_load_data" class="Ltensorflow/keras/datasets/cifar10/load_data" />
         <putfield class="LRoot" field="load_data" fieldType="LRoot" ref="keras_cifar10" value="cifar10_load_data" />
+        <new def="keras_imdb" class="Lobject" />
+        <putfield class="LRoot" field="imdb" fieldType="LRoot" ref="datasets" value="keras_imdb" />
+        <new def="imdb_load_data" class="Ltensorflow/keras/datasets/imdb/load_data" />
+        <putfield class="LRoot" field="load_data" fieldType="LRoot" ref="keras_imdb" value="imdb_load_data" />
         <new def="app" class="Lobject" />
         <putfield class="LRoot" field="app" fieldType="LRoot" ref="x" value="app" />
         <new def="run" class="Ltensorflow/app/run" />
@@ -2969,6 +2973,71 @@
           <call class="Ltensorflow/keras/datasets/cifar10/x_test" name="do" type="virtual" def="x_test" descriptor="()LRoot;" arg0="x_test_fn" numArgs="1" />
           <new def="y_test_fn" class="Ltensorflow/keras/datasets/cifar10/y_test" />
           <call class="Ltensorflow/keras/datasets/cifar10/y_test" name="do" type="virtual" def="y_test" descriptor="()LRoot;" arg0="y_test_fn" numArgs="1" />
+          <new def="test" class="Ltuple" />
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="test" value="x_test" />
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="test" value="y_test" />
+          <new def="ret" class="Ltuple" />
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="ret" value="train" />
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="ret" value="test" />
+          <return value="ret" />
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/keras/datasets/imdb">
+      <!-- https://www.tensorflow.org/api_docs/python/tf/keras/datasets/imdb/load_data -->
+      <class name="x_train" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="ret" class="Ltensorflow/keras/datasets/imdb/x_train" />
+          <new def="astype_fn" class="Lnumpy/ndarray/astype" />
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn" />
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape" />
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn" />
+          <return value="ret" />
+        </method>
+      </class>
+      <class name="y_train" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="ret" class="Ltensorflow/keras/datasets/imdb/y_train" />
+          <new def="astype_fn" class="Lnumpy/ndarray/astype" />
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn" />
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape" />
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn" />
+          <return value="ret" />
+        </method>
+      </class>
+      <class name="x_test" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="ret" class="Ltensorflow/keras/datasets/imdb/x_test" />
+          <new def="astype_fn" class="Lnumpy/ndarray/astype" />
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn" />
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape" />
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn" />
+          <return value="ret" />
+        </method>
+      </class>
+      <class name="y_test" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="ret" class="Ltensorflow/keras/datasets/imdb/y_test" />
+          <new def="astype_fn" class="Lnumpy/ndarray/astype" />
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn" />
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape" />
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn" />
+          <return value="ret" />
+        </method>
+      </class>
+      <class name="load_data" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="x_train_fn" class="Ltensorflow/keras/datasets/imdb/x_train" />
+          <call class="Ltensorflow/keras/datasets/imdb/x_train" name="do" type="virtual" def="x_train" descriptor="()LRoot;" arg0="x_train_fn" numArgs="1" />
+          <new def="y_train_fn" class="Ltensorflow/keras/datasets/imdb/y_train" />
+          <call class="Ltensorflow/keras/datasets/imdb/y_train" name="do" type="virtual" def="y_train" descriptor="()LRoot;" arg0="y_train_fn" numArgs="1" />
+          <new def="train" class="Ltuple" />
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="train" value="x_train" />
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="train" value="y_train" />
+          <new def="x_test_fn" class="Ltensorflow/keras/datasets/imdb/x_test" />
+          <call class="Ltensorflow/keras/datasets/imdb/x_test" name="do" type="virtual" def="x_test" descriptor="()LRoot;" arg0="x_test_fn" numArgs="1" />
+          <new def="y_test_fn" class="Ltensorflow/keras/datasets/imdb/y_test" />
+          <call class="Ltensorflow/keras/datasets/imdb/y_test" name="do" type="virtual" def="y_test" descriptor="()LRoot;" arg0="y_test_fn" numArgs="1" />
           <new def="test" class="Ltuple" />
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="test" value="x_test" />
           <putfield class="LRoot" field="1" fieldType="LRoot" ref="test" value="y_test" />

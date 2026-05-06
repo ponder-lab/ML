@@ -360,6 +360,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_3_STRING =
       new TensorType(STRING, asList(new NumericDim(3)));
 
+  private static final TensorType TENSOR_25000_INT64 =
+      new TensorType(INT_64, asList(new NumericDim(25000)));
+
   private static final TensorType TENSOR_5_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(5)));
 
@@ -4702,6 +4705,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testAsString()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_as_string.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_STRING)));
+  }
+
+  /**
+   * Generator test for {@code tf.keras.datasets.imdb.load_data()}. The four returned arrays each
+   * have shape {@code (25000,)}; the {@code y_train} / {@code y_test} arrays have dtype {@code
+   * int64} (binary labels).
+   */
+  @Test
+  public void testImdbLoadData()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_imdb_load_data.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_25000_INT64)));
   }
 
   @Test

@@ -63,6 +63,10 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GREATER;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GREATER_EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IDENTITY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_X_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_X_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_Y_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LESS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LESS_EQUAL;
@@ -1083,6 +1087,14 @@ public class TensorGeneratorFactory {
       return new Cifar10InputData(source, Cifar10InputData.X_TEST_SHAPE);
     else if (isType(calledFunction, CIFAR10_Y_TEST))
       return new Cifar10InputData(source, Cifar10InputData.Y_TEST_SHAPE);
+    else if (isType(calledFunction, IMDB_X_TRAIN))
+      return new ImdbInputData(source, ImdbInputData.X_TRAIN_SHAPE, ImdbInputData.X_DTYPES);
+    else if (isType(calledFunction, IMDB_Y_TRAIN))
+      return new ImdbInputData(source, ImdbInputData.Y_TRAIN_SHAPE, ImdbInputData.Y_DTYPES);
+    else if (isType(calledFunction, IMDB_X_TEST))
+      return new ImdbInputData(source, ImdbInputData.X_TEST_SHAPE, ImdbInputData.X_DTYPES);
+    else if (isType(calledFunction, IMDB_Y_TEST))
+      return new ImdbInputData(source, ImdbInputData.Y_TEST_SHAPE, ImdbInputData.Y_DTYPES);
     else if (isType(calledFunction, REDUCE_MEAN.getDeclaringClass())) return new ReduceMean(source);
     else if (isType(calledFunction, REDUCE_MAX.getDeclaringClass())) return new ReduceMax(source);
     else if (isType(calledFunction, REDUCE_PROD.getDeclaringClass())) return new ReduceProd(source);
