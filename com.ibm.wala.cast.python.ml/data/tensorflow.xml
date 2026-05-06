@@ -784,6 +784,54 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/custom_gradient -->
         <new def="custom_gradient" class="Ltensorflow/class/custom_gradient" />
         <putfield class="LRoot" field="custom_gradient" fieldType="LRoot" ref="x" value="custom_gradient" />
+        <!-- Tier-A pure-passthrough math ops (continued, wala/ML#422). Each shape and dtype passthrough on `x`. -->
+        <new def="tan" class="Ltensorflow/math/tan" />
+        <putfield class="LRoot" field="tan" fieldType="LRoot" ref="math" value="tan" />
+        <new def="asin" class="Ltensorflow/math/asin" />
+        <putfield class="LRoot" field="asin" fieldType="LRoot" ref="math" value="asin" />
+        <new def="atan" class="Ltensorflow/math/atan" />
+        <putfield class="LRoot" field="atan" fieldType="LRoot" ref="math" value="atan" />
+        <new def="sinh" class="Ltensorflow/math/sinh" />
+        <putfield class="LRoot" field="sinh" fieldType="LRoot" ref="math" value="sinh" />
+        <new def="cosh" class="Ltensorflow/math/cosh" />
+        <putfield class="LRoot" field="cosh" fieldType="LRoot" ref="math" value="cosh" />
+        <new def="asinh" class="Ltensorflow/math/asinh" />
+        <putfield class="LRoot" field="asinh" fieldType="LRoot" ref="math" value="asinh" />
+        <new def="acosh" class="Ltensorflow/math/acosh" />
+        <putfield class="LRoot" field="acosh" fieldType="LRoot" ref="math" value="acosh" />
+        <new def="atanh" class="Ltensorflow/math/atanh" />
+        <putfield class="LRoot" field="atanh" fieldType="LRoot" ref="math" value="atanh" />
+        <new def="log1p" class="Ltensorflow/math/log1p" />
+        <putfield class="LRoot" field="log1p" fieldType="LRoot" ref="math" value="log1p" />
+        <new def="expm1" class="Ltensorflow/math/expm1" />
+        <putfield class="LRoot" field="expm1" fieldType="LRoot" ref="math" value="expm1" />
+        <new def="round" class="Ltensorflow/math/round" />
+        <putfield class="LRoot" field="round" fieldType="LRoot" ref="x" value="round" />
+        <putfield class="LRoot" field="round" fieldType="LRoot" ref="math" value="round" />
+        <new def="reciprocal" class="Ltensorflow/math/reciprocal" />
+        <putfield class="LRoot" field="reciprocal" fieldType="LRoot" ref="math" value="reciprocal" />
+        <new def="softplus" class="Ltensorflow/math/softplus" />
+        <putfield class="LRoot" field="softplus" fieldType="LRoot" ref="math" value="softplus" />
+        <putfield class="LRoot" field="softplus" fieldType="LRoot" ref="nn" value="softplus" />
+        <new def="softsign" class="Ltensorflow/math/softsign" />
+        <putfield class="LRoot" field="softsign" fieldType="LRoot" ref="math" value="softsign" />
+        <putfield class="LRoot" field="softsign" fieldType="LRoot" ref="nn" value="softsign" />
+        <new def="square" class="Ltensorflow/math/square" />
+        <putfield class="LRoot" field="square" fieldType="LRoot" ref="x" value="square" />
+        <putfield class="LRoot" field="square" fieldType="LRoot" ref="math" value="square" />
+        <new def="erf" class="Ltensorflow/math/erf" />
+        <putfield class="LRoot" field="erf" fieldType="LRoot" ref="math" value="erf" />
+        <new def="erfc" class="Ltensorflow/math/erfc" />
+        <putfield class="LRoot" field="erfc" fieldType="LRoot" ref="math" value="erfc" />
+        <!-- Element-wise binary ops (broadcast shape, unified dtype) — routed through ElementWiseOperation. -->
+        <new def="atan2" class="Ltensorflow/math/atan2" />
+        <putfield class="LRoot" field="atan2" fieldType="LRoot" ref="math" value="atan2" />
+        <new def="maximum" class="Ltensorflow/math/maximum" />
+        <putfield class="LRoot" field="maximum" fieldType="LRoot" ref="x" value="maximum" />
+        <putfield class="LRoot" field="maximum" fieldType="LRoot" ref="math" value="maximum" />
+        <new def="minimum" class="Ltensorflow/math/minimum" />
+        <putfield class="LRoot" field="minimum" fieldType="LRoot" ref="x" value="minimum" />
+        <putfield class="LRoot" field="minimum" fieldType="LRoot" ref="math" value="minimum" />
         <return value="x" />
       </method>
     </class>
@@ -1105,6 +1153,128 @@
       <class name="reduce_max" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_max. Modeled as `<new>+<return>` for the same reason as `reduce_all`/`reduce_prod` — wala/ML#449 Tier 3. Output dtype inherits from input (no int→float32 promotion like `reduce_mean`). -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <!-- Tier-A pure-passthrough math ops (continued, wala/ML#422). Each is shape and dtype passthrough on `x`. -->
+      <class name="tan" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="asin" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="atan" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="sinh" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="cosh" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="asinh" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="acosh" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="atanh" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="log1p" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="expm1" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="round" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="reciprocal" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="softplus" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self features name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="softsign" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self features name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="square" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="erf" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="erfc" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <!-- Element-wise binary ops — routed through ElementWiseOperation for shape (broadcast) and dtype (unified). -->
+      <class name="atan2" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self y x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="maximum" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x y name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="minimum" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x y name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
