@@ -4536,10 +4536,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Drives the {@code axis}-passed branch in {@link
    * com.ibm.wala.cast.python.ml.client.Linspace#getDefaultShapes}. With {@code axis=1} and vector
    * {@code start}/{@code stop}, {@code tf.linspace} interpolates along axis 1, producing a
-   * higher-rank result whose precise shape combines {@code start}'s rank with {@code num} — the
-   * static analysis can't recover this, so the generator returns ⊤ (unknown shape). Dtype is still
-   * derived from {@code start} (float32). Companion to {@link #testLinspace()} (covering the
-   * absent-axis branch).
+   * higher-rank result whose runtime shape is {@code (2, 5)} with dtype {@code float32}.
+   *
+   * <p>The static analysis currently returns ⊤ (unknown shape) for any axis-passed call — combining
+   * {@code start}'s rank with {@code num} is not yet implemented; the generator trades precision
+   * for soundness. The assertion encodes the observed result with a TODO pointing at the precision
+   * improvement that would narrow it.
+   *
+   * <p>TODO(wala/ML#475): Once {@code Linspace.getDefaultShapes} computes the precise output shape
+   * from {@code start.shape[:axis] + (num,) + start.shape[axis:]}, narrow the assertion to {@code
+   * Set.of(TENSOR_2_5_FLOAT32)} (a new constant).
+   *
+   * <p>Companion to {@link #testLinspace()} (covering the absent-axis branch).
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
