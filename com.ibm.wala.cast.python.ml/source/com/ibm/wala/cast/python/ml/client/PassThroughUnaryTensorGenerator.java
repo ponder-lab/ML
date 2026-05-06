@@ -60,17 +60,30 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
    * Positional index of the input argument, <em>excluding</em> the modeled {@code self} receiver.
    * Almost always {@code 0} (the first user-facing positional after {@code self}).
    *
-   * @return The input arg's positional index.
+   * <p>Default is {@link #UNDEFINED_PARAMETER_POSITION}, signalling "no input arg" — appropriate
+   * for subclasses that override {@link #getDefaultShapes} and {@link #getDefaultDTypes} entirely
+   * and don't read from an input argument's PTS (mirrors the existing pattern for {@link
+   * #getShapeParameterPosition} / {@link #getDTypeParameterPosition} on {@link TensorGenerator}).
+   *
+   * @return The input arg's positional index, or {@link #UNDEFINED_PARAMETER_POSITION} if not
+   *     applicable.
    */
-  protected abstract int getInputParameterPosition();
+  protected int getInputParameterPosition() {
+    return UNDEFINED_PARAMETER_POSITION;
+  }
 
   /**
    * Keyword name of the input argument as declared in the XML (e.g. {@code "x"}, {@code "input"},
    * {@code "logits"}). Used for keyword-argument resolution when the call site uses kwargs.
    *
-   * @return The input arg's keyword name.
+   * <p>Default is {@code null}, signalling "no input arg" — see {@link
+   * #getInputParameterPosition()}.
+   *
+   * @return The input arg's keyword name, or {@code null} if not applicable.
    */
-  protected abstract String getInputParameterName();
+  protected String getInputParameterName() {
+    return null;
+  }
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
@@ -93,6 +106,7 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
    */
   private Set<List<Dimension<?>>> shapesOfArg(
       PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    if (paramPos == UNDEFINED_PARAMETER_POSITION) return null;
     OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPos, paramName);
     if (pts != null && !pts.isEmpty()) {
       Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, pts);
@@ -111,6 +125,7 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
    */
   private Set<DType> dtypesOfArg(
       PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    if (paramPos == UNDEFINED_PARAMETER_POSITION) return null;
     OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPos, paramName);
     if (pts != null && !pts.isEmpty()) {
       Set<DType> dtypes = this.getDTypesOfValue(builder, pts);
