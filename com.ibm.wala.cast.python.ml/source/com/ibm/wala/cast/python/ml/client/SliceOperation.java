@@ -22,8 +22,16 @@ import java.util.logging.Logger;
 /**
  * Modeling of Python slice operations (e.g., tensor[..., None]).
  *
+ * <p>TODO(<a href="https://github.com/wala/ML/issues/470">wala/ML#470</a>): orphan flagged by the
+ * dispatch-coverage meta-test — this class is not constructed from either dispatch table. Decide to
+ * wire (slice operations are real, the modeling is non-trivial) or delete; if delete, also drop
+ * {@link DispatchExempt} below.
+ *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
+@DispatchExempt(
+    "Orphan flagged by dispatch-coverage meta-test (wala/ML#470). Pending"
+        + " decide-to-wire-or-delete.")
 public class SliceOperation extends TensorGenerator {
   private static final Logger LOGGER = Logger.getLogger(SliceOperation.class.getName());
 
