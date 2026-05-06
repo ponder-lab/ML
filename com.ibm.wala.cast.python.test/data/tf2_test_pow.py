@@ -6,7 +6,8 @@ def f(a):
 
 
 # `tf.math.pow(x, y)` is element-wise `x ** y`. Output shape is the
-# broadcast of `x` and `y`; dtype is the unified dtype. Routed through
+# broadcast of `x` and `y`; output dtype matches `x` (TF requires `x`/`y` to
+# share dtype, so dtype-from-`x` is sound). Routed through
 # `ElementWiseOperation`.
 x = tf.constant([2.0, 3.0, 4.0])
 y = tf.constant([1.0, 2.0, 3.0])

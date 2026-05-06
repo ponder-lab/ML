@@ -985,7 +985,7 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/reduce_min")),
           AstMethodReference.fnSelector);
 
-  private static final String REDUCE_MIN_SIGNATURE = "tf.math.reduce_min()";
+  private static final String REDUCE_MIN_SIGNATURE = "tf.reduce_min()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/math/pow. */
   public static final MethodReference POW =

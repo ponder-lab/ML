@@ -796,6 +796,7 @@
         <new def="pow" class="Ltensorflow/math/pow" />
         <putfield class="LRoot" field="pow" fieldType="LRoot" ref="x" value="pow" />
         <putfield class="LRoot" field="pow" fieldType="LRoot" ref="math" value="pow" />
+        <putfield class="LRoot" field="pow" fieldType="LRoot" ref="math_ops" value="pow" />
         <return value="x" />
       </method>
     </class>
@@ -1129,7 +1130,7 @@
         </method>
       </class>
       <class name="pow" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/pow. Element-wise binary op (`x ** y`); routed through `ElementWiseOperation` for shape (broadcast) and dtype (unified). -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/pow. Element-wise binary op (`x ** y`); routed through `ElementWiseOperation` for broadcast shape and dtype-from-`x` (TF requires `x`/`y` to share dtype, so this is sound). -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x y name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />

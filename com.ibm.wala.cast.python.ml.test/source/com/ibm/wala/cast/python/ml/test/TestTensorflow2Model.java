@@ -4890,9 +4890,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Generator-dispatch test for {@code tf.math.pow(x, y)}. Element-wise binary; output shape is the
-   * broadcast of {@code x} and {@code y} (here both {@code (3,)}, so {@code (3,)}); dtype is the
-   * unified dtype (both {@code float32} → {@code float32}). Routed through {@link
-   * com.ibm.wala.cast.python.ml.client.ElementWiseOperation}.
+   * broadcast of {@code x} and {@code y} (here both {@code (3,)}, so {@code (3,)}); output dtype
+   * matches {@code x} (TF requires {@code x}/{@code y} to share dtype, so dtype-from-{@code x} is
+   * sound). Routed through {@link com.ibm.wala.cast.python.ml.client.ElementWiseOperation}.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
