@@ -87,22 +87,27 @@ public class Linspace extends TensorGenerator {
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     // The `(num,)` shape is only sound when `axis == 0` (the default rank-1 case). For non-default
     // axes the result rank depends on `start`/`stop` being tensors and on broadcasting we don't
-    // track here, so emit ⊤ rather than risk an unsound concrete shape. Distinguish three cases:
+    // track here, so emit ⊤ rather than risk an unsound concrete shape. Detect "axis present"
+    // explicitly via `isKeywordArgumentPresent` (for the kwarg form) plus a positional-count check
+    // (for `tf.linspace(start, stop, num, name, axis)` positional usage). When axis is absent we
+    // proceed with the rank-1 shape; when present we require every PTS instance key to be a
+    // `ConstantKey` of value `0`.
     //
-    // 1. `axis` not passed (omitted; defaults to 0) — safe to proceed with `(num,)`.
-    // 2. `axis` passed but PA can't resolve any instances — *unsound* to assume 0; return ⊤.
-    // 3. `axis` passed and resolved — proceed only when every instance key is a ConstantKey of 0.
-    //
-    // `getArgumentValueNumber(..., optional=true)` returns -1 when the kwarg is absent, which lets
-    // us tell case (1) apart from case (2) — the empty-PTS check alone conflates them.
-    int axisVn =
-        this.getArgumentValueNumber(
-            builder, Parameters.AXIS.getIndex(), Parameters.AXIS.getName(), true);
-    if (axisVn != -1) {
+    // The earlier `getArgumentValueNumber(..., optional=true) != -1` approach was unsound here:
+    // when the source is a `ReturnValueKey` of the inlined `linspace.do` (what `findCreator`
+    // typically walks to post-wala/ML#380), `getInvokeInstruction()` returns null and
+    // `getArgumentValueNumber` falls through to a manual-node fallback that returns the synthetic
+    // method's parameter VN unconditionally, mis-classifying every absent-axis user call as
+    // "passed".
+    boolean axisPresent =
+        this.isKeywordArgumentPresent(builder, Parameters.AXIS.getName())
+            || this.getNumberOfPossiblePositionalArguments(builder).stream()
+                .anyMatch(n -> n > Parameters.AXIS.getIndex());
+    if (axisPresent) {
       OrdinalSet<InstanceKey> axisPts =
           this.getArgumentPointsToSet(
               builder, Parameters.AXIS.getIndex(), Parameters.AXIS.getName());
-      if (axisPts == null || axisPts.isEmpty()) return null; // case (2)
+      if (axisPts == null || axisPts.isEmpty()) return null; // present but unresolved → ⊤
       for (InstanceKey ik : axisPts) {
         if (!(ik instanceof ConstantKey)) return null;
         Object val = ((ConstantKey<?>) ik).getValue();
