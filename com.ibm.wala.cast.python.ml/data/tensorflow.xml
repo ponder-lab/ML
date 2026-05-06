@@ -794,16 +794,22 @@
         <new def="sinh" class="Ltensorflow/math/sinh" />
         <putfield class="LRoot" field="sinh" fieldType="LRoot" ref="math" value="sinh" />
         <new def="cosh" class="Ltensorflow/math/cosh" />
+        <putfield class="LRoot" field="cosh" fieldType="LRoot" ref="x" value="cosh" />
         <putfield class="LRoot" field="cosh" fieldType="LRoot" ref="math" value="cosh" />
         <new def="asinh" class="Ltensorflow/math/asinh" />
+        <putfield class="LRoot" field="asinh" fieldType="LRoot" ref="x" value="asinh" />
         <putfield class="LRoot" field="asinh" fieldType="LRoot" ref="math" value="asinh" />
         <new def="acosh" class="Ltensorflow/math/acosh" />
+        <putfield class="LRoot" field="acosh" fieldType="LRoot" ref="x" value="acosh" />
         <putfield class="LRoot" field="acosh" fieldType="LRoot" ref="math" value="acosh" />
         <new def="atanh" class="Ltensorflow/math/atanh" />
+        <putfield class="LRoot" field="atanh" fieldType="LRoot" ref="x" value="atanh" />
         <putfield class="LRoot" field="atanh" fieldType="LRoot" ref="math" value="atanh" />
         <new def="log1p" class="Ltensorflow/math/log1p" />
+        <putfield class="LRoot" field="log1p" fieldType="LRoot" ref="x" value="log1p" />
         <putfield class="LRoot" field="log1p" fieldType="LRoot" ref="math" value="log1p" />
         <new def="expm1" class="Ltensorflow/math/expm1" />
+        <putfield class="LRoot" field="expm1" fieldType="LRoot" ref="x" value="expm1" />
         <putfield class="LRoot" field="expm1" fieldType="LRoot" ref="math" value="expm1" />
         <new def="round" class="Ltensorflow/math/round" />
         <putfield class="LRoot" field="round" fieldType="LRoot" ref="x" value="round" />
