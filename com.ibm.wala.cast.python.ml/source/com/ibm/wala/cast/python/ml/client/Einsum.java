@@ -29,13 +29,37 @@ import java.util.Set;
 public class Einsum extends PassThroughUnaryTensorGenerator {
 
   /**
-   * Argument-position constant for the dtype source. Position 0 is {@code equation} (a string, not
-   * a tensor); position 1 is the first tensor input.
+   * Parameter positions and keyword names for {@code tf.einsum(equation, *inputs, **kwargs)}.
+   * Ordinals match the position in {@code tensorflow.xml}'s {@code paramNames} after the implicit
+   * {@code self} receiver. Note that {@code equation} is a string (not a tensor), so the dtype
+   * source is {@code INPUTS} at position 1.
    */
-  private static final int FIRST_TENSOR_INPUT_POSITION = 1;
+  protected enum Parameters {
+    /** The einsum equation string (e.g. {@code "ij,jk->ik"}); not consumed by this generator. */
+    EQUATION,
 
-  /** Keyword name for the first tensor input (the {@code *inputs} varargs). */
-  private static final String FIRST_TENSOR_INPUT_NAME = "inputs";
+    /** The first tensor input (the {@code *inputs} varargs); the dtype source. */
+    INPUTS;
+
+    /**
+     * Lowercase keyword name used in argument-resolution helpers when the call site uses {@code
+     * keyword=value} syntax.
+     *
+     * @return The lowercased enum name (e.g. {@code "inputs"}).
+     */
+    public String getName() {
+      return name().toLowerCase();
+    }
+
+    /**
+     * Positional index of this parameter, excluding the implicit {@code self} receiver.
+     *
+     * @return The zero-based positional index.
+     */
+    public int getIndex() {
+      return ordinal();
+    }
+  }
 
   public Einsum(PointsToSetVariable source) {
     super(source);
@@ -47,12 +71,12 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
 
   @Override
   protected int getInputParameterPosition() {
-    return FIRST_TENSOR_INPUT_POSITION;
+    return Parameters.INPUTS.getIndex();
   }
 
   @Override
   protected String getInputParameterName() {
-    return FIRST_TENSOR_INPUT_NAME;
+    return Parameters.INPUTS.getName();
   }
 
   /**
