@@ -4513,7 +4513,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Verifies that {@code tf.math.argmax(x, axis=0, output_type=tf.int32)} honors the explicit
    * {@code output_type} override and emits an {@code int32}-dtype tensor instead of the {@code
    * int64} default. Exercises the dtype-arg dispatch path on {@link
-   * com.ibm.wala.cast.python.ml.client.Argmax} after the wala/ML#463 fix.
+   * com.ibm.wala.cast.python.ml.client.Argmax} after the wala/ML#463 fix. The fixture's sink {@code
+   * f(x, y)} has two parameters so that each tensor's inferred type can be checked independently.
+   *
+   * <p>Shape on {@code y} (parameter index {@code 3}) is currently ⊤: precise axis-aware shape
+   * composition would require reading {@code input.shape[:axis] + input.shape[axis+1:]}, which
+   * regresses {@code testNeuralNetwork*} via the {@code ElementWiseOperation} cartesian-pair issue
+   * tracked in wala/ML#462. Captured-imprecise per the prefer-observed-assertion convention;
+   * tighten to a precise {@code (3,) int32} once #462 lands.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -4524,7 +4531,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testArgmaxOutputType()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_argmax_output_type.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+        "tf2_test_argmax_output_type.py",
+        "f",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_2_3_FLOAT32),
+            3, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
   }
 
   /**
@@ -4541,7 +4554,55 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testArgminOutputType()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_argmin_output_type.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+        "tf2_test_argmin_output_type.py",
+        "f",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_2_3_FLOAT32),
+            3, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Companion to {@link #testArgmaxOutputType()} that exercises the *single-parameter sink, two
+   * call sites* shape: {@code def f(a): ...; f(x); f(y)}. Parameter {@code a} should union {@code
+   * x}'s and {@code y}'s tensor types across the two call sites &mdash; verifies that the {@code
+   * output_type=tf.int32} override on {@code y} survives the second sink call rather than being
+   * clobbered by the {@code int64} default.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgmaxOutputTypeDoubleSink()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_argmax_output_type_double_sink.py",
+        "f",
+        1,
+        2,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Counterpart of {@link #testArgmaxOutputTypeDoubleSink()} for {@code tf.math.argmin}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgminOutputTypeDoubleSink()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_argmin_output_type_double_sink.py",
+        "f",
+        1,
+        2,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
   }
 
   // wala/ML#449 Tier 7: linspace/broadcast_to. Shape derives from a shape-arg (`num`/`shape`),
