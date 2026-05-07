@@ -8,14 +8,18 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
  * Generator for {@code tf.math.argmax}. Output dtype defaults to {@link DType#INT64} (the TF
  * default); when the call passes an explicit {@code output_type} argument (e.g. {@code
- * output_type=tf.int32}), the inherited dtype-arg machinery in {@link TensorGenerator#getDTypes}
- * resolves it via {@link #getDTypeParameterPosition} / {@link #getDTypeParameterName} and uses the
- * resolved dtype instead of the default — fix for <a
+ * output_type=tf.int32}), the canonical dtype-arg dispatch from {@link TensorGenerator#getDTypes}
+ * is inlined here (in this class's {@link #getDTypes} override; see its Javadoc) to bypass {@link
+ * ReduceMean#getDTypes}, which would otherwise inherit the input tensor's dtype &mdash; the wrong
+ * answer for argmax, which always returns an integer index. The override resolves the {@code
+ * output_type} argument via {@link #getDTypeParameterPosition} / {@link #getDTypeParameterName} and
+ * uses it instead of the default &mdash; fix for <a
  * href="https://github.com/wala/ML/issues/463">wala/ML#463</a>. Output shape is left at ⊤ for now;
  * computing the precise shape (input.shape with the {@code axis} dimension removed) regresses tests
  * such as {@code testNeuralNetwork*}, where the per-context shape union for {@code y_true} (e.g.
@@ -55,12 +59,14 @@ public class Argmax extends ReduceMean {
 
     /**
      * Lowercase keyword name used in argument-resolution helpers when the call site uses {@code
-     * keyword=value} syntax.
+     * keyword=value} syntax. Uses {@link Locale#ROOT} so the conversion is locale-stable (a
+     * Turkish-locale JVM lowercasing {@code DIMENSION} would otherwise produce {@code dımensıon}
+     * with dotless {@code ı}, breaking keyword lookup for {@code dimension}).
      *
      * @return The lowercased enum name (e.g. {@code "output_type"}).
      */
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
 
     /**
