@@ -3,7 +3,6 @@ package com.ibm.wala.cast.python.test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertNotEquals;
 
 import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
@@ -11,7 +10,6 @@ import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
-import com.ibm.wala.ipa.callgraph.propagation.SSAContextInterpreter;
 import com.ibm.wala.ipa.callgraph.propagation.SSAPropagationCallGraphBuilder;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.types.TypeName;
@@ -22,7 +20,7 @@ import java.util.Iterator;
 import java.util.logging.Logger;
 import org.junit.Test;
 
-public class TestClasses extends TestPythonCallGraphShape {
+public class TestClasses extends TestJythonCallGraphShape {
 
   private static final Logger LOGGER = Logger.getLogger(TestClasses.class.getName());
 
@@ -50,7 +48,15 @@ public class TestClasses extends TestPythonCallGraphShape {
   @Test
   public void testClasses1()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    CallGraph CG = process("classes1.py");
+    PythonAnalysisEngine<?> engine = makeEngine("classes1.py");
+    SSAPropagationCallGraphBuilder builder =
+        (SSAPropagationCallGraphBuilder) engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+
+    CAstCallGraphUtil.AVOID_DUMP.set(false);
+    CAstCallGraphUtil.dumpCG(builder.getCFAContextInterpreter(), builder.getPointerAnalysis(), CG);
+    System.err.println("Call graph:\n" + CG);
+
     verifyGraphAssertions(CG, assertionsClasses1);
   }
 
@@ -128,57 +134,58 @@ public class TestClasses extends TestPythonCallGraphShape {
         (SSAPropagationCallGraphBuilder) engine.defaultCallGraphBuilder();
     CallGraph CG = builder.makeCallGraph(builder.getOptions());
     System.err.println(CG);
-    CAstCallGraphUtil.AVOID_DUMP = false;
-    CAstCallGraphUtil.dumpCG(
-        (SSAContextInterpreter) builder.getContextInterpreter(), builder.getPointerAnalysis(), CG);
     verifyGraphAssertions(CG, assertionsClasses3);
   }
 
   protected static final Object[][] externalClassAssertions =
       new Object[][] {
-        new Object[] {ROOT, new String[] {"script client.py"}},
+        new Object[] {ROOT, new String[] {"script classes4_client.py"}},
         new Object[] {
-          "script client.py",
+          "script classes4_client.py",
           new String[] {
-            "script client.py/f",
+            "script classes4_client.py/f",
           }
         },
-        // TODO: Re-add once https://github.com/wala/ML/issues/146 is fixed.
-        /*
         new Object[] {
-          "script client.py/f",
+          "script classes4_client.py/f",
           new String[] {
-            "script client.py/C",
+            "script classes4.py/C",
           }
         }
-        */
       };
 
-  /** Can we find a class (and initialize it) from another file? */
+  /**
+   * Regression guard for [wala/ML#146](https://github.com/wala/ML/issues/146) ("Can't find external
+   * classes"). The analyzer should resolve {@code C}'s constructor from {@code classes4_client.py}
+   * even though {@code C} is defined in a separate module {@code classes4.py}.
+   *
+   * <p>This test originally documented the bug as a known failure; the bug has since been fixed by
+   * a separate change on master, so this is now a positive regression test. The split-module
+   * fixture ({@code classes4_client.py} importing from {@code classes4.py}) was renamed from {@code
+   * client.py} on this PR's revival to avoid colliding with master's {@code client.py}, which is a
+   * different test fixture for [wala/ML#211](https://github.com/wala/ML/issues/211).
+   */
   @Test
   public void testExternalClass()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    CallGraph callGraph = this.process("client.py", "classes4.py");
+    CallGraph callGraph = this.process("classes4_client.py", "classes4.py");
 
     verifyGraphAssertions(callGraph, externalClassAssertions);
 
-    Collection<CGNode> nodes = this.getNodes(callGraph, "script client.py/f");
+    Collection<CGNode> nodes = this.getNodes(callGraph, "script classes4_client.py/f");
     assertEquals(1, nodes.size());
     CGNode f = nodes.iterator().next();
 
     Iterator<CGNode> succNodes = callGraph.getSuccNodes(f);
-    // TODO: Change to assertTrue() once https://github.com/wala/ML/issues/146 is fixed.
-    assertFalse(succNodes.hasNext());
+    assertTrue(succNodes.hasNext());
 
-    CGNode node =
-        f; // TODO: Change to succNodes.next() once https://github.com/wala/ML/issues/146 is fixed.
+    CGNode node = succNodes.next();
     assertFalse("Expecting only one callee.", succNodes.hasNext());
 
     IMethod method = node.getMethod();
     IClass declaringClass = method.getDeclaringClass();
     TypeName name = declaringClass.getName();
 
-    // TODO: Change to assertEquals() once https://github.com/wala/ML/issues/146 is fixed.
-    assertNotEquals("Lscript classes4.py/C", name.toString());
+    assertEquals("Lscript classes4.py/C", name.toString());
   }
 }

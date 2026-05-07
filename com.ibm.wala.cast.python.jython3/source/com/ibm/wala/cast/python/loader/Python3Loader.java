@@ -1,4 +1,4 @@
-/******************************************************************************
+/*
  * Copyright (c) 2018 IBM Corporation.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -7,8 +7,10 @@
  *
  * Contributors:
  *     IBM Corporation - initial API and implementation
- *****************************************************************************/
+ */
 package com.ibm.wala.cast.python.loader;
+
+import static java.util.logging.Level.WARNING;
 
 import com.ibm.wala.cast.ir.translator.ConstantFoldingRewriter;
 import com.ibm.wala.cast.ir.translator.RewritingTranslatorToCAst;
@@ -29,17 +31,25 @@ import com.ibm.wala.classLoader.Module;
 import com.ibm.wala.classLoader.ModuleEntry;
 import com.ibm.wala.classLoader.SourceModule;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.logging.Logger;
 import org.python.core.PyObject;
+import org.python.core.PySyntaxError;
+import org.python.core.PyUnicode;
+import org.python.util.PythonInterpreter;
 
 public class Python3Loader extends PythonLoader {
-  public Python3Loader(IClassHierarchy cha, IClassLoader parent) {
-    super(cha, parent);
+
+  private static final Logger logger = Logger.getLogger(Python3Loader.class.getName());
+
+  public Python3Loader(IClassHierarchy cha, IClassLoader parent, List<File> pythonPath) {
+    super(cha, parent, pythonPath);
   }
 
-  public Python3Loader(IClassHierarchy cha) {
-    super(cha);
+  public Python3Loader(IClassHierarchy cha, List<File> pythonPath) {
+    super(cha, pythonPath);
   }
 
   @Override
@@ -48,7 +58,8 @@ public class Python3Loader extends PythonLoader {
     RewritingTranslatorToCAst x =
         new RewritingTranslatorToCAst(
             M,
-            new PythonModuleParser((SourceModule) M, typeDictionary, allModules) {
+            new PythonModuleParser(
+                (SourceModule) M, typeDictionary, allModules, this.getPythonPath()) {
               @Override
               public CAstEntity translateToCAst() throws Error, IOException {
                 CAstEntity ce = super.translateToCAst();
@@ -91,15 +102,34 @@ public class Python3Loader extends PythonLoader {
             return new ConstantFoldingRewriter(ast) {
               @Override
               protected Object eval(CAstOperator op, Object lhs, Object rhs) {
+                String s = lhs + " " + op.getValue() + " " + rhs;
+
+                PythonInterpreter ip = Python3Interpreter.getInterp();
+                if (ip == null) {
+                  // Jython init failed (memoized in Python3Interpreter). Skip constant folding
+                  // for this expression; analysis remains correct, just less precise. Don't log
+                  // an "Evaluating:" entry — nothing is actually evaluated, and the underlying
+                  // init failure was already announced from getInterp().
+                  return null;
+                }
+                logger.info(() -> "Evaluating: " + s);
+
+                // Use the Python interpreter to evaluate the expression.
+                PyUnicode unicode = new PyUnicode(s);
+                PyObject x;
+
                 try {
-                  PyObject x =
-                      Python3Interpreter.getInterp().eval(lhs + " " + op.getValue() + " " + rhs);
-                  if (x.isNumberType()) {
-                    System.err.println(lhs + " " + op.getValue() + " " + rhs + " -> " + x.asInt());
-                    return x.asInt();
-                  }
-                } catch (Exception e) {
-                  // interpreter died for some reason, so no information.
+                  x = ip.eval(unicode);
+                } catch (PySyntaxError e) {
+                  // Handle syntax errors gracefully.
+                  logger.log(WARNING, e, () -> "Syntax error in expression: " + unicode);
+                  return null;
+                }
+
+                if (x.isNumberType()) {
+                  // If the result is a number, return its integer value.
+                  logger.info(() -> s + " -> " + x.asInt());
+                  return x.asInt();
                 }
                 return null;
               }

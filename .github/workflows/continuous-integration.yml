@@ -1,50 +1,116 @@
 name: Continuous integration
 on:
   push:
-    branches: [ "master" ]
+    # GitHub Merge Queue creates branches under `refs/heads/gh-readonly-queue/...` and pushes
+    # the queue's test commit there. That push fires this workflow's `push:` trigger AS WELL
+    # AS the `merge_group:` trigger — two runs in the same concurrency group, where the second
+    # cancels the first. The cancelled run is reported as failed to the merge queue, which
+    # kicks the PR out (per the PR #217 fix's known incompleteness — Copilot caught this on
+    # the equivalent Hybridize PR #443). Filtering out queue branches from `push:` lets
+    # `merge_group:` be the sole trigger for queue-branch pushes.
+    branches-ignore:
+      - 'gh-readonly-queue/**'
   pull_request:
-    branches: [ "master" ]
+  merge_group:
 concurrency:
-  group: ${{ github.ref }}
-  cancel-in-progress: true
+  # Group includes the workflow name so merge_group runs from different workflows don't collide.
+  # Cancel-in-progress is allowed for `pull_request` (new push to PR supersedes prior runs) and
+  # for non-tag `push` events (commits to a branch supersede prior runs); explicitly NOT for
+  # `merge_group` events, because GitHub Merge Queue spawns concurrent runs on the queue branch
+  # and cancellation marks the cancelled run as failed, kicking the PR out of the queue.
+  # Tags also run to completion so the deploy gate isn't accidentally cancelled.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')) }}
+permissions:
+  contents: read
+  packages: write
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
     - name: Check out wala/ML sources
-      uses: actions/checkout@v3
-    - name: Set up JDK 11
-      uses: actions/setup-java@v3
+      uses: actions/checkout@v6
       with:
-        java-version: '11'
+        submodules: 'recursive'
+    - name: Set up JDK 25
+      uses: actions/setup-java@v5
+      with:
+        java-version: '25'
         distribution: 'temurin'
         cache: maven
-    - name: Checkout wala/IDE sources.
-      run: git clone --depth=50 https://github.com/wala/IDE ${{ runner.temp }}/IDE
-    - name: Checkout ponder-lab/jython3 sources.
-      run: git clone --depth=50 https://github.com/ponder-lab/jython3.git ${{ runner.temp }}/jython3
-    - name: Install Jython3.
-      run: |
-        pushd ${{ runner.temp }}/jython3
-        ant
-        pushd dist
-        mvn install:install-file -Dfile=./jython-dev.jar -DgroupId="org.python" -DartifactId="jython3" -Dversion="0.0.1-SNAPSHOT" -Dpackaging="jar" -DgeneratePom=true
-        popd
-        popd
-      shell: bash
-    - name: Install IDE.
-      run: |
-        pushd ${{ runner.temp }}/IDE/com.ibm.wala.cast.lsp
-        mvn clean install -B -q -DskipTests
-        popd
-    - name: Install Python.
-      uses: actions/setup-python@v5
+    - name: Install Python
+      uses: actions/setup-python@v6
       with:
         python-version: '3.10'
         cache: 'pip'
-    - name: Install Python dependencies.
+    - name: Install Python dependencies
       run: pip install -r requirements.txt
-    - name: Check formatting with spotless.
+    - name: Check formatting with Spotless
       run: mvn spotless:check -B
+    - name: Check formatting with Black
+      run: black --fast --check --extend-exclude IDE --extend-exclude jython3 .
+    - name: Install Jython3
+      run: |
+        pushd jython3
+        ant
+        pushd dist
+        mvn install:install-file -Dfile=./jython-dev.jar -DgroupId="org.python" -DartifactId="jython3" -Dversion="0.0.1-SNAPSHOT" -Dpackaging="jar" -DgeneratePom=true -B
+        popd
+        popd
+      shell: bash
+    - name: Install IDE
+      run: |
+        pushd IDE/com.ibm.wala.cast.lsp
+        mvn install -B -q -DskipTests
+        popd
     - name: Build with Maven
-      run: mvn -Dlogging.config.file=\${maven.multiModuleProjectDirectory}/logging.ci.properties clean verify -B
+      run: mvn -Dlogging.config.file=./logging.ci.properties verify -B -Pjacoco
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v6
+      with:
+        token: $CODECOV_TOKEN
+        slug: ponder-lab/ML
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    # Verify any tag-push deploy is on a commit that's an ancestor of master
+    # (per wala/ML#421). Without this, a feature-branch tag could trigger a
+    # release deploy. Also confirm the tag name is semver-shaped — the deploy
+    # step's `if:` does the same regex via `endsWith`/`startsWith`, but we
+    # additionally guard the ancestor check itself so non-semver tags don't
+    # error out the run on the merge-base call. The `actions/checkout` above
+    # is shallow so we need a fetch first to get master's history.
+    - name: Verify tag is a semver release tag on master
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        if ! [[ "${{ github.ref_name }}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+          echo "Tag ${{ github.ref_name }} is not semver-shaped; skipping deploy gate."
+          echo "is_semver_release=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        git fetch --no-tags --depth=1 origin master
+        git merge-base --is-ancestor ${{ github.sha }} origin/master
+        echo "is_semver_release=true" >> "$GITHUB_OUTPUT"
+      id: tag_check
+      shell: bash
+    - name: Deploy with Maven
+      run: mvn -s .ci.settings.xml -Dgithub.username=$GITHUB_USERNAME -Dgithub.password=$GITHUB_TOKEN deploy -DskipTests -B
+      env:
+        GITHUB_USERNAME: ${{ secrets.GITHUB_USERNAME }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Hybrid deploy gate (per wala/ML#421). Master pushes deploy SNAPSHOT
+      # versions (continuous SNAPSHOT publishing for downstream consumers
+      # like ponder-lab/Hybridize-Functions-Refactoring). Tag pushes deploy
+      # the immutable release. Tag pushes are critical for releases: the
+      # canonical `mvn release:prepare` flow lands two consecutive master
+      # commits ("Prepare for release X.Y.0." and "Set version for next
+      # development iteration to ...") in quick succession, and
+      # `concurrency: cancel-in-progress` cancels the first one — so the
+      # release version is only ever briefly on master and the
+      # SNAPSHOT-bump's run cancels the release run before its deploy step
+      # completes. Tag pushes are exempt from `cancel-in-progress` (per the
+      # workflow's `concurrency` block) and therefore reliably finish the
+      # deploy. The semver-tag regex (in `tag_check` above) keeps legacy /
+      # non-release tags (`todo_review`, `jython3`, etc.) from re-deploying;
+      # the ancestor-of-master check in the same step blocks feature-branch
+      # tags from sneaking through.
+      if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/master' || (startsWith(github.ref, 'refs/tags/') && steps.tag_check.outputs.is_semver_release == 'true')) }}

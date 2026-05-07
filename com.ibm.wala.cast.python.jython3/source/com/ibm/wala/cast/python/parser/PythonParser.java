@@ -1,4 +1,4 @@
-/******************************************************************************
+/*
  * Copyright (c) 2018 IBM Corporation.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -7,8 +7,15 @@
  *
  * Contributors:
  *     IBM Corporation - initial API and implementation
- *****************************************************************************/
+ */
 package com.ibm.wala.cast.python.parser;
+
+import static com.ibm.wala.cast.python.util.Util.CLASS_METHOD_ANNOTATION_NAME;
+import static com.ibm.wala.cast.python.util.Util.DYNAMIC_ANNOTATION_KEY;
+import static com.ibm.wala.cast.python.util.Util.STATIC_METHOD_ANNOTATION_NAME;
+import static com.ibm.wala.cast.python.util.Util.getNames;
+import static com.ibm.wala.cast.python.util.Util.removeFileProtocolFromPath;
+import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.ir.translator.AbstractClassEntity;
 import com.ibm.wala.cast.ir.translator.AbstractCodeEntity;
@@ -18,7 +25,9 @@ import com.ibm.wala.cast.ir.translator.TranslatorToCAst;
 import com.ibm.wala.cast.python.ir.PythonCAstToIRTranslator;
 import com.ibm.wala.cast.python.loader.DynamicAnnotatableEntity;
 import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.cast.python.util.Util;
 import com.ibm.wala.cast.tree.CAst;
+import com.ibm.wala.cast.tree.CAstAnnotation;
 import com.ibm.wala.cast.tree.CAstEntity;
 import com.ibm.wala.cast.tree.CAstNode;
 import com.ibm.wala.cast.tree.CAstQualifier;
@@ -26,6 +35,7 @@ import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
 import com.ibm.wala.cast.tree.CAstType;
 import com.ibm.wala.cast.tree.impl.AbstractSourcePosition;
 import com.ibm.wala.cast.tree.impl.CAstControlFlowRecorder;
+import com.ibm.wala.cast.tree.impl.CAstImpl;
 import com.ibm.wala.cast.tree.impl.CAstNodeTypeMapRecorder;
 import com.ibm.wala.cast.tree.impl.CAstOperator;
 import com.ibm.wala.cast.tree.impl.CAstSourcePositionRecorder;
@@ -39,17 +49,23 @@ import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.ReverseIterator;
+import java.io.File;
 import java.io.IOException;
 import java.io.Reader;
 import java.net.URL;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.function.Supplier;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.python.antlr.PythonTree;
 import org.python.antlr.ast.Assert;
 import org.python.antlr.ast.Assign;
@@ -129,7 +145,11 @@ import org.python.antlr.base.slice;
 import org.python.antlr.base.stmt;
 import org.python.core.PyObject;
 
-public abstract class PythonParser<T> extends AbstractParser<T> implements TranslatorToCAst {
+public abstract class PythonParser<T> extends AbstractParser implements TranslatorToCAst {
+
+  private static CAst Ast = new CAstImpl();
+
+  private static final Logger LOGGER = getLogger(PythonParser.class.getName());
 
   private static boolean COMPREHENSION_IR = true;
 
@@ -147,7 +167,7 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
         }
       };
 
-  interface WalkContext extends TranslatorToCAst.WalkContext<WalkContext, PythonTree> {
+  public interface WalkContext extends TranslatorToCAst.WalkContext<WalkContext, PythonTree> {
 
     default void addDefinedName(String name) {
       getParent().addDefinedName(name);
@@ -275,7 +295,7 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
     }
   }
 
-  public class CAstVisitor extends AbstractParser<T>.CAstVisitor implements VisitorIF<CAstNode> {
+  public class CAstVisitor extends AbstractParser.CAstVisitor implements VisitorIF<CAstNode> {
     private final PythonParser.WalkContext context;
     private final WalaPythonParser parser;
 
@@ -971,7 +991,11 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
 
     @Override
     public CAstNode visitEllipsis(Ellipsis arg0) throws Exception {
-      return fail(arg0);
+      // Emit a distinct constant node for `...` so downstream analyses (e.g., ndarray subscript
+      // shape inference) can tell ellipsis apart from `None`, which `visitNameConstant` currently
+      // translates to Java `null`. Prior behavior returned `CAstNode.EMPTY` via `fail(arg0)`,
+      // which collapsed ellipsis and `None` into indistinguishable IR. See wala/ML#356.
+      return notePosition(Ast.makeConstant(PythonTypes.ELLIPSIS), arg0);
     }
 
     @Override
@@ -1152,6 +1176,38 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
       }
       ;
 
+      Collection<CAstAnnotation> annotations = new ArrayList<>();
+
+      for (CAstNode node : dynamicAnnotations) {
+        CAstAnnotation cAstAnnotation =
+            new CAstAnnotation() {
+              @Override
+              public CAstType getType() {
+                return PythonTypes.CAST_DYNAMIC_ANNOTATION;
+              }
+
+              @Override
+              public Map<String, Object> getArguments() {
+                Map<String, Object> map = new HashMap<>();
+                map.put(DYNAMIC_ANNOTATION_KEY, node);
+                return map;
+              }
+
+              @Override
+              public String toString() {
+                return this.getArguments().getOrDefault(DYNAMIC_ANNOTATION_KEY, this).toString();
+              }
+            };
+
+        annotations.add(cAstAnnotation);
+
+        if (LOGGER.isLoggable(Level.INFO))
+          Util.getName(cAstAnnotation).ifPresent(n -> LOGGER.info("Found decorator: " + n));
+      }
+
+      boolean staticMethod =
+          getNames(annotations).stream().anyMatch(s -> s.equals(STATIC_METHOD_ANNOTATION_NAME));
+
       CAstType functionType;
       boolean isMethod =
           context.entity().getKind() == CAstEntity.TYPE_ENTITY
@@ -1167,7 +1223,7 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
 
           @Override
           public boolean isStatic() {
-            return false;
+            return staticMethod;
           }
         }
         ;
@@ -1196,14 +1252,25 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
           implements PythonGlobalsEntity, DynamicAnnotatableEntity {
         private final java.util.Set<String> downwardGlobals;
 
+        private final Collection<CAstAnnotation> annotations;
+
         @Override
         public Iterable<CAstNode> dynamicAnnotations() {
           return dynamicAnnotations;
         }
 
-        protected PythonCodeEntity(CAstType type, java.util.Set<String> downwardGlobals) {
+        protected PythonCodeEntity(
+            CAstType type,
+            java.util.Set<String> downwardGlobals,
+            Collection<CAstAnnotation> annotations) {
           super(type);
           this.downwardGlobals = downwardGlobals;
+          this.annotations = annotations;
+        }
+
+        @Override
+        public Collection<CAstAnnotation> getAnnotations() {
+          return this.annotations;
         }
 
         @Override
@@ -1214,8 +1281,15 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
         @Override
         public CAstNode getAST() {
           if (function instanceof FunctionDef) {
-            if (isMethod) {
-              CAst Ast = PythonParser.this.Ast;
+
+            boolean classMethod =
+                getNames(annotations).stream()
+                    .anyMatch(s -> s.equals(CLASS_METHOD_ANNOTATION_NAME));
+
+            // Only add object metadata for non-static and non-class methods.
+            if (isMethod && !staticMethod && !classMethod) {
+              CAst Ast = PythonParser.Ast;
+
               CAstNode[] newNodes = new CAstNode[nodes.length + 2];
               System.arraycopy(nodes, 0, newNodes, 2, nodes.length);
 
@@ -1244,13 +1318,13 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
                               Ast.makeConstant("$self")),
                           Ast.makeNode(CAstNode.VAR, Ast.makeConstant(getArgumentNames()[1]))));
 
-              return PythonParser.this.Ast.makeNode(CAstNode.BLOCK_STMT, newNodes);
+              return PythonParser.Ast.makeNode(CAstNode.BLOCK_STMT, newNodes);
             } else {
-              return PythonParser.this.Ast.makeNode(CAstNode.BLOCK_STMT, nodes);
+              return PythonParser.Ast.makeNode(CAstNode.BLOCK_STMT, nodes);
             }
           } else {
-            return PythonParser.this.Ast.makeNode(
-                CAstNode.RETURN, PythonParser.this.Ast.makeNode(CAstNode.BLOCK_EXPR, nodes));
+            return PythonParser.Ast.makeNode(
+                CAstNode.RETURN, PythonParser.Ast.makeNode(CAstNode.BLOCK_EXPR, nodes));
           }
         }
 
@@ -1303,7 +1377,7 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
 
       java.util.Set<String> downwardGlobals = HashSetFactory.make();
 
-      PythonCodeEntity fun = new PythonCodeEntity(functionType, downwardGlobals);
+      PythonCodeEntity fun = new PythonCodeEntity(functionType, downwardGlobals, annotations);
 
       PythonParser.FunctionContext child =
           new PythonParser.FunctionContext(context, fun, downwardGlobals, function);
@@ -1916,11 +1990,29 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
                 acceptOrNull(S.getInternalStep())),
             arg0);
       } else if (s instanceof ExtSlice) {
-        CAstNode res = notePosition(arg0.getInternalValue().accept(this), arg0);
-        for (slice d : ((ExtSlice) s).getInternalDims()) {
-          res = Ast.makeNode(CAstNode.OBJECT_REF, res, d.accept(this));
+        // Build a tuple-valued subscript matching the Index-with-List case above so
+        // downstream analyses (e.g., `NdarraySubscriptOperation`'s ellipsis/newaxis
+        // classification) see `x[d0, d1, ...]` as a single `slice(value, d0, d1, ...)` CALL
+        // whose member-ref allocation is a tuple. The previous chained-OBJECT_REF emission
+        // flattened `x[..., tf.newaxis]` into two sequential attribute accesses, hiding the
+        // tuple structure and breaking tuple-shape detection for any subscript routed through
+        // this branch. Python's AST uses `ExtSlice` for multi-element subscripts where at
+        // least one element isn't a pure-constant list literal (e.g., an attribute access
+        // like `tf.newaxis`); semantically it's still a tuple subscript and this restores
+        // that representation. Matches the precedent established for the pure-constant
+        // tuple case.
+        ExtSlice extSlice = (ExtSlice) s;
+        int numDims = extSlice.getInternalDims().size();
+        CAstNode[] cs = new CAstNode[numDims + 3];
+        cs[0] = Ast.makeNode(CAstNode.VAR, Ast.makeConstant("slice"));
+        cs[1] = Ast.makeNode(CAstNode.EMPTY);
+        cs[2] = acceptOrNull(arg0.getInternalValue());
+        int i = 0;
+        for (slice d : extSlice.getInternalDims()) {
+          cs[i + 3] = d.accept(this);
+          i++;
         }
-        return res;
+        return notePosition(Ast.makeNode(CAstNode.CALL, cs), arg0);
 
       } else {
         return acceptOrNull(arg0.getInternalValue());
@@ -2270,8 +2362,18 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
 
   private final CAstTypeDictionaryImpl<String> types;
 
-  protected PythonParser(CAstTypeDictionaryImpl<String> types) {
+  /**
+   * The <a href="https://docs.python.org/3/using/cmdline.html#envvar-PYTHONPATH">PYTHONPATH</a> to
+   * use in the analysis.
+   *
+   * @apiNote PYTHONPATH is currently only supported for Python 3.
+   * @see https://docs.python.org/3/tutorial/modules.html#the-module-search-path.
+   */
+  protected java.util.List<File> pythonPath;
+
+  protected PythonParser(CAstTypeDictionaryImpl<String> types, java.util.List<File> pythonPath) {
     this.types = types;
+    this.pythonPath = pythonPath;
   }
 
   @Override
@@ -2310,7 +2412,9 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
                       }
                     });
               });
-      throw new TranslatorToCAst.Error(warnings);
+
+      // Log the parsing errors (best-effort).
+      warnings.forEach(w -> LOGGER.warning(() -> "Encountered parsing problem: " + w));
     }
 
     try {
@@ -2335,6 +2439,36 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
           context = new PythonParser.FunctionContext(root, this, root.downwardGlobals(), pythonAst);
           visitor = makeVisitor(context, parser);
           cast = pythonAst.accept(visitor);
+        }
+
+        @Override
+        public String getSignature() {
+          java.util.List<File> pythonPath = getPythonPath();
+
+          // If the PYTHONPATH isn't specified.
+          if (pythonPath.isEmpty())
+            // Revert to just the name.
+            return this.getName();
+
+          File file = this.getFile();
+
+          for (File pathEntry : pythonPath) {
+            String pathEntryAbsolutePath = pathEntry.getAbsoluteFile().getPath();
+            // Remove protocol.
+            pathEntryAbsolutePath = removeFileProtocolFromPath(pathEntryAbsolutePath);
+
+            String fileAbsolutePath = file.getAbsolutePath();
+
+            if (fileAbsolutePath.startsWith(pathEntryAbsolutePath)) {
+              // Found it.
+              Path filePath = Paths.get(fileAbsolutePath);
+              Path pathEntryPath = Paths.get(pathEntryAbsolutePath);
+
+              Path scriptRelativePath = pathEntryPath.relativize(filePath);
+              return "script " + scriptRelativePath.toString();
+            }
+          }
+          return null; // Not found.
         }
 
         private final WalkContext context;
@@ -2383,5 +2517,17 @@ public abstract class PythonParser<T> extends AbstractParser<T> implements Trans
 
   public void print(PyObject ast) {
     System.err.println(ast.getClass());
+  }
+
+  /**
+   * Gets the <a
+   * href="https://docs.python.org/3/using/cmdline.html#envvar-PYTHONPATH">PYTHONPATH</a> to use in
+   * the analysis.
+   *
+   * @apiNote PYTHONPATH is currently only supported for Python 3.
+   * @see https://docs.python.org/3/tutorial/modules.html#the-module-search-path.
+   */
+  public java.util.List<File> getPythonPath() {
+    return pythonPath;
   }
 }

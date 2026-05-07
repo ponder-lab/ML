@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
 import com.ibm.wala.cast.loader.AstMethod;
 // import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
@@ -15,6 +16,7 @@ import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.SSAPropagationCallGraphBuilder;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
@@ -22,6 +24,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import org.junit.Test;
@@ -41,11 +44,14 @@ public class TestTensorflowModelParsing extends TestPythonMLCallGraphShape {
     CallGraph CG = builder.makeCallGraph(builder.getOptions());
     assertNotNull(CG);
 
-    // CAstCallGraphUtil.AVOID_DUMP = false;
-    // CAstCallGraphUtil.dumpCG(builder.getCFAContextInterpreter(), builder.getPointerAnalysis(),
-    // CG);
-
-    // System.err.println(CG);
+    if (logger.isLoggable(Level.FINE)) {
+      CAstCallGraphUtil.AVOID_DUMP.set(false);
+      CAstCallGraphUtil.dumpCG(
+          ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
+          builder.getPointerAnalysis(),
+          CG);
+      logger.fine("Call graph:\n" + CG);
+    }
 
     TensorTypeAnalysis analysis = E.performAnalysis(builder);
 
@@ -70,7 +76,7 @@ public class TestTensorflowModelParsing extends TestPythonMLCallGraphShape {
             // associate the method to the pointer key.
             methodSignatureToPointerKeys.compute(
                 methodSignature,
-                (k, v) -> {
+                (_, v) -> {
                   if (v == null) v = new HashSet<>();
                   v.add(localPointerKey);
                   return v;
@@ -79,8 +85,8 @@ public class TestTensorflowModelParsing extends TestPythonMLCallGraphShape {
             logger.warning(() -> "Encountered pointer key type: " + pointerKey.getClass() + ".");
         });
 
-    // we should have 3 methods.
-    assertEquals(3, methodSignatureToPointerKeys.size());
+    // we should have 2 methods.
+    assertEquals(2, methodSignatureToPointerKeys.size());
 
     final String addFunctionSignature = "script " + filename + ".add.do()LRoot;";
 
@@ -88,22 +94,30 @@ public class TestTensorflowModelParsing extends TestPythonMLCallGraphShape {
     Set<LocalPointerKey> addFunctionPointerKeys =
         methodSignatureToPointerKeys.get(addFunctionSignature);
 
-    // two tensor parameters, a and b.
-    assertEquals(2, addFunctionPointerKeys.size());
+    // three tensor parameters, a, b, and the result of a + b.
+    assertEquals(3, addFunctionPointerKeys.size());
 
-    // should have value numbers of 2 and 3.
+    // should have value numbers of 2, 3, and 4.
     Set<Integer> valueNumberSet =
         addFunctionPointerKeys.stream()
             .map(LocalPointerKey::getValueNumber)
             .collect(Collectors.toSet());
-    assertEquals(2, valueNumberSet.size());
+    assertEquals(3, valueNumberSet.size());
     assertTrue(valueNumberSet.contains(2));
     assertTrue(valueNumberSet.contains(3));
+    assertTrue(valueNumberSet.contains(4));
 
     // check the source positions of each function parameter.
     for (LocalPointerKey lpk : addFunctionPointerKeys) {
       AstMethod method = (AstMethod) lpk.getNode().getIR().getMethod();
       int paramIndex = lpk.getValueNumber() - 1;
+
+      int numberOfParams = method.getNumberOfParameters();
+
+      if (paramIndex >= numberOfParams)
+        // only consider parameters.
+        continue;
+
       Position parameterPosition = method.getParameterPosition(paramIndex);
 
       // check the line.

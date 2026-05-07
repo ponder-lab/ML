@@ -283,6 +283,7 @@ public class PythonTurtleAnalysisEngine
     }
   }
 
+  @SuppressWarnings("unused")
   @Override
   public LabeledGraph<TurtlePath, EdgeType> performAnalysis(PropagationCallGraphBuilder builder)
       throws CancelException {

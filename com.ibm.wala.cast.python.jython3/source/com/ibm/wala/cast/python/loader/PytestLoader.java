@@ -22,6 +22,8 @@ import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.Pair;
+import java.io.File;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -33,13 +35,13 @@ public class PytestLoader extends Python3Loader {
 
   private final Map<String, Map<String, Integer>> testParams = HashMapFactory.make();
 
-  public PytestLoader(IClassHierarchy cha) {
-    super(cha);
+  public PytestLoader(IClassHierarchy cha, List<File> pythonPath) {
+    super(cha, pythonPath);
   }
 
   @Override
   protected TranslatorToIR initTranslator(Set<Pair<CAstEntity, ModuleEntry>> topLevelEntities) {
-    return new PythonCAstToIRTranslator(this, topLevelEntities) {
+    return new PythonCAstToIRTranslator(this) {
 
       private boolean isPytestEntry(CAstEntity F) {
         if (F.getType() instanceof CAstType.Function) {
@@ -120,7 +122,7 @@ public class PytestLoader extends Python3Loader {
           testParams.put(fnName, testArgValues);
 
           int idx = 0;
-          @SuppressWarnings("unchecked")
+          @SuppressWarnings({"unchecked", "rawtypes"})
           Pair<String, Integer>[] keys = new Pair[testArgValues.size()];
           Set<Entry<String, Integer>> parameters = testArgValues.entrySet();
           for (Entry<String, Integer> p : parameters) {

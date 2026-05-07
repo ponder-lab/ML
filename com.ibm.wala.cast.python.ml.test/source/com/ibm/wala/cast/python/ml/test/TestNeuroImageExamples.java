@@ -1,11 +1,14 @@
 package com.ibm.wala.cast.python.ml.test;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
+
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
+import java.net.URISyntaxException;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -16,25 +19,31 @@ public class TestNeuroImageExamples extends TestPythonMLCallGraphShape {
 
   @Test
   public void testEx1CG()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+      throws ClassHierarchyException,
+          IllegalArgumentException,
+          CancelException,
+          IOException,
+          URISyntaxException {
     checkTensorOps(
         Ex1URL,
         (PropagationCallGraphBuilder cgBuilder, CallGraph CG, TensorTypeAnalysis result) -> {
-          String in = "[{[D:Constant,64000] of pixel}]";
-          String out = "[{[D:Constant,40, D:Constant,40, D:Constant,40, D:Constant,1] of pixel}]";
+          String in = "[{[D:Constant,64000] of " + FLOAT32.name().toLowerCase() + "}]";
+          String out =
+              "[{[D:Constant,40, D:Constant,40, D:Constant,40, D:Constant,1] of "
+                  + FLOAT32.name().toLowerCase()
+                  + "}]";
           checkTensorOp(cgBuilder, CG, result, "reshape", in, out);
 
-          in = "[{[D:Constant,40, D:Constant,40, D:Constant,40, D:Constant,1] of pixel}]";
+          in =
+              "[{[D:Constant,40, D:Constant,40, D:Constant,40, D:Constant,1] of "
+                  + FLOAT32.name().toLowerCase()
+                  + "}]";
           checkTensorOp(cgBuilder, CG, result, "conv3d", in, null);
         });
   }
 
-  /**
-   * FIXME: Point to master branch of nilearn once https://github.com/ponder-lab/ML/issues/4 is
-   * fixed.
-   */
   private static final String Ex2URL =
-      "https://raw.githubusercontent.com/nilearn/nilearn/d43706724a72df089080f62d9f1d9c319fa391b7/examples/03_connectivity/plot_group_level_connectivity.py";
+      "https://raw.githubusercontent.com/nilearn/nilearn/refs/heads/main/examples/03_connectivity/plot_group_level_connectivity.py";
 
   @Test
   public void testEx2CG()

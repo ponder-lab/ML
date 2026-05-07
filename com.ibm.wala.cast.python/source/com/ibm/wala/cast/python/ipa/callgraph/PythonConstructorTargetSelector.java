@@ -1,4 +1,4 @@
-/******************************************************************************
+/*
  * Copyright (c) 2018 IBM Corporation.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -7,15 +7,20 @@
  *
  * Contributors:
  *     IBM Corporation - initial API and implementation
- *****************************************************************************/
+ */
 package com.ibm.wala.cast.python.ipa.callgraph;
 
+import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
+import static com.ibm.wala.cast.python.types.Util.getGlobalName;
+import static com.ibm.wala.cast.python.types.Util.makeGlobalRef;
+
+import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
 import com.ibm.wala.cast.loader.DynamicCallSiteReference;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
-import com.ibm.wala.cast.python.loader.PythonLoader.PythonClass;
+import com.ibm.wala.cast.python.loader.IPythonClass;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
@@ -27,16 +32,27 @@ import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.MethodTargetSelector;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.ipa.summaries.MethodSummary;
+import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSAInstructionFactory;
+import com.ibm.wala.ssa.SSANewInstruction;
+import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.Pair;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
+import java.util.logging.Logger;
 
 public class PythonConstructorTargetSelector implements MethodTargetSelector {
+
+  private static final Logger LOGGER =
+      Logger.getLogger(PythonConstructorTargetSelector.class.getName());
+
   private final Map<IClass, IMethod> ctors = HashMapFactory.make();
 
   private final MethodTargetSelector base;
@@ -48,9 +64,12 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
   @Override
   public IMethod getCalleeTarget(CGNode caller, CallSiteReference site, IClass receiver) {
     if (receiver != null) {
+      LOGGER.fine("Getting callee target for receiver: " + receiver);
+      LOGGER.fine("Calling method name is: " + caller.getMethod().getName());
+
       IClassHierarchy cha = receiver.getClassHierarchy();
       if (cha.isSubclassOf(receiver, cha.lookupClass(PythonTypes.object))
-          && receiver instanceof PythonClass) {
+          && (receiver instanceof IPythonClass)) {
         if (!ctors.containsKey(receiver)) {
           TypeReference ctorRef =
               TypeReference.findOrCreate(
@@ -66,12 +85,68 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
                   receiver.getReference(), site.getDeclaredTarget().getSelector());
           PythonSummary ctor = new PythonSummary(ref, params);
           SSAInstructionFactory insts = PythonLanguage.Python.instructionFactory();
+
+          // Copy metadata from the original do() method if it exists.
+          // This is useful for summarized methods like Dense.do() that carry extra parameters.
+          MethodReference originalDoRef =
+              MethodReference.findOrCreate(receiver.getReference(), DO_METHOD_NAME, "()LRoot;");
+          IClass ctorContainer = cha.lookupClass(originalDoRef.getDeclaringClass());
+          IMethod originalDo =
+              ctorContainer == null ? null : ctorContainer.getMethod(originalDoRef.getSelector());
+          if (originalDo instanceof PythonSummarizedFunction) {
+            MethodSummary originalSummary = null;
+            try {
+              java.lang.reflect.Method getSummary = originalDo.getClass().getMethod("getSummary");
+              originalSummary = (MethodSummary) getSummary.invoke(originalDo);
+            } catch (Exception e) {
+              try {
+                java.lang.reflect.Field f =
+                    com.ibm.wala.ipa.summaries.SummarizedMethod.class.getDeclaredField("summary");
+                f.setAccessible(true);
+                originalSummary = (MethodSummary) f.get(originalDo);
+              } catch (Exception e2) {
+              }
+            }
+
+            if (originalSummary != null) {
+              // Copy statements, but map parameter uses.
+              // Parameters in original do() are 1, 2, ...
+              // Parameters in our new ctor are also 1, 2, ...
+              // However, we need to ensure the number of parameters matches.
+              for (SSAInstruction instOrig : originalSummary.getStatements()) {
+                if (instOrig != null
+                    && !(instOrig instanceof SSANewInstruction)
+                    && !(instOrig instanceof SSAReturnInstruction)) {
+                  ctor.addStatement(instOrig);
+                  pc++;
+                }
+              }
+              if (originalSummary.getValueNames() != null) {
+                ctor.setValueNames(originalSummary.getValueNames());
+              }
+            }
+          }
+
           ctor.addStatement(
               insts.NewInstruction(pc, inst, NewSiteReference.make(pc, PythonTypes.object)));
           pc++;
 
-          PythonClass x = (PythonClass) receiver;
-          for (TypeReference r : x.getInnerReferences()) {
+          Collection<TypeReference> innerReferences = Collections.emptyList();
+          Collection<MethodReference> methodReferences = new ArrayList<>();
+
+          if (receiver instanceof IPythonClass) {
+            IPythonClass x = (IPythonClass) receiver;
+            innerReferences = x.getInnerReferences();
+            methodReferences = x.getMethodReferences();
+          } else {
+            for (IMethod m : receiver.getDeclaredMethods()) {
+              if (!m.isInit() && !m.isClinit()) {
+                methodReferences.add(m.getReference());
+              }
+            }
+          }
+
+          for (TypeReference r : innerReferences) {
             int orig_t = v++;
             String typeName = r.getName().toString();
             typeName = typeName.substring(typeName.lastIndexOf('/') + 1);
@@ -86,7 +161,7 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
             pc++;
           }
 
-          for (MethodReference r : x.getMethodReferences()) {
+          for (MethodReference r : methodReferences) {
             int f = v++;
             ctor.addStatement(
                 insts.NewInstruction(
@@ -129,6 +204,27 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
                         PythonTypes.Root)));
             pc++;
 
+            // Add a metadata variable that refers to the declaring class.
+            // NOTE: Per https://docs.python.org/3/library/functions.html#classmethod, "[i]f a class
+            // method is called for a derived class, the derived class object is passed as the
+            // implied first argument." I'm unsure whether `receiver` can refer to the derived
+            // class especially in light of https://github.com/wala/ML/issues/107.
+            int classVar = v++;
+            String globalName = getGlobalName(r);
+            FieldReference globalRef = makeGlobalRef(receiver.getClassLoader(), globalName);
+
+            ctor.addStatement(new AstGlobalRead(pc++, classVar, globalRef));
+
+            ctor.addStatement(
+                insts.PutInstruction(
+                    pc++,
+                    f,
+                    classVar,
+                    FieldReference.findOrCreate(
+                        PythonTypes.Root,
+                        Atom.findOrCreateUnicodeAtom("$class"),
+                        PythonTypes.Root)));
+
             ctor.addStatement(
                 insts.PutInstruction(
                     pc,
@@ -151,24 +247,29 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
                         PythonTypes.Root)));
             pc++;
 
-            int[] cps = new int[init.getNumberOfParameters()];
+            int numberOfParameters = init.getNumberOfParameters();
+            int[] cps = new int[numberOfParameters > 1 ? numberOfParameters : 2];
             cps[0] = fv;
             cps[1] = inst;
-            for (int j = 2; j < init.getNumberOfParameters(); j++) {
+            for (int j = 2; j < numberOfParameters; j++) {
               cps[j] = j;
             }
 
             int result = v++;
             int except = v++;
             CallSiteReference cref = new DynamicCallSiteReference(site.getDeclaredTarget(), pc);
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            Pair<String, Integer>[] keywordParams = new Pair[0];
             ctor.addStatement(
-                new PythonInvokeInstruction(2, result, except, cref, cps, new Pair[0]));
+                new PythonInvokeInstruction(2, result, except, cref, cps, keywordParams));
             pc++;
           }
 
           ctor.addStatement(insts.ReturnInstruction(pc++, inst, false));
 
-          ctor.setValueNames(Collections.singletonMap(1, Atom.findOrCreateUnicodeAtom("self")));
+          if (ctor.getValueNames() == null || ctor.getValueNames().isEmpty()) {
+            ctor.setValueNames(Collections.singletonMap(1, Atom.findOrCreateUnicodeAtom("self")));
+          }
 
           ctors.put(receiver, new PythonSummarizedFunction(ref, ctor, receiver));
         }

@@ -1,4 +1,4 @@
-/******************************************************************************
+/*
  * Copyright (c) 2018 IBM Corporation.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -7,7 +7,7 @@
  *
  * Contributors:
  *     IBM Corporation - initial API and implementation
- *****************************************************************************/
+ */
 package com.ibm.wala.cast.python.loader;
 
 import com.ibm.wala.cast.ir.translator.ConstantFoldingRewriter;
@@ -48,7 +48,8 @@ public class Python2Loader extends PythonLoader {
     RewritingTranslatorToCAst x =
         new RewritingTranslatorToCAst(
             M,
-            new PythonModuleParser((SourceModule) M, typeDictionary, allModules) {
+            new PythonModuleParser(
+                (SourceModule) M, typeDictionary, allModules, this.getPythonPath()) {
               @Override
               public CAstEntity translateToCAst() throws Error, IOException {
                 CAstEntity ce = super.translateToCAst();

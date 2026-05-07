@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.test;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
+
 import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
@@ -26,6 +28,7 @@ import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.CancelException;
 import com.ibm.wala.util.collections.HashSetFactory;
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.util.Set;
 import org.junit.Test;
 
@@ -50,15 +53,31 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testEx1Tensors() throws IllegalArgumentException, CancelException, IOException {
+  public void testEx1Tensors()
+      throws IllegalArgumentException, CancelException, IOException, URISyntaxException {
     checkTensorOps(
         Ex1URL,
         (PropagationCallGraphBuilder cgBuilder, CallGraph CG, TensorTypeAnalysis result) -> {
-          String in = "[{[D:Symbolic,n, D:Compound,[D:Constant,28, D:Constant,28]] of pixel}]";
-          String out = "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of pixel}]";
+          CAstCallGraphUtil.AVOID_DUMP.set(false);
+          CAstCallGraphUtil.dumpCG(
+              (SSAContextInterpreter) cgBuilder.getContextInterpreter(),
+              cgBuilder.getPointerAnalysis(),
+              CG);
+
+          String in =
+              "[{[D:Symbolic,n, D:Compound,[D:Constant,28, D:Constant,28]] of "
+                  + FLOAT32.name().toLowerCase()
+                  + "}]";
+          String out =
+              "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of "
+                  + FLOAT32.name().toLowerCase()
+                  + "}]";
           checkTensorOp(cgBuilder, CG, result, "reshape", in, out);
 
-          in = "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of pixel}]";
+          in =
+              "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of "
+                  + FLOAT32.name().toLowerCase()
+                  + "}]";
           checkTensorOp(cgBuilder, CG, result, "conv2d", in, null);
         });
   }
@@ -73,21 +92,28 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
   }
 
   @Test
-  public void testEx2Tensors() throws IllegalArgumentException, CancelException, IOException {
+  public void testEx2Tensors()
+      throws IllegalArgumentException, CancelException, IOException, URISyntaxException {
     checkTensorOps(
         Ex2URL,
         (PropagationCallGraphBuilder cgBuilder, CallGraph CG, TensorTypeAnalysis result) -> {
-          CAstCallGraphUtil.AVOID_DUMP = false;
+          CAstCallGraphUtil.AVOID_DUMP.set(false);
           CAstCallGraphUtil.dumpCG(
               (SSAContextInterpreter) cgBuilder.getContextInterpreter(),
               cgBuilder.getPointerAnalysis(),
               CG);
 
-          String in = "[{[D:Symbolic,?, D:Constant,784] of pixel}]";
-          String out = "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of pixel}]";
+          String in = "[{[D:Symbolic,?, D:Constant,784] of " + FLOAT32.name().toLowerCase() + "}]";
+          String out =
+              "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of "
+                  + FLOAT32.name().toLowerCase()
+                  + "}]";
           checkTensorOp(cgBuilder, CG, result, "reshape", in, out);
 
-          in = "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of pixel}]";
+          in =
+              "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of "
+                  + FLOAT32.name().toLowerCase()
+                  + "}]";
           checkTensorOp(cgBuilder, CG, result, "conv2d", in, null);
 
           /*
@@ -104,7 +130,11 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
       "https://raw.githubusercontent.com/tensorflow/tensorflow/r1.12/tensorflow/examples/tutorials/mnist/mnist_softmax.py";
 
   private void testMnistSoftmax(String url)
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+      throws ClassHierarchyException,
+          IllegalArgumentException,
+          CancelException,
+          IOException,
+          URISyntaxException {
     Set<SSAInstruction> goodCalls = HashSetFactory.make();
     checkTensorOps(
         url,
@@ -179,7 +209,11 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
 
   @Test
   public void testEx3CG()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+      throws ClassHierarchyException,
+          IllegalArgumentException,
+          CancelException,
+          IOException,
+          URISyntaxException {
     testMnistSoftmax(Ex3URL);
   }
 
@@ -188,7 +222,11 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
 
   @Test
   public void testEx4CG()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+      throws ClassHierarchyException,
+          IllegalArgumentException,
+          CancelException,
+          IOException,
+          URISyntaxException {
     testMnistSoftmax(Ex4URL);
   }
 
@@ -197,12 +235,19 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
 
   @Test
   public void testEx5CG()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+      throws ClassHierarchyException,
+          IllegalArgumentException,
+          CancelException,
+          IOException,
+          URISyntaxException {
     checkTensorOps(
         Ex5URL,
         (PropagationCallGraphBuilder cgBuilder, CallGraph CG, TensorTypeAnalysis result) -> {
-          String in = "[{[D:Symbolic,?, D:Constant,784] of pixel}]";
-          String out = "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of pixel}]";
+          String in = "[{[D:Symbolic,?, D:Constant,784] of " + FLOAT32.name().toLowerCase() + "}]";
+          String out =
+              "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of "
+                  + FLOAT32.name().toLowerCase()
+                  + "}]";
           checkTensorOp(cgBuilder, CG, result, "reshape", in, out);
 
           TypeReference feedDictClass =

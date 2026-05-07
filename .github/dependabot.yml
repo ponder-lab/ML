@@ -1,0 +1,59 @@
+# Dependabot configuration. See:
+# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# Approach: dependabot opens grouped PRs for build-only plugins and
+# Python tooling (where the patch/minor risk profile makes batch review
+# safe), and individual PRs for runtime libraries and the WALA pin
+# (where each bump can affect analysis behaviour and deserves its own
+# review thread).
+
+version: 2
+updates:
+  - package-ecosystem: "maven"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      # Maven build-only plugins. These don't ship into the analyzer's
+      # runtime classpath, so a patch/minor bump is unlikely to change
+      # analysis output. Group them into a single weekly PR.
+      maven-plugins:
+        applies-to: version-updates
+        patterns:
+          - "org.apache.maven.plugins:*"
+          - "org.codehaus.mojo:*"
+          - "com.diffplug.spotless:*"
+          - "com.puppycrawl.tools:*"
+          - "org.jacoco:*"
+        update-types:
+          - "minor"
+          - "patch"
+    # Runtime libraries (`com.google.guava:*`, `commons-cli:*`,
+    # `commons-csv:*`, `org.json:*`, `org.jetbrains:annotations`) and the
+    # WALA pin (`com.ibm.wala:*`, parameterized by `wala.version`) are
+    # *deliberately* not grouped — they ship into the analyzer and any
+    # bump can shift analysis behaviour or surface compatibility breaks
+    # in the points-to / call-graph layer. Keep them as individual PRs.
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      python-tooling:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actions versions in `.github/workflows/*.yml`. Previously
+  # untracked. Security-relevant for action supply-chain; weekly
+  # checks, no grouping (each action is independent and the volume is
+  # low).
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
