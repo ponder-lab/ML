@@ -384,10 +384,12 @@ public class RaggedConstant extends Constant {
               .filter(Objects::nonNull)
               .collect(toSet());
 
+      Set<List<Dimension<?>>> rawInnerShapeArguments = this.getPossibleInnerShapeArguments(builder);
+      // Soundness: a `null` from `getPossibleInnerShapeArguments` means `inner_shape` was
+      // present but unparseable — the overall ragged-constant shape must be ⊤ in that case.
+      if (rawInnerShapeArguments == null) return null;
       Set<List<Dimension<?>>> innerShapeArguments =
-          this.getPossibleInnerShapeArguments(builder).stream()
-              .filter(Objects::nonNull)
-              .collect(toSet());
+          rawInnerShapeArguments.stream().filter(Objects::nonNull).collect(toSet());
 
       if (rankArguments.isEmpty())
         // Default ragged rank.
@@ -498,12 +500,11 @@ public class RaggedConstant extends Constant {
             builder, this.getInnerShapeParameterPosition(), getInnerShapeParameterName());
 
     if (pointsToSet != null && !pointsToSet.isEmpty()) {
-      Set<List<Dimension<?>>> shapes = this.getShapesFromShapeArgument(builder, pointsToSet);
-      // After wala/ML#471 the helper can return null when the shape arg is
-      // an unrecognized form. The caller treats empty as "no inner shape
-      // info; use defaults", which matches the lattice meaning of null
-      // here, so collapse null to emptySet at the boundary.
-      return shapes == null ? emptySet() : shapes;
+      // After wala/ML#471 the helper returns `null` when `inner_shape` is present but
+      // unparseable. Propagate that upward — the caller short-circuits to ⊤ for the overall
+      // ragged-constant shape. Empty (no PTS recovered, or `inner_shape` not provided at all) is
+      // distinct from `null` and means "use defaults".
+      return this.getShapesFromShapeArgument(builder, pointsToSet);
     } else return emptySet();
   }
 

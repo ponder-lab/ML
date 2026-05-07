@@ -147,11 +147,11 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
-                Set<List<Dimension<?>>> sub =
-                    this.getShapesFromShapeArgument(
-                        builder, builder.getPointerAnalysis().getPointsToSet(pk));
-                // Soundness: an unparseable component represents real shape uncertainty for
-                // this index — propagate ⊤ rather than returning the parseable subset.
+                OrdinalSet<InstanceKey> fieldPts = builder.getPointerAnalysis().getPointsToSet(pk);
+                // Soundness: empty field PTS would throw `IllegalArgumentException` from the
+                // helper; treat as ⊤ for this index instead. Same for an unparseable result.
+                if (fieldPts == null || fieldPts.isEmpty()) return null;
+                Set<List<Dimension<?>>> sub = this.getShapesFromShapeArgument(builder, fieldPts);
                 if (sub == null) return null;
                 ret.addAll(sub);
               }
@@ -191,11 +191,10 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
-                Set<List<Dimension<?>>> sub =
-                    this.getShapesFromShapeArgument(
-                        builder, builder.getPointerAnalysis().getPointsToSet(pk));
-                // Soundness: in the legacy `output_shapes` path too, an unparseable component
-                // shape for this index represents real shape uncertainty — propagate ⊤.
+                OrdinalSet<InstanceKey> fieldPts = builder.getPointerAnalysis().getPointsToSet(pk);
+                // Same empty-PTS guard as the structured-signature path above.
+                if (fieldPts == null || fieldPts.isEmpty()) return null;
+                Set<List<Dimension<?>>> sub = this.getShapesFromShapeArgument(builder, fieldPts);
                 if (sub == null) return null;
                 ret.addAll(sub);
               }
@@ -251,11 +250,11 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
             IField f = builder.getClassHierarchy().resolveField(subscript);
             if (f != null) {
               PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
-              Set<List<Dimension<?>>> sub =
-                  this.getShapesFromShapeArgument(
-                      builder, builder.getPointerAnalysis().getPointsToSet(pk));
-              // Soundness: an unparseable component of a structured signature represents real
-              // element-shape uncertainty — propagate ⊤ rather than the parseable subset.
+              OrdinalSet<InstanceKey> fieldPts = builder.getPointerAnalysis().getPointsToSet(pk);
+              // Soundness: empty field PTS would throw `IllegalArgumentException` from the
+              // helper; treat as ⊤ instead. Same for an unparseable result.
+              if (fieldPts == null || fieldPts.isEmpty()) return null;
+              Set<List<Dimension<?>>> sub = this.getShapesFromShapeArgument(builder, fieldPts);
               if (sub == null) return null;
               ret.addAll(sub);
             }
@@ -283,8 +282,12 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
 
     if (outputShapesPts != null && !outputShapesPts.isEmpty()) {
       Set<List<Dimension<?>>> ret = this.getShapesFromShapeArgument(builder, outputShapesPts);
-      // If we found any shapes in the output_shapes, return them.
-      if (ret != null && !ret.isEmpty()) {
+      // Soundness: a `null` from the helper means the `output_shapes` argument was present but
+      // unparseable — falling through to the scalar default would be unsound (the runtime shape
+      // could be anything). Return ⊤ instead. Empty (helper recovered no shape values from a
+      // recognized structure) still falls through to the scalar default.
+      if (ret == null) return null;
+      if (!ret.isEmpty()) {
         return ret;
       }
     }
