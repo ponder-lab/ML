@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 
 
-def f(a):
+def f(a, b):
     pass
 
 
@@ -13,5 +13,11 @@ assert x_train.shape == (8982,)
 assert y_train.shape == (8982,)
 assert x_test.shape == (2246,)
 assert y_test.shape == (2246,)
+# `x_train` and `x_test` are numpy `object` arrays at runtime (each element is a
+# variable-length list of integer-encoded tokens). The analyzer's `DType` lattice has no
+# `object` representation and reports `UNKNOWN` — see wala/ML#488. The Python assert here
+# documents runtime truth; the JUnit expectation captures the analyzer's current imprecise
+# answer until #488 lands.
+assert x_train.dtype == np.dtype("object")
 assert y_train.dtype == np.int64
-f(y_train)
+f(x_train, y_train)

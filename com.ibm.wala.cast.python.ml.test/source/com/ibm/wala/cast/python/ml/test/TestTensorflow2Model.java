@@ -333,6 +333,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_404_13_FLOAT64 =
       new TensorType(FLOAT_64, asList(new NumericDim(404), new NumericDim(13)));
 
+  private static final TensorType TENSOR_404_FLOAT64 =
+      new TensorType(FLOAT_64, asList(new NumericDim(404)));
+
+  private static final TensorType TENSOR_60000_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(60000)));
+
+  private static final TensorType TENSOR_50000_1_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(50000), new NumericDim(1)));
+
+  private static final TensorType TENSOR_8982_UNKNOWN =
+      new TensorType(UNKNOWN, asList(new NumericDim(8982)));
+
   /** A {@code float32} tensor whose shape cannot be statically inferred. */
   private static final TensorType TENSOR_UNKNOWN_SHAPE_FLOAT32 = new TensorType(FLOAT_32, null);
 
@@ -4707,8 +4719,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Generator test for {@code tf.keras.datasets.fashion_mnist.load_data()}. Shapes and dtype are
-   * identical to {@code mnist.load_data()}: {@code (60000, 28, 28)} of {@code uint8} for the
-   * training-image array.
+   * identical to {@code mnist.load_data()}. Asserts on both unpacked arrays: {@code x_train}
+   * ({@code (60000, 28, 28)} of {@code uint8}) at {@code vn=2} and {@code y_train} ({@code
+   * (60000,)} of {@code uint8}) at {@code vn=3}.
    */
   @Test
   public void testFashionMnistLoadData()
@@ -4716,36 +4729,61 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test(
         "tf2_test_fashion_mnist_load_data.py",
         "f",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_60000_28_28_UINT8)));
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_60000_28_28_UINT8), 3, Set.of(TENSOR_60000_UINT8)));
   }
 
   /**
-   * Generator test for {@code tf.keras.datasets.cifar100.load_data()}. Shapes and dtype are
-   * identical to {@code cifar10.load_data()}: {@code (50000, 32, 32, 3)} of {@code uint8} for the
-   * training-image array.
+   * Generator test for {@code tf.keras.datasets.cifar100.load_data()}. Shapes are identical to
+   * {@code cifar10.load_data()}; the modeling reuses {@link
+   * com.ibm.wala.cast.python.ml.client.Cifar10InputData}, so the inferred dtype is {@code uint8}
+   * for both arrays. Asserts on both unpacked arrays: {@code x_train} at {@code vn=2} and {@code
+   * y_train} at {@code vn=3}.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/487">wala/ML#487</a>): the inferred {@code
+   * uint8} for {@code y_train} is imprecise — the runtime dtype of {@code cifar100}'s labels is
+   * {@code int64} (the Python fixture asserts that). Tighten the JUnit expectation to {@link
+   * TensorType} with {@code int64} dtype once the modeling is updated.
    */
   @Test
   public void testCifar100LoadData()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_cifar100_load_data.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_50000_32_32_3_UINT8)));
+        "tf2_test_cifar100_load_data.py",
+        "f",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_50000_32_32_3_UINT8), 3, Set.of(TENSOR_50000_1_UINT8)));
   }
 
   /**
-   * Generator test for {@code tf.keras.datasets.reuters.load_data()}. The {@code y_train} array has
-   * shape {@code (8982,)} of {@code int64} (newswire topic labels).
+   * Generator test for {@code tf.keras.datasets.reuters.load_data()}. Asserts on both unpacked
+   * arrays: {@code x_train} ({@code (8982,)} of unknown dtype — newswires are variable-length
+   * integer-encoded sequences, modeled as ⊤-dtype) at {@code vn=2}, and {@code y_train} ({@code
+   * (8982,)} of {@code int64} — newswire topic labels) at {@code vn=3}.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/488">wala/ML#488</a>): the inferred {@code
+   * unknown} dtype for {@code x_train} is imprecise — the runtime dtype is numpy {@code object}
+   * (the Python fixture asserts that). Tighten to a dedicated {@code OBJECT} dtype if/when the
+   * lattice gains one.
    */
   @Test
   public void testReutersLoadData()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_reuters_load_data.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_8982_INT64)));
+    test(
+        "tf2_test_reuters_load_data.py",
+        "f",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_8982_UNKNOWN), 3, Set.of(TENSOR_8982_INT64)));
   }
 
   /**
-   * Generator test for {@code tf.keras.datasets.boston_housing.load_data()}. The {@code x_train}
-   * array has shape {@code (404, 13)} of {@code float64} (small numeric regression dataset).
+   * Generator test for {@code tf.keras.datasets.boston_housing.load_data()}. Asserts on both
+   * unpacked arrays: {@code x_train} ({@code (404, 13)} of {@code float64} — features) at {@code
+   * vn=2}, and {@code y_train} ({@code (404,)} of {@code float64} — regression targets) at {@code
+   * vn=3}.
    */
   @Test
   public void testBostonHousingLoadData()
@@ -4753,9 +4791,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test(
         "tf2_test_boston_housing_load_data.py",
         "f",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_404_13_FLOAT64)));
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_404_13_FLOAT64), 3, Set.of(TENSOR_404_FLOAT64)));
   }
 
   @Test
