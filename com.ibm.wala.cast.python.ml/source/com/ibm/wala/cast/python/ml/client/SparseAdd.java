@@ -92,10 +92,14 @@ public class SparseAdd extends ElementWiseOperation {
         if (field != null) {
           PointerKey pk = builder.getPointerKeyForInstanceField(ik, field);
           OrdinalSet<InstanceKey> fieldPointsTo = pointerAnalysis.getPointsToSet(pk);
-          if (fieldPointsTo == null || fieldPointsTo.isEmpty()) continue;
+          // Soundness: empty `dense_shape` PTS is "shape unknown" (the field exists but the
+          // analysis couldn't recover any concrete shape values), not "skip this SparseTensor".
+          // Skipping would conflate ⊤ with ⊥ and under-approximate the result for the whole
+          // sparse-tensor value.
+          if (fieldPointsTo == null || fieldPointsTo.isEmpty()) return null;
           Set<List<Dimension<?>>> sub = this.getShapesFromShapeArgument(builder, fieldPointsTo);
-          // Soundness: if any dense_shape is unparseable, the overall shape is ⊤. Returning a
-          // partial set would under-approximate (the unparseable component represents a real
+          // Same rationale: if any dense_shape is unparseable, the overall shape is ⊤. Returning
+          // a partial set would under-approximate (the unparseable component represents a real
           // possibility we can't ignore).
           if (sub == null) return null;
           ret.addAll(sub);

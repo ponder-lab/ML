@@ -194,7 +194,10 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
                 Set<List<Dimension<?>>> sub =
                     this.getShapesFromShapeArgument(
                         builder, builder.getPointerAnalysis().getPointsToSet(pk));
-                if (sub != null) ret.addAll(sub);
+                // Soundness: in the legacy `output_shapes` path too, an unparseable component
+                // shape for this index represents real shape uncertainty — propagate ⊤.
+                if (sub == null) return null;
+                ret.addAll(sub);
               }
             }
           }
