@@ -2,10 +2,14 @@ coverage:
   status:
     project:
       default:
-        informational: true
+        target: auto
+        threshold: 1%
+        informational: false
     patch:
       default:
-        informational: true
+        target: auto
+        threshold: 2%
+        informational: false
 
 # Disable the per-PR Codecov comment (was previously the primary review surface, but its
 # per-push edits flood notification inboxes). Coverage data remains accessible via:
