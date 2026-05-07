@@ -346,21 +346,25 @@ public abstract class TensorGenerator {
                 for (List<Dimension<?>> nestedShape : nestedShapes)
                   tensorDimensions.add(new CompoundDim(nestedShape));
               } else {
-                LOGGER.fine(
+                // WARNING (not FINE) so the missing-modeling signal stays loud — the legacy
+                // contract was to throw `IllegalStateException` here, which propagated all the
+                // way up and aborted the analysis. The new contract returns ⊤ so the analysis
+                // continues, but we still want operators to know that modeling work is needed.
+                LOGGER.warning(
                     "Unrecognized instance-field allocation for shape arg: "
                         + pointerKeyForInstanceField
                         + " -> "
                         + instanceFieldIK
-                        + "; returning null (⊤).");
+                        + "; returning null (⊤). Modeling for this shape form is missing.");
                 return null;
               }
             } else {
-              LOGGER.fine(
+              LOGGER.warning(
                   "Unrecognized instance-field key for shape arg: "
                       + pointerKeyForInstanceField
                       + " -> "
                       + instanceFieldIK
-                      + "; returning null (⊤).");
+                      + "; returning null (⊤). Modeling for this shape form is missing.");
               return null;
             }
           }
@@ -462,12 +466,12 @@ public abstract class TensorGenerator {
         if (specShapes == null) return null;
         ret.addAll(specShapes);
       } else {
-        LOGGER.fine(
+        LOGGER.warning(
             "Unrecognized shape-argument allocation: "
                 + reference
                 + " for source "
                 + this.getSource()
-                + "; returning null (⊤).");
+                + "; returning null (⊤). Modeling for this shape form is missing.");
         return null;
       }
     }
