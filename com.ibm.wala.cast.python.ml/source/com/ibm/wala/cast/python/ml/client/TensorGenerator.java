@@ -162,7 +162,7 @@ public abstract class TensorGenerator {
    * garbage-collected. Safe to call more than once.
    *
    * @param builder The builder whose cache entries should be cleared.
-   * @implNote {@code WARNED_UNREGISTERED_MANUAL_TYPES} is intentionally <em>not</em> cleared here.
+   * @implNote {@link #WARNED_UNREGISTERED_MANUAL_TYPES} is intentionally <em>not</em> cleared here.
    *     The dedup is at JVM scope so each unregistered type warns exactly once total &mdash;
    *     re-warning per test would still flood logs (~1500 firings on the current suite). The set is
    *     small and the goal is "make each gap audible once," not "track gaps per analysis."
