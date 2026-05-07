@@ -13,6 +13,7 @@ import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -1936,6 +1937,39 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression guard for {@code tf.distribute.MirroredStrategy.distribute_datasets_from_function}.
+   * The fixture defines {@code dataset_fn} as a top-level function and registers it only via the
+   * {@code strategy.distribute_datasets_from_function(dataset_fn)} callback &mdash; with no other
+   * call site. The analyzer currently doesn't model that callback registration, so {@code
+   * dataset_fn} never enters the call graph; this test captures that observed absence as a positive
+   * assertion.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/113">wala/ML#113</a>): when callback
+   * registration is modeled, the assertion will flip from absent to present &mdash; replace the
+   * body with {@code test("tf2_test_callbacks3.py", "dataset_fn", 1, 0)} (one tensor parameter
+   * since {@code input_context} flows into the body; zero local tensor variables, since the locals
+   * are dataset / int values).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCallbacks3() throws ClassHierarchyException, CancelException, IOException {
+    String filename = "tf2_test_callbacks3.py";
+    PythonTensorAnalysisEngine engine = makeEngine(emptyList(), new String[] {filename});
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    addPytestEntrypoints(builder);
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+    assertNotNull(CG);
+    String fnSignature = "script " + filename + ".dataset_fn.do()LRoot;";
+    assertFalse(
+        "dataset_fn should not yet be in the call graph; the analyzer doesn't trace through"
+            + " distribute_datasets_from_function's callback registration (wala/ML#113).",
+        getFunctionSignatures(CG).anyMatch(s -> s.equals(fnSignature)));
+  }
+
+  /**
    * {@code train_step(images, generator, discriminator, ...)} receives {@code image_batch} from the
    * training loop inside {@code train}. {@code image_batch} comes from iterating a dataset built
    * from mnist data via {@code train_images[..., None].astype(np.float32)} and {@code
@@ -1954,12 +1988,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * hardcoding {@code mnist.load_data()} as an intrinsic (per the plan discussed on branch 267)
    * would unblock this test without needing the general annotation framework (wala/ML#370).
    */
-  @Test
-  public void testCallbacks3()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_callbacks3.py", "dataset_fn", 0, 0);
-  }
-
   @Test
   public void testGanTutorial()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
