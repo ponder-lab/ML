@@ -36,13 +36,37 @@ import java.util.Set;
 public class Meshgrid extends TensorGenerator implements TupleElementProvider {
 
   /**
-   * Argument-position constant for the dtype source. Position 0 is the first {@code *args} tensor;
-   * meshgrid uses pure varargs (no leading non-tensor argument).
+   * Parameter positions and keyword names for {@code tf.meshgrid(*xi, indexing='xy')}. Meshgrid
+   * uses pure varargs &mdash; the first user-facing positional argument is the first tensor in the
+   * {@code *args} varpack &mdash; so {@code Parameters.ARGS.getIndex() == 0} resolves to that first
+   * tensor. {@code INDEXING} captures the optional keyword argument that selects between Cartesian
+   * (`'xy'`) and matrix (`'ij'`) ordering; the analyzer does not consume it.
    */
-  private static final int FIRST_INPUT_POSITION = 0;
+  protected enum Parameters {
+    /** First input tensor in the {@code *args} varargs; the dtype source. */
+    ARGS,
 
-  /** Keyword name for the first input (the {@code *args} varargs). */
-  private static final String FIRST_INPUT_NAME = "args";
+    /** Keyword controlling Cartesian (`'xy'`) vs matrix (`'ij'`) ordering; not consumed. */
+    INDEXING;
+
+    /**
+     * Lowercase keyword name used in argument-resolution helpers.
+     *
+     * @return The lowercased enum name (e.g. {@code "args"}).
+     */
+    public String getName() {
+      return name().toLowerCase();
+    }
+
+    /**
+     * Positional index of this parameter, excluding the implicit {@code self} receiver.
+     *
+     * @return The zero-based positional index.
+     */
+    public int getIndex() {
+      return ordinal();
+    }
+  }
 
   public Meshgrid(PointsToSetVariable source) {
     super(source);
@@ -68,7 +92,7 @@ public class Meshgrid extends TensorGenerator implements TupleElementProvider {
   @Override
   public Set<DType> getDTypesForIndex(PropagationCallGraphBuilder builder, int index) {
     OrdinalSet<InstanceKey> inputPts =
-        this.getArgumentPointsToSet(builder, FIRST_INPUT_POSITION, FIRST_INPUT_NAME);
+        this.getArgumentPointsToSet(builder, Parameters.ARGS.getIndex(), Parameters.ARGS.getName());
     if (inputPts == null || inputPts.isEmpty()) return EnumSet.of(DType.UNKNOWN);
     Set<DType> dtypes = this.getDTypesOfValue(builder, inputPts);
     return dtypes == null || dtypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : dtypes;

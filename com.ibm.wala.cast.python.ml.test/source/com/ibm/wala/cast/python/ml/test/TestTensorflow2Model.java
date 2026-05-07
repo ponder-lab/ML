@@ -7177,6 +7177,41 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
 
+  /**
+   * Companion to {@link #testMeshgrid}: 2-parameter sink {@code f(X, Y)} so the analyzer's
+   * per-parameter typing on `tf.meshgrid`'s tuple result can be observed at distinct value numbers.
+   * The two parameters split the leak asymmetrically:
+   *
+   * <ul>
+   *   <li>vn=2 ({@code X}) shows the full {@code float32}/⊤-dtype union &mdash; the meshgrid XML
+   *       only allocates field-0 of the tuple, so when {@code X} aliases that slot through PA
+   *       propagation it picks up both the precise float32 alloc and the ⊤ tuple-slot leak.
+   *   <li>vn=3 ({@code Y}) collapses to just the precise {@code float32} &mdash; the second
+   *       meshgrid output's allocation site doesn't reach this parameter through the PA graph, so
+   *       the ⊤ leak doesn't surface.
+   * </ul>
+   *
+   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/480">wala/ML#480</a> lands, narrow
+   * vn=2's assertion to {@code Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)} (vn=3 is already there).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMeshgridXY()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_meshgrid_xy.py",
+        "f",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE),
+            3, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
   @Test
   public void testConvertToTensor4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
