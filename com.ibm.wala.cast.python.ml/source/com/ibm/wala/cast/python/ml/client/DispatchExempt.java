@@ -7,22 +7,26 @@ import java.lang.annotation.Target;
 
 /**
  * Marks a {@link TensorGenerator} subclass as exempt from the dispatch-coverage meta-test (see
- * {@code TestTensorGeneratorDispatchCoverage} in the test module). Use sparingly, and only when the
- * subclass is genuinely not reachable from either dispatch entry point — i.e., it's constructed by
- * other generators rather than from {@link TensorGeneratorFactory#getGenerator} or {@link
- * TensorGenerator#createManualGenerator}.
+ * {@code TestTensorGeneratorDispatchCoverage} in the test module). The annotation suppresses the
+ * "must be constructed in {@link TensorGeneratorFactory#getGenerator} or {@link
+ * TensorGenerator#createManualGenerator}" check for the annotated subclass. Use sparingly.
  *
- * <p>Examples of legitimate exemptions:
+ * <p>Two distinct uses:
  *
- * <ul>
- *   <li>Delegation-only subclasses that are constructed by another generator rather than by either
- *       dispatch table directly.
- *   <li>Anonymous inline subclasses (which can't be annotated anyway — the meta-test naturally
- *       skips these via the {@link Class#getCanonicalName} check).
- * </ul>
+ * <ol>
+ *   <li><strong>Permanent exemption — delegation-only subclasses</strong>: a generator that is
+ *       constructed by another generator rather than by either dispatch table directly. The
+ *       annotation here documents an architectural choice; no follow-up action is implied.
+ *   <li><strong>Transient exemption — known orphan pending wire-or-delete</strong>: a generator
+ *       that has no construction site anywhere in the codebase (orphan flagged by the meta-test
+ *       itself). The annotation here is a TODO marker — the {@link #value} should reference the
+ *       filed sub-issue tracking the wire-or-delete decision, and the annotation should be removed
+ *       when that decision lands.
+ * </ol>
  *
- * <p>Abstract bases are skipped automatically by the meta-test (via {@link
- * java.lang.reflect.Modifier#isAbstract}); they don't need this annotation.
+ * <p>Anonymous inline subclasses (which can't be annotated anyway) are skipped by the meta-test via
+ * the {@link Class#getCanonicalName} check. Abstract bases are skipped via {@link
+ * java.lang.reflect.Modifier#isAbstract}; they don't need this annotation.
  *
  * <p>This is a stop-gap until the dispatch-table unification proposed in wala/ML#469 lands. After
  * that, this annotation can be retired.

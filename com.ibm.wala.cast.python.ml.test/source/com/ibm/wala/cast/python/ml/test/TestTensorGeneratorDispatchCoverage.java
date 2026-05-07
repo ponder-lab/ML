@@ -16,10 +16,17 @@ import java.util.stream.Stream;
 import org.junit.Test;
 
 /**
- * Meta-test asserting that every concrete {@link TensorGenerator} subclass under {@code
- * com.ibm.wala.cast.python.ml.client} is reachable from at least one of the two dispatch tables —
- * {@link com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory#getGenerator} or {@link
+ * Meta-test asserting that every concrete <em>top-level</em> {@link TensorGenerator} subclass under
+ * {@code com.ibm.wala.cast.python.ml.client} is reachable from at least one of the two dispatch
+ * tables — {@link com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory#getGenerator} or {@link
  * TensorGenerator#createManualGenerator}.
+ *
+ * <p><strong>Scope:</strong> the enumeration walks {@code .java} source files and derives the FQN
+ * from the path, which assumes one top-level class per file. Nested {@link TensorGenerator}
+ * subclasses (e.g., the private {@code ReadDataFallback} inside {@code TensorGeneratorFactory}) are
+ * not enumerated. In practice nested subclasses tend to be dispatch-table-internal helpers that are
+ * constructed by their enclosing class anyway, but the limitation is real — a class-file- scanning
+ * enumeration would be a strict improvement (see wala/ML#485).
  *
  * <p>Until the dispatch-table unification proposed in wala/ML#469 lands, every new {@code
  * TensorGenerator} subclass has to be added to both {@code getGeneratorBody} (factory-side) and
@@ -80,6 +87,7 @@ public class TestTensorGeneratorDispatchCoverage {
     }
 
     if (!orphans.isEmpty()) {
+      orphans.sort(String::compareTo); // stable diagnostic across filesystems / JVMs
       fail(
           "The following concrete TensorGenerator subclasses are not constructed in either"
               + " TensorGeneratorFactory.getGenerator or TensorGenerator.createManualGenerator. If"
