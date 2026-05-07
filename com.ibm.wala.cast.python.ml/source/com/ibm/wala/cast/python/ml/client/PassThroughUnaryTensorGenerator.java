@@ -113,9 +113,9 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
           getClass().getSimpleName()
               + " uses "
               + PassThroughUnaryTensorGenerator.class.getSimpleName()
-              + "'s default `getDefaultShapes` (which reads from the input arg) but did not"
-              + " override `getInputParameterPosition`. Either override the input-arg getters or"
-              + " override `getDefaultShapes` entirely.");
+              + "'s default getDefaultShapes (which reads from the input arg) but did not"
+              + " override getInputParameterPosition. Either override the input-arg getters or"
+              + " override getDefaultShapes entirely.");
     OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPos, paramName);
     if (pts != null && !pts.isEmpty()) {
       Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, pts);
@@ -139,9 +139,9 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
           getClass().getSimpleName()
               + " uses "
               + PassThroughUnaryTensorGenerator.class.getSimpleName()
-              + "'s default `getDefaultDTypes` (which reads from the input arg) but did not"
-              + " override `getInputParameterPosition`. Either override the input-arg getters or"
-              + " override `getDefaultDTypes` entirely.");
+              + "'s default getDefaultDTypes (which reads from the input arg) but did not"
+              + " override getInputParameterPosition. Either override the input-arg getters or"
+              + " override getDefaultDTypes entirely.");
     OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPos, paramName);
     if (pts != null && !pts.isEmpty()) {
       Set<DType> dtypes = this.getDTypesOfValue(builder, pts);
