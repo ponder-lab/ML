@@ -72,11 +72,18 @@ public class BroadcastTo extends TensorGenerator {
         this.getArgumentPointsToSet(
             builder, Parameters.SHAPE.getIndex(), Parameters.SHAPE.getName());
     if (shapePts == null || shapePts.isEmpty()) return null;
-    // After wala/ML#471, `getShapesFromShapeArgument` returns `null` rather
-    // than throwing for shape forms it doesn't recognize (notably when
-    // `shape` is itself a runtime tensor — e.g. `tf.broadcast_to(x, tf.shape(y))`).
-    // The `null` return already encodes the lattice-correct ⊤.
-    Set<List<Dimension<?>>> shapes = this.getShapesFromShapeArgument(builder, shapePts);
+    Set<List<Dimension<?>>> shapes;
+    try {
+      // `getShapesFromShapeArgument` throws `IllegalStateException` for shape forms it doesn't
+      // recognize. For `BroadcastTo` specifically, a runtime-tensor shape argument is an
+      // expected input pattern (e.g., `tf.broadcast_to(x, tf.shape(y))`), so we tolerate the
+      // throw here and degrade to ⊤ ("tensor of unknown shape"). Other callers let the throw
+      // propagate as a loud signal that modeling work is missing — see wala/ML#471's design
+      // discussion on PR #245.
+      shapes = this.getShapesFromShapeArgument(builder, shapePts);
+    } catch (IllegalStateException e) {
+      return null;
+    }
     return shapes == null || shapes.isEmpty() ? null : shapes;
   }
 

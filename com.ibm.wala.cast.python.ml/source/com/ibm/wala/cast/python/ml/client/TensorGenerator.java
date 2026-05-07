@@ -345,28 +345,20 @@ public abstract class TensorGenerator {
                 if (nestedShapes == null) return null;
                 for (List<Dimension<?>> nestedShape : nestedShapes)
                   tensorDimensions.add(new CompoundDim(nestedShape));
-              } else {
-                // WARNING (not FINE) so the missing-modeling signal stays loud — the legacy
-                // contract was to throw `IllegalStateException` here, which propagated all the
-                // way up and aborted the analysis. The new contract returns ⊤ so the analysis
-                // continues, but we still want operators to know that modeling work is needed.
-                LOGGER.warning(
-                    "Unrecognized instance-field allocation for shape arg: "
+              } else
+                throw new IllegalStateException(
+                    "Expected a constant key or nested structure for instance field: "
                         + pointerKeyForInstanceField
-                        + " -> "
+                        + ", but got: "
                         + instanceFieldIK
-                        + "; returning null (⊤). Modeling for this shape form is missing.");
-                return null;
-              }
-            } else {
-              LOGGER.warning(
-                  "Unrecognized instance-field key for shape arg: "
+                        + ".");
+            } else
+              throw new IllegalStateException(
+                  "Expected a constant key or nested structure for instance field: "
                       + pointerKeyForInstanceField
-                      + " -> "
+                      + ", but got: "
                       + instanceFieldIK
-                      + "; returning null (⊤). Modeling for this shape form is missing.");
-              return null;
-            }
+                      + ".");
           }
 
           LOGGER.info(
@@ -465,15 +457,9 @@ public abstract class TensorGenerator {
         Set<List<Dimension<?>>> specShapes = this.getShapesFromShapeArgument(builder, shapePts);
         if (specShapes == null) return null;
         ret.addAll(specShapes);
-      } else {
-        LOGGER.warning(
-            "Unrecognized shape-argument allocation: "
-                + reference
-                + " for source "
-                + this.getSource()
-                + "; returning null (⊤). Modeling for this shape form is missing.");
-        return null;
-      }
+      } else
+        throw new IllegalStateException(
+            "Expected a " + list + " or " + tuple + " for the shape, but got: " + reference + ".");
     }
 
     return ret;
