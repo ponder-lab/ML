@@ -30,6 +30,7 @@ import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.client.SliceBuiltinOperation;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.CompoundDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.classLoader.IField;
@@ -6964,6 +6965,32 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testReshape5() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_reshape5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_28_28_1_FLOAT32)));
+  }
+
+  /**
+   * Regression guard for {@code tf.reshape(x, tf.shape(y))} shape inference. Runtime answer is
+   * {@code (2, 3)} of {@code float32}; the analyzer currently produces a malformed compound-dim
+   * shape (two compound dims, each containing three {@code Constant(0)} sub-dims) plus a spurious
+   * scalar shape — neither the precise answer nor a sound ⊤. The assertion encodes the
+   * observed-imprecise output per the prefer-observed-assertion convention; when the modeling
+   * lands, tighten the assertion to {@link #TENSOR_2_3_FLOAT32}.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/489">wala/ML#489</a>): {@code tf.reshape}
+   * with a runtime-tensor shape arg should either compute the precise shape or return ⊤ soundly,
+   * not a malformed compound-dim derived from misinterpreting the receiver tensor's element values
+   * as dim sizes.
+   */
+  @Test
+  public void testReshapeRuntimeShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    // Observed-imprecise: scalar shape + a compound-of-compounds derived from y's structure.
+    // The compounds each contain three Constant(0) dims (the values of y's rows). See #489.
+    List<TensorType.Dimension<?>> threeZeros =
+        asList(new NumericDim(0), new NumericDim(0), new NumericDim(0));
+    TensorType malformed =
+        new TensorType(FLOAT_32, asList(new CompoundDim(threeZeros), new CompoundDim(threeZeros)));
+    TensorType scalar = new TensorType(FLOAT_32, asList());
+    test("tf2_test_reshape_runtime_shape.py", "f", 1, 1, Map.of(2, Set.of(scalar, malformed)));
   }
 
   @Test
