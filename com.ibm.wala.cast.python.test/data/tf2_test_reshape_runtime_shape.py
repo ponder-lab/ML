@@ -3,8 +3,9 @@
 # At runtime, `z` has shape (2, 3) of float32. The analyzer currently produces a malformed
 # compound-dim shape (`[Compound,[Constant,0, Constant,0, Constant,0], ...]`) instead of
 # either the precise (2, 3) answer or a sound ⊤ (null shape). The corresponding JUnit test
-# is suppressed with `@Test(expected = AssertionError.class)` and a TODO referencing #489;
-# when modeling lands, flip the suppression to plain `@Test`.
+# (`testReshapeRuntimeShape`) asserts the currently-observed malformed shape with a TODO
+# referencing #489; when the modeling lands, the assertion will start failing and the TODO
+# is the cue to tighten it to the precise post-fix shape.
 import tensorflow as tf
 
 
