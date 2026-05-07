@@ -67,7 +67,11 @@ public class Reshape extends TensorGenerator {
 
     if (shapePts != null && !shapePts.isEmpty()) {
       Set<List<Dimension<?>>> rawShapes = this.getShapesFromShapeArgument(builder, shapePts);
-      if (rawShapes != null && !rawShapes.isEmpty()) {
+      // Soundness: when the `shape` argument is present but unparseable, the output shape is ⊤
+      // (the result is determined by `shape`, not the input tensor — falling back to input-shape
+      // inference would be unsound).
+      if (rawShapes == null) return null;
+      if (!rawShapes.isEmpty()) {
         Set<List<Dimension<?>>> refinedShapes = HashSetFactory.make();
 
         for (List<Dimension<?>> shape : rawShapes) {

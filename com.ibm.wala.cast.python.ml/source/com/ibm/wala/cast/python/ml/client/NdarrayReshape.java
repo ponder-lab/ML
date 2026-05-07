@@ -97,7 +97,12 @@ public class NdarrayReshape extends TensorGenerator {
     if (shapePts == null || shapePts.isEmpty()) return getDefaultShapes(builder);
 
     Set<List<Dimension<?>>> rawShapes = this.getShapesFromShapeArgument(builder, shapePts);
-    if (rawShapes == null || rawShapes.isEmpty()) return getDefaultShapes(builder);
+    // Soundness: when the `shape` argument is present but unparseable (helper returns null),
+    // the output shape is ⊤ — falling back to receiver-shape inference would be unsound since
+    // `ndarray.reshape(...)` is determined by the argument. Empty result distinct: no signature
+    // recoverable, fall back to receiver shape.
+    if (rawShapes == null) return null;
+    if (rawShapes.isEmpty()) return getDefaultShapes(builder);
 
     Set<List<Dimension<?>>> refinedShapes = HashSetFactory.make();
 

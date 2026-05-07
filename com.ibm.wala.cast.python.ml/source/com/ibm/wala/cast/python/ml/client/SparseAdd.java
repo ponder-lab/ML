@@ -94,7 +94,11 @@ public class SparseAdd extends ElementWiseOperation {
           OrdinalSet<InstanceKey> fieldPointsTo = pointerAnalysis.getPointsToSet(pk);
           if (fieldPointsTo == null || fieldPointsTo.isEmpty()) continue;
           Set<List<Dimension<?>>> sub = this.getShapesFromShapeArgument(builder, fieldPointsTo);
-          if (sub != null) ret.addAll(sub);
+          // Soundness: if any dense_shape is unparseable, the overall shape is ⊤. Returning a
+          // partial set would under-approximate (the unparseable component represents a real
+          // possibility we can't ignore).
+          if (sub == null) return null;
+          ret.addAll(sub);
         }
       }
     }

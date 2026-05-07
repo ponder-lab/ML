@@ -106,7 +106,9 @@ public class ReduceMean extends TensorGenerator {
           // Try to handle list/tuple of axes.
           Set<List<Dimension<?>>> axesLists =
               this.getShapesFromShapeArgument(builder, Collections.singleton(ik));
-          if (axesLists == null) continue;
+          // Soundness: if any axis form is unparseable, output shape is ⊤. Returning the
+          // recognized-axis subset would under-approximate.
+          if (axesLists == null) return null;
           for (List<Dimension<?>> axesList : axesLists) {
             Set<Integer> s = new HashSet<>();
             for (Dimension<?> d : axesList) {

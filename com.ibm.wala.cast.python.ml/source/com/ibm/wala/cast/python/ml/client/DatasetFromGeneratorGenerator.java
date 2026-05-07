@@ -150,7 +150,10 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
                 Set<List<Dimension<?>>> sub =
                     this.getShapesFromShapeArgument(
                         builder, builder.getPointerAnalysis().getPointsToSet(pk));
-                if (sub != null) ret.addAll(sub);
+                // Soundness: an unparseable component represents real shape uncertainty for
+                // this index — propagate ⊤ rather than returning the parseable subset.
+                if (sub == null) return null;
+                ret.addAll(sub);
               }
             }
           }
@@ -248,14 +251,20 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
               Set<List<Dimension<?>>> sub =
                   this.getShapesFromShapeArgument(
                       builder, builder.getPointerAnalysis().getPointsToSet(pk));
-              if (sub != null) ret.addAll(sub);
+              // Soundness: an unparseable component of a structured signature represents real
+              // element-shape uncertainty — propagate ⊤ rather than the parseable subset.
+              if (sub == null) return null;
+              ret.addAll(sub);
             }
           }
         } else {
           // Case 1.2: Single spec object as signature.
           Set<List<Dimension<?>>> sub =
               this.getShapesFromShapeArgument(builder, Collections.singleton(ik));
-          if (sub != null) ret.addAll(sub);
+          // Soundness: a present-but-unparseable signature is shape-unknown, not "no signature";
+          // return ⊤ rather than falling through to later default-shape inference.
+          if (sub == null) return null;
+          ret.addAll(sub);
         }
       }
       // If we found any shapes in the output_signature, return them.
