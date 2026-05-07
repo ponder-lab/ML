@@ -14,6 +14,39 @@
                 Often `LRoot` in synthetic models unless a specific class is needed.
   - fieldType : The type of the field itself (the type of the slot). Often `LRoot`.
 -->
+<!--
+  Allocation-class convention for <new> inside <method name="do"> bodies:
+
+  1. Object-typed API result with its own method surface (Estimator, Variable,
+     Optimizer, Model, Layer, Dataset, SparseTensor, RaggedTensor, ...): the
+     class itself (i.e., `Ltensorflow/.../Variable`, `Ltensorflow/.../SparseTensor`,
+     etc.). The class declares the result's API surface (.train, .minimize,
+     .batch, .indices, .values, etc.); virtual dispatch on the result resolves
+     through the class hierarchy. `Tensor` belongs to case (2) below —
+     tensor-producing functions allocate canonical Tensor; the `Tensor` class
+     is itself the substrate that case (2) names.
+
+  2. Function-typed API producing a tensor result (e.g., tf.math.sigmoid,
+     tf.math.add, tf.reshape, tf.math.argmax, tf.math.less, ...): canonical
+     `Ltensorflow/python/framework/ops/Tensor`. The function name is not a
+     method dispatcher — Tensor methods (.shape, .dtype, .numpy(), ...) are
+     declared on `Tensor`. Per-op alloc classes here would only duplicate the
+     function name without carrying any dispatchable members; ponder-lab/ML#219
+     migrated 66 such allocations to canonical `Tensor`.
+
+  3. Wrapper for callback storage + virtual dispatch (Estimator's `train`
+     class, future `Dataset.map`-style modeling): per-op class. The class
+     identity is load-bearing for the <getfield ... field="$callback" />
+     followed by <call type="virtual" arg0="..." /> invocation chain — the
+     virtual dispatch needs the alloc class to declare the invocable method.
+     Such allocations are structurally protected from migration: their `def`
+     is field-stored (via <putfield value="..."/>) rather than returned.
+
+  Background: wala/ML#459 (function-typed migration; ponder-lab/ML#219 was
+  the migration PR); Dolby et al., MAPL '18, *Ariadne: Analysis for Machine
+  Learning Programs* (the per-op alloc-class pattern's original API-modeling
+  rationale, Figures 7 and 8).
+-->
 <!-- spotless:on -->
 <summary-spec>
   <classloader name="PythonLoader">
@@ -180,6 +213,12 @@
         <putfield class="LRoot" field="argmax" fieldType="LRoot" ref="x" value="argmax" />
         <putfield class="LRoot" field="argmax" fieldType="LRoot" ref="math" value="argmax" />
         <putfield class="LRoot" field="argmax" fieldType="LRoot" ref="math_ops" value="argmax" />
+        <!-- Same aliasing for `tf.argmin` / `tf.math.argmin`. -->
+        <!-- https://www.tensorflow.org/api_docs/python/tf/math/argmin -->
+        <new def="argmin" class="Ltensorflow/math/argmin" />
+        <putfield class="LRoot" field="argmin" fieldType="LRoot" ref="x" value="argmin" />
+        <putfield class="LRoot" field="argmin" fieldType="LRoot" ref="math" value="argmin" />
+        <putfield class="LRoot" field="argmin" fieldType="LRoot" ref="math_ops" value="argmin" />
         <!-- Same aliasing for `tf.equal` / `tf.math.equal`. -->
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/equal -->
         <new def="equal" class="Ltensorflow/math/equal" />
@@ -261,6 +300,24 @@
         <putfield class="LRoot" field="not_equal" fieldType="LRoot" ref="x" value="not_equal" />
         <putfield class="LRoot" field="not_equal" fieldType="LRoot" ref="math" value="not_equal" />
         <putfield class="LRoot" field="not_equal" fieldType="LRoot" ref="math_ops" value="not_equal" />
+        <!-- The four ordering comparison ops (`tf.less`, `tf.less_equal`, `tf.greater`, `tf.greater_equal`) round out the comparison family started by `equal`/`not_equal`; same alias structure (top-level `tf.X`, `tf.math.X`, `tf.math_ops.X`). Each routes to `ComparisonOperation` and emits `bool` per
+          wala/ML#427. -->
+        <new def="less" class="Ltensorflow/math/less" />
+        <putfield class="LRoot" field="less" fieldType="LRoot" ref="x" value="less" />
+        <putfield class="LRoot" field="less" fieldType="LRoot" ref="math" value="less" />
+        <putfield class="LRoot" field="less" fieldType="LRoot" ref="math_ops" value="less" />
+        <new def="less_equal" class="Ltensorflow/math/less_equal" />
+        <putfield class="LRoot" field="less_equal" fieldType="LRoot" ref="x" value="less_equal" />
+        <putfield class="LRoot" field="less_equal" fieldType="LRoot" ref="math" value="less_equal" />
+        <putfield class="LRoot" field="less_equal" fieldType="LRoot" ref="math_ops" value="less_equal" />
+        <new def="greater" class="Ltensorflow/math/greater" />
+        <putfield class="LRoot" field="greater" fieldType="LRoot" ref="x" value="greater" />
+        <putfield class="LRoot" field="greater" fieldType="LRoot" ref="math" value="greater" />
+        <putfield class="LRoot" field="greater" fieldType="LRoot" ref="math_ops" value="greater" />
+        <new def="greater_equal" class="Ltensorflow/math/greater_equal" />
+        <putfield class="LRoot" field="greater_equal" fieldType="LRoot" ref="x" value="greater_equal" />
+        <putfield class="LRoot" field="greater_equal" fieldType="LRoot" ref="math" value="greater_equal" />
+        <putfield class="LRoot" field="greater_equal" fieldType="LRoot" ref="math_ops" value="greater_equal" />
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/log -->
         <putfield class="LRoot" field="log" fieldType="LRoot" ref="math" value="pass_through" />
         <putfield class="LRoot" field="log" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
@@ -285,11 +342,7 @@
         <putfield class="LRoot" field="minimum" fieldType="LRoot" ref="x" value="pass_through" />
         <putfield class="LRoot" field="minimum" fieldType="LRoot" ref="math" value="pass_through" />
         <putfield class="LRoot" field="minimum" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/less -->
-        <!-- TODO: Return a dtype of bool instead of the input. -->
-        <putfield class="LRoot" field="less" fieldType="LRoot" ref="x" value="pass_through" />
-        <putfield class="LRoot" field="less" fieldType="LRoot" ref="math" value="pass_through" />
-        <putfield class="LRoot" field="less" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
+        <!-- `tf.less`'s legacy `pass_through` aliasing was removed: the modern `<class name="less">` block + `ComparisonOperation` dispatch (wala/ML#427) now handle bool dtype directly. -->
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/cos -->
         <putfield class="LRoot" field="cos" fieldType="LRoot" ref="x" value="pass_through" />
         <putfield class="LRoot" field="cos" fieldType="LRoot" ref="math" value="pass_through" />
@@ -498,9 +551,11 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/solve -->
         <putfield class="LRoot" field="solve" fieldType="LRoot" ref="linalg" value="pass_through" />
         <putfield class="LRoot" field="solve" fieldType="LRoot" ref="gen_linalg_ops" value="pass_through" />
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/broadcast_to -->
-        <putfield class="LRoot" field="broadcast_to" fieldType="LRoot" ref="x" value="pass_through" />
-        <putfield class="LRoot" field="broadcast_to" fieldType="LRoot" ref="gen_array_ops" value="pass_through" />
+        <!-- https://www.tensorflow.org/api_docs/python/tf/broadcast_to — fresh allocation routed to the dedicated `BroadcastTo` generator (wala/ML#449 Tier 7). Pre-fix used `value="pass_through"` aliasing, which routed the result through `PassThrough`'s identity semantics rather than computing the actual
+          broadcast shape from the `shape` argument. -->
+        <new def="broadcast_to" class="Ltensorflow/functions/broadcast_to" />
+        <putfield class="LRoot" field="broadcast_to" fieldType="LRoot" ref="x" value="broadcast_to" />
+        <putfield class="LRoot" field="broadcast_to" fieldType="LRoot" ref="gen_array_ops" value="broadcast_to" />
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/tile -->
         <putfield class="LRoot" field="tile" fieldType="LRoot" ref="x" value="pass_through" />
         <putfield class="LRoot" field="tile" fieldType="LRoot" ref="gen_array_ops" value="pass_through" />
@@ -853,7 +908,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/sigmoid. Modeled as `<new>+<return>` (fresh allocation, not pass-through) to match add/matmul and reflect actual TF semantics: sigmoid returns a new tensor with the same shape/dtype as its input, not the input object itself.
           Shape/dtype inference lives in the `Sigmoid` generator. -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
-          <new def="res" class="Ltensorflow/math/sigmoid" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
@@ -861,7 +916,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/add -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x y name">
           <!-- Even though tf.add() isn't a tensor "generator," it can convert its non-tensor arguments to tensors. -->
-          <new def="res" class="Ltensorflow/math/add" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
@@ -869,7 +924,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/multiply -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x y name">
           <!-- Even though tf.multiply() isn't a tensor "generator," it can convert its non-tensor arguments to tensors. -->
-          <new def="res" class="Ltensorflow/math/multiply" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
@@ -881,91 +936,76 @@
         </method>
       </class>
       <class name="reduce_sum" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/reduce_sum -->
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/reduce_sum. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="xx" />
-          <return value="xx" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="argmax" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
+        <!-- https://www.tensorflow.org/api_docs/python/tf/math/argmax — index of the maximum value across an axis. The dedicated `Argmax` generator emits `int64` (the TF default) for the output dtype; output shape is currently ⊤ pending wala/ML#462. The legacy `dimension` parameter (a TF 1.x alias for
+          `axis`) is retained in `paramNames`; the modern `output_type` parameter isn't surfaced here yet — wala/ML#463 covers the migration. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input axis name dimension">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="xx" />
-          <return value="xx" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="argmin" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/math/argmin — index of the minimum value across an axis. Mirrors the `argmax` modeling above (same param signature, same direct `<new>+<return>` per wala/ML#380, same `int64` output dtype via the dedicated `Argmin` generator). -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input axis name dimension">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="equal" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/equal -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/equal. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
         <!-- TODO: Return a Tensor whose dtype is bool (see wala/ML#427). -->
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x y name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="xx" />
-          <return value="xx" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="rsqrt" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/rsqrt. Modeled as `<new>+<return>` (fresh allocation, not `read_data` pass-through) so the factory can dispatch to the dedicated `Rsqrt` generator (wala/ML#449 Tier 2). Shape/dtype inference reads the `x` argument's PTS via
           `PassThroughUnaryTensorGenerator`. -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
-          <new def="res" class="Ltensorflow/math/rsqrt" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
       <class name="log_softmax" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/log_softmax. Modeled as `<new>+<return>` for the same reason — wala/ML#449 Tier 2. Note the parameter name `logits` (vs. `x` for the other Tier-2 unary math ops). -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self logits axis name">
-          <new def="res" class="Ltensorflow/math/log_softmax" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
       <class name="exp" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/exp. Modeled as `<new>+<return>` for the same reason — wala/ML#449 Tier 2. -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
-          <new def="res" class="Ltensorflow/math/exp" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
       <class name="tensordot" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/tensordot -->
-        <method name="read_data" descriptor="()LRoot;">
-          <new def="x" class="Ltensorflow/math/tensordot" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="a b axes name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="xx" />
-          <return value="xx" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/tensordot. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self a b axes name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="trace" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/trace -->
-        <method name="read_data" descriptor="()LRoot;">
-          <new def="x" class="Ltensorflow/math/trace" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="x name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="xx" />
-          <return value="xx" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/trace. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="einsum" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/einsum -->
-        <method name="read_data" descriptor="()LRoot;">
-          <new def="x" class="Ltensorflow/math/einsum" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="equation *inputs **kwargs">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="xx" />
-          <return value="xx" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/einsum. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self equation *inputs **kwargs">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="add_n" allocatable="true">
@@ -978,27 +1018,47 @@
         </method>
       </class>
       <class name="not_equal" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/not_equal -->
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
-          <return value="x" />
-        </method>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/not_equal. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x y name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="xx" />
-          <return value="xx" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="less" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/math/less — elementwise `x < y`. Direct `<new>+<return>` per wala/ML#380's preference (no `read_data` materialization chain). Routes to `ComparisonOperation` for bool output dtype (wala/ML#427). -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x y name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="less_equal" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/math/less_equal — elementwise `x <= y`. Direct `<new>+<return>` per wala/ML#380's preference. Routes to `ComparisonOperation` for bool output dtype (wala/ML#427). -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x y name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="greater" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/math/greater — elementwise `x > y`. Direct `<new>+<return>` per wala/ML#380's preference. Routes to `ComparisonOperation` for bool output dtype (wala/ML#427). -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x y name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="greater_equal" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/math/greater_equal — elementwise `x >= y`. Direct `<new>+<return>` per wala/ML#380's preference. Routes to `ComparisonOperation` for bool output dtype (wala/ML#427). -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x y name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="top_k" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;">
-          <new def="x" class="Ltensorflow/math/top_k" />
-          <return value="x" />
-        </method>
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/top_k -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/top_k. Direct `<new>+<putfield>` per wala/ML#380 (was a `read_data` materialization chain). Returns a `(values, indices)` tuple — both fields point at fresh `Tensor` allocations. -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input k sorted name">
           <new def="x" class="Ltuple" />
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="xx" />
+          <new def="xx" class="Ltensorflow/python/framework/ops/Tensor" />
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="x" value="xx" />
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="yy" />
+          <new def="yy" class="Ltensorflow/python/framework/ops/Tensor" />
           <putfield class="LRoot" field="1" fieldType="LRoot" ref="x" value="yy" />
           <return value="x" />
         </method>
@@ -1015,14 +1075,14 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_all. Modeled as `<new>+<return>` so the factory dispatches to the dedicated `ReduceAll` generator (wala/ML#449 Tier 3); the `convert_to_tensor` chain preserved input's shape, but reductions collapse dims along `axis`.
           Shape logic lives in `ReduceMean`'s axis/keepdims handling, which `ReduceAll` reuses by inheritance; dtype is always `BOOL`. -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
-          <new def="res" class="Ltensorflow/math/reduce_all" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
       <class name="reduce_prod" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_prod. Modeled as `<new>+<return>` for the same reason — wala/ML#449 Tier 3. Output dtype inherits from input (no int→float32 promotion like `reduce_mean`). -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
-          <new def="res" class="Ltensorflow/math/reduce_prod" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
@@ -1045,7 +1105,7 @@
       <class name="reduce_max" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_max. Modeled as `<new>+<return>` for the same reason as `reduce_all`/`reduce_prod` — wala/ML#449 Tier 3. Output dtype inherits from input (no int→float32 promotion like `reduce_mean`). -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
-          <new def="res" class="Ltensorflow/math/reduce_max" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
@@ -1053,7 +1113,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_logsumexp. Modeled as `<new>+<return>` for the same reason — wala/ML#449 Tier 3. Output dtype inherits from input (`reduce_logsumexp` requires float input at runtime; static analysis just preserves whatever the input
           dtype was). -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
-          <new def="res" class="Ltensorflow/math/reduce_logsumexp" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
@@ -1077,7 +1137,7 @@
       </class>
       <class name="convert_to_tensor" allocatable="true">
         <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/framework/ops/convert_to_tensor" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
@@ -1098,31 +1158,31 @@
     <package name="tensorflow/python/ops/array_ops">
       <class name="zeros" allocatable="true">
         <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/array_ops/zeros" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
       <class name="zeros_like" allocatable="true">
         <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/array_ops/zeros_like" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
       <class name="fill" allocatable="true">
         <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/array_ops/fill" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
       <class name="reshape" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="tensor shape name">
-          <new def="x" class="Ltensorflow/python/ops/array_ops/reshape" />
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self tensor shape name">
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
       <class name="one_hot" allocatable="true">
         <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/array_ops/one_hot" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
@@ -1130,7 +1190,7 @@
     <package name="tensorflow/python/ops/linalg_ops">
       <class name="eye" allocatable="true">
         <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/linalg_ops/eye" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
@@ -1138,31 +1198,31 @@
     <package name="tensorflow/python/ops/random_ops">
       <class name="uniform" allocatable="true">
         <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/random_ops/uniform" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
       <class name="gamma" allocatable="true">
         <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/random_ops/gamma" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
       <class name="normal" allocatable="true">
         <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/random_ops/normal" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
       <class name="poisson" allocatable="true">
         <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/random_ops/poisson" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
       <class name="truncated_normal" allocatable="true">
         <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/python/ops/random_ops/truncated_normal" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
@@ -1187,7 +1247,7 @@
     <package name="tensorflow/functions">
       <class name="from_nested_value_rowids" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self flat_values nested_value_rowids nested_nrows name validate">
-          <new def="res" class="Ltensorflow/functions/from_nested_value_rowids" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
@@ -1242,7 +1302,7 @@
       <class name="reshape" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/reshape -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self input shape name">
-          <new def="x" class="Ltensorflow/python/ops/array_ops/reshape" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
@@ -1253,14 +1313,13 @@
         </method>
       </class>
       <class name="concat" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;">
-          <new def="x" class="Ltensorflow/python/ops/array_ops/concat" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="values axis name">
-          <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/concat -->
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="x" />
-          <return value="x" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/concat. Mirrors `add_n`'s pattern: read field 0 of the input list and route through `convert_to_tensor` so the dtype propagates from the first input element. Shape is approximated by inheriting from the first input — known unsoundness,
+          since runtime concat grows the `axis` dimension by the sum of the input dims. A future generator can read the full `values` list and `axis` to produce a precise (and sound) shape. See wala/ML#449 (Tier 5). -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self values axis name">
+          <getfield class="Llist" field="0" fieldType="LRoot" ref="values" def="x" />
+          <new def="z" class="Ltensorflow/functions/convert_to_tensor" />
+          <call class="Ltensorflow/functions/convert_to_tensor" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="x" numArgs="2" def="y" />
+          <return value="y" />
         </method>
       </class>
       <class name="Variable" allocatable="true">
@@ -1271,7 +1330,7 @@
       </class>
       <class name="constant" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self value dtype shape name">
-          <new def="res" class="Ltensorflow/python/framework/constant_op/constant" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <!-- The `value` putfield was removed (wala/ML#451 reopen): binding the user-supplied value to the alloc's `value` field caused Hybridize's `Function.containsPrimitive` to traverse fields of the alloc and find a `ConstantKey<Integer>`/`ConstantKey<Float>` for `tf.constant(N)`-style calls, classifying
             parameters that receive the result (e.g. `recursive_fn(tf.constant(5))`'s `n`) as having primitive parameters. The Ariadne-side `Constant` generator reads dtype/shape directly from the call's `value` argument PTS via `getArgumentPointsToSet`, so dtype/shape inference is unaffected. The Java-side `TensorGenerator.getShapesFromShapeArgument`'s
             `CONSTANT_OP_CONSTANT` branch falls back to walking back to the allocating call's value arg when the field is empty. -->
@@ -1281,7 +1340,7 @@
       </class>
       <class name="zeros" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self shape dtype name">
-          <new def="res" class="Ltensorflow/python/ops/array_ops/zeros" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
@@ -1315,26 +1374,29 @@
       <class name="sparse_add" allocatable="true">
         <!-- https://www.tensorflow.org/api_docs/python/tf/sparse/add. Fresh allocation, not pass-through; shape / dtype inference lives in the `SparseAdd` generator. -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self a b threshold name">
-          <new def="res" class="Ltensorflow/functions/sparse_add" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
       <class name="fill" allocatable="true">
         <!-- Allocation moved to do() to avoid 1-CFA aliasing issues with shared read_data(). -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self dims value name">
-          <new def="x" class="Ltensorflow/python/ops/array_ops/fill" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
-      <class name="sequence_mask" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;">
-          <new def="x" class="Ltensorflow/python/ops/array_ops/sequence_mask" />
-          <return value="x" />
+      <class name="broadcast_to" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/broadcast_to — direct `<new>+<return>` per wala/ML#380's preferred pattern. Routes to `BroadcastTo` for shape-from-`shape` and dtype-from-`input` (wala/ML#449 Tier 7). -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self input shape name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/sequence_mask -->
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="lengths maxlen dtype name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="x" />
-          <return value="x" />
+      </class>
+      <class name="sequence_mask" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/sequence_mask. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self lengths maxlen dtype name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="stop_gradient" allocatable="true">
@@ -1342,38 +1404,34 @@
           inference reads the `input` argument's PTS via `StopGradient.shapesOfArg` / `dtypesOfArg`. The alloc class matches this `<class>`'s declared type (`Ltensorflow/functions/stop_gradient`) so the heap model can resolve the `<new>` to a concrete InstanceKey — a separate undeclared `Ltensorflow/python/ops/array_ops/stop_gradient`
           would silently fail PA propagation (see `project_synthetic_method_implicit_pts` note). -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self input name">
-          <new def="res" class="Ltensorflow/functions/stop_gradient" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
       <class name="zeros_like" allocatable="true">
         <!-- Allocation moved to do() to avoid 1-CFA aliasing issues with shared read_data(). -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self input dtype name">
-          <new def="x" class="Ltensorflow/python/ops/array_ops/zeros_like" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
       <class name="embedding_lookup" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;">
-          <new def="x" class="Ltensorflow/python/ops/embedding_ops/embedding_lookup" />
-          <return value="x" />
-        </method>
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/embedding_lookup -->
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="params ids max_norm name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="x" />
-          <return value="x" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/embedding_lookup. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self params ids max_norm name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="one_hot" allocatable="true">
         <!-- Allocation moved to do() to avoid 1-CFA aliasing issues with shared read_data(). -->
         <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self indices depth on_value off_value axis dtype name">
-          <new def="x" class="Ltensorflow/python/ops/array_ops/one_hot" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
       <class name="convert_to_tensor" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self value dtype dtype_hint name">
-          <new def="x" class="Ltensorflow/python/framework/ops/convert_to_tensor" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
@@ -1381,46 +1439,34 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/identity. Modeled as `<new>+<return>` (fresh allocation, not pass-through) to match `sigmoid`/`softmax` and enable factory dispatch to the dedicated `Identity` generator (wala/ML#449 Tier 1). Shape/dtype inference reads the `input`
           argument's PTS via `Identity.shapesOfArg` / `dtypesOfArg`. -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self input name">
-          <new def="res" class="Ltensorflow/functions/identity" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
       <class name="where" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;">
-          <new def="x" class="Ltensorflow/python/ops/array_ops/where" />
-          <return value="x" />
-        </method>
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/where -->
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="condition x y name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="xx" />
-          <return value="xx" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/where. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self condition x y name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="meshgrid" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/meshgrid -->
-        <method name="read_data" descriptor="()LRoot;">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/meshgrid. Inlined per wala/ML#380 (was a `read_data` materialization chain). Returns a list whose first element is a constant-materialized tensor. -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self *args **kwargs">
           <new def="x" class="Llist" />
           <new def="z" class="Ltensorflow/functions/constant" />
           <call class="Ltensorflow/functions/constant" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="1" numArgs="2" def="y" />
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="x" value="y" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="*args **kwargs">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="x" />
           <return value="x" />
         </method>
       </class>
       <class name="split" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/split -->
-        <method name="read_data" descriptor="()LRoot;">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/split. Inlined per wala/ML#380 (was a `read_data` materialization chain). Returns a list whose first element is a constant-materialized tensor. -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self *args **kwargs">
           <new def="x" class="Llist" />
           <new def="z" class="Ltensorflow/functions/constant" />
           <call class="Ltensorflow/functions/constant" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="1" numArgs="2" def="y" />
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="x" value="y" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="*args **kwargs">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="x" />
           <return value="x" />
         </method>
       </class>
@@ -1428,7 +1474,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/rank. Modeled as `<new>+<return>` so the factory dispatches to the dedicated `Rank` generator (wala/ML#449 Tier 4); pre-fix routed through the `read_data → constant.do(z, 1)` materialization chain which gave ⊤ via `ReadDataFallback`.
           Output is intrinsic to the API (scalar int32 = number of dims of `input`); shape/dtype are hardcoded in the generator rather than read from any arg. Param shape `self input name` matches `sigmoid`. -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self input name">
-          <new def="res" class="Ltensorflow/functions/rank" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
@@ -1436,19 +1482,15 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/size. Modeled as `<new>+<return>` for the same reason as `rank` — wala/ML#449 Tier 4. Output is intrinsic (scalar = total number of elements). Default dtype is int32; the `out_type` arg can override to int64 (the analysis' DType
           lattice models int32, int64, and a handful of others — uint32/uint64 from the runtime API aren't in the lattice). The generator currently hardcodes int32 — extending to honor `out_type` is a clean follow-up if a fixture surfaces the need. -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self input out_type name">
-          <new def="res" class="Ltensorflow/functions/size" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
       <class name="tensor_scatter_nd_update" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/tensor_scatter_nd_update. Inlined per wala/ML#380 (was a `read_data` materialization chain). Returns a constant-materialized tensor. -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self tensor indices updates name">
           <new def="z" class="Ltensorflow/functions/constant" />
           <call class="Ltensorflow/functions/constant" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="1" numArgs="2" def="x" />
-          <return value="x" />
-        </method>
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/tensor_scatter_nd_update -->
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="tensor indices updates name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="x" />
           <return value="x" />
         </method>
       </class>
@@ -1476,26 +1518,26 @@
       </class>
       <class name="ragged_range" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self starts limits deltas dtype name row_splits_dtype">
-          <new def="x" class="Ltensorflow/python/ops/ragged/ragged_math_ops/range" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
       <class name="ragged_constant" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self pylist dtype ragged_rank inner_shape name row_splits_dtype">
-          <new def="x" class="Ltensorflow/python/ops/ragged/ragged_factory_ops/constant" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <putfield class="Ltensorflow/python/ops/ragged/ragged_factory_ops/constant" field="value" fieldType="LRoot" ref="x" value="pylist" />
           <return value="x" />
         </method>
       </class>
       <class name="eye" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self num_rows num_columns batch_shape dtype name">
-          <new def="x" class="Ltensorflow/python/ops/linalg_ops/eye" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
       <class name="eigh" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/eigh -->
-        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="tensor name">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self tensor name">
           <new def="x" class="Ltuple" />
           <new def="z" class="Ltensorflow/functions/convert_to_tensor" />
           <call class="Ltensorflow/functions/convert_to_tensor" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="tensor" numArgs="2" def="y" />
@@ -1506,7 +1548,7 @@
       </class>
       <class name="clip_by_global_norm" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/clip_by_global_norm -->
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="t_list clip_norm use_norm name">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self t_list clip_norm use_norm name">
           <new def="x" class="Ltuple" />
           <new def="y" class="Llist" />
           <new def="z" class="Ltensorflow/functions/constant" />
@@ -1521,71 +1563,63 @@
       <class name="map_fn" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/map_fn -->
         <!-- TODO: Call `map_fn()` on each of the elements of `elems`. -->
-        <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="fn elems dtype parallel_iterations back_prop swap_memory infer_shape name fn_output_signature">
+        <method name="do" descriptor="()LRoot;" numArgs="10" paramNames="self fn elems dtype parallel_iterations back_prop swap_memory infer_shape name fn_output_signature">
           <return value="elems" />
         </method>
       </class>
       <class name="py_function" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;">
-          <new def="x" class="Ltensorflow/functions/py_function" />
-          <return value="x" />
-        </method>
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/py_function -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/py_function. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
         <!-- TODO: Call `func` per https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/py_function#returns -->
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="func inp Tout name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="x" />
-          <return value="x" />
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self func inp Tout name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="uniform" allocatable="true">
         <!-- Allocation moved to do() to avoid 1-CFA aliasing issues with shared read_data(). -->
         <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self shape minval maxval dtype seed name">
-          <new def="x" class="Ltensorflow/python/ops/random_ops/uniform" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
       <class name="gamma" allocatable="true">
         <!-- Allocation moved to do() to avoid 1-CFA aliasing issues with shared read_data(). -->
         <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self shape alpha beta dtype seed name">
-          <new def="x" class="Ltensorflow/python/ops/random_ops/gamma" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
       <class name="normal" allocatable="true">
         <!-- Allocation moved to do() to avoid 1-CFA aliasing issues with shared read_data(). -->
         <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self shape mean stddev dtype seed name">
-          <new def="x" class="Ltensorflow/python/ops/random_ops/normal" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
       <class name="poisson" allocatable="true">
         <!-- Allocation moved to do() to avoid 1-CFA aliasing issues with shared read_data(). -->
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self shape lam dtype seed name">
-          <new def="x" class="Ltensorflow/python/ops/random_ops/poisson" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
       <class name="gather_nd" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;">
-          <new def="x" class="Ltensorflow/python/ops/array_ops/gather_nd" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="params indices name batch_dims">
-          <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/gather_nd -->
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="x" />
-          <return value="x" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/gather_nd. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self params indices batch_dims name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="truncated_normal" allocatable="true">
         <!-- Allocation moved to do() to avoid 1-CFA aliasing issues with shared read_data(). -->
         <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self shape mean stddev dtype seed name">
-          <new def="x" class="Ltensorflow/python/ops/random_ops/truncated_normal" />
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
       </class>
       <class name="shuffle" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/random/shuffle -->
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="value seed name">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self value seed name">
           <new def="z" class="Ltensorflow/functions/convert_to_tensor" />
           <call class="Ltensorflow/functions/convert_to_tensor" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="value" numArgs="2" def="y" />
           <return value="y" />
@@ -1593,114 +1627,98 @@
       </class>
       <class name="sort" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/sort -->
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="values axis direction name">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self values axis direction name">
           <new def="z" class="Ltensorflow/functions/convert_to_tensor" />
           <call class="Ltensorflow/functions/convert_to_tensor" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="values" numArgs="2" def="y" />
           <return value="y" />
         </method>
       </class>
       <class name="Input" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;">
-          <new def="x" class="Ltensorflow/functions/Input" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="shape batch_size name dtype sparse tensor ragged type_spec">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="x" />
-          <return value="x" />
+        <!-- Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). Mirrors `tensorflow/keras/layers/Input` below. -->
+        <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self shape batch_size name dtype sparse tensor ragged type_spec">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="from_nested_row_lengths" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self flat_values nested_row_lengths name validate">
-          <new def="res" class="Ltensorflow/functions/from_nested_row_lengths" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
       <class name="from_nested_row_splits" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self flat_values nested_row_splits name validate">
-          <new def="res" class="Ltensorflow/functions/from_nested_row_splits" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
       <class name="from_row_lengths" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self values row_lengths name validate">
-          <new def="res" class="Ltensorflow/functions/from_row_lengths" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
       <class name="from_row_limits" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self values row_limits name validate">
-          <new def="res" class="Ltensorflow/functions/from_row_limits" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
       <class name="from_row_splits" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self values row_splits name validate">
-          <new def="res" class="Ltensorflow/functions/from_row_splits" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
       <class name="from_row_starts" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self values row_starts name validate">
-          <new def="res" class="Ltensorflow/functions/from_row_starts" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
       <class name="from_value_rowids" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self values value_rowids nrows name validate">
-          <new def="res" class="Ltensorflow/functions/from_value_rowids" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
       <class name="boolean_mask" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/boolean_mask -->
-        <method name="read_data" descriptor="()LRoot;">
-          <new def="x" class="Ltensorflow/python/functions/boolean_mask" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="tensor mask axis name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="x" />
-          <return value="x" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/boolean_mask. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self tensor mask axis name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="linspace" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linspace -->
-        <method name="read_data" descriptor="()LRoot;">
-          <new def="x" class="Ltensorflow/python/functions/linspace" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="start stop num name axis">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="x" />
-          <return value="x" />
+        <!-- https://www.tensorflow.org/api_docs/python/tf/linspace — direct `<new>+<return>` per wala/ML#380's preferred pattern (was `read_data`). Routes to `Linspace` for shape-from-`num` and dtype-from-`start` (wala/ML#449 Tier 7). -->
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self start stop num name axis">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="stack" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/stack -->
-        <method name="read_data" descriptor="()LRoot;">
-          <new def="x" class="Ltensorflow/python/functions/stack" />
-          <return value="x" />
-        </method>
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="value axis name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="x" />
-          <return value="x" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/stack. Mirrors `add_n` / `concat`'s pattern: read field 0 of the input list and route through `convert_to_tensor` so dtype propagates from the first input element. Shape is approximated by inheriting from the first input — known
+          unsoundness, since runtime stack adds a new axis (rank+1). A future generator can compose the input shape with the `values` list length to produce a precise (and sound) shape. See wala/ML#449 (Tier 5). -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self values axis name">
+          <getfield class="Llist" field="0" fieldType="LRoot" ref="values" def="x" />
+          <new def="z" class="Ltensorflow/functions/convert_to_tensor" />
+          <call class="Ltensorflow/functions/convert_to_tensor" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="x" numArgs="2" def="y" />
+          <return value="y" />
         </method>
       </class>
       <class name="unstack" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/unstack -->
-        <method name="read_data" descriptor="()LRoot;">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/unstack. Inlined per wala/ML#380 (was a `read_data` materialization chain). Returns a list whose first element is a constant-materialized tensor. -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self value num axis name">
           <new def="x" class="Llist" />
           <new def="z" class="Ltensorflow/functions/constant" />
           <call class="Ltensorflow/functions/constant" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="1" numArgs="2" def="y" />
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="x" value="y" />
           <return value="x" />
         </method>
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="value num axis name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="x" />
-          <return value="x" />
-        </method>
       </class>
       <class name="dynamic_partition" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dynamic_partition -->
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="data partitions num_partitions name">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self data partitions num_partitions name">
           <new def="x" class="Llist" />
           <new def="z" class="Ltensorflow/functions/constant" />
           <call class="Ltensorflow/functions/constant" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="1" numArgs="2" def="y" />
@@ -1710,7 +1728,7 @@
       </class>
       <class name="dynamic_stitch" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dynamic_stitch -->
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="indices data name">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self indices data name">
           <getfield class="Llist" field="0" fieldType="LRoot" ref="data" def="x" />
           <new def="z" class="Ltensorflow/functions/convert_to_tensor" />
           <call class="Ltensorflow/functions/convert_to_tensor" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="x" numArgs="2" def="y" />
@@ -1769,7 +1787,7 @@
       <class name="softmax" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/softmax. Fresh allocation (not pass-through); shape / dtype inferred from `logits` by the `Softmax` generator. See the rationale on `sigmoid.do()` in this file. -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self logits axis name">
-          <new def="res" class="Ltensorflow/functions/softmax" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
@@ -1777,7 +1795,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/sparse_softmax_cross_entropy_with_logits -->
         <!-- Returns a fresh loss tensor of shape `logits.shape[:-1]` and dtype float32 — does NOT return `labels`. `SoftmaxCrossEntropy` computes the output type. -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self labels logits name">
-          <new def="res" class="Ltensorflow/functions/sparse_softmax_cross_entropy_with_logits" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
@@ -1792,14 +1810,10 @@
     </package>
     <package name="tensorflow/functions/image">
       <class name="extract_patches" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/image/extract_patches#example -->
-        <method name="read_data" descriptor="()LRoot;">
-          <new def="x" class="Ltensorflow/python/functions/image/extract_patches" />
-          <return value="x" />
-        </method>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/image/extract_patches#example. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
         <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self images sizes strides rates padding name">
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" def="x" />
-          <return value="x" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
     </package>
@@ -1816,7 +1830,7 @@
       <class name="EstimatorSpec" allocatable="true">
         <!-- https://www.tensorflow.org/api_docs/python/tf/estimator/EstimatorSpec — fresh allocation (not pass-through) so the resulting spec is a distinct object from any input. Each named parameter is stored as a field on the result, mirroring the namedtuple shape of the real API. See wala/ML#429. -->
         <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self mode predictions loss train_op eval_metric_ops export_outputs">
-          <new def="res" class="Ltensorflow/estimator/EstimatorSpec" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <putfield class="LRoot" field="mode" fieldType="LRoot" ref="res" value="mode" />
           <putfield class="LRoot" field="predictions" fieldType="LRoot" ref="res" value="predictions" />
           <putfield class="LRoot" field="loss" fieldType="LRoot" ref="res" value="loss" />
@@ -1992,9 +2006,10 @@
         </method>
       </class>
       <class name="gradient" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/GradientTape#gradient -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/GradientTape#gradient — fresh allocation (not pass-through of `sources`). The dedicated `Gradient` generator inherits shape and dtype from the `sources` argument. See wala/ML#430. -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self target sources output_gradients unconnected_gradients">
-          <return value="sources" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
     </package>
@@ -2393,7 +2408,7 @@
     <package name="tensorflow/data/Dataset">
       <class name="from_tensors" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#from_tensors -->
-        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="tensors name">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self tensors name">
           <!-- FIXME: We should encode the tensors argument here. See https://github.com/wala/ML/issues/164. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
@@ -2426,7 +2441,7 @@
       </class>
       <class name="from_tensor_slices" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#from_tensor_slices -->
-        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="tensors name">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self tensors name">
           <!-- NOTE: This block of dataset field initializations is duplicated across all dataset methods (e.g., from_tensor_slices, shuffle, batch) intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like
             `read_dataset` or an `init_fields` method), 1-CFA would merge all calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained
             operations. By inlining these allocations directly into each endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
@@ -2461,7 +2476,7 @@
       </class>
       <class name="sample_from_datasets" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#sample_from_datasets -->
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="datasets weights seed stop_on_empty_dataset">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self datasets weights seed stop_on_empty_dataset">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
@@ -2493,7 +2508,7 @@
       </class>
       <class name="list_files" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#list_files -->
-        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="file_pattern shuffle seed name">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self file_pattern shuffle seed name">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
@@ -2525,7 +2540,7 @@
       </class>
       <class name="choose_from_datasets" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#choose_from_datasets -->
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="datasets choice_dataset stop_on_empty_dataset">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self datasets choice_dataset stop_on_empty_dataset">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
@@ -2557,7 +2572,7 @@
       </class>
       <class name="from_generator" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#from_generator -->
-        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="generator output_types output_shapes args output_signature name">
+        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self generator output_types output_shapes args output_signature name">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
@@ -2589,7 +2604,7 @@
       </class>
       <class name="zip" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#zip -->
-        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="datasets name">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self datasets name">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
@@ -2622,7 +2637,7 @@
       </class>
       <class name="range" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#range -->
-        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="start stop step output_type name">
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self start stop step output_type name">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each
@@ -2654,7 +2669,7 @@
       </class>
       <class name="random" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#random -->
-        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="seed name">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self seed name">
           <new def="x" class="Ltensorflow/data/Dataset" />
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like `read_dataset` or an `init_fields` method), 1-CFA would merge all
             calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained operations. By inlining these allocations directly into each

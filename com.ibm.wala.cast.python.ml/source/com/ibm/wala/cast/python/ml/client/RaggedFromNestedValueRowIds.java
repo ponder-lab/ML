@@ -3,7 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.ml.client.RaggedFromNestedValueRowIds.Parameters.FLAT_VALUES;
 import static com.ibm.wala.cast.python.ml.client.RaggedFromNestedValueRowIds.Parameters.NESTED_NROWS;
 import static com.ibm.wala.cast.python.ml.client.RaggedFromNestedValueRowIds.Parameters.NESTED_VALUE_ROWIDS;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT_OP_CONSTANT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT_VALUE;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
@@ -289,7 +289,22 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
     Set<InstanceKey> result = HashSetFactory.make();
     for (InstanceKey ik : pts) {
       AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-      if (asin != null && asin.getConcreteType().getReference().equals(CONSTANT_OP_CONSTANT)) {
+      if (asin != null
+          && asin.getNode()
+              .getMethod()
+              .getDeclaringClass()
+              .getReference()
+              .equals(CONSTANT.getDeclaringClass())) {
+        // Detect a `tf.constant(...)` result by checking the *containing method*
+        // of the allocation (the `tensorflow/functions/constant.do()` CGNode), not
+        // the alloc's concrete type. The latter is
+        // `Ltensorflow/python/framework/constant_op/constant`,
+        // a function-name duplicate that we want to be able to migrate to canonical
+        // `Ltensorflow/python/framework/ops/Tensor` later (wala/ML#459 PR 2). Reading
+        // the containing method's declaring class instead decouples this recognition
+        // from the alloc-class convention; the two are functionally equivalent today
+        // because the only place that allocates `CONSTANT_OP_CONSTANT` is inside `constant.do()`.
+        //
         // Try the alloc's `value` field PTS first, then fall back to the
         // allocating call's value-arg PTS. The XML stopped binding the value
         // to the field (wala/ML#451 reopen) to keep Hybridize's

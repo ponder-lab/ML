@@ -10,6 +10,19 @@ The following dependencies require Git submodules to be initialized and updated.
 git submodule update --init --recursive
 ```
 
+**When adding or removing a Git submodule, update every place that hardcodes the submodule list to match `.gitmodules`.** Submodules are third-party code outside the Ariadne codebase under change, and several tools have to be told explicitly to skip them. Audit checklist:
+
+- `pom.xml` — Spotless `<format>` blocks (search for `<!-- Exclude Git submodules -->`).
+- `.github/workflows/continuous-integration.yml` — the `black --fast --check --extend-exclude ... .` invocation under "Check formatting with Black."
+- `.github/codeql/codeql-config-java-kotlin.yml` — the `paths-ignore` block at the top.
+- Install steps in `continuous-integration.yml` and `codeql.yml` — the build needs each submodule installed as a local Maven artifact (or otherwise made available), so renames/removals propagate here too.
+
+To verify completeness, list current submodule paths and confirm each appears (or no longer appears) in every site above:
+
+```bash
+git config --file .gitmodules --get-regexp path | awk '{print $2}'
+```
+
 ### Installing Jython 3
 
 You must install the `jython-dev.jar` to your local maven repository.
@@ -81,11 +94,11 @@ Within a single shape, use `new SymbolicDim("?")` for a known-rank-but-unknown-s
 
 Never return a bare empty set to mean "unknown dtype" — that collides with the "not a tensor" signal.
 
-### Tensor types — `getTensorTypes`
+### Tensor Types — `getTensorTypes`
 
 Shapes and dtypes are orthogonal. When the shape is unknown but the dtype is known, `getTensorTypes` emits `TensorType` instances with `null` dims so dtype information is preserved. `TensorType` is null-dims-safe; any code that consumes `TensorType`s must handle `getDims() == null`.
 
-### Checklist when adding a new generator
+### Checklist When Adding a New Generator
 
 - [ ] Audit every final-fallback return in `getDefaultShapes` and `getDefaultDTypes` against the tables above.
 - [ ] Prefer `null` over `Collections.emptySet()` when the intended meaning is "we know it's a tensor, we just can't figure out the shape."
@@ -97,11 +110,12 @@ Shapes and dtypes are orthogonal. When the shape is unknown but the dtype is kno
 When adding or modifying an API summary in `tensorflow.xml` / `numpy.xml`:
 
 - **Allocating ops** — APIs that return a fresh tensor (e.g., `tf.matmul`, `tf.nn.sigmoid`, `tf.nn.softmax`, `tf.sparse.add`, `tf.nn.sparse_softmax_cross_entropy_with_logits`, `np.array`, `np.reshape`) should use `<new def="res" class="..."/>` followed by `<return value="res"/>`. Pair the XML with a `TensorGenerator` subclass that computes the output shape/dtype from the inputs. **Never** use `<return value="param"/>` for an allocating op — that aliases the call's result with an input and silently propagates the wrong shape/dtype downstream (this is a recurring bug class; see closed wala/ML#412 and predecessors).
+- **Allocation-class convention for `<new>` results** — picking the right `class="..."` depends on the API kind. The asymmetric rule is documented in the header comment at the top of `tensorflow.xml`; the short version: function-typed APIs that return a tensor (e.g., `tf.math.sigmoid`, `tf.math.add`, `tf.reshape`) use canonical `Ltensorflow/python/framework/ops/Tensor`; object-typed APIs and callback-bearing wrappers (e.g., `Variable`, `Estimator`, `SparseTensor`, Estimator's `train` method class) use the per-op class because class identity is load-bearing for the result's method surface or for virtual dispatch on stored callbacks. See wala/ML#459 (the migration that established this) and wala/ML#465 (the convention's documentation).
 - **Genuinely pass-through ops** — only methods that semantically return one of their inputs unchanged (e.g., builder-style `Dataset.shuffle`/`batch` chain that returns the same dataset object, or identity-like ops) should use `<return value="param"/>`. Document the choice with a comment.
 - **Allocatable classes** — `<new class="L..."/>` requires the target class to be declared `<class name="..." allocatable="true">` somewhere in the XML, otherwise `HeapModel.getInstanceKeyForAllocation` returns `null` and the iKey never reaches the caller (see wala/WALA#1889 history). When a new `<new>` target class is added, audit existing ones in the same area for the declaration.
 - **`numArgs` / `paramNames` consistency** — every `<method numArgs="N" paramNames="...">` must have exactly `N` whitespace-separated names in `paramNames`. Mismatches silently break parameter resolution; audit when changing signatures.
 
-## Pinning shapes / blocking PA leaks
+## Pinning Shapes / Blocking PA Leaks
 
 When the PA assignment graph propagates a tensor type into a destination that semantically isn't a tensor, use one of these `TensorTypeAnalysis` mechanisms (both threaded through `PythonTensorAnalysisEngine.performAnalysis`):
 
@@ -115,7 +129,22 @@ When the PA assignment graph propagates a tensor type into a destination that se
 - Ensure that all new and existing JUnit test cases pass successfully before committing changes.
 - Use descriptive names for JUnit test methods that clearly indicate the purpose of the test.
 - If you change any of the summary files (e.g., `tensorflow.xml`), ensure that you add or update JUnit test cases to cover the changes made. Also, you must run `mvn clean` to ensure that the changes are correctly reflected in the build for summary (XML) files.
-- When suppressing a known-failing test with `@Test(expected = AssertionError.class)`, always add a `TODO:` line to the test's Javadoc naming the issue that needs to land before the annotation can be removed. For example:
+- When a test would fail because of a known precision/correctness gap, **prefer encoding the *observed* (current, imprecise) behavior in the assertion itself** with a `TODO(<issue>):` comment that names the precise post-fix form. When the fix lands, the actual result changes and the test starts failing with a clear "expected observed-form, got precise-form" diff — that's the cue to update the assertion. For example:
+
+	```java
+	/**
+	 * ...test description, including why the result is currently imprecise...
+	 *
+	 * <p>TODO(wala/ML#380): When the per-Model collapse is fixed, narrow the assertion to
+	 * {@code Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32)}.
+	 */
+	@Test
+	public void testModelAttributesMultiModelWrapped() {
+		test(..., Map.of(2, Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32, TENSOR_64_7_FLOAT32, TENSOR_7_FLOAT32)));
+	}
+	```
+
+	The fallback is `@Test(expected = AssertionError.class)`, which inverts the pass/fail signal — when the fix lands the test silently passes through an unrelated assertion (or fails because no `AssertionError` was thrown). Use it only when the precise post-fix shape is not yet known or not yet expressible in `TensorType`. When you do use it, always add a `TODO:` line to the test's Javadoc naming the blocking issue. For example:
 
 	```java
 	/**

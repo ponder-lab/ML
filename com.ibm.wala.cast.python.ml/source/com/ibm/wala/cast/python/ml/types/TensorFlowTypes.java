@@ -444,6 +444,25 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String FILL_SIGNATURE = "tf.fill()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/linspace. */
+  public static final MethodReference LINSPACE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/linspace")),
+          AstMethodReference.fnSelector);
+
+  private static final String LINSPACE_SIGNATURE = "tf.linspace()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/broadcast_to. */
+  public static final MethodReference BROADCAST_TO =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/broadcast_to")),
+          AstMethodReference.fnSelector);
+
+  private static final String BROADCAST_TO_SIGNATURE = "tf.broadcast_to()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/convert_to_tensor. */
   public static final MethodReference CONVERT_TO_TENSOR =
       MethodReference.findOrCreate(
@@ -862,6 +881,93 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String ARGMAX_SIGNATURE = "tf.argmax()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/math/argmin. */
+  public static final MethodReference ARGMIN =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/argmin")),
+          AstMethodReference.fnSelector);
+
+  private static final String ARGMIN_SIGNATURE = "tf.argmin()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/linalg/tensordot. */
+  public static final MethodReference TENSORDOT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/tensordot")),
+          AstMethodReference.fnSelector);
+
+  private static final String TENSORDOT_SIGNATURE = "tf.linalg.tensordot()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/linalg/trace. */
+  public static final MethodReference TRACE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/trace")),
+          AstMethodReference.fnSelector);
+
+  private static final String TRACE_SIGNATURE = "tf.linalg.trace()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/tensor_scatter_nd_update. */
+  public static final MethodReference TENSOR_SCATTER_ND_UPDATE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/tensor_scatter_nd_update")),
+          AstMethodReference.fnSelector);
+
+  private static final String TENSOR_SCATTER_ND_UPDATE_SIGNATURE = "tf.tensor_scatter_nd_update()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/sequence_mask. */
+  public static final MethodReference SEQUENCE_MASK =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/sequence_mask")),
+          AstMethodReference.fnSelector);
+
+  private static final String SEQUENCE_MASK_SIGNATURE = "tf.sequence_mask()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/nn/embedding_lookup. */
+  public static final MethodReference EMBEDDING_LOOKUP =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/embedding_lookup")),
+          AstMethodReference.fnSelector);
+
+  private static final String EMBEDDING_LOOKUP_SIGNATURE = "tf.nn.embedding_lookup()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/gather_nd. */
+  public static final MethodReference GATHER_ND =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/gather_nd")),
+          AstMethodReference.fnSelector);
+
+  private static final String GATHER_ND_SIGNATURE = "tf.gather_nd()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/boolean_mask. */
+  public static final MethodReference BOOLEAN_MASK =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/boolean_mask")),
+          AstMethodReference.fnSelector);
+
+  private static final String BOOLEAN_MASK_SIGNATURE = "tf.boolean_mask()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/image/extract_patches. */
+  public static final MethodReference EXTRACT_PATCHES =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/image/extract_patches")),
+          AstMethodReference.fnSelector);
+
+  private static final String EXTRACT_PATCHES_SIGNATURE = "tf.image.extract_patches()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/math/equal. */
   public static final MethodReference EQUAL =
       MethodReference.findOrCreate(
@@ -879,6 +985,42 @@ public class TensorFlowTypes extends PythonTypes {
           AstMethodReference.fnSelector);
 
   private static final String NOT_EQUAL_SIGNATURE = "tf.not_equal()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/less. */
+  public static final MethodReference LESS =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/less")),
+          AstMethodReference.fnSelector);
+
+  private static final String LESS_SIGNATURE = "tf.less()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/less_equal. */
+  public static final MethodReference LESS_EQUAL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/less_equal")),
+          AstMethodReference.fnSelector);
+
+  private static final String LESS_EQUAL_SIGNATURE = "tf.less_equal()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/greater. */
+  public static final MethodReference GREATER =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/greater")),
+          AstMethodReference.fnSelector);
+
+  private static final String GREATER_SIGNATURE = "tf.greater()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/greater_equal. */
+  public static final MethodReference GREATER_EQUAL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/greater_equal")),
+          AstMethodReference.fnSelector);
+
+  private static final String GREATER_EQUAL_SIGNATURE = "tf.greater_equal()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/cast. */
   public static final MethodReference CAST =
@@ -1012,6 +1154,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String STOP_GRADIENT_SIGNATURE = "tf.stop_gradient()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/GradientTape#gradient. */
+  public static final MethodReference GRADIENT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/gradient")),
+          AstMethodReference.fnSelector);
+
+  private static final String GRADIENT_SIGNATURE = "tf.GradientTape.gradient()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/nn/softmax. */
   public static final MethodReference SOFTMAX =
       MethodReference.findOrCreate(
@@ -1144,6 +1295,8 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(TRUNCATED_NORMAL.getDeclaringClass(), TRUNCATED_NORMAL_SIGNATURE),
           Map.entry(ZEROS_LIKE.getDeclaringClass(), ZEROS_LIKE_SIGNATURE),
           Map.entry(FILL.getDeclaringClass(), FILL_SIGNATURE),
+          Map.entry(LINSPACE.getDeclaringClass(), LINSPACE_SIGNATURE),
+          Map.entry(BROADCAST_TO.getDeclaringClass(), BROADCAST_TO_SIGNATURE),
           Map.entry(CONVERT_TO_TENSOR.getDeclaringClass(), CONVERT_TO_TENSOR_SIGNATURE),
           Map.entry(EYE.getDeclaringClass(), EYE_SIGNATURE),
           Map.entry(SPARSE_TENSOR.getDeclaringClass(), SPARSE_TENSOR_SIGNATURE),
@@ -1195,8 +1348,22 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(CIFAR10_Y_TEST, CIFAR10_Y_TEST_SIGNATURE),
           Map.entry(PLACEHOLDER.getDeclaringClass(), PLACEHOLDER_SIGNATURE),
           Map.entry(ARGMAX.getDeclaringClass(), ARGMAX_SIGNATURE),
+          Map.entry(ARGMIN.getDeclaringClass(), ARGMIN_SIGNATURE),
+          Map.entry(TENSORDOT.getDeclaringClass(), TENSORDOT_SIGNATURE),
+          Map.entry(TRACE.getDeclaringClass(), TRACE_SIGNATURE),
+          Map.entry(
+              TENSOR_SCATTER_ND_UPDATE.getDeclaringClass(), TENSOR_SCATTER_ND_UPDATE_SIGNATURE),
+          Map.entry(SEQUENCE_MASK.getDeclaringClass(), SEQUENCE_MASK_SIGNATURE),
+          Map.entry(EMBEDDING_LOOKUP.getDeclaringClass(), EMBEDDING_LOOKUP_SIGNATURE),
+          Map.entry(GATHER_ND.getDeclaringClass(), GATHER_ND_SIGNATURE),
+          Map.entry(BOOLEAN_MASK.getDeclaringClass(), BOOLEAN_MASK_SIGNATURE),
+          Map.entry(EXTRACT_PATCHES.getDeclaringClass(), EXTRACT_PATCHES_SIGNATURE),
           Map.entry(EQUAL.getDeclaringClass(), EQUAL_SIGNATURE),
           Map.entry(NOT_EQUAL.getDeclaringClass(), NOT_EQUAL_SIGNATURE),
+          Map.entry(LESS.getDeclaringClass(), LESS_SIGNATURE),
+          Map.entry(LESS_EQUAL.getDeclaringClass(), LESS_EQUAL_SIGNATURE),
+          Map.entry(GREATER.getDeclaringClass(), GREATER_SIGNATURE),
+          Map.entry(GREATER_EQUAL.getDeclaringClass(), GREATER_EQUAL_SIGNATURE),
           Map.entry(CAST.getDeclaringClass(), CAST_SIGNATURE),
           Map.entry(
               SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass(),
@@ -1215,6 +1382,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(SIZE.getDeclaringClass(), SIZE_SIGNATURE),
           Map.entry(IDENTITY.getDeclaringClass(), IDENTITY_SIGNATURE),
           Map.entry(STOP_GRADIENT.getDeclaringClass(), STOP_GRADIENT_SIGNATURE),
+          Map.entry(GRADIENT.getDeclaringClass(), GRADIENT_SIGNATURE),
           Map.entry(SOFTMAX.getDeclaringClass(), SOFTMAX_SIGNATURE),
           Map.entry(DENSE_CALL.getDeclaringClass(), DENSE_CALL_SIGNATURE),
           Map.entry(FLATTEN.getDeclaringClass(), FLATTEN_SIGNATURE),
