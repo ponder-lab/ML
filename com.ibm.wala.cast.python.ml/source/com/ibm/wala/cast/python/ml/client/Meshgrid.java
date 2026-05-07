@@ -76,15 +76,11 @@ public class Meshgrid extends TensorGenerator implements TupleElementProvider {
 
   @Override
   public Set<TensorType> getTensorTypesForIndex(PropagationCallGraphBuilder builder, int index) {
+    // Shapes are uniformly ⊤ until the broadcast composer lands; emit one TensorType per
+    // dtype with null dims. When shapes become precise, this method needs to fan out per shape.
     Set<DType> dtypes = this.getDTypesForIndex(builder, index);
-    Set<List<Dimension<?>>> shapes = this.getShapesForIndex(builder, index);
     Set<TensorType> ret = HashSetFactory.make();
-    if (shapes == null) {
-      for (DType dt : dtypes) ret.add(new TensorType(dt.name().toLowerCase(), null));
-    } else {
-      for (List<Dimension<?>> shape : shapes)
-        for (DType dt : dtypes) ret.add(new TensorType(dt.name().toLowerCase(), shape));
-    }
+    for (DType dt : dtypes) ret.add(new TensorType(dt.name().toLowerCase(), null));
     return ret;
   }
 

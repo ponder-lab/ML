@@ -103,29 +103,24 @@ public class TopK extends TensorGenerator implements TupleElementProvider {
   @Override
   public Set<DType> getDTypesForIndex(PropagationCallGraphBuilder builder, int index) {
     if (index == INDICES_INDEX) return EnumSet.of(DType.INT32);
-    if (index == VALUES_INDEX) {
-      OrdinalSet<InstanceKey> inputPts =
-          this.getArgumentPointsToSet(
-              builder, Parameters.INPUT.getIndex(), Parameters.INPUT.getName());
-      if (inputPts == null || inputPts.isEmpty()) return EnumSet.of(DType.UNKNOWN);
-      Set<DType> dtypes = this.getDTypesOfValue(builder, inputPts);
-      return dtypes == null || dtypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : dtypes;
-    }
-    return EnumSet.of(DType.UNKNOWN);
+    if (index != VALUES_INDEX)
+      throw new IllegalArgumentException(
+          "TopK has only 2 outputs (values, indices); got index " + index + ".");
+    OrdinalSet<InstanceKey> inputPts =
+        this.getArgumentPointsToSet(
+            builder, Parameters.INPUT.getIndex(), Parameters.INPUT.getName());
+    if (inputPts == null || inputPts.isEmpty()) return EnumSet.of(DType.UNKNOWN);
+    Set<DType> dtypes = this.getDTypesOfValue(builder, inputPts);
+    return dtypes == null || dtypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : dtypes;
   }
 
   @Override
   public Set<TensorType> getTensorTypesForIndex(PropagationCallGraphBuilder builder, int index) {
+    // Shapes are uniformly ⊤ until the input-shape + k composer lands; emit one TensorType per
+    // dtype with null dims. When shapes become precise, this method needs to fan out per shape.
     Set<DType> dtypes = this.getDTypesForIndex(builder, index);
-    Set<List<Dimension<?>>> shapes = this.getShapesForIndex(builder, index);
     Set<TensorType> ret = HashSetFactory.make();
-    if (shapes == null) {
-      // ⊤ shape — emit one TensorType per dtype with null dims.
-      for (DType dt : dtypes) ret.add(new TensorType(dt.name().toLowerCase(), null));
-    } else {
-      for (List<Dimension<?>> shape : shapes)
-        for (DType dt : dtypes) ret.add(new TensorType(dt.name().toLowerCase(), shape));
-    }
+    for (DType dt : dtypes) ret.add(new TensorType(dt.name().toLowerCase(), null));
     return ret;
   }
 
