@@ -1,5 +1,8 @@
-# Test of tf.keras.datasets.cifar100.load_data(). Same shapes and dtype as cifar10:
-# x_train (50000, 32, 32, 3) uint8, y_train (50000, 1) uint8, x_test (10000, 32, 32, 3) uint8, y_test (10000, 1) uint8.
+# Test of tf.keras.datasets.cifar100.load_data(). Shapes match cifar10's:
+# x_train (50000, 32, 32, 3), y_train (50000, 1), x_test (10000, 32, 32, 3), y_test (10000, 1).
+# Image arrays carry uint8 (matching cifar10). LABEL arrays carry int64 — a divergence from
+# cifar10's uint8 labels that the analyzer's reuse of `Cifar10InputData` doesn't yet capture
+# (see wala/ML#487).
 import numpy as np
 import tensorflow as tf
 

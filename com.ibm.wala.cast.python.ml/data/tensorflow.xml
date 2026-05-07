@@ -3057,7 +3057,8 @@
       </class>
     </package>
     <package name="tensorflow/keras/datasets/cifar100">
-      <!-- https://www.tensorflow.org/api_docs/python/tf/keras/datasets/cifar100/load_data — same shapes and dtype as `cifar10.load_data()`. -->
+      <!-- https://www.tensorflow.org/api_docs/python/tf/keras/datasets/cifar100/load_data — shapes match `cifar10.load_data()` (so the dispatch reuses `Cifar10InputData`); image arrays carry `uint8`. Note: cifar100's label arrays are `int64` at runtime (vs `uint8` for cifar10) — a runtime-dtype divergence
+        the analyzer doesn't yet capture, see wala/ML#487. -->
       <class name="x_train" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
           <new def="ret" class="Ltensorflow/keras/datasets/cifar100/x_train" />
