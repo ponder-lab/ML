@@ -33,16 +33,6 @@ public class SequenceMask extends PassThroughUnaryTensorGenerator {
   }
 
   @Override
-  protected int getInputParameterPosition() {
-    return 0;
-  }
-
-  @Override
-  protected String getInputParameterName() {
-    return "lengths";
-  }
-
-  @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     return null;
   }
