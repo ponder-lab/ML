@@ -12,6 +12,38 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Cosh extends PassThroughUnaryTensorGenerator {
 
+  /**
+   * Parameter positions and keyword names for {@code tf.math.cosh(x, name=None)}. Ordinals match
+   * the position in {@code tensorflow.xml}'s {@code paramNames} after the implicit {@code self}
+   * receiver, so {@code Parameters.X.getIndex() == 0} resolves to the first user-facing positional
+   * argument.
+   */
+  protected enum Parameters {
+    /** The input tensor; shape and dtype source. */
+    X,
+
+    /** Optional debug name for the op; not consumed by this generator. */
+    NAME;
+
+    /**
+     * Lowercase keyword name used in argument-resolution helpers.
+     *
+     * @return The lowercased enum name (e.g. {@code "x"}).
+     */
+    public String getName() {
+      return name().toLowerCase();
+    }
+
+    /**
+     * Positional index of this parameter, excluding the implicit {@code self} receiver.
+     *
+     * @return The zero-based positional index.
+     */
+    public int getIndex() {
+      return ordinal();
+    }
+  }
+
   public Cosh(PointsToSetVariable source) {
     super(source);
   }
@@ -22,11 +54,11 @@ public class Cosh extends PassThroughUnaryTensorGenerator {
 
   @Override
   protected int getInputParameterPosition() {
-    return 0;
+    return Parameters.X.getIndex();
   }
 
   @Override
   protected String getInputParameterName() {
-    return "x";
+    return Parameters.X.getName();
   }
 }

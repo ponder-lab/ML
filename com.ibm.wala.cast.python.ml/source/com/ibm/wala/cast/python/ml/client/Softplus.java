@@ -12,6 +12,38 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Softplus extends PassThroughUnaryTensorGenerator {
 
+  /**
+   * Parameter positions and keyword names for {@code tf.math.softplus(features, name=None)}.
+   * Ordinals match the position in {@code tensorflow.xml}'s {@code paramNames} after the implicit
+   * {@code self} receiver, so {@code Parameters.FEATURES.getIndex() == 0} resolves to the first
+   * user-facing positional argument.
+   */
+  protected enum Parameters {
+    /** The input tensor; shape and dtype source. */
+    FEATURES,
+
+    /** Optional debug name for the op; not consumed by this generator. */
+    NAME;
+
+    /**
+     * Lowercase keyword name used in argument-resolution helpers.
+     *
+     * @return The lowercased enum name (e.g. {@code "features"}).
+     */
+    public String getName() {
+      return name().toLowerCase();
+    }
+
+    /**
+     * Positional index of this parameter, excluding the implicit {@code self} receiver.
+     *
+     * @return The zero-based positional index.
+     */
+    public int getIndex() {
+      return ordinal();
+    }
+  }
+
   public Softplus(PointsToSetVariable source) {
     super(source);
   }
@@ -22,11 +54,11 @@ public class Softplus extends PassThroughUnaryTensorGenerator {
 
   @Override
   protected int getInputParameterPosition() {
-    return 0;
+    return Parameters.FEATURES.getIndex();
   }
 
   @Override
   protected String getInputParameterName() {
-    return "features";
+    return Parameters.FEATURES.getName();
   }
 }
