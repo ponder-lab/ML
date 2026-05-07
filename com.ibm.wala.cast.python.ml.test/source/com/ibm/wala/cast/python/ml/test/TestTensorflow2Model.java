@@ -4543,7 +4543,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Counterpart of {@link #testArgmaxOutputType()} for {@code tf.math.argmin}. Same dispatch path
    * via the inherited {@link com.ibm.wala.cast.python.ml.client.Argmin} extends {@link
-   * com.ibm.wala.cast.python.ml.client.Argmax} relationship.
+   * com.ibm.wala.cast.python.ml.client.Argmax} relationship; same shape-imprecision driver too.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the inferred ⊤ shape
+   * on {@code y} (vn=3) is imprecise &mdash; precise axis-aware shape composition for {@code
+   * Argmin} is gated by the {@code ElementWiseOperation} cartesian-pair issue, same as for {@code
+   * Argmax}. Tighten to the precise post-fix shape once #462 lands.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -4570,6 +4575,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * output_type=tf.int32} override on {@code y} survives the second sink call rather than being
    * clobbered by the {@code int64} default.
    *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the {@code y}
+   * contribution to the union is currently ⊤-shape ({@code TENSOR_INT32_UNKNOWN_SHAPE}) for the
+   * same reason as {@link #testArgmaxOutputType()} &mdash; gated by the {@code
+   * ElementWiseOperation} cartesian-pair issue. Tighten {@code y}'s contribution to its precise
+   * post-fix shape (a {@code (3,) int32}) once #462 lands.
+   *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
    * @throws CancelException if the analysis is cancelled.
@@ -4587,7 +4598,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Counterpart of {@link #testArgmaxOutputTypeDoubleSink()} for {@code tf.math.argmin}.
+   * Counterpart of {@link #testArgmaxOutputTypeDoubleSink()} for {@code tf.math.argmin}; same
+   * shape-imprecision driver.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the {@code y}
+   * contribution to the union is currently ⊤-shape ({@code TENSOR_INT32_UNKNOWN_SHAPE}) for the
+   * same reason as {@link #testArgmaxOutputTypeDoubleSink()}. Tighten to the precise {@code (3,)
+   * int32} once #462 lands.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
