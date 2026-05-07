@@ -7093,10 +7093,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Generator-dispatch test for the 3-arg form of {@code tf.where(condition, x, y)}. The dedicated
-   * {@link com.ibm.wala.cast.python.ml.client.Where} generator inherits shape and dtype from {@code
-   * x} (the second argument; {@code y} must have the same dtype as {@code x} per TF). The fixture
-   * has all three operands shape {@code (3,)} float32, so the precise output is {@code (3,)}
-   * float32. Fix for the wala/ML#422 listing.
+   * {@link com.ibm.wala.cast.python.ml.client.Where} generator produces shape and dtype by unioning
+   * the inferred sets over {@code x} and {@code y} (and intentionally ignoring {@code condition}'s
+   * shape, per the modeling note in {@code Where}'s class Javadoc). The fixture has all three
+   * operands shape {@code (3,)} float32, so the union collapses to the singleton {@code (3,)
+   * float32}. Fix for the wala/ML#422 listing.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.

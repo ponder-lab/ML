@@ -14,23 +14,26 @@ import java.util.Set;
 
 /**
  * Generator for the 3-argument form of {@code tf.where(condition, x, y, name=None)}, which selects
- * per-element from {@code x} or {@code y} based on {@code condition}. Output shape is the broadcast
- * of all three; output dtype matches {@code x} (and {@code y}, which TF requires to be the same
- * dtype as {@code x}).
+ * per-element from {@code x} or {@code y} based on {@code condition}.
+ *
+ * <p><b>TensorFlow's runtime contract</b> is that the output shape is the broadcast of all three
+ * inputs and the output dtype matches {@code x} (with TF requiring {@code y} to share {@code x}'s
+ * dtype). This generator does <em>not</em> compute a broadcast shape: it produces shape and dtype
+ * by unioning the inferred sets over {@code x} <em>and</em> {@code y} only, and intentionally
+ * ignores {@code condition}'s shape. Under TF's runtime contract the three sets agree, so the union
+ * collapses to a singleton; the modeling sacrifices a strictly-broader-rank bool-mask {@code
+ * condition} (which would broadcast the output beyond {@code x} / {@code y}'s shape) for a closer
+ * fit on the common case where {@code condition.shape == x.shape == y.shape}.
+ *
+ * <p>The reason for the union over {@code x} / {@code y} (rather than reading either alone) is
+ * static imprecision: under the analyzer's lattice, the inferred sets for {@code x} and {@code y}
+ * can disagree (e.g., when one is the result of a binary op whose PTS is empty). Unioning ensures
+ * we don't drop {@code y}'s contribution.
  *
  * <p>The 1-argument form {@code tf.where(condition)} is semantically different &mdash; it returns
  * {@code int64} indices of the true entries &mdash; and has no test fixture today. This generator
  * targets the common 3-argument form. For the 1-argument form, the union over {@code x} and {@code
  * y} below resolves to ⊤ (both args are absent), which is a sound fallback.
- *
- * <p>Shape and dtype are produced by unioning the inferred sets over {@code x} <em>and</em> {@code
- * y}. TF requires {@code x.dtype == y.dtype} and broadcasts {@code condition}, {@code x}, {@code y}
- * to a common shape, so at runtime the union is a singleton; under static imprecision (e.g., when
- * one of {@code x} / {@code y} is the result of a binary op whose PTS is empty) the two
- * argument-side sets can disagree, and unioning ensures we don't drop {@code y}'s contribution.
- * {@code condition}'s shape is intentionally not unioned in: in idiomatic user code its shape
- * equals {@code x} / {@code y}'s, but it can also be a strictly-broader-rank bool mask and
- * including it would over-approximate the common case.
  *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/where">tf.where</a>
  * @see <a href="https://github.com/wala/ML/issues/422">wala/ML#422</a>.
