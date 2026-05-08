@@ -22,6 +22,7 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -45,7 +46,7 @@ public class Range extends TensorGenerator {
     NAME;
 
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
 
     public int getIndex() {

@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -53,7 +54,7 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
     STOP_ON_EMPTY_DATASET;
 
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
 
     public int getIndex() {
