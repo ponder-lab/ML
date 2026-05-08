@@ -134,7 +134,7 @@ public class TestClasses extends TestJythonCallGraphShape {
     verifyGraphAssertions(CG, assertionsClasses3);
   }
 
-  protected static final Object[][] externalClassAssertions =
+  protected static final Object[][] assertionsClasses4 =
       new Object[][] {
         new Object[] {ROOT, new String[] {"script classes4_client.py", "script classes4.py"}},
         new Object[] {
@@ -167,7 +167,7 @@ public class TestClasses extends TestJythonCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph callGraph = this.process("classes4_client.py", "classes4.py");
 
-    verifyGraphAssertions(callGraph, externalClassAssertions);
+    verifyGraphAssertions(callGraph, assertionsClasses4);
 
     Collection<CGNode> nodes = this.getNodes(callGraph, "script classes4_client.py/f");
     assertEquals(1, nodes.size());
