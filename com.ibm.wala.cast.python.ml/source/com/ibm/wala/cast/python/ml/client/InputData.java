@@ -14,7 +14,15 @@ import java.util.Set;
 /**
  * A generator for MNIST input data tensors. These tensors have the shape defined by
  * TensorType.mnistInput().
+ *
+ * <p>TODO(<a href="https://github.com/wala/ML/issues/483">wala/ML#483</a>): orphan flagged by the
+ * dispatch-coverage meta-test (wala/ML#470). Recommended action is delete — likely superseded by
+ * {@link MnistInputData} (the actively-dispatched MNIST generator). When deleting, also drop {@link
+ * DispatchExempt} below.
  */
+@DispatchExempt(
+    "Orphan flagged by dispatch-coverage meta-test (wala/ML#470). Recommended delete per"
+        + " wala/ML#483; likely superseded by MnistInputData.")
 public class InputData extends TensorGenerator {
   public InputData(PointsToSetVariable source) {
     super(source);
