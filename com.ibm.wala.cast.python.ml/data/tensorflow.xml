@@ -453,9 +453,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/transpose -->
         <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="x" value="pass_through" />
         <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="array_ops" value="pass_through" />
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/clip_by_value -->
-        <putfield class="LRoot" field="clip_by_value" fieldType="LRoot" ref="x" value="pass_through" />
-        <putfield class="LRoot" field="clip_by_value" fieldType="LRoot" ref="clip_ops" value="pass_through" />
+        <!-- `tf.clip_by_value` and `clip_ops.clip_by_value` now route through the dedicated `<class name="clip_by_value">` block defined later in this file. -->
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/clip_by_global_norm -->
         <new def="clip_by_global_norm" class="Ltensorflow/functions/clip_by_global_norm" />
         <putfield class="LRoot" field="clip_by_global_norm" fieldType="LRoot" ref="x" value="clip_by_global_norm" />
@@ -548,9 +546,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/tile -->
         <putfield class="LRoot" field="tile" fieldType="LRoot" ref="x" value="pass_through" />
         <putfield class="LRoot" field="tile" fieldType="LRoot" ref="gen_array_ops" value="pass_through" />
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/expand_dims -->
-        <putfield class="LRoot" field="expand_dims" fieldType="LRoot" ref="x" value="pass_through" />
-        <putfield class="LRoot" field="expand_dims" fieldType="LRoot" ref="array_ops" value="pass_through" />
+        <!-- `tf.expand_dims` and `array_ops.expand_dims` now route through the dedicated `<class name="expand_dims">` block defined later in this file. -->
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/gather -->
         <putfield class="LRoot" field="gather" fieldType="LRoot" ref="x" value="pass_through" />
         <putfield class="LRoot" field="gather" fieldType="LRoot" ref="array_ops" value="pass_through" />
@@ -783,9 +779,11 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/expand_dims -->
         <new def="expand_dims" class="Ltensorflow/functions/expand_dims" />
         <putfield class="LRoot" field="expand_dims" fieldType="LRoot" ref="x" value="expand_dims" />
+        <putfield class="LRoot" field="expand_dims" fieldType="LRoot" ref="array_ops" value="expand_dims" />
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/clip_by_value -->
         <new def="clip_by_value" class="Ltensorflow/functions/clip_by_value" />
         <putfield class="LRoot" field="clip_by_value" fieldType="LRoot" ref="x" value="clip_by_value" />
+        <putfield class="LRoot" field="clip_by_value" fieldType="LRoot" ref="clip_ops" value="clip_by_value" />
         <!-- Tier-A pure-passthrough math ops (wala/ML#422). Each modeled with direct `<new>+<return>` and a per-op Java generator extending `PassThroughUnaryTensorGenerator`; output shape and dtype both inherit from `x`. Pre-this-PR, several of these ops (sqrt, log, sin, cos) were earlier-bound to a
           generic `pass_through` field-write that aliases the result to the input rather than allocating a fresh tensor &mdash; the result was reachable via the receiver's modeling but had no per-op precision. The per-op `<new>+<return>` here replaces that for `tf` / `tf.math` callers, and the `gen_math_ops` /
           `math_ops` aliases below restore the precision under those internal modules too (`sqrt` had `math_ops`; `log`/`sin`/`cos` had `gen_math_ops` in the prior model). -->
