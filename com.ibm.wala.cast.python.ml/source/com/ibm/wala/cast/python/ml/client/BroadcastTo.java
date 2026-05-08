@@ -87,6 +87,21 @@ public class BroadcastTo extends TensorGenerator {
     return shapes == null || shapes.isEmpty() ? null : shapes;
   }
 
+  /**
+   * Routes the shape query through {@link #getDefaultShapes} unconditionally rather than deferring
+   * to the parent's PTS-based dispatch (which would call {@link #getShapesFromShapeArgument}
+   * directly without the tolerate-runtime-tensor catch). The point of this generator is the
+   * localized catch on `tf.broadcast_to(x, tf.shape(y))`; letting the parent's dispatch bypass it
+   * would defeat the purpose.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The shapes per {@link #getDefaultShapes}.
+   */
+  @Override
+  public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+    return getDefaultShapes(builder);
+  }
+
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     int inputVn =

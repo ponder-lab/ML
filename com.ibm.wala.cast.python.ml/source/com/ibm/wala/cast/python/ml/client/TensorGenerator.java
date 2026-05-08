@@ -256,11 +256,21 @@ public abstract class TensorGenerator {
    * empty or {@code null} &mdash; that's a caller-contract violation (callers should check for
    * empty PTS before invoking this helper), distinct from "shape was a runtime tensor".
    *
+   * <p>Returns {@code null} (lattice ⊤) for sub-parse failures during recursive descent: when a
+   * recognized container's nested elements have empty PTS, when a {@code tf.constant} value PTS is
+   * empty after the call-site walk, when a {@link com.ibm.wala.cast.python.ml.types.TensorFlowTypes
+   * #TENSOR_SPEC} or {@link com.ibm.wala.cast.python.ml.types.TensorFlowTypes#RAGGED_TENSOR_SPEC}
+   * shape field has empty PTS, or when a recursive call on any of these returns {@code null}. This
+   * is distinct from the strict-throw contract for unrecognized top-level forms above: the throw
+   * signals "this kind of shape isn't modeled at all"; the {@code null} returns signal "this
+   * shape's structure is recognized but the leaves aren't statically resolvable" (a soundness ⊤
+   * appropriate for the lattice).
+   *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param pointsToSet The points-to set of the shape argument. FIXME: Why not take a value number?
-   * @return A set of possible shapes of the tensor returned by this generator. Never {@code null}
-   *     under normal operation; unrecognized forms throw {@link IllegalStateException} rather than
-   *     returning {@code null}.
+   * @return A set of possible shapes; or {@code null} (⊤) when sub-parse fails as documented above.
+   *     Never {@code null} for unrecognized top-level forms &mdash; those throw {@link
+   *     IllegalStateException} instead.
    */
   protected Set<List<Dimension<?>>> getShapesFromShapeArgument(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {

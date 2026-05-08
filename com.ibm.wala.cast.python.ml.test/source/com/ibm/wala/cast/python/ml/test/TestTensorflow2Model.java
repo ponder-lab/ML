@@ -4587,7 +4587,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Regression guard for {@code tf.broadcast_to(x, tf.shape(y))} &mdash; the runtime-tensor
    * shape-arg pattern. {@link com.ibm.wala.cast.python.ml.client.TensorGenerator
    * #getShapesFromShapeArgument} throws {@link IllegalStateException} for the unrecognized {@code
-   * Ltensorflow/functions/shape} allocation type that {@code tf.shape(y)} now produces (post the
+   * Ltensorflow/math/shape} allocation type that {@code tf.shape(y)} now produces (post the
    * wala/ML#489 root-cause fix on this PR's `tensorflow.xml`); {@link
    * com.ibm.wala.cast.python.ml.client.BroadcastTo#getDefaultShapes}'s try/catch returns {@code
    * null} (lattice ⊤) instead of letting the exception abort the analysis. The result is shape ⊤
@@ -6995,28 +6995,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Regression guard for {@code tf.reshape(x, tf.shape(y))} shape inference. Runtime answer is
-   * {@code (2, 3)} of {@code float32}. Post the wala/ML#489 root-cause fix on this PR's
-   * `tensorflow.xml`, the malformed compound-dim shape is gone; the analyzer now produces a union
-   * of the input's shape ({@code (6,)} since {@code x} is 1-D with 6 elements) and a scalar &mdash;
-   * not the precise {@code (2, 3)} answer, but no longer the malformed compound. The {@link
-   * com.ibm.wala.cast.python.ml.client.Reshape} generator doesn't have a try/catch around the
-   * helper (unlike {@link com.ibm.wala.cast.python.ml.client.BroadcastTo}), so when the helper
-   * throws on the {@code Ltensorflow/functions/shape} allocation, the exception propagates to
-   * {@link com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory}'s upstream catch and the
-   * result falls back to less-precise inference paths.
+   * {@code (2, 3)} of {@code float32}. Post this PR's wala/ML#489 root-cause fix (`tensorflow.xml`
+   * allocates a fresh `Ltensorflow/math/shape` instance for `tf.shape(...)` instead of aliasing
+   * through `pass_through`), the helper's else-branch fires cleanly for the unrecognized allocation
+   * type and throws {@link IllegalStateException}. {@link
+   * com.ibm.wala.cast.python.ml.client.Reshape} doesn't localize the catch (unlike {@link
+   * com.ibm.wala.cast.python.ml.client.BroadcastTo}), per this PR's keep-throw-everywhere-except-
+   * BroadcastTo design, so the exception propagates up and aborts the analysis on this fixture.
+   * That's the design choice: missing modeling on `Reshape`'s runtime-tensor shape path surfaces as
+   * a loud signal rather than a silent ⊤.
    *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/489">wala/ML#489</a>): tighten to {@link
-   * #TENSOR_2_3_FLOAT32} once {@code Reshape} can compute the precise shape from a runtime shape
-   * arg (or once the helper's runtime-tensor handling lands a precise composer).
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/489">wala/ML#489</a>): when {@code Reshape}
+   * gains a precise-shape composer (or a localized try/catch), tighten this test to assert {@link
+   * #TENSOR_2_3_FLOAT32} (or ⊤) and remove the {@code expected} suppression.
    */
-  @Test
+  @Test(expected = IllegalStateException.class)
   public void testReshapeRuntimeShape()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    // Observed: union of the input x's shape (6,) and a scalar. Captured per the
-    // prefer-observed-assertion convention (CONTRIBUTING.md > Java Testing).
-    TensorType inputShape = new TensorType(FLOAT_32, asList(new NumericDim(6)));
-    TensorType scalar = new TensorType(FLOAT_32, asList());
-    test("tf2_test_reshape_runtime_shape.py", "f", 1, 1, Map.of(2, Set.of(inputShape, scalar)));
+    test("tf2_test_reshape_runtime_shape.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
   }
 
   @Test
