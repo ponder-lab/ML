@@ -4731,6 +4731,38 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression guard for {@code tf.broadcast_to(x, tf.shape(y))} &mdash; the runtime-tensor
+   * shape-arg pattern. {@link com.ibm.wala.cast.python.ml.client.TensorGenerator
+   * #getShapesFromShapeArgument} throws {@link IllegalStateException} for the runtime {@code
+   * Ltensorflow/python/framework/ops/Tensor} that {@code tf.shape(y)} now allocates (post the
+   * wala/ML#489 root-cause fix on this PR's `tensorflow.xml`); {@link
+   * com.ibm.wala.cast.python.ml.client.BroadcastTo#getDefaultShapes}'s try/catch returns {@code
+   * null} (lattice ⊤) instead of letting the exception abort the analysis. The result is shape ⊤
+   * with dtype inherited from {@code x} (float32). Without the catch, analysis aborts and this test
+   * fails &mdash; this is the direct regression guard for this PR's localized-tolerance fix.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/473">wala/ML#473</a>): the runtime answer is
+   * (2, 3) of float32. When the helper learns to recognize {@code tf.shape(y)} as a shape arg
+   * (rather than treating it as an unmodeled runtime tensor), tighten this assertion from {@link
+   * #TENSOR_UNKNOWN_SHAPE_FLOAT32} to {@code TENSOR_2_3_FLOAT32}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testBroadcastToRuntimeShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_broadcast_to_runtime_shape.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
    * Generator-dispatch test for {@code tf.linalg.tensordot}. Output dtype is inherited from the
    * {@code a} input (here float32), shape is ⊤. See {@link
    * com.ibm.wala.cast.python.ml.client.Tensordot} (wala/ML#449).
@@ -7302,6 +7334,34 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testReshape5() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_reshape5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_28_28_1_FLOAT32)));
+  }
+
+  /**
+   * Regression guard for {@code tf.reshape(x, tf.shape(y))} shape inference. Runtime answer is
+   * {@code (2, 3)} of {@code float32}. Post this PR's wala/ML#489 root-cause fix (`tensorflow.xml`
+   * allocates a fresh `Ltensorflow/python/framework/ops/Tensor` for `tf.shape(...)` instead of
+   * aliasing through `pass_through`), the helper's else-branch fires cleanly for the unrecognized
+   * allocation type and throws {@link IllegalStateException}. {@link
+   * com.ibm.wala.cast.python.ml.client.Reshape} doesn't localize the catch (unlike {@link
+   * com.ibm.wala.cast.python.ml.client.BroadcastTo}), per this PR's keep-throw-everywhere-except-
+   * BroadcastTo design, so the exception propagates up and aborts the analysis on this fixture.
+   * That's the design choice: missing modeling on `Reshape`'s runtime-tensor shape path surfaces as
+   * a loud signal rather than a silent ⊤.
+   *
+   * <p>The {@code expected} types map below ({@code Map.of(2, Set.of(TENSOR_2_3_FLOAT32))}) is
+   * unreachable while the {@code @Test(expected = IllegalStateException.class)} suppression is in
+   * place; it's staged for the eventual flip so that lifting the suppression brings the
+   * precise-shape assertion back without further edits to this method.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/473">wala/ML#473</a>): when the helper
+   * learns to recognize {@code tf.shape(y)} as a shape arg (or {@code Reshape} gains a localized
+   * try/catch mirroring {@code BroadcastTo}'s), tighten this test to assert {@link
+   * #TENSOR_2_3_FLOAT32} (or ⊤) and remove the {@code expected} suppression.
+   */
+  @Test(expected = IllegalStateException.class)
+  public void testReshapeRuntimeShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_reshape_runtime_shape.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
   }
 
   @Test

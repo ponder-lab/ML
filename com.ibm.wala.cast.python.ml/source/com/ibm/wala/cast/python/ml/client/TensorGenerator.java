@@ -238,14 +238,42 @@ public abstract class TensorGenerator {
   /**
    * Returns the possible shapes of the tensor returned by this generator.
    *
+   * <p>The strict-throw contract for unrecognized top-level forms is intentional: an unrecognized
+   * shape form means missing or incorrect modeling, and silencing it via a {@code null} return
+   * would suppress that diagnostic signal across the whole generator surface during development.
+   * The deeper fix (change the helper's contract to return {@code null} instead of throw) is
+   * tracked at <a href="https://github.com/wala/ML/issues/471">wala/ML#471</a>; for now the
+   * tolerance is localized to the one caller where runtime-tensor shape arguments are the
+   * legitimate use case &mdash; {@link BroadcastTo#getDefaultShapes} wraps this helper in a {@code
+   * try/catch (IllegalStateException)} that returns {@code null} (lattice ⊤). Other callers stay
+   * strict; a missing case there surfaces as an analysis-aborting exception, which is the
+   * load-bearing "modeling gap" signal.
+   *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param pointsToSet The points-to set of the shape argument. FIXME: Why not take a value number?
-   * @return A set of possible shapes of the tensor returned by this generator.
+   * @return A set of possible shapes, or {@code null} (lattice ⊤) for sub-parse failures during
+   *     recursive descent: when a {@code tf.constant} value PTS is empty after the call-site walk,
+   *     when a {@link com.ibm.wala.cast.python.ml.types.TensorFlowTypes#TENSOR_SPEC} or {@link
+   *     com.ibm.wala.cast.python.ml.types.TensorFlowTypes#RAGGED_TENSOR_SPEC} shape field has empty
+   *     PTS, or when a recursive call on any of these returns {@code null}. The {@code null}
+   *     returns signal "this shape's structure is recognized but the leaves aren't statically
+   *     resolvable" &mdash; distinct from the strict-throw contract for unrecognized top-level
+   *     forms, which signals "this kind of shape isn't modeled at all."
+   * @throws IllegalArgumentException when the {@code pointsToSet} parameter is itself empty or
+   *     {@code null}. That's a caller-contract violation (callers should check for empty PTS before
+   *     invoking this helper); distinct from "shape was a runtime tensor."
+   * @throws IllegalStateException when the shape argument's PTS contains an {@code
+   *     AllocationSiteInNode} of a type this method does not recognize as a static shape &mdash;
+   *     runtime tensors (e.g. the result of {@code tf.shape(y)}), opaque builder objects, or
+   *     anything that isn't a list/tuple, {@code tf.constant}, {@code TensorSpec}, or {@code
+   *     RaggedTensorSpec}. Non-allocation {@code InstanceKey}s in the PTS (e.g., {@code
+   *     ConstantKey} for a scalar Python int passed as the shape) are silently skipped rather than
+   *     throwing &mdash; if every key in the PTS is non-allocation, the method returns the empty
+   *     set rather than {@code null} or an exception.
    */
   protected Set<List<Dimension<?>>> getShapesFromShapeArgument(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
     if (pointsToSet == null || !pointsToSet.iterator().hasNext())
-      // TODO: The shape argument could be a tensor, in which case the points-to set would be empty.
       throw new IllegalArgumentException(
           "Empty points-to set for shape argument in source: " + this.getSource() + ".");
 
@@ -329,6 +357,7 @@ public abstract class TensorGenerator {
                     this.getShapesFromShapeArgument(
                         builder, Collections.singleton(instanceFieldIK));
 
+                if (nestedShapes == null) return null;
                 for (List<Dimension<?>> nestedShape : nestedShapes)
                   tensorDimensions.add(new CompoundDim(nestedShape));
               } else
@@ -421,7 +450,10 @@ public abstract class TensorGenerator {
           PointerKey valuePK = builder.getPointerKeyForInstanceField(asin, valueField);
           valuePts = pointerAnalysis.getPointsToSet(valuePK);
         }
-        ret.addAll(this.getShapesFromShapeArgument(builder, valuePts));
+        if (valuePts == null || valuePts.isEmpty()) return null;
+        Set<List<Dimension<?>>> constantShapes = this.getShapesFromShapeArgument(builder, valuePts);
+        if (constantShapes == null) return null;
+        ret.addAll(constantShapes);
       } else if (reference.equals(TensorFlowTypes.TENSOR_SPEC)
           || reference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)) {
         // We have a TensorSpec or RaggedTensorSpec. These objects carry shape and dtype
@@ -436,7 +468,10 @@ public abstract class TensorGenerator {
                         : TensorFlowTypes.RAGGED_SPEC_SHAPE);
         PointerKey shapePK = builder.getPointerKeyForInstanceField(instanceKey, shapeField);
         OrdinalSet<InstanceKey> shapePts = pointerAnalysis.getPointsToSet(shapePK);
-        ret.addAll(this.getShapesFromShapeArgument(builder, shapePts));
+        if (shapePts == null || shapePts.isEmpty()) return null;
+        Set<List<Dimension<?>>> specShapes = this.getShapesFromShapeArgument(builder, shapePts);
+        if (specShapes == null) return null;
+        ret.addAll(specShapes);
       } else
         throw new IllegalStateException(
             "Expected a " + list + " or " + tuple + " for the shape, but got: " + reference + ".");
