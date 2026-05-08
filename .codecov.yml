@@ -2,10 +2,14 @@ coverage:
   status:
     project:
       default:
-        informational: true
+        target: auto
+        threshold: 1%
+        informational: false
     patch:
       default:
-        informational: true
+        target: auto
+        threshold: 2%
+        informational: false
 
 # Inline annotations on changed lines in the PR's "Files changed" view, posted via the
 # GitHub Checks API. Surfaces uncovered patch lines co-located with the code under review,
