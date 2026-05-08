@@ -397,7 +397,9 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
   @Override
   public Set<TensorType> getTensorTypesForIndex(PropagationCallGraphBuilder builder, int index) {
     Set<List<Dimension<?>>> shapes = this.getShapesForIndex(builder, index);
+    if (shapes == null) return null;
     Set<DType> dTypes = this.getDTypesForIndex(builder, index);
+    if (dTypes == null) return null;
 
     Set<TensorType> ret = HashSetFactory.make();
 
