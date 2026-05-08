@@ -986,6 +986,69 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String MESHGRID_SIGNATURE = "tf.meshgrid()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/math/sqrt. */
+  public static final MethodReference SQRT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/sqrt")),
+          AstMethodReference.fnSelector);
+
+  private static final String SQRT_SIGNATURE = "tf.math.sqrt()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/negative. */
+  public static final MethodReference NEGATIVE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/negative")),
+          AstMethodReference.fnSelector);
+
+  private static final String NEGATIVE_SIGNATURE = "tf.math.negative()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/sin. */
+  public static final MethodReference SIN =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/sin")),
+          AstMethodReference.fnSelector);
+
+  private static final String SIN_SIGNATURE = "tf.math.sin()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/cos. */
+  public static final MethodReference COS =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/cos")),
+          AstMethodReference.fnSelector);
+
+  private static final String COS_SIGNATURE = "tf.math.cos()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/floor. */
+  public static final MethodReference FLOOR =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/floor")),
+          AstMethodReference.fnSelector);
+
+  private static final String FLOOR_SIGNATURE = "tf.math.floor()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/ceil. */
+  public static final MethodReference CEIL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/ceil")),
+          AstMethodReference.fnSelector);
+
+  private static final String CEIL_SIGNATURE = "tf.math.ceil()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/sign. */
+  public static final MethodReference SIGN =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/sign")),
+          AstMethodReference.fnSelector);
+
+  private static final String SIGN_SIGNATURE = "tf.math.sign()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/math/equal. */
   public static final MethodReference EQUAL =
       MethodReference.findOrCreate(
@@ -1378,6 +1441,13 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(EXTRACT_PATCHES.getDeclaringClass(), EXTRACT_PATCHES_SIGNATURE),
           Map.entry(TOP_K.getDeclaringClass(), TOP_K_SIGNATURE),
           Map.entry(MESHGRID.getDeclaringClass(), MESHGRID_SIGNATURE),
+          Map.entry(SQRT.getDeclaringClass(), SQRT_SIGNATURE),
+          Map.entry(NEGATIVE.getDeclaringClass(), NEGATIVE_SIGNATURE),
+          Map.entry(SIN.getDeclaringClass(), SIN_SIGNATURE),
+          Map.entry(COS.getDeclaringClass(), COS_SIGNATURE),
+          Map.entry(FLOOR.getDeclaringClass(), FLOOR_SIGNATURE),
+          Map.entry(CEIL.getDeclaringClass(), CEIL_SIGNATURE),
+          Map.entry(SIGN.getDeclaringClass(), SIGN_SIGNATURE),
           Map.entry(EQUAL.getDeclaringClass(), EQUAL_SIGNATURE),
           Map.entry(NOT_EQUAL.getDeclaringClass(), NOT_EQUAL_SIGNATURE),
           Map.entry(LESS.getDeclaringClass(), LESS_SIGNATURE),

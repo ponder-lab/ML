@@ -2,26 +2,82 @@ package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
- * Generator for {@code tf.math.argmax}. Output dtype is fixed at {@link DType#INT64} (the TF
- * default; the {@code output_type=tf.int32} alternative isn't currently surfaced through {@code
- * tensorflow.xml}, so the generator emits {@code int64} unconditionally). Output shape is left at ⊤
- * for now; computing the precise shape (input.shape with the {@code axis} dimension removed)
- * regresses tests such as {@code testNeuralNetwork*}, where the per-context shape union for {@code
- * y_true} (e.g. {@code [256]} train vs. {@code [10000]} test) cross-products through {@code
+ * Generator for {@code tf.math.argmax}. Output dtype defaults to {@link DType#INT64} (the TF
+ * default); when the call passes an explicit {@code output_type} argument (e.g. {@code
+ * output_type=tf.int32}), the canonical dtype-arg dispatch from {@link TensorGenerator#getDTypes}
+ * is inlined here (in this class's {@link #getDTypes} override; see its Javadoc) to bypass {@link
+ * ReduceMean#getDTypes}, which would otherwise inherit the input tensor's dtype &mdash; the wrong
+ * answer for argmax, which always returns an integer index. The override resolves the {@code
+ * output_type} argument via {@link #getDTypeParameterPosition} / {@link #getDTypeParameterName} and
+ * uses it instead of the default &mdash; fix for <a
+ * href="https://github.com/wala/ML/issues/463">wala/ML#463</a>. Output shape is left at ⊤ for now;
+ * computing the precise shape (input.shape with the {@code axis} dimension removed) regresses tests
+ * such as {@code testNeuralNetwork*}, where the per-context shape union for {@code y_true} (e.g.
+ * {@code [256]} train vs. {@code [10000]} test) cross-products through {@code
  * ElementWiseOperation}'s strict broadcast check. Shape precision can be added once the EWO union
- * behaviour is addressed (wala/ML#462). See wala/ML#449 (Tier 6).
+ * behaviour is addressed (<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>). See <a
+ * href="https://github.com/wala/ML/issues/449">wala/ML#449</a> (Tier 6).
  *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/math/argmax">tf.math.argmax</a>
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
 public class Argmax extends ReduceMean {
+
+  /**
+   * Parameter positions and keyword names for {@code tf.math.argmax(input, axis=None,
+   * output_type=tf.dtypes.int64, name=None)}. Ordinals match the position in {@code
+   * tensorflow.xml}'s {@code paramNames} after the implicit {@code self} receiver, so {@code
+   * Parameters.INPUT.getIndex() == 0} resolves to the first user-facing positional argument. The
+   * trailing {@code DIMENSION} entry preserves back-compat with the deprecated TF 1.x alias for
+   * {@code axis}.
+   */
+  protected enum Parameters {
+    /** The tensor to scan; the index of its max element along {@code axis} is returned. */
+    INPUT,
+
+    /** The axis along which to scan; defaults to {@code None}. */
+    AXIS,
+
+    /** Optional dtype override for the index output (defaults to {@code int64}). */
+    OUTPUT_TYPE,
+
+    /** Optional debug name for the op; not consumed by this generator. */
+    NAME,
+
+    /** TF 1.x alias for {@code axis}; retained for back-compat. */
+    DIMENSION;
+
+    /**
+     * Lowercase keyword name used in argument-resolution helpers when the call site uses {@code
+     * keyword=value} syntax. Uses {@link Locale#ROOT} so the conversion is locale-stable (a
+     * Turkish-locale JVM lowercasing {@code DIMENSION} would otherwise produce {@code dımensıon}
+     * with dotless {@code ı}, breaking keyword lookup for {@code dimension}).
+     *
+     * @return The lowercased enum name (e.g. {@code "output_type"}).
+     */
+    public String getName() {
+      return name().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Positional index of this parameter, excluding the implicit {@code self} receiver.
+     *
+     * @return The zero-based positional index.
+     */
+    public int getIndex() {
+      return ordinal();
+    }
+  }
 
   public Argmax(PointsToSetVariable source) {
     super(source);
@@ -32,13 +88,51 @@ public class Argmax extends ReduceMean {
     return null;
   }
 
-  // `getDefaultDTypes` is intentionally not overridden: the parent's `getDTypes(builder)` (which
-  // dispatches to `getDefaultDTypes` when there is no dtype argument) is itself overridden here to
-  // return INT64 unconditionally, bypassing the dtype-arg path entirely. Overriding
-  // `getDefaultDTypes` would be dead code.
+  /**
+   * The default output dtype when no {@code output_type} argument is passed. {@link
+   * TensorGenerator#getDTypes} dispatches here only when the dtype-arg path returns no resolved
+   * dtype, so this is the fallback. TF 2.9 default is {@code int64}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return {@code EnumSet.of(DType.INT64)}.
+   */
+  @Override
+  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    return EnumSet.of(DType.INT64);
+  }
 
   @Override
+  protected int getDTypeParameterPosition() {
+    return Parameters.OUTPUT_TYPE.getIndex();
+  }
+
+  @Override
+  protected String getDTypeParameterName() {
+    return Parameters.OUTPUT_TYPE.getName();
+  }
+
+  /**
+   * Bypasses {@link ReduceMean#getDTypes} (which inherits from the input tensor's dtype) by
+   * inlining the canonical {@link TensorGenerator#getDTypes} dispatch: read the {@code output_type}
+   * argument if present, otherwise fall back to {@link #getDefaultDTypes}. {@code argmax} produces
+   * an integer index regardless of input dtype, so the input-dtype path is never the right answer
+   * here.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The output dtype: the resolved {@code output_type} when explicitly passed, or {@code
+   *     int64} (the TF default) otherwise.
+   */
+  @Override
   protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
-    return EnumSet.of(DType.INT64);
+    int valNum =
+        this.getArgumentValueNumber(
+            builder, this.getDTypeParameterPosition(), this.getDTypeParameterName(), true);
+    if (valNum <= 0) return this.getDefaultDTypes(builder);
+
+    OrdinalSet<InstanceKey> pointsToSet =
+        this.getArgumentPointsToSet(
+            builder, this.getDTypeParameterPosition(), this.getDTypeParameterName());
+    if (pointsToSet == null || pointsToSet.isEmpty()) return this.getDefaultDTypes(builder);
+    return this.getDTypesFromDTypeArgument(builder, pointsToSet);
   }
 }

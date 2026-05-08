@@ -384,10 +384,12 @@ public class RaggedConstant extends Constant {
               .filter(Objects::nonNull)
               .collect(toSet());
 
+      Set<List<Dimension<?>>> rawInnerShapeArguments = this.getPossibleInnerShapeArguments(builder);
+      // Soundness: a `null` from `getPossibleInnerShapeArguments` means `inner_shape` was
+      // present but unparseable — the overall ragged-constant shape must be ⊤ in that case.
+      if (rawInnerShapeArguments == null) return null;
       Set<List<Dimension<?>>> innerShapeArguments =
-          this.getPossibleInnerShapeArguments(builder).stream()
-              .filter(Objects::nonNull)
-              .collect(toSet());
+          rawInnerShapeArguments.stream().filter(Objects::nonNull).collect(toSet());
 
       if (rankArguments.isEmpty())
         // Default ragged rank.
@@ -498,6 +500,13 @@ public class RaggedConstant extends Constant {
             builder, this.getInnerShapeParameterPosition(), getInnerShapeParameterName());
 
     if (pointsToSet != null && !pointsToSet.isEmpty()) {
+      // The helper still throws `IllegalStateException` for unparseable `inner_shape` forms
+      // (e.g., a runtime tensor). The keep-throw contract is intentional &mdash; per wala/ML#471
+      // the strict signal surfaces missing modeling rather than silently degrading. The
+      // exception propagates up to the analysis driver; only `BroadcastTo` localizes a catch
+      // (because runtime-tensor shape args are the legitimate use case there). Empty (no PTS
+      // recovered, or `inner_shape` not provided at all) returns the empty set, distinct from
+      // an unparseable form, and means "use defaults".
       return this.getShapesFromShapeArgument(builder, pointsToSet);
     } else return emptySet();
   }
