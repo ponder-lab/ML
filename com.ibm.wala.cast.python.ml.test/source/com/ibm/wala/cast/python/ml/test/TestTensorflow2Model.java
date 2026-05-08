@@ -495,6 +495,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_4096_UINT8 =
       new TensorType(UINT_8, asList(new NumericDim(4096)));
 
+  private static final TensorType TENSOR_3_STRING =
+      new TensorType(STRING, asList(new NumericDim(3)));
+
+  private static final TensorType TENSOR_25000_INT64 =
+      new TensorType(INT_64, asList(new NumericDim(25000)));
+
+  private static final TensorType TENSOR_25000_UNKNOWN =
+      new TensorType(UNKNOWN, asList(new NumericDim(25000)));
+
   @Test
   public void testValueIndex()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -5032,6 +5041,72 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             3, Set.of(TENSOR_404_FLOAT64),
             4, Set.of(TENSOR_102_13_FLOAT64),
             5, Set.of(TENSOR_102_FLOAT64)));
+  }
+
+  /**
+   * Generator test for {@code tf.keras.datasets.imdb.load_data()}. The four returned arrays each
+   * have shape {@code (25000,)}: the {@code x_train} / {@code x_test} arrays carry numpy {@code
+   * object} dtype at runtime (variable-length integer-encoded sequences, modeled as ⊤-dtype); the
+   * {@code y_train} / {@code y_test} arrays have dtype {@code int64} (binary labels). Asserts on
+   * all four unpacked arrays at {@code vn=2..5}.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/488">wala/ML#488</a>): the inferred unknown
+   * dtype for {@code x_train} / {@code x_test} is imprecise &mdash; the runtime dtype is numpy
+   * {@code object} (the Python fixture asserts that). Tighten to a dedicated {@code OBJECT} dtype
+   * if/when the lattice gains one.
+   */
+  @Test
+  public void testImdbLoadData()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_imdb_load_data.py",
+        "f",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_25000_UNKNOWN),
+            3, Set.of(TENSOR_25000_INT64),
+            4, Set.of(TENSOR_25000_UNKNOWN),
+            5, Set.of(TENSOR_25000_INT64)));
+  }
+
+  /**
+   * Generator test for {@code tf.strings.as_string} on a 2-arg sink {@code f(y, x)}. Output shape
+   * is the input's shape (here {@code (3,)}); output dtype is fixed to {@code string}
+   * (wala/ML#422). Asserts that both the {@code as_string} output (`y`, string dtype) at vn=2 and
+   * its input (`x`, float32) at vn=3 classify precisely &mdash; the multi-tensor-sink pattern
+   * doesn't break classification on either flow when run inside the full test suite.
+   */
+  @Test
+  public void testAsString2ArgSink()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_as_string_2arg_sink.py",
+        "f",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_3_STRING), 3, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Sibling of {@link #testAsString2ArgSink()} with two 1-arg sinks {@code f(y)} and {@code g(x)},
+   * asserting the {@code y}-side sink. The {@code as_string} output's string-dtype tensor
+   * classifies precisely at vn=2.
+   */
+  @Test
+  public void testAsStringTwoSinksY()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_as_string_two_sinks.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_STRING)));
+  }
+
+  /**
+   * Companion to {@link #testAsStringTwoSinksY()} asserting the {@code x}-side sink {@code g(x)}.
+   * The {@code x} input classifies precisely as float32 at vn=2.
+   */
+  @Test
+  public void testAsStringTwoSinksX()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_as_string_two_sinks.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
   }
 
   @Test
