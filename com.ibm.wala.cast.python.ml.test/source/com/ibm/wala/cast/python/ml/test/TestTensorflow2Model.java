@@ -4480,8 +4480,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Verifies that {@code tf.math.argmax(x, axis=0)} routes through the dedicated {@link
    * com.ibm.wala.cast.python.ml.client.Argmax} generator and emits the precise {@code int64} dtype
-   * (the TF default for argmax indices). Output shape is left at ⊤ in this Tier 6 PR — see
-   * wala/ML#462 for why.
+   * (the TF default for argmax indices).
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): output shape is left
+   * at ⊤. Precise axis-aware shape composition (reading {@code input.shape[:axis] +
+   * input.shape[axis+1:]}) regresses {@code testNeuralNetwork*} via the {@code
+   * ElementWiseOperation} cartesian-pair issue tracked at #462. Tighten to the precise post-fix
+   * shape once #462 lands.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -4497,6 +4502,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Counterpart of {@link #testArgmax()} for {@code tf.math.argmin}. Same semantics: dtype is fixed
    * at {@code int64}, shape is left at ⊤. See {@link com.ibm.wala.cast.python.ml.client.Argmin}.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): output shape is left
+   * at ⊤; same {@code ElementWiseOperation} cartesian-pair driver as for {@link #testArgmax()}.
+   * Tighten to the precise post-fix shape once #462 lands.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -4516,11 +4525,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * com.ibm.wala.cast.python.ml.client.Argmax} after the wala/ML#463 fix. The fixture's sink {@code
    * f(x, y)} has two parameters so that each tensor's inferred type can be checked independently.
    *
-   * <p>Shape on {@code y} (parameter index {@code 3}) is currently ⊤: precise axis-aware shape
-   * composition would require reading {@code input.shape[:axis] + input.shape[axis+1:]}, which
-   * regresses {@code testNeuralNetwork*} via the {@code ElementWiseOperation} cartesian-pair issue
-   * tracked in wala/ML#462. Captured-imprecise per the prefer-observed-assertion convention;
-   * tighten to a precise {@code (3,) int32} once #462 lands.
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the inferred ⊤ shape
+   * on {@code y} (vn=3) is imprecise &mdash; precise axis-aware shape composition (reading {@code
+   * input.shape[:axis] + input.shape[axis+1:]}) regresses {@code testNeuralNetwork*} via the {@code
+   * ElementWiseOperation} cartesian-pair issue tracked at #462. Captured-imprecise per the
+   * prefer-observed-assertion convention; tighten to a precise {@code (3,) int32} once #462 lands.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
