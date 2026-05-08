@@ -92,11 +92,13 @@ public class Where extends TensorGenerator {
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     Set<List<Dimension<?>>> xShapes = shapesOfArg(builder, Parameters.X);
     Set<List<Dimension<?>>> yShapes = shapesOfArg(builder, Parameters.Y);
-    if ((xShapes == null || xShapes.isEmpty()) && (yShapes == null || yShapes.isEmpty()))
-      return null;
+    // Lattice: `null` means ⊤ (unknown). If either side is ⊤, the union is ⊤ &mdash; taking only
+    // the other side's concrete shapes would be an unsound narrowing (we'd claim the result is
+    // exactly that shape when the unknown side could be any shape).
+    if (xShapes == null || yShapes == null) return null;
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
-    if (xShapes != null) ret.addAll(xShapes);
-    if (yShapes != null) ret.addAll(yShapes);
+    ret.addAll(xShapes);
+    ret.addAll(yShapes);
     return ret.isEmpty() ? null : ret;
   }
 
@@ -104,12 +106,17 @@ public class Where extends TensorGenerator {
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     Set<DType> xDTypes = dtypesOfArg(builder, Parameters.X);
     Set<DType> yDTypes = dtypesOfArg(builder, Parameters.Y);
-    if ((xDTypes == null || xDTypes.isEmpty()) && (yDTypes == null || yDTypes.isEmpty()))
-      return EnumSet.of(DType.UNKNOWN);
+    // Same lattice rule as `getDefaultShapes`: `null` means ⊤. If either side is ⊤, the result
+    // is ⊤ &mdash; collapse to `{UNKNOWN}` rather than narrow to the concrete side.
+    if (xDTypes == null || yDTypes == null) return EnumSet.of(DType.UNKNOWN);
     Set<DType> ret = EnumSet.noneOf(DType.class);
-    if (xDTypes != null) ret.addAll(xDTypes);
-    if (yDTypes != null) ret.addAll(yDTypes);
-    return ret.isEmpty() ? EnumSet.of(DType.UNKNOWN) : ret;
+    ret.addAll(xDTypes);
+    ret.addAll(yDTypes);
+    if (ret.isEmpty()) return EnumSet.of(DType.UNKNOWN);
+    // Lattice-normalize: if the union contains UNKNOWN, collapse to exactly `{UNKNOWN}` (⊤).
+    // Mixed sets like `{FLOAT32, UNKNOWN}` would violate the dtype lattice convention.
+    if (ret.contains(DType.UNKNOWN)) return EnumSet.of(DType.UNKNOWN);
+    return ret;
   }
 
   /**
