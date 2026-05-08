@@ -262,10 +262,14 @@ public abstract class TensorGenerator {
    * @throws IllegalArgumentException when the {@code pointsToSet} parameter is itself empty or
    *     {@code null}. That's a caller-contract violation (callers should check for empty PTS before
    *     invoking this helper); distinct from "shape was a runtime tensor."
-   * @throws IllegalStateException when the shape argument's PTS contains forms this method does not
-   *     recognize as a static shape &mdash; runtime tensors (e.g. the result of {@code
-   *     tf.shape(y)}), opaque builder objects, or anything that isn't a list/tuple, {@code
-   *     tf.constant}, {@code TensorSpec}, or {@code RaggedTensorSpec}.
+   * @throws IllegalStateException when the shape argument's PTS contains an {@code
+   *     AllocationSiteInNode} of a type this method does not recognize as a static shape &mdash;
+   *     runtime tensors (e.g. the result of {@code tf.shape(y)}), opaque builder objects, or
+   *     anything that isn't a list/tuple, {@code tf.constant}, {@code TensorSpec}, or {@code
+   *     RaggedTensorSpec}. Non-allocation {@code InstanceKey}s in the PTS (e.g., {@code
+   *     ConstantKey} for a scalar Python int passed as the shape) are silently skipped rather than
+   *     throwing &mdash; if every key in the PTS is non-allocation, the method returns the empty
+   *     set rather than {@code null} or an exception.
    */
   protected Set<List<Dimension<?>>> getShapesFromShapeArgument(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
