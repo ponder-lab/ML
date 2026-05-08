@@ -7,6 +7,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARGMAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARGMIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARRAY_OPS_RESHAPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.AS_STRING;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOOLEAN_MASK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOSTON_HOUSING_X_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOSTON_HOUSING_X_TRAIN;
@@ -78,6 +79,10 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GREATER;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GREATER_EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IDENTITY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_X_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_X_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_Y_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LEAKY_RELU;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LESS;
@@ -1113,6 +1118,14 @@ public class TensorGeneratorFactory {
       return new Cifar10InputData(source, Cifar10InputData.X_TEST_SHAPE);
     else if (isType(calledFunction, CIFAR10_Y_TEST))
       return new Cifar10InputData(source, Cifar10InputData.Y_TEST_SHAPE);
+    else if (isType(calledFunction, IMDB_X_TRAIN))
+      return new ImdbInputData(source, ImdbInputData.X_TRAIN_SHAPE, ImdbInputData.X_DTYPES);
+    else if (isType(calledFunction, IMDB_Y_TRAIN))
+      return new ImdbInputData(source, ImdbInputData.Y_TRAIN_SHAPE, ImdbInputData.Y_DTYPES);
+    else if (isType(calledFunction, IMDB_X_TEST))
+      return new ImdbInputData(source, ImdbInputData.X_TEST_SHAPE, ImdbInputData.X_DTYPES);
+    else if (isType(calledFunction, IMDB_Y_TEST))
+      return new ImdbInputData(source, ImdbInputData.Y_TEST_SHAPE, ImdbInputData.Y_DTYPES);
     else if (isType(calledFunction, FASHION_MNIST_X_TRAIN))
       return new MnistInputData(source, MnistInputData.X_TRAIN_SHAPE);
     else if (isType(calledFunction, FASHION_MNIST_Y_TRAIN))
@@ -1194,6 +1207,7 @@ public class TensorGeneratorFactory {
       return new BooleanMask(source);
     else if (isType(calledFunction, EXTRACT_PATCHES.getDeclaringClass()))
       return new ExtractPatches(source);
+    else if (isType(calledFunction, AS_STRING.getDeclaringClass())) return new AsString(source);
     else if (isType(calledFunction, TOP_K.getDeclaringClass())) return new TopK(source);
     else if (isType(calledFunction, MESHGRID.getDeclaringClass())) return new Meshgrid(source);
     else if (isType(calledFunction, WHERE.getDeclaringClass())) return new Where(source);

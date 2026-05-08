@@ -862,6 +862,29 @@ public class TensorFlowTypes extends PythonTypes {
   public static final String CIFAR10_Y_TEST_SIGNATURE =
       "tf.keras.datasets.cifar10.load_data/y_test";
 
+  public static final TypeReference IMDB_X_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/imdb/x_train"));
+
+  public static final String IMDB_X_TRAIN_SIGNATURE = "tf.keras.datasets.imdb.load_data/x_train";
+
+  public static final TypeReference IMDB_Y_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/imdb/y_train"));
+
+  public static final String IMDB_Y_TRAIN_SIGNATURE = "tf.keras.datasets.imdb.load_data/y_train";
+
+  public static final TypeReference IMDB_X_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/imdb/x_test"));
+
+  public static final String IMDB_X_TEST_SIGNATURE = "tf.keras.datasets.imdb.load_data/x_test";
+
+  public static final TypeReference IMDB_Y_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/imdb/y_test"));
+
+  public static final String IMDB_Y_TEST_SIGNATURE = "tf.keras.datasets.imdb.load_data/y_test";
   public static final TypeReference FASHION_MNIST_X_TRAIN =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/fashion_mnist/x_train"));
@@ -1079,6 +1102,15 @@ public class TensorFlowTypes extends PythonTypes {
           AstMethodReference.fnSelector);
 
   private static final String EXTRACT_PATCHES_SIGNATURE = "tf.image.extract_patches()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/strings/as_string. */
+  public static final MethodReference AS_STRING =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/strings/as_string")),
+          AstMethodReference.fnSelector);
+
+  private static final String AS_STRING_SIGNATURE = "tf.strings.as_string()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/math/top_k. */
   public static final MethodReference TOP_K =
@@ -1594,6 +1626,10 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(CIFAR10_Y_TRAIN, CIFAR10_Y_TRAIN_SIGNATURE),
           Map.entry(CIFAR10_X_TEST, CIFAR10_X_TEST_SIGNATURE),
           Map.entry(CIFAR10_Y_TEST, CIFAR10_Y_TEST_SIGNATURE),
+          Map.entry(IMDB_X_TRAIN, IMDB_X_TRAIN_SIGNATURE),
+          Map.entry(IMDB_Y_TRAIN, IMDB_Y_TRAIN_SIGNATURE),
+          Map.entry(IMDB_X_TEST, IMDB_X_TEST_SIGNATURE),
+          Map.entry(IMDB_Y_TEST, IMDB_Y_TEST_SIGNATURE),
           Map.entry(FASHION_MNIST_X_TRAIN, FASHION_MNIST_X_TRAIN_SIGNATURE),
           Map.entry(FASHION_MNIST_Y_TRAIN, FASHION_MNIST_Y_TRAIN_SIGNATURE),
           Map.entry(FASHION_MNIST_X_TEST, FASHION_MNIST_X_TEST_SIGNATURE),
@@ -1622,6 +1658,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(GATHER_ND.getDeclaringClass(), GATHER_ND_SIGNATURE),
           Map.entry(BOOLEAN_MASK.getDeclaringClass(), BOOLEAN_MASK_SIGNATURE),
           Map.entry(EXTRACT_PATCHES.getDeclaringClass(), EXTRACT_PATCHES_SIGNATURE),
+          Map.entry(AS_STRING.getDeclaringClass(), AS_STRING_SIGNATURE),
           Map.entry(TOP_K.getDeclaringClass(), TOP_K_SIGNATURE),
           Map.entry(MESHGRID.getDeclaringClass(), MESHGRID_SIGNATURE),
           Map.entry(WHERE.getDeclaringClass(), WHERE_SIGNATURE),
