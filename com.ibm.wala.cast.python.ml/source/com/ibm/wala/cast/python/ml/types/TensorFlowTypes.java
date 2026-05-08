@@ -968,6 +968,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String EXTRACT_PATCHES_SIGNATURE = "tf.image.extract_patches()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/where. */
+  public static final MethodReference WHERE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/where")),
+          AstMethodReference.fnSelector);
+
+  private static final String WHERE_SIGNATURE = "tf.where()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/nn/leaky_relu. */
   public static final MethodReference LEAKY_RELU =
       MethodReference.findOrCreate(
@@ -1467,6 +1476,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(GATHER_ND.getDeclaringClass(), GATHER_ND_SIGNATURE),
           Map.entry(BOOLEAN_MASK.getDeclaringClass(), BOOLEAN_MASK_SIGNATURE),
           Map.entry(EXTRACT_PATCHES.getDeclaringClass(), EXTRACT_PATCHES_SIGNATURE),
+          Map.entry(WHERE.getDeclaringClass(), WHERE_SIGNATURE),
           Map.entry(LEAKY_RELU.getDeclaringClass(), LEAKY_RELU_SIGNATURE),
           Map.entry(REDUCE_MIN.getDeclaringClass(), REDUCE_MIN_SIGNATURE),
           Map.entry(POW.getDeclaringClass(), POW_SIGNATURE),

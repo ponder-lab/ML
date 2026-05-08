@@ -137,6 +137,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VARIABLE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.WHERE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS_LIKE;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
@@ -1141,6 +1142,7 @@ public class TensorGeneratorFactory {
       return new BooleanMask(source);
     else if (isType(calledFunction, EXTRACT_PATCHES.getDeclaringClass()))
       return new ExtractPatches(source);
+    else if (isType(calledFunction, WHERE.getDeclaringClass())) return new Where(source);
     else if (isType(calledFunction, LEAKY_RELU.getDeclaringClass())) return new LeakyRelu(source);
     else if (isType(calledFunction, POW.getDeclaringClass()))
       return new ElementWiseOperation(source);
