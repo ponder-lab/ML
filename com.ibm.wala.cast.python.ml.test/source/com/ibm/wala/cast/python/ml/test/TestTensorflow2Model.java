@@ -4831,6 +4831,36 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_minimum.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
   }
 
+  /**
+   * Keyword-argument variant of {@link #testAtan2}: {@code tf.math.atan2(y=..., x=...)}. Exercises
+   * the kw-arg-resolution path on the {@code ElementWiseOperation} dispatch.
+   */
+  @Test
+  public void testAtan2Kw()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_atan2_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Keyword-argument variant of {@link #testMaximum}: {@code tf.math.maximum(x=..., y=...)}.
+   * Exercises the kw-arg-resolution path on the {@code ElementWiseOperation} dispatch.
+   */
+  @Test
+  public void testMaximumKw()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_maximum_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Keyword-argument variant of {@link #testMinimum}: {@code tf.math.minimum(x=..., y=...)}.
+   * Exercises the kw-arg-resolution path on the {@code ElementWiseOperation} dispatch.
+   */
+  @Test
+  public void testMinimumKw()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_minimum_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
   @Test
   public void testReduceSum2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
