@@ -7628,6 +7628,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * surface is {@code equation} (which the user can name explicitly even though it's positional in
    * the API) plus optional {@code name} / {@code optimize} kwargs. Same shape and dtype expectation
    * as the positional variant.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/507">wala/ML#507</a>): output shape is
+   * currently ⊤ pending the einsum-equation parser. Tighten to the precise post-parse shape ({@code
+   * (2, 2)} for this fixture) once #507 lands.
    */
   @Test
   public void testEinsumKw()
@@ -7640,6 +7644,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * &mdash; equation positional, inputs positional, optional `name` as kwarg. Exercises the
    * positional-then-kwarg dispatch path. Same shape and dtype expectation as the positional
    * variant.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/507">wala/ML#507</a>): output shape is
+   * currently ⊤ pending the einsum-equation parser. Tighten to the precise post-parse shape ({@code
+   * (2, 2)} for this fixture) once #507 lands.
    */
   @Test
   public void testEinsumMixed()
