@@ -17,12 +17,9 @@ import com.ibm.wala.util.CancelException;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.logging.Logger;
 import org.junit.Test;
 
 public class TestClasses extends TestJythonCallGraphShape {
-
-  private static final Logger LOGGER = Logger.getLogger(TestClasses.class.getName());
 
   protected static final Object[][] assertionsClasses1 =
       new Object[][] {
@@ -139,7 +136,7 @@ public class TestClasses extends TestJythonCallGraphShape {
 
   protected static final Object[][] externalClassAssertions =
       new Object[][] {
-        new Object[] {ROOT, new String[] {"script classes4_client.py"}},
+        new Object[] {ROOT, new String[] {"script classes4_client.py", "script classes4.py"}},
         new Object[] {
           "script classes4_client.py",
           new String[] {
