@@ -340,6 +340,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_INT64_UNKNOWN_SHAPE = new TensorType(INT_64, null);
 
+  private static final TensorType TENSOR_INT32_UNKNOWN_SHAPE = new TensorType(INT_32, null);
+
   private static final TensorType TENSOR_UNKNOWN_SHAPE_BOOL = new TensorType(BOOL, null);
 
   private static final TensorType TENSOR_3_INT32 =
@@ -1933,6 +1935,28 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testSliceSubscriptThroughDataset()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_iso_slicesub_ds.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_1_FLOAT32)));
+  }
+
+  /**
+   * Regression guard for {@code tf.distribute.MirroredStrategy.distribute_datasets_from_function}'s
+   * callback registration (wala/ML#113). The fixture registers {@code dataset_fn} only via {@code
+   * strategy.distribute_datasets_from_function(dataset_fn)} &mdash; no other call site. The {@code
+   * test(...)} helper's "function must exist in call graph" assertion fails pre-fix because {@code
+   * dataset_fn} never gets traced. After this PR's `tensorflow.xml` fix (synthetic-method body on
+   * {@code tensorflow/distribute/run/distribute_datasets_from_function} that allocates a stub
+   * {@code InputContext} and invokes {@code dataset_fn(ctx)}), the callback enters the call graph
+   * and the helper finds it. {@code input_context} is non-tensor, hence 0 tensor parameters; the 6
+   * tensor variables in the body come from the chained {@code tf.data.Dataset} calls.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCallbacks3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_callbacks3.py", "dataset_fn", 0, 6, Map.of());
   }
 
   /**
@@ -4478,8 +4502,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Verifies that {@code tf.math.argmax(x, axis=0)} routes through the dedicated {@link
    * com.ibm.wala.cast.python.ml.client.Argmax} generator and emits the precise {@code int64} dtype
-   * (the TF default for argmax indices). Output shape is left at ⊤ in this Tier 6 PR — see
-   * wala/ML#462 for why.
+   * (the TF default for argmax indices).
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): output shape is left
+   * at ⊤. Precise axis-aware shape composition (reading {@code input.shape[:axis] +
+   * input.shape[axis+1:]}) regresses {@code testNeuralNetwork*} via the {@code
+   * ElementWiseOperation} cartesian-pair issue tracked at #462. Tighten to the precise post-fix
+   * shape once #462 lands.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -4493,8 +4522,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Counterpart of {@link #testArgmax()} for {@code tf.math.argmin}. Same semantics: dtype is fixed
-   * at {@code int64}, shape is left at ⊤. See {@link com.ibm.wala.cast.python.ml.client.Argmin}.
+   * Counterpart of {@link #testArgmax()} for {@code tf.math.argmin}. Same semantics: dtype defaults
+   * to {@code int64} (overridable via {@code output_type}, see {@link #testArgminOutputType()}),
+   * shape is left at ⊤. See {@link com.ibm.wala.cast.python.ml.client.Argmin}.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): output shape is left
+   * at ⊤; same {@code ElementWiseOperation} cartesian-pair driver as for {@link #testArgmax()}.
+   * Tighten to the precise post-fix shape once #462 lands.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -4505,6 +4539,119 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testArgmin()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_argmin.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT64_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Verifies that {@code tf.math.argmax(x, axis=0, output_type=tf.int32)} honors the explicit
+   * {@code output_type} override and emits an {@code int32}-dtype tensor instead of the {@code
+   * int64} default. Exercises the dtype-arg dispatch path on {@link
+   * com.ibm.wala.cast.python.ml.client.Argmax} after the wala/ML#463 fix. The fixture's sink {@code
+   * f(x, y)} has two parameters so that each tensor's inferred type can be checked independently.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the inferred ⊤ shape
+   * on {@code y} (vn=3) is imprecise &mdash; precise axis-aware shape composition (reading {@code
+   * input.shape[:axis] + input.shape[axis+1:]}) regresses {@code testNeuralNetwork*} via the {@code
+   * ElementWiseOperation} cartesian-pair issue tracked at #462. Captured-imprecise per the
+   * prefer-observed-assertion convention; tighten to a precise {@code (3,) int32} once #462 lands.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgmaxOutputType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_argmax_output_type.py",
+        "f",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_2_3_FLOAT32),
+            3, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Counterpart of {@link #testArgmaxOutputType()} for {@code tf.math.argmin}. Same dispatch path
+   * via the inherited {@link com.ibm.wala.cast.python.ml.client.Argmin} extends {@link
+   * com.ibm.wala.cast.python.ml.client.Argmax} relationship; same shape-imprecision driver too.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the inferred ⊤ shape
+   * on {@code y} (vn=3) is imprecise &mdash; precise axis-aware shape composition for {@code
+   * Argmin} is gated by the {@code ElementWiseOperation} cartesian-pair issue, same as for {@code
+   * Argmax}. Tighten to the precise post-fix shape once #462 lands.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgminOutputType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_argmin_output_type.py",
+        "f",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_2_3_FLOAT32),
+            3, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Companion to {@link #testArgmaxOutputType()} that exercises the *single-parameter sink, two
+   * call sites* shape: {@code def f(a): ...; f(x); f(y)}. Parameter {@code a} should union {@code
+   * x}'s and {@code y}'s tensor types across the two call sites &mdash; verifies that the {@code
+   * output_type=tf.int32} override on {@code y} survives the second sink call rather than being
+   * clobbered by the {@code int64} default.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the {@code y}
+   * contribution to the union is currently ⊤-shape ({@code TENSOR_INT32_UNKNOWN_SHAPE}) for the
+   * same reason as {@link #testArgmaxOutputType()} &mdash; gated by the {@code
+   * ElementWiseOperation} cartesian-pair issue. Tighten {@code y}'s contribution to its precise
+   * post-fix shape (a {@code (3,) int32}) once #462 lands.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgmaxOutputTypeDoubleSink()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_argmax_output_type_double_sink.py",
+        "f",
+        1,
+        2,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Counterpart of {@link #testArgmaxOutputTypeDoubleSink()} for {@code tf.math.argmin}; same
+   * shape-imprecision driver.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the {@code y}
+   * contribution to the union is currently ⊤-shape ({@code TENSOR_INT32_UNKNOWN_SHAPE}) for the
+   * same reason as {@link #testArgmaxOutputTypeDoubleSink()}. Tighten to the precise {@code (3,)
+   * int32} once #462 lands.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgminOutputTypeDoubleSink()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_argmin_output_type_double_sink.py",
+        "f",
+        1,
+        2,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
   }
 
   // wala/ML#449 Tier 7: linspace/broadcast_to. Shape derives from a shape-arg (`num`/`shape`),
@@ -4852,6 +4999,197 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testRelu()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_relu.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  // Tier-A pure-passthrough math ops (wala/ML#422). Each is shape and dtype passthrough on `x`;
+  // routes to a per-op subclass of `PassThroughUnaryTensorGenerator`. The point of dedicated
+  // generators (vs. leaving these on `ReadDataFallback`) is dtype propagation: without these,
+  // `tf.math.sqrt(x)` etc. produce ⊤/UNKNOWN, blocking downstream input-signature inference
+  // through any function whose parameters flow from these ops.
+
+  /**
+   * Pure passthrough on {@code x}. See {@link com.ibm.wala.cast.python.ml.client.Sqrt}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testSqrt()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_sqrt.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Pure passthrough on {@code x}. See {@link com.ibm.wala.cast.python.ml.client.Log}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testLog()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_log.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Pure passthrough on {@code x}. See {@link com.ibm.wala.cast.python.ml.client.Negative}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testNegative()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_negative.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Pure passthrough on {@code x}. See {@link com.ibm.wala.cast.python.ml.client.Sin}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testSin()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_sin.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Pure passthrough on {@code x}. See {@link com.ibm.wala.cast.python.ml.client.Cos}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCos()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_cos.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Pure passthrough on {@code x}. See {@link com.ibm.wala.cast.python.ml.client.Floor}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testFloor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_floor.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Pure passthrough on {@code x}. See {@link com.ibm.wala.cast.python.ml.client.Ceil}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCeil()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_ceil.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testCeil} that exercises the {@code x} side of the fixture (the input to
+   * {@code tf.math.ceil}, asserted at the second sink {@code g(x)}). Combined with {@link
+   * #testCeil} (the {@code y} side, the {@code ceil} output), this covers both ends of the
+   * passthrough.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCeilInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_ceil.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Keyword-argument variant of {@link #testCeil}: {@code tf.math.ceil(x=x)}. Exercises the keyword
+   * arg-resolution path on the {@code PassThroughUnaryTensorGenerator} base.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCeilKw()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_ceil_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testCeilKw} that exercises the {@code x} side of the keyword-arg fixture.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCeilKwInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_ceil_kw.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * 2-arg-sink variant of {@link #testCeil}: same input and op, but with one combined sink {@code
+   * f(y, x)} instead of two separate single-arg sinks {@code f(y); g(x)}. This is the same shape as
+   * the wala/ML#495 multi-tensor-sink pattern; the difference is that #495 is specifically about
+   * dataset-loader outputs (`fashion_mnist`/`cifar100`/etc.) flowing through {@link
+   * com.ibm.wala.cast.python.ml.client.TensorGenerator#shapesFromSSAChain}'s fallback path. For
+   * {@code ceil} on {@code tf.constant}, no fallback is involved, so the pattern works precisely
+   * today &mdash; this test asserts the lattice-correct {@code (3,) float32} on both params and
+   * stands as a canary: if #495 ever generalizes beyond dataset loaders to per-op generators, this
+   * test will start failing.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCeilPair()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ceil_pair.py",
+        "f",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_3_FLOAT32), 3, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Pure passthrough on {@code x}. See {@link com.ibm.wala.cast.python.ml.client.Sign}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testSign()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_sign.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
   }
 
   @Test
