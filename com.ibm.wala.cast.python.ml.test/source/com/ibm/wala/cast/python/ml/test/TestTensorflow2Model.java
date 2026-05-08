@@ -30,8 +30,6 @@ import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.client.SliceBuiltinOperation;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
-import com.ibm.wala.cast.python.ml.types.TensorType.CompoundDim;
-import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.classLoader.IField;
@@ -4587,22 +4585,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Regression guard for {@code tf.broadcast_to(x, tf.shape(y))} &mdash; the runtime-tensor
-   * shape-arg pattern. The expectation when this PR was filed was that {@link
-   * com.ibm.wala.cast.python.ml.client.TensorGenerator#getShapesFromShapeArgument} throws {@link
-   * IllegalStateException} for runtime-tensor shape arguments, and that {@link
+   * shape-arg pattern. {@link com.ibm.wala.cast.python.ml.client.TensorGenerator
+   * #getShapesFromShapeArgument} throws {@link IllegalStateException} for the unrecognized {@code
+   * Ltensorflow/functions/shape} allocation type that {@code tf.shape(y)} now produces (post the
+   * wala/ML#489 root-cause fix on this PR's `tensorflow.xml`); {@link
    * com.ibm.wala.cast.python.ml.client.BroadcastTo#getDefaultShapes}'s try/catch returns {@code
-   * null} (lattice ⊤) instead of letting the exception abort the analysis.
-   *
-   * <p>Empirically, that's not what happens on this case: the helper successfully builds a
-   * malformed compound-dim shape (the same shape produced by {@code testReshapeRuntimeShape} for
-   * {@code tf.reshape(x, tf.shape(y))}), so the catch path doesn't fire. The observed output is a
-   * 2-dim compound where each dim is itself a Compound of three Constant-0 entries &mdash; a
-   * malformed shape, not ⊤. Same root cause as wala/ML#489.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/489">wala/ML#489</a>): the malformed
-   * compound-dim shape is incorrect; tighten the JUnit assertion to {@link
-   * #TENSOR_UNKNOWN_SHAPE_FLOAT32} (or the precise (2, 3) post-fix shape) once the helper's
-   * runtime-tensor handling is fixed.
+   * null} (lattice ⊤) instead of letting the exception abort the analysis. The result is shape ⊤
+   * with dtype inherited from {@code x} (float32). Without the catch, analysis aborts and this test
+   * fails &mdash; this is the direct regression guard for this PR's localized-tolerance fix.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -4612,15 +4602,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testBroadcastToRuntimeShape()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    // The observed (imprecise) shape for `tf.broadcast_to(x, tf.shape(y))` &mdash; a 2-dim
-    // Compound where each dim is itself a Compound of three NumericDim(0) entries. Encoded
-    // here per the prefer-observed-assertion convention (CONTRIBUTING.md > Java Testing).
-    List<Dimension<?>> observed =
-        asList(
-            new CompoundDim(asList(new NumericDim(0), new NumericDim(0), new NumericDim(0))),
-            new CompoundDim(asList(new NumericDim(0), new NumericDim(0), new NumericDim(0))));
-    TensorType observedType = new TensorType(FLOAT_32, observed);
-    test("tf2_test_broadcast_to_runtime_shape.py", "f", 1, 1, Map.of(2, Set.of(observedType)));
+    test(
+        "tf2_test_broadcast_to_runtime_shape.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
@@ -7008,28 +6995,28 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Regression guard for {@code tf.reshape(x, tf.shape(y))} shape inference. Runtime answer is
-   * {@code (2, 3)} of {@code float32}; the analyzer currently produces a malformed compound-dim
-   * shape (two compound dims, each containing three {@code Constant(0)} sub-dims) plus a spurious
-   * scalar shape — neither the precise answer nor a sound ⊤. The assertion encodes the
-   * observed-imprecise output per the prefer-observed-assertion convention; when the modeling
-   * lands, tighten the assertion to {@link #TENSOR_2_3_FLOAT32}.
+   * {@code (2, 3)} of {@code float32}. Post the wala/ML#489 root-cause fix on this PR's
+   * `tensorflow.xml`, the malformed compound-dim shape is gone; the analyzer now produces a union
+   * of the input's shape ({@code (6,)} since {@code x} is 1-D with 6 elements) and a scalar &mdash;
+   * not the precise {@code (2, 3)} answer, but no longer the malformed compound. The {@link
+   * com.ibm.wala.cast.python.ml.client.Reshape} generator doesn't have a try/catch around the
+   * helper (unlike {@link com.ibm.wala.cast.python.ml.client.BroadcastTo}), so when the helper
+   * throws on the {@code Ltensorflow/functions/shape} allocation, the exception propagates to
+   * {@link com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory}'s upstream catch and the
+   * result falls back to less-precise inference paths.
    *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/489">wala/ML#489</a>): {@code tf.reshape}
-   * with a runtime-tensor shape arg should either compute the precise shape or return ⊤ soundly,
-   * not a malformed compound-dim derived from misinterpreting the receiver tensor's element values
-   * as dim sizes.
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/489">wala/ML#489</a>): tighten to {@link
+   * #TENSOR_2_3_FLOAT32} once {@code Reshape} can compute the precise shape from a runtime shape
+   * arg (or once the helper's runtime-tensor handling lands a precise composer).
    */
   @Test
   public void testReshapeRuntimeShape()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    // Observed-imprecise: scalar shape + a compound-of-compounds derived from y's structure.
-    // The compounds each contain three Constant(0) dims (the values of y's rows). See #489.
-    List<TensorType.Dimension<?>> threeZeros =
-        asList(new NumericDim(0), new NumericDim(0), new NumericDim(0));
-    TensorType malformed =
-        new TensorType(FLOAT_32, asList(new CompoundDim(threeZeros), new CompoundDim(threeZeros)));
+    // Observed: union of the input x's shape (6,) and a scalar. Captured per the
+    // prefer-observed-assertion convention (CONTRIBUTING.md > Java Testing).
+    TensorType inputShape = new TensorType(FLOAT_32, asList(new NumericDim(6)));
     TensorType scalar = new TensorType(FLOAT_32, asList());
-    test("tf2_test_reshape_runtime_shape.py", "f", 1, 1, Map.of(2, Set.of(scalar, malformed)));
+    test("tf2_test_reshape_runtime_shape.py", "f", 1, 1, Map.of(2, Set.of(inputShape, scalar)));
   }
 
   @Test

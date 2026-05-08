@@ -1,11 +1,15 @@
 # Regression guard for `tf.reshape(x, tf.shape(y))` shape inference (wala/ML#489).
 #
-# At runtime, `z` has shape (2, 3) of float32. The analyzer currently produces a malformed
-# compound-dim shape (`[Compound,[Constant,0, Constant,0, Constant,0], ...]`) instead of
-# either the precise (2, 3) answer or a sound ⊤ (null shape). The corresponding JUnit test
-# (`testReshapeRuntimeShape`) asserts the currently-observed malformed shape with a TODO
-# referencing #489; when the modeling lands, the assertion will start failing and the TODO
-# is the cue to tighten it to the precise post-fix shape.
+# At runtime, `z` has shape (2, 3) of float32. Post the wala/ML#489 root-cause fix on this
+# PR's `tensorflow.xml` (separating `tf.shape`'s allocation from `pass_through` aliasing),
+# the malformed compound-dim shape that previously surfaced here is gone. The analyzer now
+# produces a union of the input x's shape ((6,)) and a scalar — neither the precise (2, 3)
+# answer nor a sound ⊤, but no longer malformed. Reshape doesn't have a try/catch around the
+# helper (unlike BroadcastTo), so the exception propagates to upstream fallback paths.
+#
+# The corresponding JUnit test asserts the currently-observed shape with a TODO referencing
+# #489; when Reshape gains a precise composer or a try/catch, the assertion will start
+# failing and the TODO is the cue to tighten it.
 import tensorflow as tf
 
 
