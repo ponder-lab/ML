@@ -54,7 +54,7 @@ public class TestClasses extends TestJythonCallGraphShape {
     CAstCallGraphUtil.dumpCG(builder.getCFAContextInterpreter(), builder.getPointerAnalysis(), CG);
     System.err.println("Call graph:\n" + CG);
 
-    verifyGraphAssertions(CG, assertionsClasses1);
+    verifyGraphAssertions(CG, graphAssertions(assertionsClasses1));
   }
 
   protected static final Object[][] assertionsClasses2 =
@@ -82,7 +82,7 @@ public class TestClasses extends TestJythonCallGraphShape {
   public void testClasses2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph CG = process("classes2.py");
-    verifyGraphAssertions(CG, assertionsClasses2);
+    verifyGraphAssertions(CG, graphAssertions(assertionsClasses2));
   }
 
   protected static final Object[][] assertionsClasses3 =
@@ -131,7 +131,7 @@ public class TestClasses extends TestJythonCallGraphShape {
         (SSAPropagationCallGraphBuilder) engine.defaultCallGraphBuilder();
     CallGraph CG = builder.makeCallGraph(builder.getOptions());
     System.err.println(CG);
-    verifyGraphAssertions(CG, assertionsClasses3);
+    verifyGraphAssertions(CG, graphAssertions(assertionsClasses3));
   }
 
   protected static final Object[][] assertionsClasses4 =

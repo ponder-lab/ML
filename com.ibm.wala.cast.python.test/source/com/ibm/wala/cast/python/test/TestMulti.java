@@ -20,7 +20,7 @@ public class TestMulti extends TestJythonCallGraphShape {
   public void testCalls1()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph CG = process("calls1.py", "calls2.py");
-    verifyGraphAssertions(CG, assertionsCalls1);
+    verifyGraphAssertions(CG, graphAssertions(assertionsCalls1));
   }
 
   protected static final Object[][] assertionsMulti1 =
@@ -40,7 +40,7 @@ public class TestMulti extends TestJythonCallGraphShape {
     CAstCallGraphUtil.AVOID_DUMP.set(false);
     CAstCallGraphUtil.dumpCG(
         (SSAContextInterpreter) builder.getContextInterpreter(), builder.getPointerAnalysis(), CG);
-    verifyGraphAssertions(CG, assertionsMulti1);
+    verifyGraphAssertions(CG, graphAssertions(assertionsMulti1));
   }
 
   protected static final Object[][] assertionsMulti2 =
@@ -62,7 +62,7 @@ public class TestMulti extends TestJythonCallGraphShape {
     CAstCallGraphUtil.AVOID_DUMP.set(false);
     CAstCallGraphUtil.dumpCG(
         (SSAContextInterpreter) builder.getContextInterpreter(), builder.getPointerAnalysis(), CG);
-    verifyGraphAssertions(CG, assertionsMulti2);
+    verifyGraphAssertions(CG, graphAssertions(assertionsMulti2));
   }
 
   protected static final Object[][] assertionsMulti3 =
@@ -82,7 +82,7 @@ public class TestMulti extends TestJythonCallGraphShape {
     CAstCallGraphUtil.AVOID_DUMP.set(false);
     CAstCallGraphUtil.dumpCG(
         (SSAContextInterpreter) builder.getContextInterpreter(), builder.getPointerAnalysis(), CG);
-    verifyGraphAssertions(CG, assertionsMulti3);
+    verifyGraphAssertions(CG, graphAssertions(assertionsMulti3));
   }
 
   protected static final Object[][] assertionsMulti4 =
@@ -102,7 +102,7 @@ public class TestMulti extends TestJythonCallGraphShape {
     CAstCallGraphUtil.AVOID_DUMP.set(false);
     CAstCallGraphUtil.dumpCG(
         (SSAContextInterpreter) builder.getContextInterpreter(), builder.getPointerAnalysis(), CG);
-    verifyGraphAssertions(CG, assertionsMulti4);
+    verifyGraphAssertions(CG, graphAssertions(assertionsMulti4));
   }
 
   protected static final Object[][] assertionsMulti5 =
@@ -122,6 +122,6 @@ public class TestMulti extends TestJythonCallGraphShape {
     CAstCallGraphUtil.AVOID_DUMP.set(false);
     CAstCallGraphUtil.dumpCG(
         (SSAContextInterpreter) builder.getContextInterpreter(), builder.getPointerAnalysis(), CG);
-    verifyGraphAssertions(CG, assertionsMulti5);
+    verifyGraphAssertions(CG, graphAssertions(assertionsMulti5));
   }
 }

@@ -53,7 +53,7 @@ public class TestCompare extends TestJythonCallGraphShape {
     PropagationCallGraphBuilder cgBuilder =
         (PropagationCallGraphBuilder) e.defaultCallGraphBuilder();
     CallGraph CG = cgBuilder.makeCallGraph(cgBuilder.getOptions());
-    verifyGraphAssertions(CG, assertionsCmp1);
+    verifyGraphAssertions(CG, graphAssertions(assertionsCmp1));
 
     Collection<CGNode> ctwo = this.getNodes(CG, "script cmp1.py/ctwo");
     assert !ctwo.isEmpty();
@@ -109,6 +109,6 @@ public class TestCompare extends TestJythonCallGraphShape {
     PropagationCallGraphBuilder cgBuilder =
         (PropagationCallGraphBuilder) e.defaultCallGraphBuilder();
     CallGraph CG = cgBuilder.makeCallGraph(cgBuilder.getOptions());
-    verifyGraphAssertions(CG, assertionsCmp2);
+    verifyGraphAssertions(CG, graphAssertions(assertionsCmp2));
   }
 }

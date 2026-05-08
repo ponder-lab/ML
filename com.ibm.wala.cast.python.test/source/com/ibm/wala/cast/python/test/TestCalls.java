@@ -44,7 +44,7 @@ public class TestCalls extends TestJythonCallGraphShape {
   public void testCalls1()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph CG = process("calls1.py");
-    verifyGraphAssertions(CG, assertionsCalls1);
+    verifyGraphAssertions(CG, graphAssertions(assertionsCalls1));
   }
 
   protected static final Object[][] assertionsCalls2 =
@@ -69,7 +69,7 @@ public class TestCalls extends TestJythonCallGraphShape {
   public void testCalls2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph CG = process("calls2.py");
-    verifyGraphAssertions(CG, assertionsCalls2);
+    verifyGraphAssertions(CG, graphAssertions(assertionsCalls2));
   }
 
   protected static final Object[][] assertionsCalls3 =
@@ -87,7 +87,7 @@ public class TestCalls extends TestJythonCallGraphShape {
   public void testCalls3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph CG = process("calls3.py");
-    verifyGraphAssertions(CG, assertionsCalls3);
+    verifyGraphAssertions(CG, graphAssertions(assertionsCalls3));
   }
 
   protected static final Object[][] assertionsCalls4 =
@@ -103,7 +103,7 @@ public class TestCalls extends TestJythonCallGraphShape {
   public void testCalls4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph CG = process("calls4.py");
-    verifyGraphAssertions(CG, assertionsCalls4);
+    verifyGraphAssertions(CG, graphAssertions(assertionsCalls4));
   }
 
   protected static final Object[][] assertionsCalls5 =
@@ -125,7 +125,7 @@ public class TestCalls extends TestJythonCallGraphShape {
   public void testCalls5()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph CG = process("calls5.py");
-    verifyGraphAssertions(CG, assertionsCalls5);
+    verifyGraphAssertions(CG, graphAssertions(assertionsCalls5));
   }
 
   protected static final Object[][] assertionsCalls6 =
@@ -163,7 +163,7 @@ public class TestCalls extends TestJythonCallGraphShape {
         (SSAContextInterpreter) cgBuilder.getContextInterpreter(),
         cgBuilder.getPointerAnalysis(),
         CG);
-    verifyGraphAssertions(CG, assertionsCalls6);
+    verifyGraphAssertions(CG, graphAssertions(assertionsCalls6));
   }
 
   @Test
@@ -175,7 +175,7 @@ public class TestCalls extends TestJythonCallGraphShape {
         (n) -> {
           System.err.println(n.getIR());
         });
-    // verifyGraphAssertions(CG, assertionsCalls6);
+    // verifyGraphAssertions(CG, graphAssertions(assertionsCalls6));
   }
 
   @Test
@@ -231,7 +231,7 @@ public class TestCalls extends TestJythonCallGraphShape {
     PropagationCallGraphBuilder cgBuilder =
         (PropagationCallGraphBuilder) e.defaultCallGraphBuilder();
     CallGraph CG = cgBuilder.makeCallGraph(cgBuilder.getOptions());
-    verifyGraphAssertions(CG, assertionsDefaultValues);
+    verifyGraphAssertions(CG, graphAssertions(assertionsDefaultValues));
   }
 
   protected static final Object[][] PYTEST_ASSERTIONS =
@@ -266,7 +266,7 @@ public class TestCalls extends TestJythonCallGraphShape {
 
     CallGraph callGraph = callGraphBuilder.makeCallGraph(callGraphBuilder.getOptions());
 
-    verifyGraphAssertions(callGraph, PYTEST_ASSERTIONS);
+    verifyGraphAssertions(callGraph, graphAssertions(PYTEST_ASSERTIONS));
   }
 
   protected static final Object[][] PYTEST_ASSERTIONS2 =
@@ -298,7 +298,7 @@ public class TestCalls extends TestJythonCallGraphShape {
         callGraphBuilder.getPointerAnalysis(),
         callGraph);
 
-    verifyGraphAssertions(callGraph, PYTEST_ASSERTIONS2);
+    verifyGraphAssertions(callGraph, graphAssertions(PYTEST_ASSERTIONS2));
   }
 
   protected static final Object[][] PYTEST_ASSERTIONS3 =
@@ -318,7 +318,7 @@ public class TestCalls extends TestJythonCallGraphShape {
         (SSAContextInterpreter) callGraphBuilder.getContextInterpreter(),
         callGraphBuilder.getPointerAnalysis(),
         callGraph);
-    verifyGraphAssertions(callGraph, PYTEST_ASSERTIONS3);
+    verifyGraphAssertions(callGraph, graphAssertions(PYTEST_ASSERTIONS3));
   }
 
   protected static final Object[][] CLICK_ASSERTIONS =
@@ -346,7 +346,7 @@ public class TestCalls extends TestJythonCallGraphShape {
         callGraph);
     LOGGER.info("Call graph: " + callGraph);
 
-    verifyGraphAssertions(callGraph, CLICK_ASSERTIONS);
+    verifyGraphAssertions(callGraph, graphAssertions(CLICK_ASSERTIONS));
   }
 
   protected static final Object[][] ABSEIL_ASSERTIONS =
@@ -375,6 +375,6 @@ public class TestCalls extends TestJythonCallGraphShape {
         callGraph);
     LOGGER.info("Call graph: " + callGraph);
 
-    verifyGraphAssertions(callGraph, ABSEIL_ASSERTIONS);
+    verifyGraphAssertions(callGraph, graphAssertions(ABSEIL_ASSERTIONS));
   }
 }

@@ -24,7 +24,7 @@ public class TestAssign extends TestJythonCallGraphShape {
   public void testAssign1()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph CG = process("assign1.py");
-    verifyGraphAssertions(CG, assertionsAssign1);
+    verifyGraphAssertions(CG, graphAssertions(assertionsAssign1));
   }
 
   protected static final Object[][] assertionsAssign2 =
@@ -44,6 +44,6 @@ public class TestAssign extends TestJythonCallGraphShape {
     PythonAnalysisEngine<?> E = makeEngine("assign2.py");
     PythonSSAPropagationCallGraphBuilder B = E.defaultCallGraphBuilder();
     CallGraph CG = B.makeCallGraph(B.getOptions());
-    verifyGraphAssertions(CG, assertionsAssign2);
+    verifyGraphAssertions(CG, graphAssertions(assertionsAssign2));
   }
 }

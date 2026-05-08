@@ -88,7 +88,7 @@ public class TestSlice extends TestJythonCallGraphShape {
     CAstCallGraphUtil.AVOID_DUMP.set(false);
     CAstCallGraphUtil.dumpCG(
         (SSAContextInterpreter) builder.getContextInterpreter(), builder.getPointerAnalysis(), CG);
-    verifyGraphAssertions(CG, assertionsSlice2);
+    verifyGraphAssertions(CG, graphAssertions(assertionsSlice2));
 
     Collection<CGNode> nodes = getNodes(CG, "script slice2.py");
     assert nodes.size() == 1;

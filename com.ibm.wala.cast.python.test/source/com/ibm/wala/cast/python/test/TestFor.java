@@ -21,7 +21,7 @@ public class TestFor extends TestJythonCallGraphShape {
   public void testFor1()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph CG = process("for1.py");
-    verifyGraphAssertions(CG, assertionsFor1);
+    verifyGraphAssertions(CG, graphAssertions(assertionsFor1));
   }
 
   protected static final Object[][] assertionsFor2 =
@@ -38,7 +38,7 @@ public class TestFor extends TestJythonCallGraphShape {
   public void testFor2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph CG = process("for2.py");
-    verifyGraphAssertions(CG, assertionsFor2);
+    verifyGraphAssertions(CG, graphAssertions(assertionsFor2));
   }
 
   protected static final Object[][] assertionsFor3 =
@@ -66,7 +66,7 @@ public class TestFor extends TestJythonCallGraphShape {
   public void testFor3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph CG = process("for3.py");
-    verifyGraphAssertions(CG, assertionsFor3);
+    verifyGraphAssertions(CG, graphAssertions(assertionsFor3));
   }
 
   protected static final Object[][] assertionsFor4 =
@@ -87,6 +87,6 @@ public class TestFor extends TestJythonCallGraphShape {
   public void testFor6()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph CG = process("for6.py");
-    verifyGraphAssertions(CG, assertionsFor6);
+    verifyGraphAssertions(CG, graphAssertions(assertionsFor6));
   }
 }

@@ -22,7 +22,7 @@ public class TestSifisExamples extends TestPythonMLCallGraphShape {
   public void testEx1CG()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph CG = process(Ex1URL);
-    verifyGraphAssertions(CG, assertionsEx1);
+    verifyGraphAssertions(CG, graphAssertions(assertionsEx1));
   }
 
   private static final String Ex2URL =
@@ -37,6 +37,6 @@ public class TestSifisExamples extends TestPythonMLCallGraphShape {
   public void testEx2CG()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph CG = process(Ex2URL);
-    verifyGraphAssertions(CG, assertionsEx2);
+    verifyGraphAssertions(CG, graphAssertions(assertionsEx2));
   }
 }

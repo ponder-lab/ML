@@ -26,7 +26,7 @@ public class TestLibrary extends TestPythonLibraryCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph CG = process("lib1.py");
     System.err.println(CG);
-    verifyGraphAssertions(CG, assertionsLib1);
+    verifyGraphAssertions(CG, graphAssertions(assertionsLib1));
   }
 
   protected static final Object[][] assertionsLib2 =
@@ -64,6 +64,6 @@ public class TestLibrary extends TestPythonLibraryCallGraphShape {
         (n) -> {
           System.err.println(n.getIR());
         });
-    verifyGraphAssertions(CG, assertionsLib2);
+    verifyGraphAssertions(CG, graphAssertions(assertionsLib2));
   }
 }

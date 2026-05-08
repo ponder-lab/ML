@@ -31,7 +31,7 @@ public class TestLambda extends TestJythonCallGraphShape {
   public void testLambda1()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph CG = process("lambda1.py");
-    verifyGraphAssertions(CG, assertionsLambda1);
+    verifyGraphAssertions(CG, graphAssertions(assertionsLambda1));
   }
 
   protected static final Object[][] assertionsLambda2 =
@@ -57,7 +57,7 @@ public class TestLambda extends TestJythonCallGraphShape {
   public void testLambda2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph CG = process("lambda2.py");
-    verifyGraphAssertions(CG, assertionsLambda2);
+    verifyGraphAssertions(CG, graphAssertions(assertionsLambda2));
   }
 
   protected static final Object[][] assertionsLambda3 =
@@ -92,7 +92,7 @@ public class TestLambda extends TestJythonCallGraphShape {
             CG);
     */
 
-    verifyGraphAssertions(CG, assertionsLambda3);
+    verifyGraphAssertions(CG, graphAssertions(assertionsLambda3));
   }
 
   protected static final Object[][] assertionsLambda4 =
@@ -120,6 +120,6 @@ public class TestLambda extends TestJythonCallGraphShape {
             CG);
     */
 
-    verifyGraphAssertions(CG, assertionsLambda4);
+    verifyGraphAssertions(CG, graphAssertions(assertionsLambda4));
   }
 }

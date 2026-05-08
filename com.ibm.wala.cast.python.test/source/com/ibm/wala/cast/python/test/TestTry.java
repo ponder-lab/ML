@@ -40,6 +40,6 @@ public class TestTry extends TestJythonCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph CG = process("try.py");
     System.err.println(CG);
-    verifyGraphAssertions(CG, assertionsTry);
+    verifyGraphAssertions(CG, graphAssertions(assertionsTry));
   }
 }

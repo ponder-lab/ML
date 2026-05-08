@@ -57,7 +57,7 @@ public class TestComprehension extends TestJythonCallGraphShape {
          CG);
          */
     System.err.println(CG);
-    verifyGraphAssertions(CG, assertionsComp1);
+    verifyGraphAssertions(CG, graphAssertions(assertionsComp1));
   }
 
   protected static final Object[][] assertionsComp3 =
@@ -114,6 +114,6 @@ public class TestComprehension extends TestJythonCallGraphShape {
         callGraphBuilder.getPointerAnalysis(),
         CG);
 
-    verifyGraphAssertions(CG, assertionsComp3);
+    verifyGraphAssertions(CG, graphAssertions(assertionsComp3));
   }
 }

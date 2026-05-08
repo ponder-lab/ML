@@ -13,6 +13,6 @@ public class TestCollections extends TestJythonCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph CG = process("collections.py");
     System.err.println(CG);
-    // verifyGraphAssertions(CG, assertionsCalls1);
+    // verifyGraphAssertions(CG, graphAssertions(assertionsCalls1));
   }
 }
