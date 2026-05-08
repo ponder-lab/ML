@@ -346,7 +346,8 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/lgamma -->
         <putfield class="LRoot" field="lgamma" fieldType="LRoot" ref="math" value="pass_through" />
         <putfield class="LRoot" field="lgamma" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
-        <!-- `tf.{reciprocal,erf,square}` and `tf.{math,gen_math_ops}.{reciprocal,erf,square}` now route through dedicated `<class>` blocks defined later in this file (search for `class name="reciprocal"`, etc.). The new bindings include the `gen_math_ops` alias as well. -->
+        <!-- `tf.{math,gen_math_ops}.{reciprocal,erf}` and `tf.square` (plus its `tf.{math,gen_math_ops}.square` aliases) now route through dedicated `<class>` blocks defined later in this file (search for `class name="reciprocal"`, etc.). `tf.reciprocal` and `tf.erf` are not real TF 2 top-level names,
+          so no `ref="x"` putfield is needed for those. -->
         <!-- `tf.{maximum,minimum}` and `tf.{math,gen_math_ops}.{maximum,minimum}` now route through dedicated `<class>` blocks dispatched to `ElementWiseOperation` (broadcast shape, unified dtype). -->
         <!-- `tf.less`'s legacy `pass_through` aliasing was removed: the modern `<class name="less">` block + `ComparisonOperation` dispatch (wala/ML#427) now handle bool dtype directly. -->
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/tanh -->
