@@ -4890,16 +4890,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Sibling of {@link #testAsString()} that uses a single 2-arg sink {@code f(y, x)}. Captures the
-   * wala/ML#495 multi-tensor-sink-collapse pattern: with both the {@code as_string} output (`y`)
-   * and its input (`x`) flowing into one sink, only the input side (`x` at vn=3) classifies; the
-   * {@code as_string} output (`y` at vn=2) drops out, presumably because the string-dtype
-   * propagation through the {@code as_string} call doesn't survive the multi-tensor sink.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/495">wala/ML#495</a>): tighten to {@code
-   * Map.of(2, Set.of(TENSOR_3_STRING), 3, Set.of(TENSOR_3_FLOAT32))} once the dataset-loader
-   * `TypeReference`s extend the `TensorGenerator` fallback paths and the multi-tensor-sink collapse
-   * is fixed.
+   * Sibling of {@link #testAsString()} that uses a single 2-arg sink {@code f(y, x)}. Asserts that
+   * both the {@code as_string} output (`y`, string dtype) at vn=2 and its input (`x`, float32) at
+   * vn=3 classify precisely &mdash; the multi-tensor-sink pattern doesn't break classification on
+   * either flow when run inside the full test suite.
    */
   @Test
   public void testAsString2ArgSink()
@@ -4914,11 +4908,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Sibling of {@link #testAsString()} with two 1-arg sinks {@code f(y)} and {@code g(x)},
-   * asserting the {@code y}-side sink. The {@code as_string} output's string-dtype tensor doesn't
-   * classify here &mdash; the second sink's presence triggers collapse on the string-side flow.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/495">wala/ML#495</a>): tighten to {@code
-   * Map.of(2, Set.of(TENSOR_3_STRING))} once #495 lands.
+   * asserting the {@code y}-side sink. The {@code as_string} output's string-dtype tensor
+   * classifies precisely at vn=2.
    */
   @Test
   public void testAsStringTwoSinksY()
@@ -4928,9 +4919,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Companion to {@link #testAsStringTwoSinksY()} asserting the {@code x}-side sink {@code g(x)}.
-   * Unlike the {@code y}-side, the {@code x} input classifies precisely &mdash; the
-   * multi-tensor-sink collapse (wala/ML#495) here is asymmetric, hitting only the {@code as_string}
-   * output's string-dtype side.
+   * The {@code x} input classifies precisely as float32 at vn=2.
    */
   @Test
   public void testAsStringTwoSinksX()

@@ -1,8 +1,7 @@
-# Sibling of `tf2_test_as_string.py` with a single 2-arg sink `f(y, x)` exercising the
-# wala/ML#495 multi-tensor-sink-collapse pattern. With both `y` (the as_string output) and
-# `x` (the input) flowing into one sink, dataset-loader-style fallback paths in the analyzer
-# collapse classification on both. The companion JUnit test captures the currently-observed
-# (broken) result with a TODO referencing #495.
+# Sibling of `tf2_test_as_string.py` with a single 2-arg sink `f(y, x)`. Covers the
+# multi-tensor-sink shape (the same shape that triggers wala/ML#495 in the dataset-loader
+# case). For `as_string` on a `tf.constant`, the analyzer classifies both `y` (string dtype)
+# and `x` (float32) precisely; the companion JUnit test asserts those types directly.
 import tensorflow as tf
 
 
