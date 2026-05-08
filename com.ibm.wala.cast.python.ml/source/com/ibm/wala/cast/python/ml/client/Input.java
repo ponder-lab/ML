@@ -77,7 +77,7 @@ public class Input extends Ones {
       // Fallback to default.
       return this.getDefaultDTypes(builder);
 
-    LOGGER.info("Found possible dtypes: " + pointsToSet + " for source: " + this.getSource() + ".");
+    LOGGER.fine("Found possible dtypes: " + pointsToSet + " for source: " + this.getSource() + ".");
     return this.getDTypesFromDTypeArgument(builder, pointsToSet);
   }
 
@@ -96,10 +96,10 @@ public class Input extends Ones {
               builder, this.getShapeParameterPosition(), this.getShapeParameterName());
 
       if (shapePts == null || shapePts.isEmpty()) {
-        LOGGER.info("No shapes found for source: " + this.getSource() + "; using default shapes.");
+        LOGGER.fine("No shapes found for source: " + this.getSource() + "; using default shapes.");
         shapes = this.getDefaultShapes(builder);
       } else {
-        LOGGER.info(
+        LOGGER.fine(
             "Found possible shape points-to set: "
                 + shapePts
                 + " for source: "
@@ -108,7 +108,7 @@ public class Input extends Ones {
         shapes = this.getShapesFromShapeArgument(builder, shapePts);
       }
     } else {
-      LOGGER.info("No shapes found for source: " + this.getSource() + "; using default shapes.");
+      LOGGER.fine("No shapes found for source: " + this.getSource() + "; using default shapes.");
       shapes = this.getDefaultShapes(builder);
     }
 
@@ -124,7 +124,7 @@ public class Input extends Ones {
               builder, this.getBatchSizeParameterPosition(), this.getBatchSizeParameterName());
 
       if (batchSizePts == null || batchSizePts.isEmpty()) {
-        LOGGER.info(
+        LOGGER.fine(
             "Empty points-to set for batch_size argument in source: "
                 + this.getSource()
                 + "; assuming unknown.");
@@ -135,7 +135,7 @@ public class Input extends Ones {
 
     if (batchSizes.isEmpty()) batchSizes.add(null);
     else
-      LOGGER.info(
+      LOGGER.fine(
           "Found possible batch sizes: " + batchSizes + " for source: " + this.getSource() + ".");
 
     // If the base shape is ⊤ (unknown), the prepended batch dim doesn't recover enough info to
@@ -156,7 +156,7 @@ public class Input extends Ones {
         newShapes.add(newShape);
       }
 
-    LOGGER.info("Generated shapes: " + newShapes + " for source: " + source + ".");
+    LOGGER.fine("Generated shapes: " + newShapes + " for source: " + source + ".");
     return newShapes;
   }
 
