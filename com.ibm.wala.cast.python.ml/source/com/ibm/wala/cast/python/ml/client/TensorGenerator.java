@@ -256,15 +256,20 @@ public abstract class TensorGenerator {
    * empty or {@code null} &mdash; that's a caller-contract violation (callers should check for
    * empty PTS before invoking this helper), distinct from "shape was a runtime tensor".
    *
-   * <p>Returns {@code null} (lattice ⊤) for sub-parse failures during recursive descent: when a
-   * recognized container's nested elements have empty PTS, when a {@code tf.constant} value PTS is
-   * empty after the call-site walk, when a {@link com.ibm.wala.cast.python.ml.types.TensorFlowTypes
-   * #TENSOR_SPEC} or {@link com.ibm.wala.cast.python.ml.types.TensorFlowTypes#RAGGED_TENSOR_SPEC}
-   * shape field has empty PTS, or when a recursive call on any of these returns {@code null}. This
-   * is distinct from the strict-throw contract for unrecognized top-level forms above: the throw
-   * signals "this kind of shape isn't modeled at all"; the {@code null} returns signal "this
-   * shape's structure is recognized but the leaves aren't statically resolvable" (a soundness ⊤
-   * appropriate for the lattice).
+   * <p>Returns {@code null} (lattice ⊤) for sub-parse failures during recursive descent on the
+   * cases this PR converts: when a {@code tf.constant} value PTS is empty after the call-site walk,
+   * when a {@link com.ibm.wala.cast.python.ml.types.TensorFlowTypes#TENSOR_SPEC} or {@link
+   * com.ibm.wala.cast.python.ml.types.TensorFlowTypes#RAGGED_TENSOR_SPEC} shape field has empty
+   * PTS, or when a recursive call on any of these returns {@code null}. This is distinct from the
+   * strict-throw contract for unrecognized top-level forms above: the throw signals "this kind of
+   * shape isn't modeled at all"; the {@code null} returns signal "this shape's structure is
+   * recognized but the leaves aren't statically resolvable" (a soundness ⊤ appropriate for the
+   * lattice).
+   *
+   * <p>Out of scope of this PR: the list/tuple branch with empty element PTS still returns an empty
+   * result set rather than {@code null}, which means callers can't distinguish "list with
+   * unresolved element" from "no shape recovered" at that path. Tracked at <a
+   * href="https://github.com/wala/ML/issues/504">wala/ML#504</a>.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param pointsToSet The points-to set of the shape argument. FIXME: Why not take a value number?

@@ -106,11 +106,14 @@ public class ReduceMean extends TensorGenerator {
           // Try to handle list/tuple of axes.
           Set<List<Dimension<?>>> axesLists =
               this.getShapesFromShapeArgument(builder, Collections.singleton(ik));
-          // If any axis form is unparseable, the helper throws `IllegalStateException` and
-          // the exception propagates up; `PythonTensorAnalysisEngine.performAnalysis` does
-          // not catch generator exceptions today, so this aborts the run. The null guard
-          // below is defensive in case wala/ML#471's resolution converts the helper's
-          // contract from throw to null-return; today it's dead code but cheap insurance.
+          // The helper has two failure modes: throw `IllegalStateException` for unrecognized
+          // top-level allocation types (which propagates up — `performAnalysis` doesn't catch
+          // generator exceptions today, so the run aborts), or return `null` for recognized
+          // sub-parse failures during recursive descent (empty `tf.constant` value PTS, empty
+          // `TensorSpec`/`RaggedTensorSpec` shape PTS, recursive null). Either can fire here
+          // when the axis arg is e.g. `tf.constant([...])` whose value-field PTS is empty, so
+          // the null guard below is live, not defensive — translate `null` to ⊤ for this
+          // generator.
           if (axesLists == null) return null;
           for (List<Dimension<?>> axesList : axesLists) {
             Set<Integer> s = new HashSet<>();
