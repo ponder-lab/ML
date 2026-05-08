@@ -4586,8 +4586,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Regression guard for {@code tf.broadcast_to(x, tf.shape(y))} &mdash; the runtime-tensor
    * shape-arg pattern. {@link com.ibm.wala.cast.python.ml.client.TensorGenerator
-   * #getShapesFromShapeArgument} throws {@link IllegalStateException} for the unrecognized {@code
-   * Ltensorflow/math/shape} allocation type that {@code tf.shape(y)} now produces (post the
+   * #getShapesFromShapeArgument} throws {@link IllegalStateException} for the runtime {@code
+   * Ltensorflow/python/framework/ops/Tensor} that {@code tf.shape(y)} now allocates (post the
    * wala/ML#489 root-cause fix on this PR's `tensorflow.xml`); {@link
    * com.ibm.wala.cast.python.ml.client.BroadcastTo#getDefaultShapes}'s try/catch returns {@code
    * null} (lattice ⊤) instead of letting the exception abort the analysis. The result is shape ⊤
@@ -6996,14 +6996,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Regression guard for {@code tf.reshape(x, tf.shape(y))} shape inference. Runtime answer is
    * {@code (2, 3)} of {@code float32}. Post this PR's wala/ML#489 root-cause fix (`tensorflow.xml`
-   * allocates a fresh `Ltensorflow/math/shape` instance for `tf.shape(...)` instead of aliasing
-   * through `pass_through`), the helper's else-branch fires cleanly for the unrecognized allocation
-   * type and throws {@link IllegalStateException}. {@link
+   * allocates a fresh `Ltensorflow/python/framework/ops/Tensor` for `tf.shape(...)` instead of
+   * aliasing through `pass_through`), the helper's else-branch fires cleanly for the unrecognized
+   * allocation type and throws {@link IllegalStateException}. {@link
    * com.ibm.wala.cast.python.ml.client.Reshape} doesn't localize the catch (unlike {@link
    * com.ibm.wala.cast.python.ml.client.BroadcastTo}), per this PR's keep-throw-everywhere-except-
    * BroadcastTo design, so the exception propagates up and aborts the analysis on this fixture.
    * That's the design choice: missing modeling on `Reshape`'s runtime-tensor shape path surfaces as
    * a loud signal rather than a silent ⊤.
+   *
+   * <p>The {@code expected} types map below ({@code Map.of(2, Set.of(TENSOR_2_3_FLOAT32))}) is
+   * unreachable while the {@code @Test(expected = IllegalStateException.class)} suppression is in
+   * place; it's staged for the eventual flip so that lifting the suppression brings the
+   * precise-shape assertion back without further edits to this method.
    *
    * <p>TODO(<a href="https://github.com/wala/ML/issues/489">wala/ML#489</a>): when {@code Reshape}
    * gains a precise-shape composer (or a localized try/catch), tighten this test to assert {@link

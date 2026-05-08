@@ -2,14 +2,15 @@
 #
 # At runtime, `z` has shape (2, 3) of float32. Post the wala/ML#489 root-cause fix on this
 # PR's `tensorflow.xml` (separating `tf.shape`'s allocation from `pass_through` aliasing),
-# the malformed compound-dim shape that previously surfaced here is gone. The analyzer now
-# produces a union of the input x's shape ((6,)) and a scalar — neither the precise (2, 3)
-# answer nor a sound ⊤, but no longer malformed. Reshape doesn't have a try/catch around the
-# helper (unlike BroadcastTo), so the exception propagates to upstream fallback paths.
+# `tf.shape(y)` allocates a fresh `Ltensorflow/python/framework/ops/Tensor` whose static
+# shape `getShapesFromShapeArgument` doesn't recognize. `Reshape` doesn't localize the
+# resulting `IllegalStateException` (unlike `BroadcastTo`), per this PR's keep-throw-
+# everywhere-except-BroadcastTo design, so the exception aborts the analysis on this fixture.
 #
-# The corresponding JUnit test asserts the currently-observed shape with a TODO referencing
-# #489; when Reshape gains a precise composer or a try/catch, the assertion will start
-# failing and the TODO is the cue to tighten it.
+# The corresponding JUnit test (`testReshapeRuntimeShape`) is annotated
+# `@Test(expected = IllegalStateException.class)` with a TODO referencing #489. When `Reshape`
+# gains a precise composer or a localized try/catch, the suppression lifts and the test
+# starts asserting the precise shape (or ⊤) instead.
 import tensorflow as tf
 
 
