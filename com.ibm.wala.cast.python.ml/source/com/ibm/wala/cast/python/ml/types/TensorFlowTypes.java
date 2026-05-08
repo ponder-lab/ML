@@ -977,6 +977,34 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String EINSUM_SIGNATURE = "tf.einsum()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/nn/leaky_relu. */
+  public static final MethodReference LEAKY_RELU =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/leaky_relu")),
+          AstMethodReference.fnSelector);
+
+  private static final String LEAKY_RELU_SIGNATURE = "tf.nn.leaky_relu()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/reduce_min. */
+  public static final MethodReference REDUCE_MIN =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/reduce_min")),
+          AstMethodReference.fnSelector);
+
+  private static final String REDUCE_MIN_SIGNATURE = "tf.reduce_min()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/pow. */
+  public static final MethodReference POW =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/pow")),
+          AstMethodReference.fnSelector);
+
+  private static final String POW_SIGNATURE = "tf.math.pow()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/concat. */
   public static final MethodReference CONCAT =
       MethodReference.findOrCreate(
@@ -1449,6 +1477,9 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(BOOLEAN_MASK.getDeclaringClass(), BOOLEAN_MASK_SIGNATURE),
           Map.entry(EXTRACT_PATCHES.getDeclaringClass(), EXTRACT_PATCHES_SIGNATURE),
           Map.entry(EINSUM.getDeclaringClass(), EINSUM_SIGNATURE),
+          Map.entry(LEAKY_RELU.getDeclaringClass(), LEAKY_RELU_SIGNATURE),
+          Map.entry(REDUCE_MIN.getDeclaringClass(), REDUCE_MIN_SIGNATURE),
+          Map.entry(POW.getDeclaringClass(), POW_SIGNATURE),
           Map.entry(CONCAT.getDeclaringClass(), CONCAT_SIGNATURE),
           Map.entry(STACK.getDeclaringClass(), STACK_SIGNATURE),
           Map.entry(SQRT.getDeclaringClass(), SQRT_SIGNATURE),
