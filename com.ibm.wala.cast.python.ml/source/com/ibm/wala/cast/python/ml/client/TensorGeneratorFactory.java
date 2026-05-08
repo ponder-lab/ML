@@ -8,8 +8,16 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARGMAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARGMIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARRAY_OPS_RESHAPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOOLEAN_MASK;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOSTON_HOUSING_X_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOSTON_HOUSING_X_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOSTON_HOUSING_Y_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOSTON_HOUSING_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BROADCAST_TO;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CEIL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR100_X_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR100_X_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR100_Y_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR100_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_X_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_X_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_Y_TEST;
@@ -46,6 +54,10 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EXP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EXTRACT_PATCHES;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EYE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FASHION_MNIST_X_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FASHION_MNIST_X_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FASHION_MNIST_Y_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FASHION_MNIST_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLATTEN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLATTEN_LAYER_CALL;
@@ -109,6 +121,10 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MEAN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_PROD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_SUM;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_X_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_X_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_Y_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RSQRT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SEQUENCE_MASK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIGMOID;
@@ -139,6 +155,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VARIABLE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.WHERE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS_LIKE;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
@@ -1096,6 +1113,40 @@ public class TensorGeneratorFactory {
       return new Cifar10InputData(source, Cifar10InputData.X_TEST_SHAPE);
     else if (isType(calledFunction, CIFAR10_Y_TEST))
       return new Cifar10InputData(source, Cifar10InputData.Y_TEST_SHAPE);
+    else if (isType(calledFunction, FASHION_MNIST_X_TRAIN))
+      return new MnistInputData(source, MnistInputData.X_TRAIN_SHAPE);
+    else if (isType(calledFunction, FASHION_MNIST_Y_TRAIN))
+      return new MnistInputData(source, MnistInputData.Y_TRAIN_SHAPE);
+    else if (isType(calledFunction, FASHION_MNIST_X_TEST))
+      return new MnistInputData(source, MnistInputData.X_TEST_SHAPE);
+    else if (isType(calledFunction, FASHION_MNIST_Y_TEST))
+      return new MnistInputData(source, MnistInputData.Y_TEST_SHAPE);
+    else if (isType(calledFunction, CIFAR100_X_TRAIN))
+      return new Cifar10InputData(source, Cifar10InputData.X_TRAIN_SHAPE);
+    else if (isType(calledFunction, CIFAR100_Y_TRAIN))
+      return new Cifar10InputData(source, Cifar10InputData.Y_TRAIN_SHAPE);
+    else if (isType(calledFunction, CIFAR100_X_TEST))
+      return new Cifar10InputData(source, Cifar10InputData.X_TEST_SHAPE);
+    else if (isType(calledFunction, CIFAR100_Y_TEST))
+      return new Cifar10InputData(source, Cifar10InputData.Y_TEST_SHAPE);
+    else if (isType(calledFunction, REUTERS_X_TRAIN))
+      return new ReutersInputData(
+          source, ReutersInputData.X_TRAIN_SHAPE, ReutersInputData.X_DTYPES);
+    else if (isType(calledFunction, REUTERS_Y_TRAIN))
+      return new ReutersInputData(
+          source, ReutersInputData.Y_TRAIN_SHAPE, ReutersInputData.Y_DTYPES);
+    else if (isType(calledFunction, REUTERS_X_TEST))
+      return new ReutersInputData(source, ReutersInputData.X_TEST_SHAPE, ReutersInputData.X_DTYPES);
+    else if (isType(calledFunction, REUTERS_Y_TEST))
+      return new ReutersInputData(source, ReutersInputData.Y_TEST_SHAPE, ReutersInputData.Y_DTYPES);
+    else if (isType(calledFunction, BOSTON_HOUSING_X_TRAIN))
+      return new BostonHousingInputData(source, BostonHousingInputData.X_TRAIN_SHAPE);
+    else if (isType(calledFunction, BOSTON_HOUSING_Y_TRAIN))
+      return new BostonHousingInputData(source, BostonHousingInputData.Y_TRAIN_SHAPE);
+    else if (isType(calledFunction, BOSTON_HOUSING_X_TEST))
+      return new BostonHousingInputData(source, BostonHousingInputData.X_TEST_SHAPE);
+    else if (isType(calledFunction, BOSTON_HOUSING_Y_TEST))
+      return new BostonHousingInputData(source, BostonHousingInputData.Y_TEST_SHAPE);
     else if (isType(calledFunction, REDUCE_MEAN.getDeclaringClass())) return new ReduceMean(source);
     else if (isType(calledFunction, REDUCE_MAX.getDeclaringClass())) return new ReduceMax(source);
     else if (isType(calledFunction, REDUCE_MIN.getDeclaringClass())) return new ReduceMin(source);
@@ -1145,6 +1196,7 @@ public class TensorGeneratorFactory {
       return new ExtractPatches(source);
     else if (isType(calledFunction, TOP_K.getDeclaringClass())) return new TopK(source);
     else if (isType(calledFunction, MESHGRID.getDeclaringClass())) return new Meshgrid(source);
+    else if (isType(calledFunction, WHERE.getDeclaringClass())) return new Where(source);
     else if (isType(calledFunction, LEAKY_RELU.getDeclaringClass())) return new LeakyRelu(source);
     else if (isType(calledFunction, POW.getDeclaringClass()))
       return new ElementWiseOperation(source);
