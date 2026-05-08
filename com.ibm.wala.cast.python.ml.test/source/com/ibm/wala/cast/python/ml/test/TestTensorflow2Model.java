@@ -4500,8 +4500,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Counterpart of {@link #testArgmax()} for {@code tf.math.argmin}. Same semantics: dtype is fixed
-   * at {@code int64}, shape is left at ⊤. See {@link com.ibm.wala.cast.python.ml.client.Argmin}.
+   * Counterpart of {@link #testArgmax()} for {@code tf.math.argmin}. Same semantics: dtype defaults
+   * to {@code int64} (overridable via {@code output_type}, see {@link #testArgminOutputType()}),
+   * shape is left at ⊤. See {@link com.ibm.wala.cast.python.ml.client.Argmin}.
    *
    * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): output shape is left
    * at ⊤; same {@code ElementWiseOperation} cartesian-pair driver as for {@link #testArgmax()}.
