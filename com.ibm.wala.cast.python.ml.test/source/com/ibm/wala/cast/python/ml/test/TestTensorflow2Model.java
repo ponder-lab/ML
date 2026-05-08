@@ -4975,6 +4975,28 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_404_13_FLOAT64), 3, Set.of(TENSOR_404_FLOAT64)));
   }
 
+  /**
+   * Sibling of {@link #testBostonHousingLoadData()} that passes all four unpacked arrays ({@code
+   * x_train}, {@code y_train}, {@code x_test}, {@code y_test}) into the sink at once. This is the
+   * wala/ML#495 multi-tensor-sink-collapse pattern: dataset-loader fallback paths in {@code
+   * TensorGenerator} aren't wired for the test-pair `TypeReference`s, so flowing {@code
+   * x_test}/{@code y_test} through the sink collapses tensor classification across the whole call.
+   * The assertion captures the currently-observed (broken) result &mdash; 0 tensor parameters
+   * classified rather than the lattice-correct 4 &mdash; per the prefer-observed-assertion
+   * convention.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/495">wala/ML#495</a>): when the dataset
+   * loader's `TypeReference`s are extended into `TensorGenerator.shapesFromSSAChain` /
+   * `dtypesFromSSAChain` / `createManualGenerator` fallback paths, tighten this to {@code Map.of(2,
+   * Set.of(TENSOR_404_13_FLOAT64), 3, Set.of(TENSOR_404_FLOAT64), 4, Set.of(TENSOR_102_13_FLOAT64),
+   * 5, Set.of(TENSOR_102_FLOAT64))} (precise types on all four params).
+   */
+  @Test
+  public void testBostonHousingLoadDataXTest()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_boston_housing_load_data_xtest.py", "f", 0, 0, Map.of());
+  }
+
   @Test
   public void testReduceSum2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
