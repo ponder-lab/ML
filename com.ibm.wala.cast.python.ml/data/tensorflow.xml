@@ -1410,13 +1410,11 @@
         </method>
       </class>
       <class name="concat" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/concat. Mirrors `add_n`'s pattern: read field 0 of the input list and route through `convert_to_tensor` so the dtype propagates from the first input element. Shape is approximated by inheriting from the first input — known unsoundness,
-          since runtime concat grows the `axis` dimension by the sum of the input dims. A future generator can read the full `values` list and `axis` to produce a precise (and sound) shape. See wala/ML#449 (Tier 5). -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/concat. Direct `<new>+<return>` paired with the dedicated `Concat` generator (wala/ML#449 Tier 5): the generator computes the precise output shape by walking every entry in the `values` list, summing each input's dim along the resolved
+          `axis`, and inheriting the rest of the shape from the first input. Pre-fix the XML routed through `convert_to_tensor` which inherited the first input's shape verbatim — sound on dtype but unsound on shape (missed the per-input axis-dim sum). -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self values axis name">
-          <getfield class="Llist" field="0" fieldType="LRoot" ref="values" def="x" />
-          <new def="z" class="Ltensorflow/functions/convert_to_tensor" />
-          <call class="Ltensorflow/functions/convert_to_tensor" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="x" numArgs="2" def="y" />
-          <return value="y" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="Variable" allocatable="true">
