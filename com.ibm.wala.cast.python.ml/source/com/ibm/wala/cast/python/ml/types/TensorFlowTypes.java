@@ -862,6 +862,118 @@ public class TensorFlowTypes extends PythonTypes {
   public static final String CIFAR10_Y_TEST_SIGNATURE =
       "tf.keras.datasets.cifar10.load_data/y_test";
 
+  public static final TypeReference FASHION_MNIST_X_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/fashion_mnist/x_train"));
+
+  public static final String FASHION_MNIST_X_TRAIN_SIGNATURE =
+      "tf.keras.datasets.fashion_mnist.load_data/x_train";
+
+  public static final TypeReference FASHION_MNIST_Y_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/fashion_mnist/y_train"));
+
+  public static final String FASHION_MNIST_Y_TRAIN_SIGNATURE =
+      "tf.keras.datasets.fashion_mnist.load_data/y_train";
+
+  public static final TypeReference FASHION_MNIST_X_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/fashion_mnist/x_test"));
+
+  public static final String FASHION_MNIST_X_TEST_SIGNATURE =
+      "tf.keras.datasets.fashion_mnist.load_data/x_test";
+
+  public static final TypeReference FASHION_MNIST_Y_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/fashion_mnist/y_test"));
+
+  public static final String FASHION_MNIST_Y_TEST_SIGNATURE =
+      "tf.keras.datasets.fashion_mnist.load_data/y_test";
+
+  public static final TypeReference CIFAR100_X_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/cifar100/x_train"));
+
+  public static final String CIFAR100_X_TRAIN_SIGNATURE =
+      "tf.keras.datasets.cifar100.load_data/x_train";
+
+  public static final TypeReference CIFAR100_Y_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/cifar100/y_train"));
+
+  public static final String CIFAR100_Y_TRAIN_SIGNATURE =
+      "tf.keras.datasets.cifar100.load_data/y_train";
+
+  public static final TypeReference CIFAR100_X_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/cifar100/x_test"));
+
+  public static final String CIFAR100_X_TEST_SIGNATURE =
+      "tf.keras.datasets.cifar100.load_data/x_test";
+
+  public static final TypeReference CIFAR100_Y_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/cifar100/y_test"));
+
+  public static final String CIFAR100_Y_TEST_SIGNATURE =
+      "tf.keras.datasets.cifar100.load_data/y_test";
+
+  public static final TypeReference REUTERS_X_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/reuters/x_train"));
+
+  public static final String REUTERS_X_TRAIN_SIGNATURE =
+      "tf.keras.datasets.reuters.load_data/x_train";
+
+  public static final TypeReference REUTERS_Y_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/reuters/y_train"));
+
+  public static final String REUTERS_Y_TRAIN_SIGNATURE =
+      "tf.keras.datasets.reuters.load_data/y_train";
+
+  public static final TypeReference REUTERS_X_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/reuters/x_test"));
+
+  public static final String REUTERS_X_TEST_SIGNATURE =
+      "tf.keras.datasets.reuters.load_data/x_test";
+
+  public static final TypeReference REUTERS_Y_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/reuters/y_test"));
+
+  public static final String REUTERS_Y_TEST_SIGNATURE =
+      "tf.keras.datasets.reuters.load_data/y_test";
+
+  public static final TypeReference BOSTON_HOUSING_X_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/boston_housing/x_train"));
+
+  public static final String BOSTON_HOUSING_X_TRAIN_SIGNATURE =
+      "tf.keras.datasets.boston_housing.load_data/x_train";
+
+  public static final TypeReference BOSTON_HOUSING_Y_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/boston_housing/y_train"));
+
+  public static final String BOSTON_HOUSING_Y_TRAIN_SIGNATURE =
+      "tf.keras.datasets.boston_housing.load_data/y_train";
+
+  public static final TypeReference BOSTON_HOUSING_X_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/boston_housing/x_test"));
+
+  public static final String BOSTON_HOUSING_X_TEST_SIGNATURE =
+      "tf.keras.datasets.boston_housing.load_data/x_test";
+
+  public static final TypeReference BOSTON_HOUSING_Y_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/boston_housing/y_test"));
+
+  public static final String BOSTON_HOUSING_Y_TEST_SIGNATURE =
+      "tf.keras.datasets.boston_housing.load_data/y_test";
+
   /** https://www.tensorflow.org/api_docs/python/tf/placeholder. */
   public static final MethodReference PLACEHOLDER =
       MethodReference.findOrCreate(
@@ -976,6 +1088,15 @@ public class TensorFlowTypes extends PythonTypes {
           AstMethodReference.fnSelector);
 
   private static final String EINSUM_SIGNATURE = "tf.einsum()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/where. */
+  public static final MethodReference WHERE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/where")),
+          AstMethodReference.fnSelector);
+
+  private static final String WHERE_SIGNATURE = "tf.where()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/nn/leaky_relu. */
   public static final MethodReference LEAKY_RELU =
@@ -1464,6 +1585,22 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(CIFAR10_Y_TRAIN, CIFAR10_Y_TRAIN_SIGNATURE),
           Map.entry(CIFAR10_X_TEST, CIFAR10_X_TEST_SIGNATURE),
           Map.entry(CIFAR10_Y_TEST, CIFAR10_Y_TEST_SIGNATURE),
+          Map.entry(FASHION_MNIST_X_TRAIN, FASHION_MNIST_X_TRAIN_SIGNATURE),
+          Map.entry(FASHION_MNIST_Y_TRAIN, FASHION_MNIST_Y_TRAIN_SIGNATURE),
+          Map.entry(FASHION_MNIST_X_TEST, FASHION_MNIST_X_TEST_SIGNATURE),
+          Map.entry(FASHION_MNIST_Y_TEST, FASHION_MNIST_Y_TEST_SIGNATURE),
+          Map.entry(CIFAR100_X_TRAIN, CIFAR100_X_TRAIN_SIGNATURE),
+          Map.entry(CIFAR100_Y_TRAIN, CIFAR100_Y_TRAIN_SIGNATURE),
+          Map.entry(CIFAR100_X_TEST, CIFAR100_X_TEST_SIGNATURE),
+          Map.entry(CIFAR100_Y_TEST, CIFAR100_Y_TEST_SIGNATURE),
+          Map.entry(REUTERS_X_TRAIN, REUTERS_X_TRAIN_SIGNATURE),
+          Map.entry(REUTERS_Y_TRAIN, REUTERS_Y_TRAIN_SIGNATURE),
+          Map.entry(REUTERS_X_TEST, REUTERS_X_TEST_SIGNATURE),
+          Map.entry(REUTERS_Y_TEST, REUTERS_Y_TEST_SIGNATURE),
+          Map.entry(BOSTON_HOUSING_X_TRAIN, BOSTON_HOUSING_X_TRAIN_SIGNATURE),
+          Map.entry(BOSTON_HOUSING_Y_TRAIN, BOSTON_HOUSING_Y_TRAIN_SIGNATURE),
+          Map.entry(BOSTON_HOUSING_X_TEST, BOSTON_HOUSING_X_TEST_SIGNATURE),
+          Map.entry(BOSTON_HOUSING_Y_TEST, BOSTON_HOUSING_Y_TEST_SIGNATURE),
           Map.entry(PLACEHOLDER.getDeclaringClass(), PLACEHOLDER_SIGNATURE),
           Map.entry(ARGMAX.getDeclaringClass(), ARGMAX_SIGNATURE),
           Map.entry(ARGMIN.getDeclaringClass(), ARGMIN_SIGNATURE),
@@ -1477,6 +1614,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(BOOLEAN_MASK.getDeclaringClass(), BOOLEAN_MASK_SIGNATURE),
           Map.entry(EXTRACT_PATCHES.getDeclaringClass(), EXTRACT_PATCHES_SIGNATURE),
           Map.entry(EINSUM.getDeclaringClass(), EINSUM_SIGNATURE),
+          Map.entry(WHERE.getDeclaringClass(), WHERE_SIGNATURE),
           Map.entry(LEAKY_RELU.getDeclaringClass(), LEAKY_RELU_SIGNATURE),
           Map.entry(REDUCE_MIN.getDeclaringClass(), REDUCE_MIN_SIGNATURE),
           Map.entry(POW.getDeclaringClass(), POW_SIGNATURE),
