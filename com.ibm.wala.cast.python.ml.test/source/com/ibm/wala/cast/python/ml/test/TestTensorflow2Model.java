@@ -4941,34 +4941,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Generator test for {@code tf.keras.datasets.fashion_mnist.load_data()}. Shapes and dtype are
-   * identical to {@code mnist.load_data()}. Asserts on both unpacked arrays: {@code x_train}
-   * ({@code (60000, 28, 28)} of {@code uint8}) at {@code vn=2} and {@code y_train} ({@code
-   * (60000,)} of {@code uint8}) at {@code vn=3}.
+   * identical to {@code mnist.load_data()}. The fixture passes all four unpacked arrays ({@code
+   * x_train}, {@code y_train}, {@code x_test}, {@code y_test}) into the 4-arg sink, so the
+   * assertion pins types at {@code vn=2..5}.
    */
   @Test
   public void testFashionMnistLoadData()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_fashion_mnist_load_data.py",
-        "f",
-        2,
-        2,
-        Map.of(2, Set.of(TENSOR_60000_28_28_UINT8), 3, Set.of(TENSOR_60000_UINT8)));
-  }
-
-  /**
-   * Sibling of {@link #testFashionMnistLoadData()} that passes all four unpacked arrays into the
-   * sink at once. Captures the wala/ML#495 multi-tensor-sink-collapse pattern.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/495">wala/ML#495</a>): tighten to {@code
-   * Map.of(2, Set.of(TENSOR_60000_28_28_UINT8), 3, Set.of(TENSOR_60000_UINT8), 4,
-   * Set.of(TENSOR_10000_28_28_UINT8), 5, Set.of(TENSOR_10000_UINT8))} once #495 lands.
-   */
-  @Test
-  public void testFashionMnistLoadDataXTest()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_fashion_mnist_load_data_xtest.py",
         "f",
         4,
         4,
@@ -4983,38 +4964,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Generator test for {@code tf.keras.datasets.cifar100.load_data()}. Shapes are identical to
    * {@code cifar10.load_data()}; the modeling reuses {@link
    * com.ibm.wala.cast.python.ml.client.Cifar10InputData}, so the inferred dtype is {@code uint8}
-   * for both arrays. Asserts on both unpacked arrays: {@code x_train} at {@code vn=2} and {@code
-   * y_train} at {@code vn=3}.
+   * for both label arrays. Asserts on all four unpacked arrays at {@code vn=2..5}.
    *
    * <p>TODO(<a href="https://github.com/wala/ML/issues/487">wala/ML#487</a>): the inferred {@code
-   * uint8} for {@code y_train} is imprecise — the runtime dtype of {@code cifar100}'s labels is
-   * {@code int64} (the Python fixture asserts that). Tighten the JUnit expectation to {@link
-   * TensorType} with {@code int64} dtype once the modeling is updated.
+   * uint8} for {@code y_train} / {@code y_test} is imprecise &mdash; the runtime dtype of {@code
+   * cifar100}'s labels is {@code int64} (the Python fixture asserts that). Tighten to {@code
+   * int64}-dtype variants once the modeling is updated.
    */
   @Test
   public void testCifar100LoadData()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_cifar100_load_data.py",
-        "f",
-        2,
-        2,
-        Map.of(2, Set.of(TENSOR_50000_32_32_3_UINT8), 3, Set.of(TENSOR_50000_1_UINT8)));
-  }
-
-  /**
-   * Sibling of {@link #testCifar100LoadData()} that passes all four unpacked arrays into the sink
-   * at once. Captures the wala/ML#495 multi-tensor-sink-collapse pattern.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/495">wala/ML#495</a>): tighten to recover
-   * precise types on all four params once #495 lands; also tracks wala/ML#487 for the
-   * cifar100-specific `int64` label dtype that's currently reported as `uint8`.
-   */
-  @Test
-  public void testCifar100LoadDataXTest()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_cifar100_load_data_xtest.py",
         "f",
         4,
         4,
@@ -5026,39 +4987,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Generator test for {@code tf.keras.datasets.reuters.load_data()}. Asserts on both unpacked
-   * arrays: {@code x_train} ({@code (8982,)} of unknown dtype — newswires are variable-length
-   * integer-encoded sequences, modeled as ⊤-dtype) at {@code vn=2}, and {@code y_train} ({@code
-   * (8982,)} of {@code int64} — newswire topic labels) at {@code vn=3}.
+   * Generator test for {@code tf.keras.datasets.reuters.load_data()}. Asserts on all four unpacked
+   * arrays at {@code vn=2..5}: {@code x_train} ({@code (8982,)} unknown dtype &mdash; newswires are
+   * variable-length integer-encoded sequences, modeled as ⊤-dtype), {@code y_train} ({@code
+   * (8982,)} {@code int64}), {@code x_test} ({@code (2246,)} unknown dtype), {@code y_test} ({@code
+   * (2246,)} {@code int64}).
    *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/488">wala/ML#488</a>): the inferred {@code
-   * unknown} dtype for {@code x_train} is imprecise — the runtime dtype is numpy {@code object}
-   * (the Python fixture asserts that). Tighten to a dedicated {@code OBJECT} dtype if/when the
-   * lattice gains one.
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/488">wala/ML#488</a>): the inferred unknown
+   * dtype for {@code x_train} / {@code x_test} is imprecise &mdash; the runtime dtype is numpy
+   * {@code object} (the Python fixture asserts that). Tighten to a dedicated {@code OBJECT} dtype
+   * if/when the lattice gains one.
    */
   @Test
   public void testReutersLoadData()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_reuters_load_data.py",
-        "f",
-        2,
-        2,
-        Map.of(2, Set.of(TENSOR_8982_UNKNOWN), 3, Set.of(TENSOR_8982_INT64)));
-  }
-
-  /**
-   * Sibling of {@link #testReutersLoadData()} that passes all four unpacked arrays into the sink at
-   * once. Captures the wala/ML#495 multi-tensor-sink-collapse pattern.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/495">wala/ML#495</a>): tighten to recover
-   * precise types on all four params once #495 lands.
-   */
-  @Test
-  public void testReutersLoadDataXTest()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_reuters_load_data_xtest.py",
         "f",
         4,
         4,
@@ -5070,43 +5014,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Generator test for {@code tf.keras.datasets.boston_housing.load_data()}. Asserts on both
-   * unpacked arrays: {@code x_train} ({@code (404, 13)} of {@code float64} — features) at {@code
-   * vn=2}, and {@code y_train} ({@code (404,)} of {@code float64} — regression targets) at {@code
-   * vn=3}.
+   * Generator test for {@code tf.keras.datasets.boston_housing.load_data()}. Asserts on all four
+   * unpacked arrays at {@code vn=2..5}: {@code x_train} ({@code (404, 13)} {@code float64}
+   * features), {@code y_train} ({@code (404,)} {@code float64} regression targets), {@code x_test}
+   * ({@code (102, 13)} {@code float64}), {@code y_test} ({@code (102,)} {@code float64}).
    */
   @Test
   public void testBostonHousingLoadData()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_boston_housing_load_data.py",
-        "f",
-        2,
-        2,
-        Map.of(2, Set.of(TENSOR_404_13_FLOAT64), 3, Set.of(TENSOR_404_FLOAT64)));
-  }
-
-  /**
-   * Sibling of {@link #testBostonHousingLoadData()} that passes all four unpacked arrays ({@code
-   * x_train}, {@code y_train}, {@code x_test}, {@code y_test}) into the sink at once. This is the
-   * wala/ML#495 multi-tensor-sink-collapse pattern: dataset-loader fallback paths in {@code
-   * TensorGenerator} aren't wired for the test-pair `TypeReference`s, so flowing {@code
-   * x_test}/{@code y_test} through the sink collapses tensor classification across the whole call.
-   * The assertion captures the currently-observed (broken) result &mdash; 0 tensor parameters
-   * classified rather than the lattice-correct 4 &mdash; per the prefer-observed-assertion
-   * convention.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/495">wala/ML#495</a>): when the dataset
-   * loader's `TypeReference`s are extended into `TensorGenerator.shapesFromSSAChain` /
-   * `dtypesFromSSAChain` / `createManualGenerator` fallback paths, tighten this to {@code Map.of(2,
-   * Set.of(TENSOR_404_13_FLOAT64), 3, Set.of(TENSOR_404_FLOAT64), 4, Set.of(TENSOR_102_13_FLOAT64),
-   * 5, Set.of(TENSOR_102_FLOAT64))} (precise types on all four params).
-   */
-  @Test
-  public void testBostonHousingLoadDataXTest()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_boston_housing_load_data_xtest.py",
         "f",
         4,
         4,

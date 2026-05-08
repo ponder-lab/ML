@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 
 
-def f(a, b):
+def f(a, b, c, d):
     pass
 
 
@@ -19,5 +19,7 @@ assert y_test.shape == (2246,)
 # documents runtime truth; the JUnit expectation captures the analyzer's current imprecise
 # answer until #488 lands.
 assert x_train.dtype == np.dtype("object")
+assert x_test.dtype == np.dtype("object")
 assert y_train.dtype == np.int64
-f(x_train, y_train)
+assert y_test.dtype == np.int64
+f(x_train, y_train, x_test, y_test)

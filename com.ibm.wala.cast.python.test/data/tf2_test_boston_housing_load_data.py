@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 
 
-def f(a, b):
+def f(a, b, c, d):
     pass
 
 
@@ -15,4 +15,6 @@ assert x_test.shape == (102, 13)
 assert y_test.shape == (102,)
 assert x_train.dtype == np.float64
 assert y_train.dtype == np.float64
-f(x_train, y_train)
+assert x_test.dtype == np.float64
+assert y_test.dtype == np.float64
+f(x_train, y_train, x_test, y_test)
