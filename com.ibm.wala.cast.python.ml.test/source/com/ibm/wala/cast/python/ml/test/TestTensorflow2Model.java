@@ -31,6 +31,7 @@ import com.ibm.wala.cast.python.ml.client.SliceBuiltinOperation;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.CompoundDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.classLoader.IField;
@@ -4582,6 +4583,44 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testBroadcastTo()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_broadcast_to.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
+   * Regression guard for {@code tf.broadcast_to(x, tf.shape(y))} &mdash; the runtime-tensor
+   * shape-arg pattern. The expectation when this PR was filed was that {@link
+   * com.ibm.wala.cast.python.ml.client.TensorGenerator#getShapesFromShapeArgument} throws {@link
+   * IllegalStateException} for runtime-tensor shape arguments, and that {@link
+   * com.ibm.wala.cast.python.ml.client.BroadcastTo#getDefaultShapes}'s try/catch returns {@code
+   * null} (lattice ⊤) instead of letting the exception abort the analysis.
+   *
+   * <p>Empirically, that's not what happens on this case: the helper successfully builds a
+   * malformed compound-dim shape (the same shape produced by {@code testReshapeRuntimeShape} for
+   * {@code tf.reshape(x, tf.shape(y))}), so the catch path doesn't fire. The observed output is a
+   * 2-dim compound where each dim is itself a Compound of three Constant-0 entries &mdash; a
+   * malformed shape, not ⊤. Same root cause as wala/ML#489.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/489">wala/ML#489</a>): the malformed
+   * compound-dim shape is incorrect; tighten the JUnit assertion to {@link
+   * #TENSOR_UNKNOWN_SHAPE_FLOAT32} (or the precise (2, 3) post-fix shape) once the helper's
+   * runtime-tensor handling is fixed.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testBroadcastToRuntimeShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    // The observed (imprecise) shape for `tf.broadcast_to(x, tf.shape(y))` &mdash; a 2-dim
+    // Compound where each dim is itself a Compound of three NumericDim(0) entries. Encoded
+    // here per the prefer-observed-assertion convention (CONTRIBUTING.md > Java Testing).
+    List<Dimension<?>> observed =
+        asList(
+            new CompoundDim(asList(new NumericDim(0), new NumericDim(0), new NumericDim(0))),
+            new CompoundDim(asList(new NumericDim(0), new NumericDim(0), new NumericDim(0))));
+    TensorType observedType = new TensorType(FLOAT_32, observed);
+    test("tf2_test_broadcast_to_runtime_shape.py", "f", 1, 1, Map.of(2, Set.of(observedType)));
   }
 
   /**
