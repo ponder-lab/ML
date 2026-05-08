@@ -120,6 +120,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_FROM_DENS
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SQRT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.STACK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.STOP_GRADIENT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SUBTRACT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR;
@@ -1137,6 +1138,7 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, EXTRACT_PATCHES.getDeclaringClass()))
       return new ExtractPatches(source);
     else if (isType(calledFunction, EINSUM.getDeclaringClass())) return new Einsum(source);
+    else if (isType(calledFunction, STACK.getDeclaringClass())) return new Stack(source);
     else if (isType(calledFunction, SQRT.getDeclaringClass())) return new Sqrt(source);
     else if (isType(calledFunction, LOG.getDeclaringClass())) return new Log(source);
     else if (isType(calledFunction, NEGATIVE.getDeclaringClass())) return new Negative(source);
