@@ -7620,6 +7620,32 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_where.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
   }
 
+  /**
+   * Sibling of {@link #testWhere()} that exercises the union-over-{@code x}-and-{@code y} path with
+   * broadcast-compatible different shapes: {@code x} is {@code (3,)} float32 and {@code y} is
+   * {@code (2, 3)} float32. The runtime broadcast result is {@code (2, 3)}; the static analysis
+   * unions the two operand shapes to {@code {(3,), (2, 3)}}, which is sound but imprecise.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/482">wala/ML#482</a>): once broadcast-shape
+   * composition lands, tighten this assertion from the union {@code {TENSOR_3_FLOAT32,
+   * TENSOR_2_3_FLOAT32}} to the precise {@code TENSOR_2_3_FLOAT32}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testWhereBroadcast()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_where_broadcast.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_FLOAT32, TENSOR_2_3_FLOAT32)));
+  }
+
   @Test
   public void testConvertToTensor4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
