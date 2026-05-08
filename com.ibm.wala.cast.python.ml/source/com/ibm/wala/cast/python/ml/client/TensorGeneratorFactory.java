@@ -9,12 +9,14 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARGMIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARRAY_OPS_RESHAPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOOLEAN_MASK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BROADCAST_TO;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CEIL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_X_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_X_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_Y_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.COS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_BATCH_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CHOOSE_FROM_DATASETS_TYPE;
@@ -46,6 +48,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLATTEN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLATTEN_LAYER_CALL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLOOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_ROW_LENGTHS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_ROW_SPLITS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_VALUE_ROWIDS;
@@ -78,6 +81,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MULTIPLY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NDARRAY;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NEGATIVE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NOT_EQUAL;
@@ -103,6 +107,8 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_SUM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RSQRT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SEQUENCE_MASK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIGMOID;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIGN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIZE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SLICE_BUILTIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SOFTMAX;
@@ -112,6 +118,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_FROM_DENSE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SQRT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.STACK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.STOP_GRADIENT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SUBTRACT;
@@ -349,7 +356,7 @@ public class TensorGeneratorFactory {
       }
     }
 
-    LOGGER.info("findCreator fallback returning original source: " + source);
+    LOGGER.fine("findCreator fallback returning original source: " + source);
     return source;
   }
 
@@ -940,13 +947,13 @@ public class TensorGeneratorFactory {
     }
 
     TypeReference calledFunction = getFunction(source, builder);
-    LOGGER.info("Getting tensor generator for call to: " + calledFunction + ".");
+    LOGGER.fine("Getting tensor generator for call to: " + calledFunction + ".");
 
     // sanitize the type name by removing the artificial suffix that is added for synthetic
     // classes to facilitate trampoline generation.
     calledFunction = sanitize(calledFunction);
 
-    LOGGER.info("Getting tensor generator for sanitized call to: " + calledFunction + ".");
+    LOGGER.fine("Getting tensor generator for sanitized call to: " + calledFunction + ".");
 
     if (isType(calledFunction, ONES.getDeclaringClass())) return new Ones(source);
     else if (isType(calledFunction, CONSTANT.getDeclaringClass())) return new Constant(source);
@@ -1106,8 +1113,6 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass())
         || isType(calledFunction, SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass()))
       return new SoftmaxCrossEntropy(source);
-    else if (isType(calledFunction, LOG.getDeclaringClass()))
-      return new ElementWiseOperation(source);
     else if (isType(calledFunction, REDUCE_SUM.getDeclaringClass())) return new ReduceSum(source);
     else if (isType(calledFunction, MATMUL.getDeclaringClass())) return new MatMul(source);
     else if (isType(calledFunction, SIGMOID.getDeclaringClass())) return new Sigmoid(source);
@@ -1132,6 +1137,14 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, EXTRACT_PATCHES.getDeclaringClass()))
       return new ExtractPatches(source);
     else if (isType(calledFunction, STACK.getDeclaringClass())) return new Stack(source);
+    else if (isType(calledFunction, SQRT.getDeclaringClass())) return new Sqrt(source);
+    else if (isType(calledFunction, LOG.getDeclaringClass())) return new Log(source);
+    else if (isType(calledFunction, NEGATIVE.getDeclaringClass())) return new Negative(source);
+    else if (isType(calledFunction, SIN.getDeclaringClass())) return new Sin(source);
+    else if (isType(calledFunction, COS.getDeclaringClass())) return new Cos(source);
+    else if (isType(calledFunction, FLOOR.getDeclaringClass())) return new Floor(source);
+    else if (isType(calledFunction, CEIL.getDeclaringClass())) return new Ceil(source);
+    else if (isType(calledFunction, SIGN.getDeclaringClass())) return new Sign(source);
     else if (isType(calledFunction, IDENTITY.getDeclaringClass())) return new Identity(source);
     else if (isType(calledFunction, STOP_GRADIENT.getDeclaringClass()))
       return new StopGradient(source);
