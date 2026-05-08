@@ -212,7 +212,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         } else if (inst instanceof SSABinaryOpInstruction) {
           // Binary operations (e.g. +, *) on tensors are also sources.
           sources.add(src);
-          LOGGER.info("Added dataflow source from binary op: " + src + ".");
+          LOGGER.fine("Added dataflow source from binary op: " + src + ".");
         } else if (inst instanceof EachElementGetInstruction) {
           // We are potentially pulling a tensor out of a tensor iterable.
           EachElementGetInstruction eachElementGetInstruction = (EachElementGetInstruction) inst;
@@ -220,12 +220,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           // Don't add the source if the container has elements in it. In that case, we want to add
           // the individual elements themselves as sources instead.
           if (definitionIsNonScalar(eachElementGetInstruction, du))
-            LOGGER.info(
+            LOGGER.fine(
                 "Definition of instruction: "
                     + eachElementGetInstruction
                     + " is non-scalar. Skipping...");
           else {
-            LOGGER.info(
+            LOGGER.fine(
                 "Definition of instruction: "
                     + eachElementGetInstruction
                     + " is scalar. Processing...");
@@ -314,12 +314,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           TensorGenerator generator = getGenerator(src, builder);
           LOGGER.fine(() -> "Found tensor generator: " + generator + " for source: " + src + ".");
           sources.add(src);
-          LOGGER.info("Added dataflow source from tensor generator: " + src + ".");
+          LOGGER.fine("Added dataflow source from tensor generator: " + src + ".");
           ret = true;
         } catch (IllegalArgumentException e) {
           // not a tensor source.
           LOGGER.log(Level.FINE, "Not a tensor source: " + methodName, e);
-          e.printStackTrace();
         }
       } else if (instruction.getNumberOfUses() > 1) {
         // Get the invoked function from the PA.
@@ -466,7 +465,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         // First try intraprocedural analysis.
         if (definesTensorIterable(def, node, callGraph, pointerAnalysis)) {
           sources.add(src);
-          LOGGER.info("Added dataflow source from tensor iterable: " + src + ".");
+          LOGGER.fine("Added dataflow source from tensor iterable: " + src + ".");
           return true;
         } else {
           // Use interprocedural analysis using the PA.
@@ -508,7 +507,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       PointsToSetVariable src,
       Set<PointsToSetVariable> sources,
       PointerAnalysis<InstanceKey> pointerAnalysis) {
-    LOGGER.info(
+    LOGGER.fine(
         () ->
             "Using interprocedural analysis to find potential tensor definition for use: "
                 + use
@@ -529,7 +528,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                 || reference.getName().toString().startsWith(DATA_PACKAGE_PREFIX))
             && isDatasetTensorElement(src, use, pointerAnalysis)) {
           sources.add(src);
-          LOGGER.info("Added dataflow source from tensor dataset: " + src + ".");
+          LOGGER.fine("Added dataflow source from tensor dataset: " + src + ".");
           return true;
         }
       }
