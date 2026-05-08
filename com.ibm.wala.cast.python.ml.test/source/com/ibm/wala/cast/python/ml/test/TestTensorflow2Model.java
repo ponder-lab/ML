@@ -368,6 +368,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_25000_INT64 =
       new TensorType(INT_64, asList(new NumericDim(25000)));
 
+  private static final TensorType TENSOR_25000_UNKNOWN =
+      new TensorType(UNKNOWN, asList(new NumericDim(25000)));
+
   private static final TensorType TENSOR_5_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(5)));
 
@@ -4946,13 +4949,29 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Generator test for {@code tf.keras.datasets.imdb.load_data()}. The four returned arrays each
-   * have shape {@code (25000,)}; the {@code y_train} / {@code y_test} arrays have dtype {@code
-   * int64} (binary labels).
+   * have shape {@code (25000,)}: the {@code x_train} / {@code x_test} arrays carry numpy {@code
+   * object} dtype at runtime (variable-length integer-encoded sequences, modeled as ⊤-dtype); the
+   * {@code y_train} / {@code y_test} arrays have dtype {@code int64} (binary labels). Asserts on
+   * all four unpacked arrays at {@code vn=2..5}.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/488">wala/ML#488</a>): the inferred unknown
+   * dtype for {@code x_train} / {@code x_test} is imprecise &mdash; the runtime dtype is numpy
+   * {@code object} (the Python fixture asserts that). Tighten to a dedicated {@code OBJECT} dtype
+   * if/when the lattice gains one.
    */
   @Test
   public void testImdbLoadData()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_imdb_load_data.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_25000_INT64)));
+    test(
+        "tf2_test_imdb_load_data.py",
+        "f",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_25000_UNKNOWN),
+            3, Set.of(TENSOR_25000_INT64),
+            4, Set.of(TENSOR_25000_UNKNOWN),
+            5, Set.of(TENSOR_25000_INT64)));
   }
 
   @Test
