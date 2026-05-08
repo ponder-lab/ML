@@ -2768,6 +2768,12 @@
       <class name="distribute_datasets_from_function" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self dataset_fn">
           <new def="ctx" class="Ltensorflow/distribute/InputContext" />
+          <constant name="num_pipelines" type="int" value="1" />
+          <constant name="pipeline_id" type="int" value="0" />
+          <putfield class="LRoot" field="num_input_pipelines" fieldType="LRoot" ref="ctx" value="num_pipelines" />
+          <putfield class="LRoot" field="input_pipeline_id" fieldType="LRoot" ref="ctx" value="pipeline_id" />
+          <new def="batch_fn" class="Ltensorflow/distribute/InputContext/get_per_replica_batch_size" />
+          <putfield class="LRoot" field="get_per_replica_batch_size" fieldType="LRoot" ref="ctx" value="batch_fn" />
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="arg1" arg1="ctx" numArgs="2" def="v" />
           <return value="v" />
         </method>
@@ -2775,9 +2781,19 @@
     </package>
     <package name="tensorflow/distribute">
       <class name="InputContext" allocatable="true">
-        <!-- Stub for the `tf.distribute.InputContext` instance passed to the user's `dataset_fn` callback by `distribute_datasets_from_function`. The real class exposes the integer attributes `num_input_pipelines` / `input_pipeline_id` and the method `get_per_replica_batch_size(global_batch_size)`.
-          None of those produce tensors, so this stub leaves both the attributes and the method unmodeled &mdash; reads of the attributes resolve to ⊤ (no value-known) and calls to `get_per_replica_batch_size` fall through to the synthetic-method default (no-op return). Because none of these flow into tensor shape
-          or dtype, leaving them unmodeled doesn't affect the typing of the Datasets that `dataset_fn`'s body produces &mdash; which is the typing question wala/ML#113 is about. -->
+        <!-- Modeled stub for the `tf.distribute.InputContext` instance passed to the user's `dataset_fn` callback by `distribute_datasets_from_function`. The real class exposes the integer attributes `num_input_pipelines` and `input_pipeline_id` plus the method `get_per_replica_batch_size(global_batch_size)`,
+          which divides the global batch size by the number of replicas. The fields are populated at allocation time in `distribute_datasets_from_function`'s synthetic body: integer constants for the two attributes (placeholders &mdash; the analyzer doesn't track per-replica shard counts statically) and a `get_per_replica_batch_size`
+          callable that returns its `global_batch_size` argument unchanged (an upper-bound approximation; precise per-replica division would require static replica-count modeling). None of these flow into tensor shape or dtype, so the placeholder values don't affect the typing of the Datasets `dataset_fn` produces
+          &mdash; the modeling exists so that reads of `input_context.num_input_pipelines` etc. don't surface as ⊤ at use sites in user code. -->
+      </class>
+    </package>
+    <package name="tensorflow/distribute/InputContext">
+      <class name="get_per_replica_batch_size" allocatable="true">
+        <!-- `input_context.get_per_replica_batch_size(global_batch_size)` returns `global_batch_size / num_replicas` at runtime. This synthetic body returns `global_batch_size` unchanged &mdash; an upper bound, used because we don't track replica counts statically and the caller's typing on the returned
+          int doesn't depend on the precise division (only that it's an int). -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self global_batch_size">
+          <return value="arg1" />
+        </method>
       </class>
     </package>
     <package name="tensorflow/app">
