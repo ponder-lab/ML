@@ -8070,6 +8070,27 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Generator-dispatch test for {@code tf.einsum(equation, *inputs)}. Output dtype inherits from
+   * the first tensor input ({@code float32} in the fixture). See {@link
+   * com.ibm.wala.cast.python.ml.client.Einsum} (wala/ML#449 Tier 5).
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/507">wala/ML#507</a>): output shape is
+   * currently ⊤. Precise shape inference requires parsing the einsum equation string (e.g. {@code
+   * "ij,jk->ik"}) and composing it against each input's shape. Tighten to the precise post-parse
+   * shape ({@code (2, 2)} for this fixture) once #507 lands.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsum()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_einsum.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
    * Tier-5 generator (wala/ML#449): {@code tf.math.top_k(input, k)}. Returns a {@code (values,
    * indices)} 2-tuple. The dedicated {@link com.ibm.wala.cast.python.ml.client.TopK} generator
    * implements {@link com.ibm.wala.cast.python.ml.client.TupleElementProvider} with per-index dtype

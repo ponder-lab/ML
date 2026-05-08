@@ -1289,6 +1289,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String MINIMUM_SIGNATURE = "tf.math.minimum()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/linalg/einsum. */
+  public static final MethodReference EINSUM =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/einsum")),
+          AstMethodReference.fnSelector);
+
+  private static final String EINSUM_SIGNATURE = "tf.einsum()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/nn/relu. */
   public static final MethodReference RELU =
       MethodReference.findOrCreate(
@@ -1893,6 +1902,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(ATAN2.getDeclaringClass(), ATAN2_SIGNATURE),
           Map.entry(MAXIMUM.getDeclaringClass(), MAXIMUM_SIGNATURE),
           Map.entry(MINIMUM.getDeclaringClass(), MINIMUM_SIGNATURE),
+          Map.entry(EINSUM.getDeclaringClass(), EINSUM_SIGNATURE),
           Map.entry(RELU.getDeclaringClass(), RELU_SIGNATURE),
           Map.entry(EXPAND_DIMS.getDeclaringClass(), EXPAND_DIMS_SIGNATURE),
           Map.entry(CLIP_BY_VALUE.getDeclaringClass(), CLIP_BY_VALUE_SIGNATURE),
