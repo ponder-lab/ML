@@ -348,6 +348,29 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_8982_UNKNOWN =
       new TensorType(UNKNOWN, asList(new NumericDim(8982)));
 
+  private static final TensorType TENSOR_102_13_FLOAT64 =
+      new TensorType(FLOAT_64, asList(new NumericDim(102), new NumericDim(13)));
+
+  private static final TensorType TENSOR_102_FLOAT64 =
+      new TensorType(FLOAT_64, asList(new NumericDim(102)));
+
+  private static final TensorType TENSOR_10000_32_32_3_UINT8 =
+      new TensorType(
+          UINT_8,
+          asList(new NumericDim(10000), new NumericDim(32), new NumericDim(32), new NumericDim(3)));
+
+  private static final TensorType TENSOR_10000_1_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(10000), new NumericDim(1)));
+
+  private static final TensorType TENSOR_10000_28_28_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(10000), new NumericDim(28), new NumericDim(28)));
+
+  private static final TensorType TENSOR_2246_INT64 =
+      new TensorType(INT_64, asList(new NumericDim(2246)));
+
+  private static final TensorType TENSOR_2246_UNKNOWN =
+      new TensorType(UNKNOWN, asList(new NumericDim(2246)));
+
   /** A {@code float32} tensor whose shape cannot be statically inferred. */
   private static final TensorType TENSOR_UNKNOWN_SHAPE_FLOAT32 = new TensorType(FLOAT_32, null);
 
@@ -4944,7 +4967,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testFashionMnistLoadDataXTest()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_fashion_mnist_load_data_xtest.py", "f", 0, 0, Map.of());
+    test(
+        "tf2_test_fashion_mnist_load_data_xtest.py",
+        "f",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_60000_28_28_UINT8),
+            3, Set.of(TENSOR_60000_UINT8),
+            4, Set.of(TENSOR_10000_28_28_UINT8),
+            5, Set.of(TENSOR_10000_UINT8)));
   }
 
   /**
@@ -4981,7 +5013,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testCifar100LoadDataXTest()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_cifar100_load_data_xtest.py", "f", 0, 0, Map.of());
+    test(
+        "tf2_test_cifar100_load_data_xtest.py",
+        "f",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_50000_32_32_3_UINT8),
+            3, Set.of(TENSOR_50000_1_UINT8),
+            4, Set.of(TENSOR_10000_32_32_3_UINT8),
+            5, Set.of(TENSOR_10000_1_UINT8)));
   }
 
   /**
@@ -5016,7 +5057,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testReutersLoadDataXTest()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_reuters_load_data_xtest.py", "f", 0, 0, Map.of());
+    test(
+        "tf2_test_reuters_load_data_xtest.py",
+        "f",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_8982_UNKNOWN),
+            3, Set.of(TENSOR_8982_INT64),
+            4, Set.of(TENSOR_2246_UNKNOWN),
+            5, Set.of(TENSOR_2246_INT64)));
   }
 
   /**
@@ -5055,7 +5105,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testBostonHousingLoadDataXTest()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_boston_housing_load_data_xtest.py", "f", 0, 0, Map.of());
+    test(
+        "tf2_test_boston_housing_load_data_xtest.py",
+        "f",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_404_13_FLOAT64),
+            3, Set.of(TENSOR_404_FLOAT64),
+            4, Set.of(TENSOR_102_13_FLOAT64),
+            5, Set.of(TENSOR_102_FLOAT64)));
   }
 
   @Test
