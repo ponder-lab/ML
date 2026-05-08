@@ -99,7 +99,9 @@ public class Where extends TensorGenerator {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     ret.addAll(xShapes);
     ret.addAll(yShapes);
-    return ret.isEmpty() ? null : ret;
+    // Empty propagates as-is: empty set = ⊥ (provably not a tensor). Don't collapse to `null`
+    // (⊤) &mdash; that would conflate ⊥ with ⊤.
+    return ret;
   }
 
   @Override
@@ -112,10 +114,11 @@ public class Where extends TensorGenerator {
     Set<DType> ret = EnumSet.noneOf(DType.class);
     ret.addAll(xDTypes);
     ret.addAll(yDTypes);
-    if (ret.isEmpty()) return EnumSet.of(DType.UNKNOWN);
     // Lattice-normalize: if the union contains UNKNOWN, collapse to exactly `{UNKNOWN}` (⊤).
     // Mixed sets like `{FLOAT32, UNKNOWN}` would violate the dtype lattice convention.
     if (ret.contains(DType.UNKNOWN)) return EnumSet.of(DType.UNKNOWN);
+    // Empty propagates as-is: empty set = ⊥ (provably not a tensor). Don't collapse to
+    // `{UNKNOWN}` (⊤) &mdash; that would conflate ⊥ with ⊤.
     return ret;
   }
 
