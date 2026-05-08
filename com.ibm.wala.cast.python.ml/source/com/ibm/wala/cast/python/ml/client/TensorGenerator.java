@@ -230,7 +230,7 @@ public abstract class TensorGenerator {
           ret.add(new TensorType(dtype.name().toLowerCase(), dimensionList));
     }
 
-    LOGGER.info("Generator " + this.getClass().getSimpleName() + " produced types: " + ret);
+    LOGGER.fine("Generator " + this.getClass().getSimpleName() + " produced types: " + ret);
 
     return ret;
   }
@@ -347,7 +347,7 @@ public abstract class TensorGenerator {
                       + ".");
           }
 
-          LOGGER.info(
+          LOGGER.fine(
               "Found possible shape dimensions: "
                   + tensorDimensions
                   + " for field: "
@@ -1304,7 +1304,7 @@ public abstract class TensorGenerator {
         Object value = constantKey.getValue();
 
         if (value == null) {
-          LOGGER.info(
+          LOGGER.fine(
               "DType argument is None for source: "
                   + this.getSource()
                   + "; using default dtypes."
@@ -1345,7 +1345,7 @@ public abstract class TensorGenerator {
                   for (InstanceKey ik : pts)
                     if (ik.equals(instanceKey)) {
                       ret.add(dtype);
-                      LOGGER.info(
+                      LOGGER.fine(
                           "Found dtype: "
                               + dtype
                               + " for source: "
@@ -1452,7 +1452,7 @@ public abstract class TensorGenerator {
         }
 
         ret.add(dtype);
-        LOGGER.info(
+        LOGGER.fine(
             "Found dtype: "
                 + dtype
                 + " for source: "
@@ -1666,7 +1666,7 @@ public abstract class TensorGenerator {
         Object value = constantKey.getValue();
         if (value instanceof Float || value instanceof Double) {
           ret.add(FLOAT32);
-          LOGGER.info(
+          LOGGER.fine(
               "Inferred dtype: "
                   + FLOAT32
                   + " for source: "
@@ -1676,7 +1676,7 @@ public abstract class TensorGenerator {
                   + ".");
         } else if (value instanceof Integer || value instanceof Long) {
           ret.add(INT32);
-          LOGGER.info(
+          LOGGER.fine(
               "Inferred dtype: "
                   + INT32
                   + " for source: "
@@ -1686,7 +1686,7 @@ public abstract class TensorGenerator {
                   + ".");
         } else if (value instanceof String) {
           ret.add(STRING);
-          LOGGER.info(
+          LOGGER.fine(
               "Inferred dtype: "
                   + STRING
                   + " for source: "
@@ -1696,7 +1696,7 @@ public abstract class TensorGenerator {
                   + ".");
         } else if (value instanceof Boolean) {
           ret.add(BOOL);
-          LOGGER.info(
+          LOGGER.fine(
               "Inferred dtype: "
                   + BOOL
                   + " for source: "
@@ -1712,7 +1712,7 @@ public abstract class TensorGenerator {
           // (#447): missing types should fall through to ⊤ in the lattice
           // rather than terminate the analysis.
           ret.add(UNKNOWN);
-          LOGGER.info(
+          LOGGER.fine(
               "Unrecognized constant type for source: "
                   + this.getSource()
                   + " value: "
