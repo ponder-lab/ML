@@ -768,15 +768,24 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/custom_gradient -->
         <new def="custom_gradient" class="Ltensorflow/class/custom_gradient" />
         <putfield class="LRoot" field="custom_gradient" fieldType="LRoot" ref="x" value="custom_gradient" />
-        <!-- Tier-A pure-passthrough math ops (continued, wala/ML#422). Each shape and dtype passthrough on `x`. -->
+        <!-- Tier-A math ops (continued, wala/ML#422). Most are shape and dtype passthrough on their primary tensor argument (named `x` for the unary ops; `features` for `softplus` / `softsign`). The binary ops `atan2` / `maximum` / `minimum` later in this block are the exception &mdash; they're routed
+          through `ElementWiseOperation`, which derives dtype from the `x` parameter at position 0 and computes broadcast shape from both operands. -->
         <new def="tan" class="Ltensorflow/math/tan" />
+        <putfield class="LRoot" field="tan" fieldType="LRoot" ref="x" value="tan" />
         <putfield class="LRoot" field="tan" fieldType="LRoot" ref="math" value="tan" />
+        <putfield class="LRoot" field="tan" fieldType="LRoot" ref="gen_math_ops" value="tan" />
         <new def="asin" class="Ltensorflow/math/asin" />
+        <putfield class="LRoot" field="asin" fieldType="LRoot" ref="x" value="asin" />
         <putfield class="LRoot" field="asin" fieldType="LRoot" ref="math" value="asin" />
+        <putfield class="LRoot" field="asin" fieldType="LRoot" ref="gen_math_ops" value="asin" />
         <new def="atan" class="Ltensorflow/math/atan" />
+        <putfield class="LRoot" field="atan" fieldType="LRoot" ref="x" value="atan" />
         <putfield class="LRoot" field="atan" fieldType="LRoot" ref="math" value="atan" />
+        <putfield class="LRoot" field="atan" fieldType="LRoot" ref="gen_math_ops" value="atan" />
         <new def="sinh" class="Ltensorflow/math/sinh" />
+        <putfield class="LRoot" field="sinh" fieldType="LRoot" ref="x" value="sinh" />
         <putfield class="LRoot" field="sinh" fieldType="LRoot" ref="math" value="sinh" />
+        <putfield class="LRoot" field="sinh" fieldType="LRoot" ref="gen_math_ops" value="sinh" />
         <new def="cosh" class="Ltensorflow/math/cosh" />
         <putfield class="LRoot" field="cosh" fieldType="LRoot" ref="x" value="cosh" />
         <putfield class="LRoot" field="cosh" fieldType="LRoot" ref="math" value="cosh" />
