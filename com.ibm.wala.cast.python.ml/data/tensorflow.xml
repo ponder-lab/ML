@@ -2717,6 +2717,9 @@
           <new def="x" class="Ltensorflow/distribute/run/run" />
           <putfield class="LRoot" field="run" fieldType="LRoot" ref="self" value="x" />
           <putfield class="LRoot" field="experimental_run_v2" fieldType="LRoot" ref="self" value="x" />
+          <new def="ddff" class="Ltensorflow/distribute/run/distribute_datasets_from_function" />
+          <putfield class="LRoot" field="distribute_datasets_from_function" fieldType="LRoot" ref="self" value="ddff" />
+          <putfield class="LRoot" field="experimental_distribute_datasets_from_function" fieldType="LRoot" ref="self" value="ddff" />
           <return value="arg0" />
         </method>
       </class>
@@ -2725,6 +2728,9 @@
           <new def="x" class="Ltensorflow/distribute/run/run" />
           <putfield class="LRoot" field="run" fieldType="LRoot" ref="self" value="x" />
           <putfield class="LRoot" field="experimental_run_v2" fieldType="LRoot" ref="self" value="x" />
+          <new def="ddff" class="Ltensorflow/distribute/run/distribute_datasets_from_function" />
+          <putfield class="LRoot" field="distribute_datasets_from_function" fieldType="LRoot" ref="self" value="ddff" />
+          <putfield class="LRoot" field="experimental_distribute_datasets_from_function" fieldType="LRoot" ref="self" value="ddff" />
           <return value="arg0" />
         </method>
       </class>
@@ -2733,6 +2739,9 @@
           <new def="x" class="Ltensorflow/distribute/run/run" />
           <putfield class="LRoot" field="run" fieldType="LRoot" ref="self" value="x" />
           <putfield class="LRoot" field="experimental_run_v2" fieldType="LRoot" ref="self" value="x" />
+          <new def="ddff" class="Ltensorflow/distribute/run/distribute_datasets_from_function" />
+          <putfield class="LRoot" field="distribute_datasets_from_function" fieldType="LRoot" ref="self" value="ddff" />
+          <putfield class="LRoot" field="experimental_distribute_datasets_from_function" fieldType="LRoot" ref="self" value="ddff" />
           <return value="arg0" />
         </method>
       </class>
@@ -2751,6 +2760,21 @@
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="arg1" arg1="x" numArgs="2" def="v" />
           <return value="v" />
         </method>
+      </class>
+      <!-- https://www.tensorflow.org/api_docs/python/tf/distribute/Strategy#distribute_datasets_from_function — `strategy.distribute_datasets_from_function(dataset_fn)` invokes `dataset_fn(input_context)` per replica and assembles the results into a distributed dataset. The synthetic-method body below
+        allocates a stub `InputContext` and synchronously calls the user-supplied `dataset_fn` with it, so the callback enters the call graph and its body's tensor flows are analyzed (wala/ML#113). The deprecated alias `experimental_distribute_datasets_from_function` is wired to the same class on each strategy. -->
+      <class name="distribute_datasets_from_function" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self dataset_fn">
+          <new def="ctx" class="Ltensorflow/distribute/InputContext" />
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="arg1" arg1="ctx" numArgs="2" def="v" />
+          <return value="v" />
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/distribute">
+      <class name="InputContext" allocatable="true">
+        <!-- Stub for the `tf.distribute.InputContext` instance passed to the user's `dataset_fn` callback by `distribute_datasets_from_function`. The real class carries `num_input_pipelines`, `input_pipeline_id`, and `get_per_replica_batch_size` — none of those are tensors, so this stub leaves the fields
+          unmodeled and lets the analyzer treat them as ⊤ at use sites. -->
       </class>
     </package>
     <package name="tensorflow/app">

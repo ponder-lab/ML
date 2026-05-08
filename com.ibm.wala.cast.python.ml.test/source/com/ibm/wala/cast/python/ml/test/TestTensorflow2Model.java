@@ -13,7 +13,6 @@ import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -1937,18 +1936,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Regression guard for {@code tf.distribute.MirroredStrategy.distribute_datasets_from_function}.
-   * The fixture defines {@code dataset_fn} as a top-level function and registers it only via the
-   * {@code strategy.distribute_datasets_from_function(dataset_fn)} callback &mdash; with no other
-   * call site. The analyzer currently doesn't model that callback registration, so {@code
-   * dataset_fn} never enters the call graph; this test captures that observed absence as a positive
-   * assertion.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/113">wala/ML#113</a>): when callback
-   * registration is modeled, the assertion will flip from absent to present &mdash; replace the
-   * body with {@code test("tf2_test_callbacks3.py", "dataset_fn", 1, 0)} (one tensor parameter
-   * since {@code input_context} flows into the body; zero local tensor variables, since the locals
-   * are dataset / int values).
+   * Regression guard for {@code tf.distribute.MirroredStrategy.distribute_datasets_from_function}'s
+   * callback registration (wala/ML#113). The fixture defines {@code dataset_fn} as a top-level
+   * function and registers it only via {@code
+   * strategy.distribute_datasets_from_function(dataset_fn)} &mdash; with no other call site. After
+   * this PR's `tensorflow.xml` fix (synthetic-method body on {@code
+   * tensorflow/distribute/run/distribute_datasets_from_function} that allocates a stub {@code
+   * InputContext} and synchronously calls {@code dataset_fn(ctx)}), the callback enters the call
+   * graph and its body's tensor flows are analyzed. This test asserts that the function signature
+   * {@code script tf2_test_callbacks3.py.dataset_fn.do()LRoot;} is now present.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws CancelException if the analysis is cancelled.
@@ -1963,9 +1959,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     CallGraph CG = builder.makeCallGraph(builder.getOptions());
     assertNotNull(CG);
     String fnSignature = "script " + filename + ".dataset_fn.do()LRoot;";
-    assertFalse(
-        "dataset_fn should not yet be in the call graph; the analyzer doesn't trace through"
-            + " distribute_datasets_from_function's callback registration (wala/ML#113).",
+    assertTrue(
+        "dataset_fn should be in the call graph after the wala/ML#113 fix wires"
+            + " distribute_datasets_from_function's synthetic-method body to invoke the user"
+            + " callback with a stub InputContext.",
         getFunctionSignatures(CG).anyMatch(s -> s.equals(fnSignature)));
   }
 
