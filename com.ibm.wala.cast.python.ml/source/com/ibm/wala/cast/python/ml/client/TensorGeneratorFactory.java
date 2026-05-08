@@ -14,6 +14,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_X_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_X_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_Y_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_Y_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONCAT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.COS;
@@ -1138,6 +1139,7 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, EXTRACT_PATCHES.getDeclaringClass()))
       return new ExtractPatches(source);
     else if (isType(calledFunction, EINSUM.getDeclaringClass())) return new Einsum(source);
+    else if (isType(calledFunction, CONCAT.getDeclaringClass())) return new Concat(source);
     else if (isType(calledFunction, STACK.getDeclaringClass())) return new Stack(source);
     else if (isType(calledFunction, SQRT.getDeclaringClass())) return new Sqrt(source);
     else if (isType(calledFunction, LOG.getDeclaringClass())) return new Log(source);
