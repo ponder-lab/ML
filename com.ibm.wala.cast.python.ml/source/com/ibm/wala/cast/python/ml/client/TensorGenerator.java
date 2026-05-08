@@ -238,44 +238,34 @@ public abstract class TensorGenerator {
   /**
    * Returns the possible shapes of the tensor returned by this generator.
    *
-   * <p>Throws {@link IllegalStateException} when the shape argument's PTS contains forms this
-   * method does not recognize as a static shape &mdash; runtime tensors (e.g. the result of {@code
-   * tf.shape(y)}), opaque builder objects, or anything that isn't a list / tuple / {@code
-   * tf.constant} / {@code TensorSpec} / {@code RaggedTensorSpec}. The strict throw is intentional:
-   * an unrecognized shape form means missing or incorrect modeling, and silencing it via a {@code
-   * null} return would suppress that diagnostic signal across the whole generator surface during
-   * development. The deeper fix (change the helper's contract to return {@code null} instead of
-   * throw) is tracked at <a href="https://github.com/wala/ML/issues/471">wala/ML#471</a>; for now
-   * the tolerance is localized to the one caller where runtime-tensor shape arguments are the
+   * <p>The strict-throw contract for unrecognized top-level forms is intentional: an unrecognized
+   * shape form means missing or incorrect modeling, and silencing it via a {@code null} return
+   * would suppress that diagnostic signal across the whole generator surface during development.
+   * The deeper fix (change the helper's contract to return {@code null} instead of throw) is
+   * tracked at <a href="https://github.com/wala/ML/issues/471">wala/ML#471</a>; for now the
+   * tolerance is localized to the one caller where runtime-tensor shape arguments are the
    * legitimate use case &mdash; {@link BroadcastTo#getDefaultShapes} wraps this helper in a {@code
-   * try / catch (IllegalStateException)} that returns {@code null} (lattice ⊤). Other callers stay
+   * try/catch (IllegalStateException)} that returns {@code null} (lattice ⊤). Other callers stay
    * strict; a missing case there surfaces as an analysis-aborting exception, which is the
    * load-bearing "modeling gap" signal.
    *
-   * <p>Throws {@link IllegalArgumentException} when the {@code pointsToSet} parameter itself is
-   * empty or {@code null} &mdash; that's a caller-contract violation (callers should check for
-   * empty PTS before invoking this helper), distinct from "shape was a runtime tensor".
-   *
-   * <p>Returns {@code null} (lattice ⊤) for sub-parse failures during recursive descent on the
-   * cases this PR converts: when a {@code tf.constant} value PTS is empty after the call-site walk,
-   * when a {@link com.ibm.wala.cast.python.ml.types.TensorFlowTypes#TENSOR_SPEC} or {@link
-   * com.ibm.wala.cast.python.ml.types.TensorFlowTypes#RAGGED_TENSOR_SPEC} shape field has empty
-   * PTS, or when a recursive call on any of these returns {@code null}. This is distinct from the
-   * strict-throw contract for unrecognized top-level forms above: the throw signals "this kind of
-   * shape isn't modeled at all"; the {@code null} returns signal "this shape's structure is
-   * recognized but the leaves aren't statically resolvable" (a soundness ⊤ appropriate for the
-   * lattice).
-   *
-   * <p>Out of scope of this PR: the list/tuple branch with empty element PTS still returns an empty
-   * result set rather than {@code null}, which means callers can't distinguish "list with
-   * unresolved element" from "no shape recovered" at that path. Tracked at <a
-   * href="https://github.com/wala/ML/issues/504">wala/ML#504</a>.
-   *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param pointsToSet The points-to set of the shape argument. FIXME: Why not take a value number?
-   * @return A set of possible shapes; or {@code null} (⊤) when sub-parse fails as documented above.
-   *     Never {@code null} for unrecognized top-level forms &mdash; those throw {@link
-   *     IllegalStateException} instead.
+   * @return A set of possible shapes, or {@code null} (lattice ⊤) for sub-parse failures during
+   *     recursive descent: when a {@code tf.constant} value PTS is empty after the call-site walk,
+   *     when a {@link com.ibm.wala.cast.python.ml.types.TensorFlowTypes#TENSOR_SPEC} or {@link
+   *     com.ibm.wala.cast.python.ml.types.TensorFlowTypes#RAGGED_TENSOR_SPEC} shape field has empty
+   *     PTS, or when a recursive call on any of these returns {@code null}. The {@code null}
+   *     returns signal "this shape's structure is recognized but the leaves aren't statically
+   *     resolvable" &mdash; distinct from the strict-throw contract for unrecognized top-level
+   *     forms, which signals "this kind of shape isn't modeled at all."
+   * @throws IllegalArgumentException when the {@code pointsToSet} parameter is itself empty or
+   *     {@code null}. That's a caller-contract violation (callers should check for empty PTS before
+   *     invoking this helper); distinct from "shape was a runtime tensor."
+   * @throws IllegalStateException when the shape argument's PTS contains forms this method does not
+   *     recognize as a static shape &mdash; runtime tensors (e.g. the result of {@code
+   *     tf.shape(y)}), opaque builder objects, or anything that isn't a list/tuple, {@code
+   *     tf.constant}, {@code TensorSpec}, or {@code RaggedTensorSpec}.
    */
   protected Set<List<Dimension<?>>> getShapesFromShapeArgument(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
