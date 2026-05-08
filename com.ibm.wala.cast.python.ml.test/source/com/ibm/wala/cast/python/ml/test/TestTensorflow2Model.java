@@ -340,6 +340,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_INT64_UNKNOWN_SHAPE = new TensorType(INT_64, null);
 
+  private static final TensorType TENSOR_INT32_UNKNOWN_SHAPE = new TensorType(INT_32, null);
+
   private static final TensorType TENSOR_UNKNOWN_SHAPE_BOOL = new TensorType(BOOL, null);
 
   private static final TensorType TENSOR_3_INT32 =
@@ -4500,8 +4502,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Verifies that {@code tf.math.argmax(x, axis=0)} routes through the dedicated {@link
    * com.ibm.wala.cast.python.ml.client.Argmax} generator and emits the precise {@code int64} dtype
-   * (the TF default for argmax indices). Output shape is left at ⊤ in this Tier 6 PR — see
-   * wala/ML#462 for why.
+   * (the TF default for argmax indices).
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): output shape is left
+   * at ⊤. Precise axis-aware shape composition (reading {@code input.shape[:axis] +
+   * input.shape[axis+1:]}) regresses {@code testNeuralNetwork*} via the {@code
+   * ElementWiseOperation} cartesian-pair issue tracked at #462. Tighten to the precise post-fix
+   * shape once #462 lands.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -4515,8 +4522,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Counterpart of {@link #testArgmax()} for {@code tf.math.argmin}. Same semantics: dtype is fixed
-   * at {@code int64}, shape is left at ⊤. See {@link com.ibm.wala.cast.python.ml.client.Argmin}.
+   * Counterpart of {@link #testArgmax()} for {@code tf.math.argmin}. Same semantics: dtype defaults
+   * to {@code int64} (overridable via {@code output_type}, see {@link #testArgminOutputType()}),
+   * shape is left at ⊤. See {@link com.ibm.wala.cast.python.ml.client.Argmin}.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): output shape is left
+   * at ⊤; same {@code ElementWiseOperation} cartesian-pair driver as for {@link #testArgmax()}.
+   * Tighten to the precise post-fix shape once #462 lands.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -4527,6 +4539,119 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testArgmin()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_argmin.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT64_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Verifies that {@code tf.math.argmax(x, axis=0, output_type=tf.int32)} honors the explicit
+   * {@code output_type} override and emits an {@code int32}-dtype tensor instead of the {@code
+   * int64} default. Exercises the dtype-arg dispatch path on {@link
+   * com.ibm.wala.cast.python.ml.client.Argmax} after the wala/ML#463 fix. The fixture's sink {@code
+   * f(x, y)} has two parameters so that each tensor's inferred type can be checked independently.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the inferred ⊤ shape
+   * on {@code y} (vn=3) is imprecise &mdash; precise axis-aware shape composition (reading {@code
+   * input.shape[:axis] + input.shape[axis+1:]}) regresses {@code testNeuralNetwork*} via the {@code
+   * ElementWiseOperation} cartesian-pair issue tracked at #462. Captured-imprecise per the
+   * prefer-observed-assertion convention; tighten to a precise {@code (3,) int32} once #462 lands.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgmaxOutputType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_argmax_output_type.py",
+        "f",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_2_3_FLOAT32),
+            3, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Counterpart of {@link #testArgmaxOutputType()} for {@code tf.math.argmin}. Same dispatch path
+   * via the inherited {@link com.ibm.wala.cast.python.ml.client.Argmin} extends {@link
+   * com.ibm.wala.cast.python.ml.client.Argmax} relationship; same shape-imprecision driver too.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the inferred ⊤ shape
+   * on {@code y} (vn=3) is imprecise &mdash; precise axis-aware shape composition for {@code
+   * Argmin} is gated by the {@code ElementWiseOperation} cartesian-pair issue, same as for {@code
+   * Argmax}. Tighten to the precise post-fix shape once #462 lands.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgminOutputType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_argmin_output_type.py",
+        "f",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_2_3_FLOAT32),
+            3, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Companion to {@link #testArgmaxOutputType()} that exercises the *single-parameter sink, two
+   * call sites* shape: {@code def f(a): ...; f(x); f(y)}. Parameter {@code a} should union {@code
+   * x}'s and {@code y}'s tensor types across the two call sites &mdash; verifies that the {@code
+   * output_type=tf.int32} override on {@code y} survives the second sink call rather than being
+   * clobbered by the {@code int64} default.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the {@code y}
+   * contribution to the union is currently ⊤-shape ({@code TENSOR_INT32_UNKNOWN_SHAPE}) for the
+   * same reason as {@link #testArgmaxOutputType()} &mdash; gated by the {@code
+   * ElementWiseOperation} cartesian-pair issue. Tighten {@code y}'s contribution to its precise
+   * post-fix shape (a {@code (3,) int32}) once #462 lands.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgmaxOutputTypeDoubleSink()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_argmax_output_type_double_sink.py",
+        "f",
+        1,
+        2,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Counterpart of {@link #testArgmaxOutputTypeDoubleSink()} for {@code tf.math.argmin}; same
+   * shape-imprecision driver.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the {@code y}
+   * contribution to the union is currently ⊤-shape ({@code TENSOR_INT32_UNKNOWN_SHAPE}) for the
+   * same reason as {@link #testArgmaxOutputTypeDoubleSink()}. Tighten to the precise {@code (3,)
+   * int32} once #462 lands.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgminOutputTypeDoubleSink()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_argmin_output_type_double_sink.py",
+        "f",
+        1,
+        2,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
   }
 
   // wala/ML#449 Tier 7: linspace/broadcast_to. Shape derives from a shape-arg (`num`/`shape`),
