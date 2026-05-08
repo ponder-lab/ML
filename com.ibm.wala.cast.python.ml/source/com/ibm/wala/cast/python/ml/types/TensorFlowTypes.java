@@ -968,9 +968,11 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String EXTRACT_PATCHES_SIGNATURE = "tf.image.extract_patches()";
 
-  // Tier-A pure-passthrough math ops (continued, wala/ML#422). Each is shape and dtype passthrough
-  // on its primary tensor argument (named `x` for most ops; `features` for `softplus` / `softsign`;
-  // and the second tensor operand of the binary ops `atan2` / `maximum` / `minimum`).
+  // Tier-A math ops (continued, wala/ML#422). Most are shape and dtype passthrough on their primary
+  // tensor argument (named `x` for most unary ops; `features` for `softplus` / `softsign`). The
+  // binary ops `atan2` / `maximum` / `minimum` are the exception: they're routed through
+  // `ElementWiseOperation`, which derives dtype from the `x` parameter at position 0 and computes
+  // broadcast shape from both operands &mdash; not passthrough.
 
   /** https://www.tensorflow.org/api_docs/python/tf/math/tan. */
   public static final MethodReference TAN =

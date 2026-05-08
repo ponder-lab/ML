@@ -321,20 +321,11 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/log -->
         <putfield class="LRoot" field="log" fieldType="LRoot" ref="math" value="pass_through" />
         <putfield class="LRoot" field="log" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reciprocal -->
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/lgamma -->
         <putfield class="LRoot" field="lgamma" fieldType="LRoot" ref="math" value="pass_through" />
         <putfield class="LRoot" field="lgamma" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/erf -->
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/square -->
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/maximum -->
-        <putfield class="LRoot" field="maximum" fieldType="LRoot" ref="x" value="pass_through" />
-        <putfield class="LRoot" field="maximum" fieldType="LRoot" ref="math" value="pass_through" />
-        <putfield class="LRoot" field="maximum" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/minimum -->
-        <putfield class="LRoot" field="minimum" fieldType="LRoot" ref="x" value="pass_through" />
-        <putfield class="LRoot" field="minimum" fieldType="LRoot" ref="math" value="pass_through" />
-        <putfield class="LRoot" field="minimum" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
+        <!-- `tf.{reciprocal,erf,square}` and `tf.{math,gen_math_ops}.{reciprocal,erf,square}` now route through dedicated `<class>` blocks defined later in this file (search for `class name="reciprocal"`, etc.). The new bindings include the `gen_math_ops` alias as well. -->
+        <!-- `tf.{maximum,minimum}` and `tf.{math,gen_math_ops}.{maximum,minimum}` now route through dedicated `<class>` blocks dispatched to `ElementWiseOperation` (broadcast shape, unified dtype). -->
         <!-- `tf.less`'s legacy `pass_through` aliasing was removed: the modern `<class name="less">` block + `ComparisonOperation` dispatch (wala/ML#427) now handle bool dtype directly. -->
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/cos -->
         <putfield class="LRoot" field="cos" fieldType="LRoot" ref="x" value="pass_through" />
@@ -809,6 +800,7 @@
         <putfield class="LRoot" field="round" fieldType="LRoot" ref="math" value="round" />
         <new def="reciprocal" class="Ltensorflow/math/reciprocal" />
         <putfield class="LRoot" field="reciprocal" fieldType="LRoot" ref="math" value="reciprocal" />
+        <putfield class="LRoot" field="reciprocal" fieldType="LRoot" ref="gen_math_ops" value="reciprocal" />
         <new def="softplus" class="Ltensorflow/math/softplus" />
         <putfield class="LRoot" field="softplus" fieldType="LRoot" ref="math" value="softplus" />
         <putfield class="LRoot" field="softplus" fieldType="LRoot" ref="nn" value="softplus" />
@@ -818,8 +810,10 @@
         <new def="square" class="Ltensorflow/math/square" />
         <putfield class="LRoot" field="square" fieldType="LRoot" ref="x" value="square" />
         <putfield class="LRoot" field="square" fieldType="LRoot" ref="math" value="square" />
+        <putfield class="LRoot" field="square" fieldType="LRoot" ref="gen_math_ops" value="square" />
         <new def="erf" class="Ltensorflow/math/erf" />
         <putfield class="LRoot" field="erf" fieldType="LRoot" ref="math" value="erf" />
+        <putfield class="LRoot" field="erf" fieldType="LRoot" ref="gen_math_ops" value="erf" />
         <new def="erfc" class="Ltensorflow/math/erfc" />
         <putfield class="LRoot" field="erfc" fieldType="LRoot" ref="math" value="erfc" />
         <!-- Element-wise binary ops (broadcast shape, unified dtype) — routed through ElementWiseOperation. -->
@@ -828,9 +822,11 @@
         <new def="maximum" class="Ltensorflow/math/maximum" />
         <putfield class="LRoot" field="maximum" fieldType="LRoot" ref="x" value="maximum" />
         <putfield class="LRoot" field="maximum" fieldType="LRoot" ref="math" value="maximum" />
+        <putfield class="LRoot" field="maximum" fieldType="LRoot" ref="gen_math_ops" value="maximum" />
         <new def="minimum" class="Ltensorflow/math/minimum" />
         <putfield class="LRoot" field="minimum" fieldType="LRoot" ref="x" value="minimum" />
         <putfield class="LRoot" field="minimum" fieldType="LRoot" ref="math" value="minimum" />
+        <putfield class="LRoot" field="minimum" fieldType="LRoot" ref="gen_math_ops" value="minimum" />
         <return value="x" />
       </method>
     </class>
