@@ -86,7 +86,7 @@ public class RaggedFromRowLimits extends RaggedTensorFromValues {
     }
 
     final Set<Dimension<?>> finalPossibleRowDims = possibleRowDims;
-    LOGGER.info(() -> "Inferred nrows for " + this.getSource() + ": " + finalPossibleRowDims + ".");
+    LOGGER.fine(() -> "Inferred nrows for " + this.getSource() + ": " + finalPossibleRowDims + ".");
 
     // 2. Determine shape of `values`.
     OrdinalSet<InstanceKey> valuesPts =

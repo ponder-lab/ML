@@ -862,6 +862,141 @@ public class TensorFlowTypes extends PythonTypes {
   public static final String CIFAR10_Y_TEST_SIGNATURE =
       "tf.keras.datasets.cifar10.load_data/y_test";
 
+  public static final TypeReference IMDB_X_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/imdb/x_train"));
+
+  public static final String IMDB_X_TRAIN_SIGNATURE = "tf.keras.datasets.imdb.load_data/x_train";
+
+  public static final TypeReference IMDB_Y_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/imdb/y_train"));
+
+  public static final String IMDB_Y_TRAIN_SIGNATURE = "tf.keras.datasets.imdb.load_data/y_train";
+
+  public static final TypeReference IMDB_X_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/imdb/x_test"));
+
+  public static final String IMDB_X_TEST_SIGNATURE = "tf.keras.datasets.imdb.load_data/x_test";
+
+  public static final TypeReference IMDB_Y_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/imdb/y_test"));
+
+  public static final String IMDB_Y_TEST_SIGNATURE = "tf.keras.datasets.imdb.load_data/y_test";
+  public static final TypeReference FASHION_MNIST_X_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/fashion_mnist/x_train"));
+
+  public static final String FASHION_MNIST_X_TRAIN_SIGNATURE =
+      "tf.keras.datasets.fashion_mnist.load_data/x_train";
+
+  public static final TypeReference FASHION_MNIST_Y_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/fashion_mnist/y_train"));
+
+  public static final String FASHION_MNIST_Y_TRAIN_SIGNATURE =
+      "tf.keras.datasets.fashion_mnist.load_data/y_train";
+
+  public static final TypeReference FASHION_MNIST_X_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/fashion_mnist/x_test"));
+
+  public static final String FASHION_MNIST_X_TEST_SIGNATURE =
+      "tf.keras.datasets.fashion_mnist.load_data/x_test";
+
+  public static final TypeReference FASHION_MNIST_Y_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/fashion_mnist/y_test"));
+
+  public static final String FASHION_MNIST_Y_TEST_SIGNATURE =
+      "tf.keras.datasets.fashion_mnist.load_data/y_test";
+
+  public static final TypeReference CIFAR100_X_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/cifar100/x_train"));
+
+  public static final String CIFAR100_X_TRAIN_SIGNATURE =
+      "tf.keras.datasets.cifar100.load_data/x_train";
+
+  public static final TypeReference CIFAR100_Y_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/cifar100/y_train"));
+
+  public static final String CIFAR100_Y_TRAIN_SIGNATURE =
+      "tf.keras.datasets.cifar100.load_data/y_train";
+
+  public static final TypeReference CIFAR100_X_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/cifar100/x_test"));
+
+  public static final String CIFAR100_X_TEST_SIGNATURE =
+      "tf.keras.datasets.cifar100.load_data/x_test";
+
+  public static final TypeReference CIFAR100_Y_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/cifar100/y_test"));
+
+  public static final String CIFAR100_Y_TEST_SIGNATURE =
+      "tf.keras.datasets.cifar100.load_data/y_test";
+
+  public static final TypeReference REUTERS_X_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/reuters/x_train"));
+
+  public static final String REUTERS_X_TRAIN_SIGNATURE =
+      "tf.keras.datasets.reuters.load_data/x_train";
+
+  public static final TypeReference REUTERS_Y_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/reuters/y_train"));
+
+  public static final String REUTERS_Y_TRAIN_SIGNATURE =
+      "tf.keras.datasets.reuters.load_data/y_train";
+
+  public static final TypeReference REUTERS_X_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/reuters/x_test"));
+
+  public static final String REUTERS_X_TEST_SIGNATURE =
+      "tf.keras.datasets.reuters.load_data/x_test";
+
+  public static final TypeReference REUTERS_Y_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/reuters/y_test"));
+
+  public static final String REUTERS_Y_TEST_SIGNATURE =
+      "tf.keras.datasets.reuters.load_data/y_test";
+
+  public static final TypeReference BOSTON_HOUSING_X_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/boston_housing/x_train"));
+
+  public static final String BOSTON_HOUSING_X_TRAIN_SIGNATURE =
+      "tf.keras.datasets.boston_housing.load_data/x_train";
+
+  public static final TypeReference BOSTON_HOUSING_Y_TRAIN =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/boston_housing/y_train"));
+
+  public static final String BOSTON_HOUSING_Y_TRAIN_SIGNATURE =
+      "tf.keras.datasets.boston_housing.load_data/y_train";
+
+  public static final TypeReference BOSTON_HOUSING_X_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/boston_housing/x_test"));
+
+  public static final String BOSTON_HOUSING_X_TEST_SIGNATURE =
+      "tf.keras.datasets.boston_housing.load_data/x_test";
+
+  public static final TypeReference BOSTON_HOUSING_Y_TEST =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/keras/datasets/boston_housing/y_test"));
+
+  public static final String BOSTON_HOUSING_Y_TEST_SIGNATURE =
+      "tf.keras.datasets.boston_housing.load_data/y_test";
+
   /** https://www.tensorflow.org/api_docs/python/tf/placeholder. */
   public static final MethodReference PLACEHOLDER =
       MethodReference.findOrCreate(
@@ -1153,6 +1288,180 @@ public class TensorFlowTypes extends PythonTypes {
           AstMethodReference.fnSelector);
 
   private static final String MINIMUM_SIGNATURE = "tf.math.minimum()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/nn/relu. */
+  public static final MethodReference RELU =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/relu")),
+          AstMethodReference.fnSelector);
+
+  private static final String RELU_SIGNATURE = "tf.nn.relu()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/expand_dims. */
+  public static final MethodReference EXPAND_DIMS =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/expand_dims")),
+          AstMethodReference.fnSelector);
+
+  private static final String EXPAND_DIMS_SIGNATURE = "tf.expand_dims()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/clip_by_value. */
+  public static final MethodReference CLIP_BY_VALUE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/clip_by_value")),
+          AstMethodReference.fnSelector);
+
+  private static final String CLIP_BY_VALUE_SIGNATURE = "tf.clip_by_value()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/strings/as_string. */
+  public static final MethodReference AS_STRING =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/strings/as_string")),
+          AstMethodReference.fnSelector);
+
+  private static final String AS_STRING_SIGNATURE = "tf.strings.as_string()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/top_k. */
+  public static final MethodReference TOP_K =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/top_k")),
+          AstMethodReference.fnSelector);
+
+  private static final String TOP_K_SIGNATURE = "tf.math.top_k()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/meshgrid. */
+  public static final MethodReference MESHGRID =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/meshgrid")),
+          AstMethodReference.fnSelector);
+
+  private static final String MESHGRID_SIGNATURE = "tf.meshgrid()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/where. */
+  public static final MethodReference WHERE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/where")),
+          AstMethodReference.fnSelector);
+
+  private static final String WHERE_SIGNATURE = "tf.where()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/nn/leaky_relu. */
+  public static final MethodReference LEAKY_RELU =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/leaky_relu")),
+          AstMethodReference.fnSelector);
+
+  private static final String LEAKY_RELU_SIGNATURE = "tf.nn.leaky_relu()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/reduce_min. */
+  public static final MethodReference REDUCE_MIN =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/reduce_min")),
+          AstMethodReference.fnSelector);
+
+  private static final String REDUCE_MIN_SIGNATURE = "tf.reduce_min()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/pow. */
+  public static final MethodReference POW =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/pow")),
+          AstMethodReference.fnSelector);
+
+  private static final String POW_SIGNATURE = "tf.math.pow()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/concat. */
+  public static final MethodReference CONCAT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/concat")),
+          AstMethodReference.fnSelector);
+
+  private static final String CONCAT_SIGNATURE = "tf.concat()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/stack. */
+  public static final MethodReference STACK =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/stack")),
+          AstMethodReference.fnSelector);
+
+  private static final String STACK_SIGNATURE = "tf.stack()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/sqrt. */
+  public static final MethodReference SQRT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/sqrt")),
+          AstMethodReference.fnSelector);
+
+  private static final String SQRT_SIGNATURE = "tf.math.sqrt()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/negative. */
+  public static final MethodReference NEGATIVE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/negative")),
+          AstMethodReference.fnSelector);
+
+  private static final String NEGATIVE_SIGNATURE = "tf.math.negative()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/sin. */
+  public static final MethodReference SIN =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/sin")),
+          AstMethodReference.fnSelector);
+
+  private static final String SIN_SIGNATURE = "tf.math.sin()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/cos. */
+  public static final MethodReference COS =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/cos")),
+          AstMethodReference.fnSelector);
+
+  private static final String COS_SIGNATURE = "tf.math.cos()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/floor. */
+  public static final MethodReference FLOOR =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/floor")),
+          AstMethodReference.fnSelector);
+
+  private static final String FLOOR_SIGNATURE = "tf.math.floor()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/ceil. */
+  public static final MethodReference CEIL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/ceil")),
+          AstMethodReference.fnSelector);
+
+  private static final String CEIL_SIGNATURE = "tf.math.ceil()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/sign. */
+  public static final MethodReference SIGN =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/sign")),
+          AstMethodReference.fnSelector);
+
+  private static final String SIGN_SIGNATURE = "tf.math.sign()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/math/equal. */
   public static final MethodReference EQUAL =
@@ -1532,6 +1841,26 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(CIFAR10_Y_TRAIN, CIFAR10_Y_TRAIN_SIGNATURE),
           Map.entry(CIFAR10_X_TEST, CIFAR10_X_TEST_SIGNATURE),
           Map.entry(CIFAR10_Y_TEST, CIFAR10_Y_TEST_SIGNATURE),
+          Map.entry(IMDB_X_TRAIN, IMDB_X_TRAIN_SIGNATURE),
+          Map.entry(IMDB_Y_TRAIN, IMDB_Y_TRAIN_SIGNATURE),
+          Map.entry(IMDB_X_TEST, IMDB_X_TEST_SIGNATURE),
+          Map.entry(IMDB_Y_TEST, IMDB_Y_TEST_SIGNATURE),
+          Map.entry(FASHION_MNIST_X_TRAIN, FASHION_MNIST_X_TRAIN_SIGNATURE),
+          Map.entry(FASHION_MNIST_Y_TRAIN, FASHION_MNIST_Y_TRAIN_SIGNATURE),
+          Map.entry(FASHION_MNIST_X_TEST, FASHION_MNIST_X_TEST_SIGNATURE),
+          Map.entry(FASHION_MNIST_Y_TEST, FASHION_MNIST_Y_TEST_SIGNATURE),
+          Map.entry(CIFAR100_X_TRAIN, CIFAR100_X_TRAIN_SIGNATURE),
+          Map.entry(CIFAR100_Y_TRAIN, CIFAR100_Y_TRAIN_SIGNATURE),
+          Map.entry(CIFAR100_X_TEST, CIFAR100_X_TEST_SIGNATURE),
+          Map.entry(CIFAR100_Y_TEST, CIFAR100_Y_TEST_SIGNATURE),
+          Map.entry(REUTERS_X_TRAIN, REUTERS_X_TRAIN_SIGNATURE),
+          Map.entry(REUTERS_Y_TRAIN, REUTERS_Y_TRAIN_SIGNATURE),
+          Map.entry(REUTERS_X_TEST, REUTERS_X_TEST_SIGNATURE),
+          Map.entry(REUTERS_Y_TEST, REUTERS_Y_TEST_SIGNATURE),
+          Map.entry(BOSTON_HOUSING_X_TRAIN, BOSTON_HOUSING_X_TRAIN_SIGNATURE),
+          Map.entry(BOSTON_HOUSING_Y_TRAIN, BOSTON_HOUSING_Y_TRAIN_SIGNATURE),
+          Map.entry(BOSTON_HOUSING_X_TEST, BOSTON_HOUSING_X_TEST_SIGNATURE),
+          Map.entry(BOSTON_HOUSING_Y_TEST, BOSTON_HOUSING_Y_TEST_SIGNATURE),
           Map.entry(PLACEHOLDER.getDeclaringClass(), PLACEHOLDER_SIGNATURE),
           Map.entry(ARGMAX.getDeclaringClass(), ARGMAX_SIGNATURE),
           Map.entry(ARGMIN.getDeclaringClass(), ARGMIN_SIGNATURE),
@@ -1564,6 +1893,25 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(ATAN2.getDeclaringClass(), ATAN2_SIGNATURE),
           Map.entry(MAXIMUM.getDeclaringClass(), MAXIMUM_SIGNATURE),
           Map.entry(MINIMUM.getDeclaringClass(), MINIMUM_SIGNATURE),
+          Map.entry(RELU.getDeclaringClass(), RELU_SIGNATURE),
+          Map.entry(EXPAND_DIMS.getDeclaringClass(), EXPAND_DIMS_SIGNATURE),
+          Map.entry(CLIP_BY_VALUE.getDeclaringClass(), CLIP_BY_VALUE_SIGNATURE),
+          Map.entry(AS_STRING.getDeclaringClass(), AS_STRING_SIGNATURE),
+          Map.entry(TOP_K.getDeclaringClass(), TOP_K_SIGNATURE),
+          Map.entry(MESHGRID.getDeclaringClass(), MESHGRID_SIGNATURE),
+          Map.entry(WHERE.getDeclaringClass(), WHERE_SIGNATURE),
+          Map.entry(LEAKY_RELU.getDeclaringClass(), LEAKY_RELU_SIGNATURE),
+          Map.entry(REDUCE_MIN.getDeclaringClass(), REDUCE_MIN_SIGNATURE),
+          Map.entry(POW.getDeclaringClass(), POW_SIGNATURE),
+          Map.entry(CONCAT.getDeclaringClass(), CONCAT_SIGNATURE),
+          Map.entry(STACK.getDeclaringClass(), STACK_SIGNATURE),
+          Map.entry(SQRT.getDeclaringClass(), SQRT_SIGNATURE),
+          Map.entry(NEGATIVE.getDeclaringClass(), NEGATIVE_SIGNATURE),
+          Map.entry(SIN.getDeclaringClass(), SIN_SIGNATURE),
+          Map.entry(COS.getDeclaringClass(), COS_SIGNATURE),
+          Map.entry(FLOOR.getDeclaringClass(), FLOOR_SIGNATURE),
+          Map.entry(CEIL.getDeclaringClass(), CEIL_SIGNATURE),
+          Map.entry(SIGN.getDeclaringClass(), SIGN_SIGNATURE),
           Map.entry(EQUAL.getDeclaringClass(), EQUAL_SIGNATURE),
           Map.entry(NOT_EQUAL.getDeclaringClass(), NOT_EQUAL_SIGNATURE),
           Map.entry(LESS.getDeclaringClass(), LESS_SIGNATURE),
