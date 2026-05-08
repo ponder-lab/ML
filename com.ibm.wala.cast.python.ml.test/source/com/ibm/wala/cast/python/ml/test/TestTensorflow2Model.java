@@ -5005,6 +5005,33 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * 2-arg-sink variant of {@link #testCeil}: same input and op, but with one combined sink {@code
+   * f(y, x)} instead of two separate single-arg sinks {@code f(y); g(x)}. This is the same shape as
+   * the wala/ML#495 multi-tensor-sink pattern; the difference is that #495 is specifically about
+   * dataset-loader outputs (`fashion_mnist`/`cifar100`/etc.) flowing through {@link
+   * com.ibm.wala.cast.python.ml.client.TensorGenerator#shapesFromSSAChain}'s fallback path. For
+   * {@code ceil} on {@code tf.constant}, no fallback is involved, so the pattern works precisely
+   * today &mdash; this test asserts the lattice-correct {@code (3,) float32} on both params and
+   * stands as a canary: if #495 ever generalizes beyond dataset loaders to per-op generators, this
+   * test will start failing.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCeilPair()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ceil_pair.py",
+        "f",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_3_FLOAT32), 3, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
    * Pure passthrough on {@code x}. See {@link com.ibm.wala.cast.python.ml.client.Sign}.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.

@@ -318,7 +318,7 @@
         <putfield class="LRoot" field="greater_equal" fieldType="LRoot" ref="x" value="greater_equal" />
         <putfield class="LRoot" field="greater_equal" fieldType="LRoot" ref="math" value="greater_equal" />
         <putfield class="LRoot" field="greater_equal" fieldType="LRoot" ref="math_ops" value="greater_equal" />
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/log -->
+        <!-- `tf.{sqrt,log,sin,cos}` and their aliases (`tf.math.*`, `tf.gen_math_ops.{log,sin,cos}`, `tf.math_ops.sqrt`) now route through dedicated `<class>` blocks defined later in this file (search for `class name="sqrt"`, etc.). -->
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reciprocal -->
         <putfield class="LRoot" field="reciprocal" fieldType="LRoot" ref="math" value="pass_through" />
         <putfield class="LRoot" field="reciprocal" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
@@ -341,7 +341,6 @@
         <putfield class="LRoot" field="minimum" fieldType="LRoot" ref="math" value="pass_through" />
         <putfield class="LRoot" field="minimum" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
         <!-- `tf.less`'s legacy `pass_through` aliasing was removed: the modern `<class name="less">` block + `ComparisonOperation` dispatch (wala/ML#427) now handle bool dtype directly. -->
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/cos -->
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/tanh -->
         <new def="tanh" class="Ltensorflow/math/tanh" />
         <putfield class="LRoot" field="tanh" fieldType="LRoot" ref="x" value="tanh" />
@@ -367,7 +366,6 @@
         <putfield class="LRoot" field="l2_normalize" fieldType="LRoot" ref="math" value="l2_normalize" />
         <putfield class="LRoot" field="l2_normalize" fieldType="LRoot" ref="nn" value="l2_normalize" />
         <putfield class="LRoot" field="l2_normalize" fieldType="LRoot" ref="nn_impl" value="l2_normalize" />
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/sin -->
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/pow -->
         <putfield class="LRoot" field="pow" fieldType="LRoot" ref="x" value="pass_through" />
         <putfield class="LRoot" field="pow" fieldType="LRoot" ref="math" value="pass_through" />
@@ -382,7 +380,6 @@
         <putfield class="LRoot" field="reduce_max" fieldType="LRoot" ref="x" value="reduce_max" />
         <putfield class="LRoot" field="reduce_max" fieldType="LRoot" ref="math" value="reduce_max" />
         <putfield class="LRoot" field="reduce_max" fieldType="LRoot" ref="math_ops" value="reduce_max" />
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/sqrt -->
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/rsqrt -->
         <new def="rsqrt" class="Ltensorflow/math/rsqrt" />
         <putfield class="LRoot" field="rsqrt" fieldType="LRoot" ref="math" value="rsqrt" />
@@ -774,23 +771,27 @@
         <new def="custom_gradient" class="Ltensorflow/class/custom_gradient" />
         <putfield class="LRoot" field="custom_gradient" fieldType="LRoot" ref="x" value="custom_gradient" />
         <!-- Tier-A pure-passthrough math ops (wala/ML#422). Each modeled with direct `<new>+<return>` and a per-op Java generator extending `PassThroughUnaryTensorGenerator`; output shape and dtype both inherit from `x`. Pre-this-PR, several of these ops (sqrt, log, sin, cos) were earlier-bound to a
-          generic `pass_through` field-write that aliases the result to the input rather than allocating a fresh tensor &mdash; the result was reachable via the receiver's modeling but had no per-op precision. The per-op `<new>+<return>` here replaces that for `tf` / `tf.math` callers; calls through internal aliases
-          like `math_ops` / `gen_math_ops` still hit the earlier `pass_through` bindings, so a follow-up should extend the bindings to those modules as well (see wala/ML#498). -->
+          generic `pass_through` field-write that aliases the result to the input rather than allocating a fresh tensor &mdash; the result was reachable via the receiver's modeling but had no per-op precision. The per-op `<new>+<return>` here replaces that for `tf` / `tf.math` callers, and the `gen_math_ops` /
+          `math_ops` aliases below restore the precision under those internal modules too (`sqrt` had `math_ops`; `log`/`sin`/`cos` had `gen_math_ops` in the prior model). -->
         <new def="sqrt" class="Ltensorflow/math/sqrt" />
         <putfield class="LRoot" field="sqrt" fieldType="LRoot" ref="x" value="sqrt" />
         <putfield class="LRoot" field="sqrt" fieldType="LRoot" ref="math" value="sqrt" />
+        <putfield class="LRoot" field="sqrt" fieldType="LRoot" ref="math_ops" value="sqrt" />
         <new def="log" class="Ltensorflow/math/log" />
         <putfield class="LRoot" field="log" fieldType="LRoot" ref="x" value="log" />
         <putfield class="LRoot" field="log" fieldType="LRoot" ref="math" value="log" />
+        <putfield class="LRoot" field="log" fieldType="LRoot" ref="gen_math_ops" value="log" />
         <new def="negative" class="Ltensorflow/math/negative" />
         <putfield class="LRoot" field="negative" fieldType="LRoot" ref="x" value="negative" />
         <putfield class="LRoot" field="negative" fieldType="LRoot" ref="math" value="negative" />
         <new def="sin" class="Ltensorflow/math/sin" />
         <putfield class="LRoot" field="sin" fieldType="LRoot" ref="x" value="sin" />
         <putfield class="LRoot" field="sin" fieldType="LRoot" ref="math" value="sin" />
+        <putfield class="LRoot" field="sin" fieldType="LRoot" ref="gen_math_ops" value="sin" />
         <new def="cos" class="Ltensorflow/math/cos" />
         <putfield class="LRoot" field="cos" fieldType="LRoot" ref="x" value="cos" />
         <putfield class="LRoot" field="cos" fieldType="LRoot" ref="math" value="cos" />
+        <putfield class="LRoot" field="cos" fieldType="LRoot" ref="gen_math_ops" value="cos" />
         <new def="floor" class="Ltensorflow/math/floor" />
         <putfield class="LRoot" field="floor" fieldType="LRoot" ref="x" value="floor" />
         <putfield class="LRoot" field="floor" fieldType="LRoot" ref="math" value="floor" />
