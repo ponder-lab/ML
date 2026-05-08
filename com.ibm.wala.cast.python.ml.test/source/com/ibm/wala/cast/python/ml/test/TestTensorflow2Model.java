@@ -4432,18 +4432,29 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_4096_32_32_3_FLOAT32), 3, Set.of(TENSOR_4096_UINT8)));
   }
 
+  /**
+   * Companion to {@link #testMultiGPUTraining()} on the {@code average_gradients} function in the
+   * same fixture. Exercises tensor classification through a per-tower gradient-averaging loop: for
+   * each gradient {@code g} in the input tower-gradient list, the body computes {@code
+   * tf.expand_dims(g, 0)}, collects the results into a list, and reduces them with {@code
+   * tf.concat(axis=0, values=grads)}. Verifies the analyzer detects the 3 internal tensor variables
+   * this loop produces: {@code tf.expand_dims(g, 0)}'s dedicated {@code <new>} allocation, the
+   * post-allocation receiver, and {@code tf.concat(...)} flowing through <a
+   * href="https://github.com/wala/ML/issues/196">wala/ML#196</a>'s {@link
+   * com.ibm.wala.cast.python.ml.client.ReadDataFallback}.
+   *
+   * <p>The current assertion is {@code (0, 3)} &mdash; 0 tensor parameters because the parameter (a
+   * list of tensors) is dropped from classification per <a
+   * href="https://github.com/wala/ML/issues/136">wala/ML#136</a>.
+   *
+   * <p>TODO: Once wala/ML#136 (losing tensors in lists) lands, change the assertion to {@code (1,
+   * 3)} (one tensor parameter &mdash; the {@code tower_grads} list-of-tensors), with the parameter
+   * at {@code vn=2} typed as the appropriate list-of-tensors type.
+   */
   @Test
   public void testMultiGPUTraining2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "multigpu_training.py",
-        "average_gradients",
-        0,
-        2); // 0/2: parameter is a list of tensors so the parameter-count stays 0 until wala/ML#136
-    // (losing tensors in lists) lands; the 2 tensor variables are `tf.expand_dims(g, 0)`
-    // and `tf.concat(axis=0, values=grads)` flowing through #196's `ReadDataFallback`.
-    // Eventual fully-fixed shape would be 1, 1, 2 (per-op generators in #449 don't change
-    // the count, only the asserted types).
+    test("multigpu_training.py", "average_gradients", 0, 3);
   }
 
   @Test
@@ -5461,6 +5472,74 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testSign()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_sign.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.cast(x, dtype)}. The dedicated {@link
+   * com.ibm.wala.cast.python.ml.client.Cast} generator extends {@link
+   * com.ibm.wala.cast.python.ml.client.PassThroughUnaryTensorGenerator} for shape and overrides the
+   * dtype-arg position to point at {@code dtype}, but the override doesn't take effect — see <a
+   * href="https://github.com/wala/ML/issues/481">wala/ML#481</a>. The static analysis currently
+   * reports the input's dtype rather than the cast target.
+   *
+   * <p>The earlier {@code tf.cast} {@code pass_through} alias is intentionally retained: removing
+   * it would unblock the {@code Cast} override here (so this assertion would tighten to {@code
+   * Set.of(TENSOR_3_INT32)}), but the dedicated {@code <new>+<return>} doesn't propagate the cast
+   * result's tensor classification through to chained consumers (e.g., {@code reshape} in {@code
+   * TestNeuroImageExamples.testEx1CG}). The pass_through alias is sound for those chains.
+   *
+   * <p>TODO: Once the dedicated-allocation chained-consumer integration tracked by <a
+   * href="https://github.com/wala/ML/issues/509">wala/ML#509</a> lands (which lets us safely drop
+   * the {@code pass_through} alias and let the {@code Cast} override fire &mdash; closing
+   * wala/ML#481's {@code Cast} arm), replace the assertion with {@code Set.of(TENSOR_3_INT32)} (the
+   * precise cast-target dtype, disjoint from the currently-asserted input dtype).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCast()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_cast.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.expand_dims(input, axis)}. The dedicated {@link
+   * com.ibm.wala.cast.python.ml.client.ExpandDims} generator overrides {@code getDefaultShapes} to
+   * ⊤ pending an axis-aware shape composer. Replacing the stale {@code array_ops.expand_dims}
+   * pass_through alias with the dedicated routing (this PR's earlier review fix) made the override
+   * actually fire, so the assertion now sees the ⊤ output the override emits.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/481">wala/ML#481</a>): once the axis-aware
+   * composer lands as a follow-up, tighten this from {@code TENSOR_UNKNOWN_SHAPE_FLOAT32} to {@code
+   * (1, 3)} float32 (the precise insert-at-axis result).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testExpandDims()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_expand_dims.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.clip_by_value(t, clip_value_min, clip_value_max)}. Pure
+   * passthrough — output shape and dtype both inherit from {@code t}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testClipByValue()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_clip_by_value.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
   }
 
   /**

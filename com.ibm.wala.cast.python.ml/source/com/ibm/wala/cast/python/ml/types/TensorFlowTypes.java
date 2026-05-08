@@ -1103,6 +1103,35 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String EXTRACT_PATCHES_SIGNATURE = "tf.image.extract_patches()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/nn/relu. */
+  public static final MethodReference RELU =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/relu")),
+          AstMethodReference.fnSelector);
+
+  private static final String RELU_SIGNATURE = "tf.nn.relu()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/expand_dims. */
+  public static final MethodReference EXPAND_DIMS =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/expand_dims")),
+          AstMethodReference.fnSelector);
+
+  private static final String EXPAND_DIMS_SIGNATURE = "tf.expand_dims()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/clip_by_value. */
+  public static final MethodReference CLIP_BY_VALUE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/clip_by_value")),
+          AstMethodReference.fnSelector);
+
+  private static final String CLIP_BY_VALUE_SIGNATURE = "tf.clip_by_value()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/strings/as_string. */
   public static final MethodReference AS_STRING =
       MethodReference.findOrCreate(
@@ -1658,6 +1687,9 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(GATHER_ND.getDeclaringClass(), GATHER_ND_SIGNATURE),
           Map.entry(BOOLEAN_MASK.getDeclaringClass(), BOOLEAN_MASK_SIGNATURE),
           Map.entry(EXTRACT_PATCHES.getDeclaringClass(), EXTRACT_PATCHES_SIGNATURE),
+          Map.entry(RELU.getDeclaringClass(), RELU_SIGNATURE),
+          Map.entry(EXPAND_DIMS.getDeclaringClass(), EXPAND_DIMS_SIGNATURE),
+          Map.entry(CLIP_BY_VALUE.getDeclaringClass(), CLIP_BY_VALUE_SIGNATURE),
           Map.entry(AS_STRING.getDeclaringClass(), AS_STRING_SIGNATURE),
           Map.entry(TOP_K.getDeclaringClass(), TOP_K_SIGNATURE),
           Map.entry(MESHGRID.getDeclaringClass(), MESHGRID_SIGNATURE),

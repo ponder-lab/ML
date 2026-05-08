@@ -14,6 +14,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOSTON_HOUSING_X
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOSTON_HOUSING_Y_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOSTON_HOUSING_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BROADCAST_TO;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CAST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CEIL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR100_X_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR100_X_TRAIN;
@@ -23,6 +24,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_X_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_X_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_Y_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_Y_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CLIP_BY_VALUE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONCAT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
@@ -53,6 +55,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.UNKNOWN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EMBEDDING_LOOKUP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EXP;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EXPAND_DIMS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EXTRACT_PATCHES;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FASHION_MNIST_X_TEST;
@@ -126,6 +129,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MEAN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_PROD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_SUM;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RELU;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_X_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_X_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_Y_TEST;
@@ -1207,6 +1211,11 @@ public class TensorGeneratorFactory {
       return new BooleanMask(source);
     else if (isType(calledFunction, EXTRACT_PATCHES.getDeclaringClass()))
       return new ExtractPatches(source);
+    else if (isType(calledFunction, RELU.getDeclaringClass())) return new Relu(source);
+    else if (isType(calledFunction, CAST.getDeclaringClass())) return new Cast(source);
+    else if (isType(calledFunction, EXPAND_DIMS.getDeclaringClass())) return new ExpandDims(source);
+    else if (isType(calledFunction, CLIP_BY_VALUE.getDeclaringClass()))
+      return new ClipByValue(source);
     else if (isType(calledFunction, AS_STRING.getDeclaringClass())) return new AsString(source);
     else if (isType(calledFunction, TOP_K.getDeclaringClass())) return new TopK(source);
     else if (isType(calledFunction, MESHGRID.getDeclaringClass())) return new Meshgrid(source);
