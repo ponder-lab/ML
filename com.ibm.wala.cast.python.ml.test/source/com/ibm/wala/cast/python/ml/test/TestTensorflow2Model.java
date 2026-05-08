@@ -1937,33 +1937,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Regression guard for {@code tf.distribute.MirroredStrategy.distribute_datasets_from_function}'s
-   * callback registration (wala/ML#113). The fixture defines {@code dataset_fn} as a top-level
-   * function and registers it only via {@code
-   * strategy.distribute_datasets_from_function(dataset_fn)} &mdash; with no other call site. After
-   * this PR's `tensorflow.xml` fix (synthetic-method body on {@code
-   * tensorflow/distribute/run/distribute_datasets_from_function} that allocates a stub {@code
-   * InputContext} and synchronously calls {@code dataset_fn(ctx)}), the callback enters the call
-   * graph and its body's tensor flows are analyzed. This test asserts that the function signature
-   * {@code script tf2_test_callbacks3.py.dataset_fn.do()LRoot;} is now present.
+   * callback registration (wala/ML#113). The fixture registers {@code dataset_fn} only via {@code
+   * strategy.distribute_datasets_from_function(dataset_fn)} &mdash; no other call site. The {@code
+   * test(...)} helper's "function must exist in call graph" assertion fails pre-fix because {@code
+   * dataset_fn} never gets traced. After this PR's `tensorflow.xml` fix (synthetic-method body on
+   * {@code tensorflow/distribute/run/distribute_datasets_from_function} that allocates a stub
+   * {@code InputContext} and invokes {@code dataset_fn(ctx)}), the callback enters the call graph
+   * and the helper finds it. {@code input_context} is non-tensor, hence 0 tensor parameters; the 6
+   * tensor variables in the body come from the chained {@code tf.data.Dataset} calls.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
    * @throws CancelException if the analysis is cancelled.
    * @throws IOException if the input fixture cannot be read.
    */
   @Test
-  public void testCallbacks3() throws ClassHierarchyException, CancelException, IOException {
-    String filename = "tf2_test_callbacks3.py";
-    PythonTensorAnalysisEngine engine = makeEngine(emptyList(), new String[] {filename});
-    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
-    addPytestEntrypoints(builder);
-    CallGraph CG = builder.makeCallGraph(builder.getOptions());
-    assertNotNull(CG);
-    String fnSignature = "script " + filename + ".dataset_fn.do()LRoot;";
-    assertTrue(
-        "dataset_fn should be in the call graph after the wala/ML#113 fix wires"
-            + " distribute_datasets_from_function's synthetic-method body to invoke the user"
-            + " callback with a stub InputContext.",
-        getFunctionSignatures(CG).anyMatch(s -> s.equals(fnSignature)));
+  public void testCallbacks3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_callbacks3.py", "dataset_fn", 0, 6, Map.of());
   }
 
   /**
