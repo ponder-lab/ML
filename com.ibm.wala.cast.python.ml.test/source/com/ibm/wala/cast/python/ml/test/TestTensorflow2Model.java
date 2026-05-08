@@ -345,6 +345,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_50000_1_UINT8 =
       new TensorType(UINT_8, asList(new NumericDim(50000), new NumericDim(1)));
 
+  private static final TensorType TENSOR_50000_1_INT64 =
+      new TensorType(INT_64, asList(new NumericDim(50000), new NumericDim(1)));
+
   private static final TensorType TENSOR_8982_UNKNOWN =
       new TensorType(UNKNOWN, asList(new NumericDim(8982)));
 
@@ -361,6 +364,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_10000_1_UINT8 =
       new TensorType(UINT_8, asList(new NumericDim(10000), new NumericDim(1)));
+
+  private static final TensorType TENSOR_10000_1_INT64 =
+      new TensorType(INT_64, asList(new NumericDim(10000), new NumericDim(1)));
 
   private static final TensorType TENSOR_10000_28_28_UINT8 =
       new TensorType(UINT_8, asList(new NumericDim(10000), new NumericDim(28), new NumericDim(28)));
@@ -5152,14 +5158,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Generator test for {@code tf.keras.datasets.cifar100.load_data()}. Shapes are identical to
-   * {@code cifar10.load_data()}; the modeling reuses {@link
-   * com.ibm.wala.cast.python.ml.client.Cifar10InputData}, so the inferred dtype is {@code uint8}
-   * for both label arrays. Asserts on all four unpacked arrays at {@code vn=2..5}.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/487">wala/ML#487</a>): the inferred {@code
-   * uint8} for {@code y_train} / {@code y_test} is imprecise &mdash; the runtime dtype of {@code
-   * cifar100}'s labels is {@code int64} (the Python fixture asserts that). Tighten to {@code
-   * int64}-dtype variants once the modeling is updated.
+   * {@code cifar10.load_data()}, but the {@code y_train} / {@code y_test} dtype is {@code int64}
+   * (cifar100's class indices) rather than {@code uint8} (cifar10's class indices). The dispatch
+   * routes through the dedicated {@link com.ibm.wala.cast.python.ml.client.Cifar100InputData}
+   * generator (closes wala/ML#487's mis-routing through {@code Cifar10InputData}). Asserts on all
+   * four unpacked arrays at {@code vn=2..5}.
    */
   @Test
   public void testCifar100LoadData()
@@ -5171,9 +5174,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         4,
         Map.of(
             2, Set.of(TENSOR_50000_32_32_3_UINT8),
-            3, Set.of(TENSOR_50000_1_UINT8),
+            3, Set.of(TENSOR_50000_1_INT64),
             4, Set.of(TENSOR_10000_32_32_3_UINT8),
-            5, Set.of(TENSOR_10000_1_UINT8)));
+            5, Set.of(TENSOR_10000_1_INT64)));
   }
 
   /**
