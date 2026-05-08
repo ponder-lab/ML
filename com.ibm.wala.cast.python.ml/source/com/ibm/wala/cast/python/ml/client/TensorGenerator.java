@@ -67,6 +67,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -161,6 +162,10 @@ public abstract class TensorGenerator {
    * garbage-collected. Safe to call more than once.
    *
    * @param builder The builder whose cache entries should be cleared.
+   * @implNote {@link #WARNED_UNREGISTERED_MANUAL_TYPES} is intentionally <em>not</em> cleared here.
+   *     The dedup is at JVM scope so each unregistered type warns exactly once total &mdash;
+   *     re-warning per test would still flood logs (~1500 firings on the current suite). The set is
+   *     small and the goal is "make each gap audible once," not "track gaps per analysis."
    */
   public static void clearCaches(PropagationCallGraphBuilder builder) {
     SHAPES_CACHE.remove(builder);
@@ -2907,6 +2912,45 @@ public abstract class TensorGenerator {
     } else if (type.equals(TensorFlowTypes.INPUT.getDeclaringClass())) {
       return new Input(node);
     }
+    // Unregistered type: the manual-walker dispatch table doesn't know about this op, so the
+    // caller will treat the null return as "no contribution" and silently lose precision on
+    // anything reached through this node. The factory-side dispatch
+    // (`TensorGeneratorFactory.getGeneratorBody`) may still cover this type — the two tables
+    // aren't yet unified (wala/ML#469); audit both when this fires for an op we expect to model.
+    // Logged at WARNING (deduplicated per type, see `WARNED_UNREGISTERED_MANUAL_TYPES`) per
+    // wala/ML#468 to make the silent-skip audible without flooding logs when the same op is hit
+    // many times within one analysis.
+    final TypeReference unregisteredType = type;
+    if (WARNED_UNREGISTERED_MANUAL_TYPES.add(unregisteredType.getName().toString())) {
+      LOGGER.warning(
+          () ->
+              "createManualGenerator: no manual generator registered for type "
+                  + unregisteredType.getName()
+                  + " (first occurrence; further calls for this type are silent). Treating as"
+                  + " no contribution; this is likely a wala/ML#468 / wala/ML#469 gap in the"
+                  + " manual-walker dispatch table. Add a case here if this op should be"
+                  + " modeled in manual-walker contexts.");
+    } else {
+      LOGGER.fine(
+          () ->
+              "createManualGenerator: no manual generator registered for type "
+                  + unregisteredType.getName()
+                  + " (already warned).");
+    }
     return null;
   }
+
+  /**
+   * De-duplication set for the wala/ML#468 unregistered-type WARNING in {@link
+   * #createManualGenerator(CGNode, PropagationCallGraphBuilder)}. Without dedup the WARNING fires
+   * per call site, which on the existing test suite produces ~1500 lines per analysis run —
+   * drowning the signal. Tracking already-warned type names keeps each new gap visible exactly once
+   * per JVM lifetime.
+   *
+   * <p>Intentionally JVM-scoped (not cleared by {@link #clearCaches}): the goal is to surface each
+   * gap once per JVM run, not once per analysis. Re-warning per test still floods logs because the
+   * same op gets hit by many tests.
+   */
+  private static final Set<String> WARNED_UNREGISTERED_MANUAL_TYPES =
+      Collections.synchronizedSet(new HashSet<>());
 }

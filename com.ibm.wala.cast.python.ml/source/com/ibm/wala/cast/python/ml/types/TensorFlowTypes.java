@@ -977,6 +977,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String CONCAT_SIGNATURE = "tf.concat()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/stack. */
+  public static final MethodReference STACK =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/stack")),
+          AstMethodReference.fnSelector);
+
+  private static final String STACK_SIGNATURE = "tf.stack()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/math/sqrt. */
   public static final MethodReference SQRT =
       MethodReference.findOrCreate(
@@ -1431,6 +1440,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(BOOLEAN_MASK.getDeclaringClass(), BOOLEAN_MASK_SIGNATURE),
           Map.entry(EXTRACT_PATCHES.getDeclaringClass(), EXTRACT_PATCHES_SIGNATURE),
           Map.entry(CONCAT.getDeclaringClass(), CONCAT_SIGNATURE),
+          Map.entry(STACK.getDeclaringClass(), STACK_SIGNATURE),
           Map.entry(SQRT.getDeclaringClass(), SQRT_SIGNATURE),
           Map.entry(NEGATIVE.getDeclaringClass(), NEGATIVE_SIGNATURE),
           Map.entry(SIN.getDeclaringClass(), SIN_SIGNATURE),
