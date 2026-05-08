@@ -17,6 +17,8 @@ result = tf.math.top_k(x, k=2)
 values, indices = result.values, result.indices
 assert isinstance(values, tf.Tensor)
 assert isinstance(indices, tf.Tensor)
+assert values.shape == (2,)
+assert indices.shape == (2,)
 assert values.dtype == tf.float32
 assert indices.dtype == tf.int32
 f_values(values)

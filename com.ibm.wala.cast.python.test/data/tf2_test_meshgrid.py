@@ -14,6 +14,8 @@ y = tf.constant([10.0, 20.0])
 X, Y = tf.meshgrid(x, y)
 assert isinstance(X, tf.Tensor)
 assert isinstance(Y, tf.Tensor)
+assert X.shape == (2, 3)
+assert Y.shape == (2, 3)
 assert X.dtype == tf.float32
 assert Y.dtype == tf.float32
 f(X)
