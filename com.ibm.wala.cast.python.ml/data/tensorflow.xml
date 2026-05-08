@@ -2762,9 +2762,9 @@
         </method>
       </class>
       <!-- https://www.tensorflow.org/api_docs/python/tf/distribute/Strategy#distribute_datasets_from_function — at runtime `strategy.distribute_datasets_from_function(dataset_fn)` invokes `dataset_fn(input_context)` once per replica and wraps the results in a distributed-dataset object. This synthetic-method
-        body is an analysis approximation: it allocates a stub `InputContext`, synchronously calls the user-supplied `dataset_fn` with it (a single time, single context), and returns the callback's result directly &mdash; no distributed-dataset wrapper. That's enough to put `dataset_fn` in the call graph and
-        let its body's tensor flows be analyzed (wala/ML#113), which is what the issue is about; modeling a distinct distributed-dataset type would be additional precision unrelated to the call-graph reachability that this fix targets. The deprecated alias `experimental_distribute_datasets_from_function` is
-        wired to the same class on each strategy. -->
+        body approximates: it allocates a stub `InputContext`, synchronously calls `dataset_fn` with it (single time, single context), and returns the callback's result directly &mdash; no distributed-dataset wrapper. The result is that the callback's body becomes analyzable, which is what wala/ML#113 requires
+        for typing the Datasets that flow out of `dataset_fn`. Modeling a distinct distributed-dataset wrapper type would be additional typing precision on the *return* value (the wrapper's element type tracks the inner dataset's element type); not modeled here because the issue's reported scenario only consumes
+        the wrapper as an opaque object, not as a typed dataset. The deprecated alias `experimental_distribute_datasets_from_function` is wired to the same class on each strategy. -->
       <class name="distribute_datasets_from_function" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self dataset_fn">
           <new def="ctx" class="Ltensorflow/distribute/InputContext" />
@@ -2776,8 +2776,8 @@
     <package name="tensorflow/distribute">
       <class name="InputContext" allocatable="true">
         <!-- Stub for the `tf.distribute.InputContext` instance passed to the user's `dataset_fn` callback by `distribute_datasets_from_function`. The real class exposes the integer attributes `num_input_pipelines` / `input_pipeline_id` and the method `get_per_replica_batch_size(global_batch_size)`.
-          None of those produce tensors, so this stub leaves both the attributes and the method unmodeled &mdash; reads of the attributes resolve to ⊤ (no value-known) and calls to `get_per_replica_batch_size` fall through to the synthetic-method default (no-op return). The analyzer's tensor-classification pass
-          ignores all of these, so the unmodeled surface is harmless for the wala/ML#113 fix's call-graph-reachability goal. -->
+          None of those produce tensors, so this stub leaves both the attributes and the method unmodeled &mdash; reads of the attributes resolve to ⊤ (no value-known) and calls to `get_per_replica_batch_size` fall through to the synthetic-method default (no-op return). Because none of these flow into tensor shape
+          or dtype, leaving them unmodeled doesn't affect the typing of the Datasets that `dataset_fn`'s body produces &mdash; which is the typing question wala/ML#113 is about. -->
       </class>
     </package>
     <package name="tensorflow/app">
