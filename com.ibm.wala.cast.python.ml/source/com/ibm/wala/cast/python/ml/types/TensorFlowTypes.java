@@ -1089,6 +1089,24 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String EINSUM_SIGNATURE = "tf.einsum()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/math/top_k. */
+  public static final MethodReference TOP_K =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/top_k")),
+          AstMethodReference.fnSelector);
+
+  private static final String TOP_K_SIGNATURE = "tf.math.top_k()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/meshgrid. */
+  public static final MethodReference MESHGRID =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/meshgrid")),
+          AstMethodReference.fnSelector);
+
+  private static final String MESHGRID_SIGNATURE = "tf.meshgrid()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/where. */
   public static final MethodReference WHERE =
       MethodReference.findOrCreate(
@@ -1614,6 +1632,8 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(BOOLEAN_MASK.getDeclaringClass(), BOOLEAN_MASK_SIGNATURE),
           Map.entry(EXTRACT_PATCHES.getDeclaringClass(), EXTRACT_PATCHES_SIGNATURE),
           Map.entry(EINSUM.getDeclaringClass(), EINSUM_SIGNATURE),
+          Map.entry(TOP_K.getDeclaringClass(), TOP_K_SIGNATURE),
+          Map.entry(MESHGRID.getDeclaringClass(), MESHGRID_SIGNATURE),
           Map.entry(WHERE.getDeclaringClass(), WHERE_SIGNATURE),
           Map.entry(LEAKY_RELU.getDeclaringClass(), LEAKY_RELU_SIGNATURE),
           Map.entry(REDUCE_MIN.getDeclaringClass(), REDUCE_MIN_SIGNATURE),
