@@ -67,6 +67,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GREATER_EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IDENTITY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LEAKY_RELU;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LESS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LESS_EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LINSPACE;
@@ -93,6 +94,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONE_HOT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.PLACEHOLDER;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.POISSON;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.POISSON_OP;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.POW;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANDOM_NORMAL_INIT_CALL;
@@ -103,6 +105,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_ALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_LOGSUMEXP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MEAN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_PROD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_SUM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RSQRT;
@@ -1093,6 +1096,7 @@ public class TensorGeneratorFactory {
       return new Cifar10InputData(source, Cifar10InputData.Y_TEST_SHAPE);
     else if (isType(calledFunction, REDUCE_MEAN.getDeclaringClass())) return new ReduceMean(source);
     else if (isType(calledFunction, REDUCE_MAX.getDeclaringClass())) return new ReduceMax(source);
+    else if (isType(calledFunction, REDUCE_MIN.getDeclaringClass())) return new ReduceMin(source);
     else if (isType(calledFunction, REDUCE_PROD.getDeclaringClass())) return new ReduceProd(source);
     else if (isType(calledFunction, REDUCE_LOGSUMEXP.getDeclaringClass()))
       return new ReduceLogSumExp(source);
@@ -1137,6 +1141,9 @@ public class TensorGeneratorFactory {
       return new BooleanMask(source);
     else if (isType(calledFunction, EXTRACT_PATCHES.getDeclaringClass()))
       return new ExtractPatches(source);
+    else if (isType(calledFunction, LEAKY_RELU.getDeclaringClass())) return new LeakyRelu(source);
+    else if (isType(calledFunction, POW.getDeclaringClass()))
+      return new ElementWiseOperation(source);
     else if (isType(calledFunction, CONCAT.getDeclaringClass())) return new Concat(source);
     else if (isType(calledFunction, STACK.getDeclaringClass())) return new Stack(source);
     else if (isType(calledFunction, SQRT.getDeclaringClass())) return new Sqrt(source);
