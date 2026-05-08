@@ -1946,7 +1946,8 @@
         </method>
       </class>
       <class name="cast" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/cast. Direct `<new>+<return>` paired with the dedicated `Cast` generator: shape inherits from `x`; dtype is the explicit `dtype` argument. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/cast. Direct `<new>+<return>` paired with the dedicated `Cast` generator: shape inherits from `x`; dtype intended to be the explicit `dtype` argument. CURRENT LIMITATION: the dispatch is bypassed by the retained `tf.cast` `pass_through`
+          alias (kept because removing it breaks chained consumers; see wala/ML#509), so the analyzer reports the input dtype today. Tracked by wala/ML#481. -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x dtype name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
