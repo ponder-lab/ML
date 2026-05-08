@@ -90,6 +90,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG_SOFTMAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MATMUL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MAX_POOL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MESHGRID;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MNIST_X_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MNIST_X_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MNIST_Y_TEST;
@@ -151,6 +152,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORDOT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_SCATTER_ND_UPDATE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TEXT_LINE_DATASET_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TF_RESHAPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TOP_K;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRACE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL_OP;
@@ -1201,6 +1203,8 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, EXPAND_DIMS.getDeclaringClass())) return new ExpandDims(source);
     else if (isType(calledFunction, CLIP_BY_VALUE.getDeclaringClass()))
       return new ClipByValue(source);
+    else if (isType(calledFunction, TOP_K.getDeclaringClass())) return new TopK(source);
+    else if (isType(calledFunction, MESHGRID.getDeclaringClass())) return new Meshgrid(source);
     else if (isType(calledFunction, WHERE.getDeclaringClass())) return new Where(source);
     else if (isType(calledFunction, LEAKY_RELU.getDeclaringClass())) return new LeakyRelu(source);
     else if (isType(calledFunction, POW.getDeclaringClass()))
