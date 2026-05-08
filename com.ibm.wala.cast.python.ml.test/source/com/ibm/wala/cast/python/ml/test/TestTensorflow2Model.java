@@ -4433,16 +4433,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Expected: 0 tensor parameters, 3 tensor variables. The parameter is a list of tensors, so the
-   * parameter-count stays 0 (see TODO below). The 3 tensor variables are: {@code tf.expand_dims(g,
-   * 0)}'s dedicated {@code <new>} allocation, the post-allocation receiver, and {@code
-   * tf.concat(axis=0, values=grads)} flowing through <a
+   * Companion to {@link #testMultiGPUTraining()} on the {@code average_gradients} function in the
+   * same fixture. Exercises tensor classification through a per-tower gradient-averaging loop: for
+   * each gradient {@code g} in the input tower-gradient list, the body computes {@code
+   * tf.expand_dims(g, 0)}, collects the results into a list, and reduces them with {@code
+   * tf.concat(axis=0, values=grads)}. Verifies the analyzer detects the 3 internal tensor variables
+   * this loop produces: {@code tf.expand_dims(g, 0)}'s dedicated {@code <new>} allocation, the
+   * post-allocation receiver, and {@code tf.concat(...)} flowing through <a
    * href="https://github.com/wala/ML/issues/196">wala/ML#196</a>'s {@link
    * com.ibm.wala.cast.python.ml.client.ReadDataFallback}.
    *
-   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/136">wala/ML#136</a> (losing tensors
-   * in lists) lands, the parameter (a list of tensors) should classify and the count should rise
-   * from 0 to 1.
+   * <p>The current assertion is {@code (0, 3)} &mdash; 0 tensor parameters because the parameter (a
+   * list of tensors) is dropped from classification per <a
+   * href="https://github.com/wala/ML/issues/136">wala/ML#136</a>.
+   *
+   * <p>TODO: Once wala/ML#136 (losing tensors in lists) lands, change the assertion to {@code (1,
+   * 3)} (one tensor parameter &mdash; the {@code tower_grads} list-of-tensors), with the parameter
+   * at {@code vn=2} typed as the appropriate list-of-tensors type.
    */
   @Test
   public void testMultiGPUTraining2()
