@@ -4594,6 +4594,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * with dtype inherited from {@code x} (float32). Without the catch, analysis aborts and this test
    * fails &mdash; this is the direct regression guard for this PR's localized-tolerance fix.
    *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/473">wala/ML#473</a>): the runtime answer is
+   * (2, 3) of float32. When the helper learns to recognize {@code tf.shape(y)} as a shape arg
+   * (rather than treating it as an unmodeled runtime tensor), tighten this assertion from {@link
+   * #TENSOR_UNKNOWN_SHAPE_FLOAT32} to {@code TENSOR_2_3_FLOAT32}.
+   *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
    * @throws CancelException if the analysis is cancelled.
@@ -7010,8 +7015,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * place; it's staged for the eventual flip so that lifting the suppression brings the
    * precise-shape assertion back without further edits to this method.
    *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/489">wala/ML#489</a>): when {@code Reshape}
-   * gains a precise-shape composer (or a localized try/catch), tighten this test to assert {@link
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/473">wala/ML#473</a>): when the helper
+   * learns to recognize {@code tf.shape(y)} as a shape arg (or {@code Reshape} gains a localized
+   * try/catch mirroring {@code BroadcastTo}'s), tighten this test to assert {@link
    * #TENSOR_2_3_FLOAT32} (or ⊤) and remove the {@code expected} suppression.
    */
   @Test(expected = IllegalStateException.class)
