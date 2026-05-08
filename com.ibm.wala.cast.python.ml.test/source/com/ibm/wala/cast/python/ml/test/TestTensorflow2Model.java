@@ -4423,20 +4423,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_4096_32_32_3_FLOAT32), 3, Set.of(TENSOR_4096_UINT8)));
   }
 
+  /**
+   * Expected: 0 tensor parameters, 3 tensor variables. The parameter is a list of tensors, so the
+   * parameter-count stays 0 until <a href="https://github.com/wala/ML/issues/136">wala/ML#136</a>
+   * (losing tensors in lists) lands. The 3 tensor variables are: {@code tf.expand_dims(g, 0)}'s
+   * dedicated {@code <new>} allocation, the post-allocation receiver, and {@code tf.concat(axis=0,
+   * values=grads)} flowing through <a
+   * href="https://github.com/wala/ML/issues/196">wala/ML#196</a>'s {@link
+   * com.ibm.wala.cast.python.ml.client.ReadDataFallback}.
+   */
   @Test
   public void testMultiGPUTraining2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "multigpu_training.py",
-        "average_gradients",
-        0,
-        3); // 0/3: parameter is a list of tensors so the parameter-count stays 0 until wala/ML#136
-    // (losing tensors in lists) lands; the 3 tensor variables are `tf.expand_dims(g, 0)` (now
-    // routing through the dedicated `ExpandDims` allocation rather than pass_through), the
-    // re-allocated post-allocation receiver, and `tf.concat(axis=0, values=grads)` flowing
-    // through #196's `ReadDataFallback`. Pre-this-PR's-alias-fix, the count was 2 because
-    // `expand_dims` aliased through pass_through; the +1 is the dedicated `<new>` allocation
-    // for `tf.expand_dims(...)`'s result.
+    test("multigpu_training.py", "average_gradients", 0, 3);
   }
 
   @Test
