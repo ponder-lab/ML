@@ -152,15 +152,15 @@ public class TestClasses extends TestJythonCallGraphShape {
       };
 
   /**
-   * Regression guard for [wala/ML#146](https://github.com/wala/ML/issues/146) ("Can't find external
-   * classes"). The analyzer should resolve {@code C}'s constructor from {@code classes4_client.py}
-   * even though {@code C} is defined in a separate module {@code classes4.py}.
+   * Regression guard for <a href="https://github.com/wala/ML/issues/146">wala/ML#146</a> ("Can't
+   * find external classes"). The analyzer should resolve {@code C}'s constructor from {@code
+   * classes4_client.py} even though {@code C} is defined in a separate module {@code classes4.py}.
    *
    * <p>This test originally documented the bug as a known failure; the bug has since been fixed by
    * a separate change on master, so this is now a positive regression test. The split-module
    * fixture ({@code classes4_client.py} importing from {@code classes4.py}) was renamed from {@code
    * client.py} on this PR's revival to avoid colliding with master's {@code client.py}, which is a
-   * different test fixture for [wala/ML#211](https://github.com/wala/ML/issues/211).
+   * different test fixture for <a href="https://github.com/wala/ML/issues/211">wala/ML#211</a>.
    */
   @Test
   public void testExternalClass()
