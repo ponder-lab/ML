@@ -4381,11 +4381,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "multigpu_training.py",
         "average_gradients",
         0,
-        2); // 0/2: parameter is a list of tensors so the parameter-count stays 0 until wala/ML#136
-    // (losing tensors in lists) lands; the 2 tensor variables are `tf.expand_dims(g, 0)`
-    // and `tf.concat(axis=0, values=grads)` flowing through #196's `ReadDataFallback`.
-    // Eventual fully-fixed shape would be 1, 1, 2 (per-op generators in #449 don't change
-    // the count, only the asserted types).
+        3); // 0/3: parameter is a list of tensors so the parameter-count stays 0 until wala/ML#136
+    // (losing tensors in lists) lands; the 3 tensor variables are `tf.expand_dims(g, 0)` (now
+    // routing through the dedicated `ExpandDims` allocation rather than pass_through), the
+    // re-allocated post-allocation receiver, and `tf.concat(axis=0, values=grads)` flowing
+    // through #196's `ReadDataFallback`. Pre-this-PR's-alias-fix, the count was 2 because
+    // `expand_dims` aliased through pass_through; the +1 is the dedicated `<new>` allocation
+    // for `tf.expand_dims(...)`'s result.
   }
 
   @Test
@@ -5252,13 +5254,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Generator-dispatch test for {@code tf.expand_dims(input, axis)}. The dedicated {@link
    * com.ibm.wala.cast.python.ml.client.ExpandDims} generator overrides {@code getDefaultShapes} to
-   * ⊤ pending an axis-aware shape composer, but the override doesn't take effect — see <a
-   * href="https://github.com/wala/ML/issues/481">wala/ML#481</a>. The static analysis currently
-   * reports the input's full shape rather than ⊤.
+   * ⊤ pending an axis-aware shape composer. Replacing the stale {@code array_ops.expand_dims}
+   * pass_through alias with the dedicated routing (this PR's earlier review fix) made the override
+   * actually fire, so the assertion now sees the ⊤ output the override emits.
    *
-   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/481">wala/ML#481</a> is fixed, narrow
-   * the assertion to {@code Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)} (precise ⊤ shape) — and once the
-   * axis-aware composer lands as a separate follow-up, narrow further to {@code (1, 3)}.
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/481">wala/ML#481</a>): once the axis-aware
+   * composer lands as a follow-up, tighten this from {@code TENSOR_UNKNOWN_SHAPE_FLOAT32} to {@code
+   * (1, 3)} float32 (the precise insert-at-axis result).
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -5268,7 +5270,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testExpandDims()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_expand_dims.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+    test("tf2_test_expand_dims.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
