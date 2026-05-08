@@ -4887,6 +4887,55 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Sibling of {@link #testAsString()} that uses a single 2-arg sink {@code f(y, x)}. Captures the
+   * wala/ML#495 multi-tensor-sink-collapse pattern: with both the {@code as_string} output (`y`)
+   * and its input (`x`) flowing into one sink, only the input side (`x` at vn=3) classifies; the
+   * {@code as_string} output (`y` at vn=2) drops out, presumably because the string-dtype
+   * propagation through the {@code as_string} call doesn't survive the multi-tensor sink.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/495">wala/ML#495</a>): tighten to {@code
+   * Map.of(2, Set.of(TENSOR_3_STRING), 3, Set.of(TENSOR_3_FLOAT32))} once the dataset-loader
+   * `TypeReference`s extend the `TensorGenerator` fallback paths and the multi-tensor-sink collapse
+   * is fixed.
+   */
+  @Test
+  public void testAsString2ArgSink()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_as_string_2arg_sink.py",
+        "f",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_3_STRING), 3, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Sibling of {@link #testAsString()} with two 1-arg sinks {@code f(y)} and {@code g(x)},
+   * asserting the {@code y}-side sink. The {@code as_string} output's string-dtype tensor doesn't
+   * classify here &mdash; the second sink's presence triggers collapse on the string-side flow.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/495">wala/ML#495</a>): tighten to {@code
+   * Map.of(2, Set.of(TENSOR_3_STRING))} once #495 lands.
+   */
+  @Test
+  public void testAsStringTwoSinksY()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_as_string_two_sinks.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_STRING)));
+  }
+
+  /**
+   * Companion to {@link #testAsStringTwoSinksY()} asserting the {@code x}-side sink {@code g(x)}.
+   * Unlike the {@code y}-side, the {@code x} input classifies precisely &mdash; the
+   * multi-tensor-sink collapse (wala/ML#495) here is asymmetric, hitting only the {@code as_string}
+   * output's string-dtype side.
+   */
+  @Test
+  public void testAsStringTwoSinksX()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_as_string_two_sinks.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
    * Generator test for {@code tf.keras.datasets.imdb.load_data()}. The four returned arrays each
    * have shape {@code (25000,)}; the {@code y_train} / {@code y_test} arrays have dtype {@code
    * int64} (binary labels).
