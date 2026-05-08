@@ -75,16 +75,31 @@ public class BroadcastTo extends TensorGenerator {
     Set<List<Dimension<?>>> shapes;
     try {
       // `getShapesFromShapeArgument` throws `IllegalStateException` for shape forms it doesn't
-      // recognize (notably when `shape` is itself a runtime tensor — e.g.
-      // `tf.broadcast_to(x, tf.shape(y))`). The lattice-correct response there is ⊤ ("tensor of
-      // unknown shape"), not aborting the analysis with an exception. The deeper fix is to change
-      // the helper's contract to return `null` rather than throw — see wala/ML#471 — but that
-      // touches every caller, so localize the catch here for now.
+      // recognize. For `BroadcastTo` specifically, a runtime-tensor shape argument is an
+      // expected input pattern (e.g., `tf.broadcast_to(x, tf.shape(y))`), so we tolerate the
+      // throw here and degrade to ⊤ ("tensor of unknown shape"). Other callers let the throw
+      // propagate as a loud signal that modeling work is missing — see wala/ML#471's design
+      // discussion on PR #245.
       shapes = this.getShapesFromShapeArgument(builder, shapePts);
     } catch (IllegalStateException e) {
       return null;
     }
     return shapes == null || shapes.isEmpty() ? null : shapes;
+  }
+
+  /**
+   * Routes the shape query through {@link #getDefaultShapes} unconditionally rather than deferring
+   * to the parent's PTS-based dispatch (which would call {@link #getShapesFromShapeArgument}
+   * directly without the tolerate-runtime-tensor catch). The point of this generator is the
+   * localized catch on `tf.broadcast_to(x, tf.shape(y))`; letting the parent's dispatch bypass it
+   * would defeat the purpose.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The shapes per {@link #getDefaultShapes}.
+   */
+  @Override
+  public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+    return getDefaultShapes(builder);
   }
 
   @Override

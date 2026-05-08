@@ -90,7 +90,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
 
   @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
-    LOGGER.info("Calculating shapes for RaggedFromNestedValueRowIds.");
+    LOGGER.fine("Calculating shapes for RaggedFromNestedValueRowIds.");
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     // 1. Determine `nrows`.

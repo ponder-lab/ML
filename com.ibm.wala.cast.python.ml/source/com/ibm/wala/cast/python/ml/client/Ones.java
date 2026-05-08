@@ -50,7 +50,7 @@ public class Ones extends TensorGenerator {
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    LOGGER.info(
+    LOGGER.fine(
         "No dtype specified for source: " + source + ". Using default dtype of: " + FLOAT32 + " .");
 
     // Use the default dtype of float32.
