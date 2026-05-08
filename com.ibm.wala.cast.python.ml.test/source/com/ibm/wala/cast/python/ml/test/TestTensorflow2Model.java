@@ -254,6 +254,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_2_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(3)));
 
+  private static final TensorType TENSOR_2_6_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(6)));
+
   private static final TensorType TENSOR_2_1_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(1)));
 
@@ -7454,21 +7457,51 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Tier-5 generator (wala/ML#449): {@code tf.concat(values, axis)}. Pre-fix the {@code concat} XML
-   * routed through a {@code read_data} marker that allocated a non-tensor wrapper class ({@code
-   * Ltensorflow/python/ops/array_ops/concat}), giving {@code [{? of unknown}]} via {@code
-   * ReadDataFallback}. Post-fix the XML mirrors {@code add_n}'s pattern: read field 0 of {@code
-   * values} (the input tensor list) and route through {@code convert_to_tensor}, propagating the
-   * first input's shape and dtype. Dtype propagation is sound (concat preserves dtype). Shape is
-   * approximated by inheriting from the first input — this is <em>unsound</em>, since runtime
-   * concat grows the {@code axis} dimension by the sum of the input dims; a future generator can
-   * read {@code axis} and the full {@code values} list to produce a precise (and sound) shape. The
-   * lock-in here pins the observable static-analysis output as the current approximation.
+   * Tier-5 generator (wala/ML#449): {@code tf.concat(values, axis)}. The dedicated {@link
+   * com.ibm.wala.cast.python.ml.client.Concat} generator computes the precise output shape by
+   * walking every entry in the {@code values} list, summing each input's dim along the resolved
+   * {@code axis}, and inheriting the rest of the shape from the first input. The fixture
+   * concatenates two {@code (3,)} tensors along {@code axis=0}, so the precise output is {@code
+   * (6,)}; dtype is inherited from the first element ({@code int32}).
    */
   @Test
   public void testConcat()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_concat.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_INT32)));
+    test("tf2_test_concat.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_6_INT32)));
+  }
+
+  /**
+   * Multi-rank {@code tf.concat([t1, t2], axis=1)} with {@code (2, 3)} inputs. Exercises the
+   * rank-aware path in {@link com.ibm.wala.cast.python.ml.client.Concat#computeConcatenatedShape}:
+   * non-axis dim preservation (the leading {@code 2} survives) and the axis-dim sum (the trailing
+   * {@code 3 + 3 = 6}).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConcatMultirank()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_concat_multirank.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_6_INT32)));
+  }
+
+  /**
+   * {@code tf.concat([t1, t2], axis=-1)} with {@code (2, 3)} inputs. Exercises the negative-axis
+   * normalization in {@link com.ibm.wala.cast.python.ml.client.Concat#computeConcatenatedShape}:
+   * {@code axis = -1} resolves to {@code rank - 1 = 1} for rank-2 inputs, producing the same {@code
+   * (2, 6)} answer as the explicit {@code axis=1} fixture.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConcatNegativeAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_concat_negaxis.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_6_INT32)));
   }
 
   /**
