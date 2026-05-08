@@ -997,6 +997,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String CLIP_BY_VALUE_SIGNATURE = "tf.clip_by_value()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/concat. */
+  public static final MethodReference CONCAT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/concat")),
+          AstMethodReference.fnSelector);
+
+  private static final String CONCAT_SIGNATURE = "tf.concat()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/stack. */
   public static final MethodReference STACK =
       MethodReference.findOrCreate(
@@ -1462,6 +1471,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(RELU.getDeclaringClass(), RELU_SIGNATURE),
           Map.entry(EXPAND_DIMS.getDeclaringClass(), EXPAND_DIMS_SIGNATURE),
           Map.entry(CLIP_BY_VALUE.getDeclaringClass(), CLIP_BY_VALUE_SIGNATURE),
+          Map.entry(CONCAT.getDeclaringClass(), CONCAT_SIGNATURE),
           Map.entry(STACK.getDeclaringClass(), STACK_SIGNATURE),
           Map.entry(SQRT.getDeclaringClass(), SQRT_SIGNATURE),
           Map.entry(NEGATIVE.getDeclaringClass(), NEGATIVE_SIGNATURE),
