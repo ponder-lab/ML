@@ -83,7 +83,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
 
   @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
-    LOGGER.info("Calculating shapes for RaggedFromNestedRowLengths.");
+    LOGGER.fine("Calculating shapes for RaggedFromNestedRowLengths.");
     // 1. Determine `nrows` and number of ragged dimensions from `nested_row_lengths`.
     // The number of rows is len(nested_row_lengths[0]).
     OrdinalSet<InstanceKey> nestedRowLengthsPts = this.getNestedStructurePointsToSet(builder);
@@ -93,7 +93,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
     Set<Integer> possibleK = HashSetFactory.make(); // Number of ragged dimensions.
 
     if (nestedRowLengthsPts != null && !nestedRowLengthsPts.isEmpty()) {
-      LOGGER.info(
+      LOGGER.fine(
           "Found " + nestedRowLengthsPts.size() + " points-to set(s) for nested_row_lengths.");
       for (InstanceKey ik : nestedRowLengthsPts) {
         if (ik instanceof AllocationSiteInNode) {
@@ -106,7 +106,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
                     ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                         .getPointerKeyForObjectCatalog(asin));
             int k = objectCatalogPointsToSet.size();
-            LOGGER.info("Found nested_row_lengths list/tuple with length (K): " + k);
+            LOGGER.fine("Found nested_row_lengths list/tuple with length (K): " + k);
             possibleK.add(k);
 
             // Get the first element of nested_row_lengths to determine nrows.
@@ -125,7 +125,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
                   for (List<Dimension<?>> shape : shapesOfFirstElem) {
                     if (!shape.isEmpty()) {
                       Dimension<?> dim = shape.get(0);
-                      LOGGER.info("Found row dimension from first element: " + dim);
+                      LOGGER.fine("Found row dimension from first element: " + dim);
                       possibleRowDims.add(computeRowDim(dim));
                       foundRowDim = true;
                     }
@@ -158,11 +158,11 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
     Set<List<Dimension<?>>> valuesShapes = emptySet();
     if (valuesPts != null && !valuesPts.isEmpty()) {
       valuesShapes = this.getShapesOfValue(builder, valuesPts);
-      LOGGER.info("Found value shapes: " + valuesShapes);
+      LOGGER.fine("Found value shapes: " + valuesShapes);
     } else {
       valuesShapes = new java.util.HashSet<>();
       valuesShapes.add(emptyList());
-      LOGGER.info("No value shapes found, assuming empty list.");
+      LOGGER.fine("No value shapes found, assuming empty list.");
     }
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
@@ -195,7 +195,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
       throw new IllegalStateException("Could not calculate shapes for RaggedFromNestedRowLengths");
     }
 
-    LOGGER.info("Final calculated shapes: " + ret);
+    LOGGER.fine("Final calculated shapes: " + ret);
     return ret;
   }
 

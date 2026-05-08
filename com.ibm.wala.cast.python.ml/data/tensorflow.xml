@@ -444,9 +444,12 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/ones_like -->
         <putfield class="LRoot" field="ones_like" fieldType="LRoot" ref="x" value="pass_through" />
         <putfield class="LRoot" field="ones_like" fieldType="LRoot" ref="array_ops" value="pass_through" />
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/shape -->
-        <putfield class="LRoot" field="shape" fieldType="LRoot" ref="x" value="pass_through" />
-        <putfield class="LRoot" field="shape" fieldType="LRoot" ref="array_ops" value="pass_through" />
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/shape — at runtime allocates a fresh 1-D int32 tensor whose values are `input`'s shape. The model here is partial: `<new>+<return>` allocates a `Ltensorflow/python/framework/ops/Tensor` of unknown dtype and unknown rank/shape (no
+          dedicated generator yet wired to encode int32 dtype or the statically-1 rank). That's enough to fix wala/ML#489's specific symptom &mdash; the dedicated allocation breaks the prior `pass_through` aliasing that caused `getShapesFromShapeArgument` to mis-parse `tf.shape(y)` as if `y`'s data were a shape
+          spec. Tightening the result to int32 dtype / rank-1 shape is tracked at wala/ML#473. -->
+        <new def="shape" class="Ltensorflow/math/shape" />
+        <putfield class="LRoot" field="shape" fieldType="LRoot" ref="x" value="shape" />
+        <putfield class="LRoot" field="shape" fieldType="LRoot" ref="array_ops" value="shape" />
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/transpose -->
         <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="x" value="pass_through" />
         <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="array_ops" value="pass_through" />
@@ -921,6 +924,14 @@
       </class>
     </package>
     <package name="tensorflow/math">
+      <class name="shape" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/shape — returns a 1-D int32 tensor whose values are `input`'s runtime shape. Modeled as `<new>+<return>` (fresh allocation, not pass-through) so `getShapesFromShapeArgument` doesn't conflate the shape-tensor with `input`'s data
+          structure (wala/ML#489). The result is a tensor whose rank is statically 1 but whose dim depends on `input`'s rank, which static analysis can't compute in general — left at ⊤ (no per-op generator wired up here). -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self input out_type name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
       <class name="sigmoid" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/sigmoid. Modeled as `<new>+<return>` (fresh allocation, not pass-through) to match add/matmul and reflect actual TF semantics: sigmoid returns a new tensor with the same shape/dtype as its input, not the input object itself.
           Shape/dtype inference lives in the `Sigmoid` generator. -->
@@ -1070,13 +1081,17 @@
         </method>
       </class>
       <class name="top_k" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/top_k. Direct `<new>+<putfield>` per wala/ML#380 (was a `read_data` materialization chain). Returns a `(values, indices)` tuple — both fields point at fresh `Tensor` allocations. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/top_k. Direct `<new>+<putfield>` per wala/ML#380 (was a `read_data` materialization chain). Returns a `(values, indices)` NamedTuple — both fields point at fresh `Tensor` allocations. The `values`/`indices` named-field aliases
+          (in addition to the numeric `0`/`1` fields) handle the NamedTuple attribute-access pattern: `result.values` reads field `"values"` (a string property name) and the alias makes that resolve to the same `xx` alloc as field `0`. Without the alias, `result.values` reads an empty field-PTS and falls through
+          to ⊤, even though `values, indices = result` (numeric destructuring) worked fine. See wala/ML#480 for the full diagnosis. -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input k sorted name">
           <new def="x" class="Ltuple" />
           <new def="xx" class="Ltensorflow/python/framework/ops/Tensor" />
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="x" value="xx" />
+          <putfield class="LRoot" field="values" fieldType="LRoot" ref="x" value="xx" />
           <new def="yy" class="Ltensorflow/python/framework/ops/Tensor" />
           <putfield class="LRoot" field="1" fieldType="LRoot" ref="x" value="yy" />
+          <putfield class="LRoot" field="indices" fieldType="LRoot" ref="x" value="yy" />
           <return value="x" />
         </method>
       </class>
@@ -1379,13 +1394,11 @@
         </method>
       </class>
       <class name="concat" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/concat. Mirrors `add_n`'s pattern: read field 0 of the input list and route through `convert_to_tensor` so the dtype propagates from the first input element. Shape is approximated by inheriting from the first input — known unsoundness,
-          since runtime concat grows the `axis` dimension by the sum of the input dims. A future generator can read the full `values` list and `axis` to produce a precise (and sound) shape. See wala/ML#449 (Tier 5). -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/concat. Direct `<new>+<return>` paired with the dedicated `Concat` generator (wala/ML#449 Tier 5): the generator computes the precise output shape by walking every entry in the `values` list, summing each input's dim along the resolved
+          `axis`, and inheriting the rest of the shape from the first input. Pre-fix the XML routed through `convert_to_tensor` which inherited the first input's shape verbatim — sound on dtype but unsound on shape (missed the per-input axis-dim sum). -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self values axis name">
-          <getfield class="Llist" field="0" fieldType="LRoot" ref="values" def="x" />
-          <new def="z" class="Ltensorflow/functions/convert_to_tensor" />
-          <call class="Ltensorflow/functions/convert_to_tensor" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="x" numArgs="2" def="y" />
-          <return value="y" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="Variable" allocatable="true">
@@ -1763,13 +1776,11 @@
         </method>
       </class>
       <class name="stack" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/stack. Mirrors `add_n` / `concat`'s pattern: read field 0 of the input list and route through `convert_to_tensor` so dtype propagates from the first input element. Shape is approximated by inheriting from the first input — known
-          unsoundness, since runtime stack adds a new axis (rank+1). A future generator can compose the input shape with the `values` list length to produce a precise (and sound) shape. See wala/ML#449 (Tier 5). -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/stack. Direct `<new>+<return>` paired with the dedicated `Stack` generator (wala/ML#449 Tier 5): the generator computes the precise output shape `t.shape[:axis] + (len(values),) + t.shape[axis:]` from the `values` list's PTS-derived
+          length and the first element's shape, and inherits the dtype from the first element. Pre-fix the XML routed through `convert_to_tensor` which inherited the first element's shape verbatim — sound on dtype but unsound on shape (missed the new axis). -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self values axis name">
-          <getfield class="Llist" field="0" fieldType="LRoot" ref="values" def="x" />
-          <new def="z" class="Ltensorflow/functions/convert_to_tensor" />
-          <call class="Ltensorflow/functions/convert_to_tensor" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="x" numArgs="2" def="y" />
-          <return value="y" />
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
         </method>
       </class>
       <class name="unstack" allocatable="true">

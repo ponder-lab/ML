@@ -14,6 +14,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_X_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_X_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_Y_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_Y_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONCAT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.COS;
@@ -119,6 +120,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_FROM_DENS
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SQRT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.STACK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.STOP_GRADIENT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SUBTRACT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR;
@@ -355,7 +357,7 @@ public class TensorGeneratorFactory {
       }
     }
 
-    LOGGER.info("findCreator fallback returning original source: " + source);
+    LOGGER.fine("findCreator fallback returning original source: " + source);
     return source;
   }
 
@@ -946,13 +948,13 @@ public class TensorGeneratorFactory {
     }
 
     TypeReference calledFunction = getFunction(source, builder);
-    LOGGER.info("Getting tensor generator for call to: " + calledFunction + ".");
+    LOGGER.fine("Getting tensor generator for call to: " + calledFunction + ".");
 
     // sanitize the type name by removing the artificial suffix that is added for synthetic
     // classes to facilitate trampoline generation.
     calledFunction = sanitize(calledFunction);
 
-    LOGGER.info("Getting tensor generator for sanitized call to: " + calledFunction + ".");
+    LOGGER.fine("Getting tensor generator for sanitized call to: " + calledFunction + ".");
 
     if (isType(calledFunction, ONES.getDeclaringClass())) return new Ones(source);
     else if (isType(calledFunction, CONSTANT.getDeclaringClass())) return new Constant(source);
@@ -1135,6 +1137,8 @@ public class TensorGeneratorFactory {
       return new BooleanMask(source);
     else if (isType(calledFunction, EXTRACT_PATCHES.getDeclaringClass()))
       return new ExtractPatches(source);
+    else if (isType(calledFunction, CONCAT.getDeclaringClass())) return new Concat(source);
+    else if (isType(calledFunction, STACK.getDeclaringClass())) return new Stack(source);
     else if (isType(calledFunction, SQRT.getDeclaringClass())) return new Sqrt(source);
     else if (isType(calledFunction, LOG.getDeclaringClass())) return new Log(source);
     else if (isType(calledFunction, NEGATIVE.getDeclaringClass())) return new Negative(source);

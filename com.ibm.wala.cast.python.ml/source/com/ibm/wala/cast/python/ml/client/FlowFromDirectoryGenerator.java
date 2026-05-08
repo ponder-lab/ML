@@ -45,6 +45,10 @@ public class FlowFromDirectoryGenerator extends DatasetGenerator {
     OrdinalSet<InstanceKey> targetSizePts = this.getArgumentPointsToSet(builder, 1, "target_size");
     if (targetSizePts != null && !targetSizePts.isEmpty()) {
       Set<List<Dimension<?>>> targetSizes = this.getShapesFromShapeArgument(builder, targetSizePts);
+      // Soundness: when `target_size` is present but unparseable, the runtime value could be
+      // anything — falling back to the (256, 256) default would falsely claim a fixed shape.
+      // Return ⊤ instead.
+      if (targetSizes == null) return null;
       if (!targetSizes.isEmpty()) {
         targetSize = targetSizes.iterator().next();
       }
