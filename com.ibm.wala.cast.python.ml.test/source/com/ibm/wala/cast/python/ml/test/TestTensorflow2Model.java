@@ -4934,6 +4934,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Sibling of {@link #testFashionMnistLoadData()} that passes all four unpacked arrays into the
+   * sink at once. Captures the wala/ML#495 multi-tensor-sink-collapse pattern.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/495">wala/ML#495</a>): tighten to {@code
+   * Map.of(2, Set.of(TENSOR_60000_28_28_UINT8), 3, Set.of(TENSOR_60000_UINT8), 4,
+   * Set.of(TENSOR_10000_28_28_UINT8), 5, Set.of(TENSOR_10000_UINT8))} once #495 lands.
+   */
+  @Test
+  public void testFashionMnistLoadDataXTest()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_fashion_mnist_load_data_xtest.py", "f", 0, 0, Map.of());
+  }
+
+  /**
    * Generator test for {@code tf.keras.datasets.cifar100.load_data()}. Shapes are identical to
    * {@code cifar10.load_data()}; the modeling reuses {@link
    * com.ibm.wala.cast.python.ml.client.Cifar10InputData}, so the inferred dtype is {@code uint8}
@@ -4957,6 +4971,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Sibling of {@link #testCifar100LoadData()} that passes all four unpacked arrays into the sink
+   * at once. Captures the wala/ML#495 multi-tensor-sink-collapse pattern.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/495">wala/ML#495</a>): tighten to recover
+   * precise types on all four params once #495 lands; also tracks wala/ML#487 for the
+   * cifar100-specific `int64` label dtype that's currently reported as `uint8`.
+   */
+  @Test
+  public void testCifar100LoadDataXTest()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_cifar100_load_data_xtest.py", "f", 0, 0, Map.of());
+  }
+
+  /**
    * Generator test for {@code tf.keras.datasets.reuters.load_data()}. Asserts on both unpacked
    * arrays: {@code x_train} ({@code (8982,)} of unknown dtype — newswires are variable-length
    * integer-encoded sequences, modeled as ⊤-dtype) at {@code vn=2}, and {@code y_train} ({@code
@@ -4976,6 +5004,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         2,
         Map.of(2, Set.of(TENSOR_8982_UNKNOWN), 3, Set.of(TENSOR_8982_INT64)));
+  }
+
+  /**
+   * Sibling of {@link #testReutersLoadData()} that passes all four unpacked arrays into the sink at
+   * once. Captures the wala/ML#495 multi-tensor-sink-collapse pattern.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/495">wala/ML#495</a>): tighten to recover
+   * precise types on all four params once #495 lands.
+   */
+  @Test
+  public void testReutersLoadDataXTest()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_reuters_load_data_xtest.py", "f", 0, 0, Map.of());
   }
 
   /**
