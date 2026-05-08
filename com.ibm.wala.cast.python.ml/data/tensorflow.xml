@@ -319,8 +319,6 @@
         <putfield class="LRoot" field="greater_equal" fieldType="LRoot" ref="math" value="greater_equal" />
         <putfield class="LRoot" field="greater_equal" fieldType="LRoot" ref="math_ops" value="greater_equal" />
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/log -->
-        <putfield class="LRoot" field="log" fieldType="LRoot" ref="math" value="pass_through" />
-        <putfield class="LRoot" field="log" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reciprocal -->
         <putfield class="LRoot" field="reciprocal" fieldType="LRoot" ref="math" value="pass_through" />
         <putfield class="LRoot" field="reciprocal" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
@@ -344,9 +342,6 @@
         <putfield class="LRoot" field="minimum" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
         <!-- `tf.less`'s legacy `pass_through` aliasing was removed: the modern `<class name="less">` block + `ComparisonOperation` dispatch (wala/ML#427) now handle bool dtype directly. -->
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/cos -->
-        <putfield class="LRoot" field="cos" fieldType="LRoot" ref="x" value="pass_through" />
-        <putfield class="LRoot" field="cos" fieldType="LRoot" ref="math" value="pass_through" />
-        <putfield class="LRoot" field="cos" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/tanh -->
         <new def="tanh" class="Ltensorflow/math/tanh" />
         <putfield class="LRoot" field="tanh" fieldType="LRoot" ref="x" value="tanh" />
@@ -373,9 +368,6 @@
         <putfield class="LRoot" field="l2_normalize" fieldType="LRoot" ref="nn" value="l2_normalize" />
         <putfield class="LRoot" field="l2_normalize" fieldType="LRoot" ref="nn_impl" value="l2_normalize" />
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/sin -->
-        <putfield class="LRoot" field="sin" fieldType="LRoot" ref="x" value="pass_through" />
-        <putfield class="LRoot" field="sin" fieldType="LRoot" ref="math" value="pass_through" />
-        <putfield class="LRoot" field="sin" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/pow -->
         <putfield class="LRoot" field="pow" fieldType="LRoot" ref="x" value="pass_through" />
         <putfield class="LRoot" field="pow" fieldType="LRoot" ref="math" value="pass_through" />
@@ -391,9 +383,6 @@
         <putfield class="LRoot" field="reduce_max" fieldType="LRoot" ref="math" value="reduce_max" />
         <putfield class="LRoot" field="reduce_max" fieldType="LRoot" ref="math_ops" value="reduce_max" />
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/sqrt -->
-        <putfield class="LRoot" field="sqrt" fieldType="LRoot" ref="x" value="pass_through" />
-        <putfield class="LRoot" field="sqrt" fieldType="LRoot" ref="math" value="pass_through" />
-        <putfield class="LRoot" field="sqrt" fieldType="LRoot" ref="math_ops" value="pass_through" />
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/rsqrt -->
         <new def="rsqrt" class="Ltensorflow/math/rsqrt" />
         <putfield class="LRoot" field="rsqrt" fieldType="LRoot" ref="math" value="rsqrt" />
