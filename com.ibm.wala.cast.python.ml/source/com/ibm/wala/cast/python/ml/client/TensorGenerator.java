@@ -238,23 +238,29 @@ public abstract class TensorGenerator {
   /**
    * Returns the possible shapes of the tensor returned by this generator.
    *
-   * <p>Returns {@code null} when the shape argument's PTS contains forms this method does not
-   * recognize as a static shape — runtime tensors (e.g. the result of {@code tf.shape(y)}), opaque
-   * builder objects, or anything that isn't a list / tuple / {@code tf.constant} / {@code
-   * TensorSpec} / {@code RaggedTensorSpec}. The {@code null} return is the lattice signal for ⊤
-   * ("tensor of unknown shape") matching the convention documented in this class's class-level
-   * Javadoc and {@code CONTRIBUTING.md}'s "Tensor Type Generators" section. Callers that aggregate
-   * sub-shapes should propagate {@code null} upward rather than treating it as an empty result. See
-   * <a href="https://github.com/wala/ML/issues/471">wala/ML#471</a>.
+   * <p>Throws {@link IllegalStateException} when the shape argument's PTS contains forms this
+   * method does not recognize as a static shape &mdash; runtime tensors (e.g. the result of {@code
+   * tf.shape(y)}), opaque builder objects, or anything that isn't a list / tuple / {@code
+   * tf.constant} / {@code TensorSpec} / {@code RaggedTensorSpec}. The strict throw is intentional:
+   * an unrecognized shape form means missing or incorrect modeling, and silencing it via a {@code
+   * null} return would suppress that diagnostic signal across the whole generator surface during
+   * development. The deeper fix (change the helper's contract to return {@code null} instead of
+   * throw) is tracked at <a href="https://github.com/wala/ML/issues/471">wala/ML#471</a>; for now
+   * the tolerance is localized to the one caller where runtime-tensor shape arguments are the
+   * legitimate use case &mdash; {@link BroadcastTo#getDefaultShapes} wraps this helper in a {@code
+   * try / catch (IllegalStateException)} that returns {@code null} (lattice ⊤). Other callers stay
+   * strict; a missing case there surfaces as an analysis-aborting exception, which is the
+   * load-bearing "modeling gap" signal.
    *
-   * <p>Still throws {@link IllegalArgumentException} when the {@code pointsToSet} parameter itself
-   * is empty or {@code null} — that's a caller-contract violation (callers should check for empty
-   * PTS before invoking this helper), distinct from "shape was a runtime tensor".
+   * <p>Throws {@link IllegalArgumentException} when the {@code pointsToSet} parameter itself is
+   * empty or {@code null} &mdash; that's a caller-contract violation (callers should check for
+   * empty PTS before invoking this helper), distinct from "shape was a runtime tensor".
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param pointsToSet The points-to set of the shape argument. FIXME: Why not take a value number?
-   * @return A set of possible shapes of the tensor returned by this generator, or {@code null} when
-   *     no static shape can be recovered from {@code pointsToSet}.
+   * @return A set of possible shapes of the tensor returned by this generator. Never {@code null}
+   *     under normal operation; unrecognized forms throw {@link IllegalStateException} rather than
+   *     returning {@code null}.
    */
   protected Set<List<Dimension<?>>> getShapesFromShapeArgument(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {

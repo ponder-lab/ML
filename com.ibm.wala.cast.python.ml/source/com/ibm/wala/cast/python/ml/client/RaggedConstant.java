@@ -500,10 +500,13 @@ public class RaggedConstant extends Constant {
             builder, this.getInnerShapeParameterPosition(), getInnerShapeParameterName());
 
     if (pointsToSet != null && !pointsToSet.isEmpty()) {
-      // After wala/ML#471 the helper returns `null` when `inner_shape` is present but
-      // unparseable. Propagate that upward — the caller short-circuits to ⊤ for the overall
-      // ragged-constant shape. Empty (no PTS recovered, or `inner_shape` not provided at all) is
-      // distinct from `null` and means "use defaults".
+      // The helper still throws `IllegalStateException` for unparseable `inner_shape` forms
+      // (e.g., a runtime tensor). The keep-throw contract is intentional &mdash; per wala/ML#471
+      // the strict signal surfaces missing modeling rather than silently degrading. The
+      // exception propagates up to the analysis driver; only `BroadcastTo` localizes a catch
+      // (because runtime-tensor shape args are the legitimate use case there). Empty (no PTS
+      // recovered, or `inner_shape` not provided at all) returns the empty set, distinct from
+      // an unparseable form, and means "use defaults".
       return this.getShapesFromShapeArgument(builder, pointsToSet);
     } else return emptySet();
   }
