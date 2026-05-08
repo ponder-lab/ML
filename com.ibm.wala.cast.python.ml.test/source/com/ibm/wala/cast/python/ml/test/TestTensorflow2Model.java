@@ -322,6 +322,55 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       new TensorType(
           FLOAT_32, asList(new NumericDim(60000), new NumericDim(28), new NumericDim(28)));
 
+  private static final TensorType TENSOR_60000_28_28_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(60000), new NumericDim(28), new NumericDim(28)));
+
+  private static final TensorType TENSOR_50000_32_32_3_UINT8 =
+      new TensorType(
+          UINT_8,
+          asList(new NumericDim(50000), new NumericDim(32), new NumericDim(32), new NumericDim(3)));
+
+  private static final TensorType TENSOR_8982_INT64 =
+      new TensorType(INT_64, asList(new NumericDim(8982)));
+
+  private static final TensorType TENSOR_404_13_FLOAT64 =
+      new TensorType(FLOAT_64, asList(new NumericDim(404), new NumericDim(13)));
+
+  private static final TensorType TENSOR_404_FLOAT64 =
+      new TensorType(FLOAT_64, asList(new NumericDim(404)));
+
+  private static final TensorType TENSOR_60000_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(60000)));
+
+  private static final TensorType TENSOR_50000_1_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(50000), new NumericDim(1)));
+
+  private static final TensorType TENSOR_8982_UNKNOWN =
+      new TensorType(UNKNOWN, asList(new NumericDim(8982)));
+
+  private static final TensorType TENSOR_102_13_FLOAT64 =
+      new TensorType(FLOAT_64, asList(new NumericDim(102), new NumericDim(13)));
+
+  private static final TensorType TENSOR_102_FLOAT64 =
+      new TensorType(FLOAT_64, asList(new NumericDim(102)));
+
+  private static final TensorType TENSOR_10000_32_32_3_UINT8 =
+      new TensorType(
+          UINT_8,
+          asList(new NumericDim(10000), new NumericDim(32), new NumericDim(32), new NumericDim(3)));
+
+  private static final TensorType TENSOR_10000_1_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(10000), new NumericDim(1)));
+
+  private static final TensorType TENSOR_10000_28_28_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(10000), new NumericDim(28), new NumericDim(28)));
+
+  private static final TensorType TENSOR_2246_INT64 =
+      new TensorType(INT_64, asList(new NumericDim(2246)));
+
+  private static final TensorType TENSOR_2246_UNKNOWN =
+      new TensorType(UNKNOWN, asList(new NumericDim(2246)));
+
   /** A {@code float32} tensor whose shape cannot be statically inferred. */
   private static final TensorType TENSOR_UNKNOWN_SHAPE_FLOAT32 = new TensorType(FLOAT_32, null);
 
@@ -4892,6 +4941,101 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_extract_patches.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
+  /**
+   * Generator test for {@code tf.keras.datasets.fashion_mnist.load_data()}. Shapes and dtype are
+   * identical to {@code mnist.load_data()}. The fixture passes all four unpacked arrays ({@code
+   * x_train}, {@code y_train}, {@code x_test}, {@code y_test}) into the 4-arg sink, so the
+   * assertion pins types at {@code vn=2..5}.
+   */
+  @Test
+  public void testFashionMnistLoadData()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_fashion_mnist_load_data.py",
+        "f",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_60000_28_28_UINT8),
+            3, Set.of(TENSOR_60000_UINT8),
+            4, Set.of(TENSOR_10000_28_28_UINT8),
+            5, Set.of(TENSOR_10000_UINT8)));
+  }
+
+  /**
+   * Generator test for {@code tf.keras.datasets.cifar100.load_data()}. Shapes are identical to
+   * {@code cifar10.load_data()}; the modeling reuses {@link
+   * com.ibm.wala.cast.python.ml.client.Cifar10InputData}, so the inferred dtype is {@code uint8}
+   * for both label arrays. Asserts on all four unpacked arrays at {@code vn=2..5}.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/487">wala/ML#487</a>): the inferred {@code
+   * uint8} for {@code y_train} / {@code y_test} is imprecise &mdash; the runtime dtype of {@code
+   * cifar100}'s labels is {@code int64} (the Python fixture asserts that). Tighten to {@code
+   * int64}-dtype variants once the modeling is updated.
+   */
+  @Test
+  public void testCifar100LoadData()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_cifar100_load_data.py",
+        "f",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_50000_32_32_3_UINT8),
+            3, Set.of(TENSOR_50000_1_UINT8),
+            4, Set.of(TENSOR_10000_32_32_3_UINT8),
+            5, Set.of(TENSOR_10000_1_UINT8)));
+  }
+
+  /**
+   * Generator test for {@code tf.keras.datasets.reuters.load_data()}. Asserts on all four unpacked
+   * arrays at {@code vn=2..5}: {@code x_train} ({@code (8982,)} unknown dtype &mdash; newswires are
+   * variable-length integer-encoded sequences, modeled as ⊤-dtype), {@code y_train} ({@code
+   * (8982,)} {@code int64}), {@code x_test} ({@code (2246,)} unknown dtype), {@code y_test} ({@code
+   * (2246,)} {@code int64}).
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/488">wala/ML#488</a>): the inferred unknown
+   * dtype for {@code x_train} / {@code x_test} is imprecise &mdash; the runtime dtype is numpy
+   * {@code object} (the Python fixture asserts that). Tighten to a dedicated {@code OBJECT} dtype
+   * if/when the lattice gains one.
+   */
+  @Test
+  public void testReutersLoadData()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reuters_load_data.py",
+        "f",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_8982_UNKNOWN),
+            3, Set.of(TENSOR_8982_INT64),
+            4, Set.of(TENSOR_2246_UNKNOWN),
+            5, Set.of(TENSOR_2246_INT64)));
+  }
+
+  /**
+   * Generator test for {@code tf.keras.datasets.boston_housing.load_data()}. Asserts on all four
+   * unpacked arrays at {@code vn=2..5}: {@code x_train} ({@code (404, 13)} {@code float64}
+   * features), {@code y_train} ({@code (404,)} {@code float64} regression targets), {@code x_test}
+   * ({@code (102, 13)} {@code float64}), {@code y_test} ({@code (102,)} {@code float64}).
+   */
+  @Test
+  public void testBostonHousingLoadData()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_boston_housing_load_data.py",
+        "f",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_404_13_FLOAT64),
+            3, Set.of(TENSOR_404_FLOAT64),
+            4, Set.of(TENSOR_102_13_FLOAT64),
+            5, Set.of(TENSOR_102_FLOAT64)));
+  }
+
   @Test
   public void testReduceSum2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -7667,6 +7811,51 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testStack()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_stack.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_INT32)));
+  }
+
+  /**
+   * Generator-dispatch test for the 3-arg form of {@code tf.where(condition, x, y)}. The dedicated
+   * {@link com.ibm.wala.cast.python.ml.client.Where} generator produces shape and dtype by unioning
+   * the inferred sets over {@code x} and {@code y} (and intentionally ignoring {@code condition}'s
+   * shape, per the modeling note in {@code Where}'s class Javadoc). The fixture has all three
+   * operands shape {@code (3,)} float32, so the union collapses to the singleton {@code (3,)
+   * float32}. Fix for the wala/ML#422 listing.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testWhere()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_where.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Sibling of {@link #testWhere()} that exercises the union-over-{@code x}-and-{@code y} path with
+   * broadcast-compatible different shapes: {@code x} is {@code (3,)} float32 and {@code y} is
+   * {@code (2, 3)} float32. The runtime broadcast result is {@code (2, 3)}; the static analysis
+   * unions the two operand shapes to {@code {(3,), (2, 3)}}, which is sound but imprecise.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/482">wala/ML#482</a>): once broadcast-shape
+   * composition lands, tighten this assertion from the union {@code {TENSOR_3_FLOAT32,
+   * TENSOR_2_3_FLOAT32}} to the precise {@code TENSOR_2_3_FLOAT32}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testWhereBroadcast()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_where_broadcast.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_FLOAT32, TENSOR_2_3_FLOAT32)));
   }
 
   @Test
