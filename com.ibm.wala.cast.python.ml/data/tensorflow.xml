@@ -318,9 +318,7 @@
         <putfield class="LRoot" field="greater_equal" fieldType="LRoot" ref="x" value="greater_equal" />
         <putfield class="LRoot" field="greater_equal" fieldType="LRoot" ref="math" value="greater_equal" />
         <putfield class="LRoot" field="greater_equal" fieldType="LRoot" ref="math_ops" value="greater_equal" />
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/log -->
-        <putfield class="LRoot" field="log" fieldType="LRoot" ref="math" value="pass_through" />
-        <putfield class="LRoot" field="log" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
+        <!-- `tf.{sqrt,log,sin,cos}` and their aliases (`tf.math.*`, `tf.gen_math_ops.{log,sin,cos}`, `tf.math_ops.sqrt`) now route through dedicated `<class>` blocks defined later in this file (search for `class name="sqrt"`, etc.). -->
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reciprocal -->
         <putfield class="LRoot" field="reciprocal" fieldType="LRoot" ref="math" value="pass_through" />
         <putfield class="LRoot" field="reciprocal" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
@@ -343,10 +341,6 @@
         <putfield class="LRoot" field="minimum" fieldType="LRoot" ref="math" value="pass_through" />
         <putfield class="LRoot" field="minimum" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
         <!-- `tf.less`'s legacy `pass_through` aliasing was removed: the modern `<class name="less">` block + `ComparisonOperation` dispatch (wala/ML#427) now handle bool dtype directly. -->
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/cos -->
-        <putfield class="LRoot" field="cos" fieldType="LRoot" ref="x" value="pass_through" />
-        <putfield class="LRoot" field="cos" fieldType="LRoot" ref="math" value="pass_through" />
-        <putfield class="LRoot" field="cos" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/tanh -->
         <new def="tanh" class="Ltensorflow/math/tanh" />
         <putfield class="LRoot" field="tanh" fieldType="LRoot" ref="x" value="tanh" />
@@ -372,10 +366,6 @@
         <putfield class="LRoot" field="l2_normalize" fieldType="LRoot" ref="math" value="l2_normalize" />
         <putfield class="LRoot" field="l2_normalize" fieldType="LRoot" ref="nn" value="l2_normalize" />
         <putfield class="LRoot" field="l2_normalize" fieldType="LRoot" ref="nn_impl" value="l2_normalize" />
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/sin -->
-        <putfield class="LRoot" field="sin" fieldType="LRoot" ref="x" value="pass_through" />
-        <putfield class="LRoot" field="sin" fieldType="LRoot" ref="math" value="pass_through" />
-        <putfield class="LRoot" field="sin" fieldType="LRoot" ref="gen_math_ops" value="pass_through" />
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/pow -->
         <putfield class="LRoot" field="pow" fieldType="LRoot" ref="x" value="pass_through" />
         <putfield class="LRoot" field="pow" fieldType="LRoot" ref="math" value="pass_through" />
@@ -390,10 +380,6 @@
         <putfield class="LRoot" field="reduce_max" fieldType="LRoot" ref="x" value="reduce_max" />
         <putfield class="LRoot" field="reduce_max" fieldType="LRoot" ref="math" value="reduce_max" />
         <putfield class="LRoot" field="reduce_max" fieldType="LRoot" ref="math_ops" value="reduce_max" />
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/sqrt -->
-        <putfield class="LRoot" field="sqrt" fieldType="LRoot" ref="x" value="pass_through" />
-        <putfield class="LRoot" field="sqrt" fieldType="LRoot" ref="math" value="pass_through" />
-        <putfield class="LRoot" field="sqrt" fieldType="LRoot" ref="math_ops" value="pass_through" />
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/rsqrt -->
         <new def="rsqrt" class="Ltensorflow/math/rsqrt" />
         <putfield class="LRoot" field="rsqrt" fieldType="LRoot" ref="math" value="rsqrt" />
@@ -786,6 +772,37 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/custom_gradient -->
         <new def="custom_gradient" class="Ltensorflow/class/custom_gradient" />
         <putfield class="LRoot" field="custom_gradient" fieldType="LRoot" ref="x" value="custom_gradient" />
+        <!-- Tier-A pure-passthrough math ops (wala/ML#422). Each modeled with direct `<new>+<return>` and a per-op Java generator extending `PassThroughUnaryTensorGenerator`; output shape and dtype both inherit from `x`. Pre-this-PR, several of these ops (sqrt, log, sin, cos) were earlier-bound to a
+          generic `pass_through` field-write that aliases the result to the input rather than allocating a fresh tensor &mdash; the result was reachable via the receiver's modeling but had no per-op precision. The per-op `<new>+<return>` here replaces that for `tf` / `tf.math` callers, and the `gen_math_ops` /
+          `math_ops` aliases below restore the precision under those internal modules too (`sqrt` had `math_ops`; `log`/`sin`/`cos` had `gen_math_ops` in the prior model). -->
+        <new def="sqrt" class="Ltensorflow/math/sqrt" />
+        <putfield class="LRoot" field="sqrt" fieldType="LRoot" ref="x" value="sqrt" />
+        <putfield class="LRoot" field="sqrt" fieldType="LRoot" ref="math" value="sqrt" />
+        <putfield class="LRoot" field="sqrt" fieldType="LRoot" ref="math_ops" value="sqrt" />
+        <new def="log" class="Ltensorflow/math/log" />
+        <putfield class="LRoot" field="log" fieldType="LRoot" ref="x" value="log" />
+        <putfield class="LRoot" field="log" fieldType="LRoot" ref="math" value="log" />
+        <putfield class="LRoot" field="log" fieldType="LRoot" ref="gen_math_ops" value="log" />
+        <new def="negative" class="Ltensorflow/math/negative" />
+        <putfield class="LRoot" field="negative" fieldType="LRoot" ref="x" value="negative" />
+        <putfield class="LRoot" field="negative" fieldType="LRoot" ref="math" value="negative" />
+        <new def="sin" class="Ltensorflow/math/sin" />
+        <putfield class="LRoot" field="sin" fieldType="LRoot" ref="x" value="sin" />
+        <putfield class="LRoot" field="sin" fieldType="LRoot" ref="math" value="sin" />
+        <putfield class="LRoot" field="sin" fieldType="LRoot" ref="gen_math_ops" value="sin" />
+        <new def="cos" class="Ltensorflow/math/cos" />
+        <putfield class="LRoot" field="cos" fieldType="LRoot" ref="x" value="cos" />
+        <putfield class="LRoot" field="cos" fieldType="LRoot" ref="math" value="cos" />
+        <putfield class="LRoot" field="cos" fieldType="LRoot" ref="gen_math_ops" value="cos" />
+        <new def="floor" class="Ltensorflow/math/floor" />
+        <putfield class="LRoot" field="floor" fieldType="LRoot" ref="x" value="floor" />
+        <putfield class="LRoot" field="floor" fieldType="LRoot" ref="math" value="floor" />
+        <new def="ceil" class="Ltensorflow/math/ceil" />
+        <putfield class="LRoot" field="ceil" fieldType="LRoot" ref="x" value="ceil" />
+        <putfield class="LRoot" field="ceil" fieldType="LRoot" ref="math" value="ceil" />
+        <new def="sign" class="Ltensorflow/math/sign" />
+        <putfield class="LRoot" field="sign" fieldType="LRoot" ref="x" value="sign" />
+        <putfield class="LRoot" field="sign" fieldType="LRoot" ref="math" value="sign" />
         <return value="x" />
       </method>
     </class>
@@ -953,16 +970,16 @@
         </method>
       </class>
       <class name="argmax" allocatable="true">
-        <!-- https://www.tensorflow.org/api_docs/python/tf/math/argmax — index of the maximum value across an axis. The dedicated `Argmax` generator emits `int64` (the TF default) for the output dtype; output shape is currently ⊤ pending wala/ML#462. The legacy `dimension` parameter (a TF 1.x alias for
-          `axis`) is retained in `paramNames`; the modern `output_type` parameter isn't surfaced here yet — wala/ML#463 covers the migration. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
-        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input axis name dimension">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/math/argmax — index of the maximum value across an axis. The dedicated `Argmax` generator reads the `output_type` argument when explicitly passed (e.g. `output_type=tf.int32`) and falls back to the TF default of `int64` otherwise; output shape
+          is currently ⊤ pending wala/ML#462. The legacy `dimension` parameter (a TF 1.x alias for `axis`) is retained in `paramNames` for back-compat. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self input axis output_type name dimension">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
       </class>
       <class name="argmin" allocatable="true">
-        <!-- https://www.tensorflow.org/api_docs/python/tf/math/argmin — index of the minimum value across an axis. Mirrors the `argmax` modeling above (same param signature, same direct `<new>+<return>` per wala/ML#380, same `int64` output dtype via the dedicated `Argmin` generator). -->
-        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input axis name dimension">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/math/argmin — index of the minimum value across an axis. Mirrors the `argmax` modeling above (same param signature, same direct `<new>+<return>` per wala/ML#380, same `output_type`-overrideable output dtype via the dedicated `Argmin` generator). -->
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self input axis output_type name dimension">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
@@ -1115,6 +1132,55 @@
       <class name="reduce_max" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_max. Modeled as `<new>+<return>` for the same reason as `reduce_all`/`reduce_prod` — wala/ML#449 Tier 3. Output dtype inherits from input (no int→float32 promotion like `reduce_mean`). -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <!-- Tier-A pure-passthrough math ops (wala/ML#422). Each is shape and dtype passthrough on `x`. -->
+      <class name="sqrt" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="log" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="negative" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="sin" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="cos" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="floor" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="ceil" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="sign" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
@@ -2727,6 +2793,9 @@
           <new def="x" class="Ltensorflow/distribute/run/run" />
           <putfield class="LRoot" field="run" fieldType="LRoot" ref="self" value="x" />
           <putfield class="LRoot" field="experimental_run_v2" fieldType="LRoot" ref="self" value="x" />
+          <new def="ddff" class="Ltensorflow/distribute/run/distribute_datasets_from_function" />
+          <putfield class="LRoot" field="distribute_datasets_from_function" fieldType="LRoot" ref="self" value="ddff" />
+          <putfield class="LRoot" field="experimental_distribute_datasets_from_function" fieldType="LRoot" ref="self" value="ddff" />
           <return value="arg0" />
         </method>
       </class>
@@ -2735,6 +2804,9 @@
           <new def="x" class="Ltensorflow/distribute/run/run" />
           <putfield class="LRoot" field="run" fieldType="LRoot" ref="self" value="x" />
           <putfield class="LRoot" field="experimental_run_v2" fieldType="LRoot" ref="self" value="x" />
+          <new def="ddff" class="Ltensorflow/distribute/run/distribute_datasets_from_function" />
+          <putfield class="LRoot" field="distribute_datasets_from_function" fieldType="LRoot" ref="self" value="ddff" />
+          <putfield class="LRoot" field="experimental_distribute_datasets_from_function" fieldType="LRoot" ref="self" value="ddff" />
           <return value="arg0" />
         </method>
       </class>
@@ -2743,6 +2815,9 @@
           <new def="x" class="Ltensorflow/distribute/run/run" />
           <putfield class="LRoot" field="run" fieldType="LRoot" ref="self" value="x" />
           <putfield class="LRoot" field="experimental_run_v2" fieldType="LRoot" ref="self" value="x" />
+          <new def="ddff" class="Ltensorflow/distribute/run/distribute_datasets_from_function" />
+          <putfield class="LRoot" field="distribute_datasets_from_function" fieldType="LRoot" ref="self" value="ddff" />
+          <putfield class="LRoot" field="experimental_distribute_datasets_from_function" fieldType="LRoot" ref="self" value="ddff" />
           <return value="arg0" />
         </method>
       </class>
@@ -2760,6 +2835,40 @@
           <getfield class="LRoot" field="0" fieldType="LRoot" ref="arg2" def="x" />
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="arg1" arg1="x" numArgs="2" def="v" />
           <return value="v" />
+        </method>
+      </class>
+      <!-- https://www.tensorflow.org/api_docs/python/tf/distribute/Strategy#distribute_datasets_from_function — at runtime `strategy.distribute_datasets_from_function(dataset_fn)` invokes `dataset_fn(input_context)` once per replica and wraps the results in a distributed-dataset object. This synthetic-method
+        body approximates: it allocates a stub `InputContext`, synchronously calls `dataset_fn` with it (single time, single context), and returns the callback's result directly &mdash; no distributed-dataset wrapper. The result is that the callback's body becomes analyzable, which is what wala/ML#113 requires
+        for typing the Datasets that flow out of `dataset_fn`. Modeling a distinct distributed-dataset wrapper type would be additional typing precision on the *return* value (the wrapper's element type tracks the inner dataset's element type); not modeled here because the issue's reported scenario only consumes
+        the wrapper as an opaque object, not as a typed dataset. The deprecated alias `experimental_distribute_datasets_from_function` is wired to the same class on each strategy. -->
+      <class name="distribute_datasets_from_function" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self dataset_fn">
+          <new def="ctx" class="Ltensorflow/distribute/InputContext" />
+          <constant name="num_pipelines" type="int" value="1" />
+          <constant name="pipeline_id" type="int" value="0" />
+          <putfield class="LRoot" field="num_input_pipelines" fieldType="LRoot" ref="ctx" value="num_pipelines" />
+          <putfield class="LRoot" field="input_pipeline_id" fieldType="LRoot" ref="ctx" value="pipeline_id" />
+          <new def="batch_fn" class="Ltensorflow/distribute/InputContext/get_per_replica_batch_size" />
+          <putfield class="LRoot" field="get_per_replica_batch_size" fieldType="LRoot" ref="ctx" value="batch_fn" />
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="arg1" arg1="ctx" numArgs="2" def="v" />
+          <return value="v" />
+        </method>
+      </class>
+    </package>
+    <package name="tensorflow/distribute">
+      <class name="InputContext" allocatable="true">
+        <!-- Modeled stub for the `tf.distribute.InputContext` instance passed to the user's `dataset_fn` callback by `distribute_datasets_from_function`. The real class exposes the integer attributes `num_input_pipelines` and `input_pipeline_id` plus the method `get_per_replica_batch_size(global_batch_size)`,
+          which divides the global batch size by the number of replicas. The fields are populated at allocation time in `distribute_datasets_from_function`'s synthetic body: integer constants for the two attributes (placeholders &mdash; the analyzer doesn't track per-replica shard counts statically) and a `get_per_replica_batch_size`
+          callable that returns its `global_batch_size` argument unchanged (an upper-bound approximation; precise per-replica division would require static replica-count modeling). None of these flow into tensor shape or dtype, so the placeholder values don't affect the typing of the Datasets `dataset_fn` produces
+          &mdash; the modeling exists so that reads of `input_context.num_input_pipelines` etc. don't surface as ⊤ at use sites in user code. -->
+      </class>
+    </package>
+    <package name="tensorflow/distribute/InputContext">
+      <class name="get_per_replica_batch_size" allocatable="true">
+        <!-- `input_context.get_per_replica_batch_size(global_batch_size)` returns `global_batch_size / num_replicas` at runtime. This synthetic body returns `global_batch_size` unchanged &mdash; an upper bound, used because we don't track replica counts statically and the caller's typing on the returned
+          int doesn't depend on the precise division (only that it's an int). -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self global_batch_size">
+          <return value="arg1" />
         </method>
       </class>
     </package>
