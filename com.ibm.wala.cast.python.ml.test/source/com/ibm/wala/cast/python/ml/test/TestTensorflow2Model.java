@@ -4959,6 +4959,176 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_extract_patches.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
+  /** Pure-passthrough generator test for {@code tf.math.tan} (wala/ML#422). */
+  @Test
+  public void testTan()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_tan.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.asin} (wala/ML#422). */
+  @Test
+  public void testAsin()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_asin.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.atan} (wala/ML#422). */
+  @Test
+  public void testAtan()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_atan.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.sinh} (wala/ML#422). */
+  @Test
+  public void testSinh()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_sinh.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.cosh} (wala/ML#422). */
+  @Test
+  public void testCosh()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_cosh.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.asinh} (wala/ML#422). */
+  @Test
+  public void testAsinh()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_asinh.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.acosh} (wala/ML#422). */
+  @Test
+  public void testAcosh()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_acosh.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.atanh} (wala/ML#422). */
+  @Test
+  public void testAtanh()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_atanh.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.log1p} (wala/ML#422). */
+  @Test
+  public void testLog1p()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_log1p.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.expm1} (wala/ML#422). */
+  @Test
+  public void testExpm1()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_expm1.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.round} (wala/ML#422). */
+  @Test
+  public void testRound()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_round.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.reciprocal} (wala/ML#422). */
+  @Test
+  public void testReciprocal()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_reciprocal.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.softplus} (wala/ML#422). */
+  @Test
+  public void testSoftplus()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_softplus.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.softsign} (wala/ML#422). */
+  @Test
+  public void testSoftsign()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_softsign.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.square} (wala/ML#422). */
+  @Test
+  public void testSquare()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_square.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.erf} (wala/ML#422). */
+  @Test
+  public void testErf()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_erf.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.erfc} (wala/ML#422). */
+  @Test
+  public void testErfc()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_erfc.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Elementwise binary generator test for {@code tf.math.atan2} (wala/ML#422). */
+  @Test
+  public void testAtan2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_atan2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Elementwise binary generator test for {@code tf.math.maximum} (wala/ML#422). */
+  @Test
+  public void testMaximum()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_maximum.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Elementwise binary generator test for {@code tf.math.minimum} (wala/ML#422). */
+  @Test
+  public void testMinimum()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_minimum.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Keyword-argument variant of {@link #testAtan2}: {@code tf.math.atan2(y=..., x=...)}. Exercises
+   * the kw-arg-resolution path on the {@code ElementWiseOperation} dispatch.
+   */
+  @Test
+  public void testAtan2Kw()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_atan2_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Keyword-argument variant of {@link #testMaximum}: {@code tf.math.maximum(x=..., y=...)}.
+   * Exercises the kw-arg-resolution path on the {@code ElementWiseOperation} dispatch.
+   */
+  @Test
+  public void testMaximumKw()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_maximum_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Keyword-argument variant of {@link #testMinimum}: {@code tf.math.minimum(x=..., y=...)}.
+   * Exercises the kw-arg-resolution path on the {@code ElementWiseOperation} dispatch.
+   */
+  @Test
+  public void testMinimumKw()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_minimum_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
   /**
    * Generator test for {@code tf.keras.datasets.fashion_mnist.load_data()}. Shapes and dtype are
    * identical to {@code mnist.load_data()}. The fixture passes all four unpacked arrays ({@code
