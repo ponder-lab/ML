@@ -12,6 +12,44 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class ClipByValue extends PassThroughUnaryTensorGenerator {
 
+  /**
+   * Parameter positions and keyword names for {@code tf.clip_by_value(t, clip_value_min,
+   * clip_value_max, name=None)}. Ordinals match the position in the XML's {@code paramNames} after
+   * the implicit {@code self} receiver.
+   */
+  protected enum Parameters {
+    /** Tensor being clipped; shape and dtype source for the result. */
+    T,
+
+    /** Lower bound for clipping; not consumed by this generator. */
+    CLIP_VALUE_MIN,
+
+    /** Upper bound for clipping; not consumed by this generator. */
+    CLIP_VALUE_MAX,
+
+    /** Optional debug name for the op; not consumed by this generator. */
+    NAME;
+
+    /**
+     * Lowercase keyword name used in arg-resolution helpers when the call site uses {@code
+     * keyword=value} syntax.
+     *
+     * @return The lowercased enum name (e.g. {@code "t"}).
+     */
+    public String getName() {
+      return name().toLowerCase();
+    }
+
+    /**
+     * Positional index of this parameter, excluding the implicit {@code self} receiver.
+     *
+     * @return The zero-based positional index.
+     */
+    public int getIndex() {
+      return ordinal();
+    }
+  }
+
   public ClipByValue(PointsToSetVariable source) {
     super(source);
   }
@@ -22,11 +60,11 @@ public class ClipByValue extends PassThroughUnaryTensorGenerator {
 
   @Override
   protected int getInputParameterPosition() {
-    return 0;
+    return Parameters.T.getIndex();
   }
 
   @Override
   protected String getInputParameterName() {
-    return "t";
+    return Parameters.T.getName();
   }
 }

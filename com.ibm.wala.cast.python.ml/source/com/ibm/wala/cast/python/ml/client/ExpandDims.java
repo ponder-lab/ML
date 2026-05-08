@@ -17,6 +17,41 @@ import java.util.Set;
  */
 public class ExpandDims extends PassThroughUnaryTensorGenerator {
 
+  /**
+   * Parameter positions and keyword names for {@code tf.expand_dims(input, axis, name=None)}.
+   * Ordinals match the position in the XML's {@code paramNames} after the implicit {@code self}
+   * receiver.
+   */
+  protected enum Parameters {
+    /** Tensor whose rank is being expanded; shape and dtype source. */
+    INPUT,
+
+    /** Position at which to insert the new length-1 dimension; not consumed by this generator. */
+    AXIS,
+
+    /** Optional debug name for the op; not consumed by this generator. */
+    NAME;
+
+    /**
+     * Lowercase keyword name used in arg-resolution helpers when the call site uses {@code
+     * keyword=value} syntax.
+     *
+     * @return The lowercased enum name (e.g. {@code "input"}).
+     */
+    public String getName() {
+      return name().toLowerCase();
+    }
+
+    /**
+     * Positional index of this parameter, excluding the implicit {@code self} receiver.
+     *
+     * @return The zero-based positional index.
+     */
+    public int getIndex() {
+      return ordinal();
+    }
+  }
+
   public ExpandDims(PointsToSetVariable source) {
     super(source);
   }
@@ -27,12 +62,12 @@ public class ExpandDims extends PassThroughUnaryTensorGenerator {
 
   @Override
   protected int getInputParameterPosition() {
-    return 0;
+    return Parameters.INPUT.getIndex();
   }
 
   @Override
   protected String getInputParameterName() {
-    return "input";
+    return Parameters.INPUT.getName();
   }
 
   /**

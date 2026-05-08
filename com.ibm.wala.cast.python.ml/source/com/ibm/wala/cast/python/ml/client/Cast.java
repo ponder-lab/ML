@@ -23,6 +23,40 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  */
 public class Cast extends PassThroughUnaryTensorGenerator {
 
+  /**
+   * Parameter positions and keyword names for {@code tf.cast(x, dtype, name=None)}. Ordinals match
+   * the position in the XML's {@code paramNames} after the implicit {@code self} receiver.
+   */
+  protected enum Parameters {
+    /** Tensor whose elements are cast; shape source. */
+    X,
+
+    /** Target dtype for the cast (e.g., {@code tf.int32}); dtype source. */
+    DTYPE,
+
+    /** Optional debug name for the op; not consumed by this generator. */
+    NAME;
+
+    /**
+     * Lowercase keyword name used in arg-resolution helpers when the call site uses {@code
+     * keyword=value} syntax.
+     *
+     * @return The lowercased enum name (e.g. {@code "x"}).
+     */
+    public String getName() {
+      return name().toLowerCase();
+    }
+
+    /**
+     * Positional index of this parameter, excluding the implicit {@code self} receiver.
+     *
+     * @return The zero-based positional index.
+     */
+    public int getIndex() {
+      return ordinal();
+    }
+  }
+
   public Cast(PointsToSetVariable source) {
     super(source);
   }
@@ -33,21 +67,21 @@ public class Cast extends PassThroughUnaryTensorGenerator {
 
   @Override
   protected int getInputParameterPosition() {
-    return 0; // x — shape source
+    return Parameters.X.getIndex();
   }
 
   @Override
   protected String getInputParameterName() {
-    return "x";
+    return Parameters.X.getName();
   }
 
   @Override
   protected int getDTypeParameterPosition() {
-    return 1; // dtype — the explicit cast target
+    return Parameters.DTYPE.getIndex();
   }
 
   @Override
   protected String getDTypeParameterName() {
-    return "dtype";
+    return Parameters.DTYPE.getName();
   }
 }

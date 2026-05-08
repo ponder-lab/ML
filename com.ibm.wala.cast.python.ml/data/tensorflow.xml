@@ -1939,7 +1939,8 @@
         </method>
       </class>
       <class name="relu" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/relu. Direct `<new>+<return>` paired with the dedicated `Relu` generator (full-passthrough on shape and dtype). -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/relu. Direct `<new>+<return>` intended to be paired with the dedicated `Relu` generator (full-passthrough on shape and dtype). CURRENT LIMITATION: the dispatch is bypassed by the retained `tf.nn.relu` `pass_through` alias (kept
+          because removing it risks breaking chained consumers; same integration shape as `cast`, see wala/ML#509). Tracked together with wala/ML#481. -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self features name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />

@@ -4425,12 +4425,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Expected: 0 tensor parameters, 3 tensor variables. The parameter is a list of tensors, so the
-   * parameter-count stays 0 until <a href="https://github.com/wala/ML/issues/136">wala/ML#136</a>
-   * (losing tensors in lists) lands. The 3 tensor variables are: {@code tf.expand_dims(g, 0)}'s
-   * dedicated {@code <new>} allocation, the post-allocation receiver, and {@code tf.concat(axis=0,
-   * values=grads)} flowing through <a
+   * parameter-count stays 0 (see TODO below). The 3 tensor variables are: {@code tf.expand_dims(g,
+   * 0)}'s dedicated {@code <new>} allocation, the post-allocation receiver, and {@code
+   * tf.concat(axis=0, values=grads)} flowing through <a
    * href="https://github.com/wala/ML/issues/196">wala/ML#196</a>'s {@link
    * com.ibm.wala.cast.python.ml.client.ReadDataFallback}.
+   *
+   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/136">wala/ML#136</a> (losing tensors
+   * in lists) lands, the parameter (a list of tensors) should classify and the count should rise
+   * from 0 to 1.
    */
   @Test
   public void testMultiGPUTraining2()
@@ -5401,11 +5404,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * it would unblock the {@code Cast} override here (so this assertion would tighten to {@code
    * Set.of(TENSOR_3_INT32)}), but the dedicated {@code <new>+<return>} doesn't propagate the cast
    * result's tensor classification through to chained consumers (e.g., {@code reshape} in {@code
-   * TestNeuroImageExamples.testEx1CG}). The pass_through alias is sound for those chains. Resolving
-   * the integration is tracked separately.
+   * TestNeuroImageExamples.testEx1CG}). The pass_through alias is sound for those chains.
    *
-   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/481">wala/ML#481</a> is fixed, narrow
-   * the assertion to {@code Set.of(TENSOR_3_INT32)} (precise cast-target dtype).
+   * <p>TODO: Once the dedicated-allocation chained-consumer integration tracked by <a
+   * href="https://github.com/wala/ML/issues/509">wala/ML#509</a> lands (which lets us safely drop
+   * the {@code pass_through} alias and let the {@code Cast} override fire &mdash; closing
+   * wala/ML#481's {@code Cast} arm), replace the assertion with {@code Set.of(TENSOR_3_INT32)} (the
+   * precise cast-target dtype, disjoint from the currently-asserted input dtype).
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
