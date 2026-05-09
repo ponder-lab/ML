@@ -8599,6 +8599,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_poisson4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_7_5_2_FLOAT32)));
   }
 
+  /**
+   * Generator-dispatch test for {@code tf.sparse.from_dense(tensor, name=None)}. The fixture uses
+   * the keyword form {@code from_dense(tensor=x)} so that arg-resolution drives through {@link
+   * com.ibm.wala.cast.python.ml.client.SparseFromDense}'s {@code Parameters.TENSOR.getName()}
+   * keyword-name lookup, exercising the {@code Locale.ROOT} line that wala/ML#510 flagged as
+   * uncovered. Output shape and dtype both inherit from {@code tensor}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testSparseFromDense()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_sparse_from_dense.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
   @Test
   public void testSparseEye() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_sparse_eye.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_5_FLOAT32)));
