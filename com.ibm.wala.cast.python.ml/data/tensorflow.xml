@@ -717,6 +717,9 @@
         <new def="sparse_add" class="Ltensorflow/functions/sparse_add" />
         <putfield class="LRoot" field="add" fieldType="LRoot" ref="sparse" value="sparse_add" />
         <putfield class="LRoot" field="sparse_add" fieldType="LRoot" ref="sparse_ops" value="sparse_add" />
+        <new def="sparse_from_dense" class="Ltensorflow/functions/sparse_from_dense" />
+        <putfield class="LRoot" field="from_dense" fieldType="LRoot" ref="sparse" value="sparse_from_dense" />
+        <putfield class="LRoot" field="sparse_from_dense" fieldType="LRoot" ref="sparse_ops" value="sparse_from_dense" />
         <new def="convert_to_tensor" class="Ltensorflow/functions/convert_to_tensor" />
         <putfield class="LRoot" field="convert_to_tensor" fieldType="LRoot" ref="x" value="convert_to_tensor" />
         <putfield class="LRoot" field="convert_to_tensor" fieldType="LRoot" ref="ops" value="convert_to_tensor" />
@@ -1690,6 +1693,13 @@
       <class name="sparse_add" allocatable="true">
         <!-- https://www.tensorflow.org/api_docs/python/tf/sparse/add. Fresh allocation, not pass-through; shape / dtype inference lives in the `SparseAdd` generator. -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self a b threshold name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <return value="res" />
+        </method>
+      </class>
+      <class name="sparse_from_dense" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/sparse/from_dense. Fresh allocation, not pass-through; shape and dtype inheritance from the `tensor` argument lives in the `SparseFromDense` generator. -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self tensor name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
         </method>
