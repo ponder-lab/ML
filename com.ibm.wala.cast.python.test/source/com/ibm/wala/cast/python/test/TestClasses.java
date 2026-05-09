@@ -167,7 +167,7 @@ public class TestClasses extends TestJythonCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph callGraph = this.process("classes4_client.py", "classes4.py");
 
-    verifyGraphAssertions(callGraph, assertionsClasses4);
+    verifyGraphAssertions(callGraph, graphAssertions(assertionsClasses4));
 
     Collection<CGNode> nodes = this.getNodes(callGraph, "script classes4_client.py/f");
     assertEquals(1, nodes.size());
