@@ -5,6 +5,7 @@ import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -39,7 +40,7 @@ public class ExpandDims extends PassThroughUnaryTensorGenerator {
      * @return The lowercased enum name (e.g. {@code "input"}).
      */
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
 
     /**

@@ -6,6 +6,7 @@ import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.Locale;
 import java.util.logging.Logger;
 
 /**
@@ -26,7 +27,7 @@ public class RaggedFromNestedRowSplits extends RaggedFromNestedRowLengths {
     VALIDATE;
 
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
 
     public int getIndex() {

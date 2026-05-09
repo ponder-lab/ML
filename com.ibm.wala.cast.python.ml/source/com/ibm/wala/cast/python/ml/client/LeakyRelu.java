@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+import java.util.Locale;
 
 /**
  * Generator for {@code tf.nn.leaky_relu(features, alpha=0.2, name=None)}. Pure passthrough — output
@@ -34,7 +35,7 @@ public class LeakyRelu extends PassThroughUnaryTensorGenerator {
      * @return The lowercased enum name (e.g. {@code "features"}).
      */
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
 
     /**

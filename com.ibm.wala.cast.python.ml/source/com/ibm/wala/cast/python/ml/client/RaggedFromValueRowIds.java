@@ -24,6 +24,7 @@ import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -46,7 +47,7 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
     VALIDATE;
 
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
 
     public int getIndex() {

@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+import java.util.Locale;
 
 /**
  * Generator for {@code tf.math.softsign}. Pure passthrough — output shape and dtype both inherit
@@ -31,7 +32,7 @@ public class Softsign extends PassThroughUnaryTensorGenerator {
      * @return The lowercased enum name (e.g. {@code "features"}).
      */
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
 
     /**

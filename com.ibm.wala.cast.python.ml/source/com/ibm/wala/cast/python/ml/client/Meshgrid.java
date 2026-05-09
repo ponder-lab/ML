@@ -11,6 +11,7 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -55,7 +56,7 @@ public class Meshgrid extends TensorGenerator implements TupleElementProvider {
      * @return The lowercased enum name (e.g. {@code "args"}).
      */
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
 
     /**

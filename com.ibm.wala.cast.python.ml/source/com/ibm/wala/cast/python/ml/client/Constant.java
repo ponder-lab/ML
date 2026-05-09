@@ -8,6 +8,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -26,7 +27,7 @@ public class Constant extends TensorGenerator {
     VERIFY_SHAPE;
 
     public String getName() {
-      return this.name().toLowerCase();
+      return this.name().toLowerCase(Locale.ROOT);
     }
 
     public int getIndex() {

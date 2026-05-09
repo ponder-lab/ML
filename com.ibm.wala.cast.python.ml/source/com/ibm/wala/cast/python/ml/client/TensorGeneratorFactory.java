@@ -1160,13 +1160,17 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, FASHION_MNIST_Y_TEST))
       return new MnistInputData(source, MnistInputData.Y_TEST_SHAPE);
     else if (isType(calledFunction, CIFAR100_X_TRAIN))
-      return new Cifar10InputData(source, Cifar10InputData.X_TRAIN_SHAPE);
+      return new Cifar100InputData(
+          source, Cifar100InputData.X_TRAIN_SHAPE, Cifar100InputData.X_DTYPES);
     else if (isType(calledFunction, CIFAR100_Y_TRAIN))
-      return new Cifar10InputData(source, Cifar10InputData.Y_TRAIN_SHAPE);
+      return new Cifar100InputData(
+          source, Cifar100InputData.Y_TRAIN_SHAPE, Cifar100InputData.Y_DTYPES);
     else if (isType(calledFunction, CIFAR100_X_TEST))
-      return new Cifar10InputData(source, Cifar10InputData.X_TEST_SHAPE);
+      return new Cifar100InputData(
+          source, Cifar100InputData.X_TEST_SHAPE, Cifar100InputData.X_DTYPES);
     else if (isType(calledFunction, CIFAR100_Y_TEST))
-      return new Cifar10InputData(source, Cifar10InputData.Y_TEST_SHAPE);
+      return new Cifar100InputData(
+          source, Cifar100InputData.Y_TEST_SHAPE, Cifar100InputData.Y_DTYPES);
     else if (isType(calledFunction, REUTERS_X_TRAIN))
       return new ReutersInputData(
           source, ReutersInputData.X_TRAIN_SHAPE, ReutersInputData.X_DTYPES);
