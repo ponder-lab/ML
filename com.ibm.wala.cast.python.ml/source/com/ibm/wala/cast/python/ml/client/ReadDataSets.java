@@ -13,6 +13,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /** A representation of the `read_data_sets()` function in TensorFlow. */
@@ -31,7 +32,7 @@ public class ReadDataSets extends Ones {
     SOURCE_URL;
 
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
   }
 

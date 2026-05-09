@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+import java.util.Locale;
 
 /**
  * Generator for {@code tf.clip_by_value(t, clip_value_min, clip_value_max, name=None)}. Pure
@@ -37,7 +38,7 @@ public class ClipByValue extends PassThroughUnaryTensorGenerator {
      * @return The lowercased enum name (e.g. {@code "t"}).
      */
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
 
     /**
