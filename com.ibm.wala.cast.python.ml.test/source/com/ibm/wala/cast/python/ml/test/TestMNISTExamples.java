@@ -10,6 +10,7 @@ import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
+import com.ibm.wala.cast.util.test.TestCallGraphShape.GraphAssertion;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
@@ -29,6 +30,7 @@ import com.ibm.wala.util.CancelException;
 import com.ibm.wala.util.collections.HashSetFactory;
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.util.List;
 import java.util.Set;
 import org.junit.Test;
 
@@ -37,13 +39,11 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
   private static final String Ex1URL =
       "https://raw.githubusercontent.com/aymericdamien/TensorFlow-Examples/dd2e6dcd9603d5de008d8c766453162d0204affa/examples/3_NeuralNetworks/convolutional_network.py";
 
-  protected static final Object[][] assertionsEx1 =
-      new Object[][] {
-        new Object[] {
-          "script convolutional_network.py/model_fn",
-          new String[] {"script convolutional_network.py/conv_net"}
-        }
-      };
+  protected static final List<GraphAssertion> assertionsEx1 =
+      List.of(
+          new GraphAssertion(
+              "script convolutional_network.py/model_fn",
+              new String[] {"script convolutional_network.py/conv_net"}));
 
   @Test
   public void testEx1CG()

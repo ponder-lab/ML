@@ -450,7 +450,13 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
           context.addScopedEntity(
               null,
               new AbstractFieldEntity(
-                  lhs.getText(), Collections.emptySet(), false, context.entity()) {
+                  lhs.getText(),
+                  PythonCAstToIRTranslator.Any,
+                  Collections.emptySet(),
+                  false,
+                  context.entity(),
+                  makePosition(lhs),
+                  makePosition(lhs)) {
                 @Override
                 public CAstNode getAST() {
                   return v;
