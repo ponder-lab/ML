@@ -2,23 +2,23 @@ package com.ibm.wala.cast.python.test;
 
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.util.test.TestCallGraphShape.GraphAssertion;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
+import java.util.List;
 import org.junit.Test;
 
 public class TestAssign extends TestJythonCallGraphShape {
 
-  protected static final Object[][] assertionsAssign1 =
-      new Object[][] {
-        new Object[] {ROOT, new String[] {"script assign1.py"}},
-        new Object[] {
-          "script assign1.py", new String[] {"script assign1.py/f", "script assign1.py/g"}
-        },
-        new Object[] {"script assign1.py/f", new String[] {"script assign1.py/a"}},
-        new Object[] {"script assign1.py/g", new String[] {"script assign1.py/a"}}
-      };
+  protected static final List<GraphAssertion> assertionsAssign1 =
+      List.of(
+          new GraphAssertion(ROOT, new String[] {"script assign1.py"}),
+          new GraphAssertion(
+              "script assign1.py", new String[] {"script assign1.py/f", "script assign1.py/g"}),
+          new GraphAssertion("script assign1.py/f", new String[] {"script assign1.py/a"}),
+          new GraphAssertion("script assign1.py/g", new String[] {"script assign1.py/a"}));
 
   @Test
   public void testAssign1()
@@ -27,16 +27,16 @@ public class TestAssign extends TestJythonCallGraphShape {
     verifyGraphAssertions(CG, assertionsAssign1);
   }
 
-  protected static final Object[][] assertionsAssign2 =
-      new Object[][] {
-        new Object[] {ROOT, new String[] {"script assign2.py"}},
-        new Object[] {
-          "script assign2.py",
-          new String[] {"script assign2.py/f", "script assign2.py/ff", "script assign2.py/fff"}
-        },
-        new Object[] {"script assign2.py/ff", new String[] {"script assign2.py/f"}},
-        new Object[] {"script assign2.py/fff", new String[] {"script assign2.py/ff"}}
-      };
+  protected static final List<GraphAssertion> assertionsAssign2 =
+      List.of(
+          new GraphAssertion(ROOT, new String[] {"script assign2.py"}),
+          new GraphAssertion(
+              "script assign2.py",
+              new String[] {
+                "script assign2.py/f", "script assign2.py/ff", "script assign2.py/fff"
+              }),
+          new GraphAssertion("script assign2.py/ff", new String[] {"script assign2.py/f"}),
+          new GraphAssertion("script assign2.py/fff", new String[] {"script assign2.py/ff"}));
 
   @Test
   public void testAssign2()

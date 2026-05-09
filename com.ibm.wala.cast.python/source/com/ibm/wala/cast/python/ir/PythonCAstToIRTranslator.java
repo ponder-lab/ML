@@ -204,7 +204,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
       AbstractCFG<SSAInstruction, ? extends IBasicBlock<SSAInstruction>> cfg,
       SymbolTable symtab,
       boolean hasCatchBlock,
-      Map<IBasicBlock<SSAInstruction>, TypeReference[]> catchTypes,
+      Map<IBasicBlock<SSAInstruction>, Set<TypeReference>> catchTypes,
       boolean hasMonitorOp,
       AstLexicalInformation lexicalInfo,
       DebuggingInformation debugInfo) {
@@ -297,7 +297,12 @@ public class PythonCAstToIRTranslator extends AstTranslator {
 
   @Override
   public void doArrayWrite(
-      WalkContext context, int arrayValue, CAstNode arrayRef, int[] dimValues, int rval) {
+      WalkContext context,
+      int arrayValue,
+      CAstNode arrayRef,
+      CAstNode rvalNode,
+      int[] dimValues,
+      int rval) {
     assert dimValues.length == 1;
     context
         .cfg()
@@ -335,7 +340,12 @@ public class PythonCAstToIRTranslator extends AstTranslator {
 
   @Override
   protected void doFieldWrite(
-      WalkContext context, int receiver, CAstNode elt, CAstNode parent, int rval) {
+      WalkContext context,
+      int receiver,
+      CAstNode elt,
+      CAstNode parent,
+      CAstNode rvalNode,
+      int rval) {
     //	    if (elt.getKind() == CAstNode.CONSTANT && elt.getValue() instanceof String) {
     //			FieldReference f = FieldReference.findOrCreate(PythonTypes.Root,
     // Atom.findOrCreateUnicodeAtom((String)elt.getValue()), PythonTypes.Root);
