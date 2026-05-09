@@ -444,6 +444,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_5_INT32 =
       new TensorType(INT_32, asList(new NumericDim(5)));
 
+  private static final TensorType TENSOR_5_INT64 =
+      new TensorType(INT_64, asList(new NumericDim(5)));
+
   private static final TensorType TENSOR_4_INT32 =
       new TensorType(INT_32, asList(new NumericDim(4)));
 
@@ -5824,6 +5827,57 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testRange5()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_range5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_INT32)));
+  }
+
+  /**
+   * Regression test for wala/ML#492. When an explicit {@code dtype=} keyword is supplied to {@code
+   * tf.range}, the analyzer must honor it instead of defaulting to {@code int32}. {@code
+   * tf.range(0, 5, dtype=tf.float32)} should infer {@code float32}.
+   */
+  @Test
+  public void testRangeDType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_range_dtype.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testRangeDType()} — explicit {@code dtype=tf.int64} should be honored (not
+   * collapsed to the {@code int32} default). Pinpoints that the dtype-arg path resolves arbitrary
+   * {@link com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType} values, not just {@code
+   * float32}.
+   */
+  @Test
+  public void testRangeDTypeInt64()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_range_dtype_int64.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT64)));
+  }
+
+  /**
+   * Companion to {@link #testRangeDType()} — 1-positional form {@code tf.range(limit, dtype=...)}.
+   * Verifies that the dtype-arg dispatch fires regardless of how many positional args are present
+   * (the {@link Range} class's call-string-based shape resolution is independent of dtype lookup).
+   */
+  @Test
+  public void testRangeDType1Arg()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_range_dtype_1arg.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_FLOAT32)));
+  }
+
+  /**
+   * Documents a remaining limitation of {@link Range}: when no explicit {@code dtype} is supplied
+   * but the {@code start}/{@code limit}/{@code delta} arguments are {@code float}-typed, TF
+   * promotes the output to {@code float32} at runtime. The analyzer currently returns the
+   * unconditional {@code int32} default from {@code Range.getDefaultDTypes}, which this test pins
+   * down. Tracked by <a href="https://github.com/wala/ML/issues/492">wala/ML#492</a>.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/492">wala/ML#492</a>): when {@link
+   * Range#getDefaultDTypes} learns to derive its result from the start/limit/delta arg dtypes, flip
+   * the expected type to {@code TENSOR_5_FLOAT32}.
+   */
+  @Test
+  public void testRangeFloatArgs()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_range_float_args.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
   @Test
