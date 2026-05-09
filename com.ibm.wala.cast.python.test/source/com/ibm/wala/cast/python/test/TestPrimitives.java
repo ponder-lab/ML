@@ -22,6 +22,6 @@ public class TestPrimitives extends TestJythonCallGraphShape {
     CAstCallGraphUtil.AVOID_DUMP.set(false);
     CAstCallGraphUtil.dumpCG(
         (SSAContextInterpreter) builder.getContextInterpreter(), builder.getPointerAnalysis(), CG);
-    // verifyGraphAssertions(CG, graphAssertions(assertionsCalls1));
+    // verifyGraphAssertions(CG, assertionsCalls1);
   }
 }

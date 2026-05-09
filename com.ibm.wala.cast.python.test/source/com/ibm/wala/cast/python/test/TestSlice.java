@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.test;
 
 import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
+import com.ibm.wala.cast.util.test.TestCallGraphShape.GraphAssertion;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.SSAContextInterpreter;
@@ -15,6 +16,7 @@ import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.List;
 import java.util.function.Function;
 import org.junit.Test;
 
@@ -63,20 +65,18 @@ public class TestSlice extends TestJythonCallGraphShape {
     assert sliceImport != null;
   }
 
-  protected static final Object[][] assertionsSlice2 =
-      new Object[][] {
-        new Object[] {ROOT, new String[] {"script slice2.py"}},
-        new Object[] {
-          "script slice2.py",
-          new String[] {
-            "wala/builtin/slice",
-            "script slice2.py/a",
-            "script slice2.py/b",
-            "script slice2.py/c",
-            "script slice2.py/d"
-          }
-        }
-      };
+  protected static final List<GraphAssertion> assertionsSlice2 =
+      List.of(
+          new GraphAssertion(ROOT, new String[] {"script slice2.py"}),
+          new GraphAssertion(
+              "script slice2.py",
+              new String[] {
+                "wala/builtin/slice",
+                "script slice2.py/a",
+                "script slice2.py/b",
+                "script slice2.py/c",
+                "script slice2.py/d"
+              }));
 
   @Test
   public void testSlice2()
@@ -88,7 +88,7 @@ public class TestSlice extends TestJythonCallGraphShape {
     CAstCallGraphUtil.AVOID_DUMP.set(false);
     CAstCallGraphUtil.dumpCG(
         (SSAContextInterpreter) builder.getContextInterpreter(), builder.getPointerAnalysis(), CG);
-    verifyGraphAssertions(CG, graphAssertions(assertionsSlice2));
+    verifyGraphAssertions(CG, assertionsSlice2);
 
     Collection<CGNode> nodes = getNodes(CG, "script slice2.py");
     assert nodes.size() == 1;

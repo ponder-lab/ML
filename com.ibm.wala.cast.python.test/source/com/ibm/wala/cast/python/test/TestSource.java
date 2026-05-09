@@ -16,6 +16,6 @@ public class TestSource extends TestJythonCallGraphShape {
         (n) -> {
           System.err.println(n.getIR());
         });
-    // verifyGraphAssertions(CG, graphAssertions(assertionsCalls1));
+    // verifyGraphAssertions(CG, assertionsCalls1);
   }
 }

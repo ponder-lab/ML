@@ -1,13 +1,11 @@
 package com.ibm.wala.cast.python.test;
 
 import static java.util.Collections.emptyList;
-import static java.util.stream.Collectors.toList;
 
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.cast.util.test.TestCallGraphShape;
-import com.ibm.wala.cast.util.test.TestCallGraphShape.GraphAssertion;
 import com.ibm.wala.classLoader.Module;
 import com.ibm.wala.classLoader.SourceURLModule;
 import com.ibm.wala.core.util.strings.Atom;
@@ -26,7 +24,6 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -35,20 +32,6 @@ public abstract class TestPythonCallGraphShape extends TestCallGraphShape {
 
   public TestPythonCallGraphShape() {
     super();
-  }
-
-  /**
-   * Convert legacy {@code Object[][]} call-graph-assertion fixtures (each row a {@code [Object
-   * source, String[] targets]} pair) into the {@link GraphAssertion} list shape that upstream WALA
-   * 1.7.0+ requires for {@link #verifyGraphAssertions}. Adapter for wala/ML#466.
-   *
-   * @param data Legacy fixture array.
-   * @return Equivalent list of {@link GraphAssertion} entries.
-   */
-  protected static List<GraphAssertion> graphAssertions(Object[][] data) {
-    return Arrays.stream(data)
-        .map(row -> new GraphAssertion(row[0], (String[]) row[1]))
-        .collect(toList());
   }
 
   @Override
