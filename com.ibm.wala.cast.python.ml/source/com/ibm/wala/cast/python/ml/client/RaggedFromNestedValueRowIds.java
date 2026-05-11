@@ -120,7 +120,14 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
                   Object val = ((ConstantKey<?>) valKey).getValue();
                   if (val instanceof Integer) nrowsArgs.add(((Integer) val).longValue());
                   else if (val instanceof Long) nrowsArgs.add((Long) val);
-                  else if (val instanceof String) nrowsArgs.add(Long.parseLong((String) val));
+                  else if (val instanceof String) {
+                    try {
+                      nrowsArgs.add(Long.parseLong((String) val));
+                    } catch (NumberFormatException e) {
+                      throw new IllegalStateException(
+                          "nested_nrows element \"" + val + "\" is not a long.", e);
+                    }
+                  }
                 }
               }
             }
@@ -196,7 +203,17 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
                                 long lVal = -1;
                                 if (val instanceof Integer) lVal = ((Integer) val).longValue();
                                 else if (val instanceof Long) lVal = (Long) val;
-                                else if (val instanceof String) lVal = Long.parseLong((String) val);
+                                else if (val instanceof String) {
+                                  try {
+                                    lVal = Long.parseLong((String) val);
+                                  } catch (NumberFormatException e) {
+                                    throw new IllegalStateException(
+                                        "nested_value_rowids inner element \""
+                                            + val
+                                            + "\" is not a long.",
+                                        e);
+                                  }
+                                }
 
                                 if (lVal >= 0) {
                                   if (max == null || lVal > max) max = lVal;

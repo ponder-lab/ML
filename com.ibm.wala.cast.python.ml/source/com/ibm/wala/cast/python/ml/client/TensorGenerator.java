@@ -489,7 +489,14 @@ public abstract class TensorGenerator {
     Object constantKeyValue = constantKey.getValue();
 
     if (constantKeyValue instanceof Integer) return (Integer) constantKeyValue;
-    else if (constantKeyValue instanceof String) return Integer.parseInt((String) constantKeyValue);
+    if (constantKeyValue instanceof String) {
+      try {
+        return Integer.parseInt((String) constantKeyValue);
+      } catch (NumberFormatException e) {
+        throw new IllegalStateException(
+            "Catalog field index \"" + constantKeyValue + "\" is not an integer.", e);
+      }
+    }
 
     return null;
   }
