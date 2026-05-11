@@ -493,7 +493,8 @@ public abstract class TensorGenerator {
       try {
         return Integer.parseInt((String) constantKeyValue);
       } catch (NumberFormatException e) {
-        return null;
+        throw new IllegalStateException(
+            "Catalog field index \"" + constantKeyValue + "\" is not an integer.", e);
       }
     }
 

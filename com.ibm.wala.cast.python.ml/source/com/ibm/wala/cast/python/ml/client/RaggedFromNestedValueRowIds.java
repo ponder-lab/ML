@@ -124,7 +124,8 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
                     try {
                       nrowsArgs.add(Long.parseLong((String) val));
                     } catch (NumberFormatException e) {
-                      // Skip non-numeric value; preserves lattice ⊤ vs. crashing.
+                      throw new IllegalStateException(
+                          "nested_nrows element \"" + val + "\" is not a long.", e);
                     }
                   }
                 }
@@ -206,7 +207,11 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
                                   try {
                                     lVal = Long.parseLong((String) val);
                                   } catch (NumberFormatException e) {
-                                    // Skip non-numeric value; lVal stays -1 and is filtered below.
+                                    throw new IllegalStateException(
+                                        "nested_value_rowids inner element \""
+                                            + val
+                                            + "\" is not a long.",
+                                        e);
                                   }
                                 }
 
