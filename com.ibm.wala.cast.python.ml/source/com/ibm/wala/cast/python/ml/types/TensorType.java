@@ -33,6 +33,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
@@ -506,7 +507,7 @@ public class TensorType implements Iterable<Dimension<?>> {
    */
   public DType getDType() {
     try {
-      return DType.valueOf(cellType.toUpperCase());
+      return DType.valueOf(cellType.toUpperCase(Locale.ROOT));
     } catch (IllegalArgumentException e) {
       throw new IllegalStateException(
           "Cell type \"" + cellType + "\" does not map to a known DType.", e);
