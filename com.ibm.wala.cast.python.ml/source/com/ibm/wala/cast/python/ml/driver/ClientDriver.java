@@ -307,6 +307,23 @@ public class ClientDriver implements LanguageClient {
               + args.length
               + " arg(s).");
     }
+    for (int i = 1; i < args.length; i += 2) {
+      try {
+        Integer.parseInt(args[i]);
+        Integer.parseInt(args[i + 1]);
+      } catch (NumberFormatException e) {
+        throw new IllegalArgumentException(
+            "Argv positions must be numeric; got args["
+                + i
+                + "]="
+                + args[i]
+                + ", args["
+                + (i + 1)
+                + "]="
+                + args[i + 1],
+            e);
+      }
+    }
     ClientDriver client = new ClientDriver();
     client.args = args;
     client.process = process;
