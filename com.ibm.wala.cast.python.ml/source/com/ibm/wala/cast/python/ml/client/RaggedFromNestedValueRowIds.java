@@ -120,7 +120,13 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
                   Object val = ((ConstantKey<?>) valKey).getValue();
                   if (val instanceof Integer) nrowsArgs.add(((Integer) val).longValue());
                   else if (val instanceof Long) nrowsArgs.add((Long) val);
-                  else if (val instanceof String) nrowsArgs.add(Long.parseLong((String) val));
+                  else if (val instanceof String) {
+                    try {
+                      nrowsArgs.add(Long.parseLong((String) val));
+                    } catch (NumberFormatException e) {
+                      // Skip non-numeric value; preserves lattice ⊤ vs. crashing.
+                    }
+                  }
                 }
               }
             }
@@ -196,7 +202,13 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
                                 long lVal = -1;
                                 if (val instanceof Integer) lVal = ((Integer) val).longValue();
                                 else if (val instanceof Long) lVal = (Long) val;
-                                else if (val instanceof String) lVal = Long.parseLong((String) val);
+                                else if (val instanceof String) {
+                                  try {
+                                    lVal = Long.parseLong((String) val);
+                                  } catch (NumberFormatException e) {
+                                    // Skip non-numeric value; lVal stays -1 and is filtered below.
+                                  }
+                                }
 
                                 if (lVal >= 0) {
                                   if (max == null || lVal > max) max = lVal;
