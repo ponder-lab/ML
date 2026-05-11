@@ -63,7 +63,6 @@
         <includes>
           <include>META-INF/**</include>
           <include>build.properties</include>
-          <include>logging.properties</include>
         </includes>
       </resource>
     </resources>
