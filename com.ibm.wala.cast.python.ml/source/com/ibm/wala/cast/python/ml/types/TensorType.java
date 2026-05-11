@@ -16,6 +16,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.ibm.wala.cast.loader.AstMethod;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
 import com.ibm.wala.cast.python.util.PythonInterpreter;
@@ -32,6 +33,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
@@ -488,5 +490,31 @@ public class TensorType implements Iterable<Dimension<?>> {
    */
   public String getCellType() {
     return cellType;
+  }
+
+  /**
+   * Returns the dtype of the tensor as a typed {@link DType} enum value.
+   *
+   * <p>The cell type is stored as a lowercase string (e.g., {@code "float32"}) for the LSP wire
+   * format. This accessor inverts that pattern using {@link Locale#ROOT} for the uppercase, so the
+   * lookup is locale-stable. Consumers can branch on the dtype as a typed value instead of doing
+   * cast-and-uppercase boilerplate inline.
+   *
+   * <p>Construction sites currently build the cell type via {@code dtype.name().toLowerCase()} (no
+   * explicit locale), which is locale-sensitive — sweeping them to {@code toLowerCase(Locale.ROOT)}
+   * is tracked at <a href="https://github.com/wala/ML/issues/521">wala/ML#521</a>.
+   *
+   * @return The dtype enum value corresponding to the stored cell type.
+   * @throws IllegalStateException if the stored cell type doesn't map to a {@link DType} constant.
+   *     Construction sites build the cell type from {@code dtype.name()}, so an unparseable value
+   *     means an internal invariant was violated upstream.
+   */
+  public DType getDType() {
+    try {
+      return DType.valueOf(cellType.toUpperCase(Locale.ROOT));
+    } catch (IllegalArgumentException e) {
+      throw new IllegalStateException(
+          "Cell type \"" + cellType + "\" does not map to a known DType.", e);
+    }
   }
 }

@@ -62,8 +62,6 @@ public class ReadDataSets extends Ones {
 
   @Override
   protected EnumSet<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    String cellType = MNIST_INPUT.getCellType().toUpperCase();
-    DType dType = DType.valueOf(cellType);
-    return EnumSet.of(dType);
+    return EnumSet.of(MNIST_INPUT.getDType());
   }
 }
