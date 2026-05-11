@@ -6,6 +6,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT64;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.STRING;
 import static java.util.Collections.emptyList;
+import static java.util.Locale.ROOT;
 import static org.junit.Assert.*;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -39,13 +40,13 @@ public class TensorFlowTypesTest {
 
   @Test
   public void testTensorTypeGetDTypeRoundtripFloat32() {
-    TensorType t = new TensorType(FLOAT32.name().toLowerCase(), emptyList());
+    TensorType t = new TensorType(FLOAT32.name().toLowerCase(ROOT), emptyList());
     assertEquals(FLOAT32, t.getDType());
   }
 
   @Test
   public void testTensorTypeGetDTypeRoundtripInt64() {
-    TensorType t = new TensorType(INT64.name().toLowerCase(), emptyList());
+    TensorType t = new TensorType(INT64.name().toLowerCase(ROOT), emptyList());
     assertEquals(INT64, t.getDType());
   }
 
@@ -58,7 +59,7 @@ public class TensorFlowTypesTest {
   @Test
   public void testTensorTypeGetDTypeUnknownEnumValueRoundtrips() {
     // DType.UNKNOWN is a real enum value; its cellType "unknown" must round-trip too.
-    TensorType t = new TensorType(DType.UNKNOWN.name().toLowerCase(), emptyList());
+    TensorType t = new TensorType(DType.UNKNOWN.name().toLowerCase(ROOT), emptyList());
     assertEquals(DType.UNKNOWN, t.getDType());
   }
 }
