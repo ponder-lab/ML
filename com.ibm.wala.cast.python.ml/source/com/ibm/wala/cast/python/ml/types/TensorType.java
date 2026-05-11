@@ -16,6 +16,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.ibm.wala.cast.loader.AstMethod;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
 import com.ibm.wala.cast.python.util.PythonInterpreter;
@@ -488,5 +489,27 @@ public class TensorType implements Iterable<Dimension<?>> {
    */
   public String getCellType() {
     return cellType;
+  }
+
+  /**
+   * Returns the dtype of the tensor as a typed {@link DType} enum value.
+   *
+   * <p>The cell type is stored as a lowercase string (e.g., {@code "float32"}) for the LSP wire
+   * format. This accessor inverts the {@code DType.name().toLowerCase()} construction pattern used
+   * at every {@link TensorType} construction site, so consumers can branch on the dtype as a typed
+   * value instead of doing cast-and-uppercase boilerplate inline.
+   *
+   * @return The dtype enum value corresponding to the stored cell type.
+   * @throws IllegalStateException if the stored cell type doesn't map to a {@link DType} constant.
+   *     Every construction site builds the cell type from {@code DType.name().toLowerCase()}, so an
+   *     unparseable value means an internal invariant was violated upstream.
+   */
+  public DType getDType() {
+    try {
+      return DType.valueOf(cellType.toUpperCase());
+    } catch (IllegalArgumentException e) {
+      throw new IllegalStateException(
+          "Cell type \"" + cellType + "\" does not map to a known DType.", e);
+    }
   }
 }
