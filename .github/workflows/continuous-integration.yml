@@ -10,6 +10,12 @@ on:
     # `merge_group:` be the sole trigger for queue-branch pushes.
     branches-ignore:
       - 'gh-readonly-queue/**'
+    # When only `branches`/`branches-ignore` is set on `push:`, GitHub Actions silently
+    # filters out tag-push events too. The release-deploy gate at the bottom of this
+    # workflow depends on `refs/tags/0.*` pushes firing the workflow, so explicitly
+    # allow all tags here.
+    tags:
+      - '**'
   pull_request:
   merge_group:
 concurrency:
