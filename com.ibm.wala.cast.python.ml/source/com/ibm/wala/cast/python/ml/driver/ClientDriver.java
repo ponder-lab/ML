@@ -301,6 +301,12 @@ public class ClientDriver implements LanguageClient {
 
   public static void main(String[] args, InputStream in, OutputStream out, Consumer<Object> process)
       throws IOException, InterruptedException, ExecutionException {
+    if (args.length < 1 || args.length % 2 != 1) {
+      throw new IllegalArgumentException(
+          "Expected URI followed by zero or more (line, character) pairs; got "
+              + args.length
+              + " arg(s).");
+    }
     ClientDriver client = new ClientDriver();
     client.args = args;
     client.process = process;
