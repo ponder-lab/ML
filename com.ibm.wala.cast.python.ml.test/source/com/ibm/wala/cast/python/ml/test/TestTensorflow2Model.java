@@ -5375,6 +5375,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_gradient2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_NONE_FLOAT32)));
   }
 
+  /**
+   * Regression test for the wala/ML#518 throw path at {@code
+   * RaggedFromNestedValueRowIds.getShapes:123}: when a {@code nested_nrows} arg contains a
+   * non-numeric string {@link com.ibm.wala.ipa.callgraph.propagation.ConstantKey}, the {@code
+   * Long.parseLong((String) val)} site catches {@link NumberFormatException} and rethrows as {@link
+   * IllegalStateException}. The test exercises that branch by passing {@code nested_nrows=["abc"]}
+   * in the Python fixture. Closes part of <a
+   * href="https://github.com/wala/ML/issues/520">wala/ML#520</a> (the {@code
+   * RaggedFromNestedValueRowIds} portion).
+   */
+  @Test(expected = IllegalStateException.class)
+  public void testRaggedNrowsNonNumeric()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_ragged_nrows_non_numeric.py", "f", 0, 0, Map.of());
+  }
+
   @Test
   public void testMultiply()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
