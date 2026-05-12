@@ -105,6 +105,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_3_BOOL = new TensorType(BOOL, asList(new NumericDim(3)));
 
+  private static final TensorType TENSOR_1_1_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(1)));
+
   private static final TensorType TENSOR_1_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(2)));
 
@@ -5394,15 +5397,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Regression test for <a href="https://github.com/wala/ML/issues/464">wala/ML#464</a>: when
    * {@code sources} is a list (the common Keras pattern), {@code tape.gradient} returns a parallel
    * list of fresh tensors and {@code grads[i]} must resolve to the shape/dtype of the i-th source.
-   * The fixture passes {@code grads[0]} (the gradient for {@code w1}, a {@code [2]}-shaped float32)
-   * to {@code f}; with the {@link com.ibm.wala.cast.python.ml.client.Gradient} {@code
-   * TupleElementProvider} implementation, {@code f}'s parameter resolves to {@link
-   * #TENSOR_2_FLOAT32}.
+   * The fixture passes both {@code grads[0]} (for {@code w1}, a {@code [2]}-shaped float32) and
+   * {@code grads[1]} (for {@code w2}, a {@code [1, 1]}-shaped float32) to {@code f}; with the
+   * {@link com.ibm.wala.cast.python.ml.client.Gradient} {@code TupleElementProvider}
+   * implementation, {@code f}'s parameter resolves to the union of {@link #TENSOR_2_FLOAT32} and
+   * {@link #TENSOR_1_1_FLOAT32}.
    */
   @Test
   public void testGradientList()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_gradient_list.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+    test(
+        "tf2_test_gradient_list.py",
+        "f",
+        1,
+        2,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32, TENSOR_1_1_FLOAT32)));
   }
 
   /**

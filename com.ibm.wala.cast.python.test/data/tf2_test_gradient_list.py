@@ -23,7 +23,8 @@ assert grads[0].dtype == tf.float32
 assert grads[1].shape == (1, 1)
 assert grads[1].dtype == tf.float32
 
-# Sink: pass the first gradient to `f`. The analyzer should classify `f`'s
-# parameter as a tensor with shape (2,) and dtype float32, inherited from the
-# first source `w1` (which itself is a [2]-shaped float32 tensor).
+# Sinks: pass both gradients to `f`. The analyzer should classify `f`'s
+# parameter as a union of two tensor types, inherited from the corresponding
+# source: shape (2,) float32 from `w1` and shape (1, 1) float32 from `w2`.
 f(grads[0])
+f(grads[1])
