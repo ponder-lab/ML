@@ -46,6 +46,6 @@ public class GlobalVarAP implements IAPRoot {
 
   @Override
   public String toString() {
-    return varName.toString();
+    return varName;
   }
 }

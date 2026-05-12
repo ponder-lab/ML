@@ -104,6 +104,6 @@ public class PropertyPathElement implements IPathElement {
 
   @Override
   public String toString() {
-    return field.toString();
+    return field;
   }
 }

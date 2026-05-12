@@ -1094,7 +1094,7 @@ public abstract class TensorGenerator {
    * Returns the possible shapes of the tensor returned by this generator.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @param pointsToSet The points-to set of the value from which the shape will be derived.
+   * @param valuePointsToSet The points-to set of the value from which the shape will be derived.
    * @return A set of possible shapes of the tensor returned by this generator.
    */
   protected Set<List<Dimension<?>>> getShapesOfValue(
@@ -1692,7 +1692,7 @@ public abstract class TensorGenerator {
    * from the given points-to set.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @param pointsToSet The points-to set of the value from which the dtype will be derived.
+   * @param valuePointsToSet The points-to set of the value from which the dtype will be derived.
    * @return A set of possible dtypes of the tensor returned by this generator.
    */
   protected Set<DType> getDTypesOfValue(
