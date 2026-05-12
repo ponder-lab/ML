@@ -40,7 +40,11 @@ public class Reshape extends TensorGenerator {
      * attempt to resolve the `-1` based on the input tensor's shape and the known dimensions in the
      * target shape.
      */
-    SHAPE
+    SHAPE;
+
+    public String getName() {
+      return name().toLowerCase(Locale.ROOT);
+    }
   }
 
   public Reshape(PointsToSetVariable source) {
@@ -177,7 +181,7 @@ public class Reshape extends TensorGenerator {
 
   @Override
   protected String getShapeParameterName() {
-    return Parameters.SHAPE.name().toLowerCase(Locale.ROOT);
+    return Parameters.SHAPE.getName();
   }
 
   @Override
@@ -195,6 +199,6 @@ public class Reshape extends TensorGenerator {
   }
 
   protected String getValueParameterName() {
-    return Parameters.TENSOR.name().toLowerCase(Locale.ROOT);
+    return Parameters.TENSOR.getName();
   }
 }
