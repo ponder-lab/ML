@@ -16,6 +16,7 @@ public class GlobalVarAP implements IAPRoot {
     this.varName = varName;
   }
 
+  @Override
   public Kind getKind() {
     return Kind.GLOBAL;
   }
@@ -40,6 +41,7 @@ public class GlobalVarAP implements IAPRoot {
     return true;
   }
 
+  @Override
   public int length() {
     return 1;
   }

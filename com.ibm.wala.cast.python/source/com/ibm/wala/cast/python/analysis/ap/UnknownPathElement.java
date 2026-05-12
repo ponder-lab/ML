@@ -18,6 +18,7 @@ public class UnknownPathElement implements IPathElement {
     return "?";
   }
 
+  @Override
   public boolean matches(IPathElement other) {
     return true;
   }

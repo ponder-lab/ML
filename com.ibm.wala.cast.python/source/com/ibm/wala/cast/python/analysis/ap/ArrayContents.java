@@ -11,12 +11,14 @@ public class ArrayContents implements IPathElement {
 
   private ArrayContents() {}
 
+  @Override
   public boolean matches(IPathElement other) {
     return this.equals(other)
         || other instanceof UnknownPathElement
         || other instanceof StarPathElement;
   }
 
+  @Override
   public String toString() {
     return "[*]";
   }
