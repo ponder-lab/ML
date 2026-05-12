@@ -11,3 +11,8 @@ repos:
         entry: mvn spotless:apply
         language: system
         pass_filenames: false
+        # Skip when the commit touches only files Spotless does not format
+        # (binaries, images, etc.), so we do not pay JVM-startup latency for
+        # nothing. The Spotless plug-in itself runs repo-wide when invoked,
+        # which is why `pass_filenames: false` stays.
+        files: '\.(md|xml|java)$|(?:^|/)(\.gitignore|\.pydevproject|MANIFEST\.MF|build\.properties)$|(?:^|/)META-INF/'
