@@ -62,7 +62,7 @@ The repo ships a [pre-commit](https://pre-commit.com) configuration at `.pre-com
 pip install pre-commit && pre-commit install
 ```
 
-After install, every `git commit` auto-formats touched files before the commit lands, so CI's `spotless:check` and `black --check` stay green. To run all hooks ad-hoc against the whole tree: `pre-commit run --all-files`.
+After install, every `git commit` triggers `mvn spotless:apply` (which formats the whole repo) and `black --fast` (which formats touched Python files), so CI's `spotless:check` and `black --check` stay green. To run all hooks ad-hoc against the whole tree: `pre-commit run --all-files`.
 
 If you prefer to run the formatters manually instead, the equivalent commands from the project root are:
 
