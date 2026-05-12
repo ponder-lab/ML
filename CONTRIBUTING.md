@@ -56,7 +56,15 @@ Build and install to your local Maven repo: `mvn install`
 
 ## Code Style
 
-Please run the following commands from the project root directory before committing any changes to ensure code style consistency and that the project compiles:
+The repo ships a [pre-commit](https://pre-commit.com) configuration at `.pre-commit-config.yaml` that runs `mvn spotless:apply` and `black --fast` automatically before each commit. Install once after cloning:
+
+```bash
+pip install pre-commit && pre-commit install
+```
+
+After install, every `git commit` auto-formats touched files before the commit lands, so CI's `spotless:check` and `black --check` stay green. To run all hooks ad-hoc against the whole tree: `pre-commit run --all-files`.
+
+If you prefer to run the formatters manually instead, the equivalent commands from the project root are:
 
 ```bash
 mvn compile
