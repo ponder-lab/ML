@@ -8,7 +8,9 @@ def f(a):
 # Regression fixture for wala/ML#464: when `sources` is a list (the common
 # Keras pattern `tape.gradient(loss, model.trainable_variables)`), the runtime
 # returns a parallel list of fresh tensors—one per source. The analyzer should
-# resolve `grads[i]` to the shape/dtype of the i-th source.
+# resolve `grads[i]` to the shape/dtype of the i-th source. Passing both
+# gradients to `f` across two call sites exercises both per-index resolutions;
+# `f`'s parameter type is the union of the two source types.
 w1 = tf.Variable(tf.constant([1.0, 2.0]))
 w2 = tf.Variable(tf.constant([[3.0]]))
 
@@ -23,7 +25,5 @@ assert grads[0].dtype == tf.float32
 assert grads[1].shape == (1, 1)
 assert grads[1].dtype == tf.float32
 
-# Sink: pass the first gradient to `f`. The analyzer should classify `f`'s
-# parameter as a tensor with shape (2,) and dtype float32, inherited from the
-# first source `w1` (which itself is a [2]-shaped float32 tensor).
 f(grads[0])
+f(grads[1])

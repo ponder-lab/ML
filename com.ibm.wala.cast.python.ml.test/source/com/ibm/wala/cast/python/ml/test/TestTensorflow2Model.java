@@ -5397,32 +5397,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Regression test for <a href="https://github.com/wala/ML/issues/464">wala/ML#464</a>: when
    * {@code sources} is a list (the common Keras pattern), {@code tape.gradient} returns a parallel
    * list of fresh tensors and {@code grads[i]} must resolve to the shape/dtype of the i-th source.
-   * The fixture passes {@code grads[0]} (the gradient for {@code w1}, a {@code [2]}-shaped float32)
-   * to {@code f}; with the {@link com.ibm.wala.cast.python.ml.client.Gradient} {@code
-   * TupleElementProvider} implementation, {@code f}'s parameter resolves to {@link
-   * #TENSOR_2_FLOAT32}.
+   * The fixture passes both {@code grads[0]} (for {@code w1}, a {@code [2]}-shaped float32) and
+   * {@code grads[1]} (for {@code w2}, a {@code [1, 1]}-shaped float32) to {@code f} across two
+   * separate calls; with the {@link com.ibm.wala.cast.python.ml.client.Gradient} {@code
+   * TupleElementProvider} implementation, {@code f}'s parameter resolves to the union of {@link
+   * #TENSOR_2_FLOAT32} and {@link #TENSOR_1_1_FLOAT32}.
    */
   @Test
   public void testGradientList()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_gradient_list.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
-  }
-
-  /**
-   * Companion to {@link #testGradientList()}: the fixture passes both {@code grads[0]} (for {@code
-   * w1}, a {@code [2]}-shaped float32) and {@code grads[1]} (for {@code w2}, a {@code [1,
-   * 1]}-shaped float32) to {@code f} across two separate calls; with the {@link
-   * com.ibm.wala.cast.python.ml.client.Gradient} {@code TupleElementProvider} implementation,
-   * {@code f}'s single parameter resolves to the union of {@link #TENSOR_2_FLOAT32} and {@link
-   * #TENSOR_1_1_FLOAT32}. This verifies that {@code grads[1]} is reachable (in addition to {@code
-   * grads[0]} which {@link #testGradientList()} already covers), but the union form doesn't pin
-   * which-grad-goes-where—{@link #testGradientList2()} does that.
-   */
-  @Test
-  public void testGradientListBoth()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_gradient_list_both.py",
+        "tf2_test_gradient_list.py",
         "f",
         1,
         2,
@@ -5430,7 +5415,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Tighter variant of {@link #testGradientListBoth()}: passes both gradients in a single {@code
+   * Tighter variant of {@link #testGradientList()}: passes both gradients in a single {@code
    * f(grads[0], grads[1])} call, so the analyzer must resolve each argument's tensor type
    * independently per its source index rather than as a union across two call sites. {@code f}'s
    * first parameter (vn=2) must resolve to {@link #TENSOR_2_FLOAT32} (from {@code w1}) and the
