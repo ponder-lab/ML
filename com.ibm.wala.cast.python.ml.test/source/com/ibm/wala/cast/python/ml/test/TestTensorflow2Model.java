@@ -5415,6 +5415,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Tighter variant of {@link #testGradientList()}: passes both gradients in a single {@code
+   * f(grads[0], grads[1])} call, so the analyzer must resolve each argument's tensor type
+   * independently per its source index rather than as a union across two call sites. {@code f}'s
+   * first parameter (vn=2) must resolve to {@link #TENSOR_2_FLOAT32} (from {@code w1}) and the
+   * second parameter (vn=3) to {@link #TENSOR_1_1_FLOAT32} (from {@code w2}). Closes part of <a
+   * href="https://github.com/wala/ML/issues/464">wala/ML#464</a>.
+   */
+  @Test
+  public void testGradientList2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gradient_list2.py",
+        "f",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TENSOR_1_1_FLOAT32)));
+  }
+
+  /**
    * Regression test for the wala/ML#518 throw path in {@link
    * com.ibm.wala.cast.python.ml.client.RaggedFromNestedValueRowIds#getShapes}'s {@code
    * nested_nrows} arg-collection loop: when the arg contains a non-numeric string {@link
