@@ -2190,9 +2190,10 @@
         </method>
       </class>
       <class name="EstimatorSpec" allocatable="true">
-        <!-- https://www.tensorflow.org/api_docs/python/tf/estimator/EstimatorSpec — fresh allocation (not pass-through) so the resulting spec is a distinct object from any input. Each named parameter is stored as a field on the result, mirroring the namedtuple shape of the real API. See wala/ML#429. -->
+        <!-- https://www.tensorflow.org/api_docs/python/tf/estimator/EstimatorSpec — fresh allocation (not pass-through) so the resulting spec is a distinct object from any input. Each named parameter is stored as a field on the result, mirroring the namedtuple shape of the real API. Allocated as `Ltensorflow/estimator/EstimatorSpec`
+          (the proper class type that's already registered for the estimator-namespace binding), not as a `Tensor` — `EstimatorSpec` is a namedtuple-like spec object, not a tensor. See wala/ML#429 (binding + body) and wala/ML#523 (allocation-class fix). -->
         <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self mode predictions loss train_op eval_metric_ops export_outputs">
-          <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
+          <new def="res" class="Ltensorflow/estimator/EstimatorSpec" />
           <putfield class="LRoot" field="mode" fieldType="LRoot" ref="res" value="mode" />
           <putfield class="LRoot" field="predictions" fieldType="LRoot" ref="res" value="predictions" />
           <putfield class="LRoot" field="loss" fieldType="LRoot" ref="res" value="loss" />
