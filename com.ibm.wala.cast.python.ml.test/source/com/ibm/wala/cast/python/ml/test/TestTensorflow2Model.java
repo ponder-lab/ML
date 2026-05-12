@@ -5375,6 +5375,30 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_gradient2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_NONE_FLOAT32)));
   }
 
+  /**
+   * Regression test for the wala/ML#518 throw path in {@link
+   * com.ibm.wala.cast.python.ml.client.RaggedFromNestedValueRowIds#getShapes}'s {@code
+   * nested_nrows} arg-collection loop: when the arg contains a non-numeric string {@link
+   * com.ibm.wala.ipa.callgraph.propagation.ConstantKey}, the {@code Long.parseLong((String) val)}
+   * site catches {@link NumberFormatException} and rethrows as {@link IllegalStateException} (with
+   * the original NFE as {@code cause}). The test exercises that branch by passing {@code
+   * nested_nrows=["abc"]} in the Python fixture, and {@code assertThrows} captures the rethrow so
+   * the test can assert on the cause—tighter than a bare {@code @Test(expected = …)}, which would
+   * pass on any {@code IllegalStateException} raised during analysis regardless of origin. Closes
+   * part of <a href="https://github.com/wala/ML/issues/520">wala/ML#520</a> (the {@code
+   * RaggedFromNestedValueRowIds} portion).
+   */
+  @Test
+  public void testRaggedNrowsNonNumeric() {
+    IllegalStateException ise =
+        assertThrows(
+            IllegalStateException.class,
+            () -> test("tf2_test_ragged_nrows_non_numeric.py", "f", 1, 1, Map.of()));
+    assertTrue(
+        "Expected cause to be NumberFormatException; got " + ise.getCause(),
+        ise.getCause() instanceof NumberFormatException);
+  }
+
   @Test
   public void testMultiply()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
