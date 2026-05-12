@@ -405,7 +405,8 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
     Set<TensorType> ret = HashSetFactory.make();
 
     for (List<Dimension<?>> dimensionList : shapes)
-      for (DType dtype : dTypes) ret.add(new TensorType(dtype.name().toLowerCase(), dimensionList));
+      for (DType dtype : dTypes)
+        ret.add(new TensorType(dtype.name().toLowerCase(Locale.ROOT), dimensionList));
 
     return ret;
   }

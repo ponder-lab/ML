@@ -11,6 +11,7 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -176,7 +177,7 @@ public class Reshape extends TensorGenerator {
 
   @Override
   protected String getShapeParameterName() {
-    return Parameters.SHAPE.name().toLowerCase();
+    return Parameters.SHAPE.name().toLowerCase(Locale.ROOT);
   }
 
   @Override
@@ -194,6 +195,6 @@ public class Reshape extends TensorGenerator {
   }
 
   protected String getValueParameterName() {
-    return Parameters.TENSOR.name().toLowerCase();
+    return Parameters.TENSOR.name().toLowerCase(Locale.ROOT);
   }
 }
