@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE summary-spec>
-<!-- `functools` stdlib model. -->
+<!-- functools model -->
 <summary-spec>
   <classloader name="PythonLoader">
     <class name="functools" allocatable="true">

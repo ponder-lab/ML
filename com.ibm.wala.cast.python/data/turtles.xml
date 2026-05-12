@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE summary-spec>
-<!-- Turtle stubs (placeholder summaries spanning multiple unmodeled libraries: numpy, sklearn, pandas, patsy, seaborn, statsmodels, scipy, matplotlib, IPython, mpl_toolkits, tensorflow). -->
+<!-- Turtle model -->
 <summary-spec>
   <classloader name="PythonLoader">
     <class name="numpy" allocatable="true">
