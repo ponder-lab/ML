@@ -14,6 +14,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Collections;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -36,7 +37,7 @@ public class DatasetEnumerateGenerator extends DatasetGenerator {
     Set<TensorType> types = HashSetFactory.make();
 
     // Add the index type (int64 scalar)
-    types.add(new TensorType(DType.INT64.name().toLowerCase(), Collections.emptyList()));
+    types.add(new TensorType(DType.INT64.name().toLowerCase(Locale.ROOT), Collections.emptyList()));
 
     // Add the underlying dataset types
     TensorGenerator underlying = getUnderlyingGenerator(builder);

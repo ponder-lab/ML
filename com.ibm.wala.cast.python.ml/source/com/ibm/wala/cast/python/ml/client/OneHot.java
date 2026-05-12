@@ -189,7 +189,7 @@ public class OneHot extends Ones {
         : "Number of "
             + OneHot.class.getName()
             + " shapes should be at least the number of "
-            + INDICES.name().toLowerCase()
+            + INDICES.getName()
             + " shapes.";
 
     return ret;
