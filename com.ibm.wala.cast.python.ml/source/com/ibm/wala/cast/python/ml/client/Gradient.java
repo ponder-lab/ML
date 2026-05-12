@@ -165,6 +165,7 @@ public class Gradient extends TensorGenerator implements TupleElementProvider {
                         .getPointerKeyForObjectCatalog(asin));
 
         for (InstanceKey catalogIK : objectCatalogPointsToSet) {
+          if (!(catalogIK instanceof ConstantKey)) continue;
           Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
           if (fieldIndex == null || fieldIndex != index) continue;
 
@@ -216,6 +217,7 @@ public class Gradient extends TensorGenerator implements TupleElementProvider {
                         .getPointerKeyForObjectCatalog(asin));
 
         for (InstanceKey catalogIK : objectCatalogPointsToSet) {
+          if (!(catalogIK instanceof ConstantKey)) continue;
           Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
           if (fieldIndex == null || fieldIndex != index) continue;
 
