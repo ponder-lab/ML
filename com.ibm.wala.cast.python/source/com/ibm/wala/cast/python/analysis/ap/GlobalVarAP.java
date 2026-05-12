@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.analysis.ap;
 
+import java.util.Objects;
+
 public class GlobalVarAP implements IAPRoot {
 
   public static GlobalVarAP createGlobalVarAP(String varName) {
@@ -46,6 +48,6 @@ public class GlobalVarAP implements IAPRoot {
 
   @Override
   public String toString() {
-    return varName;
+    return Objects.toString(varName);
   }
 }
