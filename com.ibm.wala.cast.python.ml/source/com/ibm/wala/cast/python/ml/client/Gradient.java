@@ -31,7 +31,7 @@ import java.util.Set;
  * Generator for {@code tf.GradientTape.gradient}. Returns a fresh tensor whose shape and dtype
  * match the {@code sources} argument—the gradient of a function w.r.t. a tensor has the same shape
  * and dtype as that tensor. The output is a distinct allocation from {@code sources} (no input
- * alias).
+ * alias). See wala/ML#430.
  *
  * <p>When {@code sources} is a list or tuple (the common Keras pattern {@code tape.gradient(loss,
  * model.trainable_variables)}), the runtime returns a parallel list of fresh tensors—one per
@@ -40,9 +40,6 @@ import java.util.Set;
  * getDefaultShapes}/{@code getDefaultDTypes} path still recovers a single shape/dtype for the
  * single-source case via {@code getShapesOfValue}/{@code getDTypesOfValue}'s existing aggregation
  * behavior.
- *
- * <p>See <a href="https://github.com/wala/ML/issues/430">wala/ML#430</a> (parent) and <a
- * href="https://github.com/wala/ML/issues/464">wala/ML#464</a> (list-source structure).
  *
  * @see <a
  *     href="https://www.tensorflow.org/api_docs/python/tf/GradientTape#gradient">tf.GradientTape.gradient</a>
