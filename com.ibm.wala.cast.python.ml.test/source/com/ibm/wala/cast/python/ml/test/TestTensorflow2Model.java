@@ -5375,6 +5375,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_gradient2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_NONE_FLOAT32)));
   }
 
+  /**
+   * Regression test for <a href="https://github.com/wala/ML/issues/464">wala/ML#464</a>: when
+   * {@code sources} is a list (the common Keras pattern), {@code tape.gradient} returns a parallel
+   * list of fresh tensors and {@code grads[i]} must resolve to the shape/dtype of the i-th source.
+   * The fixture passes {@code grads[0]} (the gradient for {@code w1}, a {@code [2]}-shaped float32)
+   * to {@code f}; with the {@link com.ibm.wala.cast.python.ml.client.Gradient} {@code
+   * TupleElementProvider} implementation, {@code f}'s parameter resolves to {@link
+   * #TENSOR_2_FLOAT32}.
+   */
+  @Test
+  public void testGradientList()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_gradient_list.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+  }
+
   @Test
   public void testMultiply()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
