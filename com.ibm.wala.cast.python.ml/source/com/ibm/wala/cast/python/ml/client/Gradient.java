@@ -116,8 +116,8 @@ public class Gradient extends TensorGenerator implements TupleElementProvider {
   /**
    * {@inheritDoc}
    *
-   * <p>Returns {@code true} when {@code sources}'s points-to set contains a list or tuple
-   * allocation, indicating the gradient result should be modeled as a per-source list/tuple.
+   * @implNote Returns {@code true} when {@code sources}'s points-to set contains a list or tuple
+   *     allocation, indicating the gradient result should be modeled as a per-source list/tuple.
    */
   @Override
   public boolean yieldsTuple(PropagationCallGraphBuilder builder) {
@@ -139,10 +139,10 @@ public class Gradient extends TensorGenerator implements TupleElementProvider {
   /**
    * {@inheritDoc}
    *
-   * <p>Walks {@code sources}'s list/tuple allocation and returns the shape of the element at the
-   * requested index. If the per-index field's PTS is empty, returns {@code null} (lattice ⊤) rather
-   * than falling through to the aggregate, which would silently leak sibling indices' shapes (see
-   * <a href="https://github.com/wala/ML/issues/396">wala/ML#396</a>).
+   * @implNote Walks {@code sources}'s list/tuple allocation and returns the shape of the element at
+   *     the requested index. If the per-index field's PTS is empty, returns {@code null} (lattice
+   *     ⊤) rather than falling through to the aggregate, which would silently leak sibling indices'
+   *     shapes (see <a href="https://github.com/wala/ML/issues/396">wala/ML#396</a>).
    */
   @Override
   public Set<List<Dimension<?>>> getShapesForIndex(PropagationCallGraphBuilder builder, int index) {
@@ -191,10 +191,10 @@ public class Gradient extends TensorGenerator implements TupleElementProvider {
   /**
    * {@inheritDoc}
    *
-   * <p>Walks {@code sources}'s list/tuple allocation and returns the dtype of the element at the
-   * requested index. If the per-index field's PTS is empty, returns {@code UNKNOWN} (lattice ⊤)
-   * rather than falling through to the aggregate (see <a
-   * href="https://github.com/wala/ML/issues/396">wala/ML#396</a>).
+   * @implNote Walks {@code sources}'s list/tuple allocation and returns the dtype of the element at
+   *     the requested index. If the per-index field's PTS is empty, returns {@code UNKNOWN}
+   *     (lattice ⊤) rather than falling through to the aggregate (see <a
+   *     href="https://github.com/wala/ML/issues/396">wala/ML#396</a>).
    */
   @Override
   public Set<DType> getDTypesForIndex(PropagationCallGraphBuilder builder, int index) {
