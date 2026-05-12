@@ -31,7 +31,7 @@ import java.util.Set;
  * Generator for {@code tf.GradientTape.gradient}. Returns a fresh tensor whose shape and dtype
  * match the {@code sources} argument—the gradient of a function w.r.t. a tensor has the same shape
  * and dtype as that tensor. The output is a distinct allocation from {@code sources} (no input
- * alias). See wala/ML#430.
+ * alias).
  *
  * <p>When {@code sources} is a list or tuple (the common Keras pattern {@code tape.gradient(loss,
  * model.trainable_variables)}), the runtime returns a parallel list of fresh tensors—one per
@@ -43,6 +43,7 @@ import java.util.Set;
  *
  * @see <a
  *     href="https://www.tensorflow.org/api_docs/python/tf/GradientTape#gradient">tf.GradientTape.gradient</a>
+ * @see <a href="https://github.com/wala/ML/issues/430">wala/ML#430</a>
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
 public class Gradient extends TensorGenerator implements TupleElementProvider {
@@ -175,8 +176,10 @@ public class Gradient extends TensorGenerator implements TupleElementProvider {
           if (f == null) continue;
 
           PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
-          ret.addAll(
-              this.getShapesOfValue(builder, builder.getPointerAnalysis().getPointsToSet(pk)));
+          Set<List<Dimension<?>>> fieldShapes =
+              this.getShapesOfValue(builder, builder.getPointerAnalysis().getPointsToSet(pk));
+          if (fieldShapes == null || fieldShapes.isEmpty()) return null;
+          ret.addAll(fieldShapes);
         }
       }
       if (!ret.isEmpty()) return ret;
@@ -227,8 +230,10 @@ public class Gradient extends TensorGenerator implements TupleElementProvider {
           if (f == null) continue;
 
           PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
-          ret.addAll(
-              this.getDTypesOfValue(builder, builder.getPointerAnalysis().getPointsToSet(pk)));
+          Set<DType> fieldDTypes =
+              this.getDTypesOfValue(builder, builder.getPointerAnalysis().getPointsToSet(pk));
+          if (fieldDTypes == null || fieldDTypes.isEmpty()) return EnumSet.of(DType.UNKNOWN);
+          ret.addAll(fieldDTypes);
         }
       }
       if (!ret.isEmpty()) return ret;
