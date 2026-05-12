@@ -4530,6 +4530,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_estimator_spec.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
+  /**
+   * Regression test for <a href="https://github.com/wala/ML/issues/523">wala/ML#523</a>: the {@code
+   * EstimatorSpec.do()} constructor's fresh allocation must be a {@code
+   * Ltensorflow/estimator/EstimatorSpec} (a namedtuple-like spec object) rather than a {@code
+   * Ltensorflow/python/framework/ops/Tensor}. The fixture passes the {@code spec} directly to
+   * {@code f}; if {@code spec} is misclassified as a tensor allocation, {@code f}'s parameter would
+   * be a tensor (and the expected count would be 1 / 1). With the correct non-tensor class, {@code
+   * f} has 0 tensor parameters and 0 tensor variables.
+   */
+  @Test
+  public void testEstimatorSpecNotTensor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_estimator_spec_not_tensor.py", "f", 0, 0, Map.of());
+  }
+
   @Test
   public void testReduceMean2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {

@@ -13,6 +13,7 @@ import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -1965,7 +1966,7 @@ public class TensorFlowTypes extends PythonTypes {
    */
   public static final FieldReference FLOAT_32 =
       FieldReference.findOrCreate(
-          PythonTypes.Root, findOrCreateAsciiAtom(FLOAT32.name().toLowerCase()), D_TYPE);
+          PythonTypes.Root, findOrCreateAsciiAtom(FLOAT32.name().toLowerCase(Locale.ROOT)), D_TYPE);
 
   /**
    * Represents the TensorFlow float64 data type.
@@ -1976,7 +1977,7 @@ public class TensorFlowTypes extends PythonTypes {
    */
   public static final FieldReference FLOAT_64 =
       FieldReference.findOrCreate(
-          PythonTypes.Root, findOrCreateAsciiAtom(FLOAT64.name().toLowerCase()), D_TYPE);
+          PythonTypes.Root, findOrCreateAsciiAtom(FLOAT64.name().toLowerCase(Locale.ROOT)), D_TYPE);
 
   /**
    * Represents the TensorFlow int32 data type.
@@ -1987,7 +1988,7 @@ public class TensorFlowTypes extends PythonTypes {
    */
   public static final FieldReference INT_32 =
       FieldReference.findOrCreate(
-          PythonTypes.Root, findOrCreateAsciiAtom(INT32.name().toLowerCase()), D_TYPE);
+          PythonTypes.Root, findOrCreateAsciiAtom(INT32.name().toLowerCase(Locale.ROOT)), D_TYPE);
 
   /**
    * Represents the TensorFlow int64 data type.
@@ -1998,7 +1999,7 @@ public class TensorFlowTypes extends PythonTypes {
    */
   public static final FieldReference INT_64 =
       FieldReference.findOrCreate(
-          PythonTypes.Root, findOrCreateAsciiAtom(INT64.name().toLowerCase()), D_TYPE);
+          PythonTypes.Root, findOrCreateAsciiAtom(INT64.name().toLowerCase(Locale.ROOT)), D_TYPE);
 
   /**
    * Represents the TensorFlow uint8 data type.
@@ -2009,7 +2010,7 @@ public class TensorFlowTypes extends PythonTypes {
    */
   public static final FieldReference UINT_8 =
       FieldReference.findOrCreate(
-          PythonTypes.Root, findOrCreateAsciiAtom(UINT8.name().toLowerCase()), D_TYPE);
+          PythonTypes.Root, findOrCreateAsciiAtom(UINT8.name().toLowerCase(Locale.ROOT)), D_TYPE);
 
   /**
    * Represents the TensorFlow string data type.
@@ -2020,7 +2021,9 @@ public class TensorFlowTypes extends PythonTypes {
    */
   public static final FieldReference STRING =
       FieldReference.findOrCreate(
-          PythonTypes.Root, findOrCreateAsciiAtom(DType.STRING.name().toLowerCase()), D_TYPE);
+          PythonTypes.Root,
+          findOrCreateAsciiAtom(DType.STRING.name().toLowerCase(Locale.ROOT)),
+          D_TYPE);
 
   /** A mapping from a field reference to its associated {@link DType}, if any. */
   public static final Map<FieldReference, DType> FIELD_REFERENCE_TO_DTYPE =

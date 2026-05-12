@@ -11,6 +11,7 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -39,7 +40,11 @@ public class Reshape extends TensorGenerator {
      * attempt to resolve the `-1` based on the input tensor's shape and the known dimensions in the
      * target shape.
      */
-    SHAPE
+    SHAPE;
+
+    public String getName() {
+      return name().toLowerCase(Locale.ROOT);
+    }
   }
 
   public Reshape(PointsToSetVariable source) {
@@ -176,7 +181,7 @@ public class Reshape extends TensorGenerator {
 
   @Override
   protected String getShapeParameterName() {
-    return Parameters.SHAPE.name().toLowerCase();
+    return Parameters.SHAPE.getName();
   }
 
   @Override
@@ -194,6 +199,6 @@ public class Reshape extends TensorGenerator {
   }
 
   protected String getValueParameterName() {
-    return Parameters.TENSOR.name().toLowerCase();
+    return Parameters.TENSOR.getName();
   }
 }

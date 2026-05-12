@@ -105,7 +105,7 @@ public class Meshgrid extends TensorGenerator implements TupleElementProvider {
     // dtype with null dims. When shapes become precise, this method needs to fan out per shape.
     Set<DType> dtypes = this.getDTypesForIndex(builder, index);
     Set<TensorType> ret = HashSetFactory.make();
-    for (DType dt : dtypes) ret.add(new TensorType(dt.name().toLowerCase(), null));
+    for (DType dt : dtypes) ret.add(new TensorType(dt.name().toLowerCase(Locale.ROOT), null));
     return ret;
   }
 
