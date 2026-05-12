@@ -20,6 +20,7 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -125,12 +126,14 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
     // rather than falling through to the aggregate {@code getTensorTypes}, which would silently
     // leak sibling fields' shapes. See wala/ML#396.
     if (shapes == null) {
-      for (DType dtype : dTypes) ret.add(new TensorType(dtype.name().toLowerCase(), null));
+      for (DType dtype : dTypes)
+        ret.add(new TensorType(dtype.name().toLowerCase(Locale.ROOT), null));
       return ret;
     }
 
     for (List<Dimension<?>> dimensionList : shapes)
-      for (DType dtype : dTypes) ret.add(new TensorType(dtype.name().toLowerCase(), dimensionList));
+      for (DType dtype : dTypes)
+        ret.add(new TensorType(dtype.name().toLowerCase(Locale.ROOT), dimensionList));
 
     return ret;
   }

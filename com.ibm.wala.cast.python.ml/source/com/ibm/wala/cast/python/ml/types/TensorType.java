@@ -363,7 +363,7 @@ public class TensorType implements Iterable<Dimension<?>> {
     Dimension<Integer> x = new NumericDim(28);
     Dimension<Integer> y = new NumericDim(28);
     Dimension<List<Dimension<?>>> vec = new CompoundDim(Arrays.asList(x, y));
-    return new TensorType(FLOAT32.name().toLowerCase(), Arrays.asList(batch, vec));
+    return new TensorType(FLOAT32.name().toLowerCase(Locale.ROOT), Arrays.asList(batch, vec));
   }
 
   public static TensorType shapeArg(CGNode node, int literalVn) throws IOException {
@@ -439,7 +439,7 @@ public class TensorType implements Iterable<Dimension<?>> {
         dims.put(index, new SymbolicDim("?"));
       }
     }
-    return new TensorType(FLOAT32.name().toLowerCase(), new ArrayList<>(dims.values()));
+    return new TensorType(FLOAT32.name().toLowerCase(Locale.ROOT), new ArrayList<>(dims.values()));
   }
 
   @Override
@@ -496,13 +496,9 @@ public class TensorType implements Iterable<Dimension<?>> {
    * Returns the dtype of the tensor as a typed {@link DType} enum value.
    *
    * <p>The cell type is stored as a lowercase string (e.g., {@code "float32"}) for the LSP wire
-   * format. This accessor inverts that pattern using {@link Locale#ROOT} for the uppercase, so the
-   * lookup is locale-stable. Consumers can branch on the dtype as a typed value instead of doing
-   * cast-and-uppercase boilerplate inline.
-   *
-   * <p>Construction sites currently build the cell type via {@code dtype.name().toLowerCase()} (no
-   * explicit locale), which is locale-sensitive — sweeping them to {@code toLowerCase(Locale.ROOT)}
-   * is tracked at <a href="https://github.com/wala/ML/issues/521">wala/ML#521</a>.
+   * format. Both construction sites and this accessor use {@link Locale#ROOT} for the case
+   * conversion, so the round-trip is locale-stable. Consumers can branch on the dtype as a typed
+   * value instead of doing cast-and-uppercase boilerplate inline.
    *
    * @return The dtype enum value corresponding to the stored cell type.
    * @throws IllegalStateException if the stored cell type doesn't map to a {@link DType} constant.

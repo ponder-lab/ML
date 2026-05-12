@@ -130,7 +130,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
           Set<DType> dTypes = this.getDTypesOfValue(builder, singletonPTS);
           for (List<Dimension<?>> shape : shapes) {
             for (DType dtype : dTypes) {
-              ret.add(new TensorType(dtype.name().toLowerCase(), shape));
+              ret.add(new TensorType(dtype.name().toLowerCase(Locale.ROOT), shape));
             }
           }
         }
@@ -261,12 +261,14 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
     // rather than falling through to the aggregate {@code getTensorTypes}, which would silently
     // leak sibling fields' shapes. See wala/ML#396.
     if (shapes == null) {
-      for (DType dtype : dTypes) ret.add(new TensorType(dtype.name().toLowerCase(), null));
+      for (DType dtype : dTypes)
+        ret.add(new TensorType(dtype.name().toLowerCase(Locale.ROOT), null));
       return ret;
     }
 
     for (List<Dimension<?>> dimensionList : shapes)
-      for (DType dtype : dTypes) ret.add(new TensorType(dtype.name().toLowerCase(), dimensionList));
+      for (DType dtype : dTypes)
+        ret.add(new TensorType(dtype.name().toLowerCase(Locale.ROOT), dimensionList));
 
     return ret;
   }
