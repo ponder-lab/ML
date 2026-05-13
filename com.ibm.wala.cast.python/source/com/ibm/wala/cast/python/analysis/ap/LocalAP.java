@@ -42,14 +42,17 @@ public class LocalAP implements IAPRoot {
     return true;
   }
 
+  @Override
   public Kind getKind() {
     return Kind.LOCAL;
   }
 
+  @Override
   public int length() {
     return 1;
   }
 
+  @Override
   public String toString() {
     if (valueNumber == RETURN_VALUE_NUMBER) {
       return "ret";

@@ -19,6 +19,7 @@ public class StarPathElement implements IPathElement {
     return "*";
   }
 
+  @Override
   public boolean matches(IPathElement other) {
     return true;
   }
