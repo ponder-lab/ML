@@ -51,9 +51,11 @@ public class TensorFlowTypesTest {
   }
 
   @Test
-  public void testTensorTypeGetDTypeUnknownCellTypeThrowsIllegalStateException() {
-    TensorType t = new TensorType("not_a_real_dtype", emptyList());
-    assertThrows(IllegalStateException.class, t::getDType);
+  public void testTensorTypeUnknownCellTypeRejectedAtConstruction() {
+    // wala/ML#533: dtype is the internal source of truth; the String ctor must reject any
+    // cellType that doesn't map to a known DType at construction time (eager, fail-fast).
+    assertThrows(
+        IllegalArgumentException.class, () -> new TensorType("not_a_real_dtype", emptyList()));
   }
 
   @Test

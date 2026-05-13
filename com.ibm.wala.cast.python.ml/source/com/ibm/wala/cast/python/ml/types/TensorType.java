@@ -36,7 +36,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.TreeMap;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -252,46 +251,49 @@ public class TensorType implements Iterable<Dimension<?>> {
   }
 
   /**
-   * The dtype as a typed enum value when the {@code cellType} string parses to a known {@link
-   * DType} (covers every construction site in the Ariadne and Hybridize codebases — see <a
-   * href="https://github.com/wala/ML/issues/533">wala/ML#533</a>). {@link Optional#empty} for the
-   * pathological "construction with a non-enum {@code cellType} string" case (currently only
-   * exercised by a test fixture in {@code TensorFlowTypesTest}); {@link #getDType} then throws
-   * {@link IllegalStateException} on access, matching the pre-#533 lazy-throw contract.
+   * The dtype as a typed enum value — every {@code TensorType} has one. The {@link
+   * #TensorType(DType, List)} ctor stores the passed value directly; the {@link #TensorType(String,
+   * List)} ctor parses the cellType string at construction and throws {@link
+   * IllegalArgumentException} if it doesn't map to a known {@link DType}. See <a
+   * href="https://github.com/wala/ML/issues/533">wala/ML#533</a>.
    */
-  private final Optional<DType> dtype;
+  private final DType dtype;
 
-  private final String cellType;
   private final List<Dimension<?>> dims;
 
+  /**
+   * Constructs a {@code TensorType} from a {@code cellType} string. The string must map to a known
+   * {@link DType} via {@code DType.valueOf(cellType.toUpperCase(Locale.ROOT))}; an unparseable
+   * value is rejected at construction time. Prefer {@link #TensorType(DType, List)} when a typed
+   * {@link DType} is already in hand.
+   *
+   * @param cellType The lowercase dtype name (e.g., {@code "float32"}). Must not be null and must
+   *     parse to a {@link DType} constant.
+   * @param dims The dimensions of the tensor; may be null to indicate unknown rank (⊤ shape).
+   * @throws IllegalArgumentException if {@code cellType} doesn't map to a {@link DType}.
+   */
   public TensorType(String cellType, List<Dimension<?>> dims) {
     // A TensorType with a null cellType is nonsensical: every tensor has a dtype, even if it is
     // DType.UNKNOWN. Dims, on the other hand, may legitimately be null (unknown rank / ⊤ shape).
-    this.cellType = Objects.requireNonNull(cellType, "TensorType cellType must not be null");
-    Optional<DType> parsed;
+    Objects.requireNonNull(cellType, "TensorType cellType must not be null");
     try {
-      parsed = Optional.of(DType.valueOf(cellType.toUpperCase(Locale.ROOT)));
+      this.dtype = DType.valueOf(cellType.toUpperCase(Locale.ROOT));
     } catch (IllegalArgumentException e) {
-      parsed = Optional.empty();
+      throw new IllegalArgumentException(
+          "Cell type \"" + cellType + "\" does not map to a known DType.", e);
     }
-    this.dtype = parsed;
     this.dims = dims;
   }
 
   /**
-   * Convenience constructor that derives the {@code cellType} string from a typed {@link DType}.
-   * Equivalent to {@code new TensorType(dtype.name().toLowerCase(Locale.ROOT), dims)} — the
-   * canonical Ariadne-side cellType serialization. Lets callers that already hold a {@link DType}
-   * skip the {@code name().toLowerCase(Locale.ROOT)} round-trip. See <a
-   * href="https://github.com/wala/ML/issues/533">wala/ML#533</a>.
+   * Primary constructor. The dtype is the internal source of truth since wala/ML#533; the cellType
+   * String exposed via {@link #getCellType} is derived from it on demand.
    *
-   * @param dtype The tensor element type; converted to {@code cellType} via {@link DType#name()}
-   *     lowercased with {@link Locale#ROOT}. Must not be null.
+   * @param dtype The tensor element type. Must not be null.
    * @param dims The dimensions of the tensor; may be null to indicate unknown rank (⊤ shape).
    */
   public TensorType(DType dtype, List<Dimension<?>> dims) {
-    this.dtype = Optional.of(Objects.requireNonNull(dtype, "TensorType dtype must not be null"));
-    this.cellType = dtype.name().toLowerCase(Locale.ROOT);
+    this.dtype = Objects.requireNonNull(dtype, "TensorType dtype must not be null");
     this.dims = dims;
   }
 
@@ -524,27 +526,19 @@ public class TensorType implements Iterable<Dimension<?>> {
    * @return The cell type of the tensor.
    */
   public String getCellType() {
-    return cellType;
+    return dtype.name().toLowerCase(Locale.ROOT);
   }
 
   /**
    * Returns the dtype of the tensor as a typed {@link DType} enum value.
    *
-   * <p>The dtype is the internal representation since wala/ML#533; consumers branch on it as a
-   * typed value instead of doing cast-and-uppercase boilerplate on {@link #getCellType()}.
-   * Construction via the {@link #TensorType(DType, List)} ctor stores the dtype directly;
-   * construction via the {@link #TensorType(String, List)} ctor parses the cell type once at
-   * construction and caches the result. Both use {@link Locale#ROOT} for the case conversion.
+   * <p>{@code dtype} is the internal source of truth since wala/ML#533; consumers branch on it as a
+   * typed value instead of doing cast-and-uppercase boilerplate on {@link #getCellType()}. The
+   * String ctor parses-or-throws at construction, so this accessor never throws.
    *
-   * @return The dtype enum value corresponding to the stored cell type.
-   * @throws IllegalStateException if the stored cell type doesn't map to a {@link DType} constant —
-   *     the pre-#533 lazy-throw contract is preserved for callers that constructed a {@code
-   *     TensorType} with a non-enum cell type string.
+   * @return The dtype enum value.
    */
   public DType getDType() {
-    return dtype.orElseThrow(
-        () ->
-            new IllegalStateException(
-                "Cell type \"" + cellType + "\" does not map to a known DType."));
+    return dtype;
   }
 }
