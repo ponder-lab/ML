@@ -827,7 +827,8 @@
         <putfield class="LRoot" field="negative" fieldType="LRoot" ref="x" value="negative" />
         <putfield class="LRoot" field="negative" fieldType="LRoot" ref="math" value="negative" />
         <putfield class="LRoot" field="negative" fieldType="LRoot" ref="math_ops" value="negative" />
-        <putfield class="LRoot" field="negative" fieldType="LRoot" ref="gen_math_ops" value="negative" />
+        <!-- `gen_math_ops` wraps the C++ `Neg` op as `neg` (not `negative`); bind that field so `tensorflow.python.ops.gen_math_ops.neg(...)` routes to the `Negative` generator. -->
+        <putfield class="LRoot" field="neg" fieldType="LRoot" ref="gen_math_ops" value="negative" />
         <new def="sin" class="Ltensorflow/math/sin" />
         <putfield class="LRoot" field="sin" fieldType="LRoot" ref="x" value="sin" />
         <putfield class="LRoot" field="sin" fieldType="LRoot" ref="math" value="sin" />
