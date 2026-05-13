@@ -200,7 +200,7 @@ public class Ariadne {
                 "Error: option "
                     + opt
                     + " was specified while running in "
-                    + modeString.toString()
+                    + modeString
                     + " mode.  This option is only applicable when running as one of ("
                     + collToString(modeSet)
                     + ")");

@@ -356,7 +356,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           logger.finer("Found field name: " + fieldName);
 
           // if the "receiver" is a module initialization script.
-          if (fieldName.toString().endsWith("/" + MODULE_INITIALIZATION_FILENAME))
+          if (fieldName.endsWith("/" + MODULE_INITIALIZATION_FILENAME))
             try {
               processWildcardImports(instruction, fieldName, constantValue.toString());
             } catch (CancelException e) {
