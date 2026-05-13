@@ -9,7 +9,7 @@ type when the PTS walk doesn't carry the synthetic ``<new>`` alloc through direc
 import tensorflow as tf
 
 
-def consume(t):
+def consume(tensor):
     pass
 
 

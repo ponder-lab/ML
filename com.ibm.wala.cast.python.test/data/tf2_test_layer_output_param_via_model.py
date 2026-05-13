@@ -9,7 +9,7 @@ fallback), but exercised across one extra level of call indirection.
 import tensorflow as tf
 
 
-def consume(t):
+def consume(tensor):
     pass
 
 
