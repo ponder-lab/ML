@@ -297,14 +297,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   private static boolean pointsToTensorAllocation(
       PointerKey key, PointerAnalysis<InstanceKey> pointerAnalysis) {
     for (InstanceKey ik : pointerAnalysis.getPointsToSet(key)) {
-      TypeReference allocType;
-      if (ik instanceof AllocationSiteInNode) {
-        allocType = ((AllocationSiteInNode) ik).getConcreteType().getReference();
-      } else if (ik instanceof ConcreteTypeKey) {
-        allocType = ((ConcreteTypeKey) ik).getType().getReference();
-      } else {
-        continue;
-      }
+      if (!(ik instanceof AllocationSiteInNode)) continue;
+      TypeReference allocType = ((AllocationSiteInNode) ik).getConcreteType().getReference();
       if (allocType.equals(TensorFlowTypes.TENSOR_TYPE)) {
         return true;
       }
@@ -342,8 +336,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           methodName.equals(TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME)
               || methodName.equals(DO_METHOD_NAME);
       // wala/ML#378: broaden seeding to recognize any allocation of a registered tensor class as a
-      // tensor source, regardless of containing-method name. Lets direct `__call__`/`call` modeling
-      // (post wala/ML#127) seed without depending on the `do`/`read_data` method-name convention.
+      // tensor source, regardless of containing-method name. This lets direct `__call__`/`call`
+      // modeling (post wala/ML#127) seed without depending on the `do`/`read_data` method-name
+      // convention.
       boolean allocIsTensor =
           !methodNameSeedable && pointsToTensorAllocation(src.getPointerKey(), pointerAnalysis);
       if (methodNameSeedable || allocIsTensor) {
