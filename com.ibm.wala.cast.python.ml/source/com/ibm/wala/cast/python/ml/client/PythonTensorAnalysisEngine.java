@@ -283,6 +283,36 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * Returns whether the given pointer key's points-to set contains any allocation of a registered
+   * tensor class. Used by wala/ML#378's alloc-type-based seeding broadening: a call whose return
+   * value flows from a {@code <new class="Ltensorflow/python/framework/ops/Tensor"/>} site is a
+   * tensor source even if the containing method is not named {@code do} or {@code read_data}.
+   *
+   * @param key The pointer key whose points-to set is inspected.
+   * @param pointerAnalysis The pointer analysis providing the points-to set.
+   * @return {@code true} iff any {@link InstanceKey} in {@code key}'s points-to set has an
+   *     allocation class equal to {@link TensorFlowTypes#TENSOR_TYPE} (the canonical tensor type
+   *     post wala/ML#459).
+   */
+  private static boolean pointsToTensorAllocation(
+      PointerKey key, PointerAnalysis<InstanceKey> pointerAnalysis) {
+    for (InstanceKey ik : pointerAnalysis.getPointsToSet(key)) {
+      TypeReference allocType;
+      if (ik instanceof AllocationSiteInNode) {
+        allocType = ((AllocationSiteInNode) ik).getConcreteType().getReference();
+      } else if (ik instanceof ConcreteTypeKey) {
+        allocType = ((ConcreteTypeKey) ik).getType().getReference();
+      } else {
+        continue;
+      }
+      if (allocType.equals(TensorFlowTypes.TENSOR_TYPE)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Processes the given {@link SSAAbstractInvokeInstruction}, adding the given {@link PointsToSetVariable} to the given {@link Set} of {@link PointsToSetVariable}s as a dataflow source if the given {@link SSAAbstractInvokeInstruction} results in a tensor value.
    *
    * @param instruction The {@link SSAAbstractInvokeInstruction} to consider.
@@ -308,8 +338,15 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // don't consider exceptions as a data source.
     if (instruction.getException() != vn) {
       String methodName = instruction.getCallSite().getDeclaredTarget().getName().toString();
-      if (methodName.equals(TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME)
-          || methodName.equals(DO_METHOD_NAME)) {
+      boolean methodNameSeedable =
+          methodName.equals(TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME)
+              || methodName.equals(DO_METHOD_NAME);
+      // wala/ML#378: broaden seeding to recognize any allocation of a registered tensor class as a
+      // tensor source, regardless of containing-method name. Lets direct `__call__`/`call` modeling
+      // (post wala/ML#127) seed without depending on the `do`/`read_data` method-name convention.
+      boolean allocIsTensor =
+          !methodNameSeedable && pointsToTensorAllocation(src.getPointerKey(), pointerAnalysis);
+      if (methodNameSeedable || allocIsTensor) {
         try {
           TensorGenerator generator = getGenerator(src, builder);
           LOGGER.fine(() -> "Found tensor generator: " + generator + " for source: " + src + ".");
