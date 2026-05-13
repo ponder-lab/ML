@@ -260,6 +260,25 @@ public class TensorType implements Iterable<Dimension<?>> {
     this.dims = dims;
   }
 
+  /**
+   * Convenience constructor that derives the {@code cellType} string from a typed {@link DType}.
+   * Equivalent to {@code new TensorType(dtype.name().toLowerCase(Locale.ROOT), dims)} — the
+   * canonical Ariadne-side cellType serialization. Lets callers that already hold a {@link DType}
+   * skip the {@code name().toLowerCase(Locale.ROOT)} round-trip. See <a
+   * href="https://github.com/wala/ML/issues/533">wala/ML#533</a>.
+   *
+   * @param dtype The tensor element type; converted to {@code cellType} via {@link DType#name()}
+   *     lowercased with {@link Locale#ROOT}. Must not be null.
+   * @param dims The dimensions of the tensor; may be null to indicate unknown rank (⊤ shape).
+   */
+  public TensorType(DType dtype, List<Dimension<?>> dims) {
+    this(
+        Objects.requireNonNull(dtype, "TensorType dtype must not be null")
+            .name()
+            .toLowerCase(Locale.ROOT),
+        dims);
+  }
+
   String toFormattedString(Format fmt) {
     switch (fmt) {
       case CString:

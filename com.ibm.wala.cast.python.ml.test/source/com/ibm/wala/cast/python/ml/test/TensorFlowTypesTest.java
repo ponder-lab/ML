@@ -62,4 +62,36 @@ public class TensorFlowTypesTest {
     TensorType t = new TensorType(DType.UNKNOWN.name().toLowerCase(ROOT), emptyList());
     assertEquals(DType.UNKNOWN, t.getDType());
   }
+
+  // wala/ML#533: TensorType(DType, List<Dimension<?>>) ctor — equivalence with the String form.
+
+  @Test
+  public void testTensorTypeDTypeCtorEquivalentToStringCtorFloat32() {
+    TensorType viaDType = new TensorType(FLOAT32, emptyList());
+    TensorType viaString = new TensorType(FLOAT32.name().toLowerCase(ROOT), emptyList());
+    assertEquals(viaString, viaDType);
+    assertEquals(viaString.hashCode(), viaDType.hashCode());
+    assertEquals(FLOAT32, viaDType.getDType());
+  }
+
+  @Test
+  public void testTensorTypeDTypeCtorEquivalentToStringCtorInt64() {
+    TensorType viaDType = new TensorType(INT64, emptyList());
+    TensorType viaString = new TensorType(INT64.name().toLowerCase(ROOT), emptyList());
+    assertEquals(viaString, viaDType);
+    assertEquals(INT64, viaDType.getDType());
+  }
+
+  @Test
+  public void testTensorTypeDTypeCtorNullDtypeThrows() {
+    assertThrows(NullPointerException.class, () -> new TensorType((DType) null, emptyList()));
+  }
+
+  @Test
+  public void testTensorTypeDTypeCtorNullDimsAllowed() {
+    // Null dims is a valid ⊤ shape per the String-ctor contract; the DType ctor must accept it too.
+    TensorType t = new TensorType(FLOAT32, null);
+    assertEquals(FLOAT32, t.getDType());
+    assertEquals(new TensorType(FLOAT32.name().toLowerCase(ROOT), null), t);
+  }
 }
