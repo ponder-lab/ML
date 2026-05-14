@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.analysis.ap;
 
 import com.ibm.wala.util.collections.Pair;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /** A path element representing an instance field. */
@@ -107,6 +108,6 @@ public class PropertyPathElement implements IPathElement {
 
   @Override
   public String toString() {
-    return field.toString();
+    return Objects.toString(field);
   }
 }
