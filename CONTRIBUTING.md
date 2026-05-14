@@ -110,20 +110,20 @@ Shapes and dtypes are orthogonal. When the shape is unknown but the dtype is kno
 
 - [ ] Audit every final-fallback return in `getDefaultShapes` and `getDefaultDTypes` against the tables above.
 - [ ] Prefer `null` over `Collections.emptySet()` when the intended meaning is "we know it's a tensor, we just can't figure out the shape."
-- [ ] Prefer `EnumSet.of(DType.UNKNOWN)` over `EnumSet.noneOf(DType.class)` / `Collections.emptySet()` for unknown dtypes.
+- [ ] Prefer `EnumSet.of(DType.UNKNOWN)` over `EnumSet.noneOf(DType.class)`/`Collections.emptySet()` for unknown dtypes.
 - [ ] If your generator's result is accumulated into a `ret` set inside a loop, verify the final `return ret` cannot return an empty set when you actually meant "unknown." Add `return ret.isEmpty() ? null : ret;` if it can.
 
 ## Modeling APIs in `tensorflow.xml`
 
-When adding or modifying an API summary in `tensorflow.xml` / `numpy.xml`:
+When adding or modifying an API summary in `tensorflow.xml`/`numpy.xml`:
 
 - **Allocating ops**—APIs that return a fresh tensor (e.g., `tf.matmul`, `tf.nn.sigmoid`, `tf.nn.softmax`, `tf.sparse.add`, `tf.nn.sparse_softmax_cross_entropy_with_logits`, `np.array`, `np.reshape`) should use `<new def="res" class="..."/>` followed by `<return value="res"/>`. Pair the XML with a `TensorGenerator` subclass that computes the output shape/dtype from the inputs. **Never** use `<return value="param"/>` for an allocating op—that aliases the call's result with an input and silently propagates the wrong shape/dtype downstream (this is a recurring bug class; see closed wala/ML#412 and predecessors).
 - **Allocation-class convention for `<new>` results**—picking the right `class="..."` depends on the API kind. The asymmetric rule is documented in the header comment at the top of `tensorflow.xml`; the short version: function-typed APIs that return a tensor (e.g., `tf.math.sigmoid`, `tf.math.add`, `tf.reshape`) use canonical `Ltensorflow/python/framework/ops/Tensor`; object-typed APIs and callback-bearing wrappers (e.g., `Variable`, `Estimator`, `SparseTensor`, Estimator's `train` method class) use the per-op class because class identity is load-bearing for the result's method surface or for virtual dispatch on stored callbacks. See wala/ML#459 (the migration that established this) and wala/ML#465 (the convention's documentation).
 - **Genuinely pass-through ops**—only methods that semantically return one of their inputs unchanged (e.g., builder-style `Dataset.shuffle`/`batch` chain that returns the same dataset object, or identity-like ops) should use `<return value="param"/>`. Document the choice with a comment.
 - **Allocatable classes**—`<new class="L..."/>` requires the target class to be declared `<class name="..." allocatable="true">` somewhere in the XML, otherwise `HeapModel.getInstanceKeyForAllocation` returns `null` and the iKey never reaches the caller (see wala/WALA#1889 history). When a new `<new>` target class is added, audit existing ones in the same area for the declaration.
-- **`numArgs` / `paramNames` consistency**—every `<method numArgs="N" paramNames="...">` must have exactly `N` whitespace-separated names in `paramNames`. Mismatches silently break parameter resolution; audit when changing signatures.
+- **`numArgs`/`paramNames` consistency**—every `<method numArgs="N" paramNames="...">` must have exactly `N` whitespace-separated names in `paramNames`. Mismatches silently break parameter resolution; audit when changing signatures.
 
-## Pinning Shapes / Blocking PA Leaks
+## Pinning Shapes/Blocking PA Leaks
 
 When the PA assignment graph propagates a tensor type into a destination that semantically isn't a tensor, use one of these `TensorTypeAnalysis` mechanisms (both threaded through `PythonTensorAnalysisEngine.performAnalysis`):
 
@@ -164,6 +164,6 @@ When the PA assignment graph propagates a tensor type into a destination that se
 	public void testModule70() { ... }
 	```
 
-	Without the `TODO` keyword a suppressed failure is indistinguishable from an intentional positive negative-assertion (see `testDecoratedMethod9`), and IDE task-list / `grep TODO` tooling will not surface it as temporary. The only legitimate exception is when the `AssertionError` is itself the expected positive outcome (e.g., "this function doesn't exist, so the test should fail"); those should be documented in the Javadoc as intentional.
+	Without the `TODO` keyword a suppressed failure is indistinguishable from an intentional positive negative-assertion (see `testDecoratedMethod9`), and IDE task-list/`grep TODO` tooling will not surface it as temporary. The only legitimate exception is when the `AssertionError` is itself the expected positive outcome (e.g., "this function doesn't exist, so the test should fail"); those should be documented in the Javadoc as intentional.
 
 [SO post]: https://stackoverflow.com/questions/4955635/how-to-add-local-jar-files-to-a-maven-project#answer-4955635
