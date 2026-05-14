@@ -278,11 +278,11 @@ public class TensorType implements Iterable<Dimension<?>> {
     try {
       this.dtype =
           DType.valueOf(
-              Objects.requireNonNull(cellType, "TensorType cellType must not be null")
+              Objects.requireNonNull(cellType, "Cell type must not be null.")
                   .toUpperCase(Locale.ROOT));
     } catch (IllegalArgumentException e) {
       throw new IllegalArgumentException(
-          "Cell type \"" + cellType + "\" does not map to a known DType.", e);
+          "Cell type: " + cellType + " does not map to a known " + DType.class.getName() + ".", e);
     }
     this.dims = dims;
   }
