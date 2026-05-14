@@ -111,6 +111,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_1_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(2)));
 
+  private static final TensorType TENSOR_1_3_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(3)));
+
+  private static final TensorType TENSOR_3_1_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(1)));
+
   @SuppressWarnings("unused")
   private static final TensorType TENSOR_32_INT32 =
       new TensorType(INT_32, asList(new NumericDim(32)));
@@ -5782,7 +5788,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testExpandDims()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_expand_dims.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test("tf2_test_expand_dims.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_3_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testExpandDims()} for {@code axis=-1}: trailing length-1 dim. Input shape
+   * {@code (3,)} produces output shape {@code (3, 1)}.
+   */
+  @Test
+  public void testExpandDimsAxisNeg1()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_expand_dims_axis_neg1.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_1_FLOAT32)));
   }
 
   /**
