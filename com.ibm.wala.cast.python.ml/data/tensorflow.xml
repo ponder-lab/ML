@@ -632,6 +632,7 @@
         <putfield class="LRoot" field="acos" fieldType="LRoot" ref="x" value="acos" />
         <putfield class="LRoot" field="acos" fieldType="LRoot" ref="math" value="acos" />
         <putfield class="LRoot" field="acos" fieldType="LRoot" ref="math_ops" value="acos" />
+        <putfield class="LRoot" field="acos" fieldType="LRoot" ref="gen_math_ops" value="acos" />
         <new def="ragged_range" class="Ltensorflow/functions/ragged_range" />
         <putfield class="LRoot" field="range" fieldType="LRoot" ref="ragged" value="ragged_range" />
         <putfield class="LRoot" field="range" fieldType="LRoot" ref="ragged_math_ops" value="ragged_range" />
@@ -816,27 +817,38 @@
         <putfield class="LRoot" field="sqrt" fieldType="LRoot" ref="x" value="sqrt" />
         <putfield class="LRoot" field="sqrt" fieldType="LRoot" ref="math" value="sqrt" />
         <putfield class="LRoot" field="sqrt" fieldType="LRoot" ref="math_ops" value="sqrt" />
+        <putfield class="LRoot" field="sqrt" fieldType="LRoot" ref="gen_math_ops" value="sqrt" />
         <new def="log" class="Ltensorflow/math/log" />
         <putfield class="LRoot" field="log" fieldType="LRoot" ref="x" value="log" />
         <putfield class="LRoot" field="log" fieldType="LRoot" ref="math" value="log" />
         <putfield class="LRoot" field="log" fieldType="LRoot" ref="gen_math_ops" value="log" />
+        <putfield class="LRoot" field="log" fieldType="LRoot" ref="math_ops" value="log" />
         <new def="negative" class="Ltensorflow/math/negative" />
         <putfield class="LRoot" field="negative" fieldType="LRoot" ref="x" value="negative" />
         <putfield class="LRoot" field="negative" fieldType="LRoot" ref="math" value="negative" />
+        <putfield class="LRoot" field="negative" fieldType="LRoot" ref="math_ops" value="negative" />
+        <!-- `gen_math_ops` wraps the C++ `Neg` op as `neg` (not `negative`); bind that field so `tensorflow.python.ops.gen_math_ops.neg(...)` routes to the `Negative` generator. -->
+        <putfield class="LRoot" field="neg" fieldType="LRoot" ref="gen_math_ops" value="negative" />
         <new def="sin" class="Ltensorflow/math/sin" />
         <putfield class="LRoot" field="sin" fieldType="LRoot" ref="x" value="sin" />
         <putfield class="LRoot" field="sin" fieldType="LRoot" ref="math" value="sin" />
         <putfield class="LRoot" field="sin" fieldType="LRoot" ref="gen_math_ops" value="sin" />
+        <putfield class="LRoot" field="sin" fieldType="LRoot" ref="math_ops" value="sin" />
         <new def="cos" class="Ltensorflow/math/cos" />
         <putfield class="LRoot" field="cos" fieldType="LRoot" ref="x" value="cos" />
         <putfield class="LRoot" field="cos" fieldType="LRoot" ref="math" value="cos" />
         <putfield class="LRoot" field="cos" fieldType="LRoot" ref="gen_math_ops" value="cos" />
+        <putfield class="LRoot" field="cos" fieldType="LRoot" ref="math_ops" value="cos" />
         <new def="floor" class="Ltensorflow/math/floor" />
         <putfield class="LRoot" field="floor" fieldType="LRoot" ref="x" value="floor" />
         <putfield class="LRoot" field="floor" fieldType="LRoot" ref="math" value="floor" />
+        <putfield class="LRoot" field="floor" fieldType="LRoot" ref="math_ops" value="floor" />
+        <putfield class="LRoot" field="floor" fieldType="LRoot" ref="gen_math_ops" value="floor" />
         <new def="ceil" class="Ltensorflow/math/ceil" />
         <putfield class="LRoot" field="ceil" fieldType="LRoot" ref="x" value="ceil" />
         <putfield class="LRoot" field="ceil" fieldType="LRoot" ref="math" value="ceil" />
+        <putfield class="LRoot" field="ceil" fieldType="LRoot" ref="math_ops" value="ceil" />
+        <putfield class="LRoot" field="ceil" fieldType="LRoot" ref="gen_math_ops" value="ceil" />
         <new def="sign" class="Ltensorflow/math/sign" />
         <putfield class="LRoot" field="sign" fieldType="LRoot" ref="x" value="sign" />
         <putfield class="LRoot" field="sign" fieldType="LRoot" ref="math" value="sign" />
@@ -846,42 +858,61 @@
         <putfield class="LRoot" field="tan" fieldType="LRoot" ref="x" value="tan" />
         <putfield class="LRoot" field="tan" fieldType="LRoot" ref="math" value="tan" />
         <putfield class="LRoot" field="tan" fieldType="LRoot" ref="gen_math_ops" value="tan" />
+        <putfield class="LRoot" field="tan" fieldType="LRoot" ref="math_ops" value="tan" />
         <new def="asin" class="Ltensorflow/math/asin" />
         <putfield class="LRoot" field="asin" fieldType="LRoot" ref="x" value="asin" />
         <putfield class="LRoot" field="asin" fieldType="LRoot" ref="math" value="asin" />
         <putfield class="LRoot" field="asin" fieldType="LRoot" ref="gen_math_ops" value="asin" />
+        <putfield class="LRoot" field="asin" fieldType="LRoot" ref="math_ops" value="asin" />
         <new def="atan" class="Ltensorflow/math/atan" />
         <putfield class="LRoot" field="atan" fieldType="LRoot" ref="x" value="atan" />
         <putfield class="LRoot" field="atan" fieldType="LRoot" ref="math" value="atan" />
         <putfield class="LRoot" field="atan" fieldType="LRoot" ref="gen_math_ops" value="atan" />
+        <putfield class="LRoot" field="atan" fieldType="LRoot" ref="math_ops" value="atan" />
         <new def="sinh" class="Ltensorflow/math/sinh" />
         <putfield class="LRoot" field="sinh" fieldType="LRoot" ref="x" value="sinh" />
         <putfield class="LRoot" field="sinh" fieldType="LRoot" ref="math" value="sinh" />
         <putfield class="LRoot" field="sinh" fieldType="LRoot" ref="gen_math_ops" value="sinh" />
+        <putfield class="LRoot" field="sinh" fieldType="LRoot" ref="math_ops" value="sinh" />
         <new def="cosh" class="Ltensorflow/math/cosh" />
         <putfield class="LRoot" field="cosh" fieldType="LRoot" ref="x" value="cosh" />
         <putfield class="LRoot" field="cosh" fieldType="LRoot" ref="math" value="cosh" />
+        <putfield class="LRoot" field="cosh" fieldType="LRoot" ref="math_ops" value="cosh" />
+        <putfield class="LRoot" field="cosh" fieldType="LRoot" ref="gen_math_ops" value="cosh" />
         <new def="asinh" class="Ltensorflow/math/asinh" />
         <putfield class="LRoot" field="asinh" fieldType="LRoot" ref="x" value="asinh" />
         <putfield class="LRoot" field="asinh" fieldType="LRoot" ref="math" value="asinh" />
+        <putfield class="LRoot" field="asinh" fieldType="LRoot" ref="math_ops" value="asinh" />
+        <putfield class="LRoot" field="asinh" fieldType="LRoot" ref="gen_math_ops" value="asinh" />
         <new def="acosh" class="Ltensorflow/math/acosh" />
         <putfield class="LRoot" field="acosh" fieldType="LRoot" ref="x" value="acosh" />
         <putfield class="LRoot" field="acosh" fieldType="LRoot" ref="math" value="acosh" />
+        <putfield class="LRoot" field="acosh" fieldType="LRoot" ref="math_ops" value="acosh" />
+        <putfield class="LRoot" field="acosh" fieldType="LRoot" ref="gen_math_ops" value="acosh" />
         <new def="atanh" class="Ltensorflow/math/atanh" />
         <putfield class="LRoot" field="atanh" fieldType="LRoot" ref="x" value="atanh" />
         <putfield class="LRoot" field="atanh" fieldType="LRoot" ref="math" value="atanh" />
+        <putfield class="LRoot" field="atanh" fieldType="LRoot" ref="math_ops" value="atanh" />
+        <putfield class="LRoot" field="atanh" fieldType="LRoot" ref="gen_math_ops" value="atanh" />
         <new def="log1p" class="Ltensorflow/math/log1p" />
         <putfield class="LRoot" field="log1p" fieldType="LRoot" ref="x" value="log1p" />
         <putfield class="LRoot" field="log1p" fieldType="LRoot" ref="math" value="log1p" />
+        <putfield class="LRoot" field="log1p" fieldType="LRoot" ref="math_ops" value="log1p" />
+        <putfield class="LRoot" field="log1p" fieldType="LRoot" ref="gen_math_ops" value="log1p" />
         <new def="expm1" class="Ltensorflow/math/expm1" />
         <putfield class="LRoot" field="expm1" fieldType="LRoot" ref="x" value="expm1" />
         <putfield class="LRoot" field="expm1" fieldType="LRoot" ref="math" value="expm1" />
+        <putfield class="LRoot" field="expm1" fieldType="LRoot" ref="math_ops" value="expm1" />
+        <putfield class="LRoot" field="expm1" fieldType="LRoot" ref="gen_math_ops" value="expm1" />
         <new def="round" class="Ltensorflow/math/round" />
         <putfield class="LRoot" field="round" fieldType="LRoot" ref="x" value="round" />
         <putfield class="LRoot" field="round" fieldType="LRoot" ref="math" value="round" />
+        <putfield class="LRoot" field="round" fieldType="LRoot" ref="math_ops" value="round" />
+        <putfield class="LRoot" field="round" fieldType="LRoot" ref="gen_math_ops" value="round" />
         <new def="reciprocal" class="Ltensorflow/math/reciprocal" />
         <putfield class="LRoot" field="reciprocal" fieldType="LRoot" ref="math" value="reciprocal" />
         <putfield class="LRoot" field="reciprocal" fieldType="LRoot" ref="gen_math_ops" value="reciprocal" />
+        <putfield class="LRoot" field="reciprocal" fieldType="LRoot" ref="math_ops" value="reciprocal" />
         <new def="softplus" class="Ltensorflow/math/softplus" />
         <putfield class="LRoot" field="softplus" fieldType="LRoot" ref="math" value="softplus" />
         <putfield class="LRoot" field="softplus" fieldType="LRoot" ref="nn" value="softplus" />
@@ -891,12 +922,16 @@
         <new def="square" class="Ltensorflow/math/square" />
         <putfield class="LRoot" field="square" fieldType="LRoot" ref="x" value="square" />
         <putfield class="LRoot" field="square" fieldType="LRoot" ref="math" value="square" />
+        <putfield class="LRoot" field="square" fieldType="LRoot" ref="math_ops" value="square" />
         <putfield class="LRoot" field="square" fieldType="LRoot" ref="gen_math_ops" value="square" />
         <new def="erf" class="Ltensorflow/math/erf" />
         <putfield class="LRoot" field="erf" fieldType="LRoot" ref="math" value="erf" />
         <putfield class="LRoot" field="erf" fieldType="LRoot" ref="gen_math_ops" value="erf" />
+        <putfield class="LRoot" field="erf" fieldType="LRoot" ref="math_ops" value="erf" />
         <new def="erfc" class="Ltensorflow/math/erfc" />
         <putfield class="LRoot" field="erfc" fieldType="LRoot" ref="math" value="erfc" />
+        <putfield class="LRoot" field="erfc" fieldType="LRoot" ref="math_ops" value="erfc" />
+        <putfield class="LRoot" field="erfc" fieldType="LRoot" ref="gen_math_ops" value="erfc" />
         <!-- Element-wise binary ops (broadcast shape, unified dtype) — routed through ElementWiseOperation. -->
         <new def="atan2" class="Ltensorflow/math/atan2" />
         <putfield class="LRoot" field="atan2" fieldType="LRoot" ref="math" value="atan2" />
