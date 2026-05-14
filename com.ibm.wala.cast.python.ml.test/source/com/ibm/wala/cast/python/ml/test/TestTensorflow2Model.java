@@ -111,6 +111,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_1_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(2)));
 
+  private static final TensorType TENSOR_1_10_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(10)));
+
   private static final TensorType TENSOR_1_3_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(3)));
 
@@ -9559,6 +9562,37 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_model_call_consume.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_20_10_FLOAT32)));
+  }
+
+  /**
+   * Regression guard for the "layer-output flows into script-level consumer" pattern: a downstream
+   * function whose tensor parameter comes from a layer call's output. Companion to {@link
+   * #testModelCallConsume()}, which calls {@code consume(x)} <em>inside</em> {@code
+   * SequentialModel.__call__}; this fixture calls {@code consume(pred)} at script-level after the
+   * layer call — the same surface shape, but a different caller. The existing {@code
+   * DenseCall.getDefaultShapes} SSA-chain fallback recovers the result type when the direct PTS
+   * walk doesn't carry the synthetic {@code <new>} alloc through.
+   */
+  @Test
+  public void testLayerOutputParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_layer_output_param.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_1_10_FLOAT32)));
+  }
+
+  /**
+   * Variant of {@link #testLayerOutputParam()} that interposes a user-defined {@code
+   * tf.keras.Model} subclass between the {@code Dense} layers and the script-level consumer —
+   * exercises the same fallback through one extra level of call indirection.
+   */
+  @Test
+  public void testLayerOutputParamViaModel()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_layer_output_param_via_model.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_10_FLOAT32)));
   }
 
   private void test(
