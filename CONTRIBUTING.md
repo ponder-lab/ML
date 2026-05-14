@@ -82,7 +82,7 @@ black --fast .
 
 When writing a new `TensorGenerator` subclass in `com.ibm.wala.cast.python.ml.client`, uphold the lattice conventions for shapes and dtypes so downstream analysis can distinguish "unknown tensor" (⊤) from "not a tensor" (⊥). The class-level Javadoc on `TensorGenerator` is the source of truth; the summary below is the quick version.
 
-### Shapes — `getDefaultShapes`
+### Shapes—`getDefaultShapes`
 
 | Return value | Meaning |
 |---|---|
@@ -100,9 +100,9 @@ Within a single shape, use `new SymbolicDim("?")` for a known-rank-but-unknown-s
 | empty set | ⊥ — the variable is provably not a tensor. |
 | non-empty set of concrete `DType`s | The set of possible dtypes. |
 
-Never return a bare empty set to mean "unknown dtype" — that collides with the "not a tensor" signal.
+Never return a bare empty set to mean "unknown dtype"—that collides with the "not a tensor" signal.
 
-### Tensor Types — `getTensorTypes`
+### Tensor Types—`getTensorTypes`
 
 Shapes and dtypes are orthogonal. When the shape is unknown but the dtype is known, `getTensorTypes` emits `TensorType` instances with `null` dims so dtype information is preserved. `TensorType` is null-dims-safe; any code that consumes `TensorType`s must handle `getDims() == null`.
 
