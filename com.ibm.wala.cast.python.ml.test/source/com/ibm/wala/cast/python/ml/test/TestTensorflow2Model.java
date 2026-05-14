@@ -4238,21 +4238,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Tests that the analysis identifies non-broadcastable shapes in conditional branches.
+   * Tests that under per-context shape unions the analysis returns the broadcastable cross-pairs
+   * and silently discards the non-broadcastable ones (wala/ML#462).
    *
    * <p>In {@code tf2_test_add117.py}, the variable {@code a} can be either 1 or 3.
    *
    * <ul>
-   *   <li>If {@code a=1}, the addition is {@code [1, 2] + [2, 2]}, which is broadcastable.
+   *   <li>If {@code a=1}, the addition is {@code [1, 2] + [2, 2]}, which is broadcastable to {@code
+   *       [2, 2]}.
    *   <li>If {@code a=3}, the addition is {@code [3, 2] + [2, 2]}, which is NOT broadcastable.
    * </ul>
    *
-   * The analysis correctly identifies that one possible dataflow is invalid and throws a {@link
-   * NonBroadcastableShapesException}.
+   * The analysis retains the broadcastable result ({@code [2, 2]}) and discards the
+   * non-broadcastable cross-pair as analysis-level imprecision rather than a runtime error &mdash;
+   * the cross-pair would never co-occur at runtime under matched contexts. A {@link
+   * NonBroadcastableShapesException} is only thrown when <em>every</em> pair is non-broadcastable.
    *
    * @see #testAdd117a()
    */
-  @Test(expected = NonBroadcastableShapesException.class)
+  @Test
   public void testAdd117()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
