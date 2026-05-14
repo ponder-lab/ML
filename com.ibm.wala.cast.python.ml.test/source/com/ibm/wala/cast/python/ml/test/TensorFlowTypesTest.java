@@ -99,7 +99,7 @@ public class TensorFlowTypesTest {
     assertEquals(FLOAT32, t.getDType());
     assertEquals(new TensorType(FLOAT32.name().toLowerCase(ROOT), null), t);
   }
-  
+
   // wala/ML#532 regression guards: TensorType honors equals/hashCode on (cellType, dims).
 
   @Test
