@@ -54,9 +54,11 @@ public class TensorFlowTypesTest {
   }
 
   @Test
-  public void testTensorTypeGetDTypeUnknownCellTypeThrowsIllegalStateException() {
-    TensorType t = new TensorType("not_a_real_dtype", emptyList());
-    assertThrows(IllegalStateException.class, t::getDType);
+  public void testTensorTypeUnknownCellTypeRejectedAtConstruction() {
+    // wala/ML#533: dtype is the internal source of truth; the String ctor must reject any
+    // cellType that doesn't map to a known DType at construction time (eager, fail-fast).
+    assertThrows(
+        IllegalArgumentException.class, () -> new TensorType("not_a_real_dtype", emptyList()));
   }
 
   @Test
@@ -64,6 +66,38 @@ public class TensorFlowTypesTest {
     // DType.UNKNOWN is a real enum value; its cellType "unknown" must round-trip too.
     TensorType t = new TensorType(DType.UNKNOWN.name().toLowerCase(ROOT), emptyList());
     assertEquals(DType.UNKNOWN, t.getDType());
+  }
+
+  // wala/ML#533: TensorType(DType, List<Dimension<?>>) ctor — equivalence with the String form.
+
+  @Test
+  public void testTensorTypeDTypeCtorEquivalentToStringCtorFloat32() {
+    TensorType viaDType = new TensorType(FLOAT32, emptyList());
+    TensorType viaString = new TensorType(FLOAT32.name().toLowerCase(ROOT), emptyList());
+    assertEquals(viaString, viaDType);
+    assertEquals(viaString.hashCode(), viaDType.hashCode());
+    assertEquals(FLOAT32, viaDType.getDType());
+  }
+
+  @Test
+  public void testTensorTypeDTypeCtorEquivalentToStringCtorInt64() {
+    TensorType viaDType = new TensorType(INT64, emptyList());
+    TensorType viaString = new TensorType(INT64.name().toLowerCase(ROOT), emptyList());
+    assertEquals(viaString, viaDType);
+    assertEquals(INT64, viaDType.getDType());
+  }
+
+  @Test
+  public void testTensorTypeDTypeCtorNullDtypeThrows() {
+    assertThrows(NullPointerException.class, () -> new TensorType((DType) null, emptyList()));
+  }
+
+  @Test
+  public void testTensorTypeDTypeCtorNullDimsAllowed() {
+    // Null dims is a valid ⊤ shape per the String-ctor contract; the DType ctor must accept it too.
+    TensorType t = new TensorType(FLOAT32, null);
+    assertEquals(FLOAT32, t.getDType());
+    assertEquals(new TensorType(FLOAT32.name().toLowerCase(ROOT), null), t);
   }
 
   // wala/ML#532 regression guards: TensorType honors equals/hashCode on (cellType, dims).

@@ -250,13 +250,52 @@ public class TensorType implements Iterable<Dimension<?>> {
     }
   }
 
-  private final String cellType;
+  /**
+   * The dtype as a typed enum value — every {@code TensorType} has one. The {@link
+   * #TensorType(DType, List)} ctor stores the passed value directly; the {@link #TensorType(String,
+   * List)} ctor parses the cellType string at construction and throws {@link
+   * IllegalArgumentException} if it doesn't map to a known {@link DType}. See <a
+   * href="https://github.com/wala/ML/issues/533">wala/ML#533</a>.
+   */
+  private final DType dtype;
+
   private final List<Dimension<?>> dims;
 
+  /**
+   * Constructs a {@code TensorType} from a {@code cellType} string. The string must map to a known
+   * {@link DType} via {@code DType.valueOf(cellType.toUpperCase(Locale.ROOT))}; an unparseable
+   * value is rejected at construction time. Prefer {@link #TensorType(DType, List)} when a typed
+   * {@link DType} is already in hand.
+   *
+   * @param cellType The lowercase dtype name (e.g., {@code "float32"}). Must not be null and must
+   *     parse to a {@link DType} constant.
+   * @param dims The dimensions of the tensor; may be null to indicate unknown rank (⊤ shape).
+   * @throws IllegalArgumentException if {@code cellType} doesn't map to a {@link DType}.
+   */
   public TensorType(String cellType, List<Dimension<?>> dims) {
     // A TensorType with a null cellType is nonsensical: every tensor has a dtype, even if it is
     // DType.UNKNOWN. Dims, on the other hand, may legitimately be null (unknown rank / ⊤ shape).
-    this.cellType = Objects.requireNonNull(cellType, "TensorType cellType must not be null");
+    try {
+      this.dtype =
+          DType.valueOf(
+              Objects.requireNonNull(cellType, "Cell type must not be null.")
+                  .toUpperCase(Locale.ROOT));
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException(
+          "Cell type: " + cellType + " does not map to a known " + DType.class.getName() + ".", e);
+    }
+    this.dims = dims;
+  }
+
+  /**
+   * Primary constructor. The dtype is the internal source of truth since wala/ML#533; the cellType
+   * String exposed via {@link #getCellType} is derived from it on demand.
+   *
+   * @param dtype The tensor element type. Must not be null.
+   * @param dims The dimensions of the tensor; may be null to indicate unknown rank (⊤ shape).
+   */
+  public TensorType(DType dtype, List<Dimension<?>> dims) {
+    this.dtype = Objects.requireNonNull(dtype, "TensorType dtype must not be null");
     this.dims = dims;
   }
 
@@ -489,28 +528,19 @@ public class TensorType implements Iterable<Dimension<?>> {
    * @return The cell type of the tensor.
    */
   public String getCellType() {
-    return cellType;
+    return dtype.name().toLowerCase(Locale.ROOT);
   }
 
   /**
    * Returns the dtype of the tensor as a typed {@link DType} enum value.
    *
-   * <p>The cell type is stored as a lowercase string (e.g., {@code "float32"}) for the LSP wire
-   * format. Both construction sites and this accessor use {@link Locale#ROOT} for the case
-   * conversion, so the round-trip is locale-stable. Consumers can branch on the dtype as a typed
-   * value instead of doing cast-and-uppercase boilerplate inline.
+   * <p>{@code dtype} is the internal source of truth since wala/ML#533; consumers branch on it as a
+   * typed value instead of doing cast-and-uppercase boilerplate on {@link #getCellType()}. The
+   * String ctor parses-or-throws at construction, so this accessor never throws.
    *
-   * @return The dtype enum value corresponding to the stored cell type.
-   * @throws IllegalStateException if the stored cell type doesn't map to a {@link DType} constant.
-   *     Construction sites build the cell type from {@code dtype.name()}, so an unparseable value
-   *     means an internal invariant was violated upstream.
+   * @return The dtype enum value.
    */
   public DType getDType() {
-    try {
-      return DType.valueOf(cellType.toUpperCase(Locale.ROOT));
-    } catch (IllegalArgumentException e) {
-      throw new IllegalStateException(
-          "Cell type \"" + cellType + "\" does not map to a known DType.", e);
-    }
+    return dtype;
   }
 }
