@@ -275,9 +275,11 @@ public class TensorType implements Iterable<Dimension<?>> {
   public TensorType(String cellType, List<Dimension<?>> dims) {
     // A TensorType with a null cellType is nonsensical: every tensor has a dtype, even if it is
     // DType.UNKNOWN. Dims, on the other hand, may legitimately be null (unknown rank / ⊤ shape).
-    Objects.requireNonNull(cellType, "TensorType cellType must not be null");
     try {
-      this.dtype = DType.valueOf(cellType.toUpperCase(Locale.ROOT));
+      this.dtype =
+          DType.valueOf(
+              Objects.requireNonNull(cellType, "TensorType cellType must not be null")
+                  .toUpperCase(Locale.ROOT));
     } catch (IllegalArgumentException e) {
       throw new IllegalArgumentException(
           "Cell type \"" + cellType + "\" does not map to a known DType.", e);
