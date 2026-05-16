@@ -111,6 +111,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_1_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(2)));
 
+  private static final TensorType TENSOR_1_5_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(5)));
+
   private static final TensorType TENSOR_1_10_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(10)));
 
@@ -2090,6 +2093,29 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         7,
         Map.of(2, Set.of(TENSOR_256_28_28_1_FLOAT32, TENSOR_96_28_28_1_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code top_p_logits(logits, p)}'s parameter type for the input-signature-inference
+   * empirical pass (issue <a
+   * href="https://github.com/ponder-lab/Input-Signature-Inference-Paper/issues/22">ponder-lab/Input-Signature-Inference-Paper#22</a>).
+   * Function body mirrors {@code akanyaani/gpt-2-tensorflow2.0/sample.py}'s {@code top_p_logits}, a
+   * function the previous paper's Hybridize tool refactored with {@code @tf.function}. Exercises
+   * several ops currently routed through {@code ReadDataFallback} per wala/ML#449 ({@code tf.sort},
+   * {@code tf.cumsum}, {@code tf.stack}, {@code tf.range}, {@code tf.gather_nd}, {@code tf.where}),
+   * but the parameter type of {@code logits} comes from its caller (a {@code tf.constant} with
+   * shape {@code (1, 5)} dtype {@code float32}), so this test isolates the caller-side propagation
+   * rather than the body's op precision.
+   *
+   * <p>Empirically, {@code logits} is inferred as {@code (1, 5) float32} — concrete on both axes.
+   * The caller's {@code tf.constant([[1.0, ..., 5.0]], dtype=tf.float32)} flows in cleanly. This
+   * means none of the body's {@code ReadDataFallback}-routed ops actually block input-signature
+   * inference for this function; the parameter type is fully resolved at the call site.
+   */
+  @Test
+  public void testTopPLogits()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_top_p_logits.py", "top_p_logits", 1, 11, Map.of(2, Set.of(TENSOR_1_5_FLOAT32)));
   }
 
   /**
