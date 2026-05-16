@@ -107,20 +107,24 @@
             </goals>
             <phase>package</phase>
             <configuration>
+              <!-- Attach the shaded output as a `fat` classifier so the
+                default published jar stays plain (Ariadne classes only,
+                no Main-Class). Library consumers depend on the default
+                jar and resolve `com.ibm.wala.{core,cast,shrike,util}`,
+                `jython3`, `jnr-constants`, etc. transitively. The
+                standalone driver uses the `fat` classifier via
+                `java -jar com.ibm.wala.cast.python.ml-X.Y.Z-fat.jar`.
+                See wala/ML#525. -->
+              <shadedArtifactAttached>true</shadedArtifactAttached>
+              <shadedClassifierName>fat</shadedClassifierName>
               <transformers>
-                <!-- add Main-Class to manifest file -->
+                <!-- Add `Main-Class` to manifest file. Only present on
+                  the fat classifier; the default jar's manifest stays
+                  clean. -->
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <mainClass>com.ibm.wala.cast.python.ml.driver.Ariadne</mainClass>
                 </transformer>
               </transformers>
-              <artifactSet>
-                <excludes>
-                  <exclude>com.ibm.wala:com.ibm.wala.core</exclude>
-                  <exclude>com.ibm.wala:com.ibm.wala.util</exclude>
-                  <exclude>com.ibm.wala:com.ibm.wala.shrike</exclude>
-                  <exclude>com.ibm.wala:com.ibm.wala.cast</exclude>
-                </excludes>
-              </artifactSet>
             </configuration>
           </execution>
         </executions>
