@@ -2144,6 +2144,39 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Pins {@code multilayer_perceptron(x)}'s parameter type for the input-signature-inference
+   * empirical pass (issue <a
+   * href="https://github.com/ponder-lab/Input-Signature-Inference-Paper/issues/22">ponder-lab/Input-Signature-Inference-Paper#22</a>).
+   * Function body mirrors {@code multilayer_perceptron} from {@code
+   * YunYang1994/TensorFlow2.0-Examples/2-Basical_Models/Multilayer_Perceptron.py}, a function the
+   * previous paper's Hybridize tool refactored with {@code @tf.function}. Uses raw {@code
+   * tf.matmul} / {@code tf.add} / {@code tf.nn.sigmoid} / {@code tf.nn.softmax} against global
+   * {@code tf.Variable} weights and biases — a different pattern from the {@code Dense}-layer
+   * subclass-Model approach already covered by {@code testNeuralNetwork*}.
+   *
+   * <p>Empirically, {@code x} is inferred as {@code ⊤ shape / UNKNOWN dtype} — the first
+   * load-bearing UNKNOWN-dtype the empirical pass has surfaced for input-signature inference. The
+   * dtype axis is the load-bearing one per the audit's definition, so this function would NOT be
+   * input-signature-emittable on current master. The likely cause is the caller's {@code batch_x =
+   * tf.constant(np.ones((100, 784), dtype=np.float32))} losing dtype through the {@code numpy →
+   * tf.constant} boundary — Ariadne's modeling of this construction chain appears to not preserve
+   * the numpy dtype info.
+   *
+   * <p>TODO: tighten to the precise type once the {@code numpy → tf.constant} dtype propagation gap
+   * is resolved.
+   */
+  @Test
+  public void testMultilayerPerceptron()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_multilayer_perceptron.py",
+        "multilayer_perceptron",
+        1,
+        14,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
    * {@code MyModel.call(self, x)} receives {@code x} from {@code model(images)} calls inside {@code
    * train_step} and {@code test_step}. {@code images} comes from iterating {@code train_ds}, {@code
    * valid_ds}, or {@code test_ds} &mdash; all created from mnist data via {@code
