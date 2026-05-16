@@ -2119,6 +2119,31 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Pins {@code _take_long_axis(arr, indices)}'s parameter types for the input-signature-inference
+   * empirical pass (issue <a
+   * href="https://github.com/ponder-lab/Input-Signature-Inference-Paper/issues/22">ponder-lab/Input-Signature-Inference-Paper#22</a>).
+   * Function body mirrors {@code _take_long_axis} from {@code
+   * LongmaoTeamTf/deep_recommenders/keras/models/retrieval/factorized_top_k.py}, a function the
+   * previous paper's Hybridize tool refactored with {@code @tf.function}.
+   *
+   * <p>This fixture surfaced a real Ariadne bug: {@code tf.reshape(arr, tf.shape(other))} crashes
+   * the analysis with {@code IllegalStateException} at {@code
+   * TensorGenerator.getShapesFromShapeArgument} because the shape argument is a Tensor (the result
+   * of {@code tf.shape(...)}) rather than a list/tuple literal. The {@code Reshape} generator
+   * should gracefully degrade to ⊤ shape per the lattice conventions instead of throwing.
+   *
+   * <p>TODO: replace this {@code expected = IllegalStateException.class} with a positive assertion
+   * (pinning the inferred parameter types) once <a
+   * href="https://github.com/wala/ML/issues/538">wala/ML#538</a> lands the graceful-degradation
+   * fix.
+   */
+  @Test(expected = IllegalStateException.class)
+  public void testTakeAlongAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_take_along_axis.py", "_take_long_axis", 2, 2, Map.of());
+  }
+
+  /**
    * {@code MyModel.call(self, x)} receives {@code x} from {@code model(images)} calls inside {@code
    * train_step} and {@code test_step}. {@code images} comes from iterating {@code train_ds}, {@code
    * valid_ds}, or {@code test_ds} &mdash; all created from mnist data via {@code
