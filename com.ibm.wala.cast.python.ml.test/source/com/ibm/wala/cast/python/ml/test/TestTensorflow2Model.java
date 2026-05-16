@@ -2157,13 +2157,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * <p>Empirically, {@code x} is inferred as {@code ⊤ shape / UNKNOWN dtype} — the first
    * load-bearing UNKNOWN-dtype the empirical pass has surfaced for input-signature inference. The
    * dtype axis is the load-bearing one per the audit's definition, so this function would NOT be
-   * input-signature-emittable on current master. The likely cause is the caller's {@code batch_x =
-   * tf.constant(np.ones((100, 784), dtype=np.float32))} losing dtype through the {@code numpy →
-   * tf.constant} boundary — Ariadne's modeling of this construction chain appears to not preserve
-   * the numpy dtype info.
+   * input-signature-emittable on current master. Root cause confirmed via {@link
+   * #testConstantFromNumpy}: the {@code numpy → tf.constant} dtype-loss bug, tracked as <a
+   * href="https://github.com/wala/ML/issues/539">wala/ML#539</a>. The caller's {@code batch_x =
+   * tf.constant(np.ones((100, 784), dtype=np.float32))} loses dtype through the numpy boundary, so
+   * {@code x} arrives with UNKNOWN dtype.
    *
-   * <p>TODO: tighten to the precise type once the {@code numpy → tf.constant} dtype propagation gap
-   * is resolved.
+   * <p>TODO: tighten to {@code (100, 784) float32} once wala/ML#539 lands.
    */
   @Test
   public void testMultilayerPerceptron()
@@ -2173,6 +2173,26 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "multilayer_perceptron",
         1,
         14,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * Isolating fixture for the {@code numpy → tf.constant} dtype-propagation hypothesis that
+   * surfaced from {@link #testMultilayerPerceptron}. Probes whether {@code consume(x)} sees a
+   * concrete type when {@code x = tf.constant(np.ones((2, 3), dtype=np.float32))}. The hypothesis
+   * predicts UNKNOWN dtype on {@code x} (parameter to {@code consume}); a concrete inference would
+   * refute it and push the investigation back to the matmul-chain in {@code multilayer_perceptron}.
+   *
+   * <p>Counts and types intentionally minimal; tighten after first run.
+   */
+  @Test
+  public void testConstantFromNumpy()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_constant_from_numpy.py",
+        "consume",
+        1,
+        1,
         Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
 
