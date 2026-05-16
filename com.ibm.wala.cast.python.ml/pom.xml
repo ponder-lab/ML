@@ -59,15 +59,14 @@
       from its `org.python.modules.posix.PosixModule`. The `0.0.1-SNAPSHOT`
       `jython3.jar` is registered via `mvn install:install-file
       -DgeneratePom=true` (see `CONTRIBUTING.md` and the CI workflow),
-      which synthesizes a minimal POM that declares zero dependencies. So
-      neither the Maven dependency graph nor the shaded fat-jar pulls
-      `jnr-constants` in unless we declare it here. Declaring it makes
-      `maven-shade-plugin` include `jnr/constants/*` in the published
-      fat-jar that downstream consumers (e.g.
-      `ponder-lab/Hybridize-Functions-Refactoring`) load through Tycho —
-      without it, code paths that reach `PosixModule` (e.g. the TensorFlow
-      GAN tutorial fixture) fail at runtime with
-      `NoClassDefFoundError: jnr/constants/Constant`. See wala/ML#453. -->
+      which synthesizes a minimal POM that declares zero dependencies — so
+      Maven's dependency graph won't pull `jnr-constants` transitively. We
+      declare it explicitly here so library consumers receive it via the
+      plain default jar's POM, and the `fat` classifier bundles it for the
+      standalone driver. Without this declaration, code paths that reach
+      `PosixModule` (e.g. the TensorFlow GAN tutorial fixture) fail at
+      runtime with `NoClassDefFoundError: jnr/constants/Constant`. See
+      wala/ML#453. -->
     <dependency>
       <groupId>com.github.jnr</groupId>
       <artifactId>jnr-constants</artifactId>
