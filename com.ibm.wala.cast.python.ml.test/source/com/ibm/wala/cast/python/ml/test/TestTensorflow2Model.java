@@ -175,6 +175,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_NONE_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(null, new NumericDim(2)));
 
+  private static final TensorType TENSOR_NONE_100_FLOAT32 =
+      new TensorType(FLOAT_32, asList(null, new NumericDim(100)));
+
   private static final TensorType TENSOR_NONE_NONE_STRING =
       new TensorType(STRING, asList(null, null));
 
@@ -2090,6 +2093,36 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         7,
         Map.of(2, Set.of(TENSOR_256_28_28_1_FLOAT32, TENSOR_96_28_28_1_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code generator_loss(fake_output)}'s parameter type for the input-signature-inference
+   * empirical pass (issue <a
+   * href="https://github.com/ponder-lab/Input-Signature-Inference-Paper/issues/22">ponder-lab/Input-Signature-Inference-Paper#22</a>).
+   * {@code fake_output} flows from {@code discriminator(generated_images, ...)}; runtime shape is
+   * {@code (batch, 1) float32} since the discriminator ends with a {@code Dense(1)} layer.
+   *
+   * <p>Empirically, {@code fake_output} is inferred as {@code (None, 100) float32}. The dtype is
+   * concrete (the load-bearing axis for {@code @tf.function(input_signature=[...])}), which
+   * confirms the layer-output-parameter pattern works on the dtype axis. The shape is
+   * mis-propagated: {@code 100} is the generator's noise input dim (from {@code
+   * tf.keras.Input((100,))} in {@code make_generator_model}), not the discriminator's {@code
+   * Dense(1)} output dim. The mis-routing is shape-only and orthogonal to dtype-axis
+   * input-signature emission.
+   *
+   * <p>TODO: tighten to {@code (None, 1) float32} once <a
+   * href="https://github.com/wala/ML/issues/537">wala/ML#537</a> lands the shape propagation
+   * through Keras functional-model chains.
+   */
+  @Test
+  public void testGanTutorialGeneratorLoss()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tensorflow_gan_tutorial.py",
+        "generator_loss",
+        1,
+        2,
+        Map.of(2, Set.of(TENSOR_NONE_100_FLOAT32)));
   }
 
   /**
