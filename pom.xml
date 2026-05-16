@@ -40,7 +40,7 @@
     <parallel>both</parallel>
     <logging.config.file>./logging.properties</logging.config.file>
     <jacoco-version>0.8.14</jacoco-version>
-    <argLine />
+    <argLine/>
     <junit.4.version>4.13.2</junit.4.version>
   </properties>
   <dependencyManagement>
@@ -221,8 +221,8 @@
                   <exclude>IDE/</exclude>
                   <exclude>jython3/</exclude>
                 </excludes>
-                <trimTrailingWhitespace />
-                <endWithNewline />
+                <trimTrailingWhitespace/>
+                <endWithNewline/>
               </format>
               <format>
                 <includes>
@@ -232,8 +232,8 @@
                 <excludes>
                   <exclude>**/target/</exclude>
                 </excludes>
-                <trimTrailingWhitespace />
-                <endWithNewline />
+                <trimTrailingWhitespace/>
+                <endWithNewline/>
                 <indent>
                   <tabs>true</tabs>
                   <spacesPerTab>4</spacesPerTab>
@@ -244,7 +244,7 @@
                   <include>**/*.xml</include>
                   <include>**/.pydevproject</include>
                 </includes>
-                <toggleOffOn />
+                <toggleOffOn/>
                 <excludes>
                   <exclude>**/plugin.xml</exclude>
                   <exclude>**/pom.xml</exclude>
@@ -261,8 +261,8 @@
                     <file>${maven.multiModuleProjectDirectory}/spotless.xml.prefs</file>
                   </files>
                 </eclipseWtp>
-                <trimTrailingWhitespace />
-                <endWithNewline />
+                <trimTrailingWhitespace/>
+                <endWithNewline/>
               </format>
             </formats>
             <java>
@@ -270,8 +270,8 @@
                 <version>1.27.0</version>
                 <reflowLongStrings>true</reflowLongStrings>
               </googleJavaFormat>
-              <trimTrailingWhitespace />
-              <endWithNewline />
+              <trimTrailingWhitespace/>
+              <endWithNewline/>
             </java>
             <pom>
               <sortPom>
