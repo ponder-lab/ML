@@ -117,6 +117,15 @@
                 See wala/ML#525. -->
               <shadedArtifactAttached>true</shadedArtifactAttached>
               <shadedClassifierName>fat</shadedClassifierName>
+              <!-- Without this, `maven-shade-plugin` would replace the
+                default jar's POM with a "dependency-reduced" version
+                that strips the shaded-in `<dependency>` entries — so
+                even though the default jar stays plain, library
+                consumers would receive a POM with zero declared
+                transitive deps and fail at runtime. Keep the original
+                POM so consumers resolve WALA / `jython3` /
+                `jnr-constants` etc. transitively. -->
+              <createDependencyReducedPom>false</createDependencyReducedPom>
               <transformers>
                 <!-- Add `Main-Class` to manifest file. Only present on
                   the fat classifier; the default jar's manifest stays
