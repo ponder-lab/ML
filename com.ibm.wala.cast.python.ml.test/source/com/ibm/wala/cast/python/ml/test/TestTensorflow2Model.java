@@ -2177,13 +2177,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Isolating fixture for the {@code numpy → tf.constant} dtype-propagation hypothesis that
-   * surfaced from {@link #testMultilayerPerceptron}. Probes whether {@code consume(x)} sees a
-   * concrete type when {@code x = tf.constant(np.ones((2, 3), dtype=np.float32))}. The hypothesis
-   * predicts UNKNOWN dtype on {@code x} (parameter to {@code consume}); a concrete inference would
-   * refute it and push the investigation back to the matmul-chain in {@code multilayer_perceptron}.
+   * Isolating regression guard for the {@code numpy → tf.constant} dtype-loss bug (<a
+   * href="https://github.com/wala/ML/issues/539">wala/ML#539</a>), surfaced from {@link
+   * #testMultilayerPerceptron}. {@code consume(x)} where {@code x = tf.constant(np.ones((2, 3),
+   * dtype=np.float32))} infers {@code ⊤ shape / UNKNOWN dtype} despite the explicit numpy {@code
+   * dtype=np.float32}. Confirms the dtype-loss happens at the {@code numpy → tf.constant} boundary,
+   * independent of any matmul/global-Variable noise.
    *
-   * <p>Counts and types intentionally minimal; tighten after first run.
+   * <p>TODO: tighten to {@code (2, 3) float32} once wala/ML#539 lands.
    */
   @Test
   public void testConstantFromNumpy()
