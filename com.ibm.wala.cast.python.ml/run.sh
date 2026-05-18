@@ -8,12 +8,12 @@ DIR=`dirname $ME`
 # it isn't. Pre-fix the script unconditionally referenced `$JAVA_HOME/bin/java`,
 # which expanded to `/bin/java` if `JAVA_HOME` was unset (almost always fails).
 # See https://github.com/wala/ML/issues/542.
-if [ -n "$JAVA_HOME" ]; then
+if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then
   JAVA="$JAVA_HOME/bin/java"
 elif command -v java >/dev/null 2>&1; then
   JAVA=java
 else
-  echo "no \`java\` executable found: set \`JAVA_HOME\` or add \`java\` to PATH." >&2
+  echo "no \`java\` executable found: set \`JAVA_HOME\` to a JDK install (with \`bin/java\` present) or add \`java\` to PATH." >&2
   exit 1
 fi
 
