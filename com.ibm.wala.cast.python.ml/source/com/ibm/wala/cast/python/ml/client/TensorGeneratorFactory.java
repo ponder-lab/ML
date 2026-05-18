@@ -181,6 +181,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TF_RESHAPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TOP_K;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRACE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL_METHOD_NAME;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM_OP;
@@ -262,7 +263,15 @@ public class TensorGeneratorFactory {
    * property reads. See wala/ML#356 for the broader context.
    */
   private static final Map<String, Function<PointsToSetVariable, TensorGenerator>>
-      PROPERTY_NAME_GENERATORS = Map.ofEntries(entry(ASTYPE_METHOD_NAME, AstypeOperation::new));
+      PROPERTY_NAME_GENERATORS =
+          Map.ofEntries(
+              entry(ASTYPE_METHOD_NAME, AstypeOperation::new),
+              // wala/ML#449: `tf.random.truncated_normal(...)` doesn't reach the per-class
+              // `isType` checks because `calledFunction` resolves to generic `LCodeBody`
+              // rather than the specific `TRUNCATED_NORMAL`/`TRUNCATED_NORMAL_OP` class.
+              // Duck-typing the property name catches it before the `ReadDataFallback`
+              // fallback would.
+              entry(TRUNCATED_NORMAL_METHOD_NAME, TruncatedNormal::new));
 
   /**
    * Resolves the {@link TypeReference} for the function call associated with the given source.

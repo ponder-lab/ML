@@ -323,6 +323,10 @@ public class PythonLanguage implements Language {
   @Override
   public AbstractRootMethod getFakeRootMethod(
       IClassHierarchy cha, AnalysisOptions options, IAnalysisCacheView cache) {
+    // `options` is retained in the signature to satisfy the `Language.getFakeRootMethod`
+    // interface contract (the parent's signature still takes it in WALA 1.7.2), but the
+    // 2-arg `FakeRootMethod(IClass, IAnalysisCacheView)` ctor introduced in 1.7.2 doesn't
+    // consume it. Drop the parameter only if the upstream interface drops it.
     return new FakeRootMethod(new FakeRootClass(PythonTypes.pythonLoader, cha), cache);
   }
 
