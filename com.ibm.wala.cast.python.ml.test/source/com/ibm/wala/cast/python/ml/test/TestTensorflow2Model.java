@@ -2213,6 +2213,28 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Pins {@code accuracy(y_pred, y_true)}'s parameter types. Function body mirrors {@code accuracy}
+   * from {@code YunYang1994/TensorFlow2.0-Examples/2-Basical_Models/Multilayer_Perceptron.py}.
+   * Distinct from {@link #testNeuralNetwork4}'s {@code accuracy} (which is the {@code
+   * Dense}-layer-chain variant from a different repo); this is the raw-{@code tf.matmul} MLP
+   * companion, paired with {@link #testMultilayerPerceptron}.
+   *
+   * <p>Empirically, both parameters are concrete: {@code y_pred} (vn=2) is {@code (2, 2) float32}
+   * and {@code y_true} (vn=3) is {@code (2,) int64}, matching the caller-side {@code tf.constant}
+   * shapes.
+   */
+  @Test
+  public void testMlpAccuracy()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_mlp_accuracy.py",
+        "accuracy",
+        2,
+        7,
+        Map.of(2, Set.of(TENSOR_2_2_FLOAT32), 3, Set.of(TENSOR_2_INT64)));
+  }
+
+  /**
    * Isolating regression guard for the {@code numpy → tf.constant} dtype-loss bug (<a
    * href="https://github.com/wala/ML/issues/539">wala/ML#539</a>), surfaced from {@link
    * #testMultilayerPerceptron}. {@code consume(x)} where {@code x = tf.constant(np.ones((2, 3),
