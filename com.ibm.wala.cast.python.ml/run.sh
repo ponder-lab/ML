@@ -12,7 +12,7 @@ JARS=("$DIR"/target/com.ibm.wala.cast.python.ml-*-fat.jar)
 shopt -u nullglob
 
 if [ ${#JARS[@]} -eq 0 ]; then
-  echo "fat JAR not found in $DIR/target/. Run \`mvn -f $DIR/../pom.xml -pl com.ibm.wala.cast.python.ml -am clean package -DskipTests\` first." >&2
+  echo "fat JAR not found in $DIR/target/. Run \`mvn -f \"$DIR/../pom.xml\" -pl com.ibm.wala.cast.python.ml -am clean package -DskipTests\` first." >&2
   exit 1
 fi
 
