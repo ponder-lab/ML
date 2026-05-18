@@ -76,7 +76,8 @@ black --fast .
 
 - Always verify that newly created Python test files run to completion using `python3.10`.
 - Always add `assert` statements in Python test files for tensor `shape` and `dtype`.
-- Ensure that `assert` statements in Python test files match the expectations defined in the corresponding JUnit test cases.
+- Ensure that `assert` statements in Python test files match the expectations defined in the corresponding JUnit test cases. The sync is **bidirectional**: whenever you specify or change a shape or dtype in a JUnit test case, add or update the corresponding `assert` statements in the Python fixture (and vice versa). Mismatches between the two surfaces are a red flag.
+- Some test files are full DL training scripts (e.g., `tensorflow_gan_tutorial.py`'s GAN training loop) where running to completion with `python3.10` is impractical due to runtime (multi-minute or longer, especially on CPU). In those cases, prefer a short-timeout run (`timeout 60 python3.10 file.py`) and confirm no `AssertionError` fires before the timeout, plus visual inspection that the assertion site is reachable from the script's main code path. Document the limitation in the JUnit Javadoc or commit message so reviewers know runtime-to-completion verification wasn't performed.
 
 ## Tensor Type Generators
 
