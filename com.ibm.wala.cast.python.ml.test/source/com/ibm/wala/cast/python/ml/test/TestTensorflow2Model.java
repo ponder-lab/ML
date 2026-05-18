@@ -2169,8 +2169,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * by <a href="https://github.com/wala/ML/issues/538">wala/ML#538</a>; parameter types pin
    * precisely.
    *
-   * <p>TODO: the post-fix local-tensor count of 9 captures every intermediate runtime-shape tensor
-   * flowing through the body. Tighten once the body-level imprecision is addressed.
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/543">wala/ML#543</a>): the post-fix
+   * local-tensor count of 9 captures every intermediate runtime-shape tensor flowing through the
+   * body. Tighten once the body-level imprecision is addressed.
    */
   @Test
   public void testTakeAlongAxis()
