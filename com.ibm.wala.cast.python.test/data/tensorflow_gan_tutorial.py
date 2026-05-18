@@ -76,6 +76,9 @@ def train_step(
 
         real_output = discriminator(images, training=True)
         fake_output = discriminator(generated_images, training=True)
+        # asserts confirming the runtime types asserted in testGanTutorialGeneratorLoss.
+        assert fake_output.shape == (256, 1) or fake_output.shape == (96, 1)
+        assert fake_output.dtype == tf.float32
 
         gen_loss = generator_loss(fake_output)
         disc_loss = discriminator_loss(real_output, fake_output)
