@@ -4949,6 +4949,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Tier-6 op (wala/ML#449): {@code tf.sort(values, ...)}. The XML routes the call through {@code
+   * convert_to_tensor} of {@code values}, so shape and dtype pass through unchanged — no dedicated
+   * generator needed.
+   */
+  @Test
+  public void testSort()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_sort.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_6_FLOAT32)));
+  }
+
+  /**
    * Generator-dispatch test for {@code tf.tensor_scatter_nd_update}. Output dtype AND shape are
    * inherited from the {@code tensor} input — true shape-and-dtype passthrough on the first arg.
    * Here the input is shape {@code (4,)} float32, so the precise expected result is {@code (4,)
