@@ -33,6 +33,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      is_semver_release: ${{ steps.tag_check.outputs.is_semver_release }}
     steps:
     - name: Check out wala/ML sources
       uses: actions/checkout@v6
@@ -120,3 +122,40 @@ jobs:
       # the ancestor-of-master check in the same step blocks feature-branch
       # tags from sneaking through.
       if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/master' || (startsWith(github.ref, 'refs/tags/') && steps.tag_check.outputs.is_semver_release == 'true')) }}
+    # On semver tag-push, upload the fat-classifier JAR as a CI artifact for the
+    # downstream `release-upload` job to attach to the GitHub Release.
+    - name: Upload fat JAR artifact
+      if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && steps.tag_check.outputs.is_semver_release == 'true' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: fat-jar
+        path: com.ibm.wala.cast.python.ml/target/com.ibm.wala.cast.python.ml-*-fat.jar
+        if-no-files-found: error
+        retention-days: 1
+  # Attach the fat-classifier JAR to the GitHub Release on semver tag-push. The
+  # Maven deploy step in `build` above publishes both jars (slim default + `-fat`
+  # classifier) to GitHub Packages, which requires a classic PAT with
+  # `read:packages` scope for downstream consumers. Attaching the fat JAR to the
+  # Release lets standalone-driver users (`java -jar`) fetch it directly with no
+  # auth.
+  #
+  # Run as a separate job (rather than a step in `build`) so the elevated
+  # `contents: write` permission is scoped to release tag-pushes only —
+  # PR/branch-push runs of `build` keep the workflow-level `contents: read`.
+  release-upload:
+    needs: build
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && needs.build.outputs.is_semver_release == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Download fat JAR artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: fat-jar
+    - name: Attach fat JAR to GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: com.ibm.wala.cast.python.ml/target/com.ibm.wala.cast.python.ml-*-fat.jar
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
