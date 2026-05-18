@@ -73,6 +73,24 @@ jobs:
         popd
     - name: Build with Maven
       run: mvn -Dlogging.config.file=./logging.ci.properties verify -B -Pjacoco
+    # Catch the kind of drift that prompted https://github.com/wala/ML/issues/525:
+    # `run.sh`'s JAR path falling behind the project's actual version (previously
+    # hardcoded `0.40.0-SNAPSHOT`, ~5 minor versions stale). Verifies post-build
+    # that the script's glob resolves to exactly one fat JAR and that the JAR
+    # carries the standalone driver's `Main-Class` manifest entry.
+    - name: Smoke-test `run.sh` fat-JAR resolution
+      run: |
+        cd com.ibm.wala.cast.python.ml
+        shopt -s nullglob
+        JARS=(target/com.ibm.wala.cast.python.ml-*-fat.jar)
+        if [ ${#JARS[@]} -ne 1 ]; then
+          echo "Expected exactly one fat JAR in com.ibm.wala.cast.python.ml/target/; got ${#JARS[@]}: ${JARS[*]}" >&2
+          exit 1
+        fi
+        unzip -p "${JARS[0]}" META-INF/MANIFEST.MF \
+          | grep -q "^Main-Class: com.ibm.wala.cast.python.ml.driver.Ariadne" \
+          || { echo "fat JAR ${JARS[0]} missing expected Main-Class manifest entry" >&2; exit 1; }
+      shell: bash
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v6
       with:
