@@ -28,7 +28,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')) }}
 permissions:
-  contents: read
+  # `contents: write` (rather than `read`) is required by the
+  # `softprops/action-gh-release` step at the bottom of this job, which attaches
+  # the fat-classifier JAR to the GitHub Release on semver tag-push.
+  contents: write
   packages: write
 jobs:
   build:
@@ -120,3 +123,16 @@ jobs:
       # the ancestor-of-master check in the same step blocks feature-branch
       # tags from sneaking through.
       if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/master' || (startsWith(github.ref, 'refs/tags/') && steps.tag_check.outputs.is_semver_release == 'true')) }}
+    # On semver tag-push, also attach the fat-classifier JAR to the GitHub
+    # Release as a downloadable asset. The default Maven deploy above publishes
+    # both jars (slim default + `-fat` classifier) to GitHub Packages, which
+    # requires a classic PAT with `read:packages` scope for downstream
+    # consumers. Attaching the fat JAR to the Release lets standalone-driver
+    # users (`java -jar`) fetch it directly with no auth.
+    - name: Upload fat JAR to GitHub Release
+      if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && steps.tag_check.outputs.is_semver_release == 'true' }}
+      uses: softprops/action-gh-release@v2
+      with:
+        files: com.ibm.wala.cast.python.ml/target/com.ibm.wala.cast.python.ml-*-fat.jar
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
