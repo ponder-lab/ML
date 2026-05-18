@@ -156,6 +156,6 @@ jobs:
     - name: Attach fat JAR to GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        files: com.ibm.wala.cast.python.ml-*-fat.jar
+        files: com.ibm.wala.cast.python.ml/target/com.ibm.wala.cast.python.ml-*-fat.jar
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
