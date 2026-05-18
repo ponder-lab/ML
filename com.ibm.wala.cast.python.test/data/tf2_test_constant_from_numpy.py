@@ -1,9 +1,7 @@
 # Minimal fixture isolating the `numpy → tf.constant` dtype-loss bug
-# (wala/ML#539) surfaced by the multilayer_perceptron empirical-pass finding
-# (ponder-lab/Input-Signature-Inference-Paper#22). Ariadne loses dtype info
-# when a tensor is constructed via `tf.constant(np_array)` rather than from
-# a literal Python list/scalar or a modeled API (mnist load_data, Dense
-# layer chain, etc.).
+# (wala/ML#539). Ariadne loses dtype info when a tensor is constructed via
+# `tf.constant(np_array)` rather than from a literal Python list/scalar or a
+# modeled API (mnist load_data, Dense layer chain, etc.).
 import numpy as np
 import tensorflow as tf
 

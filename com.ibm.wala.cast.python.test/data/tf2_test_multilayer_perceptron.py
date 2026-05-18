@@ -1,7 +1,5 @@
-# Minimal fixture for the input-signature-inference empirical pass
-# (ponder-lab/Input-Signature-Inference-Paper#22). Mirrors `multilayer_perceptron`
-# from `YunYang1994/TensorFlow2.0-Examples/2-Basical_Models/Multilayer_Perceptron.py`
-# — a function the previous paper's Hybridize tool refactored with `@tf.function`.
+# Minimal fixture mirroring `multilayer_perceptron` from
+# `YunYang1994/TensorFlow2.0-Examples/2-Basical_Models/Multilayer_Perceptron.py`.
 # Uses raw `tf.matmul`/`tf.add`/`tf.nn.sigmoid` instead of Keras `Dense` layers,
 # with global weight/bias `tf.Variable`s — a different pattern from the
 # `NeuralNet.call` cases already covered by `testNeuralNetwork*`.
