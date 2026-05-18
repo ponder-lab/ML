@@ -2110,9 +2110,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Dense(1)} output dim. The mis-routing is shape-only and orthogonal to dtype-axis
    * input-signature emission.
    *
-   * <p>TODO: tighten to {@code (None, 1) float32} once <a
+   * <p>TODO: tighten to {@code {(256, 1) float32, (96, 1) float32}} once <a
    * href="https://github.com/wala/ML/issues/537">wala/ML#537</a> lands the shape propagation
-   * through Keras functional-model chains.
+   * through Keras functional-model chains. Concrete batch dims (256 / 96) come from {@code
+   * train_step}'s {@code images} parameter (per {@link #testGanTutorial}); a complete fix would
+   * propagate those through the discriminator chain rather than dropping to {@code None}.
    */
   @Test
   public void testGanTutorialGeneratorLoss()
