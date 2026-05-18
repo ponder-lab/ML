@@ -1,7 +1,5 @@
-# Minimal fixture for the input-signature-inference empirical pass
-# (ponder-lab/Input-Signature-Inference-Paper#22). Mirrors `_take_long_axis`
-# from `LongmaoTeamTf/deep_recommenders/keras/models/retrieval/factorized_top_k.py`
-# — a function the previous paper's Hybridize tool refactored with `@tf.function`.
+# Minimal fixture mirroring `_take_long_axis` from
+# `LongmaoTeamTf/deep_recommenders/keras/models/retrieval/factorized_top_k.py`.
 # Tests caller-side type propagation when the function takes two tensor params
 # (`arr` and `indices`) with different dtypes (float32 and int32).
 import tensorflow as tf
