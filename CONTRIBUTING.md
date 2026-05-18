@@ -107,6 +107,16 @@ Never return a bare empty set to mean "unknown dtype"—that collides with the "
 
 Shapes and dtypes are orthogonal. When the shape is unknown but the dtype is known, `getTensorTypes` emits `TensorType` instances with `null` dims so dtype information is preserved. `TensorType` is null-dims-safe; any code that consumes `TensorType`s must handle `getDims() == null`.
 
+The per-variable result aggregated from the per-axis lattice tables above follows its own lattice on the returned `Set<TensorType>`:
+
+| Return value | Meaning |
+|---|---|
+| `null` | Defensive fallback for contract violation (dtype set is `null`/empty rather than `EnumSet.of(DType.UNKNOWN)`, and shape is also `null`). Under contract-compliant generators this case shouldn't occur. |
+| empty set | ⊥—the variable is provably not a tensor. |
+| non-empty set | The variable has at least one possible `TensorType`. ⊤ at the variable level (known to be a tensor, shape and dtype unknown) is encoded here too, as a non-empty Set containing `TensorType(UNKNOWN, null)`. Individual elements may still carry `getDims() == null` (shape-⊤) or `getDType() == DType.UNKNOWN` (dtype-⊤). |
+
+Downstream consumers iterating aggregated state (e.g., `TensorTypeAnalysis.iterator()`) filter to `state != null && !state.isEmpty()`. Under contract-compliant generators this filters out ⊥ (empty Set); ⊤ at the variable level remains visible to the iterator as a non-empty Set with `TensorType(UNKNOWN, null)` inside. A non-empty entry may carry shape-⊤ or dtype-⊤ on individual `TensorType` instances, which consumers must handle.
+
 ### Checklist When Adding a New Generator
 
 - [ ] Audit every final-fallback return in `getDefaultShapes` and `getDefaultDTypes` against the tables above.
