@@ -402,6 +402,9 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String NORMAL_SIGNATURE = "tf.random.normal()";
 
+  /** Method name used in {@code tensorflow.xml} for {@link #TRUNCATED_NORMAL}. */
+  public static final String TRUNCATED_NORMAL_METHOD_NAME = "truncated_normal";
+
   /** https://www.tensorflow.org/api_docs/python/tf/random/truncated_normal. */
   public static final MethodReference TRUNCATED_NORMAL =
       MethodReference.findOrCreate(
