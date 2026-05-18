@@ -71,7 +71,19 @@ public class Reshape extends TensorGenerator {
             builder, this.getShapeParameterPosition(), this.getShapeParameterName());
 
     if (shapePts != null && !shapePts.isEmpty()) {
-      Set<List<Dimension<?>>> rawShapes = this.getShapesFromShapeArgument(builder, shapePts);
+      Set<List<Dimension<?>>> rawShapes;
+      try {
+        // `getShapesFromShapeArgument` throws `IllegalStateException` for shape forms it
+        // doesn't recognize. For `Reshape` specifically, `tf.reshape(arr, tf.shape(other))`
+        // is a common pattern where the shape argument is itself a runtime Tensor (the result
+        // of `tf.shape(...)`), so we tolerate the throw and degrade to ⊤ ("output shape
+        // unknown"). Other callers let the throw propagate as a loud signal that modeling
+        // work is missing. Mirrors the established `BroadcastTo#getDefaultShapes` precedent;
+        // see wala/ML#538 for the surfacing fixture (`tf2_test_take_along_axis.py`).
+        rawShapes = this.getShapesFromShapeArgument(builder, shapePts);
+      } catch (IllegalStateException e) {
+        return null;
+      }
       // Soundness: when the `shape` argument is present but unparseable, the output shape is ⊤
       // (the result is determined by `shape`, not the input tensor — falling back to input-shape
       // inference would be unsound).
