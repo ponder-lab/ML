@@ -2133,16 +2133,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * should gracefully degrade to ⊤ shape per the lattice conventions instead of throwing.
    *
    * <p>TODO: once <a href="https://github.com/wala/ML/issues/538">wala/ML#538</a> lands the
-   * graceful-degradation fix, replace the {@code assertThrows} below with a positive type
-   * assertion: {@code arr} (vn=2) should resolve to {@code (2, 3) float32} and {@code indices}
-   * (vn=3) to {@code (2, 2) int32}, matching the caller-side {@code tf.constant} shapes in {@code
-   * tf2_test_take_along_axis.py}.
+   * graceful-degradation fix, remove the {@code expected = IllegalStateException.class} suppression
+   * and pin precise types: {@code arr} (vn=2) should resolve to {@code (2, 3) float32} and {@code
+   * indices} (vn=3) to {@code (2, 2) int32}, matching the caller-side {@code tf.constant} shapes in
+   * {@code tf2_test_take_along_axis.py}.
    */
-  @Test
-  public void testTakeAlongAxis() {
-    assertThrows(
-        IllegalStateException.class,
-        () -> test("tf2_test_take_along_axis.py", "_take_long_axis", 2, 2, Map.of()));
+  @Test(expected = IllegalStateException.class)
+  public void testTakeAlongAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_take_along_axis.py", "_take_long_axis", 2, 2, Map.of());
   }
 
   /**
