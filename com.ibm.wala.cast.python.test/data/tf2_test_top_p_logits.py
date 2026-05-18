@@ -1,11 +1,10 @@
-# Minimal fixture for the input-signature-inference empirical pass
-# (ponder-lab/Input-Signature-Inference-Paper#22). Mirrors `top_p_logits` from
-# akanyaani/gpt-2-tensorflow2.0/sample.py — a function the previous paper's
-# Hybridize tool refactored with `@tf.function`. This fixture's purpose is to
-# let Ariadne's `TestTensorflow2Model` test pin the inferred parameter type
-# for `logits` and observe whether ops in the body (tf.sort, tf.cumsum,
-# tf.stack, tf.range, tf.gather_nd, tf.where) are load-bearing on the dtype
-# axis for input-signature emission.
+# Minimal fixture mirroring `top_p_logits` from
+# `akanyaani/gpt-2-tensorflow2.0/sample.py`. The function's body exercises
+# several ops currently routed through `ReadDataFallback` per wala/ML#449
+# (`tf.sort`, `tf.cumsum`, `tf.stack`, `tf.range`, `tf.gather_nd`,
+# `tf.where`); the fixture lets `TestTensorflow2Model.testTopPLogits` pin
+# the parameter type of `logits` and verify that body-op precision isn't
+# load-bearing for caller-side type propagation.
 import tensorflow as tf
 
 

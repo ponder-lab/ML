@@ -2099,19 +2099,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Pins {@code generator_loss(fake_output)}'s parameter type for the input-signature-inference
-   * empirical pass (issue <a
-   * href="https://github.com/ponder-lab/Input-Signature-Inference-Paper/issues/22">ponder-lab/Input-Signature-Inference-Paper#22</a>).
-   * {@code fake_output} flows from {@code discriminator(generated_images, ...)}; runtime shape is
-   * {@code (batch, 1) float32} since the discriminator ends with a {@code Dense(1)} layer.
+   * Pins {@code generator_loss(fake_output)}'s parameter type. {@code fake_output} flows from
+   * {@code discriminator(generated_images, ...)}; runtime shape is {@code (batch, 1) float32} since
+   * the discriminator ends with a {@code Dense(1)} layer.
    *
    * <p>Empirically, {@code fake_output} is inferred as {@code (None, 100) float32}. The dtype is
-   * concrete (the load-bearing axis for {@code @tf.function(input_signature=[...])}), which
-   * confirms the layer-output-parameter pattern works on the dtype axis. The shape is
-   * mis-propagated: {@code 100} is the generator's noise input dim (from {@code
+   * concrete, which confirms the layer-output-parameter pattern works on the dtype axis. The shape
+   * is mis-propagated: {@code 100} is the generator's noise input dim (from {@code
    * tf.keras.Input((100,))} in {@code make_generator_model}), not the discriminator's {@code
-   * Dense(1)} output dim. The mis-routing is shape-only and orthogonal to dtype-axis
-   * input-signature emission.
+   * Dense(1)} output dim. The mis-routing is shape-only and orthogonal to dtype-axis precision.
    *
    * <p>TODO: tighten to {@code {(256, 1) float32, (96, 1) float32}} once <a
    * href="https://github.com/wala/ML/issues/537">wala/ML#537</a> lands the shape propagation
@@ -2131,21 +2127,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Pins {@code top_p_logits(logits, p)}'s parameter type for the input-signature-inference
-   * empirical pass (issue <a
-   * href="https://github.com/ponder-lab/Input-Signature-Inference-Paper/issues/22">ponder-lab/Input-Signature-Inference-Paper#22</a>).
-   * Function body mirrors {@code akanyaani/gpt-2-tensorflow2.0/sample.py}'s {@code top_p_logits}, a
-   * function the previous paper's Hybridize tool refactored with {@code @tf.function}. Exercises
-   * several ops currently routed through {@code ReadDataFallback} per wala/ML#449 ({@code tf.sort},
-   * {@code tf.cumsum}, {@code tf.stack}, {@code tf.range}, {@code tf.gather_nd}, {@code tf.where}),
-   * but the parameter type of {@code logits} comes from its caller (a {@code tf.constant} with
-   * shape {@code (1, 5)} dtype {@code float32}), so this test isolates the caller-side propagation
-   * rather than the body's op precision.
+   * Pins {@code top_p_logits(logits, p)}'s parameter type. Function body mirrors {@code
+   * akanyaani/gpt-2-tensorflow2.0/sample.py}'s {@code top_p_logits}. Exercises several ops
+   * currently routed through {@code ReadDataFallback} per wala/ML#449 ({@code tf.sort}, {@code
+   * tf.cumsum}, {@code tf.stack}, {@code tf.range}, {@code tf.gather_nd}, {@code tf.where}), but
+   * the parameter type of {@code logits} comes from its caller (a {@code tf.constant} with shape
+   * {@code (1, 5)} dtype {@code float32}), so this test isolates caller-side propagation rather
+   * than the body's op precision.
    *
    * <p>Empirically, {@code logits} is inferred as {@code (1, 5) float32} — concrete on both axes.
-   * The caller's {@code tf.constant([[1.0, ..., 5.0]], dtype=tf.float32)} flows in cleanly. This
-   * means none of the body's {@code ReadDataFallback}-routed ops actually block input-signature
-   * inference for this function; the parameter type is fully resolved at the call site.
+   * The caller's {@code tf.constant([[1.0, ..., 5.0]], dtype=tf.float32)} flows in cleanly, showing
+   * that none of the body's {@code ReadDataFallback}-routed ops block caller-side propagation for
+   * this function; the parameter type is fully resolved at the call site.
    */
   @Test
   public void testTopPLogits()
@@ -2154,12 +2147,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Pins {@code _take_long_axis(arr, indices)}'s parameter types for the input-signature-inference
-   * empirical pass (issue <a
-   * href="https://github.com/ponder-lab/Input-Signature-Inference-Paper/issues/22">ponder-lab/Input-Signature-Inference-Paper#22</a>).
-   * Function body mirrors {@code _take_long_axis} from {@code
-   * LongmaoTeamTf/deep_recommenders/keras/models/retrieval/factorized_top_k.py}, a function the
-   * previous paper's Hybridize tool refactored with {@code @tf.function}.
+   * Pins {@code _take_long_axis(arr, indices)}'s parameter types. Function body mirrors {@code
+   * _take_long_axis} from {@code
+   * LongmaoTeamTf/deep_recommenders/keras/models/retrieval/factorized_top_k.py}.
    *
    * <p>This fixture surfaced a real Ariadne bug: {@code tf.reshape(arr, tf.shape(other))} crashes
    * the analysis with {@code IllegalStateException} at {@code
@@ -2180,22 +2170,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Pins {@code multilayer_perceptron(x)}'s parameter type for the input-signature-inference
-   * empirical pass (issue <a
-   * href="https://github.com/ponder-lab/Input-Signature-Inference-Paper/issues/22">ponder-lab/Input-Signature-Inference-Paper#22</a>).
-   * Function body mirrors {@code multilayer_perceptron} from {@code
-   * YunYang1994/TensorFlow2.0-Examples/2-Basical_Models/Multilayer_Perceptron.py}, a function the
-   * previous paper's Hybridize tool refactored with {@code @tf.function}. Uses raw {@code
+   * Pins {@code multilayer_perceptron(x)}'s parameter type. Function body mirrors {@code
+   * multilayer_perceptron} from {@code
+   * YunYang1994/TensorFlow2.0-Examples/2-Basical_Models/Multilayer_Perceptron.py}. Uses raw {@code
    * tf.matmul} / {@code tf.add} / {@code tf.nn.sigmoid} / {@code tf.nn.softmax} against global
    * {@code tf.Variable} weights and biases — a different pattern from the {@code Dense}-layer
    * subclass-Model approach already covered by {@code testNeuralNetwork*}.
    *
-   * <p>Empirically, {@code x} is inferred as {@code ⊤ shape / UNKNOWN dtype} — the first
-   * load-bearing UNKNOWN-dtype the empirical pass has surfaced for input-signature inference. The
-   * dtype axis is the load-bearing one per the audit's definition, so this function would NOT be
-   * input-signature-emittable on current master. Root cause confirmed via {@link
-   * #testConstantFromNumpy}: the {@code numpy → tf.constant} dtype-loss bug, tracked as <a
-   * href="https://github.com/wala/ML/issues/539">wala/ML#539</a>. The caller's {@code batch_x =
+   * <p>Empirically, {@code x} is inferred as {@code ⊤ shape / UNKNOWN dtype}. Root cause confirmed
+   * via {@link #testConstantFromNumpy}: the {@code numpy → tf.constant} dtype-loss bug, tracked as
+   * <a href="https://github.com/wala/ML/issues/539">wala/ML#539</a>. The caller's {@code batch_x =
    * tf.constant(np.ones((100, 784), dtype=np.float32))} loses dtype through the numpy boundary, so
    * {@code x} arrives with UNKNOWN dtype.
    *
@@ -5721,8 +5705,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   // Tier-A pure-passthrough math ops (wala/ML#422). Each is shape and dtype passthrough on `x`;
   // routes to a per-op subclass of `PassThroughUnaryTensorGenerator`. The point of dedicated
   // generators (vs. leaving these on `ReadDataFallback`) is dtype propagation: without these,
-  // `tf.math.sqrt(x)` etc. produce ⊤/UNKNOWN, blocking downstream input-signature inference
-  // through any function whose parameters flow from these ops.
+  // `tf.math.sqrt(x)` etc. produce ⊤/UNKNOWN, blocking downstream dtype-axis precision through
+  // any function whose parameters flow from these ops.
 
   /**
    * Pure passthrough on {@code x}. See {@link com.ibm.wala.cast.python.ml.client.Sqrt}.
