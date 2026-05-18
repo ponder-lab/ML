@@ -2165,18 +2165,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * the analysis with {@code IllegalStateException} at {@code
    * TensorGenerator.getShapesFromShapeArgument} because the shape argument is a Tensor (the result
    * of {@code tf.shape(...)}) rather than a list/tuple literal. The {@code Reshape} generator
-   * should gracefully degrade to ⊤ shape per the lattice conventions instead of throwing.
+   * should gracefully degrade to ⊤ shape per the lattice conventions instead of throwing. Resolved
+   * by <a href="https://github.com/wala/ML/issues/538">wala/ML#538</a>; parameter types pin
+   * precisely.
    *
-   * <p>TODO: once <a href="https://github.com/wala/ML/issues/538">wala/ML#538</a> lands the
-   * graceful-degradation fix, remove the {@code expected = IllegalStateException.class} suppression
-   * and pin precise types: {@code arr} (vn=2) should resolve to {@code (2, 3) float32} and {@code
-   * indices} (vn=3) to {@code (2, 2) int32}, matching the caller-side {@code tf.constant} shapes in
-   * {@code tf2_test_take_along_axis.py}.
+   * <p>TODO: the post-fix local-tensor count of 9 captures every intermediate runtime-shape tensor
+   * flowing through the body. Tighten once the body-level imprecision is addressed.
    */
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void testTakeAlongAxis()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_take_along_axis.py", "_take_long_axis", 2, 2, Map.of());
+    test(
+        "tf2_test_take_along_axis.py",
+        "_take_long_axis",
+        2,
+        9,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32), 3, Set.of(TENSOR_2_2_INT32)));
   }
 
   /**
