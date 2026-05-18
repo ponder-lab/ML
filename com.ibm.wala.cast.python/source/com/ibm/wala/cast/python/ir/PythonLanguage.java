@@ -323,7 +323,7 @@ public class PythonLanguage implements Language {
   @Override
   public AbstractRootMethod getFakeRootMethod(
       IClassHierarchy cha, AnalysisOptions options, IAnalysisCacheView cache) {
-    return new FakeRootMethod(new FakeRootClass(PythonTypes.pythonLoader, cha), options, cache);
+    return new FakeRootMethod(new FakeRootClass(PythonTypes.pythonLoader, cha), cache);
   }
 
   @Override
