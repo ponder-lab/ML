@@ -2589,6 +2589,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_rsqrt_kwarg.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
   }
 
+  /**
+   * Regression guard for wala/ML#449's closing fix: {@code tf.random.truncated_normal(shape)} now
+   * dispatches to the {@code TruncatedNormal} generator (via {@code PROPERTY_NAME_GENERATORS}) and
+   * resolves to precise {@code (2, 3) float32}. Pre-fix this fell through to {@code
+   * ReadDataFallback} and emitted {@code ⊤ shape / UNKNOWN dtype}.
+   */
+  @Test
+  public void testTruncatedNormal()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_truncated_normal.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
   @Test
   public void testLogSoftmax()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
