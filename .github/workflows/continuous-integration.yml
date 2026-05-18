@@ -144,7 +144,7 @@ jobs:
     # downstream `release-upload` job to attach to the GitHub Release.
     - name: Upload fat JAR artifact
       if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && steps.tag_check.outputs.is_semver_release == 'true' }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: fat-jar
         path: com.ibm.wala.cast.python.ml/target/com.ibm.wala.cast.python.ml-*-fat.jar
@@ -172,7 +172,7 @@ jobs:
       with:
         name: fat-jar
     - name: Attach fat JAR to GitHub Release
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@v3
       with:
         files: com.ibm.wala.cast.python.ml/target/com.ibm.wala.cast.python.ml-*-fat.jar
       env:
