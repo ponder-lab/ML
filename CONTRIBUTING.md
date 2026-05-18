@@ -114,7 +114,7 @@ The per-variable result aggregated from the per-axis lattice tables above follow
 | empty set | ⊥—the variable is provably not a tensor. |
 | non-empty set | The variable has at least one possible `TensorType`. Individual elements may still carry `getDims() == null` (shape-⊤) or `getDType() == DType.UNKNOWN` (dtype-⊤). |
 
-Downstream consumers iterating aggregated state (e.g., `TensorTypeAnalysis.iterator()`) filter to `state != null && !state.isEmpty()`. Under contract-compliant generators (per the per-axis tables above), an empty/missing entry corresponds to ⊥ at the variable level; a non-empty entry may still contain shape-⊤ or dtype-⊤ on individual `TensorType` instances, which consumers must handle.
+Downstream consumers iterating aggregated state (e.g., `TensorTypeAnalysis.iterator()`) filter to `state != null && !state.isEmpty()`, which collapses ⊥ (empty Set) and ⊤ (null Set) into a single "absent from iterator" outcome—a missing entry can represent either. Consumers that need to distinguish ⊥ from ⊤ must read `state` directly rather than via `iterator()`. A non-empty entry may still contain shape-⊤ or dtype-⊤ on individual `TensorType` instances, which consumers must handle.
 
 ### Checklist When Adding a New Generator
 
