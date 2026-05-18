@@ -8221,30 +8221,26 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Regression guard for {@code tf.reshape(x, tf.shape(y))} shape inference. Runtime answer is
-   * {@code (2, 3)} of {@code float32}. Post this PR's wala/ML#489 root-cause fix (`tensorflow.xml`
-   * allocates a fresh `Ltensorflow/python/framework/ops/Tensor` for `tf.shape(...)` instead of
-   * aliasing through `pass_through`), the helper's else-branch fires cleanly for the unrecognized
-   * allocation type and throws {@link IllegalStateException}. {@link
-   * com.ibm.wala.cast.python.ml.client.Reshape} doesn't localize the catch (unlike {@link
-   * com.ibm.wala.cast.python.ml.client.BroadcastTo}), per this PR's keep-throw-everywhere-except-
-   * BroadcastTo design, so the exception propagates up and aborts the analysis on this fixture.
-   * That's the design choice: missing modeling on `Reshape`'s runtime-tensor shape path surfaces as
-   * a loud signal rather than a silent ⊤.
+   * {@code (2, 3)} of {@code float32}. Post wala/ML#538's graceful-degradation fix in {@link
+   * com.ibm.wala.cast.python.ml.client.Reshape} (mirroring {@link
+   * com.ibm.wala.cast.python.ml.client.BroadcastTo}'s localized try/catch), the analysis no longer
+   * throws on the {@code tf.shape(...)} shape arg. The inferred parameter type for {@code x} (vn=2)
+   * is currently the imprecise union {@code [() of float32, (⊤) of float32]} rather than the
+   * precise {@code (2, 3) float32}.
    *
-   * <p>The {@code expected} types map below ({@code Map.of(2, Set.of(TENSOR_2_3_FLOAT32))}) is
-   * unreachable while the {@code @Test(expected = IllegalStateException.class)} suppression is in
-   * place; it's staged for the eventual flip so that lifting the suppression brings the
-   * precise-shape assertion back without further edits to this method.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/473">wala/ML#473</a>): when the helper
-   * learns to recognize {@code tf.shape(y)} as a shape arg (or {@code Reshape} gains a localized
-   * try/catch mirroring {@code BroadcastTo}'s), tighten this test to assert {@link
-   * #TENSOR_2_3_FLOAT32} (or ⊤) and remove the {@code expected} suppression.
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/473">wala/ML#473</a>): tighten the parameter
+   * type to {@link #TENSOR_2_3_FLOAT32} when the helper learns to resolve {@code tf.shape(y)}'s
+   * shape leaves precisely.
    */
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void testReshapeRuntimeShape()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_reshape_runtime_shape.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+    test(
+        "tf2_test_reshape_runtime_shape.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32, new TensorType(FLOAT_32, null))));
   }
 
   @Test
