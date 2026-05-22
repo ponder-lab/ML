@@ -186,22 +186,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       new TensorType(STRING, asList(null, null));
 
   private static final TensorType TENSOR_4_RAGGED_RAGGED_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(4), new RaggedDim(), new RaggedDim()));
+      new TensorType(INT_32, asList(new NumericDim(4), RaggedDim.INSTANCE, RaggedDim.INSTANCE));
 
   private static final TensorType TENSOR_3_RAGGED_RAGGED_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(3), new RaggedDim(), new RaggedDim()));
+      new TensorType(INT_32, asList(new NumericDim(3), RaggedDim.INSTANCE, RaggedDim.INSTANCE));
 
   private static final TensorType TENSOR_4_RAGGED_RAGGED_NONE_STRING =
-      new TensorType(STRING, asList(new NumericDim(4), new RaggedDim(), new RaggedDim(), null));
+      new TensorType(
+          STRING, asList(new NumericDim(4), RaggedDim.INSTANCE, RaggedDim.INSTANCE, null));
 
   private static final TensorType TENSOR_3_RAGGED_RAGGED_STRING =
-      new TensorType(STRING, asList(new NumericDim(3), new RaggedDim(), new RaggedDim()));
+      new TensorType(STRING, asList(new NumericDim(3), RaggedDim.INSTANCE, RaggedDim.INSTANCE));
 
   private static final TensorType TENSOR_1_RAGGED_RAGGED_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(1), new RaggedDim(), new RaggedDim()));
+      new TensorType(FLOAT_32, asList(new NumericDim(1), RaggedDim.INSTANCE, RaggedDim.INSTANCE));
 
   private static final TensorType TENSOR_2_RAGGED_RAGGED_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(2), new RaggedDim(), new RaggedDim()));
+      new TensorType(INT_32, asList(new NumericDim(2), RaggedDim.INSTANCE, RaggedDim.INSTANCE));
 
   private static final TensorType TENSOR_2_2_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(2)));
@@ -219,58 +220,61 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       new TensorType(INT_32, asList(new NumericDim(3), new NumericDim(3)));
 
   private static final TensorType TENSOR_0_RAGGED_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(0), new RaggedDim()));
+      new TensorType(FLOAT_32, asList(new NumericDim(0), RaggedDim.INSTANCE));
 
   private static final TensorType TENSOR_0_RAGGED_3_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(0), new RaggedDim(), new NumericDim(3)));
+      new TensorType(FLOAT_32, asList(new NumericDim(0), RaggedDim.INSTANCE, new NumericDim(3)));
 
   private static final TensorType TENSOR_1_RAGGED_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(1), new RaggedDim()));
+      new TensorType(INT_32, asList(new NumericDim(1), RaggedDim.INSTANCE));
 
   private static final TensorType TENSOR_1_RAGGED_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(1), new RaggedDim()));
+      new TensorType(FLOAT_32, asList(new NumericDim(1), RaggedDim.INSTANCE));
 
   private static final TensorType TENSOR_2_NONE_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), null));
 
   private static final TensorType TENSOR_2_RAGGED_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(2), new RaggedDim()));
+      new TensorType(INT_32, asList(new NumericDim(2), RaggedDim.INSTANCE));
 
   private static final TensorType TENSOR_2_RAGGED_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(2), new RaggedDim()));
+      new TensorType(FLOAT_32, asList(new NumericDim(2), RaggedDim.INSTANCE));
 
   private static final TensorType TENSOR_2_RAGGED_2_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(2), new RaggedDim(), new NumericDim(2)));
+      new TensorType(FLOAT_32, asList(new NumericDim(2), RaggedDim.INSTANCE, new NumericDim(2)));
 
   private static final TensorType TENSOR_2_RAGGED_2_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(2), new RaggedDim(), new NumericDim(2)));
+      new TensorType(INT_32, asList(new NumericDim(2), RaggedDim.INSTANCE, new NumericDim(2)));
 
   private static final TensorType TENSOR_2_RAGGED_2_3_INT32 =
       new TensorType(
-          INT_32, asList(new NumericDim(2), new RaggedDim(), new NumericDim(2), new NumericDim(3)));
+          INT_32,
+          asList(new NumericDim(2), RaggedDim.INSTANCE, new NumericDim(2), new NumericDim(3)));
 
   private static final TensorType TENSOR_2_RAGGED_2_2_INT32 =
       new TensorType(
-          INT_32, asList(new NumericDim(2), new RaggedDim(), new NumericDim(2), new NumericDim(2)));
+          INT_32,
+          asList(new NumericDim(2), RaggedDim.INSTANCE, new NumericDim(2), new NumericDim(2)));
 
   private static final TensorType TENSOR_2_RAGGED_RAGGED_RAGGED_FLOAT32 =
       new TensorType(
-          FLOAT_32, asList(new NumericDim(2), new RaggedDim(), new RaggedDim(), new RaggedDim()));
+          FLOAT_32,
+          asList(new NumericDim(2), RaggedDim.INSTANCE, RaggedDim.INSTANCE, RaggedDim.INSTANCE));
 
   private static final TensorType TENSOR_3_RAGGED_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(3), new RaggedDim()));
+      new TensorType(INT_32, asList(new NumericDim(3), RaggedDim.INSTANCE));
 
   private static final TensorType TENSOR_3_RAGGED_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(3), new RaggedDim()));
+      new TensorType(FLOAT_32, asList(new NumericDim(3), RaggedDim.INSTANCE));
 
   private static final TensorType TENSOR_4_RAGGED_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(4), new RaggedDim()));
+      new TensorType(INT_32, asList(new NumericDim(4), RaggedDim.INSTANCE));
 
   private static final TensorType TENSOR_3_RAGGED_RAGGED_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(3), new RaggedDim(), new RaggedDim()));
+      new TensorType(FLOAT_32, asList(new NumericDim(3), RaggedDim.INSTANCE, RaggedDim.INSTANCE));
 
   private static final TensorType TENSOR_3_RAGGED_1_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(3), new RaggedDim(), new NumericDim(1)));
+      new TensorType(FLOAT_32, asList(new NumericDim(3), RaggedDim.INSTANCE, new NumericDim(1)));
 
   private static final TensorType TENSOR_2_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(3)));
@@ -300,7 +304,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       new TensorType(INT_32, asList(new NumericDim(5), new NumericDim(5)));
 
   private static final TensorType TENSOR_5_RAGGED_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(5), new RaggedDim()));
+      new TensorType(INT_32, asList(new NumericDim(5), RaggedDim.INSTANCE));
 
   private static final TensorType TENSOR_2_3_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(3), new NumericDim(3)));

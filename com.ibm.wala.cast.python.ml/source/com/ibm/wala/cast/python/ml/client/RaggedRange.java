@@ -167,7 +167,7 @@ public class RaggedRange extends Range {
         // Return 2D ragged tensor shape
         List<Dimension<?>> shape = new ArrayList<>();
         shape.add(new NumericDim(vectorLength != null ? vectorLength : -1));
-        shape.add(new RaggedDim());
+        shape.add(RaggedDim.INSTANCE);
         ret.add(shape);
       } else {
         // All scalars.
@@ -175,7 +175,7 @@ public class RaggedRange extends Range {
         // e.g. tf.ragged.range(3, 18, 3) -> [[3, 6, 9, 12, 15]]
         List<Dimension<?>> shape = new ArrayList<>();
         shape.add(new NumericDim(1));
-        shape.add(new RaggedDim());
+        shape.add(RaggedDim.INSTANCE);
         ret.add(shape);
       }
     }
