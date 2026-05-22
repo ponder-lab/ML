@@ -15,7 +15,7 @@ if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then
 elif command -v java >/dev/null 2>&1; then
   JAVA=java
 else
-  echo "no \`java\` executable found: set \`JAVA_HOME\` to a JDK install (with \`bin/java\` present) or add \`java\` to PATH." >&2
+  echo "no \`java\` executable found: set \`JAVA_HOME\` to a JDK install with an executable \`bin/java\`, or add \`java\` to PATH." >&2
   exit 1
 fi
 
