@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -46,7 +47,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
     NAME;
 
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
 
     public int getIndex() {
@@ -338,12 +339,14 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
     // rather than falling through to the aggregate {@code getTensorTypes}, which would silently
     // leak sibling fields' shapes. See wala/ML#396.
     if (shapes == null) {
-      for (DType dtype : dTypes) ret.add(new TensorType(dtype.name().toLowerCase(), null));
+      for (DType dtype : dTypes)
+        ret.add(new TensorType(dtype.name().toLowerCase(Locale.ROOT), null));
       return ret;
     }
 
     for (List<Dimension<?>> dimensionList : shapes)
-      for (DType dtype : dTypes) ret.add(new TensorType(dtype.name().toLowerCase(), dimensionList));
+      for (DType dtype : dTypes)
+        ret.add(new TensorType(dtype.name().toLowerCase(Locale.ROOT), dimensionList));
 
     return ret;
   }

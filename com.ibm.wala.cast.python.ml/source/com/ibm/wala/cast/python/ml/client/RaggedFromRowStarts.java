@@ -10,6 +10,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -30,7 +31,7 @@ public class RaggedFromRowStarts extends RaggedTensorFromValues {
     VALIDATE;
 
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
 
     public int getIndex() {
@@ -93,7 +94,7 @@ public class RaggedFromRowStarts extends RaggedTensorFromValues {
     }
 
     final Set<Dimension<?>> finalPossibleRowDims = possibleRowDims;
-    LOGGER.info(() -> "Inferred nrows for " + this.getSource() + ": " + finalPossibleRowDims + ".");
+    LOGGER.fine(() -> "Inferred nrows for " + this.getSource() + ": " + finalPossibleRowDims + ".");
 
     // 2. Determine shape of `values`.
     OrdinalSet<InstanceKey> valuesPts = this.getValuesPointsToSet(builder);
@@ -103,7 +104,7 @@ public class RaggedFromRowStarts extends RaggedTensorFromValues {
     }
 
     final Set<List<Dimension<?>>> finalValuesShapes = valuesShapes;
-    LOGGER.info(
+    LOGGER.fine(
         () -> "Possible values shapes for " + this.getSource() + ": " + finalValuesShapes + ".");
 
     return constructRaggedShape(possibleRowDims, valuesShapes);

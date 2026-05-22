@@ -3,14 +3,39 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.ml.types.NumpyTypes.ASTYPE;
 import static com.ibm.wala.cast.python.ml.types.NumpyTypes.ASTYPE_METHOD_NAME;
 import static com.ibm.wala.cast.python.ml.types.NumpyTypes.RESHAPE_METHOD;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ACOSH;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARGMAX;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARGMIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARRAY_OPS_RESHAPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ASIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ASINH;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.AS_STRING;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ATAN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ATAN2;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ATANH;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOOLEAN_MASK;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOSTON_HOUSING_X_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOSTON_HOUSING_X_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOSTON_HOUSING_Y_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOSTON_HOUSING_Y_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BROADCAST_TO;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CAST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CEIL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR100_X_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR100_X_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR100_Y_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR100_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_X_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_X_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_Y_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_Y_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CLIP_BY_VALUE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONCAT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.COS;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.COSH;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_BATCH_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CHOOSE_FROM_DATASETS_TYPE;
@@ -34,11 +59,24 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_ZIP_TYPE
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DENSE_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIVIDE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.UNKNOWN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EINSUM;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EMBEDDING_LOOKUP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EQUAL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ERF;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ERFC;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EXP;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EXPAND_DIMS;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EXPM1;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EXTRACT_PATCHES;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EYE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FASHION_MNIST_X_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FASHION_MNIST_X_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FASHION_MNIST_Y_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FASHION_MNIST_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLATTEN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLATTEN_LAYER_CALL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLOOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_ROW_LENGTHS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_ROW_SPLITS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_NESTED_VALUE_ROWIDS;
@@ -49,12 +87,29 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_ROW_STARTS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_VALUE_ROWIDS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA_OP;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GATHER_ND;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GRADIENT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GREATER;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GREATER_EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IDENTITY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_X_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_X_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_Y_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LEAKY_RELU;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LESS;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LESS_EQUAL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LINSPACE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG1P;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG_SOFTMAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MATMUL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MAXIMUM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MAX_POOL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MESHGRID;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MINIMUM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MNIST_X_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MNIST_X_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MNIST_Y_TEST;
@@ -63,6 +118,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MULTIPLY;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NDARRAY;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NEGATIVE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NOT_EQUAL;
@@ -73,36 +129,64 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONE_HOT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.PLACEHOLDER;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.POISSON;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.POISSON_OP;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.POW;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANDOM_NORMAL_INIT_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANGE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.READ_DATA_SETS;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RECIPROCAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_ALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_LOGSUMEXP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MEAN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_MIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_PROD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REDUCE_SUM;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RELU;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_X_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_X_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_Y_TEST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_Y_TRAIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ROUND;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RSQRT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SEQUENCE_MASK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIGMOID;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIGN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SINH;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIZE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SLICE_BUILTIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SOFTMAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SOFTMAX_CROSS_ENTROPY_WITH_LOGITS;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SOFTPLUS;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SOFTSIGN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_FROM_DENSE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SQRT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SQUARE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.STACK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.STOP_GRADIENT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SUBTRACT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TAN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORDOT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_SCATTER_ND_UPDATE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TEXT_LINE_DATASET_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TF_RESHAPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TOP_K;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRACE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL_METHOD_NAME;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VARIABLE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.WHERE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS_LIKE;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
@@ -179,7 +263,15 @@ public class TensorGeneratorFactory {
    * property reads. See wala/ML#356 for the broader context.
    */
   private static final Map<String, Function<PointsToSetVariable, TensorGenerator>>
-      PROPERTY_NAME_GENERATORS = Map.ofEntries(entry(ASTYPE_METHOD_NAME, AstypeOperation::new));
+      PROPERTY_NAME_GENERATORS =
+          Map.ofEntries(
+              entry(ASTYPE_METHOD_NAME, AstypeOperation::new),
+              // wala/ML#449: `tf.random.truncated_normal(...)` doesn't reach the per-class
+              // `isType` checks because `calledFunction` resolves to generic `LCodeBody`
+              // rather than the specific `TRUNCATED_NORMAL`/`TRUNCATED_NORMAL_OP` class.
+              // Duck-typing the property name catches it before the `ReadDataFallback`
+              // fallback would.
+              entry(TRUNCATED_NORMAL_METHOD_NAME, TruncatedNormal::new));
 
   /**
    * Resolves the {@link TypeReference} for the function call associated with the given source.
@@ -326,7 +418,7 @@ public class TensorGeneratorFactory {
       }
     }
 
-    LOGGER.info("findCreator fallback returning original source: " + source);
+    LOGGER.fine("findCreator fallback returning original source: " + source);
     return source;
   }
 
@@ -917,13 +1009,13 @@ public class TensorGeneratorFactory {
     }
 
     TypeReference calledFunction = getFunction(source, builder);
-    LOGGER.info("Getting tensor generator for call to: " + calledFunction + ".");
+    LOGGER.fine("Getting tensor generator for call to: " + calledFunction + ".");
 
     // sanitize the type name by removing the artificial suffix that is added for synthetic
     // classes to facilitate trampoline generation.
     calledFunction = sanitize(calledFunction);
 
-    LOGGER.info("Getting tensor generator for sanitized call to: " + calledFunction + ".");
+    LOGGER.fine("Getting tensor generator for sanitized call to: " + calledFunction + ".");
 
     if (isType(calledFunction, ONES.getDeclaringClass())) return new Ones(source);
     else if (isType(calledFunction, CONSTANT.getDeclaringClass())) return new Constant(source);
@@ -941,6 +1033,9 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, ARRAY_OPS_RESHAPE)
         || calledFunction.getName().equals(TF_RESHAPE)) return new Reshape(source);
     else if (isType(calledFunction, FILL.getDeclaringClass())) return new Fill(source);
+    else if (isType(calledFunction, LINSPACE.getDeclaringClass())) return new Linspace(source);
+    else if (isType(calledFunction, BROADCAST_TO.getDeclaringClass()))
+      return new BroadcastTo(source);
     else if (isType(calledFunction, CONVERT_TO_TENSOR.getDeclaringClass()))
       return new ConvertToTensor(source);
     else if (isType(calledFunction, ONE_HOT.getDeclaringClass())) return new OneHot(source);
@@ -1057,8 +1152,55 @@ public class TensorGeneratorFactory {
       return new Cifar10InputData(source, Cifar10InputData.X_TEST_SHAPE);
     else if (isType(calledFunction, CIFAR10_Y_TEST))
       return new Cifar10InputData(source, Cifar10InputData.Y_TEST_SHAPE);
+    else if (isType(calledFunction, IMDB_X_TRAIN))
+      return new ImdbInputData(source, ImdbInputData.X_TRAIN_SHAPE, ImdbInputData.X_DTYPES);
+    else if (isType(calledFunction, IMDB_Y_TRAIN))
+      return new ImdbInputData(source, ImdbInputData.Y_TRAIN_SHAPE, ImdbInputData.Y_DTYPES);
+    else if (isType(calledFunction, IMDB_X_TEST))
+      return new ImdbInputData(source, ImdbInputData.X_TEST_SHAPE, ImdbInputData.X_DTYPES);
+    else if (isType(calledFunction, IMDB_Y_TEST))
+      return new ImdbInputData(source, ImdbInputData.Y_TEST_SHAPE, ImdbInputData.Y_DTYPES);
+    else if (isType(calledFunction, FASHION_MNIST_X_TRAIN))
+      return new MnistInputData(source, MnistInputData.X_TRAIN_SHAPE);
+    else if (isType(calledFunction, FASHION_MNIST_Y_TRAIN))
+      return new MnistInputData(source, MnistInputData.Y_TRAIN_SHAPE);
+    else if (isType(calledFunction, FASHION_MNIST_X_TEST))
+      return new MnistInputData(source, MnistInputData.X_TEST_SHAPE);
+    else if (isType(calledFunction, FASHION_MNIST_Y_TEST))
+      return new MnistInputData(source, MnistInputData.Y_TEST_SHAPE);
+    else if (isType(calledFunction, CIFAR100_X_TRAIN))
+      return new Cifar100InputData(
+          source, Cifar100InputData.X_TRAIN_SHAPE, Cifar100InputData.X_DTYPES);
+    else if (isType(calledFunction, CIFAR100_Y_TRAIN))
+      return new Cifar100InputData(
+          source, Cifar100InputData.Y_TRAIN_SHAPE, Cifar100InputData.Y_DTYPES);
+    else if (isType(calledFunction, CIFAR100_X_TEST))
+      return new Cifar100InputData(
+          source, Cifar100InputData.X_TEST_SHAPE, Cifar100InputData.X_DTYPES);
+    else if (isType(calledFunction, CIFAR100_Y_TEST))
+      return new Cifar100InputData(
+          source, Cifar100InputData.Y_TEST_SHAPE, Cifar100InputData.Y_DTYPES);
+    else if (isType(calledFunction, REUTERS_X_TRAIN))
+      return new ReutersInputData(
+          source, ReutersInputData.X_TRAIN_SHAPE, ReutersInputData.X_DTYPES);
+    else if (isType(calledFunction, REUTERS_Y_TRAIN))
+      return new ReutersInputData(
+          source, ReutersInputData.Y_TRAIN_SHAPE, ReutersInputData.Y_DTYPES);
+    else if (isType(calledFunction, REUTERS_X_TEST))
+      return new ReutersInputData(source, ReutersInputData.X_TEST_SHAPE, ReutersInputData.X_DTYPES);
+    else if (isType(calledFunction, REUTERS_Y_TEST))
+      return new ReutersInputData(source, ReutersInputData.Y_TEST_SHAPE, ReutersInputData.Y_DTYPES);
+    else if (isType(calledFunction, BOSTON_HOUSING_X_TRAIN))
+      return new BostonHousingInputData(source, BostonHousingInputData.X_TRAIN_SHAPE);
+    else if (isType(calledFunction, BOSTON_HOUSING_Y_TRAIN))
+      return new BostonHousingInputData(source, BostonHousingInputData.Y_TRAIN_SHAPE);
+    else if (isType(calledFunction, BOSTON_HOUSING_X_TEST))
+      return new BostonHousingInputData(source, BostonHousingInputData.X_TEST_SHAPE);
+    else if (isType(calledFunction, BOSTON_HOUSING_Y_TEST))
+      return new BostonHousingInputData(source, BostonHousingInputData.Y_TEST_SHAPE);
     else if (isType(calledFunction, REDUCE_MEAN.getDeclaringClass())) return new ReduceMean(source);
     else if (isType(calledFunction, REDUCE_MAX.getDeclaringClass())) return new ReduceMax(source);
+    else if (isType(calledFunction, REDUCE_MIN.getDeclaringClass())) return new ReduceMin(source);
     else if (isType(calledFunction, REDUCE_PROD.getDeclaringClass())) return new ReduceProd(source);
     else if (isType(calledFunction, REDUCE_LOGSUMEXP.getDeclaringClass()))
       return new ReduceLogSumExp(source);
@@ -1069,17 +1211,90 @@ public class TensorGeneratorFactory {
       return new ComparisonOperation(source);
     else if (isType(calledFunction, NOT_EQUAL.getDeclaringClass()))
       return new ComparisonOperation(source);
+    else if (isType(calledFunction, LESS.getDeclaringClass()))
+      return new ComparisonOperation(source);
+    else if (isType(calledFunction, LESS_EQUAL.getDeclaringClass()))
+      return new ComparisonOperation(source);
+    else if (isType(calledFunction, GREATER.getDeclaringClass()))
+      return new ComparisonOperation(source);
+    else if (isType(calledFunction, GREATER_EQUAL.getDeclaringClass()))
+      return new ComparisonOperation(source);
     else if (isType(calledFunction, SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass())
         || isType(calledFunction, SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass()))
       return new SoftmaxCrossEntropy(source);
-    else if (isType(calledFunction, LOG.getDeclaringClass()))
-      return new ElementWiseOperation(source);
     else if (isType(calledFunction, REDUCE_SUM.getDeclaringClass())) return new ReduceSum(source);
     else if (isType(calledFunction, MATMUL.getDeclaringClass())) return new MatMul(source);
     else if (isType(calledFunction, SIGMOID.getDeclaringClass())) return new Sigmoid(source);
+    else if (isType(calledFunction, EXP.getDeclaringClass())) return new Exp(source);
+    else if (isType(calledFunction, RSQRT.getDeclaringClass())) return new Rsqrt(source);
+    else if (isType(calledFunction, LOG_SOFTMAX.getDeclaringClass())) return new LogSoftmax(source);
+    else if (isType(calledFunction, RANK.getDeclaringClass())) return new Rank(source);
+    else if (isType(calledFunction, SIZE.getDeclaringClass())) return new Size(source);
+    else if (isType(calledFunction, ARGMAX.getDeclaringClass())) return new Argmax(source);
+    else if (isType(calledFunction, ARGMIN.getDeclaringClass())) return new Argmin(source);
+    else if (isType(calledFunction, TENSORDOT.getDeclaringClass())) return new Tensordot(source);
+    else if (isType(calledFunction, TRACE.getDeclaringClass())) return new Trace(source);
+    else if (isType(calledFunction, TENSOR_SCATTER_ND_UPDATE.getDeclaringClass()))
+      return new TensorScatterNdUpdate(source);
+    else if (isType(calledFunction, SEQUENCE_MASK.getDeclaringClass()))
+      return new SequenceMask(source);
+    else if (isType(calledFunction, EMBEDDING_LOOKUP.getDeclaringClass()))
+      return new EmbeddingLookup(source);
+    else if (isType(calledFunction, GATHER_ND.getDeclaringClass())) return new GatherNd(source);
+    else if (isType(calledFunction, BOOLEAN_MASK.getDeclaringClass()))
+      return new BooleanMask(source);
+    else if (isType(calledFunction, EXTRACT_PATCHES.getDeclaringClass()))
+      return new ExtractPatches(source);
+    else if (isType(calledFunction, TAN.getDeclaringClass())) return new Tan(source);
+    else if (isType(calledFunction, ASIN.getDeclaringClass())) return new Asin(source);
+    else if (isType(calledFunction, ATAN.getDeclaringClass())) return new Atan(source);
+    else if (isType(calledFunction, SINH.getDeclaringClass())) return new Sinh(source);
+    else if (isType(calledFunction, COSH.getDeclaringClass())) return new Cosh(source);
+    else if (isType(calledFunction, ASINH.getDeclaringClass())) return new Asinh(source);
+    else if (isType(calledFunction, ACOSH.getDeclaringClass())) return new Acosh(source);
+    else if (isType(calledFunction, ATANH.getDeclaringClass())) return new Atanh(source);
+    else if (isType(calledFunction, LOG1P.getDeclaringClass())) return new Log1p(source);
+    else if (isType(calledFunction, EXPM1.getDeclaringClass())) return new Expm1(source);
+    else if (isType(calledFunction, ROUND.getDeclaringClass())) return new Round(source);
+    else if (isType(calledFunction, RECIPROCAL.getDeclaringClass())) return new Reciprocal(source);
+    else if (isType(calledFunction, SOFTPLUS.getDeclaringClass())) return new Softplus(source);
+    else if (isType(calledFunction, SOFTSIGN.getDeclaringClass())) return new Softsign(source);
+    else if (isType(calledFunction, SQUARE.getDeclaringClass())) return new Square(source);
+    else if (isType(calledFunction, ERF.getDeclaringClass())) return new Erf(source);
+    else if (isType(calledFunction, ERFC.getDeclaringClass())) return new Erfc(source);
+    else if (isType(calledFunction, ATAN2.getDeclaringClass()))
+      return new ElementWiseOperation(source);
+    else if (isType(calledFunction, MAXIMUM.getDeclaringClass()))
+      return new ElementWiseOperation(source);
+    else if (isType(calledFunction, MINIMUM.getDeclaringClass()))
+      return new ElementWiseOperation(source);
+    else if (isType(calledFunction, EINSUM.getDeclaringClass())) return new Einsum(source);
+    else if (isType(calledFunction, RELU.getDeclaringClass())) return new Relu(source);
+    else if (isType(calledFunction, CAST.getDeclaringClass())) return new Cast(source);
+    else if (isType(calledFunction, EXPAND_DIMS.getDeclaringClass())) return new ExpandDims(source);
+    else if (isType(calledFunction, CLIP_BY_VALUE.getDeclaringClass()))
+      return new ClipByValue(source);
+    else if (isType(calledFunction, AS_STRING.getDeclaringClass())) return new AsString(source);
+    else if (isType(calledFunction, TOP_K.getDeclaringClass())) return new TopK(source);
+    else if (isType(calledFunction, MESHGRID.getDeclaringClass())) return new Meshgrid(source);
+    else if (isType(calledFunction, WHERE.getDeclaringClass())) return new Where(source);
+    else if (isType(calledFunction, LEAKY_RELU.getDeclaringClass())) return new LeakyRelu(source);
+    else if (isType(calledFunction, POW.getDeclaringClass()))
+      return new ElementWiseOperation(source);
+    else if (isType(calledFunction, CONCAT.getDeclaringClass())) return new Concat(source);
+    else if (isType(calledFunction, STACK.getDeclaringClass())) return new Stack(source);
+    else if (isType(calledFunction, SQRT.getDeclaringClass())) return new Sqrt(source);
+    else if (isType(calledFunction, LOG.getDeclaringClass())) return new Log(source);
+    else if (isType(calledFunction, NEGATIVE.getDeclaringClass())) return new Negative(source);
+    else if (isType(calledFunction, SIN.getDeclaringClass())) return new Sin(source);
+    else if (isType(calledFunction, COS.getDeclaringClass())) return new Cos(source);
+    else if (isType(calledFunction, FLOOR.getDeclaringClass())) return new Floor(source);
+    else if (isType(calledFunction, CEIL.getDeclaringClass())) return new Ceil(source);
+    else if (isType(calledFunction, SIGN.getDeclaringClass())) return new Sign(source);
     else if (isType(calledFunction, IDENTITY.getDeclaringClass())) return new Identity(source);
     else if (isType(calledFunction, STOP_GRADIENT.getDeclaringClass()))
       return new StopGradient(source);
+    else if (isType(calledFunction, GRADIENT.getDeclaringClass())) return new Gradient(source);
     else if (isType(calledFunction, SOFTMAX.getDeclaringClass())) return new Softmax(source);
     else if (isType(calledFunction, DENSE_CALL.getDeclaringClass())) return new DenseCall(source);
     else if (isType(calledFunction, MODEL_CALL.getDeclaringClass())) return new ModelCall(source);

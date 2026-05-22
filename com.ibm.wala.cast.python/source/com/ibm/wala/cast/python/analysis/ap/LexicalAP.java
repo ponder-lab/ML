@@ -23,10 +23,12 @@ public class LexicalAP implements IAPRoot {
     return definer;
   }
 
+  @Override
   public Kind getKind() {
     return Kind.LEXICAL;
   }
 
+  @Override
   public int length() {
     return 1;
   }
@@ -51,6 +53,7 @@ public class LexicalAP implements IAPRoot {
     return true;
   }
 
+  @Override
   public String toString() {
     return "(" + name + "," + definer + ")";
   }

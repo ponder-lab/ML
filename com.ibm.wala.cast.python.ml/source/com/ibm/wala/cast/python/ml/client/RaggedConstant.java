@@ -15,6 +15,7 @@ import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
@@ -30,6 +31,7 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -55,7 +57,7 @@ public class RaggedConstant extends Constant {
     ROW_SPLITS_DTYPE;
 
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
 
     public int getIndex() {
@@ -384,10 +386,12 @@ public class RaggedConstant extends Constant {
               .filter(Objects::nonNull)
               .collect(toSet());
 
+      Set<List<Dimension<?>>> rawInnerShapeArguments = this.getPossibleInnerShapeArguments(builder);
+      // Soundness: a `null` from `getPossibleInnerShapeArguments` means `inner_shape` was
+      // present but unparseable — the overall ragged-constant shape must be ⊤ in that case.
+      if (rawInnerShapeArguments == null) return null;
       Set<List<Dimension<?>>> innerShapeArguments =
-          this.getPossibleInnerShapeArguments(builder).stream()
-              .filter(Objects::nonNull)
-              .collect(toSet());
+          rawInnerShapeArguments.stream().filter(Objects::nonNull).collect(toSet());
 
       if (rankArguments.isEmpty())
         // Default ragged rank.
@@ -425,7 +429,7 @@ public class RaggedConstant extends Constant {
           // The first R dimensions are ragged.
           // Dim 1 to R: These are assigned None (or ? in older outputs) in the static shape,
           // indicating they can vary.
-          for (Long i = 0L; i < R; i++) shape.add(null); // Unknown size for ragged dimensions.
+          for (long i = 0L; i < R; i++) shape.add(RaggedDim.INSTANCE);
 
           // Part B: The Uniform Portion (Dimensions R + 1 to K)
           // If R < K - 1 (meaning you requested fewer ragged dimensions than the total depth),
@@ -498,6 +502,13 @@ public class RaggedConstant extends Constant {
             builder, this.getInnerShapeParameterPosition(), getInnerShapeParameterName());
 
     if (pointsToSet != null && !pointsToSet.isEmpty()) {
+      // The helper still throws `IllegalStateException` for unparseable `inner_shape` forms
+      // (e.g., a runtime tensor). The keep-throw contract is intentional &mdash; per wala/ML#471
+      // the strict signal surfaces missing modeling rather than silently degrading. The
+      // exception propagates up to the analysis driver; only `BroadcastTo` localizes a catch
+      // (because runtime-tensor shape args are the legitimate use case there). Empty (no PTS
+      // recovered, or `inner_shape` not provided at all) returns the empty set, distinct from
+      // an unparseable form, and means "use defaults".
       return this.getShapesFromShapeArgument(builder, pointsToSet);
     } else return emptySet();
   }

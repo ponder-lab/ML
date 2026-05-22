@@ -14,6 +14,7 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -53,7 +54,7 @@ public class NdarrayReshape extends TensorGenerator {
     SHAPE;
 
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
 
     public int getIndex() {
@@ -97,6 +98,11 @@ public class NdarrayReshape extends TensorGenerator {
     if (shapePts == null || shapePts.isEmpty()) return getDefaultShapes(builder);
 
     Set<List<Dimension<?>>> rawShapes = this.getShapesFromShapeArgument(builder, shapePts);
+    // Soundness: when the `shape` argument is present but unparseable (helper returns null),
+    // the output shape is ⊤ — falling back to receiver-shape inference would be unsound since
+    // `ndarray.reshape(...)` is determined by the argument. Empty result distinct: no signature
+    // recoverable, fall back to receiver shape.
+    if (rawShapes == null) return null;
     if (rawShapes.isEmpty()) return getDefaultShapes(builder);
 
     Set<List<Dimension<?>>> refinedShapes = HashSetFactory.make();

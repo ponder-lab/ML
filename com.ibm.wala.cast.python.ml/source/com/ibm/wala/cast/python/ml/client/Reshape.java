@@ -11,6 +11,7 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -39,7 +40,11 @@ public class Reshape extends TensorGenerator {
      * attempt to resolve the `-1` based on the input tensor's shape and the known dimensions in the
      * target shape.
      */
-    SHAPE
+    SHAPE;
+
+    public String getName() {
+      return name().toLowerCase(Locale.ROOT);
+    }
   }
 
   public Reshape(PointsToSetVariable source) {
@@ -66,7 +71,23 @@ public class Reshape extends TensorGenerator {
             builder, this.getShapeParameterPosition(), this.getShapeParameterName());
 
     if (shapePts != null && !shapePts.isEmpty()) {
-      Set<List<Dimension<?>>> rawShapes = this.getShapesFromShapeArgument(builder, shapePts);
+      Set<List<Dimension<?>>> rawShapes;
+      try {
+        // `getShapesFromShapeArgument` throws `IllegalStateException` for shape forms it
+        // doesn't recognize. For `Reshape` specifically, `tf.reshape(arr, tf.shape(other))`
+        // is a common pattern where the shape argument is itself a runtime Tensor (the result
+        // of `tf.shape(...)`), so we tolerate the throw and degrade to ⊤ ("output shape
+        // unknown"). Other callers let the throw propagate as a loud signal that modeling
+        // work is missing. Mirrors the established `BroadcastTo#getDefaultShapes` precedent;
+        // see wala/ML#538 for the surfacing fixture (`tf2_test_take_along_axis.py`).
+        rawShapes = this.getShapesFromShapeArgument(builder, shapePts);
+      } catch (IllegalStateException e) {
+        return null;
+      }
+      // Soundness: when the `shape` argument is present but unparseable, the output shape is ⊤
+      // (the result is determined by `shape`, not the input tensor — falling back to input-shape
+      // inference would be unsound).
+      if (rawShapes == null) return null;
       if (!rawShapes.isEmpty()) {
         Set<List<Dimension<?>>> refinedShapes = HashSetFactory.make();
 
@@ -172,7 +193,7 @@ public class Reshape extends TensorGenerator {
 
   @Override
   protected String getShapeParameterName() {
-    return Parameters.SHAPE.name().toLowerCase();
+    return Parameters.SHAPE.getName();
   }
 
   @Override
@@ -190,6 +211,6 @@ public class Reshape extends TensorGenerator {
   }
 
   protected String getValueParameterName() {
-    return Parameters.TENSOR.name().toLowerCase();
+    return Parameters.TENSOR.getName();
   }
 }

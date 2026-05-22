@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!DOCTYPE summary-spec>
-<!-- Pandas model -->
+<!-- functools model -->
 <summary-spec>
   <classloader name="PythonLoader">
     <class name="functools" allocatable="true">

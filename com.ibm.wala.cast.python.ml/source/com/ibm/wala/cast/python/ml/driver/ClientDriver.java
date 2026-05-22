@@ -237,10 +237,48 @@ public class ClientDriver implements LanguageClient {
 
   public static void main(String[] args, Consumer<Object> process)
       throws IOException, InterruptedException, ExecutionException {
+    validateArgs(args);
     @SuppressWarnings("resource")
     Socket s = new Socket();
     s.connect(new InetSocketAddress("localhost", 6661));
     main(args, s.getInputStream(), s.getOutputStream(), process);
+  }
+
+  /**
+   * Validates that {@code args} matches the canonical {@code ClientDriver} contract: one URI
+   * followed by zero or more {@code (line, character)} integer pairs. Throws {@link
+   * IllegalArgumentException} on any violation before any I/O (socket connect, launcher start) so
+   * malformed argv fails fast without side effects.
+   *
+   * @param args The argv array to validate.
+   * @throws IllegalArgumentException If the argv length is even or zero, or if any pair component
+   *     is not parseable as {@code int}. For the numeric case, the underlying {@link
+   *     NumberFormatException} is preserved as the {@code cause}.
+   */
+  private static void validateArgs(String[] args) {
+    if (args.length < 1 || args.length % 2 != 1) {
+      throw new IllegalArgumentException(
+          "Expected URI followed by zero or more (line, character) pairs; got "
+              + args.length
+              + " arg(s).");
+    }
+    for (int i = 1; i < args.length; i += 2) {
+      try {
+        Integer.parseInt(args[i]);
+        Integer.parseInt(args[i + 1]);
+      } catch (NumberFormatException e) {
+        throw new IllegalArgumentException(
+            "Argv positions must be numeric; got args["
+                + i
+                + "]="
+                + args[i]
+                + ", args["
+                + (i + 1)
+                + "]="
+                + args[i + 1],
+            e);
+      }
+    }
   }
 
   private CompletableFuture<Void> sendClientStuff(String[] args) {
@@ -301,6 +339,7 @@ public class ClientDriver implements LanguageClient {
 
   public static void main(String[] args, InputStream in, OutputStream out, Consumer<Object> process)
       throws IOException, InterruptedException, ExecutionException {
+    validateArgs(args);
     ClientDriver client = new ClientDriver();
     client.args = args;
     client.process = process;

@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+import java.util.Locale;
 
 /**
  * A generator for tensors created by the `zeros_like()` function in TensorFlow.
@@ -19,7 +20,7 @@ public class ZerosLike extends Constant {
     SHAPE;
 
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
 
     public int getIndex() {

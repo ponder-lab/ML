@@ -5,6 +5,7 @@ import static java.util.Collections.singleton;
 
 import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
+import com.ibm.wala.cast.util.test.TestCallGraphShape.GraphAssertion;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.SSAContextInterpreter;
@@ -12,6 +13,7 @@ import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 import java.util.logging.Logger;
 import org.junit.Test;
 
@@ -19,26 +21,23 @@ public class TestCalls extends TestJythonCallGraphShape {
 
   private static final Logger LOGGER = Logger.getLogger(TestCalls.class.getName());
 
-  protected static final Object[][] assertionsCalls1 =
-      new Object[][] {
-        new Object[] {ROOT, new String[] {"script calls1.py"}},
-        new Object[] {
-          "script calls1.py",
-          new String[] {
-            "script calls1.py/Foo",
-            "script calls1.py/foo",
-            "$script calls1.py/Foo/foo:trampoline3",
-            "script calls1.py/id",
-            "script calls1.py/nothing"
-          }
-        },
-        new Object[] {
-          "$script calls1.py/Foo/foo:trampoline3", new String[] {"script calls1.py/Foo/foo"}
-        },
-        new Object[] {"script calls1.py/call", new String[] {"script calls1.py/id"}},
-        new Object[] {"script calls1.py/Foo/foo", new String[] {"script calls1.py/id"}},
-        new Object[] {"script calls1.py/foo", new String[] {"script calls1.py/call"}}
-      };
+  protected static final List<GraphAssertion> assertionsCalls1 =
+      List.of(
+          new GraphAssertion(ROOT, new String[] {"script calls1.py"}),
+          new GraphAssertion(
+              "script calls1.py",
+              new String[] {
+                "script calls1.py/Foo",
+                "script calls1.py/foo",
+                "$script calls1.py/Foo/foo:trampoline3",
+                "script calls1.py/id",
+                "script calls1.py/nothing"
+              }),
+          new GraphAssertion(
+              "$script calls1.py/Foo/foo:trampoline3", new String[] {"script calls1.py/Foo/foo"}),
+          new GraphAssertion("script calls1.py/call", new String[] {"script calls1.py/id"}),
+          new GraphAssertion("script calls1.py/Foo/foo", new String[] {"script calls1.py/id"}),
+          new GraphAssertion("script calls1.py/foo", new String[] {"script calls1.py/call"}));
 
   @Test
   public void testCalls1()
@@ -47,23 +46,20 @@ public class TestCalls extends TestJythonCallGraphShape {
     verifyGraphAssertions(CG, assertionsCalls1);
   }
 
-  protected static final Object[][] assertionsCalls2 =
-      new Object[][] {
-        new Object[] {ROOT, new String[] {"script calls2.py"}},
-        new Object[] {
-          "script calls2.py",
-          new String[] {
-            "script calls2.py/Foo/foo",
-            "script calls2.py/foo",
-            "$script calls2.py/Foo/foo:trampoline3"
-          }
-        },
-        new Object[] {
-          "$script calls2.py/Foo/foo:trampoline3", new String[] {"script calls2.py/Foo/foo"}
-        },
-        new Object[] {"script calls2.py/call", new String[] {"script calls2.py/id"}},
-        new Object[] {"script calls2.py/foo", new String[] {"script calls2.py/call"}}
-      };
+  protected static final List<GraphAssertion> assertionsCalls2 =
+      List.of(
+          new GraphAssertion(ROOT, new String[] {"script calls2.py"}),
+          new GraphAssertion(
+              "script calls2.py",
+              new String[] {
+                "script calls2.py/Foo/foo",
+                "script calls2.py/foo",
+                "$script calls2.py/Foo/foo:trampoline3"
+              }),
+          new GraphAssertion(
+              "$script calls2.py/Foo/foo:trampoline3", new String[] {"script calls2.py/Foo/foo"}),
+          new GraphAssertion("script calls2.py/call", new String[] {"script calls2.py/id"}),
+          new GraphAssertion("script calls2.py/foo", new String[] {"script calls2.py/call"}));
 
   @Test
   public void testCalls2()
@@ -72,16 +68,16 @@ public class TestCalls extends TestJythonCallGraphShape {
     verifyGraphAssertions(CG, assertionsCalls2);
   }
 
-  protected static final Object[][] assertionsCalls3 =
-      new Object[][] {
-        new Object[] {ROOT, new String[] {"script calls3.py"}},
-        new Object[] {
-          "script calls3.py",
-          new String[] {"script calls3.py/nothing", "script calls3.py/id", "script calls3.py/foo"}
-        },
-        new Object[] {"script calls3.py/call", new String[] {"script calls3.py/id"}},
-        new Object[] {"script calls3.py/foo", new String[] {"script calls3.py/call"}}
-      };
+  protected static final List<GraphAssertion> assertionsCalls3 =
+      List.of(
+          new GraphAssertion(ROOT, new String[] {"script calls3.py"}),
+          new GraphAssertion(
+              "script calls3.py",
+              new String[] {
+                "script calls3.py/nothing", "script calls3.py/id", "script calls3.py/foo"
+              }),
+          new GraphAssertion("script calls3.py/call", new String[] {"script calls3.py/id"}),
+          new GraphAssertion("script calls3.py/foo", new String[] {"script calls3.py/call"}));
 
   @Test
   public void testCalls3()
@@ -90,14 +86,14 @@ public class TestCalls extends TestJythonCallGraphShape {
     verifyGraphAssertions(CG, assertionsCalls3);
   }
 
-  protected static final Object[][] assertionsCalls4 =
-      new Object[][] {
-        new Object[] {ROOT, new String[] {"script calls4.py"}},
-        new Object[] {
-          "script calls4.py",
-          new String[] {"script calls4.py/bad", "script calls4.py/id", "script calls4.py/foo"}
-        }
-      };
+  protected static final List<GraphAssertion> assertionsCalls4 =
+      List.of(
+          new GraphAssertion(ROOT, new String[] {"script calls4.py"}),
+          new GraphAssertion(
+              "script calls4.py",
+              new String[] {
+                "script calls4.py/bad", "script calls4.py/id", "script calls4.py/foo"
+              }));
 
   @Test
   public void testCalls4()
@@ -106,20 +102,19 @@ public class TestCalls extends TestJythonCallGraphShape {
     verifyGraphAssertions(CG, assertionsCalls4);
   }
 
-  protected static final Object[][] assertionsCalls5 =
-      new Object[][] {
-        new Object[] {ROOT, new String[] {"script calls5.py"}},
-        new Object[] {
-          "script calls5.py",
-          new String[] {
-            "script calls5.py/Foo", "$script calls5.py/Foo/foo:trampoline3", "script calls5.py/bad"
-          }
-        },
-        new Object[] {
-          "$script calls5.py/Foo/foo:trampoline3", new String[] {"script calls5.py/Foo/foo"}
-        },
-        new Object[] {"script calls5.py/Foo/foo", new String[] {"script calls5.py/id"}}
-      };
+  protected static final List<GraphAssertion> assertionsCalls5 =
+      List.of(
+          new GraphAssertion(ROOT, new String[] {"script calls5.py"}),
+          new GraphAssertion(
+              "script calls5.py",
+              new String[] {
+                "script calls5.py/Foo",
+                "$script calls5.py/Foo/foo:trampoline3",
+                "script calls5.py/bad"
+              }),
+          new GraphAssertion(
+              "$script calls5.py/Foo/foo:trampoline3", new String[] {"script calls5.py/Foo/foo"}),
+          new GraphAssertion("script calls5.py/Foo/foo", new String[] {"script calls5.py/id"}));
 
   @Test
   public void testCalls5()
@@ -128,20 +123,19 @@ public class TestCalls extends TestJythonCallGraphShape {
     verifyGraphAssertions(CG, assertionsCalls5);
   }
 
-  protected static final Object[][] assertionsCalls6 =
-      new Object[][] {
-        new Object[] {ROOT, new String[] {"script calls6.py"}},
-        new Object[] {
-          "script calls6.py",
-          new String[] {
-            "script calls6.py/Foo", "$script calls6.py/Foo/foo:trampoline3", "script calls6.py/bad"
-          }
-        },
-        new Object[] {
-          "$script calls6.py/Foo/foo:trampoline3", new String[] {"script calls6.py/Foo/foo"}
-        },
-        new Object[] {"script calls6.py/Foo/foo", new String[] {"script calls6.py/id"}}
-      };
+  protected static final List<GraphAssertion> assertionsCalls6 =
+      List.of(
+          new GraphAssertion(ROOT, new String[] {"script calls6.py"}),
+          new GraphAssertion(
+              "script calls6.py",
+              new String[] {
+                "script calls6.py/Foo",
+                "$script calls6.py/Foo/foo:trampoline3",
+                "script calls6.py/bad"
+              }),
+          new GraphAssertion(
+              "$script calls6.py/Foo/foo:trampoline3", new String[] {"script calls6.py/Foo/foo"}),
+          new GraphAssertion("script calls6.py/Foo/foo", new String[] {"script calls6.py/id"}));
 
   @Test
   public void testCalls6()
@@ -200,21 +194,18 @@ public class TestCalls extends TestJythonCallGraphShape {
         CG);
   }
 
-  protected static final Object[][] assertionsDefaultValues =
-      new Object[][] {
-        new Object[] {ROOT, new String[] {"script defaultValuesTest.py"}},
-        new Object[] {
-          "script defaultValuesTest.py", new String[] {"script defaultValuesTest.py/defValTest"}
-        },
-        new Object[] {
-          "script defaultValuesTest.py/defValTest",
-          new String[] {"script defaultValuesTest.py/lambda1"}
-        },
-        new Object[] {
-          "script defaultValuesTest.py/defValTest",
-          new String[] {"script defaultValuesTest.py/lambda2"}
-        }
-      };
+  protected static final List<GraphAssertion> assertionsDefaultValues =
+      List.of(
+          new GraphAssertion(ROOT, new String[] {"script defaultValuesTest.py"}),
+          new GraphAssertion(
+              "script defaultValuesTest.py",
+              new String[] {"script defaultValuesTest.py/defValTest"}),
+          new GraphAssertion(
+              "script defaultValuesTest.py/defValTest",
+              new String[] {"script defaultValuesTest.py/lambda1"}),
+          new GraphAssertion(
+              "script defaultValuesTest.py/defValTest",
+              new String[] {"script defaultValuesTest.py/lambda2"}));
 
   @Test
   public void testDefaultValues()
@@ -234,15 +225,12 @@ public class TestCalls extends TestJythonCallGraphShape {
     verifyGraphAssertions(CG, assertionsDefaultValues);
   }
 
-  protected static final Object[][] PYTEST_ASSERTIONS =
-      new Object[][] {
-        new Object[] {
-          ROOT, new String[] {"script test_sample.py", "script test_sample.py/test_answer"}
-        },
-        new Object[] {
-          "script test_sample.py/test_answer", new String[] {"script test_sample.py/func"}
-        },
-      };
+  protected static final List<GraphAssertion> PYTEST_ASSERTIONS =
+      List.of(
+          new GraphAssertion(
+              ROOT, new String[] {"script test_sample.py", "script test_sample.py/test_answer"}),
+          new GraphAssertion(
+              "script test_sample.py/test_answer", new String[] {"script test_sample.py/func"}));
 
   @Test
   public void testPytestCalls()
@@ -269,18 +257,16 @@ public class TestCalls extends TestJythonCallGraphShape {
     verifyGraphAssertions(callGraph, PYTEST_ASSERTIONS);
   }
 
-  protected static final Object[][] PYTEST_ASSERTIONS2 =
-      new Object[][] {
-        new Object[] {
-          ROOT,
-          new String[] {
-            "script test_class.py",
-            "script test_class.py/TestClass",
-            "$script test_class.py/TestClass/test_one:trampoline2",
-            "$script test_class.py/TestClass/test_two:trampoline2"
-          }
-        },
-      };
+  protected static final List<GraphAssertion> PYTEST_ASSERTIONS2 =
+      List.of(
+          new GraphAssertion(
+              ROOT,
+              new String[] {
+                "script test_class.py",
+                "script test_class.py/TestClass",
+                "$script test_class.py/TestClass/test_one:trampoline2",
+                "$script test_class.py/TestClass/test_two:trampoline2"
+              }));
 
   @Test
   public void testPytestCalls2()
@@ -301,10 +287,8 @@ public class TestCalls extends TestJythonCallGraphShape {
     verifyGraphAssertions(callGraph, PYTEST_ASSERTIONS2);
   }
 
-  protected static final Object[][] PYTEST_ASSERTIONS3 =
-      new Object[][] {
-        new Object[] {ROOT, new String[] {"script test_class2.py"}},
-      };
+  protected static final List<GraphAssertion> PYTEST_ASSERTIONS3 =
+      List.of(new GraphAssertion(ROOT, new String[] {"script test_class2.py"}));
 
   @Test
   public void testPytestCalls3()
@@ -321,16 +305,14 @@ public class TestCalls extends TestJythonCallGraphShape {
     verifyGraphAssertions(callGraph, PYTEST_ASSERTIONS3);
   }
 
-  protected static final Object[][] CLICK_ASSERTIONS =
-      new Object[][] {
-        new Object[] {ROOT, new String[] {"script click_calls.py"}},
-        new Object[] {
-          "script click_calls.py",
-          new String[] {
-            "script click_calls.py/train",
-          }
-        }
-      };
+  protected static final List<GraphAssertion> CLICK_ASSERTIONS =
+      List.of(
+          new GraphAssertion(ROOT, new String[] {"script click_calls.py"}),
+          new GraphAssertion(
+              "script click_calls.py",
+              new String[] {
+                "script click_calls.py/train",
+              }));
 
   @Test
   public void testClickCalls()
@@ -349,17 +331,15 @@ public class TestCalls extends TestJythonCallGraphShape {
     verifyGraphAssertions(callGraph, CLICK_ASSERTIONS);
   }
 
-  protected static final Object[][] ABSEIL_ASSERTIONS =
-      new Object[][] {
-        new Object[] {ROOT, new String[] {"script abseil_calls.py"}},
-        new Object[] {"script abseil_calls.py", new String[] {"absl/run"}},
-        new Object[] {
-          "absl/run",
-          new String[] {
-            "script abseil_calls.py/main",
-          }
-        }
-      };
+  protected static final List<GraphAssertion> ABSEIL_ASSERTIONS =
+      List.of(
+          new GraphAssertion(ROOT, new String[] {"script abseil_calls.py"}),
+          new GraphAssertion("script abseil_calls.py", new String[] {"absl/run"}),
+          new GraphAssertion(
+              "absl/run",
+              new String[] {
+                "script abseil_calls.py/main",
+              }));
 
   @Test
   public void testAbseilCalls()

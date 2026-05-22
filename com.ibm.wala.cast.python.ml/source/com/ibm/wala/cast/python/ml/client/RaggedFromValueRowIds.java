@@ -24,6 +24,7 @@ import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -46,7 +47,7 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
     VALIDATE;
 
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
 
     public int getIndex() {
@@ -144,7 +145,7 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
       }
     }
 
-    LOGGER.info(() -> "Possible value rowids for " + this.getSource() + ": " + ret + ".");
+    LOGGER.fine(() -> "Possible value rowids for " + this.getSource() + ": " + ret + ".");
     return ret;
   }
 
@@ -183,10 +184,10 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
         nrowsArgs = singleton(max + 1);
       }
       final Set<Long> finalNrowsArgs = nrowsArgs;
-      LOGGER.info(() -> "Inferred nrows for " + this.getSource() + ": " + finalNrowsArgs + ".");
+      LOGGER.fine(() -> "Inferred nrows for " + this.getSource() + ": " + finalNrowsArgs + ".");
     } else {
       final Set<Long> finalNrowsArgs = nrowsArgs;
-      LOGGER.info(
+      LOGGER.fine(
           () -> "Found nrows arguments for " + this.getSource() + ": " + finalNrowsArgs + ".");
     }
 
@@ -216,7 +217,7 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
     }
 
     final Set<List<Dimension<?>>> finalValuesShapes = valuesShapes;
-    LOGGER.info(
+    LOGGER.fine(
         () -> "Possible values shapes for " + this.getSource() + ": " + finalValuesShapes + ".");
 
     return constructRaggedShape(possibleRowDims, valuesShapes);

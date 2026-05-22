@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -30,7 +31,7 @@ public class ReduceMean extends TensorGenerator {
     NAME;
 
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
 
     public int getIndex() {
@@ -103,9 +104,18 @@ public class ReduceMean extends TensorGenerator {
             axisValues.add(s);
           }
         } else {
-          // Try to handle list/tuple of axes
+          // Try to handle list/tuple of axes.
           Set<List<Dimension<?>>> axesLists =
               this.getShapesFromShapeArgument(builder, Collections.singleton(ik));
+          // The helper has two failure modes: throw `IllegalStateException` for unrecognized
+          // top-level allocation types (which propagates up — `performAnalysis` doesn't catch
+          // generator exceptions today, so the run aborts), or return `null` for recognized
+          // sub-parse failures during recursive descent (empty `tf.constant` value PTS, empty
+          // `TensorSpec`/`RaggedTensorSpec` shape PTS, recursive null). Either can fire here
+          // when the axis arg is e.g. `tf.constant([...])` whose value-field PTS is empty, so
+          // the null guard below is live, not defensive — translate `null` to ⊤ for this
+          // generator.
+          if (axesLists == null) return null;
           for (List<Dimension<?>> axesList : axesLists) {
             Set<Integer> s = new HashSet<>();
             for (Dimension<?> d : axesList) {

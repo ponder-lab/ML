@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="https://maven.apache.org/POM/4.0.0" xmlns:xsi="https://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>com.ibm.wala</groupId>
     <artifactId>ml</artifactId>
-    <version>0.43.0-SNAPSHOT</version>
+    <version>0.45.0-SNAPSHOT</version>
   </parent>
   <artifactId>com.ibm.wala.cast.python.ml</artifactId>
   <dependencies>
@@ -59,15 +59,14 @@
       from its `org.python.modules.posix.PosixModule`. The `0.0.1-SNAPSHOT`
       `jython3.jar` is registered via `mvn install:install-file
       -DgeneratePom=true` (see `CONTRIBUTING.md` and the CI workflow),
-      which synthesizes a minimal POM that declares zero dependencies. So
-      neither the Maven dependency graph nor the shaded fat-jar pulls
-      `jnr-constants` in unless we declare it here. Declaring it makes
-      `maven-shade-plugin` include `jnr/constants/*` in the published
-      fat-jar that downstream consumers (e.g.
-      `ponder-lab/Hybridize-Functions-Refactoring`) load through Tycho —
-      without it, code paths that reach `PosixModule` (e.g. the TensorFlow
-      GAN tutorial fixture) fail at runtime with
-      `NoClassDefFoundError: jnr/constants/Constant`. See wala/ML#453. -->
+      which synthesizes a minimal POM that declares zero dependencies — so
+      Maven's dependency graph won't pull `jnr-constants` transitively. We
+      declare it explicitly here so library consumers receive it via the
+      plain default jar's POM, and the `fat` classifier bundles it for the
+      standalone driver. Without this declaration, code paths that reach
+      `PosixModule` (e.g. the TensorFlow GAN tutorial fixture) fail at
+      runtime with `NoClassDefFoundError: jnr/constants/Constant`. See
+      wala/ML#453. -->
     <dependency>
       <groupId>com.github.jnr</groupId>
       <artifactId>jnr-constants</artifactId>
@@ -83,7 +82,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
-        <version>3.6.1</version>
+        <version>3.6.2</version>
         <configuration>
           <filters>
             <filter>
@@ -107,20 +106,33 @@
             </goals>
             <phase>package</phase>
             <configuration>
+              <!-- Attach the shaded output as a `fat` classifier so the
+                default published jar stays plain (Ariadne classes only,
+                no Main-Class). Library consumers depend on the default
+                jar and resolve `com.ibm.wala.{core,cast,shrike,util}`,
+                `jython3`, `jnr-constants`, etc. transitively. The
+                standalone driver uses the `fat` classifier via
+                `java -jar com.ibm.wala.cast.python.ml-X.Y.Z-fat.jar`.
+                See wala/ML#525. -->
+              <shadedArtifactAttached>true</shadedArtifactAttached>
+              <shadedClassifierName>fat</shadedClassifierName>
+              <!-- Without this, `maven-shade-plugin` would replace the
+                default jar's POM with a "dependency-reduced" version
+                that strips the shaded-in `<dependency>` entries — so
+                even though the default jar stays plain, library
+                consumers would receive a POM with zero declared
+                transitive deps and fail at runtime. Keep the original
+                POM so consumers resolve WALA / `jython3` /
+                `jnr-constants` etc. transitively. -->
+              <createDependencyReducedPom>false</createDependencyReducedPom>
               <transformers>
-                <!-- add Main-Class to manifest file -->
+                <!-- Add `Main-Class` to manifest file. Only present on
+                  the fat classifier; the default jar's manifest stays
+                  clean. -->
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <mainClass>com.ibm.wala.cast.python.ml.driver.Ariadne</mainClass>
                 </transformer>
               </transformers>
-              <artifactSet>
-                <excludes>
-                  <exclude>com.ibm.wala:com.ibm.wala.core</exclude>
-                  <exclude>com.ibm.wala:com.ibm.wala.util</exclude>
-                  <exclude>com.ibm.wala:com.ibm.wala.shrike</exclude>
-                  <exclude>com.ibm.wala:com.ibm.wala.cast</exclude>
-                </excludes>
-              </artifactSet>
             </configuration>
           </execution>
         </executions>

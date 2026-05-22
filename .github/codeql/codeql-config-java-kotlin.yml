@@ -1,0 +1,39 @@
+# CodeQL configuration for the `java-kotlin` language analysis.
+#
+# The matrix workflow runs CodeQL once per language and selects the config
+# file by interpolating `${{ matrix.language }}`. This file is for
+# `java-kotlin`; `codeql-config-actions.yml` is the sibling for `actions`.
+#
+# Runs both `security-extended` and `security-and-quality` query suites —
+# the same coverage that was in place before the per-language config split.
+# `java-kotlin` doesn't hit CodeQL's 5000-result-per-analysis cap (only
+# `actions` did), so this file keeps the broader coverage. The
+# `actions/unpinned-tag` rule isn't applicable to Java code, so no rule
+# exclusion is needed here either.
+#
+# `paths-ignore` excludes the two Git submodules (`IDE/`, `jython3/`):
+# they are third-party code (`wala/IDE` for LSP integration and the Jython
+# runtime), not part of the Ariadne codebase under change. Without this,
+# CodeQL produces thousands of quality lint findings on submodule code
+# (mostly `java/missing-override-annotation` on `jython3/`), drowning the
+# dozens of findings on Ariadne's own code in noise. **When adding or
+# removing a submodule, update this list to match `.gitmodules` — there is
+# no automatic discovery.**
+#
+# `paths-ignore` only filters source files when the Java extractor scans
+# sources directly — i.e., when `codeql.yml` sets `build-mode: none`. With
+# the old build-trace mode, `paths-ignore` translated to
+# `LGTM_INDEX_FILTERS` but the extractor still indexed everything compiled
+# by the Maven build (including submodule classes), so submodule alerts
+# persisted. The `build-mode: none` switch in `codeql.yml` is what makes
+# this filter effective. See wala/ML#476 for the diagnosis.
+
+name: "ponder-lab/ML CodeQL config (java-kotlin)"
+
+paths-ignore:
+  - 'IDE/**'
+  - 'jython3/**'
+
+queries:
+  - uses: security-extended
+  - uses: security-and-quality

@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -14,6 +15,7 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -39,7 +41,7 @@ public class RaggedRange extends Range {
     ROW_SPLITS_DTYPE;
 
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
 
     public int getIndex() {
@@ -165,7 +167,7 @@ public class RaggedRange extends Range {
         // Return 2D ragged tensor shape
         List<Dimension<?>> shape = new ArrayList<>();
         shape.add(new NumericDim(vectorLength != null ? vectorLength : -1));
-        shape.add(null); // Ragged dimension
+        shape.add(RaggedDim.INSTANCE);
         ret.add(shape);
       } else {
         // All scalars.
@@ -173,7 +175,7 @@ public class RaggedRange extends Range {
         // e.g. tf.ragged.range(3, 18, 3) -> [[3, 6, 9, 12, 15]]
         List<Dimension<?>> shape = new ArrayList<>();
         shape.add(new NumericDim(1));
-        shape.add(null); // Ragged dimension
+        shape.add(RaggedDim.INSTANCE);
         ret.add(shape);
       }
     }

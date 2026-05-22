@@ -9,6 +9,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 public class Eye extends SparseEye {
@@ -21,7 +22,7 @@ public class Eye extends SparseEye {
     NAME;
 
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
 
     public int getIndex() {

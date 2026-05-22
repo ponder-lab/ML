@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 public class OneHot extends Ones {
@@ -35,7 +36,7 @@ public class OneHot extends Ones {
     DTYPE;
 
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
   }
 
@@ -188,7 +189,7 @@ public class OneHot extends Ones {
         : "Number of "
             + OneHot.class.getName()
             + " shapes should be at least the number of "
-            + INDICES.name().toLowerCase()
+            + INDICES.getName()
             + " shapes.";
 
     return ret;

@@ -12,6 +12,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -32,7 +33,7 @@ public class Ones extends TensorGenerator {
     NAME;
 
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
 
     public int getIndex() {
@@ -50,7 +51,7 @@ public class Ones extends TensorGenerator {
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    LOGGER.info(
+    LOGGER.fine(
         "No dtype specified for source: " + source + ". Using default dtype of: " + FLOAT32 + " .");
 
     // Use the default dtype of float32.

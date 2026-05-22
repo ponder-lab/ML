@@ -18,6 +18,7 @@ import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -37,7 +38,7 @@ public class ElementWiseOperation extends ZerosLike {
     NAME;
 
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
 
     public int getIndex() {
@@ -112,10 +113,33 @@ public class ElementWiseOperation extends ZerosLike {
     LOGGER.fine(() -> "EWO.getDefaultShapes yShapes: " + yShapes);
     if (yShapes == null) return null;
 
+    // wala/ML#462: when the operands carry per-context shape unions (e.g., `y_true ∈ {[256],
+    // [10000]}` for train vs. test), the cartesian product surfaces cross-context pairs (e.g.,
+    // `(256, 10000)`) that would never co-occur at runtime under matched contexts. Discard those
+    // silently as analysis-level imprecision; only throw when *every* pair is non-broadcastable
+    // (i.e., no plausible runtime that the static analysis would model).
+    List<Dimension<?>> sampleNonBroadcastableX = null;
+    List<Dimension<?>> sampleNonBroadcastableY = null;
     for (List<Dimension<?>> xShape : xShapes)
       for (List<Dimension<?>> yShape : yShapes)
-        if (areBroadcastable(xShape, yShape)) ret.add(getBroadcastedShapes(xShape, yShape));
-        else throw new NonBroadcastableShapesException(this, xShape, yShape);
+        if (areBroadcastable(xShape, yShape)) {
+          ret.add(getBroadcastedShapes(xShape, yShape));
+        } else {
+          if (sampleNonBroadcastableX == null) {
+            sampleNonBroadcastableX = xShape;
+            sampleNonBroadcastableY = yShape;
+          }
+          LOGGER.fine(
+              () ->
+                  "EWO.getDefaultShapes: discarding non-broadcastable cross-pair: "
+                      + xShape
+                      + " vs. "
+                      + yShape);
+        }
+
+    if (ret.isEmpty() && sampleNonBroadcastableX != null)
+      throw new NonBroadcastableShapesException(
+          this, sampleNonBroadcastableX, sampleNonBroadcastableY);
 
     return ret;
   }

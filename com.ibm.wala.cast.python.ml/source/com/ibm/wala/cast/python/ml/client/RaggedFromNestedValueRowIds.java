@@ -3,7 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.ml.client.RaggedFromNestedValueRowIds.Parameters.FLAT_VALUES;
 import static com.ibm.wala.cast.python.ml.client.RaggedFromNestedValueRowIds.Parameters.NESTED_NROWS;
 import static com.ibm.wala.cast.python.ml.client.RaggedFromNestedValueRowIds.Parameters.NESTED_VALUE_ROWIDS;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT_OP_CONSTANT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT_VALUE;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
@@ -17,6 +17,7 @@ import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -32,6 +33,7 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -54,7 +56,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
     VALIDATE;
 
     public String getName() {
-      return name().toLowerCase();
+      return name().toLowerCase(Locale.ROOT);
     }
   }
 
@@ -90,7 +92,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
 
   @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
-    LOGGER.info("Calculating shapes for RaggedFromNestedValueRowIds.");
+    LOGGER.fine("Calculating shapes for RaggedFromNestedValueRowIds.");
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     // 1. Determine `nrows`.
@@ -119,7 +121,14 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
                   Object val = ((ConstantKey<?>) valKey).getValue();
                   if (val instanceof Integer) nrowsArgs.add(((Integer) val).longValue());
                   else if (val instanceof Long) nrowsArgs.add((Long) val);
-                  else if (val instanceof String) nrowsArgs.add(Long.parseLong((String) val));
+                  else if (val instanceof String) {
+                    try {
+                      nrowsArgs.add(Long.parseLong((String) val));
+                    } catch (NumberFormatException e) {
+                      throw new IllegalStateException(
+                          "nested_nrows element \"" + val + "\" is not a long.", e);
+                    }
+                  }
                 }
               }
             }
@@ -195,7 +204,17 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
                                 long lVal = -1;
                                 if (val instanceof Integer) lVal = ((Integer) val).longValue();
                                 else if (val instanceof Long) lVal = (Long) val;
-                                else if (val instanceof String) lVal = Long.parseLong((String) val);
+                                else if (val instanceof String) {
+                                  try {
+                                    lVal = Long.parseLong((String) val);
+                                  } catch (NumberFormatException e) {
+                                    throw new IllegalStateException(
+                                        "nested_value_rowids inner element \""
+                                            + val
+                                            + "\" is not a long.",
+                                        e);
+                                  }
+                                }
 
                                 if (lVal >= 0) {
                                   if (max == null || lVal > max) max = lVal;
@@ -259,9 +278,9 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
           // First dimension
           shape.add(rowDim);
 
-          // Then K ragged dimensions
+          // Then K ragged dimensions.
           for (int i = 0; i < k; i++) {
-            shape.add(null);
+            shape.add(RaggedDim.INSTANCE);
           }
 
           // Then add values.shape[1:]
@@ -289,7 +308,22 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
     Set<InstanceKey> result = HashSetFactory.make();
     for (InstanceKey ik : pts) {
       AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-      if (asin != null && asin.getConcreteType().getReference().equals(CONSTANT_OP_CONSTANT)) {
+      if (asin != null
+          && asin.getNode()
+              .getMethod()
+              .getDeclaringClass()
+              .getReference()
+              .equals(CONSTANT.getDeclaringClass())) {
+        // Detect a `tf.constant(...)` result by checking the *containing method*
+        // of the allocation (the `tensorflow/functions/constant.do()` CGNode), not
+        // the alloc's concrete type. The latter is
+        // `Ltensorflow/python/framework/constant_op/constant`,
+        // a function-name duplicate that we want to be able to migrate to canonical
+        // `Ltensorflow/python/framework/ops/Tensor` later (wala/ML#459 PR 2). Reading
+        // the containing method's declaring class instead decouples this recognition
+        // from the alloc-class convention; the two are functionally equivalent today
+        // because the only place that allocates `CONSTANT_OP_CONSTANT` is inside `constant.do()`.
+        //
         // Try the alloc's `value` field PTS first, then fall back to the
         // allocating call's value-arg PTS. The XML stopped binding the value
         // to the field (wala/ML#451 reopen) to keep Hybridize's

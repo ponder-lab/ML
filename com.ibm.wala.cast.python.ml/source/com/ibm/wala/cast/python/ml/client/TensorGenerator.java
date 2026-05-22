@@ -2,7 +2,6 @@ package com.ibm.wala.cast.python.ml.client;
 
 import static com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine.TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT_OP_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CHOOSE_FROM_DATASETS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SAMPLE_FROM_DATASETS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.BOOL;
@@ -68,8 +67,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -162,6 +163,10 @@ public abstract class TensorGenerator {
    * garbage-collected. Safe to call more than once.
    *
    * @param builder The builder whose cache entries should be cleared.
+   * @implNote {@link #WARNED_UNREGISTERED_MANUAL_TYPES} is intentionally <em>not</em> cleared here.
+   *     The dedup is at JVM scope so each unregistered type warns exactly once total &mdash;
+   *     re-warning per test would still flood logs (~1500 firings on the current suite). The set is
+   *     small and the goal is "make each gap audible once," not "track gaps per analysis."
    */
   public static void clearCaches(PropagationCallGraphBuilder builder) {
     SHAPES_CACHE.remove(builder);
@@ -223,15 +228,16 @@ public abstract class TensorGenerator {
     if (shapes == null) {
       // Shape is unknown (⊤), but dtype info may still be available. Emit TensorTypes with null
       // dims so the dtype information is preserved.
-      for (DType dtype : dTypes) ret.add(new TensorType(dtype.name().toLowerCase(), null));
+      for (DType dtype : dTypes)
+        ret.add(new TensorType(dtype.name().toLowerCase(Locale.ROOT), null));
     } else {
       // Create a tensor type for each possible shape and dtype combination.
       for (List<Dimension<?>> dimensionList : shapes)
         for (DType dtype : dTypes)
-          ret.add(new TensorType(dtype.name().toLowerCase(), dimensionList));
+          ret.add(new TensorType(dtype.name().toLowerCase(Locale.ROOT), dimensionList));
     }
 
-    LOGGER.info("Generator " + this.getClass().getSimpleName() + " produced types: " + ret);
+    LOGGER.fine("Generator " + this.getClass().getSimpleName() + " produced types: " + ret);
 
     return ret;
   }
@@ -239,14 +245,42 @@ public abstract class TensorGenerator {
   /**
    * Returns the possible shapes of the tensor returned by this generator.
    *
+   * <p>The strict-throw contract for unrecognized top-level forms is intentional: an unrecognized
+   * shape form means missing or incorrect modeling, and silencing it via a {@code null} return
+   * would suppress that diagnostic signal across the whole generator surface during development.
+   * The deeper fix (change the helper's contract to return {@code null} instead of throw) is
+   * tracked at <a href="https://github.com/wala/ML/issues/471">wala/ML#471</a>; for now the
+   * tolerance is localized to the one caller where runtime-tensor shape arguments are the
+   * legitimate use case &mdash; {@link BroadcastTo#getDefaultShapes} wraps this helper in a {@code
+   * try/catch (IllegalStateException)} that returns {@code null} (lattice ⊤). Other callers stay
+   * strict; a missing case there surfaces as an analysis-aborting exception, which is the
+   * load-bearing "modeling gap" signal.
+   *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param pointsToSet The points-to set of the shape argument. FIXME: Why not take a value number?
-   * @return A set of possible shapes of the tensor returned by this generator.
+   * @return A set of possible shapes, or {@code null} (lattice ⊤) for sub-parse failures during
+   *     recursive descent: when a {@code tf.constant} value PTS is empty after the call-site walk,
+   *     when a {@link com.ibm.wala.cast.python.ml.types.TensorFlowTypes#TENSOR_SPEC} or {@link
+   *     com.ibm.wala.cast.python.ml.types.TensorFlowTypes#RAGGED_TENSOR_SPEC} shape field has empty
+   *     PTS, or when a recursive call on any of these returns {@code null}. The {@code null}
+   *     returns signal "this shape's structure is recognized but the leaves aren't statically
+   *     resolvable" &mdash; distinct from the strict-throw contract for unrecognized top-level
+   *     forms, which signals "this kind of shape isn't modeled at all."
+   * @throws IllegalArgumentException when the {@code pointsToSet} parameter is itself empty or
+   *     {@code null}. That's a caller-contract violation (callers should check for empty PTS before
+   *     invoking this helper); distinct from "shape was a runtime tensor."
+   * @throws IllegalStateException when the shape argument's PTS contains an {@code
+   *     AllocationSiteInNode} of a type this method does not recognize as a static shape &mdash;
+   *     runtime tensors (e.g. the result of {@code tf.shape(y)}), opaque builder objects, or
+   *     anything that isn't a list/tuple, {@code tf.constant}, {@code TensorSpec}, or {@code
+   *     RaggedTensorSpec}. Non-allocation {@code InstanceKey}s in the PTS (e.g., {@code
+   *     ConstantKey} for a scalar Python int passed as the shape) are silently skipped rather than
+   *     throwing &mdash; if every key in the PTS is non-allocation, the method returns the empty
+   *     set rather than {@code null} or an exception.
    */
   protected Set<List<Dimension<?>>> getShapesFromShapeArgument(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
     if (pointsToSet == null || !pointsToSet.iterator().hasNext())
-      // TODO: The shape argument could be a tensor, in which case the points-to set would be empty.
       throw new IllegalArgumentException(
           "Empty points-to set for shape argument in source: " + this.getSource() + ".");
 
@@ -330,6 +364,7 @@ public abstract class TensorGenerator {
                     this.getShapesFromShapeArgument(
                         builder, Collections.singleton(instanceFieldIK));
 
+                if (nestedShapes == null) return null;
                 for (List<Dimension<?>> nestedShape : nestedShapes)
                   tensorDimensions.add(new CompoundDim(nestedShape));
               } else
@@ -348,7 +383,7 @@ public abstract class TensorGenerator {
                       + ".");
           }
 
-          LOGGER.info(
+          LOGGER.fine(
               "Found possible shape dimensions: "
                   + tensorDimensions
                   + " for field: "
@@ -386,18 +421,32 @@ public abstract class TensorGenerator {
 
             ret.add(asList(dimensions));
           }
-      } else if (reference.equals(CONSTANT_OP_CONSTANT)) {
-        // We have a constant tensor. We need the user-supplied value PTS to
-        // recurse into. The XML no longer binds it to the alloc's `value`
-        // field (wala/ML#451 reopen — that binding caused Hybridize's
-        // `Function.containsPrimitive` to traverse the alloc's fields and
-        // find a primitive `ConstantKey` for `tf.constant(N)`-style calls,
-        // classifying receiving parameters as primitive). Fall back to
-        // walking back from the alloc's `do` CGNode to its calling sites and
-        // unioning each call's value-arg PTS. Use the already-unwrapped
-        // {@code asin} from the loop header so wrapping {@link InstanceKey}s
-        // (e.g. {@link com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKey})
-        // route through the CG-walk just like raw {@link AllocationSiteInNode}s.
+      } else if (asin.getNode()
+          .getMethod()
+          .getDeclaringClass()
+          .getReference()
+          .equals(CONSTANT.getDeclaringClass())) {
+        // We have a `tf.constant(...)` result. Detect this by checking the
+        // *containing method* of the allocation (the `tensorflow/functions/constant.do()`
+        // CGNode), not the alloc's concrete type — the latter is the function-name
+        // duplicate `Ltensorflow/python/framework/constant_op/constant`, which is a
+        // load-bearing function-type signal we want to be able to migrate to canonical
+        // `Ltensorflow/python/framework/ops/Tensor` later (wala/ML#459 PR 2). Reading
+        // the containing method's declaring class instead decouples this recognition
+        // from the alloc-class convention; the two are functionally equivalent today
+        // because the only place that allocates `CONSTANT_OP_CONSTANT` is inside
+        // `constant.do()`.
+        //
+        // We need the user-supplied value PTS to recurse into. The XML no longer
+        // binds it to the alloc's `value` field (wala/ML#451 reopen — that binding
+        // caused Hybridize's `Function.containsPrimitive` to traverse the alloc's
+        // fields and find a primitive `ConstantKey` for `tf.constant(N)`-style calls,
+        // classifying receiving parameters as primitive). Fall back to walking back
+        // from the alloc's `do` CGNode to its calling sites and unioning each call's
+        // value-arg PTS. Use the already-unwrapped {@code asin} from the loop header so
+        // wrapping {@link InstanceKey}s (e.g. {@link
+        // com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKey}) route through the
+        // CG-walk just like raw {@link AllocationSiteInNode}s.
         OrdinalSet<InstanceKey> valuePts = getConstantCallValueArgPTS(asin, builder);
         if (valuePts == null || valuePts.isEmpty()) {
           // Defensive fallback in case the `value` field happens to be bound
@@ -408,7 +457,10 @@ public abstract class TensorGenerator {
           PointerKey valuePK = builder.getPointerKeyForInstanceField(asin, valueField);
           valuePts = pointerAnalysis.getPointsToSet(valuePK);
         }
-        ret.addAll(this.getShapesFromShapeArgument(builder, valuePts));
+        if (valuePts == null || valuePts.isEmpty()) return null;
+        Set<List<Dimension<?>>> constantShapes = this.getShapesFromShapeArgument(builder, valuePts);
+        if (constantShapes == null) return null;
+        ret.addAll(constantShapes);
       } else if (reference.equals(TensorFlowTypes.TENSOR_SPEC)
           || reference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)) {
         // We have a TensorSpec or RaggedTensorSpec. These objects carry shape and dtype
@@ -423,7 +475,10 @@ public abstract class TensorGenerator {
                         : TensorFlowTypes.RAGGED_SPEC_SHAPE);
         PointerKey shapePK = builder.getPointerKeyForInstanceField(instanceKey, shapeField);
         OrdinalSet<InstanceKey> shapePts = pointerAnalysis.getPointsToSet(shapePK);
-        ret.addAll(this.getShapesFromShapeArgument(builder, shapePts));
+        if (shapePts == null || shapePts.isEmpty()) return null;
+        Set<List<Dimension<?>>> specShapes = this.getShapesFromShapeArgument(builder, shapePts);
+        if (specShapes == null) return null;
+        ret.addAll(specShapes);
       } else
         throw new IllegalStateException(
             "Expected a " + list + " or " + tuple + " for the shape, but got: " + reference + ".");
@@ -436,7 +491,14 @@ public abstract class TensorGenerator {
     Object constantKeyValue = constantKey.getValue();
 
     if (constantKeyValue instanceof Integer) return (Integer) constantKeyValue;
-    else if (constantKeyValue instanceof String) return Integer.parseInt((String) constantKeyValue);
+    if (constantKeyValue instanceof String) {
+      try {
+        return Integer.parseInt((String) constantKeyValue);
+      } catch (NumberFormatException e) {
+        throw new IllegalStateException(
+            "Catalog field index \"" + constantKeyValue + "\" is not an integer.", e);
+      }
+    }
 
     return null;
   }
@@ -1032,7 +1094,7 @@ public abstract class TensorGenerator {
    * Returns the possible shapes of the tensor returned by this generator.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @param pointsToSet The points-to set of the value from which the shape will be derived.
+   * @param valuePointsToSet The points-to set of the value from which the shape will be derived.
    * @return A set of possible shapes of the tensor returned by this generator.
    */
   protected Set<List<Dimension<?>>> getShapesOfValue(
@@ -1291,7 +1353,7 @@ public abstract class TensorGenerator {
         Object value = constantKey.getValue();
 
         if (value == null) {
-          LOGGER.info(
+          LOGGER.fine(
               "DType argument is None for source: "
                   + this.getSource()
                   + "; using default dtypes."
@@ -1332,7 +1394,7 @@ public abstract class TensorGenerator {
                   for (InstanceKey ik : pts)
                     if (ik.equals(instanceKey)) {
                       ret.add(dtype);
-                      LOGGER.info(
+                      LOGGER.fine(
                           "Found dtype: "
                               + dtype
                               + " for source: "
@@ -1359,9 +1421,27 @@ public abstract class TensorGenerator {
 
       if (typeReference.equals(TensorFlowTypes.D_TYPE)) {
         throw new IllegalStateException("Unknown dtype: " + instanceKey + ".");
-      } else if (typeReference.equals(TensorFlowTypes.CONSTANT_OP_CONSTANT)) {
-        // We have a constant tensor. We extract its 'dtype' field and recurse to
-        // resolve the actual DType value.
+      } else if (asin != null
+          && asin.getNode()
+              .getMethod()
+              .getDeclaringClass()
+              .getReference()
+              .equals(CONSTANT.getDeclaringClass())) {
+        // We have a `tf.constant(...)` result. Detect this by checking the
+        // *containing method* of the allocation (the `tensorflow/functions/constant.do()`
+        // CGNode), not the alloc's concrete type. The latter is the function-name
+        // duplicate `Ltensorflow/python/framework/constant_op/constant`, which we want
+        // to be able to migrate to canonical `Ltensorflow/python/framework/ops/Tensor`
+        // later (wala/ML#459 PR 2). Reading the containing method's declaring class
+        // instead decouples this recognition from the alloc-class convention.
+        //
+        // Use the already-unwrapped {@code asin} from the loop header (line 1299) so
+        // wrapping {@link InstanceKey}s (e.g. {@link
+        // com.ibm.wala.cast.ipa.callgraph.ScopeMappingInstanceKey}) route through this
+        // branch correctly — the prior {@code instanceof AllocationSiteInNode} check
+        // would have skipped wrapped keys (Copilot review on PR #216).
+        //
+        // Extract the alloc's `dtype` field and recurse to resolve the actual DType.
         IField valueField =
             builder.getClassHierarchy().resolveField(TensorFlowTypes.CONSTANT_DTYPE);
         PointerKey valuePK = builder.getPointerKeyForInstanceField(instanceKey, valueField);
@@ -1421,7 +1501,7 @@ public abstract class TensorGenerator {
         }
 
         ret.add(dtype);
-        LOGGER.info(
+        LOGGER.fine(
             "Found dtype: "
                 + dtype
                 + " for source: "
@@ -1612,7 +1692,7 @@ public abstract class TensorGenerator {
    * from the given points-to set.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @param pointsToSet The points-to set of the value from which the dtype will be derived.
+   * @param valuePointsToSet The points-to set of the value from which the dtype will be derived.
    * @return A set of possible dtypes of the tensor returned by this generator.
    */
   protected Set<DType> getDTypesOfValue(
@@ -1635,7 +1715,7 @@ public abstract class TensorGenerator {
         Object value = constantKey.getValue();
         if (value instanceof Float || value instanceof Double) {
           ret.add(FLOAT32);
-          LOGGER.info(
+          LOGGER.fine(
               "Inferred dtype: "
                   + FLOAT32
                   + " for source: "
@@ -1645,7 +1725,7 @@ public abstract class TensorGenerator {
                   + ".");
         } else if (value instanceof Integer || value instanceof Long) {
           ret.add(INT32);
-          LOGGER.info(
+          LOGGER.fine(
               "Inferred dtype: "
                   + INT32
                   + " for source: "
@@ -1655,7 +1735,7 @@ public abstract class TensorGenerator {
                   + ".");
         } else if (value instanceof String) {
           ret.add(STRING);
-          LOGGER.info(
+          LOGGER.fine(
               "Inferred dtype: "
                   + STRING
                   + " for source: "
@@ -1665,7 +1745,7 @@ public abstract class TensorGenerator {
                   + ".");
         } else if (value instanceof Boolean) {
           ret.add(BOOL);
-          LOGGER.info(
+          LOGGER.fine(
               "Inferred dtype: "
                   + BOOL
                   + " for source: "
@@ -1681,7 +1761,7 @@ public abstract class TensorGenerator {
           // (#447): missing types should fall through to ⊤ in the lattice
           // rather than terminate the analysis.
           ret.add(UNKNOWN);
-          LOGGER.info(
+          LOGGER.fine(
               "Unrecognized constant type for source: "
                   + this.getSource()
                   + " value: "
@@ -2841,6 +2921,45 @@ public abstract class TensorGenerator {
     } else if (type.equals(TensorFlowTypes.INPUT.getDeclaringClass())) {
       return new Input(node);
     }
+    // Unregistered type: the manual-walker dispatch table doesn't know about this op, so the
+    // caller will treat the null return as "no contribution" and silently lose precision on
+    // anything reached through this node. The factory-side dispatch
+    // (`TensorGeneratorFactory.getGeneratorBody`) may still cover this type — the two tables
+    // aren't yet unified (wala/ML#469); audit both when this fires for an op we expect to model.
+    // Logged at WARNING (deduplicated per type, see `WARNED_UNREGISTERED_MANUAL_TYPES`) per
+    // wala/ML#468 to make the silent-skip audible without flooding logs when the same op is hit
+    // many times within one analysis.
+    final TypeReference unregisteredType = type;
+    if (WARNED_UNREGISTERED_MANUAL_TYPES.add(unregisteredType.getName().toString())) {
+      LOGGER.warning(
+          () ->
+              "createManualGenerator: no manual generator registered for type "
+                  + unregisteredType.getName()
+                  + " (first occurrence; further calls for this type are silent). Treating as"
+                  + " no contribution; this is likely a wala/ML#468 / wala/ML#469 gap in the"
+                  + " manual-walker dispatch table. Add a case here if this op should be"
+                  + " modeled in manual-walker contexts.");
+    } else {
+      LOGGER.fine(
+          () ->
+              "createManualGenerator: no manual generator registered for type "
+                  + unregisteredType.getName()
+                  + " (already warned).");
+    }
     return null;
   }
+
+  /**
+   * De-duplication set for the wala/ML#468 unregistered-type WARNING in {@link
+   * #createManualGenerator(CGNode, PropagationCallGraphBuilder)}. Without dedup the WARNING fires
+   * per call site, which on the existing test suite produces ~1500 lines per analysis run —
+   * drowning the signal. Tracking already-warned type names keeps each new gap visible exactly once
+   * per JVM lifetime.
+   *
+   * <p>Intentionally JVM-scoped (not cleared by {@link #clearCaches}): the goal is to surface each
+   * gap once per JVM run, not once per analysis. Re-warning per test still floods logs because the
+   * same op gets hit by many tests.
+   */
+  private static final Set<String> WARNED_UNREGISTERED_MANUAL_TYPES =
+      Collections.synchronizedSet(new HashSet<>());
 }

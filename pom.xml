@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.ibm.wala</groupId>
   <artifactId>ml</artifactId>
-  <version>0.43.0-SNAPSHOT</version>
+  <version>0.45.0-SNAPSHOT</version>
   <packaging>pom</packaging>
   <modules>
     <module>com.ibm.wala.cast.python</module>
@@ -31,12 +31,12 @@
   </distributionManagement>
   <properties>
     <maven.compiler.release>25</maven.compiler.release>
-    <maven.compiler.version>3.14.1</maven.compiler.version>
+    <maven.compiler.version>3.15.0</maven.compiler.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <build-alias>b000</build-alias>
-    <wala.version>1.6.12</wala.version>
-    <spotless.version>3.0.0</spotless.version>
-    <maven.surefire.version>3.5.4</maven.surefire.version>
+    <wala.version>1.7.2</wala.version>
+    <spotless.version>3.5.1</spotless.version>
+    <maven.surefire.version>3.5.5</maven.surefire.version>
     <parallel>both</parallel>
     <logging.config.file>./logging.properties</logging.config.file>
     <jacoco-version>0.8.14</jacoco-version>
@@ -78,12 +78,12 @@
       <dependency>
         <groupId>commons-cli</groupId>
         <artifactId>commons-cli</artifactId>
-        <version>1.10.0</version>
+        <version>1.11.0</version>
       </dependency>
       <dependency>
         <groupId>org.json</groupId>
         <artifactId>json</artifactId>
-        <version>20250517</version>
+        <version>20251224</version>
       </dependency>
       <dependency>
         <groupId>junit</groupId>
@@ -118,7 +118,7 @@
       <dependency>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>versions-maven-plugin</artifactId>
-        <version>2.19.1</version>
+        <version>2.21.0</version>
       </dependency>
       <dependency>
         <groupId>com.diffplug.spotless</groupId>
@@ -128,18 +128,28 @@
       <dependency>
         <groupId>com.google.guava</groupId>
         <artifactId>guava</artifactId>
-        <version>33.5.0-jre</version>
+        <version>33.6.0-jre</version>
       </dependency>
       <dependency>
         <groupId>org.jetbrains</groupId>
         <artifactId>annotations</artifactId>
-        <version>26.0.2-1</version>
+        <version>26.1.0</version>
+      </dependency>
+      <dependency>
+        <groupId>org.assertj</groupId>
+        <artifactId>assertj-core</artifactId>
+        <version>3.27.7</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
   <build>
     <pluginManagement>
       <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-release-plugin</artifactId>
+          <version>3.3.1</version>
+        </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-compiler-plugin</artifactId>

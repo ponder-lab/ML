@@ -32,6 +32,11 @@ public class PythonSummarizedFunction extends SummarizedMethodWithNames {
   }
 
   @Override
+  public int hashCode() {
+    return System.identityHashCode(this);
+  }
+
+  @Override
   public InducedCFG makeControlFlowGraph(SSAInstruction[] instructions) {
     return new PythonInducedCFG(instructions, this, Everywhere.EVERYWHERE);
   }

@@ -31,10 +31,12 @@ public class ListAP implements IAccessPath {
     return Collections.unmodifiableList(path);
   }
 
+  @Override
   public Kind getKind() {
     return Kind.LIST;
   }
 
+  @Override
   public int hashCode() {
     final int prime = 31;
     int result = 1;
@@ -43,6 +45,7 @@ public class ListAP implements IAccessPath {
     return result;
   }
 
+  @Override
   public boolean equals(Object obj) {
     if (this == obj) return true;
     if (obj == null) return false;
@@ -57,10 +60,12 @@ public class ListAP implements IAccessPath {
     return true;
   }
 
+  @Override
   public int length() {
     return path.size() + 1;
   }
 
+  @Override
   public String toString() {
     StringBuffer result = new StringBuffer(root.toString());
     for (IPathElement e : path) {

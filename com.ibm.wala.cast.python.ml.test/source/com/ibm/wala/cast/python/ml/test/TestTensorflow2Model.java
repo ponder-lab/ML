@@ -22,6 +22,8 @@ import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
+import com.ibm.wala.cast.python.ml.client.BroadcastTo;
+import com.ibm.wala.cast.python.ml.client.Linspace;
 import com.ibm.wala.cast.python.ml.client.NonBroadcastableShapesException;
 import com.ibm.wala.cast.python.ml.client.NpArray;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
@@ -29,6 +31,7 @@ import com.ibm.wala.cast.python.ml.client.SliceBuiltinOperation;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.classLoader.IMethod;
@@ -87,6 +90,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final String STRING = DType.STRING.name().toLowerCase();
 
+  private static final String UNKNOWN = DType.UNKNOWN.name().toLowerCase();
+
   private static final TensorType MNIST_INPUT = mnistInput();
 
   private static final TensorType SCALAR_TENSOR_OF_INT32 = new TensorType(INT_32, emptyList());
@@ -101,8 +106,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_3_BOOL = new TensorType(BOOL, asList(new NumericDim(3)));
 
+  private static final TensorType TENSOR_1_1_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(1)));
+
   private static final TensorType TENSOR_1_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(2)));
+
+  private static final TensorType TENSOR_1_5_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(5)));
+
+  private static final TensorType TENSOR_1_10_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(10)));
+
+  private static final TensorType TENSOR_1_3_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(3)));
+
+  private static final TensorType TENSOR_3_1_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(1)));
 
   @SuppressWarnings("unused")
   private static final TensorType TENSOR_32_INT32 =
@@ -159,26 +179,30 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_NONE_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(null, new NumericDim(2)));
 
+  private static final TensorType TENSOR_NONE_100_FLOAT32 =
+      new TensorType(FLOAT_32, asList(null, new NumericDim(100)));
+
   private static final TensorType TENSOR_NONE_NONE_STRING =
       new TensorType(STRING, asList(null, null));
 
-  private static final TensorType TENSOR_4_NONE_NONE_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(4), null, null));
+  private static final TensorType TENSOR_4_RAGGED_RAGGED_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(4), RaggedDim.INSTANCE, RaggedDim.INSTANCE));
 
-  private static final TensorType TENSOR_3_NONE_NONE_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(3), null, null));
+  private static final TensorType TENSOR_3_RAGGED_RAGGED_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(3), RaggedDim.INSTANCE, RaggedDim.INSTANCE));
 
-  private static final TensorType TENSOR_4_NONE_NONE_NONE_STRING =
-      new TensorType(STRING, asList(new NumericDim(4), null, null, null));
+  private static final TensorType TENSOR_4_RAGGED_RAGGED_NONE_STRING =
+      new TensorType(
+          STRING, asList(new NumericDim(4), RaggedDim.INSTANCE, RaggedDim.INSTANCE, null));
 
-  private static final TensorType TENSOR_3_NONE_NONE_STRING =
-      new TensorType(STRING, asList(new NumericDim(3), null, null));
+  private static final TensorType TENSOR_3_RAGGED_RAGGED_STRING =
+      new TensorType(STRING, asList(new NumericDim(3), RaggedDim.INSTANCE, RaggedDim.INSTANCE));
 
-  private static final TensorType TENSOR_1_NONE_NONE_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(1), null, null));
+  private static final TensorType TENSOR_1_RAGGED_RAGGED_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(1), RaggedDim.INSTANCE, RaggedDim.INSTANCE));
 
-  private static final TensorType TENSOR_2_NONE_NONE_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(2), null, null));
+  private static final TensorType TENSOR_2_RAGGED_RAGGED_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(2), RaggedDim.INSTANCE, RaggedDim.INSTANCE));
 
   private static final TensorType TENSOR_2_2_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(2)));
@@ -195,60 +219,68 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_3_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3), new NumericDim(3)));
 
-  private static final TensorType TENSOR_0_NONE_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(0), null));
+  private static final TensorType TENSOR_0_RAGGED_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(0), RaggedDim.INSTANCE));
 
-  private static final TensorType TENSOR_0_NONE_3_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(0), null, new NumericDim(3)));
+  private static final TensorType TENSOR_0_RAGGED_3_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(0), RaggedDim.INSTANCE, new NumericDim(3)));
 
-  private static final TensorType TENSOR_1_NONE_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(1), null));
+  private static final TensorType TENSOR_1_RAGGED_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(1), RaggedDim.INSTANCE));
 
-  private static final TensorType TENSOR_1_NONE_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(1), null));
+  private static final TensorType TENSOR_1_RAGGED_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(1), RaggedDim.INSTANCE));
 
   private static final TensorType TENSOR_2_NONE_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), null));
 
-  private static final TensorType TENSOR_2_NONE_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(2), null));
+  private static final TensorType TENSOR_2_RAGGED_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(2), RaggedDim.INSTANCE));
 
-  private static final TensorType TENSOR_2_NONE_2_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(2), null, new NumericDim(2)));
+  private static final TensorType TENSOR_2_RAGGED_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(2), RaggedDim.INSTANCE));
 
-  private static final TensorType TENSOR_2_NONE_2_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(2), null, new NumericDim(2)));
+  private static final TensorType TENSOR_2_RAGGED_2_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(2), RaggedDim.INSTANCE, new NumericDim(2)));
 
-  private static final TensorType TENSOR_2_NONE_2_3_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(2), null, new NumericDim(2), new NumericDim(3)));
+  private static final TensorType TENSOR_2_RAGGED_2_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(2), RaggedDim.INSTANCE, new NumericDim(2)));
 
-  private static final TensorType TENSOR_2_NONE_2_2_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(2), null, new NumericDim(2), new NumericDim(2)));
+  private static final TensorType TENSOR_2_RAGGED_2_3_INT32 =
+      new TensorType(
+          INT_32,
+          asList(new NumericDim(2), RaggedDim.INSTANCE, new NumericDim(2), new NumericDim(3)));
 
-  @SuppressWarnings("unused")
-  private static final TensorType TENSOR_2_NONE_NONE_NONE_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(2), null));
+  private static final TensorType TENSOR_2_RAGGED_2_2_INT32 =
+      new TensorType(
+          INT_32,
+          asList(new NumericDim(2), RaggedDim.INSTANCE, new NumericDim(2), new NumericDim(2)));
 
-  private static final TensorType TENSOR_2_NONE_NONE_NONE_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(2), null, null, null));
+  private static final TensorType TENSOR_2_RAGGED_RAGGED_RAGGED_FLOAT32 =
+      new TensorType(
+          FLOAT_32,
+          asList(new NumericDim(2), RaggedDim.INSTANCE, RaggedDim.INSTANCE, RaggedDim.INSTANCE));
 
-  private static final TensorType TENSOR_3_NONE_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(3), null));
+  private static final TensorType TENSOR_3_RAGGED_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(3), RaggedDim.INSTANCE));
 
-  private static final TensorType TENSOR_3_NONE_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(3), null));
+  private static final TensorType TENSOR_3_RAGGED_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(3), RaggedDim.INSTANCE));
 
-  private static final TensorType TENSOR_4_NONE_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(4), null));
+  private static final TensorType TENSOR_4_RAGGED_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(4), RaggedDim.INSTANCE));
 
-  private static final TensorType TENSOR_3_NONE_NONE_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(3), null, null));
+  private static final TensorType TENSOR_3_RAGGED_RAGGED_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(3), RaggedDim.INSTANCE, RaggedDim.INSTANCE));
 
-  private static final TensorType TENSOR_3_NONE_1_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new NumericDim(3), null, new NumericDim(1)));
+  private static final TensorType TENSOR_3_RAGGED_1_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(3), RaggedDim.INSTANCE, new NumericDim(1)));
 
   private static final TensorType TENSOR_2_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(3)));
+
+  private static final TensorType TENSOR_2_6_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(6)));
 
   private static final TensorType TENSOR_2_1_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(1)));
@@ -271,8 +303,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_5_5_INT32 =
       new TensorType(INT_32, asList(new NumericDim(5), new NumericDim(5)));
 
-  private static final TensorType TENSOR_5_NONE_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(5), null));
+  private static final TensorType TENSOR_5_RAGGED_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(5), RaggedDim.INSTANCE));
 
   private static final TensorType TENSOR_2_3_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(3), new NumericDim(3)));
@@ -315,8 +347,67 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       new TensorType(
           FLOAT_32, asList(new NumericDim(60000), new NumericDim(28), new NumericDim(28)));
 
+  private static final TensorType TENSOR_60000_28_28_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(60000), new NumericDim(28), new NumericDim(28)));
+
+  private static final TensorType TENSOR_50000_32_32_3_UINT8 =
+      new TensorType(
+          UINT_8,
+          asList(new NumericDim(50000), new NumericDim(32), new NumericDim(32), new NumericDim(3)));
+
+  private static final TensorType TENSOR_8982_INT64 =
+      new TensorType(INT_64, asList(new NumericDim(8982)));
+
+  private static final TensorType TENSOR_404_13_FLOAT64 =
+      new TensorType(FLOAT_64, asList(new NumericDim(404), new NumericDim(13)));
+
+  private static final TensorType TENSOR_404_FLOAT64 =
+      new TensorType(FLOAT_64, asList(new NumericDim(404)));
+
+  private static final TensorType TENSOR_60000_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(60000)));
+
+  private static final TensorType TENSOR_50000_1_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(50000), new NumericDim(1)));
+
+  private static final TensorType TENSOR_50000_1_INT64 =
+      new TensorType(INT_64, asList(new NumericDim(50000), new NumericDim(1)));
+
+  private static final TensorType TENSOR_8982_UNKNOWN =
+      new TensorType(UNKNOWN, asList(new NumericDim(8982)));
+
+  private static final TensorType TENSOR_102_13_FLOAT64 =
+      new TensorType(FLOAT_64, asList(new NumericDim(102), new NumericDim(13)));
+
+  private static final TensorType TENSOR_102_FLOAT64 =
+      new TensorType(FLOAT_64, asList(new NumericDim(102)));
+
+  private static final TensorType TENSOR_10000_32_32_3_UINT8 =
+      new TensorType(
+          UINT_8,
+          asList(new NumericDim(10000), new NumericDim(32), new NumericDim(32), new NumericDim(3)));
+
+  private static final TensorType TENSOR_10000_1_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(10000), new NumericDim(1)));
+
+  private static final TensorType TENSOR_10000_1_INT64 =
+      new TensorType(INT_64, asList(new NumericDim(10000), new NumericDim(1)));
+
+  private static final TensorType TENSOR_10000_28_28_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(10000), new NumericDim(28), new NumericDim(28)));
+
+  private static final TensorType TENSOR_2246_INT64 =
+      new TensorType(INT_64, asList(new NumericDim(2246)));
+
+  private static final TensorType TENSOR_2246_UNKNOWN =
+      new TensorType(UNKNOWN, asList(new NumericDim(2246)));
+
   /** A {@code float32} tensor whose shape cannot be statically inferred. */
   private static final TensorType TENSOR_UNKNOWN_SHAPE_FLOAT32 = new TensorType(FLOAT_32, null);
+
+  /** Fully-⊤ tensor type: unknown shape and unknown dtype. */
+  private static final TensorType TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE =
+      new TensorType(UNKNOWN, null);
 
   private static final TensorType TENSOR_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2)));
@@ -329,6 +420,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_2_INT64 =
       new TensorType(INT_64, asList(new NumericDim(2)));
+
+  private static final TensorType TENSOR_INT64_UNKNOWN_SHAPE = new TensorType(INT_64, null);
+
+  private static final TensorType TENSOR_INT32_UNKNOWN_SHAPE = new TensorType(INT_32, null);
+
+  private static final TensorType TENSOR_UNKNOWN_SHAPE_BOOL = new TensorType(BOOL, null);
 
   private static final TensorType TENSOR_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3)));
@@ -348,11 +445,32 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_5_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(5)));
 
+  private static final TensorType TENSOR_5_FLOAT64 =
+      new TensorType(FLOAT_64, asList(new NumericDim(5)));
+
   private static final TensorType TENSOR_64_5_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(64), new NumericDim(5)));
 
+  private static final TensorType TENSOR_7_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(7)));
+
+  private static final TensorType TENSOR_32_7_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(32), new NumericDim(7)));
+
+  private static final TensorType TENSOR_64_7_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(64), new NumericDim(7)));
+
+  private static final TensorType TENSOR_20_5_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(20), new NumericDim(5)));
+
+  private static final TensorType TENSOR_20_7_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(20), new NumericDim(7)));
+
   private static final TensorType TENSOR_5_INT32 =
       new TensorType(INT_32, asList(new NumericDim(5)));
+
+  private static final TensorType TENSOR_5_INT64 =
+      new TensorType(INT_64, asList(new NumericDim(5)));
 
   private static final TensorType TENSOR_4_INT32 =
       new TensorType(INT_32, asList(new NumericDim(4)));
@@ -410,6 +528,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_4096_UINT8 =
       new TensorType(UINT_8, asList(new NumericDim(4096)));
+
+  private static final TensorType TENSOR_3_STRING =
+      new TensorType(STRING, asList(new NumericDim(3)));
+
+  private static final TensorType TENSOR_25000_INT64 =
+      new TensorType(INT_64, asList(new NumericDim(25000)));
+
+  private static final TensorType TENSOR_25000_UNKNOWN =
+      new TensorType(UNKNOWN, asList(new NumericDim(25000)));
 
   @Test
   public void testValueIndex()
@@ -1684,6 +1811,136 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Multi-Model precision regression: two distinct {@code tf.keras.models.Model(...)} calls in one
+   * fixture, two sink functions, disjoint shapes per model. Validates that under the current
+   * modeling each sink's parameter sees only its own model's weight shapes (not the union across
+   * both models). See wala/ML#380's discussion of `Model.read_data` materialization. Companion to
+   * {@link #testModelAttributesMultiModel2()} (same fixture, second sink). Disjoint dim choices
+   * (64/5 vs 32/7) make a precision regression mechanically detectable: a "shapes unioned across
+   * models" failure mode produces the 4-element set, not a 2-element subset.
+   */
+  @Test
+  public void testModelAttributesMultiModel()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_attributes_multi.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testModelAttributesMultiModel()} — pins the second sink's parameter to the
+   * second model's weight shapes only.
+   */
+  @Test
+  public void testModelAttributesMultiModel2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_attributes_multi.py",
+        "g",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_32_7_FLOAT32, TENSOR_7_FLOAT32)));
+  }
+
+  /**
+   * Multi-Model precision regression with one extra call-chain frame: both Models are constructed
+   * inside a {@code make_model(units)} helper, so both user-side calls of {@code make_model(...)}
+   * share the same call site for {@code Model.do} (the one inside {@code make_model}). Under {@code
+   * nCFAContextSelector(2)} the 2 most-recent call sites in the context for {@code
+   * Model.read_data}'s inner allocation are {@code (read_data_call_in_Model.do,
+   * Model.do_call_in_make_model)} — the user-side {@code make_model} call site falls outside those
+   * two frames, so both user models collapse to the same allocation context and each sink ends up
+   * with the union of both models' weight shapes. The assertion below pins that observed
+   * (imprecise) union, which makes a precision improvement detectable as a regression: when the fix
+   * lands, the actual set will shrink to the per-Model 2-element subset and this test will start
+   * failing with a clear "expected union, got per-Model" diff — the cue to update the assertion to
+   * its precise form.
+   *
+   * <p>TODO(wala/ML#380): When inlining of {@code Model.read_data} (or wala/ML#379's configurable-k
+   * work) distinguishes the per-Model contexts here, narrow the assertion to {@code
+   * Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32)} for {@code f} and the matching pair for {@code
+   * g} in {@link #testModelAttributesMultiModelWrapped2()}.
+   */
+  @Test
+  public void testModelAttributesMultiModelWrapped()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_attributes_multi_wrapped.py",
+        "f",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32, TENSOR_64_7_FLOAT32, TENSOR_7_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testModelAttributesMultiModelWrapped()} — same fixture, second sink. The
+   * assertion pins the same observed union; both sinks see the union under 2-CFA.
+   *
+   * <p>TODO(wala/ML#380): When the per-Model collapse is fixed, narrow the assertion to {@code
+   * Set.of(TENSOR_64_7_FLOAT32, TENSOR_7_FLOAT32)}.
+   */
+  @Test
+  public void testModelAttributesMultiModelWrapped2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_attributes_multi_wrapped.py",
+        "g",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32, TENSOR_64_7_FLOAT32, TENSOR_7_FLOAT32)));
+  }
+
+  /**
+   * Multi-Model precision regression on the {@code model(x)} call-output path: two distinct Models
+   * constructed inside a {@code make_and_call(units, x)} helper that also performs the call. Each
+   * user-side {@code make_and_call(...)} returns the model's output, with disjoint shapes (5 vs 7)
+   * per call. Under 2-CFA the two user-side {@code make_and_call} call sites collapse into one
+   * context for {@code Model.__call__}'s output allocation, so each sink ends up with the union
+   * {@code {(20, 5), (20, 7)}} rather than the per-Model shape — same precision-loss mechanism as
+   * {@link #testModelAttributesMultiModelWrapped()}, but on the call-output path instead of the
+   * trainable-weights path. The assertion pins the observed union; a precision improvement will
+   * narrow it.
+   *
+   * <p>TODO(wala/ML#380): When the per-Model collapse is fixed, narrow the assertion to {@code
+   * Set.of(TENSOR_20_5_FLOAT32)} for {@code f} and {@code Set.of(TENSOR_20_7_FLOAT32)} for {@code
+   * g} in {@link #testModelCallMultiModelWrapped2()}.
+   */
+  @Test
+  public void testModelCallMultiModelWrapped()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_call_multi_wrapped.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_20_5_FLOAT32, TENSOR_20_7_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testModelCallMultiModelWrapped()} — same fixture, second sink.
+   *
+   * <p>TODO(wala/ML#380): When the per-Model collapse is fixed, narrow the assertion to {@code
+   * Set.of(TENSOR_20_7_FLOAT32)}.
+   */
+  @Test
+  public void testModelCallMultiModelWrapped2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_call_multi_wrapped.py",
+        "g",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_20_5_FLOAT32, TENSOR_20_7_FLOAT32)));
+  }
+
+  /**
    * {@code replica_fn(input)} body: {@code return input * 2.0}. Both {@code input} (parameter) and
    * the binop result are tensors, so the expected count is 2 (1 param + 1 binop-result SSA value).
    * Prior to wala/ML#395's scalar-literal-broadcast fix, the binop result was under-classified
@@ -1776,6 +2033,28 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression guard for {@code tf.distribute.MirroredStrategy.distribute_datasets_from_function}'s
+   * callback registration (wala/ML#113). The fixture registers {@code dataset_fn} only via {@code
+   * strategy.distribute_datasets_from_function(dataset_fn)} &mdash; no other call site. The {@code
+   * test(...)} helper's "function must exist in call graph" assertion fails pre-fix because {@code
+   * dataset_fn} never gets traced. After this PR's `tensorflow.xml` fix (synthetic-method body on
+   * {@code tensorflow/distribute/run/distribute_datasets_from_function} that allocates a stub
+   * {@code InputContext} and invokes {@code dataset_fn(ctx)}), the callback enters the call graph
+   * and the helper finds it. {@code input_context} is non-tensor, hence 0 tensor parameters; the 6
+   * tensor variables in the body come from the chained {@code tf.data.Dataset} calls.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCallbacks3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_callbacks3.py", "dataset_fn", 0, 6, Map.of());
+  }
+
+  /**
    * {@code train_step(images, generator, discriminator, ...)} receives {@code image_batch} from the
    * training loop inside {@code train}. {@code image_batch} comes from iterating a dataset built
    * from mnist data via {@code train_images[..., None].astype(np.float32)} and {@code
@@ -1784,9 +2063,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * = 234 full batches + 1 partial batch of 96; verified by Python assert statements in {@code
    * tensorflow_gan_tutorial.py}).
    *
-   * <p>Expected tensor variable count: 5 (matches master baseline and branch actual; no count
-   * regression or advance). The test fails only on types: value 2 ({@code images}) registers as
-   * {@code {? float32}} because the mnist data pipeline loses shape information through {@code
+   * <p>Expected tensor variable count: 7. After wala/ML#430's {@code Gradient} generator allocates
+   * a fresh tensor per {@code tape.gradient(...)} call instead of aliasing {@code sources}, each of
+   * the two gradient calls in {@code train_step} (one for the generator, one for the discriminator)
+   * registers an additional local tensor variable, lifting the count from the prior master baseline
+   * of 5 to 7. The test still fails only on types: value 2 ({@code images}) registers as {@code {?
+   * float32}} because the mnist data pipeline loses shape information through {@code
    * mnist.load_data()} and the subsequent ndarray operations (wala/ML#361). Types are aspirational;
    * hardcoding {@code mnist.load_data()} as an intrinsic (per the plan discussed on branch 267)
    * would unblock this test without needing the general annotation framework (wala/ML#370).
@@ -1798,7 +2080,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tensorflow_gan_tutorial.py",
         "train_step",
         1,
-        5,
+        7,
         Map.of(2, Set.of(TENSOR_256_28_28_1_FLOAT32, TENSOR_96_28_28_1_FLOAT32)));
   }
 
@@ -1808,8 +2090,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Python assert statements in {@code tensorflow_gan_tutorial.py} (not duplicated in {@code
    * tensorflow_gan_tutorial2.py} since the two files are structurally identical apart from the
    * decorator): shape in {@code {(256, 28, 28, 1), (96, 28, 28, 1)}}, dtype {@code float32}.
-   * Expected count 5 matches master baseline and branch actual; same mnist modeling gap
-   * (wala/ML#361) blocks type inference on value 2.
+   * Expected count 7 — same accounting as {@link #testGanTutorial()}: the two `tape.gradient(...)`
+   * calls each contribute one fresh tensor variable post-wala/ML#430 (5 → 7). Same mnist modeling
+   * gap (wala/ML#361) blocks type inference on value 2.
    */
   @Test
   public void testGanTutorial2()
@@ -1818,8 +2101,154 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tensorflow_gan_tutorial2.py",
         "train_step",
         1,
-        5,
+        7,
         Map.of(2, Set.of(TENSOR_256_28_28_1_FLOAT32, TENSOR_96_28_28_1_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code generator_loss(fake_output)}'s parameter type. {@code fake_output} flows from
+   * {@code discriminator(generated_images, ...)}; runtime shape is {@code (batch, 1) float32} since
+   * the discriminator ends with a {@code Dense(1)} layer.
+   *
+   * <p>Empirically, {@code fake_output} is inferred as {@code (None, 100) float32}. The dtype is
+   * concrete, which confirms the layer-output-parameter pattern works on the dtype axis. The shape
+   * is mis-propagated: {@code 100} is the generator's noise input dim (from {@code
+   * tf.keras.Input((100,))} in {@code make_generator_model}), not the discriminator's {@code
+   * Dense(1)} output dim. The mis-routing is shape-only and orthogonal to dtype-axis precision.
+   *
+   * <p>TODO: tighten to {@code {(256, 1) float32, (96, 1) float32}} once <a
+   * href="https://github.com/wala/ML/issues/537">wala/ML#537</a> lands the shape propagation
+   * through Keras functional-model chains. Concrete batch dims (256 / 96) come from {@code
+   * train_step}'s {@code images} parameter (per {@link #testGanTutorial}); a complete fix would
+   * propagate those through the discriminator chain rather than dropping to {@code None}.
+   */
+  @Test
+  public void testGanTutorialGeneratorLoss()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tensorflow_gan_tutorial.py",
+        "generator_loss",
+        1,
+        2,
+        Map.of(2, Set.of(TENSOR_NONE_100_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code top_p_logits(logits, p)}'s parameter type. Function body mirrors {@code
+   * akanyaani/gpt-2-tensorflow2.0/sample.py}'s {@code top_p_logits}. Exercises several ops
+   * currently routed through {@code ReadDataFallback} per wala/ML#449 ({@code tf.sort}, {@code
+   * tf.cumsum}, {@code tf.stack}, {@code tf.range}, {@code tf.gather_nd}, {@code tf.where}), but
+   * the parameter type of {@code logits} comes from its caller (a {@code tf.constant} with shape
+   * {@code (1, 5)} dtype {@code float32}), so this test isolates caller-side propagation rather
+   * than the body's op precision.
+   *
+   * <p>Empirically, {@code logits} is inferred as {@code (1, 5) float32} — concrete on both axes.
+   * The caller's {@code tf.constant([[1.0, ..., 5.0]], dtype=tf.float32)} flows in cleanly, showing
+   * that none of the body's {@code ReadDataFallback}-routed ops block caller-side propagation for
+   * this function; the parameter type is fully resolved at the call site.
+   */
+  @Test
+  public void testTopPLogits()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_top_p_logits.py", "top_p_logits", 1, 11, Map.of(2, Set.of(TENSOR_1_5_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code _take_long_axis(arr, indices)}'s parameter types. Function body mirrors {@code
+   * _take_long_axis} from {@code
+   * LongmaoTeamTf/deep_recommenders/keras/models/retrieval/factorized_top_k.py}.
+   *
+   * <p>This fixture surfaced a real Ariadne bug: {@code tf.reshape(arr, tf.shape(other))} crashes
+   * the analysis with {@code IllegalStateException} at {@code
+   * TensorGenerator.getShapesFromShapeArgument} because the shape argument is a Tensor (the result
+   * of {@code tf.shape(...)}) rather than a list/tuple literal. The {@code Reshape} generator
+   * should gracefully degrade to ⊤ shape per the lattice conventions instead of throwing. Resolved
+   * by <a href="https://github.com/wala/ML/issues/538">wala/ML#538</a>; parameter types pin
+   * precisely.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/543">wala/ML#543</a>): the post-fix
+   * local-tensor count of 9 captures every intermediate runtime-shape tensor flowing through the
+   * body. Tighten once the body-level imprecision is addressed.
+   */
+  @Test
+  public void testTakeAlongAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_take_along_axis.py",
+        "_take_long_axis",
+        2,
+        9,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32), 3, Set.of(TENSOR_2_2_INT32)));
+  }
+
+  /**
+   * Pins {@code multilayer_perceptron(x)}'s parameter type. Function body mirrors {@code
+   * multilayer_perceptron} from {@code
+   * YunYang1994/TensorFlow2.0-Examples/2-Basical_Models/Multilayer_Perceptron.py}. Uses raw {@code
+   * tf.matmul} / {@code tf.add} / {@code tf.nn.sigmoid} / {@code tf.nn.softmax} against global
+   * {@code tf.Variable} weights and biases — a different pattern from the {@code Dense}-layer
+   * subclass-Model approach already covered by {@code testNeuralNetwork*}.
+   *
+   * <p>Empirically, {@code x} is inferred as {@code ⊤ shape / UNKNOWN dtype}. Root cause confirmed
+   * via {@link #testConstantFromNumpy}: the {@code numpy → tf.constant} dtype-loss bug, tracked as
+   * <a href="https://github.com/wala/ML/issues/539">wala/ML#539</a>. The caller's {@code batch_x =
+   * tf.constant(np.ones((100, 784), dtype=np.float32))} loses dtype through the numpy boundary, so
+   * {@code x} arrives with UNKNOWN dtype.
+   *
+   * <p>TODO: tighten to {@code (100, 784) float32} once wala/ML#539 lands.
+   */
+  @Test
+  public void testMultilayerPerceptron()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_multilayer_perceptron.py",
+        "multilayer_perceptron",
+        1,
+        14,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * Pins {@code accuracy(y_pred, y_true)}'s parameter types. Function body mirrors {@code accuracy}
+   * from {@code YunYang1994/TensorFlow2.0-Examples/2-Basical_Models/Multilayer_Perceptron.py}.
+   * Distinct from {@link #testNeuralNetwork4}'s {@code accuracy} (which is the {@code
+   * Dense}-layer-chain variant from a different repo); this is the raw-{@code tf.matmul} MLP
+   * companion, paired with {@link #testMultilayerPerceptron}.
+   *
+   * <p>Empirically, both parameters are concrete: {@code y_pred} (vn=2) is {@code (2, 2) float32}
+   * and {@code y_true} (vn=3) is {@code (2,) int64}, matching the caller-side {@code tf.constant}
+   * shapes.
+   */
+  @Test
+  public void testMlpAccuracy()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_mlp_accuracy.py",
+        "accuracy",
+        2,
+        7,
+        Map.of(2, Set.of(TENSOR_2_2_FLOAT32), 3, Set.of(TENSOR_2_INT64)));
+  }
+
+  /**
+   * Isolating regression guard for the {@code numpy → tf.constant} dtype-loss bug (<a
+   * href="https://github.com/wala/ML/issues/539">wala/ML#539</a>), surfaced from {@link
+   * #testMultilayerPerceptron}. {@code consume(x)} where {@code x = tf.constant(np.ones((2, 3),
+   * dtype=np.float32))} infers {@code ⊤ shape / UNKNOWN dtype} despite the explicit numpy {@code
+   * dtype=np.float32}. Confirms the dtype-loss happens at the {@code numpy → tf.constant} boundary,
+   * independent of any matmul/global-Variable noise.
+   *
+   * <p>TODO: tighten to {@code (2, 3) float32} once wala/ML#539 lands.
+   */
+  @Test
+  public void testConstantFromNumpy()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_constant_from_numpy.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
 
   /**
@@ -1963,9 +2392,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * <p>Rule-based tensor variable count is 6 (2 parameters {@code x}, {@code y} + 4 intermediate
    * ops {@code pred}, {@code loss}, {@code trainable_variables}, {@code gradients}). With the fix
    * for wala/ML#358, {@code pred = neural_net(x, is_training=True)} is now tracked at {@code (256,
-   * 10) float32}, bringing the registered count to 4. {@code trainable_variables} and {@code
-   * gradients} are lists of tensors rather than single tensors and don't register as {@code
-   * TensorVariable}s; the remaining gap from 4 to 6 is tracked by wala/ML#391.
+   * 10) float32}, bringing the registered count to 4. After wala/ML#430's {@code Gradient}
+   * generator, {@code gradients} now registers as one fresh tensor variable (the generator
+   * allocates fresh per call rather than aliasing {@code sources}), lifting the count from 4 to 5.
+   * {@code trainable_variables} remains a list of tensors and still doesn't register; the residual
+   * gap from 5 to 6 is tracked by wala/ML#391.
    */
   @Test
   public void testNeuralNetwork3()
@@ -1974,7 +2405,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "neural_network.py",
         "run_optimization",
         2,
-        4,
+        5,
         Map.of(2, Set.of(TENSOR_256_784_FLOAT32), 3, Set.of(TENSOR_256_UINT8)));
   }
 
@@ -2079,17 +2510,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * {@code (256, 784)} dtype {@code float32} (verified by Python assert statements in {@code
    * autoencoder.py}).
    *
-   * <p>Expected tensor variable count: 3 (master baseline). Rule-based would be 6 (1 parameter + 5
-   * intermediate ops {@code encoder(x)} result, {@code decoder(...) = reconstructed_image}, {@code
-   * mean_square(...) = loss}, {@code trainable_variables}, {@code gradients}), dropping to 4 if
-   * list-of-tensors values don't register, but branch currently registers 1 &mdash; a regression
-   * from master. Keeping expected at the master baseline lets the failing count check serve as the
-   * regression signal; no separate issue is needed because the test itself tracks the discrepancy.
+   * <p>Expected tensor variable count: 4. Rule-based would be 6 (1 parameter + 5 intermediate ops
+   * {@code encoder(x)} result, {@code decoder(...) = reconstructed_image}, {@code mean_square(...)
+   * = loss}, {@code trainable_variables}, {@code gradients}), dropping to 4 if list-of-tensors
+   * values don't register. After wala/ML#430's {@code Gradient} generator, {@code gradients} now
+   * registers as one fresh tensor variable; combined with the previously-registered tensors the
+   * count reaches 4 — matching the rule-based-minus-{@code trainable_variables} ceiling. (Pre-#430
+   * the count was 1, so the master baseline of 3 had been deliberately preserved as a regression
+   * canary; that role is now superseded by reaching the rule-based ceiling.)
    */
   @Test
   public void testAutoencoder3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("autoencoder.py", "run_optimization", 1, 3, Map.of(2, Set.of(TENSOR_256_784_FLOAT32)));
+    test("autoencoder.py", "run_optimization", 1, 4, Map.of(2, Set.of(TENSOR_256_784_FLOAT32)));
   }
 
   /**
@@ -2120,6 +2553,94 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_sigmoid.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32)));
   }
 
+  // wala/ML#449 Tier 2: element-wise unary math ops. Each preserves shape and dtype from the
+  // input. Same `Sigmoid`-shape pass-through pattern; the receiving function's parameter at
+  // vn=2 carries `tf.constant([1.0, 2.0, 3.0])`'s `(3,) float32`.
+
+  @Test
+  public void testAbs()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_abs.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  @Test
+  public void testAcos()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_acos.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  @Test
+  public void testExp()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_exp.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testExp()} exercising the keyword-argument call site {@code
+   * tf.math.exp(x=...)}. {@link com.ibm.wala.cast.python.ml.client.PassThroughUnaryTensorGenerator}
+   * routes argument resolution through {@code getArgumentPointsToSet(builder, paramPos, paramName)}
+   * which resolves keyword args via {@code paramName}; without a kwarg fixture that branch is
+   * dead-on-arrival in the test data.
+   */
+  @Test
+  public void testExpKwarg()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_exp_kwarg.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  @Test
+  public void testTanh()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_tanh.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  @Test
+  public void testRsqrt()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_rsqrt.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Companion to {@link #testRsqrt()} exercising the keyword-argument call site. */
+  @Test
+  public void testRsqrtKwarg()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_rsqrt_kwarg.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Regression guard for wala/ML#449's closing fix: {@code tf.random.truncated_normal(shape)} now
+   * dispatches to the {@code TruncatedNormal} generator (via {@code PROPERTY_NAME_GENERATORS}) and
+   * resolves to precise {@code (2, 3) float32}. Pre-fix this fell through to {@code
+   * ReadDataFallback} and emitted {@code ⊤ shape / UNKNOWN dtype}.
+   */
+  @Test
+  public void testTruncatedNormal()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_truncated_normal.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  @Test
+  public void testLogSoftmax()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_log_softmax.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testLogSoftmax()} exercising the keyword-argument call site {@code
+   * tf.nn.log_softmax(logits=...)}.
+   */
+  @Test
+  public void testLogSoftmaxKwarg()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_log_softmax_kwarg.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  @Test
+  public void testL2Normalize()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_l2_normalize.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
   @Test
   public void testSigmoid2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -2148,6 +2669,63 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testNotEqual()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_not_equal.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_BOOL)));
+  }
+
+  /**
+   * Counterpart of {@link #testEqual} for {@code tf.less}. Verifies the {@link ComparisonOperation}
+   * route emits {@code bool} dtype for the four ordering comparisons (wala/ML#427 residual).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testLess()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_less.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_BOOL)));
+  }
+
+  /**
+   * Counterpart of {@link #testLess} for {@code tf.less_equal}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testLessEqual()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_less_equal.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_BOOL)));
+  }
+
+  /**
+   * Counterpart of {@link #testLess} for {@code tf.greater}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testGreater()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_greater.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_BOOL)));
+  }
+
+  /**
+   * Counterpart of {@link #testLess} for {@code tf.greater_equal}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testGreaterEqual()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_greater_equal.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_BOOL)));
   }
 
   /**
@@ -3109,7 +3687,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_1_NONE_INT32), 3, Set.of(TENSOR_1_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_1_RAGGED_INT32), 3, Set.of(TENSOR_1_RAGGED_INT32)));
   }
 
   @Test
@@ -3120,7 +3698,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_1_NONE_INT32), 3, Set.of(TENSOR_1_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_1_RAGGED_INT32), 3, Set.of(TENSOR_1_RAGGED_INT32)));
   }
 
   @Test
@@ -3131,7 +3709,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_1_NONE_INT32), 3, Set.of(TENSOR_1_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_1_RAGGED_INT32), 3, Set.of(TENSOR_1_RAGGED_INT32)));
   }
 
   @Test
@@ -3142,7 +3720,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_1_NONE_INT32), 3, Set.of(TENSOR_1_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_1_RAGGED_INT32), 3, Set.of(TENSOR_1_RAGGED_INT32)));
   }
 
   @Test
@@ -3153,7 +3731,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_1_NONE_INT32), 3, Set.of(TENSOR_1_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_1_RAGGED_INT32), 3, Set.of(TENSOR_1_RAGGED_INT32)));
   }
 
   @Test
@@ -3164,7 +3742,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_1_NONE_INT32), 3, Set.of(TENSOR_1_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_1_RAGGED_INT32), 3, Set.of(TENSOR_1_RAGGED_INT32)));
   }
 
   @Test
@@ -3176,7 +3754,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         3,
         Map.of(
-            2, Set.of(TENSOR_4_NONE_NONE_NONE_STRING), 3, Set.of(TENSOR_4_NONE_NONE_NONE_STRING)));
+            2,
+            Set.of(TENSOR_4_RAGGED_RAGGED_NONE_STRING),
+            3,
+            Set.of(TENSOR_4_RAGGED_RAGGED_NONE_STRING)));
   }
 
   @Test
@@ -3188,7 +3769,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         3,
         Map.of(
-            2, Set.of(TENSOR_4_NONE_NONE_NONE_STRING), 3, Set.of(TENSOR_4_NONE_NONE_NONE_STRING)));
+            2,
+            Set.of(TENSOR_4_RAGGED_RAGGED_NONE_STRING),
+            3,
+            Set.of(TENSOR_4_RAGGED_RAGGED_NONE_STRING)));
   }
 
   @Test
@@ -3200,7 +3784,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         3,
         Map.of(
-            2, Set.of(TENSOR_4_NONE_NONE_NONE_STRING), 3, Set.of(TENSOR_4_NONE_NONE_NONE_STRING)));
+            2,
+            Set.of(TENSOR_4_RAGGED_RAGGED_NONE_STRING),
+            3,
+            Set.of(TENSOR_4_RAGGED_RAGGED_NONE_STRING)));
   }
 
   @Test
@@ -3212,7 +3799,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         3,
         Map.of(
-            2, Set.of(TENSOR_4_NONE_NONE_NONE_STRING), 3, Set.of(TENSOR_4_NONE_NONE_NONE_STRING)));
+            2,
+            Set.of(TENSOR_4_RAGGED_RAGGED_NONE_STRING),
+            3,
+            Set.of(TENSOR_4_RAGGED_RAGGED_NONE_STRING)));
   }
 
   @Test
@@ -3223,7 +3813,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_3_NONE_NONE_INT32), 3, Set.of(TENSOR_3_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_3_RAGGED_RAGGED_INT32), 3, Set.of(TENSOR_3_RAGGED_RAGGED_INT32)));
   }
 
   @Test
@@ -3234,7 +3824,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_3_NONE_NONE_INT32), 3, Set.of(TENSOR_3_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_3_RAGGED_RAGGED_INT32), 3, Set.of(TENSOR_3_RAGGED_RAGGED_INT32)));
   }
 
   @Test
@@ -3245,7 +3835,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_3_NONE_NONE_INT32), 3, Set.of(TENSOR_3_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_3_RAGGED_RAGGED_INT32), 3, Set.of(TENSOR_3_RAGGED_RAGGED_INT32)));
   }
 
   @Test
@@ -3256,7 +3846,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_3_NONE_NONE_INT32), 3, Set.of(TENSOR_3_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_3_RAGGED_RAGGED_INT32), 3, Set.of(TENSOR_3_RAGGED_RAGGED_INT32)));
   }
 
   @Test
@@ -3267,7 +3857,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_3_NONE_NONE_INT32), 3, Set.of(TENSOR_3_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_3_RAGGED_RAGGED_INT32), 3, Set.of(TENSOR_3_RAGGED_RAGGED_INT32)));
   }
 
   @Test
@@ -3278,7 +3868,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_3_NONE_NONE_INT32), 3, Set.of(TENSOR_3_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_3_RAGGED_RAGGED_INT32), 3, Set.of(TENSOR_3_RAGGED_RAGGED_INT32)));
   }
 
   @Test
@@ -3289,7 +3879,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_3_NONE_NONE_INT32), 3, Set.of(TENSOR_3_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_3_RAGGED_RAGGED_INT32), 3, Set.of(TENSOR_3_RAGGED_RAGGED_INT32)));
   }
 
   @Test
@@ -3300,7 +3890,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_3_NONE_NONE_INT32), 3, Set.of(TENSOR_3_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_3_RAGGED_RAGGED_INT32), 3, Set.of(TENSOR_3_RAGGED_RAGGED_INT32)));
   }
 
   @Test
@@ -3312,7 +3902,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         3,
         Map.of(
-            2, Set.of(TENSOR_4_NONE_NONE_NONE_STRING), 3, Set.of(TENSOR_4_NONE_NONE_NONE_STRING)));
+            2,
+            Set.of(TENSOR_4_RAGGED_RAGGED_NONE_STRING),
+            3,
+            Set.of(TENSOR_4_RAGGED_RAGGED_NONE_STRING)));
   }
 
   @Test
@@ -3324,7 +3917,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         3,
         Map.of(
-            2, Set.of(TENSOR_4_NONE_NONE_NONE_STRING), 3, Set.of(TENSOR_4_NONE_NONE_NONE_STRING)));
+            2,
+            Set.of(TENSOR_4_RAGGED_RAGGED_NONE_STRING),
+            3,
+            Set.of(TENSOR_4_RAGGED_RAGGED_NONE_STRING)));
   }
 
   @Test
@@ -3336,7 +3932,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         3,
         Map.of(
-            2, Set.of(TENSOR_4_NONE_NONE_NONE_STRING), 3, Set.of(TENSOR_4_NONE_NONE_NONE_STRING)));
+            2,
+            Set.of(TENSOR_4_RAGGED_RAGGED_NONE_STRING),
+            3,
+            Set.of(TENSOR_4_RAGGED_RAGGED_NONE_STRING)));
   }
 
   @Test
@@ -3348,7 +3947,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         3,
         Map.of(
-            2, Set.of(TENSOR_4_NONE_NONE_NONE_STRING), 3, Set.of(TENSOR_4_NONE_NONE_NONE_STRING)));
+            2,
+            Set.of(TENSOR_4_RAGGED_RAGGED_NONE_STRING),
+            3,
+            Set.of(TENSOR_4_RAGGED_RAGGED_NONE_STRING)));
   }
 
   @Test
@@ -3359,7 +3961,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_5_NONE_INT32), 3, Set.of(TENSOR_5_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_5_RAGGED_INT32), 3, Set.of(TENSOR_5_RAGGED_INT32)));
   }
 
   @Test
@@ -3370,7 +3972,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_5_NONE_INT32), 3, Set.of(TENSOR_5_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_5_RAGGED_INT32), 3, Set.of(TENSOR_5_RAGGED_INT32)));
   }
 
   @Test
@@ -3381,7 +3983,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_5_NONE_INT32), 3, Set.of(TENSOR_5_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_5_RAGGED_INT32), 3, Set.of(TENSOR_5_RAGGED_INT32)));
   }
 
   @Test
@@ -3392,7 +3994,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_5_NONE_INT32), 3, Set.of(TENSOR_5_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_5_RAGGED_INT32), 3, Set.of(TENSOR_5_RAGGED_INT32)));
   }
 
   @Test
@@ -3403,7 +4005,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_5_NONE_INT32), 3, Set.of(TENSOR_5_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_5_RAGGED_INT32), 3, Set.of(TENSOR_5_RAGGED_INT32)));
   }
 
   @Test
@@ -3414,7 +4016,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_5_NONE_INT32), 3, Set.of(TENSOR_5_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_5_RAGGED_INT32), 3, Set.of(TENSOR_5_RAGGED_INT32)));
   }
 
   @Test
@@ -3425,7 +4027,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_5_NONE_INT32), 3, Set.of(TENSOR_5_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_5_RAGGED_INT32), 3, Set.of(TENSOR_5_RAGGED_INT32)));
   }
 
   @Test
@@ -3436,7 +4038,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_5_NONE_INT32), 3, Set.of(TENSOR_5_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_5_RAGGED_INT32), 3, Set.of(TENSOR_5_RAGGED_INT32)));
   }
 
   @Test
@@ -3447,7 +4049,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_5_NONE_INT32), 3, Set.of(TENSOR_5_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_5_RAGGED_INT32), 3, Set.of(TENSOR_5_RAGGED_INT32)));
   }
 
   @Test
@@ -3458,7 +4060,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_4_NONE_INT32), 3, Set.of(TENSOR_4_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_4_RAGGED_INT32), 3, Set.of(TENSOR_4_RAGGED_INT32)));
   }
 
   @Test
@@ -3469,7 +4071,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_4_NONE_INT32), 3, Set.of(TENSOR_4_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_4_RAGGED_INT32), 3, Set.of(TENSOR_4_RAGGED_INT32)));
   }
 
   @Test
@@ -3480,7 +4082,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_4_NONE_INT32), 3, Set.of(TENSOR_4_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_4_RAGGED_INT32), 3, Set.of(TENSOR_4_RAGGED_INT32)));
   }
 
   @Test
@@ -3492,10 +4094,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         4,
         4,
         Map.of(
-            2, Set.of(TENSOR_5_NONE_INT32),
-            3, Set.of(TENSOR_5_NONE_INT32),
-            4, Set.of(TENSOR_5_NONE_INT32),
-            5, Set.of(TENSOR_3_NONE_INT32)));
+            2, Set.of(TENSOR_5_RAGGED_INT32),
+            3, Set.of(TENSOR_5_RAGGED_INT32),
+            4, Set.of(TENSOR_5_RAGGED_INT32),
+            5, Set.of(TENSOR_3_RAGGED_INT32)));
   }
 
   @Test
@@ -3506,7 +4108,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "test_ragged_from_row_lengths",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_4_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_4_RAGGED_INT32)));
   }
 
   @Test
@@ -3517,7 +4119,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "test_ragged_from_row_limits",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_4_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_4_RAGGED_INT32)));
   }
 
   @Test
@@ -3529,9 +4131,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         3,
         3,
         Map.of(
-            2, Set.of(TENSOR_4_NONE_INT32),
-            3, Set.of(TENSOR_4_NONE_INT32),
-            4, Set.of(TENSOR_4_NONE_INT32)));
+            2, Set.of(TENSOR_4_RAGGED_INT32),
+            3, Set.of(TENSOR_4_RAGGED_INT32),
+            4, Set.of(TENSOR_4_RAGGED_INT32)));
   }
 
   @Test
@@ -3542,7 +4144,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "test_strictness",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_2_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_2_RAGGED_INT32)));
   }
 
   @Test
@@ -3560,10 +4162,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         4,
         4,
         Map.of(
-            2, Set.of(TENSOR_2_NONE_NONE_INT32),
-            3, Set.of(TENSOR_2_NONE_NONE_INT32),
-            4, Set.of(TENSOR_2_NONE_NONE_INT32),
-            5, Set.of(TENSOR_2_NONE_NONE_INT32)));
+            2, Set.of(TENSOR_2_RAGGED_RAGGED_INT32),
+            3, Set.of(TENSOR_2_RAGGED_RAGGED_INT32),
+            4, Set.of(TENSOR_2_RAGGED_RAGGED_INT32),
+            5, Set.of(TENSOR_2_RAGGED_RAGGED_INT32)));
   }
 
   @Test
@@ -3575,10 +4177,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         4,
         4,
         Map.of(
-            2, Set.of(TENSOR_5_NONE_INT32),
-            3, Set.of(TENSOR_4_NONE_INT32),
-            4, Set.of(TENSOR_4_NONE_INT32),
-            5, Set.of(TENSOR_5_NONE_INT32)));
+            2, Set.of(TENSOR_5_RAGGED_INT32),
+            3, Set.of(TENSOR_4_RAGGED_INT32),
+            4, Set.of(TENSOR_4_RAGGED_INT32),
+            5, Set.of(TENSOR_5_RAGGED_INT32)));
   }
 
   @Test
@@ -3590,10 +4192,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         4,
         4,
         Map.of(
-            2, Set.of(TENSOR_2_NONE_INT32),
-            3, Set.of(TENSOR_2_NONE_INT32),
-            4, Set.of(TENSOR_2_NONE_INT32),
-            5, Set.of(TENSOR_3_NONE_INT32)));
+            2, Set.of(TENSOR_2_RAGGED_INT32),
+            3, Set.of(TENSOR_2_RAGGED_INT32),
+            4, Set.of(TENSOR_2_RAGGED_INT32),
+            5, Set.of(TENSOR_3_RAGGED_INT32)));
   }
 
   @Test
@@ -3605,10 +4207,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         4,
         4,
         Map.of(
-            2, Set.of(TENSOR_2_NONE_INT32),
-            3, Set.of(TENSOR_2_NONE_INT32),
-            4, Set.of(TENSOR_2_NONE_INT32),
-            5, Set.of(TENSOR_3_NONE_INT32)));
+            2, Set.of(TENSOR_2_RAGGED_INT32),
+            3, Set.of(TENSOR_2_RAGGED_INT32),
+            4, Set.of(TENSOR_2_RAGGED_INT32),
+            5, Set.of(TENSOR_3_RAGGED_INT32)));
   }
 
   @Test
@@ -3622,15 +4224,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(
             // rt1: positional values, keyword value_rowids. inferred nrows=3.
             2,
-            Set.of(TENSOR_3_NONE_INT32),
+            Set.of(TENSOR_3_RAGGED_INT32),
 
             // rt2: positional values, keyword value_rowids, keyword nrows=5.
             3,
-            Set.of(TENSOR_5_NONE_INT32),
+            Set.of(TENSOR_5_RAGGED_INT32),
 
             // rt3: positional values, positional value_rowids, keyword nrows=3.
             4,
-            Set.of(TENSOR_3_NONE_INT32)));
+            Set.of(TENSOR_3_RAGGED_INT32)));
   }
 
   @Test
@@ -3643,7 +4245,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         Map.of(
             // rt: positional values, positional value_rowids, positional nrows=3.
-            2, Set.of(TENSOR_3_NONE_INT32)));
+            2, Set.of(TENSOR_3_RAGGED_INT32)));
   }
 
   @Test
@@ -3834,21 +4436,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Tests that the analysis identifies non-broadcastable shapes in conditional branches.
+   * Tests that under per-context shape unions the analysis returns the broadcastable cross-pairs
+   * and silently discards the non-broadcastable ones (wala/ML#462).
    *
    * <p>In {@code tf2_test_add117.py}, the variable {@code a} can be either 1 or 3.
    *
    * <ul>
-   *   <li>If {@code a=1}, the addition is {@code [1, 2] + [2, 2]}, which is broadcastable.
+   *   <li>If {@code a=1}, the addition is {@code [1, 2] + [2, 2]}, which is broadcastable to {@code
+   *       [2, 2]}.
    *   <li>If {@code a=3}, the addition is {@code [3, 2] + [2, 2]}, which is NOT broadcastable.
    * </ul>
    *
-   * The analysis correctly identifies that one possible dataflow is invalid and throws a {@link
-   * NonBroadcastableShapesException}.
+   * The analysis retains the broadcastable result ({@code [2, 2]}) and discards the
+   * non-broadcastable cross-pair as analysis-level imprecision rather than a runtime error &mdash;
+   * the cross-pair would never co-occur at runtime under matched contexts. A {@link
+   * NonBroadcastableShapesException} is only thrown when <em>every</em> pair is non-broadcastable.
    *
    * @see #testAdd117a()
    */
-  @Test(expected = NonBroadcastableShapesException.class)
+  @Test
   public void testAdd117()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -4023,14 +4629,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * a bare integer as the shape argument (the parenthesised {@code (-1)} parses as {@code -1}, not
    * a 1-tuple).
    *
-   * <p>Expected tensor variable count: 4. Previously 5 — branch carried a spurious classification
-   * at {@code vn=44} ({@code gpu_batch_size = int(batch_size / num_gpus)} at line 222) where {@code
-   * batch_size / num_gpus} is a binop on Python ints, dispatched to {@link ElementWiseOperation}
-   * and typed {@code [] of int32} via {@link TensorGenerator#getDTypesOfValue}'s Integer-constant →
-   * INT32 path. Now correctly rejected by {@link TensorGeneratorFactory}'s binop operand-tensor
-   * gate (wala/ML#451), restoring the master-baseline count of 4. See also wala/ML#361 (MNIST
-   * modeling) and wala/ML#393 (CIFAR-10 modeling, closed by the commit that landed this test's
-   * partial pass).
+   * <p>Expected tensor variable count: 5. The historical trajectory is: pre-wala/ML#451 the count
+   * was 5 because of a spurious classification at {@code vn=44} ({@code gpu_batch_size =
+   * int(batch_size / num_gpus)} at line 222) where {@code batch_size / num_gpus} is a binop on
+   * Python ints, dispatched to {@link ElementWiseOperation} and typed {@code [] of int32} via
+   * {@link TensorGenerator#getDTypesOfValue}'s Integer-constant → INT32 path. wala/ML#451's binop
+   * operand-tensor gate rejected that classification, dropping the count to the master baseline of
+   * 4. wala/ML#430's {@code Gradient} generator then added one fresh tensor per {@code
+   * tape.gradient(...)} call (one such call here), bringing the count back to 5 — but now backed by
+   * the legitimate registration of the gradient result rather than the spurious binop pickup. See
+   * also wala/ML#361 (MNIST modeling) and wala/ML#393 (CIFAR-10 modeling, closed by the commit that
+   * landed this test's partial pass).
    */
   @Test
   public void testMultiGPUTraining()
@@ -4039,22 +4648,33 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "multigpu_training.py",
         "run_optimization",
         2,
-        4,
+        5,
         Map.of(2, Set.of(TENSOR_4096_32_32_3_FLOAT32), 3, Set.of(TENSOR_4096_UINT8)));
   }
 
+  /**
+   * Companion to {@link #testMultiGPUTraining()} on the {@code average_gradients} function in the
+   * same fixture. Exercises tensor classification through a per-tower gradient-averaging loop: for
+   * each gradient {@code g} in the input tower-gradient list, the body computes {@code
+   * tf.expand_dims(g, 0)}, collects the results into a list, and reduces them with {@code
+   * tf.concat(axis=0, values=grads)}. Verifies the analyzer detects the 3 internal tensor variables
+   * this loop produces: {@code tf.expand_dims(g, 0)}'s dedicated {@code <new>} allocation, the
+   * post-allocation receiver, and {@code tf.concat(...)} flowing through <a
+   * href="https://github.com/wala/ML/issues/196">wala/ML#196</a>'s {@link
+   * com.ibm.wala.cast.python.ml.client.ReadDataFallback}.
+   *
+   * <p>The current assertion is {@code (0, 3)} &mdash; 0 tensor parameters because the parameter (a
+   * list of tensors) is dropped from classification per <a
+   * href="https://github.com/wala/ML/issues/136">wala/ML#136</a>.
+   *
+   * <p>TODO: Once wala/ML#136 (losing tensors in lists) lands, change the assertion to {@code (1,
+   * 3)} (one tensor parameter &mdash; the {@code tower_grads} list-of-tensors), with the parameter
+   * at {@code vn=2} typed as the appropriate list-of-tensors type.
+   */
   @Test
   public void testMultiGPUTraining2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "multigpu_training.py",
-        "average_gradients",
-        0,
-        2); // 0/2: parameter is a list of tensors so the parameter-count stays 0 until wala/ML#136
-    // (losing tensors in lists) lands; the 2 tensor variables are `tf.expand_dims(g, 0)`
-    // and `tf.concat(axis=0, values=grads)` flowing through #196's `ReadDataFallback`.
-    // Eventual fully-fixed shape would be 1, 1, 2 (per-op generators in #449 don't change
-    // the count, only the asserted types).
+    test("multigpu_training.py", "average_gradients", 0, 3);
   }
 
   @Test
@@ -4070,6 +4690,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testReduceMax()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_reduce_max.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.reduce_min(input_tensor)}. Mirrors {@link
+   * #testReduceMax()} — the {@link com.ibm.wala.cast.python.ml.client.ReduceMin} generator extends
+   * {@link com.ibm.wala.cast.python.ml.client.ReduceMax}, sharing the axis-collapse / keepdims
+   * shape inference and input-dtype passthrough.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testReduceMin()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_reduce_min.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
   @Test
@@ -4102,6 +4739,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testEstimatorSpec()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_estimator_spec.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  /**
+   * Regression test for <a href="https://github.com/wala/ML/issues/523">wala/ML#523</a>: the {@code
+   * EstimatorSpec.do()} constructor's fresh allocation must be a {@code
+   * Ltensorflow/estimator/EstimatorSpec} (a namedtuple-like spec object) rather than a {@code
+   * Ltensorflow/python/framework/ops/Tensor}. The fixture passes the {@code spec} directly to
+   * {@code f}; if {@code spec} is misclassified as a tensor allocation, {@code f}'s parameter would
+   * be a tensor (and the expected count would be 1 / 1). With the correct non-tensor class, {@code
+   * f} has 0 tensor parameters and 0 tensor variables.
+   */
+  @Test
+  public void testEstimatorSpecNotTensor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_estimator_spec_not_tensor.py", "f", 0, 0, Map.of());
   }
 
   @Test
@@ -4150,6 +4802,735 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testReduceSum()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_reduce_sum.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  // wala/ML#449 Tier 4: intrinsic-API ops with fixed output shape and dtype. Both `tf.rank` and
+  // `tf.size` return scalar int32 regardless of input. Same hardcoded-output shape as
+  // `DatasetRangeGenerator`'s `[] of int64`.
+
+  @Test
+  public void testRank()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_rank.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  @Test
+  public void testSize()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_size.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  // wala/ML#449 Tier 6: argmax/argmin produce int64 indices. Output shape is left at ⊤ for now;
+  // see `Argmax.getDefaultShapes` for why precise shape inference regresses `testNeuralNetwork*`.
+
+  /**
+   * Verifies that {@code tf.math.argmax(x, axis=0)} routes through the dedicated {@link
+   * com.ibm.wala.cast.python.ml.client.Argmax} generator and emits the precise {@code int64} dtype
+   * (the TF default for argmax indices).
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): output shape is left
+   * at ⊤. Precise axis-aware shape composition (reading {@code input.shape[:axis] +
+   * input.shape[axis+1:]}) regresses {@code testNeuralNetwork*} via the {@code
+   * ElementWiseOperation} cartesian-pair issue tracked at #462. Tighten to the precise post-fix
+   * shape once #462 lands.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgmax()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_argmax.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT64_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Counterpart of {@link #testArgmax()} for {@code tf.math.argmin}. Same semantics: dtype defaults
+   * to {@code int64} (overridable via {@code output_type}, see {@link #testArgminOutputType()}),
+   * shape is left at ⊤. See {@link com.ibm.wala.cast.python.ml.client.Argmin}.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): output shape is left
+   * at ⊤; same {@code ElementWiseOperation} cartesian-pair driver as for {@link #testArgmax()}.
+   * Tighten to the precise post-fix shape once #462 lands.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgmin()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_argmin.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT64_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Verifies that {@code tf.math.argmax(x, axis=0, output_type=tf.int32)} honors the explicit
+   * {@code output_type} override and emits an {@code int32}-dtype tensor instead of the {@code
+   * int64} default. Exercises the dtype-arg dispatch path on {@link
+   * com.ibm.wala.cast.python.ml.client.Argmax} after the wala/ML#463 fix. The fixture's sink {@code
+   * f(x, y)} has two parameters so that each tensor's inferred type can be checked independently.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the inferred ⊤ shape
+   * on {@code y} (vn=3) is imprecise &mdash; precise axis-aware shape composition (reading {@code
+   * input.shape[:axis] + input.shape[axis+1:]}) regresses {@code testNeuralNetwork*} via the {@code
+   * ElementWiseOperation} cartesian-pair issue tracked at #462. Captured-imprecise per the
+   * prefer-observed-assertion convention; tighten to a precise {@code (3,) int32} once #462 lands.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgmaxOutputType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_argmax_output_type.py",
+        "f",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_2_3_FLOAT32),
+            3, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Counterpart of {@link #testArgmaxOutputType()} for {@code tf.math.argmin}. Same dispatch path
+   * via the inherited {@link com.ibm.wala.cast.python.ml.client.Argmin} extends {@link
+   * com.ibm.wala.cast.python.ml.client.Argmax} relationship; same shape-imprecision driver too.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the inferred ⊤ shape
+   * on {@code y} (vn=3) is imprecise &mdash; precise axis-aware shape composition for {@code
+   * Argmin} is gated by the {@code ElementWiseOperation} cartesian-pair issue, same as for {@code
+   * Argmax}. Tighten to the precise post-fix shape once #462 lands.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgminOutputType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_argmin_output_type.py",
+        "f",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_2_3_FLOAT32),
+            3, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Companion to {@link #testArgmaxOutputType()} that exercises the *single-parameter sink, two
+   * call sites* shape: {@code def f(a): ...; f(x); f(y)}. Parameter {@code a} should union {@code
+   * x}'s and {@code y}'s tensor types across the two call sites &mdash; verifies that the {@code
+   * output_type=tf.int32} override on {@code y} survives the second sink call rather than being
+   * clobbered by the {@code int64} default.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the {@code y}
+   * contribution to the union is currently ⊤-shape ({@code TENSOR_INT32_UNKNOWN_SHAPE}) for the
+   * same reason as {@link #testArgmaxOutputType()} &mdash; gated by the {@code
+   * ElementWiseOperation} cartesian-pair issue. Tighten {@code y}'s contribution to its precise
+   * post-fix shape (a {@code (3,) int32}) once #462 lands.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgmaxOutputTypeDoubleSink()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_argmax_output_type_double_sink.py",
+        "f",
+        1,
+        2,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Counterpart of {@link #testArgmaxOutputTypeDoubleSink()} for {@code tf.math.argmin}; same
+   * shape-imprecision driver.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the {@code y}
+   * contribution to the union is currently ⊤-shape ({@code TENSOR_INT32_UNKNOWN_SHAPE}) for the
+   * same reason as {@link #testArgmaxOutputTypeDoubleSink()}. Tighten to the precise {@code (3,)
+   * int32} once #462 lands.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgminOutputTypeDoubleSink()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_argmin_output_type_double_sink.py",
+        "f",
+        1,
+        2,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  // wala/ML#449 Tier 7: linspace/broadcast_to. Shape derives from a shape-arg (`num`/`shape`),
+  // dtype derives from a value-arg (`start`/`input`).
+
+  /**
+   * Verifies that {@code tf.linspace(0.0, 10.0, 5)} routes through the dedicated {@link Linspace}
+   * generator and emits the precise rank-1 shape {@code (5,)} with {@code float32} dtype (derived
+   * from the float-typed {@code start} argument).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testLinspace()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_linspace.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testLinspace()} that exercises the integer-promotion branch in {@link
+   * com.ibm.wala.cast.python.ml.client.Linspace#getDefaultDTypes}. {@code tf.linspace} with integer
+   * {@code start}/{@code stop} promotes the output to {@code float64} (verified on TF 2.9), not
+   * {@code float32}. The float-input case is covered by {@link #testLinspace()}.
+   */
+  @Test
+  public void testLinspaceInt()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_linspace_int.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_FLOAT64)));
+  }
+
+  /**
+   * Drives the {@code axis}-passed branch in {@link
+   * com.ibm.wala.cast.python.ml.client.Linspace#getDefaultShapes}. With {@code axis=1} and vector
+   * {@code start}/{@code stop}, {@code tf.linspace} interpolates along axis 1, producing a
+   * higher-rank result whose runtime shape is {@code (2, 5)} with dtype {@code float32}.
+   *
+   * <p>The static analysis currently returns ⊤ (unknown shape) for any axis-passed call — combining
+   * {@code start}'s rank with {@code num} is not yet implemented; the generator trades precision
+   * for soundness. The assertion encodes the observed result with a TODO pointing at the precision
+   * improvement that would narrow it.
+   *
+   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/475">wala/ML#475</a> is fixed and
+   * {@code Linspace.getDefaultShapes} computes the precise output shape from {@code
+   * start.shape[:axis] + (num,) + start.shape[axis:]}, narrow the assertion to {@code
+   * Set.of(TENSOR_2_5_FLOAT32)} (a new constant).
+   *
+   * <p>Companion to {@link #testLinspace()} (covering the absent-axis branch).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testLinspaceAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_linspace_axis.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Verifies that {@code tf.broadcast_to(x, [2, 3])} routes through the dedicated {@link
+   * BroadcastTo} generator and emits shape {@code (2, 3)} (read from the {@code shape} argument's
+   * literal list) with {@code float32} dtype (derived from the {@code input} tensor).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testBroadcastTo()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_broadcast_to.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
+   * Regression guard for {@code tf.broadcast_to(x, tf.shape(y))} &mdash; the runtime-tensor
+   * shape-arg pattern. {@link com.ibm.wala.cast.python.ml.client.TensorGenerator
+   * #getShapesFromShapeArgument} throws {@link IllegalStateException} for the runtime {@code
+   * Ltensorflow/python/framework/ops/Tensor} that {@code tf.shape(y)} now allocates (post the
+   * wala/ML#489 root-cause fix on this PR's `tensorflow.xml`); {@link
+   * com.ibm.wala.cast.python.ml.client.BroadcastTo#getDefaultShapes}'s try/catch returns {@code
+   * null} (lattice ⊤) instead of letting the exception abort the analysis. The result is shape ⊤
+   * with dtype inherited from {@code x} (float32). Without the catch, analysis aborts and this test
+   * fails &mdash; this is the direct regression guard for this PR's localized-tolerance fix.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/473">wala/ML#473</a>): the runtime answer is
+   * (2, 3) of float32. When the helper learns to recognize {@code tf.shape(y)} as a shape arg
+   * (rather than treating it as an unmodeled runtime tensor), tighten this assertion from {@link
+   * #TENSOR_UNKNOWN_SHAPE_FLOAT32} to {@code TENSOR_2_3_FLOAT32}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testBroadcastToRuntimeShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_broadcast_to_runtime_shape.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.linalg.tensordot}. Output dtype is inherited from the
+   * {@code a} input (here float32), shape is ⊤. See {@link
+   * com.ibm.wala.cast.python.ml.client.Tensordot} (wala/ML#449).
+   */
+  @Test
+  public void testTensordot()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_tensordot.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.linalg.trace}. Output dtype is inherited from the {@code
+   * x} input (here float32), shape is ⊤. See {@link com.ibm.wala.cast.python.ml.client.Trace}
+   * (wala/ML#449).
+   */
+  @Test
+  public void testTrace()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_trace.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Tier-6 op (wala/ML#449): {@code tf.sort(values, ...)}. The XML routes the call through {@code
+   * convert_to_tensor} of {@code values}, so shape and dtype pass through unchanged — no dedicated
+   * generator needed.
+   */
+  @Test
+  public void testSort()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_sort.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_6_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.tensor_scatter_nd_update}. Output dtype AND shape are
+   * inherited from the {@code tensor} input — true shape-and-dtype passthrough on the first arg.
+   * Here the input is shape {@code (4,)} float32, so the precise expected result is {@code (4,)
+   * float32}. See {@link com.ibm.wala.cast.python.ml.client.TensorScatterNdUpdate} (wala/ML#449).
+   *
+   * <p>Post-master-merge of wala/ML#380's `tensor_scatter_nd_update` inlining (#237), the analysis
+   * also produces an additional fully-⊤ context — likely a context where the input arg's PTS isn't
+   * recovered through the inlined synthetic body, so the passthrough returns ⊤/UNKNOWN. The
+   * assertion captures both contexts (per the prefer-observed-assertion convention from
+   * `CONTRIBUTING.md`); a precision improvement that eliminates the ⊤ context will narrow the
+   * actual to just {@code TENSOR_4_FLOAT32} and this test will fail with a clear "expected union,
+   * got per-context" diff — that's the cue to update.
+   *
+   * <p>TODO(wala/ML#474): Once the additional fully-⊤ context for the inlined-passthrough path is
+   * investigated/eliminated, narrow the assertion to {@code Set.of(TENSOR_4_FLOAT32)}.
+   */
+  @Test
+  public void testTensorScatterNdUpdate()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tensor_scatter_nd_update.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_FLOAT32, TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.sequence_mask}. Output dtype is the TF-default {@code
+   * bool}; the optional {@code dtype} override is exposed in {@code tensorflow.xml}'s {@code
+   * paramNames} but is not yet honored by the {@link
+   * com.ibm.wala.cast.python.ml.client.SequenceMask} generator, which emits {@code bool}
+   * unconditionally. Shape is ⊤. (wala/ML#449 Tier 8.)
+   */
+  @Test
+  public void testSequenceMask()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_sequence_mask.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_BOOL)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.nn.embedding_lookup}. Output dtype is inherited from the
+   * {@code params} input (here float32), shape is ⊤. See {@link
+   * com.ibm.wala.cast.python.ml.client.EmbeddingLookup} (wala/ML#449 Tier 8).
+   */
+  @Test
+  public void testEmbeddingLookup()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_embedding_lookup.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.gather_nd}. Output dtype is inherited from the {@code
+   * params} input (here float32), shape is ⊤. See {@link
+   * com.ibm.wala.cast.python.ml.client.GatherNd} (wala/ML#449 Tier 8).
+   */
+  @Test
+  public void testGatherNd()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_gather_nd.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.boolean_mask}. Output dtype is inherited from the {@code
+   * tensor} input (here float32), shape is ⊤. See {@link
+   * com.ibm.wala.cast.python.ml.client.BooleanMask} (wala/ML#449 Tier 8).
+   */
+  @Test
+  public void testBooleanMask()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_boolean_mask.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.image.extract_patches}. Output dtype is inherited from
+   * the {@code images} input (here float32), shape is ⊤. See {@link
+   * com.ibm.wala.cast.python.ml.client.ExtractPatches} (wala/ML#449 Tier 8).
+   */
+  @Test
+  public void testExtractPatches()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_extract_patches.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.tan} (wala/ML#422). */
+  @Test
+  public void testTan()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_tan.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.asin} (wala/ML#422). */
+  @Test
+  public void testAsin()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_asin.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.atan} (wala/ML#422). */
+  @Test
+  public void testAtan()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_atan.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.sinh} (wala/ML#422). */
+  @Test
+  public void testSinh()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_sinh.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.cosh} (wala/ML#422). */
+  @Test
+  public void testCosh()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_cosh.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.asinh} (wala/ML#422). */
+  @Test
+  public void testAsinh()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_asinh.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.acosh} (wala/ML#422). */
+  @Test
+  public void testAcosh()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_acosh.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.atanh} (wala/ML#422). */
+  @Test
+  public void testAtanh()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_atanh.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.log1p} (wala/ML#422). */
+  @Test
+  public void testLog1p()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_log1p.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.expm1} (wala/ML#422). */
+  @Test
+  public void testExpm1()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_expm1.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.round} (wala/ML#422). */
+  @Test
+  public void testRound()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_round.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.reciprocal} (wala/ML#422). */
+  @Test
+  public void testReciprocal()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_reciprocal.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.softplus} (wala/ML#422). */
+  @Test
+  public void testSoftplus()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_softplus.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.softsign} (wala/ML#422). */
+  @Test
+  public void testSoftsign()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_softsign.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.square} (wala/ML#422). */
+  @Test
+  public void testSquare()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_square.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.erf} (wala/ML#422). */
+  @Test
+  public void testErf()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_erf.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Pure-passthrough generator test for {@code tf.math.erfc} (wala/ML#422). */
+  @Test
+  public void testErfc()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_erfc.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Elementwise binary generator test for {@code tf.math.atan2} (wala/ML#422). */
+  @Test
+  public void testAtan2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_atan2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Elementwise binary generator test for {@code tf.math.maximum} (wala/ML#422). */
+  @Test
+  public void testMaximum()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_maximum.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /** Elementwise binary generator test for {@code tf.math.minimum} (wala/ML#422). */
+  @Test
+  public void testMinimum()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_minimum.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Keyword-argument variant of {@link #testAtan2}: {@code tf.math.atan2(y=..., x=...)}. Exercises
+   * the kw-arg-resolution path on the {@code ElementWiseOperation} dispatch.
+   */
+  @Test
+  public void testAtan2Kw()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_atan2_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Keyword-argument variant of {@link #testMaximum}: {@code tf.math.maximum(x=..., y=...)}.
+   * Exercises the kw-arg-resolution path on the {@code ElementWiseOperation} dispatch.
+   */
+  @Test
+  public void testMaximumKw()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_maximum_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Keyword-argument variant of {@link #testMinimum}: {@code tf.math.minimum(x=..., y=...)}.
+   * Exercises the kw-arg-resolution path on the {@code ElementWiseOperation} dispatch.
+   */
+  @Test
+  public void testMinimumKw()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_minimum_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Generator test for {@code tf.keras.datasets.fashion_mnist.load_data()}. Shapes and dtype are
+   * identical to {@code mnist.load_data()}. The fixture passes all four unpacked arrays ({@code
+   * x_train}, {@code y_train}, {@code x_test}, {@code y_test}) into the 4-arg sink, so the
+   * assertion pins types at {@code vn=2..5}.
+   */
+  @Test
+  public void testFashionMnistLoadData()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_fashion_mnist_load_data.py",
+        "f",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_60000_28_28_UINT8),
+            3, Set.of(TENSOR_60000_UINT8),
+            4, Set.of(TENSOR_10000_28_28_UINT8),
+            5, Set.of(TENSOR_10000_UINT8)));
+  }
+
+  /**
+   * Generator test for {@code tf.keras.datasets.cifar100.load_data()}. Shapes are identical to
+   * {@code cifar10.load_data()}, but the {@code y_train} / {@code y_test} dtype is {@code int64}
+   * (cifar100's class indices) rather than {@code uint8} (cifar10's class indices). The dispatch
+   * routes through the dedicated {@link com.ibm.wala.cast.python.ml.client.Cifar100InputData}
+   * generator (closes wala/ML#487's mis-routing through {@code Cifar10InputData}). Asserts on all
+   * four unpacked arrays at {@code vn=2..5}.
+   */
+  @Test
+  public void testCifar100LoadData()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_cifar100_load_data.py",
+        "f",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_50000_32_32_3_UINT8),
+            3, Set.of(TENSOR_50000_1_INT64),
+            4, Set.of(TENSOR_10000_32_32_3_UINT8),
+            5, Set.of(TENSOR_10000_1_INT64)));
+  }
+
+  /**
+   * Generator test for {@code tf.keras.datasets.reuters.load_data()}. Asserts on all four unpacked
+   * arrays at {@code vn=2..5}: {@code x_train} ({@code (8982,)} unknown dtype &mdash; newswires are
+   * variable-length integer-encoded sequences, modeled as ⊤-dtype), {@code y_train} ({@code
+   * (8982,)} {@code int64}), {@code x_test} ({@code (2246,)} unknown dtype), {@code y_test} ({@code
+   * (2246,)} {@code int64}).
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/488">wala/ML#488</a>): the inferred unknown
+   * dtype for {@code x_train} / {@code x_test} is imprecise &mdash; the runtime dtype is numpy
+   * {@code object} (the Python fixture asserts that). Tighten to a dedicated {@code OBJECT} dtype
+   * if/when the lattice gains one.
+   */
+  @Test
+  public void testReutersLoadData()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reuters_load_data.py",
+        "f",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_8982_UNKNOWN),
+            3, Set.of(TENSOR_8982_INT64),
+            4, Set.of(TENSOR_2246_UNKNOWN),
+            5, Set.of(TENSOR_2246_INT64)));
+  }
+
+  /**
+   * Generator test for {@code tf.keras.datasets.boston_housing.load_data()}. Asserts on all four
+   * unpacked arrays at {@code vn=2..5}: {@code x_train} ({@code (404, 13)} {@code float64}
+   * features), {@code y_train} ({@code (404,)} {@code float64} regression targets), {@code x_test}
+   * ({@code (102, 13)} {@code float64}), {@code y_test} ({@code (102,)} {@code float64}).
+   */
+  @Test
+  public void testBostonHousingLoadData()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_boston_housing_load_data.py",
+        "f",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_404_13_FLOAT64),
+            3, Set.of(TENSOR_404_FLOAT64),
+            4, Set.of(TENSOR_102_13_FLOAT64),
+            5, Set.of(TENSOR_102_FLOAT64)));
+  }
+
+  /**
+   * Generator test for {@code tf.keras.datasets.imdb.load_data()}. The four returned arrays each
+   * have shape {@code (25000,)}: the {@code x_train} / {@code x_test} arrays carry numpy {@code
+   * object} dtype at runtime (variable-length integer-encoded sequences, modeled as ⊤-dtype); the
+   * {@code y_train} / {@code y_test} arrays have dtype {@code int64} (binary labels). Asserts on
+   * all four unpacked arrays at {@code vn=2..5}.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/488">wala/ML#488</a>): the inferred unknown
+   * dtype for {@code x_train} / {@code x_test} is imprecise &mdash; the runtime dtype is numpy
+   * {@code object} (the Python fixture asserts that). Tighten to a dedicated {@code OBJECT} dtype
+   * if/when the lattice gains one.
+   */
+  @Test
+  public void testImdbLoadData()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_imdb_load_data.py",
+        "f",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_25000_UNKNOWN),
+            3, Set.of(TENSOR_25000_INT64),
+            4, Set.of(TENSOR_25000_UNKNOWN),
+            5, Set.of(TENSOR_25000_INT64)));
+  }
+
+  /**
+   * Generator test for {@code tf.strings.as_string} on a 2-arg sink {@code f(y, x)}. Output shape
+   * is the input's shape (here {@code (3,)}); output dtype is fixed to {@code string}
+   * (wala/ML#422). Asserts that both the {@code as_string} output (`y`, string dtype) at vn=2 and
+   * its input (`x`, float32) at vn=3 classify precisely &mdash; the multi-tensor-sink pattern
+   * doesn't break classification on either flow when run inside the full test suite.
+   */
+  @Test
+  public void testAsString2ArgSink()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_as_string_2arg_sink.py",
+        "f",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_3_STRING), 3, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Sibling of {@link #testAsString2ArgSink()} with two 1-arg sinks {@code f(y)} and {@code g(x)},
+   * asserting the {@code y}-side sink. The {@code as_string} output's string-dtype tensor
+   * classifies precisely at vn=2.
+   */
+  @Test
+  public void testAsStringTwoSinksY()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_as_string_two_sinks.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_STRING)));
+  }
+
+  /**
+   * Companion to {@link #testAsStringTwoSinksY()} asserting the {@code x}-side sink {@code g(x)}.
+   * The {@code x} input classifies precisely as float32 at vn=2.
+   */
+  @Test
+  public void testAsStringTwoSinksX()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_as_string_two_sinks.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
   }
 
   @Test
@@ -4222,13 +5603,77 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testGradient()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_gradient.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_NONE_FLOAT32)));
+    test("tf2_test_gradient.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_RAGGED_FLOAT32)));
   }
 
   @Test
   public void testGradient2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_gradient2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_NONE_FLOAT32)));
+    test("tf2_test_gradient2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_RAGGED_FLOAT32)));
+  }
+
+  /**
+   * Regression test for <a href="https://github.com/wala/ML/issues/464">wala/ML#464</a>: when
+   * {@code sources} is a list (the common Keras pattern), {@code tape.gradient} returns a parallel
+   * list of fresh tensors and {@code grads[i]} must resolve to the shape/dtype of the i-th source.
+   * The fixture passes both {@code grads[0]} (for {@code w1}, a {@code [2]}-shaped float32) and
+   * {@code grads[1]} (for {@code w2}, a {@code [1, 1]}-shaped float32) to {@code f} across two
+   * separate calls; with the {@link com.ibm.wala.cast.python.ml.client.Gradient} {@code
+   * TupleElementProvider} implementation, {@code f}'s parameter resolves to the union of {@link
+   * #TENSOR_2_FLOAT32} and {@link #TENSOR_1_1_FLOAT32}.
+   */
+  @Test
+  public void testGradientList()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gradient_list.py",
+        "f",
+        1,
+        2,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32, TENSOR_1_1_FLOAT32)));
+  }
+
+  /**
+   * Tighter variant of {@link #testGradientList()}: passes both gradients in a single {@code
+   * f(grads[0], grads[1])} call, so the analyzer must resolve each argument's tensor type
+   * independently per its source index rather than as a union across two call sites. {@code f}'s
+   * first parameter (vn=2) must resolve to {@link #TENSOR_2_FLOAT32} (from {@code w1}) and the
+   * second parameter (vn=3) to {@link #TENSOR_1_1_FLOAT32} (from {@code w2}). Closes part of <a
+   * href="https://github.com/wala/ML/issues/464">wala/ML#464</a>.
+   */
+  @Test
+  public void testGradientList2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gradient_list2.py",
+        "f",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32), 3, Set.of(TENSOR_1_1_FLOAT32)));
+  }
+
+  /**
+   * Regression test for the wala/ML#518 throw path in {@link
+   * com.ibm.wala.cast.python.ml.client.RaggedFromNestedValueRowIds#getShapes}'s {@code
+   * nested_nrows} arg-collection loop: when the arg contains a non-numeric string {@link
+   * com.ibm.wala.ipa.callgraph.propagation.ConstantKey}, the {@code Long.parseLong((String) val)}
+   * site catches {@link NumberFormatException} and rethrows as {@link IllegalStateException} (with
+   * the original NFE as {@code cause}). The test exercises that branch by passing {@code
+   * nested_nrows=["abc"]} in the Python fixture, and {@code assertThrows} captures the rethrow so
+   * the test can assert on the cause—tighter than a bare {@code @Test(expected = …)}, which would
+   * pass on any {@code IllegalStateException} raised during analysis regardless of origin. Closes
+   * part of <a href="https://github.com/wala/ML/issues/520">wala/ML#520</a> (the {@code
+   * RaggedFromNestedValueRowIds} portion).
+   */
+  @Test
+  public void testRaggedNrowsNonNumeric() {
+    IllegalStateException ise =
+        assertThrows(
+            IllegalStateException.class,
+            () -> test("tf2_test_ragged_nrows_non_numeric.py", "f", 1, 1, Map.of()));
+    assertTrue(
+        "Expected cause to be NumberFormatException; got " + ise.getCause(),
+        ise.getCause() instanceof NumberFormatException);
   }
 
   @Test
@@ -4315,6 +5760,340 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_relu.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
   }
 
+  // Tier-A pure-passthrough math ops (wala/ML#422). Each is shape and dtype passthrough on `x`;
+  // routes to a per-op subclass of `PassThroughUnaryTensorGenerator`. The point of dedicated
+  // generators (vs. leaving these on `ReadDataFallback`) is dtype propagation: without these,
+  // `tf.math.sqrt(x)` etc. produce ⊤/UNKNOWN, blocking downstream dtype-axis precision through
+  // any function whose parameters flow from these ops.
+
+  /**
+   * Pure passthrough on {@code x}. See {@link com.ibm.wala.cast.python.ml.client.Sqrt}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testSqrt()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_sqrt.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Pure passthrough on {@code x}. See {@link com.ibm.wala.cast.python.ml.client.Log}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testLog()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_log.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Pure passthrough on {@code x}. See {@link com.ibm.wala.cast.python.ml.client.Negative}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testNegative()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_negative.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Pure passthrough on {@code x}. See {@link com.ibm.wala.cast.python.ml.client.Sin}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testSin()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_sin.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Pure passthrough on {@code x}. See {@link com.ibm.wala.cast.python.ml.client.Cos}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCos()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_cos.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Pure passthrough on {@code x}. See {@link com.ibm.wala.cast.python.ml.client.Floor}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testFloor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_floor.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Pure passthrough on {@code x}. See {@link com.ibm.wala.cast.python.ml.client.Ceil}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCeil()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_ceil.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testCeil} that exercises the {@code x} side of the fixture (the input to
+   * {@code tf.math.ceil}, asserted at the second sink {@code g(x)}). Combined with {@link
+   * #testCeil} (the {@code y} side, the {@code ceil} output), this covers both ends of the
+   * passthrough.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCeilInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_ceil.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Keyword-argument variant of {@link #testCeil}: {@code tf.math.ceil(x=x)}. Exercises the keyword
+   * arg-resolution path on the {@code PassThroughUnaryTensorGenerator} base.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCeilKw()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_ceil_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testCeilKw} that exercises the {@code x} side of the keyword-arg fixture.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCeilKwInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_ceil_kw.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * 2-arg-sink variant of {@link #testCeil}: same input and op, but with one combined sink {@code
+   * f(y, x)} instead of two separate single-arg sinks {@code f(y); g(x)}. This is the same shape as
+   * the wala/ML#495 multi-tensor-sink pattern; the difference is that #495 is specifically about
+   * dataset-loader outputs (`fashion_mnist`/`cifar100`/etc.) flowing through {@link
+   * com.ibm.wala.cast.python.ml.client.TensorGenerator#shapesFromSSAChain}'s fallback path. For
+   * {@code ceil} on {@code tf.constant}, no fallback is involved, so the pattern works precisely
+   * today &mdash; this test asserts the lattice-correct {@code (3,) float32} on both params and
+   * stands as a canary: if #495 ever generalizes beyond dataset loaders to per-op generators, this
+   * test will start failing.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCeilPair()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ceil_pair.py",
+        "f",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_3_FLOAT32), 3, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Pure passthrough on {@code x}. See {@link com.ibm.wala.cast.python.ml.client.Sign}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testSign()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_sign.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.cast(x, dtype)}. The dedicated {@link
+   * com.ibm.wala.cast.python.ml.client.Cast} generator extends {@link
+   * com.ibm.wala.cast.python.ml.client.PassThroughUnaryTensorGenerator} for shape and overrides the
+   * dtype-arg position to point at {@code dtype}, but the override doesn't take effect — see <a
+   * href="https://github.com/wala/ML/issues/481">wala/ML#481</a>. The static analysis currently
+   * reports the input's dtype rather than the cast target.
+   *
+   * <p>The earlier {@code tf.cast} {@code pass_through} alias is intentionally retained: removing
+   * it would unblock the {@code Cast} override here (so this assertion would tighten to {@code
+   * Set.of(TENSOR_3_INT32)}), but the dedicated {@code <new>+<return>} doesn't propagate the cast
+   * result's tensor classification through to chained consumers (e.g., {@code reshape} in {@code
+   * TestNeuroImageExamples.testEx1CG}). The pass_through alias is sound for those chains.
+   *
+   * <p>TODO: Once the dedicated-allocation chained-consumer integration tracked by <a
+   * href="https://github.com/wala/ML/issues/509">wala/ML#509</a> lands (which lets us safely drop
+   * the {@code pass_through} alias and let the {@code Cast} override fire &mdash; closing
+   * wala/ML#481's {@code Cast} arm), replace the assertion with {@code Set.of(TENSOR_3_INT32)} (the
+   * precise cast-target dtype, disjoint from the currently-asserted input dtype).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCast()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_cast.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.expand_dims(input, axis)}. The dedicated {@link
+   * com.ibm.wala.cast.python.ml.client.ExpandDims} generator overrides {@code getDefaultShapes} to
+   * ⊤ pending an axis-aware shape composer. Replacing the stale {@code array_ops.expand_dims}
+   * pass_through alias with the dedicated routing (this PR's earlier review fix) made the override
+   * actually fire, so the assertion now sees the ⊤ output the override emits.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/481">wala/ML#481</a>): once the axis-aware
+   * composer lands as a follow-up, tighten this from {@code TENSOR_UNKNOWN_SHAPE_FLOAT32} to {@code
+   * (1, 3)} float32 (the precise insert-at-axis result).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testExpandDims()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_expand_dims.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_3_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testExpandDims()} for {@code axis=-1}: trailing length-1 dim. Input shape
+   * {@code (3,)} produces output shape {@code (3, 1)}.
+   */
+  @Test
+  public void testExpandDimsAxisNeg1()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_expand_dims_axis_neg1.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_1_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.clip_by_value(t, clip_value_min, clip_value_max)}. Pure
+   * passthrough — output shape and dtype both inherit from {@code t}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testClipByValue()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_clip_by_value.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.nn.leaky_relu(features)}. Pure passthrough — output shape
+   * and dtype both inherit from {@code features} (the input tensor). Mirrors {@link #testRelu()};
+   * the {@link com.ibm.wala.cast.python.ml.client.LeakyRelu} generator extends {@link
+   * com.ibm.wala.cast.python.ml.client.PassThroughUnaryTensorGenerator}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testLeakyRelu()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_leaky_relu.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.math.pow(x, y)}. Element-wise binary; output shape is the
+   * broadcast of {@code x} and {@code y} (here both {@code (3,)}, so {@code (3,)}); output dtype
+   * matches {@code x} (TF requires {@code x}/{@code y} to share dtype, so dtype-from-{@code x} is
+   * sound). Routed through {@link com.ibm.wala.cast.python.ml.client.ElementWiseOperation}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testPow()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_pow.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Keyword-argument variant of {@link #testPow}: {@code tf.math.pow(x=x, y=y)}. Exercises the
+   * keyword arg-resolution path through {@link
+   * com.ibm.wala.cast.python.ml.client.ElementWiseOperation}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testPowKw()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_pow_kw.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Mixed positional/keyword variant of {@link #testPow}: {@code tf.math.pow(x, y=y)}. Exercises
+   * the case where the first argument is positional and the rest are keyword arguments.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testPowMixed()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_pow_mixed.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
   @Test
   public void testRange()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -4359,6 +6138,57 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testRange5()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_range5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_INT32)));
+  }
+
+  /**
+   * Regression test for wala/ML#492. When an explicit {@code dtype=} keyword is supplied to {@code
+   * tf.range}, the analyzer must honor it instead of defaulting to {@code int32}. {@code
+   * tf.range(0, 5, dtype=tf.float32)} should infer {@code float32}.
+   */
+  @Test
+  public void testRangeDType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_range_dtype.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testRangeDType()} — explicit {@code dtype=tf.int64} should be honored (not
+   * collapsed to the {@code int32} default). Pinpoints that the dtype-arg path resolves arbitrary
+   * {@link com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType} values, not just {@code
+   * float32}.
+   */
+  @Test
+  public void testRangeDTypeInt64()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_range_dtype_int64.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT64)));
+  }
+
+  /**
+   * Companion to {@link #testRangeDType()} — 1-positional form {@code tf.range(limit, dtype=...)}.
+   * Verifies that the dtype-arg dispatch fires regardless of how many positional args are present
+   * (the {@link Range} class's call-string-based shape resolution is independent of dtype lookup).
+   */
+  @Test
+  public void testRangeDType1Arg()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_range_dtype_1arg.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_FLOAT32)));
+  }
+
+  /**
+   * Documents a remaining limitation of {@link Range}: when no explicit {@code dtype} is supplied
+   * but the {@code start}/{@code limit}/{@code delta} arguments are {@code float}-typed, TF
+   * promotes the output to {@code float32} at runtime. The analyzer currently returns the
+   * unconditional {@code int32} default from {@code Range.getDefaultDTypes}, which this test pins
+   * down. Tracked by <a href="https://github.com/wala/ML/issues/492">wala/ML#492</a>.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/492">wala/ML#492</a>): when {@link
+   * Range#getDefaultDTypes} learns to derive its result from the start/limit/delta arg dtypes, flip
+   * the expected type to {@code TENSOR_5_FLOAT32}.
+   */
+  @Test
+  public void testRangeFloatArgs()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_range_float_args.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
   }
 
   @Test
@@ -6427,6 +8257,30 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_reshape5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_28_28_1_FLOAT32)));
   }
 
+  /**
+   * Regression guard for {@code tf.reshape(x, tf.shape(y))} shape inference. Runtime answer is
+   * {@code (2, 3)} of {@code float32}. Post wala/ML#538's graceful-degradation fix in {@link
+   * com.ibm.wala.cast.python.ml.client.Reshape} (mirroring {@link
+   * com.ibm.wala.cast.python.ml.client.BroadcastTo}'s localized try/catch), the analysis no longer
+   * throws on the {@code tf.shape(...)} shape arg. The inferred parameter type for {@code x} (vn=2)
+   * is currently the imprecise union {@code [() of float32, (⊤) of float32]} rather than the
+   * precise {@code (2, 3) float32}.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/473">wala/ML#473</a>): tighten the parameter
+   * type to {@link #TENSOR_2_3_FLOAT32} when the helper learns to resolve {@code tf.shape(y)}'s
+   * shape leaves precisely.
+   */
+  @Test
+  public void testReshapeRuntimeShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_runtime_shape.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32, new TensorType(FLOAT_32, null))));
+  }
+
   @Test
   public void testConvertToTensor()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -6529,6 +8383,269 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testConvertToTensor3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_convert_to_tensor3.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
+  }
+
+  /**
+   * Diagnostic for the existing {@code add_n} XML pattern (read list field 0 → {@code
+   * convert_to_tensor}). Captures the observable static-analysis output for {@code tf.add_n([t1,
+   * t2])} where both list elements are {@code tf.constant} tensors. If this test passes with {@code
+   * TENSOR_3_INT32}, the list-element-PTS path through {@code <getfield class="Llist" field="0">}
+   * works and Tier 5 ops ({@code concat}/{@code stack}/{@code meshgrid}) can use the same pattern
+   * cheaply. If it produces {@code ? of unknown}, the pattern doesn't propagate types and Tier 5
+   * needs Java-side list-element traversal logic.
+   */
+  @Test
+  public void testAddN()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_add_n.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_INT32)));
+  }
+
+  /**
+   * Tier-5 generator (wala/ML#449): {@code tf.concat(values, axis)}. The dedicated {@link
+   * com.ibm.wala.cast.python.ml.client.Concat} generator computes the precise output shape by
+   * walking every entry in the {@code values} list, summing each input's dim along the resolved
+   * {@code axis}, and inheriting the rest of the shape from the first input. The fixture
+   * concatenates two {@code (3,)} tensors along {@code axis=0}, so the precise output is {@code
+   * (6,)}; dtype is inherited from the first element ({@code int32}).
+   */
+  @Test
+  public void testConcat()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_concat.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_6_INT32)));
+  }
+
+  /**
+   * Multi-rank {@code tf.concat([t1, t2], axis=1)} with {@code (2, 3)} inputs. Exercises the
+   * rank-aware path in {@link com.ibm.wala.cast.python.ml.client.Concat#computeConcatenatedShape}:
+   * non-axis dim preservation (the leading {@code 2} survives) and the axis-dim sum (the trailing
+   * {@code 3 + 3 = 6}).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConcatMultirank()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_concat_multirank.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_6_INT32)));
+  }
+
+  /**
+   * {@code tf.concat([t1, t2], axis=-1)} with {@code (2, 3)} inputs. Exercises the negative-axis
+   * normalization in {@link com.ibm.wala.cast.python.ml.client.Concat#computeConcatenatedShape}:
+   * {@code axis = -1} resolves to {@code rank - 1 = 1} for rank-2 inputs, producing the same {@code
+   * (2, 6)} answer as the explicit {@code axis=1} fixture.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConcatNegativeAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_concat_negaxis.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_6_INT32)));
+  }
+
+  /**
+   * Tier-5 generator (wala/ML#449): {@code tf.stack(values, axis)}. The dedicated {@link
+   * com.ibm.wala.cast.python.ml.client.Stack} generator computes the precise output shape by
+   * reading the {@code values} list's PTS-derived length {@code N} and inserting it at the resolved
+   * {@code axis} position into the first element's shape: {@code values[0].shape[:axis] + (N,) +
+   * values[0].shape[axis:]}. The fixture stacks two {@code (3,)} tensors with {@code axis=0}, so
+   * the precise output is {@code (2, 3)}; dtype is inherited from the first element ({@code
+   * int32}).
+   */
+  @Test
+  public void testStack()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_stack.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_INT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.einsum(equation, *inputs)}. Output dtype inherits from
+   * the first tensor input ({@code float32} in the fixture). See {@link
+   * com.ibm.wala.cast.python.ml.client.Einsum} (wala/ML#449 Tier 5).
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/507">wala/ML#507</a>): output shape is
+   * currently ⊤. Precise shape inference requires parsing the einsum equation string (e.g. {@code
+   * "ij,jk->ik"}) and composing it against each input's shape. Tighten to the precise post-parse
+   * shape ({@code (2, 2)} for this fixture) once #507 lands.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsum()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_einsum.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Tier-5 generator (wala/ML#449): {@code tf.math.top_k(input, k)}. Returns a {@code (values,
+   * indices)} 2-tuple. The dedicated {@link com.ibm.wala.cast.python.ml.client.TopK} generator
+   * implements {@link com.ibm.wala.cast.python.ml.client.TupleElementProvider} with per-index dtype
+   * precision ({@code values} inherits input dtype; {@code indices} is fixed at {@code int32}), but
+   * the wrap-on-property-read dispatch in {@link
+   * com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory} doesn't fire for NamedTuple-style
+   * attribute access ({@code result.values} / {@code result.indices}). Until <a
+   * href="https://github.com/wala/ML/issues/480">wala/ML#480</a> is fixed, both destructured
+   * elements receive the aggregate union of per-element types.
+   *
+   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/480">wala/ML#480</a> lands, narrow the
+   * assertion to {@code Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)} (precise {@code values} dtype).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testTopKValues()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_top_k.py",
+        "f_values",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Counterpart of {@link #testTopKValues()} for the {@code indices} element of {@code
+   * tf.math.top_k}'s tuple result. Same wala/ML#480-driven imprecision: the assertion captures the
+   * observed aggregate union with a TODO to narrow once the per-index dispatch is fixed.
+   *
+   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/480">wala/ML#480</a> lands, narrow the
+   * assertion to {@code Set.of(TENSOR_INT32_UNKNOWN_SHAPE)} (precise {@code indices} dtype).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testTopKIndices()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_top_k.py",
+        "f_indices",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Tier-5 generator (wala/ML#449): {@code tf.meshgrid(*xi)}. Returns N tensors (one per input)
+   * sharing the broadcast of input shapes and the first input's dtype. The dedicated {@link
+   * com.ibm.wala.cast.python.ml.client.Meshgrid} generator implements {@link
+   * com.ibm.wala.cast.python.ml.client.TupleElementProvider}, but the XML only allocates one tuple
+   * slot (field 0); the second meshgrid output ({@code Y} in the fixture) doesn't have a backing
+   * alloc, so it falls through to ⊤/UNKNOWN and the aggregate union leaks the {@code
+   * float32}/{@code unknown} pair. See <a href="https://github.com/wala/ML/issues/480">
+   * wala/ML#480</a>.
+   *
+   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/480">wala/ML#480</a> lands (or the
+   * meshgrid XML is updated to allocate per-input tuple slots), narrow the assertion to {@code
+   * Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMeshgrid()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_meshgrid.py",
+        "f",
+        1,
+        2,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * Companion to {@link #testMeshgrid}: 2-parameter sink {@code f(X, Y)} so the analyzer's
+   * per-parameter typing on `tf.meshgrid`'s tuple result can be observed at distinct value numbers.
+   * The two parameters split the leak asymmetrically:
+   *
+   * <ul>
+   *   <li>vn=2 ({@code X}) shows the full {@code float32}/⊤-dtype union &mdash; the meshgrid XML
+   *       only allocates field-0 of the tuple, so when {@code X} aliases that slot through PA
+   *       propagation it picks up both the precise float32 alloc and the ⊤ tuple-slot leak.
+   *   <li>vn=3 ({@code Y}) collapses to just the precise {@code float32} &mdash; the second
+   *       meshgrid output's allocation site doesn't reach this parameter through the PA graph, so
+   *       the ⊤ leak doesn't surface.
+   * </ul>
+   *
+   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/480">wala/ML#480</a> lands, narrow
+   * vn=2's assertion to {@code Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)} (vn=3 is already there).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMeshgridXY()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_meshgrid_xy.py",
+        "f",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE),
+            3, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for the 3-arg form of {@code tf.where(condition, x, y)}. The dedicated
+   * {@link com.ibm.wala.cast.python.ml.client.Where} generator produces shape and dtype by unioning
+   * the inferred sets over {@code x} and {@code y} (and intentionally ignoring {@code condition}'s
+   * shape, per the modeling note in {@code Where}'s class Javadoc). The fixture has all three
+   * operands shape {@code (3,)} float32, so the union collapses to the singleton {@code (3,)
+   * float32}. Fix for the wala/ML#422 listing.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testWhere()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_where.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Sibling of {@link #testWhere()} that exercises the union-over-{@code x}-and-{@code y} path with
+   * broadcast-compatible different shapes: {@code x} is {@code (3,)} float32 and {@code y} is
+   * {@code (2, 3)} float32. The runtime broadcast result is {@code (2, 3)}; the static analysis
+   * unions the two operand shapes to {@code {(3,), (2, 3)}}, which is sound but imprecise.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/482">wala/ML#482</a>): once broadcast-shape
+   * composition lands, tighten this assertion from the union {@code {TENSOR_3_FLOAT32,
+   * TENSOR_2_3_FLOAT32}} to the precise {@code TENSOR_2_3_FLOAT32}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testWhereBroadcast()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_where_broadcast.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_FLOAT32, TENSOR_2_3_FLOAT32)));
   }
 
   @Test
@@ -6873,6 +8990,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_poisson4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_7_5_2_FLOAT32)));
   }
 
+  /**
+   * Generator-dispatch test for {@code tf.sparse.from_dense(tensor, name=None)}. The fixture uses
+   * the keyword form {@code from_dense(tensor=x)} so that arg-resolution drives through {@link
+   * com.ibm.wala.cast.python.ml.client.SparseFromDense}'s {@code Parameters.TENSOR.getName()}
+   * keyword-name lookup, exercising the {@code Locale.ROOT} line that wala/ML#510 flagged as
+   * uncovered. Output shape and dtype both inherit from {@code tensor}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testSparseFromDense()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_sparse_from_dense.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
   @Test
   public void testSparseEye() throws ClassHierarchyException, CancelException, IOException {
     test("tf2_test_sparse_eye.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_5_FLOAT32)));
@@ -6905,22 +9040,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   @Test
   public void testRaggedConstant() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_constant.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_NONE_INT32)));
+    test("tf2_test_ragged_constant.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_RAGGED_INT32)));
   }
 
   @Test
   public void testRaggedConstant2() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_constant2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_NONE_INT32)));
+    test("tf2_test_ragged_constant2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_RAGGED_INT32)));
   }
 
   @Test
   public void testRaggedConstant3() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_constant3.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_NONE_INT32)));
+    test("tf2_test_ragged_constant3.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_RAGGED_INT32)));
   }
 
   @Test
   public void testRaggedConstant4() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_constant4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_NONE_FLOAT32)));
+    test("tf2_test_ragged_constant4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_RAGGED_FLOAT32)));
   }
 
   @Test
@@ -6930,7 +9065,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "f",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_2_NONE_NONE_NONE_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_2_RAGGED_RAGGED_RAGGED_FLOAT32)));
   }
 
   @Test
@@ -6940,52 +9075,57 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   @Test
   public void testRaggedConstant7() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_constant7.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_NONE_INT32)));
+    test("tf2_test_ragged_constant7.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_RAGGED_INT32)));
   }
 
   @Test
   public void testRaggedConstant8() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_constant8.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_NONE_FLOAT32)));
+    test("tf2_test_ragged_constant8.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_RAGGED_FLOAT32)));
   }
 
   @Test
   public void testRaggedConstant9() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_constant9.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_NONE_NONE_FLOAT32)));
+    test(
+        "tf2_test_ragged_constant9.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_RAGGED_RAGGED_FLOAT32)));
   }
 
   @Test
   public void testRaggedConstant10() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_constant10.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_NONE_1_FLOAT32)));
+    test("tf2_test_ragged_constant10.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_RAGGED_1_FLOAT32)));
   }
 
   @Test
   public void testRaggedConstant11() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_constant11.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_NONE_FLOAT32)));
+    test("tf2_test_ragged_constant11.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_RAGGED_FLOAT32)));
   }
 
   @Test
   public void testRaggedConstant12() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_constant12.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_NONE_2_FLOAT32)));
+    test("tf2_test_ragged_constant12.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_RAGGED_2_FLOAT32)));
   }
 
   @Test
   public void testRaggedConstant13() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_constant13.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_0_NONE_FLOAT32)));
+    test("tf2_test_ragged_constant13.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_0_RAGGED_FLOAT32)));
   }
 
   @Test
   public void testRaggedConstant14() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_constant14.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_0_NONE_3_FLOAT32)));
+    test("tf2_test_ragged_constant14.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_0_RAGGED_3_FLOAT32)));
   }
 
   @Test
   public void testRaggedConstant15() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_constant15.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_NONE_2_INT32)));
+    test("tf2_test_ragged_constant15.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_RAGGED_2_INT32)));
   }
 
   @Test
   public void testRaggedConstant16() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_constant16.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_NONE_2_INT32)));
+    test("tf2_test_ragged_constant16.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_RAGGED_2_INT32)));
   }
 
   /**
@@ -6995,13 +9135,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    */
   @Test(expected = AssertionError.class)
   public void testRaggedConstant17() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_constant17.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_NONE_2_3_INT32)));
+    test("tf2_test_ragged_constant17.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_RAGGED_2_3_INT32)));
   }
 
   /** This one works because the inner dimensions are uniform. */
   @Test
   public void testRaggedConstant18() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_constant18.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_NONE_2_2_INT32)));
+    test("tf2_test_ragged_constant18.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_RAGGED_2_2_INT32)));
   }
 
   @Test
@@ -7013,9 +9153,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         3,
         3,
         Map.of(
-            2, Set.of(TENSOR_2_NONE_INT32),
-            3, Set.of(TENSOR_2_NONE_INT32),
-            4, Set.of(TENSOR_2_NONE_INT32)));
+            2, Set.of(TENSOR_2_RAGGED_INT32),
+            3, Set.of(TENSOR_2_RAGGED_INT32),
+            4, Set.of(TENSOR_2_RAGGED_INT32)));
   }
 
   @Test
@@ -7027,44 +9167,44 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         3,
         3,
         Map.of(
-            2, Set.of(TENSOR_5_NONE_INT32),
-            3, Set.of(TENSOR_5_NONE_INT32),
-            4, Set.of(TENSOR_5_NONE_INT32)));
+            2, Set.of(TENSOR_5_RAGGED_INT32),
+            3, Set.of(TENSOR_5_RAGGED_INT32),
+            4, Set.of(TENSOR_5_RAGGED_INT32)));
   }
 
   @Test
   public void testRaggedRange() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_range.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_NONE_INT32)));
+    test("tf2_test_ragged_range.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_RAGGED_INT32)));
   }
 
   @Test
   public void testRaggedRange2() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_range2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_NONE_INT32)));
+    test("tf2_test_ragged_range2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_RAGGED_INT32)));
   }
 
   @Test
   public void testRaggedRange3() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_range3.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_NONE_INT32)));
+    test("tf2_test_ragged_range3.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_RAGGED_INT32)));
   }
 
   @Test
   public void testRaggedRange4() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_range4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_NONE_INT32)));
+    test("tf2_test_ragged_range4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_RAGGED_INT32)));
   }
 
   @Test
   public void testRaggedRange5() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_range5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_NONE_INT32)));
+    test("tf2_test_ragged_range5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_RAGGED_INT32)));
   }
 
   @Test
   public void testRaggedRange6() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_range6.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_NONE_INT32)));
+    test("tf2_test_ragged_range6.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_RAGGED_INT32)));
   }
 
   @Test
   public void testRaggedRange7() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_range7.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_NONE_INT32)));
+    test("tf2_test_ragged_range7.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_RAGGED_INT32)));
   }
 
   @Test
@@ -7076,11 +9216,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         5,
         5,
         Map.of(
-            2, Set.of(TENSOR_1_NONE_INT32),
-            3, Set.of(TENSOR_1_NONE_INT32),
-            4, Set.of(TENSOR_1_NONE_INT32),
-            5, Set.of(TENSOR_1_NONE_INT32),
-            6, Set.of(TENSOR_1_NONE_INT32)));
+            2, Set.of(TENSOR_1_RAGGED_INT32),
+            3, Set.of(TENSOR_1_RAGGED_INT32),
+            4, Set.of(TENSOR_1_RAGGED_INT32),
+            5, Set.of(TENSOR_1_RAGGED_INT32),
+            6, Set.of(TENSOR_1_RAGGED_INT32)));
   }
 
   @Test
@@ -7128,7 +9268,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "test_ragged_from_nested_row_lengths",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_4_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_4_RAGGED_RAGGED_INT32)));
   }
 
   @Test
@@ -7139,7 +9279,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "test_ragged_from_nested_row_lengths_keyword",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_4_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_4_RAGGED_RAGGED_INT32)));
   }
 
   @Test
@@ -7150,7 +9290,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "test_ragged_from_nested_row_lengths_keyword2",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_4_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_4_RAGGED_RAGGED_INT32)));
   }
 
   @Test
@@ -7161,7 +9301,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "test_ragged_from_nested_row_splits_positional",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_2_RAGGED_RAGGED_INT32)));
   }
 
   @Test
@@ -7172,7 +9312,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "test_ragged_from_nested_row_splits_keyword",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_2_RAGGED_RAGGED_INT32)));
   }
 
   @Test
@@ -7183,7 +9323,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "test_ragged_from_nested_row_splits_mixed",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_2_RAGGED_RAGGED_INT32)));
   }
 
   @Test
@@ -7194,7 +9334,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_rt",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_3_NONE_NONE_STRING)));
+        Map.of(2, Set.of(TENSOR_3_RAGGED_RAGGED_STRING)));
   }
 
   @Test
@@ -7205,7 +9345,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_rt",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_3_NONE_NONE_STRING)));
+        Map.of(2, Set.of(TENSOR_3_RAGGED_RAGGED_STRING)));
   }
 
   @Test
@@ -7216,7 +9356,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_rt",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_3_NONE_NONE_STRING)));
+        Map.of(2, Set.of(TENSOR_3_RAGGED_RAGGED_STRING)));
   }
 
   @Test
@@ -7227,7 +9367,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_rt",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_2_RAGGED_RAGGED_INT32)));
   }
 
   @Test
@@ -7238,7 +9378,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_rt",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_2_RAGGED_RAGGED_INT32)));
   }
 
   @Test
@@ -7249,7 +9389,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_rt",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_2_RAGGED_RAGGED_INT32)));
   }
 
   @Test
@@ -7260,7 +9400,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_rt",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_1_NONE_NONE_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_1_RAGGED_RAGGED_FLOAT32)));
   }
 
   @Test
@@ -7271,7 +9411,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_rt",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_1_NONE_NONE_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_1_RAGGED_RAGGED_FLOAT32)));
   }
 
   @Test
@@ -7282,7 +9422,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_rt",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_1_NONE_NONE_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_1_RAGGED_RAGGED_FLOAT32)));
   }
 
   @Test
@@ -7294,7 +9434,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_case_1",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_4_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_4_RAGGED_INT32)));
 
     // check_case_2: [4, None], int32
     test(
@@ -7302,7 +9442,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_case_2",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_4_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_4_RAGGED_INT32)));
 
     // check_case_3: [4, None], int32
     test(
@@ -7310,7 +9450,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_case_3",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_4_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_4_RAGGED_INT32)));
 
     // check_case_4: [4, None], int32
     test(
@@ -7318,7 +9458,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_case_4",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_4_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_4_RAGGED_INT32)));
 
     // check_case_5: [2, None, None], int32
     test(
@@ -7326,7 +9466,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_case_5",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_2_NONE_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_2_RAGGED_RAGGED_INT32)));
 
     // check_case_6: [2, None], float32
     test(
@@ -7334,7 +9474,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_case_6",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_2_NONE_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_2_RAGGED_FLOAT32)));
 
     // check_case_7: [4, None], int32
     test(
@@ -7342,7 +9482,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "check_case_7",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_4_NONE_INT32)));
+        Map.of(2, Set.of(TENSOR_4_RAGGED_INT32)));
   }
 
   @Test
@@ -7659,6 +9799,37 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_model_call_consume.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_20_10_FLOAT32)));
+  }
+
+  /**
+   * Regression guard for the "layer-output flows into script-level consumer" pattern: a downstream
+   * function whose tensor parameter comes from a layer call's output. Companion to {@link
+   * #testModelCallConsume()}, which calls {@code consume(x)} <em>inside</em> {@code
+   * SequentialModel.__call__}; this fixture calls {@code consume(pred)} at script-level after the
+   * layer call — the same surface shape, but a different caller. The existing {@code
+   * DenseCall.getDefaultShapes} SSA-chain fallback recovers the result type when the direct PTS
+   * walk doesn't carry the synthetic {@code <new>} alloc through.
+   */
+  @Test
+  public void testLayerOutputParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_layer_output_param.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_1_10_FLOAT32)));
+  }
+
+  /**
+   * Variant of {@link #testLayerOutputParam()} that interposes a user-defined {@code
+   * tf.keras.Model} subclass between the {@code Dense} layers and the script-level consumer —
+   * exercises the same fallback through one extra level of call indirection.
+   */
+  @Test
+  public void testLayerOutputParamViaModel()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_layer_output_param_via_model.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_10_FLOAT32)));
   }
 
   private void test(
