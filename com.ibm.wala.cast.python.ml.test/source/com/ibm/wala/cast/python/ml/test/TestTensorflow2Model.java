@@ -6142,8 +6142,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Regression test for wala/ML#492. When an explicit {@code dtype=} keyword is supplied to {@code
-   * tf.range}, the analyzer must honor it instead of defaulting to {@code int32}. {@code
-   * tf.range(0, 5, dtype=tf.float32)} should infer {@code float32}.
+   * tf.range}, the analyzer honors it instead of defaulting to {@code int32}. {@code tf.range(0, 5,
+   * dtype=tf.float32)} infers {@code float32} via {@link Range#getDTypes}'s dtype-arg dispatch.
    */
   @Test
   public void testRangeDType()
@@ -6175,20 +6175,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Documents a remaining limitation of {@link Range}: when no explicit {@code dtype} is supplied
-   * but the {@code start}/{@code limit}/{@code delta} arguments are {@code float}-typed, TF
-   * promotes the output to {@code float32} at runtime. The analyzer currently returns the
-   * unconditional {@code int32} default from {@code Range.getDefaultDTypes}, which this test pins
-   * down. Tracked by <a href="https://github.com/wala/ML/issues/492">wala/ML#492</a>.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/492">wala/ML#492</a>): when {@link
-   * Range#getDefaultDTypes} learns to derive its result from the start/limit/delta arg dtypes, flip
-   * the expected type to {@code TENSOR_5_FLOAT32}.
+   * Regression test for the implicit-dtype path of {@link Range}: when no explicit {@code dtype} is
+   * supplied but the {@code start}/{@code limit}/{@code delta} arguments are {@code float}-typed,
+   * TF promotes the output to {@code float32} at runtime. {@link Range#getDefaultDTypes} now
+   * derives its result from the numeric argument types, matching that promotion. Fix for <a
+   * href="https://github.com/wala/ML/issues/492">wala/ML#492</a>.
    */
   @Test
   public void testRangeFloatArgs()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_range_float_args.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
+    test("tf2_test_range_float_args.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_FLOAT32)));
   }
 
   @Test
