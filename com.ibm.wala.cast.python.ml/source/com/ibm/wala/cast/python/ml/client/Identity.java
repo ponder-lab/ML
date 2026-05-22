@@ -55,8 +55,11 @@ public class Identity extends TensorGenerator {
   }
 
   /**
-   * Constructs an {@code Identity} anchored to a manual node. Used by {@link
-   * TensorGenerator#createManualGenerator}.
+   * Constructs an {@code Identity} anchored to a manual node. Provided as a public node-anchored
+   * entry point parallel to the {@link PointsToSetVariable} ctor; not currently wired into {@link
+   * TensorGenerator#createManualGenerator}'s dispatch (the standard path is the factory's
+   * source-based dispatch in {@code TensorGeneratorFactory.getGenerator}). Kept for downstream
+   * callers and for forward wiring if manual-dispatch coverage is added later.
    *
    * @param node The {@link CGNode} for the {@code identity.do()} synthetic method.
    */
