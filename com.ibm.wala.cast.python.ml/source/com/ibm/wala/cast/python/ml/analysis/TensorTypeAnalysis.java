@@ -392,6 +392,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                   // that tensor type propagation continues. The shape may be inaccurate, but users
                   // can inspect the error messages to find out about it. See
                   // https://github.com/wala/ML/issues/195.
+                  if (lhs.state == null) {
+                    lhs.state = HashSetFactory.make();
+                  }
                   changed |= lhs.state.add(newType);
 
                   if (t.symbolicDims() != ssz || t.concreteSize() != csz) {

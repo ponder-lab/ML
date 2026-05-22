@@ -2162,18 +2162,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * the analysis with {@code IllegalStateException} at {@code
    * TensorGenerator.getShapesFromShapeArgument} because the shape argument is a Tensor (the result
    * of {@code tf.shape(...)}) rather than a list/tuple literal. The {@code Reshape} generator
-   * should gracefully degrade to ⊤ shape per the lattice conventions instead of throwing.
+   * should gracefully degrade to ⊤ shape per the lattice conventions instead of throwing. Resolved
+   * by <a href="https://github.com/wala/ML/issues/538">wala/ML#538</a>; parameter types pin
+   * precisely.
    *
-   * <p>TODO: once <a href="https://github.com/wala/ML/issues/538">wala/ML#538</a> lands the
-   * graceful-degradation fix, remove the {@code expected = IllegalStateException.class} suppression
-   * and pin precise types: {@code arr} (vn=2) should resolve to {@code (2, 3) float32} and {@code
-   * indices} (vn=3) to {@code (2, 2) int32}, matching the caller-side {@code tf.constant} shapes in
-   * {@code tf2_test_take_along_axis.py}.
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/543">wala/ML#543</a>): the post-fix
+   * local-tensor count of 9 captures every intermediate runtime-shape tensor flowing through the
+   * body. Tighten once the body-level imprecision is addressed.
    */
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void testTakeAlongAxis()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_take_along_axis.py", "_take_long_axis", 2, 2, Map.of());
+    test(
+        "tf2_test_take_along_axis.py",
+        "_take_long_axis",
+        2,
+        9,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32), 3, Set.of(TENSOR_2_2_INT32)));
   }
 
   /**
@@ -8254,30 +8259,26 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Regression guard for {@code tf.reshape(x, tf.shape(y))} shape inference. Runtime answer is
-   * {@code (2, 3)} of {@code float32}. Post this PR's wala/ML#489 root-cause fix (`tensorflow.xml`
-   * allocates a fresh `Ltensorflow/python/framework/ops/Tensor` for `tf.shape(...)` instead of
-   * aliasing through `pass_through`), the helper's else-branch fires cleanly for the unrecognized
-   * allocation type and throws {@link IllegalStateException}. {@link
-   * com.ibm.wala.cast.python.ml.client.Reshape} doesn't localize the catch (unlike {@link
-   * com.ibm.wala.cast.python.ml.client.BroadcastTo}), per this PR's keep-throw-everywhere-except-
-   * BroadcastTo design, so the exception propagates up and aborts the analysis on this fixture.
-   * That's the design choice: missing modeling on `Reshape`'s runtime-tensor shape path surfaces as
-   * a loud signal rather than a silent ⊤.
+   * {@code (2, 3)} of {@code float32}. Post wala/ML#538's graceful-degradation fix in {@link
+   * com.ibm.wala.cast.python.ml.client.Reshape} (mirroring {@link
+   * com.ibm.wala.cast.python.ml.client.BroadcastTo}'s localized try/catch), the analysis no longer
+   * throws on the {@code tf.shape(...)} shape arg. The inferred parameter type for {@code x} (vn=2)
+   * is currently the imprecise union {@code [() of float32, (⊤) of float32]} rather than the
+   * precise {@code (2, 3) float32}.
    *
-   * <p>The {@code expected} types map below ({@code Map.of(2, Set.of(TENSOR_2_3_FLOAT32))}) is
-   * unreachable while the {@code @Test(expected = IllegalStateException.class)} suppression is in
-   * place; it's staged for the eventual flip so that lifting the suppression brings the
-   * precise-shape assertion back without further edits to this method.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/473">wala/ML#473</a>): when the helper
-   * learns to recognize {@code tf.shape(y)} as a shape arg (or {@code Reshape} gains a localized
-   * try/catch mirroring {@code BroadcastTo}'s), tighten this test to assert {@link
-   * #TENSOR_2_3_FLOAT32} (or ⊤) and remove the {@code expected} suppression.
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/473">wala/ML#473</a>): tighten the parameter
+   * type to {@link #TENSOR_2_3_FLOAT32} when the helper learns to resolve {@code tf.shape(y)}'s
+   * shape leaves precisely.
    */
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void testReshapeRuntimeShape()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_reshape_runtime_shape.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+    test(
+        "tf2_test_reshape_runtime_shape.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32, new TensorType(FLOAT_32, null))));
   }
 
   @Test
