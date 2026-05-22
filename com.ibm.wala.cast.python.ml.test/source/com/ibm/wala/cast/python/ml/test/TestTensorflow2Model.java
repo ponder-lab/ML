@@ -5955,21 +5955,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Generator-dispatch test for {@code tf.cast(x, dtype)}. The dedicated {@link
    * com.ibm.wala.cast.python.ml.client.Cast} generator extends {@link
    * com.ibm.wala.cast.python.ml.client.PassThroughUnaryTensorGenerator} for shape and overrides the
-   * dtype-arg position to point at {@code dtype}, but the override doesn't take effect — see <a
-   * href="https://github.com/wala/ML/issues/481">wala/ML#481</a>. The static analysis currently
-   * reports the input's dtype rather than the cast target.
-   *
-   * <p>The earlier {@code tf.cast} {@code pass_through} alias is intentionally retained: removing
-   * it would unblock the {@code Cast} override here (so this assertion would tighten to {@code
-   * Set.of(TENSOR_3_INT32)}), but the dedicated {@code <new>+<return>} doesn't propagate the cast
-   * result's tensor classification through to chained consumers (e.g., {@code reshape} in {@code
-   * TestNeuroImageExamples.testEx1CG}). The pass_through alias is sound for those chains.
-   *
-   * <p>TODO: Once the dedicated-allocation chained-consumer integration tracked by <a
-   * href="https://github.com/wala/ML/issues/509">wala/ML#509</a> lands (which lets us safely drop
-   * the {@code pass_through} alias and let the {@code Cast} override fire &mdash; closing
-   * wala/ML#481's {@code Cast} arm), replace the assertion with {@code Set.of(TENSOR_3_INT32)} (the
-   * precise cast-target dtype, disjoint from the currently-asserted input dtype).
+   * dtype-arg position to point at {@code dtype}; the {@code tf.cast} {@code pass_through} alias
+   * that previously bypassed the override was removed in <a
+   * href="https://github.com/wala/ML/issues/499">wala/ML#499</a>, so the static analysis now
+   * reports the explicit cast target ({@code int32}) rather than the input's dtype ({@code
+   * float32}).
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -5979,7 +5969,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testCast()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_cast.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+    test("tf2_test_cast.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_INT32)));
   }
 
   /**

@@ -5,19 +5,20 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import java.util.Locale;
 
 /**
- * Generator for {@code tf.cast(x, dtype, name=None)}. Intended output shape inherits from {@code
- * x}; output dtype is the explicit {@code dtype} argument (e.g., {@code tf.int32}, {@code
- * tf.float64}). The base-class dispatch in {@link TensorGenerator#getDTypes} reads the dtype
- * argument when {@link #getDTypeParameterPosition} returns a defined position, so this generator
- * just declares position 1 ({@code dtype}, after {@code x} at 0).
+ * Generator for {@code tf.cast(x, dtype, name=None)}. Output shape inherits from {@code x}; output
+ * dtype is the explicit {@code dtype} argument (e.g., {@code tf.int32}, {@code tf.float64}). The
+ * base-class dispatch in {@link TensorGenerator#getDTypes} reads the dtype argument when {@link
+ * #getDTypeParameterPosition} returns a defined position, so this generator just declares position
+ * 1 ({@code dtype}, after {@code x} at 0). Shape inheritance is provided by the {@link
+ * PassThroughUnaryTensorGenerator} base, which reads the input arg's shape via {@link
+ * #getInputParameterPosition} / {@link #getInputParameterName}.
  *
- * <p><b>Current limitation</b>: in the as-shipped state, this {@code getDTypes} override is
- * bypassed because the {@code tf.cast} {@code pass_through} alias in {@code tensorflow.xml} wins
- * dispatch (the alias is intentionally retained &mdash; removing it breaks downstream tensor flow
- * for chained consumers like {@code reshape(cast(...))}; see <a
- * href="https://github.com/wala/ML/issues/509">wala/ML#509</a>). The analyzer therefore reports the
- * input dtype rather than the cast target, and {@code testCast} asserts the input dtype. Tracked by
- * <a href="https://github.com/wala/ML/issues/481">wala/ML#481</a>.
+ * <p>The {@code tf.cast} {@code pass_through} alias in {@code tensorflow.xml} previously won
+ * dispatch over this generator, erasing the dtype change. An empirical probe in <a
+ * href="https://github.com/wala/ML/issues/499">wala/ML#499</a> measured the alias-removal blast
+ * radius and confirmed the chained-consumer regression that <a
+ * href="https://github.com/wala/ML/issues/509">wala/ML#509</a> was supposed to guard against does
+ * not surface in the current test suite; the alias has been removed.
  *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/cast">tf.cast</a>
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>

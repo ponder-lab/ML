@@ -69,7 +69,6 @@
         <new def="FixedLenFeature" class="Ltensorflow/functions/FixedLenFeature" />
         <putfield class="LRoot" field="FixedLenFeature" fieldType="LRoot" ref="x" value="FixedLenFeature" />
         <new def="pass_through" class="Ltensorflow/functions/pass_through" />
-        <putfield class="LRoot" field="cast" fieldType="LRoot" ref="x" value="pass_through" />
         <putfield class="LRoot" field="decode_raw" fieldType="LRoot" ref="x" value="pass_through" />
         <new def="estimator" class="Lobject" />
         <putfield class="LRoot" field="estimator" fieldType="LRoot" ref="x" value="estimator" />
@@ -2175,8 +2174,8 @@
         </method>
       </class>
       <class name="cast" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/cast. Direct `<new>+<return>` paired with the dedicated `Cast` generator: shape inherits from `x`; dtype intended to be the explicit `dtype` argument. CURRENT LIMITATION: the dispatch is bypassed by the retained `tf.cast` `pass_through`
-          alias (kept because removing it breaks chained consumers; see wala/ML#509), so the analyzer reports the input dtype today. Tracked by wala/ML#481. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/cast. Direct `<new>+<return>` paired with the dedicated `Cast` generator: shape inherits from `x`; dtype is the explicit `dtype` argument. The `tf.cast` `pass_through` alias that previously won dispatch (and erased the dtype change)
+          was removed in wala/ML#499. -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x dtype name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="res" />
