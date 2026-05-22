@@ -276,10 +276,15 @@ public class Range extends TensorGenerator {
             this.getArgumentPointsToSet(
                 builder, getDeltaParameterPosition(), getDeltaParameterName()));
 
-    if (argPts == null || argPts.isEmpty()) return EnumSet.of(DType.INT32);
+    if (argPts.isEmpty()) return EnumSet.of(DType.INT32);
 
     Set<DType> derived = this.getDTypesOfValue(builder, argPts);
     if (derived == null || derived.isEmpty()) return EnumSet.of(DType.INT32);
+
+    // TF's runtime promotion: any float operand promotes the entire result to float32, dropping
+    // integer dtypes from the mix. E.g., `tf.range(0, 5.0)` → float32, not {INT32, FLOAT32}.
+    if (derived.contains(DType.FLOAT32) || derived.contains(DType.FLOAT64))
+      return EnumSet.of(DType.FLOAT32);
     return derived;
   }
 
