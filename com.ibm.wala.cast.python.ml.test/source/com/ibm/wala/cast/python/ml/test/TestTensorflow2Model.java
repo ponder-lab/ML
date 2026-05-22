@@ -8335,9 +8335,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Tier-1 generator (wala/ML#449): {@code tf.nn.bias_add(value, bias)} returns a fresh tensor with
-   * the same shape and dtype as {@code value} (bias is broadcast-added but doesn't change the
-   * receiver's shape).
+   * Lock-in test for wala/ML#449 Tier-1 coverage of {@code tf.nn.bias_add(value, bias)}: returns a
+   * fresh tensor with the same shape and dtype as {@code value} (bias is broadcast-added but
+   * doesn't change the receiver's shape). Unlike {@link #testIdentity()} / {@link
+   * #testStopGradient()} — which got dedicated {@link com.ibm.wala.cast.python.ml.client.Identity}
+   * / {@link com.ibm.wala.cast.python.ml.client.StopGradient} generators paired with a direct
+   * {@code <new>+<return>} in the XML — {@code bias_add} is modeled in {@code tensorflow.xml} as a
+   * delegation: {@code <new>} of a {@code convert_to_tensor} function-object, {@code <call>} of its
+   * {@code do} with {@code value} as the argument, then {@code <return>} of that result (no
+   * dedicated Java generator; the actual tensor allocation happens inside {@code
+   * convert_to_tensor.do()}). That delegation suffices for the shape/dtype-passthrough semantics
+   * this test exercises.
    */
   @Test
   public void testBiasAdd()

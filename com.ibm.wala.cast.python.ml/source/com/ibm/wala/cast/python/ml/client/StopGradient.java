@@ -58,12 +58,13 @@ public class StopGradient extends TensorGenerator {
   }
 
   /**
-   * Constructs a {@code StopGradient} anchored to a manual node. Used by {@link
-   * TensorGenerator#createManualGenerator}.
+   * Constructs a {@code StopGradient} anchored to a manual node. Provided as a public node-anchored
+   * entry point parallel to the {@link PointsToSetVariable} ctor; not currently wired into {@link
+   * TensorGenerator#createManualGenerator}'s dispatch (the standard path is the factory's
+   * source-based dispatch in {@code TensorGeneratorFactory.getGenerator}). Kept for downstream
+   * callers and for forward wiring if manual-dispatch coverage is added later.
    *
-   * @param node The {@link CGNode} for the {@code stop_gradient.do()} synthetic method. (Pre-fix
-   *     this could also be the {@code read_data()} synthetic, but the new XML model uses {@code
-   *     <new>+<return>} in {@code do()} directly — no {@code read_data} entry point.)
+   * @param node The {@link CGNode} for the {@code stop_gradient.do()} synthetic method.
    */
   public StopGradient(CGNode node) {
     super(node);
