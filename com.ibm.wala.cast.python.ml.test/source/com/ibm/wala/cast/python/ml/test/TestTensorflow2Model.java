@@ -253,10 +253,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       new TensorType(
           INT_32, asList(new NumericDim(2), new RaggedDim(), new NumericDim(2), new NumericDim(2)));
 
-  @SuppressWarnings("unused")
-  private static final TensorType TENSOR_2_NONE_NONE_NONE_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(2), null));
-
   private static final TensorType TENSOR_2_RAGGED_RAGGED_RAGGED_FLOAT32 =
       new TensorType(
           FLOAT_32, asList(new NumericDim(2), new RaggedDim(), new RaggedDim(), new RaggedDim()));
