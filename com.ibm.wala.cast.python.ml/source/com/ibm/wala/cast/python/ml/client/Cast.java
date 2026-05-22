@@ -16,9 +16,9 @@ import java.util.Locale;
  * <p>The {@code tf.cast} {@code pass_through} alias in {@code tensorflow.xml} previously won
  * dispatch over this generator, erasing the dtype change. An empirical probe in <a
  * href="https://github.com/wala/ML/issues/499">wala/ML#499</a> measured the alias-removal blast
- * radius and confirmed the chained-consumer regression that <a
- * href="https://github.com/wala/ML/issues/509">wala/ML#509</a> was supposed to guard against does
- * not surface in the current test suite; the alias has been removed.
+ * radius and confirmed that the chained-consumer regression which <a
+ * href="https://github.com/wala/ML/issues/509">wala/ML#509</a> was meant to guard against does not
+ * surface in the current test suite; the alias has been removed.
  *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/cast">tf.cast</a>
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
