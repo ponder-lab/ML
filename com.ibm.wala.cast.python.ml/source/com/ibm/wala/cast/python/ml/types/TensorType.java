@@ -214,9 +214,11 @@ public class TensorType implements Iterable<Dimension<?>> {
    */
   public static class RaggedDim extends Dimension<Void> {
     /**
-     * Constructs a {@code RaggedDim}. The {@code super(null)} call is mechanical: {@link Dimension}
-     * requires a value of type {@code T}, and {@code Void} has no instances, so {@code null} is the
-     * only legal argument. Raggedness carries no payload beyond the type's identity.
+     * Constructs a {@code RaggedDim}.
+     *
+     * @implNote The {@code super(null)} call is mechanical: {@link Dimension} requires a value of
+     *     type {@code T}, and {@code Void} has no instances, so {@code null} is the only legal
+     *     argument. Raggedness carries no payload beyond the type's identity.
      */
     public RaggedDim() {
       super(null);
