@@ -248,32 +248,6 @@ public class Range extends TensorGenerator {
   }
 
   /**
-   * Honours an explicit {@code dtype=} keyword by resolving the argument's points-to set, mirroring
-   * the canonical dispatch in {@link TensorGenerator#getDTypes}. The override is defensive — the
-   * inherited path already produces the same answer — but stating it locally keeps {@code Range}'s
-   * dtype handling self-documenting alongside {@link #getDefaultDTypes}, which derives the dtype
-   * from {@code start}/{@code limit}/{@code delta} when no explicit {@code dtype} is supplied. Fix
-   * for <a href="https://github.com/wala/ML/issues/492">wala/ML#492</a>.
-   *
-   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @return The resolved {@code dtype} argument when explicitly passed, else the value derived from
-   *     numeric argument types (see {@link #getDefaultDTypes}).
-   */
-  @Override
-  protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
-    int valNum =
-        this.getArgumentValueNumber(
-            builder, this.getDTypeParameterPosition(), this.getDTypeParameterName(), true);
-    if (valNum <= 0) return this.getDefaultDTypes(builder);
-
-    OrdinalSet<InstanceKey> pointsToSet =
-        this.getArgumentPointsToSet(
-            builder, this.getDTypeParameterPosition(), this.getDTypeParameterName());
-    if (pointsToSet == null || pointsToSet.isEmpty()) return this.getDefaultDTypes(builder);
-    return this.getDTypesFromDTypeArgument(builder, pointsToSet);
-  }
-
-  /**
    * Derives the output dtype from the numeric {@code start}/{@code limit}/{@code delta} arguments
    * when no explicit {@code dtype=} keyword is supplied, matching {@code tf.range}'s runtime
    * promotion rule: any float operand promotes the result to {@code float32}, otherwise it stays
