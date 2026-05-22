@@ -10,6 +10,7 @@ import static java.util.Collections.emptySet;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.core.util.strings.Atom;
@@ -177,9 +178,9 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
           // First dimension is nrows (length of first list in nested_row_lengths)
           shape.add(rowDim);
 
-          // Then K ragged dimensions (represented as null)
+          // Then K ragged dimensions.
           for (int i = 0; i < k; i++) {
-            shape.add(null);
+            shape.add(RaggedDim.INSTANCE);
           }
 
           // Then add values.shape[1:]

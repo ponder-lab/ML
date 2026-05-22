@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
@@ -55,7 +56,7 @@ public abstract class RaggedTensorFromValues extends TensorGenerator {
       for (Dimension<?> rowDim : possibleRowDims) {
         List<Dimension<?>> shape = new ArrayList<>();
         shape.add(rowDim);
-        shape.add(null); // Ragged dimension
+        shape.add(RaggedDim.INSTANCE);
         ret.add(shape);
       }
       LOGGER.fine(
@@ -68,7 +69,7 @@ public abstract class RaggedTensorFromValues extends TensorGenerator {
       for (List<Dimension<?>> valShape : valuesShapes) {
         List<Dimension<?>> shape = new ArrayList<>();
         shape.add(rowDim);
-        shape.add(null); // Ragged dimension
+        shape.add(RaggedDim.INSTANCE);
 
         if (valShape.size() > 1) {
           shape.addAll(valShape.subList(1, valShape.size()));

@@ -15,6 +15,7 @@ import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
@@ -428,7 +429,7 @@ public class RaggedConstant extends Constant {
           // The first R dimensions are ragged.
           // Dim 1 to R: These are assigned None (or ? in older outputs) in the static shape,
           // indicating they can vary.
-          for (Long i = 0L; i < R; i++) shape.add(null); // Unknown size for ragged dimensions.
+          for (long i = 0L; i < R; i++) shape.add(RaggedDim.INSTANCE);
 
           // Part B: The Uniform Portion (Dimensions R + 1 to K)
           // If R < K - 1 (meaning you requested fewer ragged dimensions than the total depth),

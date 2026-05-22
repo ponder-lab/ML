@@ -17,6 +17,7 @@ import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -277,9 +278,9 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
           // First dimension
           shape.add(rowDim);
 
-          // Then K ragged dimensions
+          // Then K ragged dimensions.
           for (int i = 0; i < k; i++) {
-            shape.add(null);
+            shape.add(RaggedDim.INSTANCE);
           }
 
           // Then add values.shape[1:]

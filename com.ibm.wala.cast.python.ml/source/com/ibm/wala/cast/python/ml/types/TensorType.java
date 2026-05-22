@@ -54,7 +54,8 @@ public class TensorType implements Iterable<Dimension<?>> {
   enum DimensionType {
     Constant,
     Symbolic,
-    Compound
+    Compound,
+    Ragged
   };
 
   public abstract static class Dimension<T> {
@@ -194,6 +195,65 @@ public class TensorType implements Iterable<Dimension<?>> {
     @Override
     String toCString(boolean useMarkdown) {
       return value().toString();
+    }
+  }
+
+  /**
+   * Marker for a ragged dimension &mdash; a dimension whose size varies across rows of a single
+   * ragged tensor instance (e.g., the second axis of {@code tf.ragged.constant([[1, 2], [3]])}).
+   *
+   * <p>Ragged dimensions used to be encoded as raw {@code null} entries in {@code TensorType.dims};
+   * the typed sentinel restores the implicit non-null-element contract of {@link
+   * TensorType#iterator()} and lets downstream consumers (e.g., Hybridize's input-signature
+   * inference) discriminate ragged from "unknown size" (which is still encoded as raw {@code null}
+   * for dynamic-batch / placeholder dims, distinct semantics). See <a
+   * href="https://github.com/wala/ML/issues/544">wala/ML#544</a>.
+   *
+   * <p>The {@link Dimension#value() value} is always {@code null} &mdash; raggedness carries no
+   * payload beyond its identity. Because every instance is structurally equal to every other, use
+   * the shared {@link #INSTANCE} rather than allocating fresh objects.
+   */
+  public static class RaggedDim extends Dimension<Void> {
+    /** Shared singleton; {@code RaggedDim} carries no per-instance state. */
+    public static final RaggedDim INSTANCE = new RaggedDim();
+
+    /**
+     * @implNote Private — all callers should use {@link #INSTANCE}. The {@code super(null)} call is
+     *     mechanical: {@link Dimension} requires a value of type {@code T}, and {@code Void} has no
+     *     instances, so {@code null} is the only legal argument. Raggedness carries no payload
+     *     beyond the type's identity.
+     */
+    private RaggedDim() {
+      super(null);
+    }
+
+    @Override
+    DimensionType type() {
+      return DimensionType.Ragged;
+    }
+
+    @Override
+    int concreteSize() {
+      return -1;
+    }
+
+    @Override
+    int symbolicDims() {
+      return 1;
+    }
+
+    @Override
+    String toMDString() {
+      return "*ragged*";
+    }
+
+    @Override
+    String toCString(boolean useMarkdown) {
+      if (useMarkdown) {
+        return "*ragged*";
+      } else {
+        return "ragged";
+      }
     }
   }
 
