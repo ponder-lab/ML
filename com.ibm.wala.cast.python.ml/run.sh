@@ -4,9 +4,11 @@ ME=`realpath $0`
 DIR=`dirname $ME`
 
 # Resolve the `java` executable. Prefer `$JAVA_HOME/bin/java` when `JAVA_HOME` is
-# set (the common case for IDE-launched LSP); fall back to `java` on `PATH` when
-# it isn't. Pre-fix the script unconditionally referenced `$JAVA_HOME/bin/java`,
-# which expanded to `/bin/java` if `JAVA_HOME` was unset (almost always fails).
+# set AND points at a JDK with an executable `bin/java` (the common case for
+# IDE-launched LSP); fall back to `java` on `PATH` when `JAVA_HOME` is unset OR
+# set-but-invalid (stale env var, deleted/relocated JDK, switched SDK manager).
+# Pre-fix the script unconditionally referenced `$JAVA_HOME/bin/java`, which
+# expanded to `/bin/java` if `JAVA_HOME` was unset (almost always fails).
 # See https://github.com/wala/ML/issues/542.
 if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then
   JAVA="$JAVA_HOME/bin/java"
