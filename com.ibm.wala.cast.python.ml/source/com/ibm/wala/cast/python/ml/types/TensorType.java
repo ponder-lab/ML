@@ -210,17 +210,20 @@ public class TensorType implements Iterable<Dimension<?>> {
    * href="https://github.com/wala/ML/issues/544">wala/ML#544</a>.
    *
    * <p>The {@link Dimension#value() value} is always {@code null} &mdash; raggedness carries no
-   * payload beyond its identity.
+   * payload beyond its identity. Because every instance is structurally equal to every other, use
+   * the shared {@link #INSTANCE} rather than allocating fresh objects.
    */
   public static class RaggedDim extends Dimension<Void> {
+    /** Shared singleton; {@code RaggedDim} carries no per-instance state. */
+    public static final RaggedDim INSTANCE = new RaggedDim();
+
     /**
-     * Constructs a {@code RaggedDim}.
-     *
-     * @implNote The {@code super(null)} call is mechanical: {@link Dimension} requires a value of
-     *     type {@code T}, and {@code Void} has no instances, so {@code null} is the only legal
-     *     argument. Raggedness carries no payload beyond the type's identity.
+     * @implNote Private — all callers should use {@link #INSTANCE}. The {@code super(null)} call is
+     *     mechanical: {@link Dimension} requires a value of type {@code T}, and {@code Void} has no
+     *     instances, so {@code null} is the only legal argument. Raggedness carries no payload
+     *     beyond the type's identity.
      */
-    public RaggedDim() {
+    private RaggedDim() {
       super(null);
     }
 

@@ -429,7 +429,7 @@ public class RaggedConstant extends Constant {
           // The first R dimensions are ragged.
           // Dim 1 to R: These are assigned None (or ? in older outputs) in the static shape,
           // indicating they can vary.
-          for (long i = 0L; i < R; i++) shape.add(new RaggedDim());
+          for (long i = 0L; i < R; i++) shape.add(RaggedDim.INSTANCE);
 
           // Part B: The Uniform Portion (Dimensions R + 1 to K)
           // If R < K - 1 (meaning you requested fewer ragged dimensions than the total depth),

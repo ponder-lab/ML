@@ -180,7 +180,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
 
           // Then K ragged dimensions.
           for (int i = 0; i < k; i++) {
-            shape.add(new RaggedDim());
+            shape.add(RaggedDim.INSTANCE);
           }
 
           // Then add values.shape[1:]
