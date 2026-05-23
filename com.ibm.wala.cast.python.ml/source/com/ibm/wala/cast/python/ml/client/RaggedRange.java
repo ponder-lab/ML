@@ -62,6 +62,12 @@ public class RaggedRange extends Range {
       OrdinalSet<InstanceKey> startPts = OrdinalSet.empty();
       OrdinalSet<InstanceKey> limitPts = OrdinalSet.empty();
       OrdinalSet<InstanceKey> deltaPts = OrdinalSet.empty();
+      // Track which args the call explicitly provides — distinct from "PTS happens to be empty".
+      // `getArgumentPointsToSet` can return `OrdinalSet.empty()` for arg-present-but-unresolvable
+      // cases too; treating "empty" as "omitted" would make the inferred length unsound.
+      boolean startProvided = false;
+      boolean limitProvided = false;
+      boolean deltaProvided = false;
 
       if (numPosArgs == 0) {
         // Keyword only — fetched below from the keyword-fallback block.
@@ -71,60 +77,71 @@ public class RaggedRange extends Range {
           limitPts =
               this.getArgumentPointsToSet(
                   builder, Parameters.STARTS.getIndex(), Parameters.LIMITS.getName());
+          limitProvided = true;
         } else {
           startPts =
               this.getArgumentPointsToSet(
                   builder, Parameters.STARTS.getIndex(), Parameters.STARTS.getName());
+          startProvided = true;
           limitPts =
               this.getArgumentPointsToSet(
                   builder, UNDEFINED_PARAMETER_POSITION, Parameters.LIMITS.getName());
+          limitProvided = true;
         }
       } else if (numPosArgs == 2) {
         // range(starts, limits)
         startPts =
             this.getArgumentPointsToSet(
                 builder, Parameters.STARTS.getIndex(), Parameters.STARTS.getName());
+        startProvided = true;
         limitPts =
             this.getArgumentPointsToSet(
                 builder, Parameters.LIMITS.getIndex(), Parameters.LIMITS.getName());
+        limitProvided = true;
       } else if (numPosArgs >= 3) {
         // range(starts, limits, deltas)
         startPts =
             this.getArgumentPointsToSet(
                 builder, Parameters.STARTS.getIndex(), Parameters.STARTS.getName());
+        startProvided = true;
         limitPts =
             this.getArgumentPointsToSet(
                 builder, Parameters.LIMITS.getIndex(), Parameters.LIMITS.getName());
+        limitProvided = true;
         deltaPts =
             this.getArgumentPointsToSet(
                 builder, Parameters.DELTAS.getIndex(), Parameters.DELTAS.getName());
+        deltaProvided = true;
       }
 
-      // Retrieve keyword args if not already set by positional (and not empty from initialization)
-      if (startPts.isEmpty())
+      // Retrieve keyword args if not already set by positional. Use `isKeywordArgumentPresent` to
+      // know whether the arg is actually in the call, not just whether the PTS resolved.
+      if (!startProvided && this.isKeywordArgumentPresent(builder, Parameters.STARTS.getName())) {
         startPts =
-            OrdinalSet.unify(
-                startPts,
-                this.getArgumentPointsToSet(
-                    builder, UNDEFINED_PARAMETER_POSITION, Parameters.STARTS.getName()));
-      if (limitPts.isEmpty())
+            this.getArgumentPointsToSet(
+                builder, UNDEFINED_PARAMETER_POSITION, Parameters.STARTS.getName());
+        startProvided = true;
+      }
+      if (!limitProvided && this.isKeywordArgumentPresent(builder, Parameters.LIMITS.getName())) {
         limitPts =
-            OrdinalSet.unify(
-                limitPts,
-                this.getArgumentPointsToSet(
-                    builder, UNDEFINED_PARAMETER_POSITION, Parameters.LIMITS.getName()));
-      if (deltaPts.isEmpty())
+            this.getArgumentPointsToSet(
+                builder, UNDEFINED_PARAMETER_POSITION, Parameters.LIMITS.getName());
+        limitProvided = true;
+      }
+      if (!deltaProvided && this.isKeywordArgumentPresent(builder, Parameters.DELTAS.getName())) {
         deltaPts =
-            OrdinalSet.unify(
-                deltaPts,
-                this.getArgumentPointsToSet(
-                    builder, UNDEFINED_PARAMETER_POSITION, Parameters.DELTAS.getName()));
+            this.getArgumentPointsToSet(
+                builder, UNDEFINED_PARAMETER_POSITION, Parameters.DELTAS.getName());
+        deltaProvided = true;
+      }
 
       // Keyword-only: `tf.ragged.range(starts=5)` semantically means `limits=5`. Apply the swap
       // AFTER the keyword fallback above so re-fetching `starts` can't undo it.
-      if (numPosArgs == 0 && limitPts.isEmpty() && !startPts.isEmpty()) {
+      if (numPosArgs == 0 && !limitProvided && startProvided) {
         limitPts = startPts;
+        limitProvided = true;
         startPts = OrdinalSet.empty();
+        startProvided = false;
       }
 
       // Check for vectors
@@ -169,7 +186,9 @@ public class RaggedRange extends Range {
         // <a href="https://github.com/wala/ML/issues/546">wala/ML#546</a>.
         List<Dimension<?>> shape = new ArrayList<>();
         shape.add(new NumericDim(1));
-        Integer staticLength = computeStaticInnerLength(startPts, limitPts, deltaPts);
+        Integer staticLength =
+            computeStaticInnerLength(
+                startPts, startProvided, limitPts, limitProvided, deltaPts, deltaProvided);
         shape.add(staticLength != null ? new NumericDim(staticLength) : RaggedDim.INSTANCE);
         ret.add(shape);
       }
@@ -180,28 +199,54 @@ public class RaggedRange extends Range {
   /**
    * Computes the static inner-dimension length for the scalar form of {@code tf.ragged.range} when
    * {@code start}/{@code limit}/{@code delta} all resolve to compile-time numeric literals. Returns
-   * {@code null} when any arg is non-literal, when {@code delta} could be zero (invalid at
-   * runtime), or when the cross-product of literal values yields multiple distinct lengths.
+   * {@code null} when {@code limit} is omitted, when any provided arg is non-literal or
+   * unresolvable, when {@code delta} could be zero (invalid at runtime), or when the cross-product
+   * of literal values yields multiple distinct lengths. {@code start}/{@code delta} default to
+   * {@code 0}/{@code 1} only when their {@code *Provided} flag is false (the runtime default for an
+   * omitted arg) — empty PTS for a *provided* arg means "unresolvable" and forces a fallback to
+   * {@code RaggedDim}.
    *
-   * @param startPts Points-to set of the {@code start} argument (empty defaults to {@code 0}).
-   * @param limitPts Points-to set of the {@code limit} argument; required.
-   * @param deltaPts Points-to set of the {@code delta} argument (empty defaults to {@code 1}).
+   * @param startPts Points-to set of the {@code start} argument; consulted only when {@code
+   *     startProvided}.
+   * @param startProvided Whether the call provided an explicit {@code start} (positional or
+   *     keyword).
+   * @param limitPts Points-to set of the {@code limit} argument; required (mandatory at runtime).
+   * @param limitProvided Whether the call provided an explicit {@code limit}.
+   * @param deltaPts Points-to set of the {@code delta} argument; consulted only when {@code
+   *     deltaProvided}.
+   * @param deltaProvided Whether the call provided an explicit {@code delta}.
    * @return The single statically-computable inner length, or {@code null} if not derivable.
    */
   private static Integer computeStaticInnerLength(
       OrdinalSet<InstanceKey> startPts,
+      boolean startProvided,
       OrdinalSet<InstanceKey> limitPts,
-      OrdinalSet<InstanceKey> deltaPts) {
-    Set<Double> limits = getPossibleDoubleValues(limitPts);
+      boolean limitProvided,
+      OrdinalSet<InstanceKey> deltaPts,
+      boolean deltaProvided) {
+    if (!limitProvided) return null;
+
+    // `getPossibleDoubleValues` throws `IllegalStateException` on non-`ConstantKey<Number>` PTS
+    // contents (via `getConstantValues(..., requireConstants=true)`); catch and degrade to
+    // RaggedDim instead of crashing the analysis. Mirrors the established "modeling gap → soft
+    // fallback" pattern in e.g. `Reshape.getShapes`.
+    Set<Double> limits;
+    Set<Double> starts;
+    Set<Double> deltas;
+    try {
+      limits = getPossibleDoubleValues(limitPts);
+      starts = startProvided ? getPossibleDoubleValues(startPts) : new java.util.HashSet<>();
+      deltas = deltaProvided ? getPossibleDoubleValues(deltaPts) : new java.util.HashSet<>();
+    } catch (IllegalStateException e) {
+      return null;
+    }
+
     if (limits.isEmpty() || limits.contains(null)) return null;
+    if (startProvided && (starts.isEmpty() || starts.contains(null))) return null;
+    if (deltaProvided && (deltas.isEmpty() || deltas.contains(null))) return null;
 
-    Set<Double> starts = getPossibleDoubleValues(startPts);
-    if (starts.contains(null)) return null;
-    if (starts.isEmpty()) starts.add(0.0);
-
-    Set<Double> deltas = getPossibleDoubleValues(deltaPts);
-    if (deltas.contains(null)) return null;
-    if (deltas.isEmpty()) deltas.add(1.0);
+    if (!startProvided) starts.add(0.0);
+    if (!deltaProvided) deltas.add(1.0);
 
     Set<Integer> lengths = HashSetFactory.make();
     for (Double s : starts)
