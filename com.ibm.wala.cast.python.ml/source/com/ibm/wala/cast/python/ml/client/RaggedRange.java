@@ -64,22 +64,7 @@ public class RaggedRange extends Range {
       OrdinalSet<InstanceKey> deltaPts = OrdinalSet.empty();
 
       if (numPosArgs == 0) {
-        // Keyword only
-        startPts =
-            this.getArgumentPointsToSet(
-                builder, UNDEFINED_PARAMETER_POSITION, Parameters.STARTS.getName());
-        limitPts =
-            this.getArgumentPointsToSet(
-                builder, UNDEFINED_PARAMETER_POSITION, Parameters.LIMITS.getName());
-        deltaPts =
-            this.getArgumentPointsToSet(
-                builder, UNDEFINED_PARAMETER_POSITION, Parameters.DELTAS.getName());
-
-        if (limitPts.isEmpty() && !startPts.isEmpty()) {
-          // tf.ragged.range(starts=5) -> limits=5
-          limitPts = startPts;
-          startPts = OrdinalSet.empty();
-        }
+        // Keyword only — fetched below from the keyword-fallback block.
       } else if (numPosArgs == 1) {
         // range(limits) or range(starts, limits=X)
         if (!this.isKeywordArgumentPresent(builder, Parameters.LIMITS.getName())) {
@@ -135,6 +120,13 @@ public class RaggedRange extends Range {
                 this.getArgumentPointsToSet(
                     builder, UNDEFINED_PARAMETER_POSITION, Parameters.DELTAS.getName()));
 
+      // Keyword-only: `tf.ragged.range(starts=5)` semantically means `limits=5`. Apply the swap
+      // AFTER the keyword fallback above so re-fetching `starts` can't undo it.
+      if (numPosArgs == 0 && limitPts.isEmpty() && !startPts.isEmpty()) {
+        limitPts = startPts;
+        startPts = OrdinalSet.empty();
+      }
+
       // Check for vectors
       boolean hasVector = false;
       Integer vectorLength = null;
@@ -170,15 +162,55 @@ public class RaggedRange extends Range {
         shape.add(RaggedDim.INSTANCE);
         ret.add(shape);
       } else {
-        // All scalars.
-        // tf.ragged.range with scalars returns a 2D RaggedTensor with shape (1, None).
-        // e.g. tf.ragged.range(3, 18, 3) -> [[3, 6, 9, 12, 15]]
+        // All scalars. tf.ragged.range with scalars returns a 2D RaggedTensor with shape
+        // (1, ceil((limit - start) / delta)). When start/limit/delta are statically-known
+        // numeric literals and the cross-product yields a single length, pin that length as
+        // a NumericDim; otherwise fall back to RaggedDim. Fix for
+        // <a href="https://github.com/wala/ML/issues/546">wala/ML#546</a>.
         List<Dimension<?>> shape = new ArrayList<>();
         shape.add(new NumericDim(1));
-        shape.add(RaggedDim.INSTANCE);
+        Integer staticLength = computeStaticInnerLength(startPts, limitPts, deltaPts);
+        shape.add(staticLength != null ? new NumericDim(staticLength) : RaggedDim.INSTANCE);
         ret.add(shape);
       }
     }
     return ret;
+  }
+
+  /**
+   * Computes the static inner-dimension length for the scalar form of {@code tf.ragged.range} when
+   * {@code start}/{@code limit}/{@code delta} all resolve to compile-time numeric literals. Returns
+   * {@code null} when any arg is non-literal, when {@code delta} could be zero (invalid at
+   * runtime), or when the cross-product of literal values yields multiple distinct lengths.
+   *
+   * @param startPts Points-to set of the {@code start} argument (empty defaults to {@code 0}).
+   * @param limitPts Points-to set of the {@code limit} argument; required.
+   * @param deltaPts Points-to set of the {@code delta} argument (empty defaults to {@code 1}).
+   * @return The single statically-computable inner length, or {@code null} if not derivable.
+   */
+  private static Integer computeStaticInnerLength(
+      OrdinalSet<InstanceKey> startPts,
+      OrdinalSet<InstanceKey> limitPts,
+      OrdinalSet<InstanceKey> deltaPts) {
+    Set<Double> limits = getPossibleDoubleValues(limitPts);
+    if (limits.isEmpty() || limits.contains(null)) return null;
+
+    Set<Double> starts = getPossibleDoubleValues(startPts);
+    if (starts.contains(null)) return null;
+    if (starts.isEmpty()) starts.add(0.0);
+
+    Set<Double> deltas = getPossibleDoubleValues(deltaPts);
+    if (deltas.contains(null)) return null;
+    if (deltas.isEmpty()) deltas.add(1.0);
+
+    Set<Integer> lengths = HashSetFactory.make();
+    for (Double s : starts)
+      for (Double l : limits)
+        for (Double d : deltas) {
+          if (d == 0.0) return null; // invalid at runtime
+          lengths.add((int) Math.max(0, Math.ceil((l - s) / d)));
+        }
+
+    return lengths.size() == 1 ? lengths.iterator().next() : null;
   }
 }

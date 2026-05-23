@@ -164,6 +164,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_1_2_INT32 =
       new TensorType(INT_32, asList(new NumericDim(1), new NumericDim(2)));
 
+  private static final TensorType TENSOR_1_5_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(1), new NumericDim(5)));
+
+  private static final TensorType TENSOR_1_10_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(1), new NumericDim(10)));
+
   private static final TensorType TENSOR_2_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(2)));
 
@@ -3687,7 +3693,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_1_RAGGED_INT32), 3, Set.of(TENSOR_1_RAGGED_INT32)));
+        Map.of(2, Set.of(TENSOR_1_5_INT32), 3, Set.of(TENSOR_1_5_INT32)));
   }
 
   @Test
@@ -3698,7 +3704,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_1_RAGGED_INT32), 3, Set.of(TENSOR_1_RAGGED_INT32)));
+        Map.of(2, Set.of(TENSOR_1_5_INT32), 3, Set.of(TENSOR_1_5_INT32)));
   }
 
   @Test
@@ -3709,7 +3715,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_1_RAGGED_INT32), 3, Set.of(TENSOR_1_RAGGED_INT32)));
+        Map.of(2, Set.of(TENSOR_1_5_INT32), 3, Set.of(TENSOR_1_5_INT32)));
   }
 
   @Test
@@ -3720,7 +3726,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_1_RAGGED_INT32), 3, Set.of(TENSOR_1_RAGGED_INT32)));
+        Map.of(2, Set.of(TENSOR_1_5_INT32), 3, Set.of(TENSOR_1_5_INT32)));
   }
 
   @Test
@@ -3731,7 +3737,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_1_RAGGED_INT32), 3, Set.of(TENSOR_1_RAGGED_INT32)));
+        Map.of(2, Set.of(TENSOR_1_5_INT32), 3, Set.of(TENSOR_1_5_INT32)));
   }
 
   @Test
@@ -3742,7 +3748,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_1_RAGGED_INT32), 3, Set.of(TENSOR_1_RAGGED_INT32)));
+        Map.of(2, Set.of(TENSOR_1_5_INT32), 3, Set.of(TENSOR_1_5_INT32)));
   }
 
   @Test
@@ -9178,12 +9184,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   @Test
   public void testRaggedRange() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_range.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_RAGGED_INT32)));
+    test("tf2_test_ragged_range.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_10_INT32)));
   }
 
   @Test
   public void testRaggedRange2() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_range2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_RAGGED_INT32)));
+    test("tf2_test_ragged_range2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_10_INT32)));
   }
 
   @Test
@@ -9211,6 +9217,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_ragged_range7.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_RAGGED_INT32)));
   }
 
+  /**
+   * Canonical case for <a href="https://github.com/wala/ML/issues/546">wala/ML#546</a>: {@code
+   * tf.ragged.range(3, 18, 3)} — all three scalar args are compile-time literals, so the inner
+   * length is statically computable: {@code ceil((18 - 3) / 3) = 5}. The analyzer pins {@code (1,
+   * 5)} instead of {@code (1, ragged)}.
+   */
+  @Test
+  public void testRaggedRange8() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_ragged_range8.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_5_INT32)));
+  }
+
   @Test
   public void testRaggedRangeKeyword()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -9220,11 +9237,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         5,
         5,
         Map.of(
-            2, Set.of(TENSOR_1_RAGGED_INT32),
-            3, Set.of(TENSOR_1_RAGGED_INT32),
-            4, Set.of(TENSOR_1_RAGGED_INT32),
-            5, Set.of(TENSOR_1_RAGGED_INT32),
-            6, Set.of(TENSOR_1_RAGGED_INT32)));
+            2, Set.of(TENSOR_1_5_INT32),
+            3, Set.of(TENSOR_1_5_INT32),
+            4, Set.of(TENSOR_1_5_INT32),
+            5, Set.of(TENSOR_1_5_INT32),
+            6, Set.of(TENSOR_1_5_INT32)));
   }
 
   @Test
