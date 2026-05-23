@@ -32,6 +32,12 @@ import java.util.logging.Logger;
  * <p>This class is used to generate a tensor that contains a sequence of numbers, similar to the
  * range function in Python.
  *
+ * <p>Output dtype follows {@code tf.range}'s runtime behaviour: an explicit {@code dtype=} keyword
+ * is honoured; otherwise the dtype is derived from the {@code start}/{@code limit}/{@code delta}
+ * argument types (any float operand promotes the result to {@code float32}), defaulting to {@code
+ * int32} when nothing more precise is available. Fix for <a
+ * href="https://github.com/wala/ML/issues/492">wala/ML#492</a>.
+ *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/range">TensorFlow range
  *     documentation</a>.
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
@@ -241,9 +247,45 @@ public class Range extends TensorGenerator {
     return ret;
   }
 
+  /**
+   * Derives the output dtype from the numeric {@code start}/{@code limit}/{@code delta} arguments
+   * when no explicit {@code dtype=} keyword is supplied, matching {@code tf.range}'s runtime
+   * promotion rule: any float operand promotes the result to {@code float32}, otherwise it stays
+   * {@code int32}. Falls back to {@code int32} when nothing about the operand types is recoverable
+   * (the conservative default at runtime).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The dtype set derived from the numeric arguments, or {@code int32} as a fallback.
+   */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    return EnumSet.of(DType.INT32);
+    OrdinalSet<InstanceKey> argPts = OrdinalSet.empty();
+    argPts =
+        OrdinalSet.unify(
+            argPts,
+            this.getArgumentPointsToSet(
+                builder, getStartParameterPosition(), getStartParameterName()));
+    argPts =
+        OrdinalSet.unify(
+            argPts,
+            this.getArgumentPointsToSet(
+                builder, getLimitParameterPosition(), getLimitParameterName()));
+    argPts =
+        OrdinalSet.unify(
+            argPts,
+            this.getArgumentPointsToSet(
+                builder, getDeltaParameterPosition(), getDeltaParameterName()));
+
+    if (argPts.isEmpty()) return EnumSet.of(DType.INT32);
+
+    Set<DType> derived = this.getDTypesOfValue(builder, argPts);
+    if (derived == null || derived.isEmpty()) return EnumSet.of(DType.INT32);
+
+    // TF's runtime promotion: any float operand promotes the entire result to float32, dropping
+    // integer dtypes from the mix. E.g., `tf.range(0, 5.0)` → float32, not {INT32, FLOAT32}.
+    if (derived.contains(DType.FLOAT32) || derived.contains(DType.FLOAT64))
+      return EnumSet.of(DType.FLOAT32);
+    return derived;
   }
 
   @Override
