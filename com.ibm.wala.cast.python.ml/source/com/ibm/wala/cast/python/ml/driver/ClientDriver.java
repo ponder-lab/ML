@@ -133,7 +133,11 @@ public class ClientDriver implements LanguageClient {
     id.setUri(args[0]);
     HoverParams a = new HoverParams();
     a.setTextDocument(id);
-    for (int i = 1; i < args.length; i += 2) {
+    // Step by 2 so each iteration consumes a `(line, character)` pair. Stop when fewer than two
+    // args remain — `validateArgs` already enforces an odd argv length, but the explicit `i + 1
+    // < args.length` bound also silences CodeQL #5311/#5312 (`java/index-out-of-bounds`), which
+    // doesn't reason across the validation call.
+    for (int i = 1; i + 1 < args.length; i += 2) {
       Position p = new Position();
       try {
         p.setLine(Integer.parseInt(args[i]));
