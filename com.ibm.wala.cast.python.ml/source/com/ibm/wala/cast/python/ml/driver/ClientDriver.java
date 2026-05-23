@@ -135,8 +135,22 @@ public class ClientDriver implements LanguageClient {
     a.setTextDocument(id);
     for (int i = 1; i < args.length; i += 2) {
       Position p = new Position();
-      p.setLine(Integer.parseInt(args[i]));
-      p.setCharacter(Integer.parseInt(args[i + 1]));
+      try {
+        p.setLine(Integer.parseInt(args[i]));
+        p.setCharacter(Integer.parseInt(args[i + 1]));
+      } catch (NumberFormatException e) {
+        System.err.println(
+            "expected integer (line, character) at args["
+                + i
+                + ".."
+                + (i + 1)
+                + "], got: \""
+                + args[i]
+                + "\" \""
+                + args[i + 1]
+                + "\".");
+        System.exit(2);
+      }
       a.setPosition(p);
       CompletableFuture<Hover> data = server.getTextDocumentService().hover(a);
       data.thenAccept(
