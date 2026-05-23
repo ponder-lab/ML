@@ -2869,6 +2869,14 @@ public abstract class TensorGenerator {
         || type.equals(
             TensorFlowTypes.SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass())) {
       return new SoftmaxCrossEntropy(node);
+    } else if (type.equals(TensorFlowTypes.CAST.getDeclaringClass())) {
+      return new Cast(node);
+    } else if (type.equals(TensorFlowTypes.RELU.getDeclaringClass())) {
+      return new Relu(node);
+    } else if (type.equals(TensorFlowTypes.EXPAND_DIMS.getDeclaringClass())) {
+      return new ExpandDims(node);
+    } else if (type.equals(TensorFlowTypes.CLIP_BY_VALUE.getDeclaringClass())) {
+      return new ClipByValue(node);
     } else if (type.equals(CONSTANT.getDeclaringClass())) {
       return new TensorGenerator(node) {
         @Override
