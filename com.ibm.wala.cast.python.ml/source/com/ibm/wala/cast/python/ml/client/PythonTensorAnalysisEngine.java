@@ -805,6 +805,27 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         int receiverVn = prop.getObjectRef();
         PointerKey receiverKey =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, receiverVn);
+        // Containment check: only pin when the PA confirms the receiver is a TF object (Tensor,
+        // feature, etc.). Non-TF Python classes that happen to define a `set_shape` method
+        // shouldn't tip into the tensor analysis. Receivers with empty PTS are still pinned —
+        // tensor variables in this codebase can legitimately have empty PTS (CLAUDE.md note on
+        // PTS-vs-TensorTypeAnalysis), and the syntactic pattern itself is strong evidence in
+        // the TF source files this analyzer targets.
+        OrdinalSet<InstanceKey> recvPts = builder.getPointerAnalysis().getPointsToSet(receiverKey);
+        boolean tfOrUnresolved = recvPts == null || recvPts.isEmpty();
+        if (!tfOrUnresolved) {
+          for (InstanceKey ik : recvPts) {
+            if (ik instanceof AllocationSiteInNode) {
+              String typeName =
+                  ((AllocationSiteInNode) ik).getConcreteType().getReference().getName().toString();
+              if (typeName.contains("tensorflow/")) {
+                tfOrUnresolved = true;
+                break;
+              }
+            }
+          }
+        }
+        if (!tfOrUnresolved) continue;
         try {
           targets.put(
               builder.getPropagationSystem().findOrCreatePointsToSet(receiverKey),
