@@ -271,7 +271,17 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
 
             @Override
             public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
-              return lhs.state.add(setShapeTo) ? CHANGED_AND_FIXED : NOT_CHANGED;
+              // wala/ML#509: `x.set_shape(s)` is a user-supplied shape assertion that should
+              // OVERRIDE any per-op-generator init seed on the receiver, not union with it. The
+              // previous `add`-only semantics caused the cast result's Cast-generator-seeded
+              // `(?, dtype)` to leak into the post-set_shape state alongside the asserted shape.
+              // Clear-then-add mirrors `DropOp`'s clear-state pattern with CHANGED_AND_FIXED.
+              if (lhs.state.size() == 1 && lhs.state.contains(setShapeTo)) {
+                return NOT_CHANGED_AND_FIXED;
+              }
+              lhs.state.clear();
+              lhs.state.add(setShapeTo);
+              return CHANGED_AND_FIXED;
             }
 
             @Override

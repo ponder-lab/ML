@@ -762,6 +762,61 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     return targets;
   }
 
+  /**
+   * Finds {@code x.set_shape(shape)} call sites by scanning the IR directly for {@link
+   * PythonPropertyRead}s of the {@code set_shape} attribute followed by an invoke on the
+   * property-read result. Returns a map keyed by the *receiver's* points-to-set variable (the
+   * {@code x}) to the shape-arg {@link TensorType}.
+   *
+   * <p>The legacy {@link #getShapeSourceCalls} path resolves the {@code set_shape} method via
+   * WALA's call-graph dispatch on the {@code Ltensorflow/functions/set_shape} synthetic class. That
+   * dispatch only fires when the receiver has the {@code set_shape} attribute attached via the
+   * {@code FixedLenFeature.do} {@code <putfield>} chain — broken when {@code tf.cast}'s {@code
+   * pass_through} alias is removed (the freshly-allocated {@code Tensor} has no {@code set_shape}
+   * field). See wala/ML#509.
+   *
+   * <p>Syntactic recognition decouples the {@code set_shape} pin from the attribute-attachment
+   * chain. In TF code, {@code set_shape} unambiguously refers to {@code tf.Tensor.set_shape};
+   * non-TF Python classes don't typically define this method, so the false-positive surface is
+   * effectively zero.
+   *
+   * @param builder The propagation call graph builder.
+   * @return Map from receiver {@link PointsToSetVariable} to the asserted {@link TensorType}.
+   */
+  private Map<PointsToSetVariable, TensorType> getSetShapeCallsSyntactic(
+      PropagationCallGraphBuilder builder) {
+    Map<PointsToSetVariable, TensorType> targets = HashMapFactory.make();
+    for (CGNode caller : builder.getCallGraph()) {
+      com.ibm.wala.ssa.IR ir = caller.getIR();
+      if (ir == null) continue;
+      com.ibm.wala.ssa.SymbolTable st = ir.getSymbolTable();
+      DefUse du = caller.getDU();
+      for (java.util.Iterator<SSAInstruction> it = ir.iterateAllInstructions(); it.hasNext(); ) {
+        SSAInstruction inst = it.next();
+        if (!(inst instanceof PythonInvokeInstruction)) continue;
+        PythonInvokeInstruction call = (PythonInvokeInstruction) inst;
+        if (call.getNumberOfUses() < 2) continue;
+        SSAInstruction targetDef = du.getDef(call.getUse(0));
+        if (!(targetDef instanceof PythonPropertyRead)) continue;
+        PythonPropertyRead prop = (PythonPropertyRead) targetDef;
+        int memberVn = prop.getMemberRef();
+        if (!st.isStringConstant(memberVn)) continue;
+        if (!"set_shape".equals(st.getStringValue(memberVn))) continue;
+        int receiverVn = prop.getObjectRef();
+        PointerKey receiverKey =
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, receiverVn);
+        try {
+          targets.put(
+              builder.getPropagationSystem().findOrCreatePointsToSet(receiverKey),
+              TensorType.shapeArg(caller, call.getUse(1)));
+        } catch (IOException e) {
+          throw new RuntimeException("Error while processing set_shape call: " + call, e);
+        }
+      }
+    }
+    return targets;
+  }
+
   private Set<PointsToSetVariable> getKeysDefinedByCall(
       MethodReference op, PropagationCallGraphBuilder builder) {
     Set<PointsToSetVariable> lvals = HashSetFactory.make();
@@ -876,24 +931,17 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     for (Map.Entry<PointsToSetVariable, TensorType> e : placeholders.entrySet())
       init.put(e.getKey(), Set.of(e.getValue()));
 
-    Map<PointsToSetVariable, TensorType> setCalls = HashMapFactory.make();
-    Map<PointsToSetVariable, TensorType> set_shapes = getShapeSourceCalls(set_shape, builder, 1);
+    // wala/ML#509: recognize `x.set_shape(s)` via IR scanning rather than call-graph dispatch on
+    // the `Ltensorflow/functions/set_shape` synthetic class. The legacy dispatch path requires
+    // the receiver to have the `set_shape` attribute attached (via FixedLenFeature.do's
+    // <putfield>) and breaks when the cast pass_through alias is removed.
+    Map<PointsToSetVariable, TensorType> setCalls = getSetShapeCallsSyntactic(builder);
 
-    for (Map.Entry<PointsToSetVariable, TensorType> x : set_shapes.entrySet()) {
-      LocalPointerKey localPointerKey = (LocalPointerKey) x.getKey().getPointerKey();
-      CGNode setNode = localPointerKey.getNode();
-      int defVn = localPointerKey.getValueNumber();
-      SSAInstruction read = setNode.getDU().getDef(defVn);
-      SSAInstruction call = setNode.getDU().getDef(read.getUse(0));
-
-      PointerKey setKey =
-          builder
-              .getPointerAnalysis()
-              .getHeapModel()
-              .getPointerKeyForLocal(setNode, call.getUse(0));
-
-      setCalls.put(builder.getPropagationSystem().findOrCreatePointsToSet(setKey), x.getValue());
-    }
+    // wala/ML#509: `set_shape` is a user-supplied OVERRIDE of any per-op-generator init seed on
+    // the receiver. Remove receivers from `init` so the SetShapeOp edge transfer is the sole
+    // source of state for those variables; otherwise the meet-time union re-introduces the
+    // generator-seeded type (e.g., Cast generator's (?, float32) on the cast-result variable).
+    for (PointsToSetVariable recv : setCalls.keySet()) init.remove(recv);
 
     // Route subscript results through `setCalls` so `TensorTypeAnalysis`'s edge-transfer replaces
     // predecessor types rather than unioning them — the receiver's pre-subscript shape would
