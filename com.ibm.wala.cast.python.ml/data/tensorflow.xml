@@ -2850,9 +2850,6 @@
       <class name="from_tensor_slices" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#from_tensor_slices -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self tensors name">
-          <!-- NOTE: This block of dataset field initializations is duplicated across all dataset methods (e.g., from_tensor_slices, shuffle, batch) intentionally. Because WALA uses 1-CFA context sensitivity for general methods, if we were to centralize this logic into a single shared helper method (like
-            `read_dataset` or an `init_fields` method), 1-CFA would merge all calls from the user's script to that helper. This would cause all dataset instances in the user's program to share the exact same internal object fields, leading to massive aliasing and loss of precision for tensor shapes/dtypes in chained
-            operations. By inlining these allocations directly into each endpoint's `do` method, each dataset operation gets a unique allocation site, preserving the call site context and preventing aliasing. -->
           <new def="x" class="Ltensorflow/data/Dataset" />
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance*
             via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>`
