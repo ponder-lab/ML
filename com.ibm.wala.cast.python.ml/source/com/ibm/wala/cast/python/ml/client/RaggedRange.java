@@ -62,7 +62,7 @@ public class RaggedRange extends Range {
       OrdinalSet<InstanceKey> startPts = OrdinalSet.empty();
       OrdinalSet<InstanceKey> limitPts = OrdinalSet.empty();
       OrdinalSet<InstanceKey> deltaPts = OrdinalSet.empty();
-      // Track which args the call explicitly provides — distinct from "PTS happens to be empty".
+      // Track which args the call explicitly provides—distinct from "PTS happens to be empty".
       // `getArgumentPointsToSet` can return `OrdinalSet.empty()` for arg-present-but-unresolvable
       // cases too; treating "empty" as "omitted" would make the inferred length unsound.
       boolean startProvided = false;
@@ -70,7 +70,7 @@ public class RaggedRange extends Range {
       boolean deltaProvided = false;
 
       if (numPosArgs == 0) {
-        // Keyword only — fetched below from the keyword-fallback block.
+        // Keyword only—fetched below from the keyword-fallback block.
       } else if (numPosArgs == 1) {
         // range(limits) or range(starts, limits=X)
         if (!this.isKeywordArgumentPresent(builder, Parameters.LIMITS.getName())) {
@@ -203,7 +203,7 @@ public class RaggedRange extends Range {
    * unresolvable, when {@code delta} could be zero (invalid at runtime), or when the cross-product
    * of literal values yields multiple distinct lengths. {@code start}/{@code delta} default to
    * {@code 0}/{@code 1} only when their {@code *Provided} flag is false (the runtime default for an
-   * omitted arg) — empty PTS for a *provided* arg means "unresolvable" and forces a fallback to
+   * omitted arg)—empty PTS for a *provided* arg means "unresolvable" and forces a fallback to
    * {@code RaggedDim}.
    *
    * @param startPts Points-to set of the {@code start} argument; consulted only when {@code
