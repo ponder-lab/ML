@@ -69,7 +69,6 @@
         <new def="FixedLenFeature" class="Ltensorflow/functions/FixedLenFeature" />
         <putfield class="LRoot" field="FixedLenFeature" fieldType="LRoot" ref="x" value="FixedLenFeature" />
         <new def="pass_through" class="Ltensorflow/functions/pass_through" />
-        <putfield class="LRoot" field="cast" fieldType="LRoot" ref="x" value="pass_through" />
         <putfield class="LRoot" field="decode_raw" fieldType="LRoot" ref="x" value="pass_through" />
         <new def="estimator" class="Lobject" />
         <putfield class="LRoot" field="estimator" fieldType="LRoot" ref="x" value="estimator" />
