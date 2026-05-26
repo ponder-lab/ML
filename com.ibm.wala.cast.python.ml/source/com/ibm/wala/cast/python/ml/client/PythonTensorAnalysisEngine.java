@@ -41,9 +41,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationSystem;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.nCFAContextSelector;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ssa.DefUse;
+import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
@@ -787,11 +789,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       PropagationCallGraphBuilder builder) {
     Map<PointsToSetVariable, TensorType> targets = HashMapFactory.make();
     for (CGNode caller : builder.getCallGraph()) {
-      com.ibm.wala.ssa.IR ir = caller.getIR();
+      IR ir = caller.getIR();
       if (ir == null) continue;
-      com.ibm.wala.ssa.SymbolTable st = ir.getSymbolTable();
+      SymbolTable st = ir.getSymbolTable();
       DefUse du = caller.getDU();
-      for (java.util.Iterator<SSAInstruction> it = ir.iterateAllInstructions(); it.hasNext(); ) {
+      for (Iterator<SSAInstruction> it = ir.iterateAllInstructions(); it.hasNext(); ) {
         SSAInstruction inst = it.next();
         if (!(inst instanceof PythonInvokeInstruction)) continue;
         PythonInvokeInstruction call = (PythonInvokeInstruction) inst;
