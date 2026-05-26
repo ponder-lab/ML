@@ -5973,6 +5973,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/509">wala/ML#509</a>: a
+   * user-defined class that happens to define a {@code set_shape} method must not be classified as
+   * a tensor by the static analysis. The {@code set_shape} recognition path must restrict pinning
+   * to actual tensor types and let non-tensor receivers fall through untouched.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testSetShapeNonTensorReceiver()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_set_shape_non_tensor.py", "consume", 0, 0, Map.of());
+  }
+
+  /**
    * Generator-dispatch test for {@code tf.expand_dims(input, axis)}. The dedicated {@link
    * com.ibm.wala.cast.python.ml.client.ExpandDims} generator overrides {@code getDefaultShapes} to
    * ⊤ pending an axis-aware shape composer. Replacing the stale {@code array_ops.expand_dims}
