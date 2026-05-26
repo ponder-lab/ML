@@ -4,6 +4,10 @@ import static com.google.common.collect.Sets.newHashSet;
 import static com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory.getGenerator;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATA_PACKAGE_PREFIX;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR_FUNCTIONS_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_FUNCTIONS_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_TYPE;
 import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 
@@ -41,9 +45,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationSystem;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.nCFAContextSelector;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ssa.DefUse;
+import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
@@ -151,12 +157,18 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               TypeName.string2TypeName("Ltensorflow/functions/placeholder")),
           AstMethodReference.fnSelector);
 
-  private static final MethodReference set_shape =
-      MethodReference.findOrCreate(
-          TypeReference.findOrCreate(
-              PythonTypes.pythonLoader,
-              TypeName.string2TypeName("Ltensorflow/functions/set_shape")),
-          AstMethodReference.fnSelector);
+  /** The Python attribute name for {@code tf.Tensor.set_shape}, used by the IR-syntactic scan. */
+  private static final String SET_SHAPE_ATTRIBUTE = "set_shape";
+
+  /**
+   * WALA allocation types whose Python counterparts expose a public {@code set_shape} method
+   * ({@code tf.Tensor} and {@code tf.SparseTensor}). Used as a receiver-type whitelist by {@link
+   * #getSetShapeCallsSyntactic} to filter out non-tensor receivers that happen to invoke {@code
+   * set_shape}. {@code tf.RaggedTensor} and {@code tf.IndexedSlices} aren't included pending
+   * verified test fixtures.
+   */
+  private static final Set<TypeReference> SET_SHAPE_RECEIVER_TYPES =
+      Set.of(TENSOR_FUNCTIONS_TYPE, TENSOR_TYPE, SPARSE_TENSOR_FUNCTIONS_TYPE, SPARSE_TENSOR_TYPE);
 
   private static final MethodReference convert_to_tensor =
       MethodReference.findOrCreate(
@@ -757,6 +769,105 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     return targets;
   }
 
+  /**
+   * Finds {@code x.set_shape(shape)} call sites by scanning the IR directly for {@link
+   * PythonPropertyRead}s of the {@code set_shape} attribute followed by an invoke on the
+   * property-read result. Returns a map keyed by the *receiver's* points-to-set variable (the
+   * {@code x}) to the shape-arg {@link TensorType}.
+   *
+   * <p>The legacy {@link #getShapeSourceCalls} path resolves the {@code set_shape} method via
+   * WALA's call-graph dispatch on the {@code Ltensorflow/functions/set_shape} synthetic class. That
+   * dispatch only fires when the receiver has the {@code set_shape} attribute attached via the
+   * {@code FixedLenFeature.do} {@code <putfield>} chain — broken when {@code tf.cast}'s {@code
+   * pass_through} alias is removed (the freshly-allocated {@code Tensor} has no {@code set_shape}
+   * field). See wala/ML#509.
+   *
+   * <p>Syntactic recognition decouples the {@code set_shape} pin from the attribute-attachment
+   * chain. False positives are possible—any Python class can define a {@code set_shape} method, and
+   * a user-defined class that happens to do so would otherwise tip into the tensor analysis. The
+   * {@link #SET_SHAPE_RECEIVER_TYPES} whitelist is a required safeguard: receivers whose PA
+   * allocation type isn't in the whitelist are skipped, with the empty-PTS allowance documented
+   * inline at the containment-check site. {@code testSetShapeNonTensorReceiver} is the regression
+   * guard for this filtering.
+   *
+   * @param builder The propagation call graph builder.
+   * @return Map from receiver {@link PointsToSetVariable} to the asserted {@link TensorType}.
+   */
+  private Map<PointsToSetVariable, TensorType> getSetShapeCallsSyntactic(
+      PropagationCallGraphBuilder builder) {
+    Map<PointsToSetVariable, TensorType> targets = HashMapFactory.make();
+    for (CGNode caller : builder.getCallGraph()) {
+      IR ir = caller.getIR();
+      if (ir == null) continue;
+      SymbolTable st = ir.getSymbolTable();
+      DefUse du = caller.getDU();
+      // Walk every SSA instruction in the caller's IR. We are looking for the two-instruction
+      // pattern that a Python attribute-call lowers into: a `PythonPropertyRead` defining the
+      // call target, followed by a `PythonInvokeInstruction` consuming that target.
+      for (Iterator<SSAInstruction> it = ir.iterateAllInstructions(); it.hasNext(); ) {
+        SSAInstruction inst = it.next();
+        if (!(inst instanceof PythonInvokeInstruction)) continue;
+        PythonInvokeInstruction call = (PythonInvokeInstruction) inst;
+        // Python invoke uses are `[callTarget, arg1, arg2, ...]`; there is no explicit receiver
+        // slot in the invoke. `use(0)` is the call target (the `PythonPropertyRead` result), and
+        // `use(1)` is the first positional argument — for `x.set_shape(shape)`, that's the shape.
+        // The receiver `x` is recovered separately below from the property-read's `objectRef`.
+        // We need at least the call target plus one argument to identify an `x.set_shape(shape)`
+        // site, so skip invokes with fewer than 2 uses.
+        if (call.getNumberOfUses() < 2) continue;
+        // Resolve the call target's defining instruction. If the target wasn't produced by a
+        // property read, this isn't an attribute call (could be a function-typed local, a
+        // closure, etc.) and we ignore it.
+        SSAInstruction targetDef = du.getDef(call.getUse(0));
+        if (!(targetDef instanceof PythonPropertyRead)) continue;
+        PythonPropertyRead prop = (PythonPropertyRead) targetDef;
+        // The property-read's `memberRef` value-number identifies the attribute name. We only
+        // pin on the literal string `"set_shape"`; dynamic attribute names (rare in TF source)
+        // can't be matched syntactically and are out of scope.
+        int memberVn = prop.getMemberRef();
+        if (!st.isStringConstant(memberVn)) continue;
+        if (!SET_SHAPE_ATTRIBUTE.equals(st.getStringValue(memberVn))) continue;
+        // The property-read's `objectRef` value-number is the receiver — the `x` in
+        // `x.set_shape(shape)`. That's what we pin to the asserted shape.
+        int receiverVn = prop.getObjectRef();
+        PointerKey receiverKey =
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, receiverVn);
+        // Containment check: only pin when the receiver's PA allocation type is one that
+        // supports `set_shape` in real TF. See `SET_SHAPE_RECEIVER_TYPES` for the whitelist.
+        //
+        // Receivers with empty PTS are still pinned. Empty PTS occurs when a TF API in the call
+        // chain upstream of the `set_shape` site has no XML summary (or the summary doesn't
+        // model its return as a fresh allocation) — see CLAUDE.md, "PTS vs `TensorTypeAnalysis`".
+        // The syntactic `set_shape` pattern itself is strong evidence in the TF source files
+        // this analyzer targets, so pinning on empty PTS is correct-on-balance.
+        OrdinalSet<InstanceKey> recvPts = builder.getPointerAnalysis().getPointsToSet(receiverKey);
+        boolean receiverEligible = recvPts == null || recvPts.isEmpty();
+        if (!receiverEligible) {
+          for (InstanceKey ik : recvPts) {
+            // Use the `getAllocationSiteInNode` helper to unwrap `ScopeMappingInstanceKey` /
+            // `ConstantKey` wrappers — mirrors the pattern used at lines 386 and 714 of this
+            // file and avoids missing tensor receivers that flow through closures or constants.
+            AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+            if (asin != null
+                && SET_SHAPE_RECEIVER_TYPES.contains(asin.getConcreteType().getReference())) {
+              receiverEligible = true;
+              break;
+            }
+          }
+        }
+        if (!receiverEligible) continue;
+        try {
+          targets.put(
+              builder.getPropagationSystem().findOrCreatePointsToSet(receiverKey),
+              TensorType.shapeArg(caller, call.getUse(1)));
+        } catch (IOException e) {
+          throw new RuntimeException("Error while processing set_shape call: " + call, e);
+        }
+      }
+    }
+    return targets;
+  }
+
   private Set<PointsToSetVariable> getKeysDefinedByCall(
       MethodReference op, PropagationCallGraphBuilder builder) {
     Set<PointsToSetVariable> lvals = HashSetFactory.make();
@@ -871,24 +982,17 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     for (Map.Entry<PointsToSetVariable, TensorType> e : placeholders.entrySet())
       init.put(e.getKey(), Set.of(e.getValue()));
 
-    Map<PointsToSetVariable, TensorType> setCalls = HashMapFactory.make();
-    Map<PointsToSetVariable, TensorType> set_shapes = getShapeSourceCalls(set_shape, builder, 1);
+    // wala/ML#509: recognize `x.set_shape(s)` via IR scanning rather than call-graph dispatch on
+    // the `Ltensorflow/functions/set_shape` synthetic class. The legacy dispatch path requires
+    // the receiver to have the `set_shape` attribute attached (via FixedLenFeature.do's
+    // <putfield>) and breaks when the cast pass_through alias is removed.
+    Map<PointsToSetVariable, TensorType> setCalls = getSetShapeCallsSyntactic(builder);
 
-    for (Map.Entry<PointsToSetVariable, TensorType> x : set_shapes.entrySet()) {
-      LocalPointerKey localPointerKey = (LocalPointerKey) x.getKey().getPointerKey();
-      CGNode setNode = localPointerKey.getNode();
-      int defVn = localPointerKey.getValueNumber();
-      SSAInstruction read = setNode.getDU().getDef(defVn);
-      SSAInstruction call = setNode.getDU().getDef(read.getUse(0));
-
-      PointerKey setKey =
-          builder
-              .getPointerAnalysis()
-              .getHeapModel()
-              .getPointerKeyForLocal(setNode, call.getUse(0));
-
-      setCalls.put(builder.getPropagationSystem().findOrCreatePointsToSet(setKey), x.getValue());
-    }
+    // wala/ML#509: `set_shape` is a user-supplied OVERRIDE of any per-op-generator init seed on
+    // the receiver. Remove receivers from `init` so the SetShapeOp edge transfer is the sole
+    // source of state for those variables; otherwise the meet-time union re-introduces the
+    // generator-seeded type (e.g., Cast generator's (?, float32) on the cast-result variable).
+    for (PointsToSetVariable recv : setCalls.keySet()) init.remove(recv);
 
     // Route subscript results through `setCalls` so `TensorTypeAnalysis`'s edge-transfer replaces
     // predecessor types rather than unioning them — the receiver's pre-subscript shape would
