@@ -158,11 +158,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               TypeName.string2TypeName("Ltensorflow/functions/placeholder")),
           AstMethodReference.fnSelector);
 
+  /** The Python attribute name for {@code tf.Tensor.set_shape}, used by the IR-syntactic scan. */
+  private static final String SET_SHAPE_ATTRIBUTE = "set_shape";
+
   private static final MethodReference set_shape =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
               PythonTypes.pythonLoader,
-              TypeName.string2TypeName("Ltensorflow/functions/set_shape")),
+              TypeName.string2TypeName("Ltensorflow/functions/" + SET_SHAPE_ATTRIBUTE)),
           AstMethodReference.fnSelector);
 
   private static final MethodReference convert_to_tensor =
@@ -815,7 +818,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         // can't be matched syntactically and are out of scope.
         int memberVn = prop.getMemberRef();
         if (!st.isStringConstant(memberVn)) continue;
-        if (!"set_shape".equals(st.getStringValue(memberVn))) continue;
+        if (!SET_SHAPE_ATTRIBUTE.equals(st.getStringValue(memberVn))) continue;
         // The property-read's `objectRef` value-number is the receiver — the `x` in
         // `x.set_shape(shape)`. That's what we pin to the asserted shape.
         int receiverVn = prop.getObjectRef();
@@ -828,20 +831,20 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         // PTS-vs-TensorTypeAnalysis), and the syntactic pattern itself is strong evidence in
         // the TF source files this analyzer targets.
         OrdinalSet<InstanceKey> recvPts = builder.getPointerAnalysis().getPointsToSet(receiverKey);
-        boolean tfOrUnresolved = recvPts == null || recvPts.isEmpty();
-        if (!tfOrUnresolved) {
+        boolean receiverEligible = recvPts == null || recvPts.isEmpty();
+        if (!receiverEligible) {
           for (InstanceKey ik : recvPts) {
             if (ik instanceof AllocationSiteInNode) {
               String typeName =
                   ((AllocationSiteInNode) ik).getConcreteType().getReference().getName().toString();
               if (typeName.contains("tensorflow/")) {
-                tfOrUnresolved = true;
+                receiverEligible = true;
                 break;
               }
             }
           }
         }
-        if (!tfOrUnresolved) continue;
+        if (!receiverEligible) continue;
         try {
           targets.put(
               builder.getPropagationSystem().findOrCreatePointsToSet(receiverKey),
