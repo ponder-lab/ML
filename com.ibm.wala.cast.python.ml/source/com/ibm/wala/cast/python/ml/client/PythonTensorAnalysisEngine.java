@@ -162,18 +162,18 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   private static final String SET_SHAPE_ATTRIBUTE = "set_shape";
 
   /**
-   * Fully-qualified WALA allocation-type names whose Python counterparts expose a public {@code
-   * set_shape} method ({@code tf.Tensor} and {@code tf.SparseTensor}). Used as a receiver-type
-   * whitelist by {@link #getSetShapeCallsSyntactic} to filter out non-tensor receivers that happen
-   * to invoke {@code set_shape}. {@code tf.RaggedTensor} and {@code tf.IndexedSlices} aren't
-   * included pending verified test fixtures.
+   * WALA allocation types whose Python counterparts expose a public {@code set_shape} method
+   * ({@code tf.Tensor} and {@code tf.SparseTensor}). Used as a receiver-type whitelist by {@link
+   * #getSetShapeCallsSyntactic} to filter out non-tensor receivers that happen to invoke {@code
+   * set_shape}. {@code tf.RaggedTensor} and {@code tf.IndexedSlices} aren't included pending
+   * verified test fixtures.
    */
-  private static final Set<String> SET_SHAPE_RECEIVER_TYPES =
+  private static final Set<TypeReference> SET_SHAPE_RECEIVER_TYPES =
       Set.of(
-          "Ltensorflow/functions/Tensor",
-          "Ltensorflow/python/framework/ops/Tensor",
-          "Ltensorflow/functions/SparseTensor",
-          "Ltensorflow/python/framework/sparse_tensor/SparseTensor");
+          TensorFlowTypes.TENSOR_FUNCTIONS_TYPE,
+          TensorFlowTypes.TENSOR_TYPE,
+          TensorFlowTypes.SPARSE_TENSOR_FUNCTIONS_TYPE,
+          TensorFlowTypes.SPARSE_TENSOR_TYPE);
 
   private static final MethodReference convert_to_tensor =
       MethodReference.findOrCreate(
@@ -850,12 +850,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             // `ConstantKey` wrappers — mirrors the pattern used at lines 386 and 714 of this
             // file and avoids missing tensor receivers that flow through closures or constants.
             AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-            if (asin != null) {
-              String typeName = asin.getConcreteType().getReference().getName().toString();
-              if (SET_SHAPE_RECEIVER_TYPES.contains(typeName)) {
-                receiverEligible = true;
-                break;
-              }
+            if (asin != null
+                && SET_SHAPE_RECEIVER_TYPES.contains(asin.getConcreteType().getReference())) {
+              receiverEligible = true;
+              break;
             }
           }
         }
