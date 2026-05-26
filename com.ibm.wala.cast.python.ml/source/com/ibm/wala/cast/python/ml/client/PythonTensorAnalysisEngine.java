@@ -817,9 +817,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         SSAInstruction inst = it.next();
         if (!(inst instanceof PythonInvokeInstruction)) continue;
         PythonInvokeInstruction call = (PythonInvokeInstruction) inst;
-        // `use(0)` of a Python invoke is the call target (the property-read result); `use(1)` is
-        // the receiver. We need both to identify an `x.set_shape(shape)` site, so skip invokes
-        // with fewer than 2 uses (e.g., zero-arg property invocations).
+        // Python invoke uses are `[callTarget, arg1, arg2, ...]`; there is no explicit receiver
+        // slot in the invoke. `use(0)` is the call target (the `PythonPropertyRead` result), and
+        // `use(1)` is the first positional argument — for `x.set_shape(shape)`, that's the shape.
+        // The receiver `x` is recovered separately below from the property-read's `objectRef`.
+        // We need at least the call target plus one argument to identify an `x.set_shape(shape)`
+        // site, so skip invokes with fewer than 2 uses.
         if (call.getNumberOfUses() < 2) continue;
         // Resolve the call target's defining instruction. If the target wasn't produced by a
         // property read, this isn't an attribute call (could be a function-typed local, a
