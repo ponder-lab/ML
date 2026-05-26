@@ -156,7 +156,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               TypeName.string2TypeName("Ltensorflow/functions/placeholder")),
           AstMethodReference.fnSelector);
 
-  // TODO(wala/ML#550): With `set_shape` now declared as a `<method>` on each of the four
+  // TODO(https://github.com/wala/ML/issues/550): With `set_shape` now declared as a `<method>` on
+  // each of the four
   // Tensor/SparseTensor classes (see `tensorflow.xml`), the legacy
   // `Ltensorflow/functions/set_shape`
   // standalone-class dispatch path no longer reaches the recognition sites. Replace this single
