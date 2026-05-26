@@ -253,7 +253,13 @@ public class RaggedRange extends Range {
       for (Double l : limits)
         for (Double d : deltas) {
           if (d == 0.0) return null; // invalid at runtime
+          // NaN/Infinity would silently degrade through `(int) Math.ceil(NaN) == 0`, pinning a
+          // bogus `NumericDim(0)` instead of falling back to `RaggedDim`. Force the fallback.
+          if (!Double.isFinite(s) || !Double.isFinite(l) || !Double.isFinite(d)) return null;
           lengths.add((int) Math.max(0, Math.ceil((l - s) / d)));
+          // Short-circuit: the caller only needs to know whether there's exactly one distinct
+          // length; finishing the cross-product once we've seen two is wasted work.
+          if (lengths.size() > 1) return null;
         }
 
     return lengths.size() == 1 ? lengths.iterator().next() : null;
