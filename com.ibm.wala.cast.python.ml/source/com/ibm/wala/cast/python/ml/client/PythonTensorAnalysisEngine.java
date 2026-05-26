@@ -175,13 +175,6 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           "Ltensorflow/functions/SparseTensor",
           "Ltensorflow/python/framework/sparse_tensor/SparseTensor");
 
-  private static final MethodReference set_shape =
-      MethodReference.findOrCreate(
-          TypeReference.findOrCreate(
-              PythonTypes.pythonLoader,
-              TypeName.string2TypeName("Ltensorflow/functions/" + SET_SHAPE_ATTRIBUTE)),
-          AstMethodReference.fnSelector);
-
   private static final MethodReference convert_to_tensor =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
@@ -853,9 +846,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         boolean receiverEligible = recvPts == null || recvPts.isEmpty();
         if (!receiverEligible) {
           for (InstanceKey ik : recvPts) {
-            if (ik instanceof AllocationSiteInNode) {
-              String typeName =
-                  ((AllocationSiteInNode) ik).getConcreteType().getReference().getName().toString();
+            // Use the `getAllocationSiteInNode` helper to unwrap `ScopeMappingInstanceKey` /
+            // `ConstantKey` wrappers — mirrors the pattern used at lines 386 and 714 of this
+            // file and avoids missing tensor receivers that flow through closures or constants.
+            AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+            if (asin != null) {
+              String typeName = asin.getConcreteType().getReference().getName().toString();
               if (SET_SHAPE_RECEIVER_TYPES.contains(typeName)) {
                 receiverEligible = true;
                 break;
