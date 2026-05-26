@@ -793,17 +793,31 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       if (ir == null) continue;
       SymbolTable st = ir.getSymbolTable();
       DefUse du = caller.getDU();
+      // Walk every SSA instruction in the caller's IR. We are looking for the two-instruction
+      // pattern that a Python attribute-call lowers into: a `PythonPropertyRead` defining the
+      // call target, followed by a `PythonInvokeInstruction` consuming that target.
       for (Iterator<SSAInstruction> it = ir.iterateAllInstructions(); it.hasNext(); ) {
         SSAInstruction inst = it.next();
         if (!(inst instanceof PythonInvokeInstruction)) continue;
         PythonInvokeInstruction call = (PythonInvokeInstruction) inst;
+        // `use(0)` of a Python invoke is the call target (the property-read result); `use(1)` is
+        // the receiver. We need both to identify an `x.set_shape(shape)` site, so skip invokes
+        // with fewer than 2 uses (e.g., zero-arg property invocations).
         if (call.getNumberOfUses() < 2) continue;
+        // Resolve the call target's defining instruction. If the target wasn't produced by a
+        // property read, this isn't an attribute call (could be a function-typed local, a
+        // closure, etc.) and we ignore it.
         SSAInstruction targetDef = du.getDef(call.getUse(0));
         if (!(targetDef instanceof PythonPropertyRead)) continue;
         PythonPropertyRead prop = (PythonPropertyRead) targetDef;
+        // The property-read's `memberRef` value-number identifies the attribute name. We only
+        // pin on the literal string `"set_shape"`; dynamic attribute names (rare in TF source)
+        // can't be matched syntactically and are out of scope.
         int memberVn = prop.getMemberRef();
         if (!st.isStringConstant(memberVn)) continue;
         if (!"set_shape".equals(st.getStringValue(memberVn))) continue;
+        // The property-read's `objectRef` value-number is the receiver — the `x` in
+        // `x.set_shape(shape)`. That's what we pin to the asserted shape.
         int receiverVn = prop.getObjectRef();
         PointerKey receiverKey =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, receiverVn);
