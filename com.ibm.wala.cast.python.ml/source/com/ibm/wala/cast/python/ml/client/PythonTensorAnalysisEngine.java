@@ -824,12 +824,19 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         int receiverVn = prop.getObjectRef();
         PointerKey receiverKey =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, receiverVn);
-        // Containment check: only pin when the PA confirms the receiver is a TF object (Tensor,
-        // feature, etc.). Non-TF Python classes that happen to define a `set_shape` method
-        // shouldn't tip into the tensor analysis. Receivers with empty PTS are still pinned —
-        // tensor variables in this codebase can legitimately have empty PTS (CLAUDE.md note on
-        // PTS-vs-TensorTypeAnalysis), and the syntactic pattern itself is strong evidence in
-        // the TF source files this analyzer targets.
+        // Containment check: only pin when the receiver's PA allocation type is one that supports
+        // `set_shape` in real TF — `tf.Tensor` and `tf.SparseTensor` (both expose a public
+        // `set_shape`). Other tensor-like types (RaggedTensor, IndexedSlices) aren't currently
+        // included; add them here if a test fixture surfaces one with `set_shape`.
+        //
+        // Receivers with empty PTS are still pinned. Empty PTS is not the design intent of the
+        // PA — it's a propagation gap: XML summaries don't always flow allocations correctly to
+        // all consumers (CLAUDE.md, "PTS vs `TensorTypeAnalysis`"). In particular,
+        // `pass_through.do`
+        // returns its `data` argument verbatim with no fresh `<new>`, so a Tensor flowing through
+        // it loses allocation-site context at the receiver. The syntactic `set_shape` pattern is
+        // strong evidence in the TF source files this analyzer targets, so pinning on empty PTS
+        // is correct-on-balance even though it's a workaround for the summary-propagation gap.
         OrdinalSet<InstanceKey> recvPts = builder.getPointerAnalysis().getPointsToSet(receiverKey);
         boolean receiverEligible = recvPts == null || recvPts.isEmpty();
         if (!receiverEligible) {
@@ -837,7 +844,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             if (ik instanceof AllocationSiteInNode) {
               String typeName =
                   ((AllocationSiteInNode) ik).getConcreteType().getReference().getName().toString();
-              if (typeName.contains("tensorflow/")) {
+              if (typeName.endsWith("/Tensor") || typeName.endsWith("/SparseTensor")) {
                 receiverEligible = true;
                 break;
               }
