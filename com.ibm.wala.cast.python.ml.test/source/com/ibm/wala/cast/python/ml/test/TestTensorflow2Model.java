@@ -9228,6 +9228,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_ragged_range8.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_5_INT32)));
   }
 
+  /**
+   * Multi-length fallback case for <a href="https://github.com/wala/ML/issues/546">wala/ML#546</a>:
+   * {@code start} resolves to two literal values via an if/else, so the cross-product yields
+   * lengths {@code {10, 8}}. {@code computeStaticInnerLength} returns {@code null} and the inner
+   * dim falls back to {@code RaggedDim}.
+   */
+  @Test
+  public void testRaggedRange9() throws ClassHierarchyException, CancelException, IOException {
+    test("tf2_test_ragged_range9.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_RAGGED_INT32)));
+  }
+
   @Test
   public void testRaggedRangeKeyword()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
