@@ -21,4 +21,5 @@ else:
 r = tf.ragged.range(s, 10, 1)
 assert isinstance(r, tf.RaggedTensor)
 assert r.shape == (1, None)
+assert r.dtype == tf.int32
 f(r)
