@@ -151,22 +151,45 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               TypeName.string2TypeName("Ltensorflow/functions/placeholder")),
           AstMethodReference.fnSelector);
 
-  // TODO(https://github.com/wala/ML/issues/550): With `set_shape` now declared as a `<method>` on
-  // each of the four
-  // Tensor/SparseTensor classes (see `tensorflow.xml`), the legacy
-  // `Ltensorflow/functions/set_shape`
-  // standalone-class dispatch path no longer reaches the recognition sites. Replace this single
-  // `MethodReference` with a `Set<MethodReference>` (one per Tensor/SparseTensor class, using
-  // `TensorFlowTypes.{TENSOR_TYPE, TENSOR_FUNCTIONS_TYPE, SPARSE_TENSOR_TYPE,
-  // SPARSE_TENSOR_FUNCTIONS_TYPE}`) and union the `getShapeSourceCalls` results across them.
-  // Pre-condition for this draft: works empirically only after the loop is implemented. Current
-  // state of this branch leaves the legacy reference in place; testEx1CG fails accordingly.
-  private static final MethodReference set_shape =
-      MethodReference.findOrCreate(
-          TypeReference.findOrCreate(
-              PythonTypes.pythonLoader,
-              TypeName.string2TypeName("Ltensorflow/functions/set_shape")),
-          AstMethodReference.fnSelector);
+  /** The Python attribute name for {@code tf.Tensor.set_shape}. */
+  private static final String SET_SHAPE_ATTRIBUTE = "set_shape";
+
+  /**
+   * Builds the {@link MethodReference} for the synthesized class that WALA's Python frontend
+   * generates from a {@code <method name="set_shape">} declaration inside a {@code <class>} block
+   * in `tensorflow.xml`. The synthesized class name is {@code <declaringClass>/set_shape} with a
+   * {@code do()} method, so the dispatch target uses that synthesized type plus the standard {@code
+   * fnSelector}.
+   *
+   * <p>NOTE (https://github.com/wala/ML/issues/550): targeting the {@code do()} form alone is not
+   * sufficient. User code's {@code tensor.set_shape(...)} invokes a TRAMPOLINE ({@code
+   * L$<declaringClass>/set_shape.trampoline<N>()LRoot;}, per {@code
+   * PythonInstanceMethodTrampolineTargetSelector}) which in turn dispatches to the {@code do()}.
+   * Finishing the wiring requires either also constructing the trampoline {@link MethodReference}
+   * (using the `$`-prefixed class name and {@code trampoline<numTotalParameters>} method name) or
+   * extracting the receiver from the call's `PythonPropertyRead.objectRef` the way
+   * `getSetShapeCallsSyntactic` does on the alternative IR-syntactic branch.
+   */
+  private static MethodReference setShapeMethodOn(TypeReference declaringClass) {
+    return MethodReference.findOrCreate(
+        TypeReference.findOrCreate(
+            PythonTypes.pythonLoader,
+            TypeName.string2TypeName(
+                declaringClass.getName().toString() + "/" + SET_SHAPE_ATTRIBUTE)),
+        AstMethodReference.fnSelector);
+  }
+
+  /**
+   * Union of the four Tensor/SparseTensor {@code set_shape} dispatch targets (wala/ML#550).
+   * Currently insufficient on its own — see {@link #setShapeMethodOn} for the trampoline-vs-do()
+   * distinction that prevents the user code's invoke from being found.
+   */
+  private static final Set<MethodReference> SET_SHAPE_METHODS =
+      Set.of(
+          setShapeMethodOn(TensorFlowTypes.TENSOR_FUNCTIONS_TYPE),
+          setShapeMethodOn(TensorFlowTypes.TENSOR_TYPE),
+          setShapeMethodOn(TensorFlowTypes.SPARSE_TENSOR_FUNCTIONS_TYPE),
+          setShapeMethodOn(TensorFlowTypes.SPARSE_TENSOR_TYPE));
 
   private static final MethodReference convert_to_tensor =
       MethodReference.findOrCreate(
@@ -882,7 +905,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       init.put(e.getKey(), Set.of(e.getValue()));
 
     Map<PointsToSetVariable, TensorType> setCalls = HashMapFactory.make();
-    Map<PointsToSetVariable, TensorType> set_shapes = getShapeSourceCalls(set_shape, builder, 1);
+    // wala/ML#550: dispatch is routed through one synthesized class per Tensor/SparseTensor block
+    // in `tensorflow.xml`, so we union the results across all entries in `SET_SHAPE_METHODS`.
+    Map<PointsToSetVariable, TensorType> set_shapes = HashMapFactory.make();
+    for (MethodReference setShapeMethod : SET_SHAPE_METHODS) {
+      set_shapes.putAll(getShapeSourceCalls(setShapeMethod, builder, 1));
+    }
 
     for (Map.Entry<PointsToSetVariable, TensorType> x : set_shapes.entrySet()) {
       LocalPointerKey localPointerKey = (LocalPointerKey) x.getKey().getPointerKey();
