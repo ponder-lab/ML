@@ -83,8 +83,8 @@ PythonTensorAnalysisEngine.performAnalysis()
 
 WALA's Pointer Analysis (PA) and `TensorTypeAnalysis` serve different roles:
 
-- The **PA** provides the assignment graph (edges between variables) and points-to sets (PTS). However, PTS for tensor variables is **often empty** — the XML summaries don't always create allocations that flow correctly through the PA to all consumers.
-- **`TensorTypeAnalysis`** is a parallel type system that uses the PA's assignment graph as its flow graph but seeds tensor types independently via syntactic markers (`read_data`/`read_dataset` method names in `tensorflow.xml`). Variables with empty PTS can still have tensor types in this analysis.
+- The **PA** provides the assignment graph (edges between variables) and points-to sets (PTS). However, PTS for tensor variables is **often empty by design** — `tensorflow.xml` models many APIs via `<method name="read_data">` (or `read_dataset`) synthetic markers rather than `do()` with `<new>+<return>`. `read_data` exists to seed `TensorTypeAnalysis` syntactically; it does not produce a PA-level allocation. As a result, formal parameters of downstream APIs (e.g. `tf.Variable.do()`'s `initial_value`) and dataset-iteration `element` values receive empty PTS even though every API in the chain is modeled. Empirically validated 2026-05-26: 14/14 empty-PTS tensor variables observed across a representative test set traced to the `read_data` convention or iteration-element extraction; zero traced to missing summaries.
+- **`TensorTypeAnalysis`** is a parallel type system that uses the PA's assignment graph as its flow graph but seeds tensor types independently via syntactic markers (`read_data`/`read_dataset` method names in `tensorflow.xml`). Variables with empty PTS can still — and routinely do — have tensor types in this analysis.
 
 When debugging why a tensor variable isn't recognized, check the `TensorTypeAnalysis` seeding path (`getDataflowSources`, `processInstruction`, `definesTensorIterable`), not just the PTS. An empty PTS doesn't mean the variable isn't a tensor — it means the seeding didn't reach it.
 
