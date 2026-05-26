@@ -16,6 +16,7 @@ import static java.util.Collections.emptySet;
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
 import com.ibm.wala.classLoader.IField;
@@ -233,18 +234,18 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
                     // Empty list of rowids?
                     possibleRowDims.add(new NumericDim(0));
                   } else {
-                    possibleRowDims.add(null);
+                    possibleRowDims.add(DynamicDim.INSTANCE);
                   }
                 } else {
-                  possibleRowDims.add(null);
+                  possibleRowDims.add(DynamicDim.INSTANCE);
                 }
               } else {
-                possibleRowDims.add(null);
+                possibleRowDims.add(DynamicDim.INSTANCE);
               }
             } else {
               for (Long n : nrowsArgs) {
                 if (n != null) possibleRowDims.add(new NumericDim(n.intValue()));
-                else possibleRowDims.add(null);
+                else possibleRowDims.add(DynamicDim.INSTANCE);
               }
             }
           }
@@ -253,7 +254,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
     }
 
     if (possibleK.isEmpty()) possibleK.add(null);
-    if (possibleRowDims.isEmpty()) possibleRowDims.add(null);
+    if (possibleRowDims.isEmpty()) possibleRowDims.add(DynamicDim.INSTANCE);
 
     // Values shape
     OrdinalSet<InstanceKey> valuesPts =

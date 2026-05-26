@@ -4,6 +4,7 @@ import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -134,28 +135,39 @@ public class Input extends Ones {
       }
     }
 
-    if (batchSizes.isEmpty()) batchSizes.add(null);
-    else
+    // Treat `null` entries in `batchSizes` (signaling "None" from `getPossibleLongValues`) the
+    // same as an empty `batchSizes`: unknown batch dimension, prepend `DynamicDim`. wala/ML#545.
+    boolean batchSizeUnknown = batchSizes.isEmpty() || batchSizes.contains(null);
+    Set<Long> knownBatchSizes = new java.util.HashSet<>(batchSizes);
+    knownBatchSizes.remove(null);
+    if (!knownBatchSizes.isEmpty())
       LOGGER.fine(
-          "Found possible batch sizes: " + batchSizes + " for source: " + this.getSource() + ".");
+          "Found possible batch sizes: "
+              + knownBatchSizes
+              + " for source: "
+              + this.getSource()
+              + ".");
 
     // If the base shape is ⊤ (unknown), the prepended batch dim doesn't recover enough info to
-    // synthesize a meaningful shape — propagate ⊤ outward. Avoids NPE on the iteration below.
+    // synthesize a meaningful shape—propagate ⊤ outward. Avoids NPE on the iteration below.
     if (shapes == null) return null;
 
     Set<List<Dimension<?>>> newShapes = HashSetFactory.make();
 
-    for (List<Dimension<?>> shape : shapes)
-      for (Long batchSize : batchSizes) {
+    for (List<Dimension<?>> shape : shapes) {
+      if (batchSizeUnknown) {
         List<Dimension<?>> newShape = new ArrayList<>();
-
-        // Prepend batch size.
-        if (batchSize != null) newShape.add(new NumericDim(batchSize.intValue()));
-        else newShape.add(null);
-
+        newShape.add(DynamicDim.INSTANCE);
         newShape.addAll(shape);
         newShapes.add(newShape);
       }
+      for (Long batchSize : knownBatchSizes) {
+        List<Dimension<?>> newShape = new ArrayList<>();
+        newShape.add(new NumericDim(batchSize.intValue()));
+        newShape.addAll(shape);
+        newShapes.add(newShape);
+      }
+    }
 
     LOGGER.fine("Generated shapes: " + newShapes + " for source: " + source + ".");
     return newShapes;

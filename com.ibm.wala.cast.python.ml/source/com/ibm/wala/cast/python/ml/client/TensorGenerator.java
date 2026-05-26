@@ -34,6 +34,7 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.CompoundDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
@@ -346,8 +347,12 @@ public abstract class TensorGenerator {
                       + (this.getSource() != null ? this.getSource().getPointerKey() : "null")
                       + ".");
 
-              Dimension<Integer> dimension =
-                  (shapeValue != null) ? new NumericDim(shapeValue.intValue()) : null;
+              // `None` in a shape arg (e.g., `shape=[None, 4]`) is the dynamic-dim marker.
+              // wala/ML#545: emit `DynamicDim.INSTANCE` instead of raw `null`.
+              Dimension<?> dimension =
+                  (shapeValue != null)
+                      ? new NumericDim(shapeValue.intValue())
+                      : DynamicDim.INSTANCE;
 
               LOGGER.fine("Adding dimension: " + dimension + ".");
               tensorDimensions.add(dimension);
@@ -416,8 +421,16 @@ public abstract class TensorGenerator {
 
             dimensions[i] = iDim;
 
-            for (int j = 0; j < possibleDimensions.length; j++)
-              if (i != j) for (Dimension<?> jDim : possibleDimensions[j]) dimensions[j] = jDim;
+            for (int j = 0; j < possibleDimensions.length; j++) {
+              if (i == j) continue;
+              for (Dimension<?> jDim : possibleDimensions[j]) dimensions[j] = jDim;
+              // wala/ML#545: when a shape-arg field has no resolved constant (e.g., a
+              // non-literal `BATCH_SIZE` in `tf.random.normal([BATCH_SIZE, 100])`),
+              // `possibleDimensions[j]` is empty and the inner loop above leaves
+              // `dimensions[j]` at its default `null`. Treat unresolvable-but-present
+              // shape positions as dynamic.
+              if (dimensions[j] == null) dimensions[j] = DynamicDim.INSTANCE;
+            }
 
             ret.add(asList(dimensions));
           }

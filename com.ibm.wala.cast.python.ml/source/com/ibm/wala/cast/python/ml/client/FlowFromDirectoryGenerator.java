@@ -4,6 +4,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -71,8 +72,8 @@ public class FlowFromDirectoryGenerator extends DatasetGenerator {
     List<Dimension<?>> labelShape = new ArrayList<>();
     labelShape.add(new NumericDim(batchSize.intValue()));
     // For categorical, it's (batch_size, num_classes). For simplicity, just return (batch_size,
-    // null) or just (batch_size, 1) to match test.
-    labelShape.add(null);
+    // dynamic). The second dim is unknown statically; use `DynamicDim` per wala/ML#545.
+    labelShape.add(DynamicDim.INSTANCE);
 
     ret.add(imageShape);
     ret.add(labelShape);

@@ -10,6 +10,7 @@ import static java.util.Collections.singleton;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -200,12 +201,12 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
         if (nrows != null) {
           possibleRowDims.add(new NumericDim(nrows.intValue()));
         } else {
-          possibleRowDims.add(null);
+          possibleRowDims.add(DynamicDim.INSTANCE);
         }
       }
     } else {
       // Unknown rows
-      possibleRowDims.add(null);
+      possibleRowDims.add(DynamicDim.INSTANCE);
     }
 
     // 2. Determine shape of `values`.
