@@ -156,6 +156,15 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               TypeName.string2TypeName("Ltensorflow/functions/placeholder")),
           AstMethodReference.fnSelector);
 
+  // TODO(wala/ML#550): With `set_shape` now declared as a `<method>` on each of the four
+  // Tensor/SparseTensor classes (see `tensorflow.xml`), the legacy
+  // `Ltensorflow/functions/set_shape`
+  // standalone-class dispatch path no longer reaches the recognition sites. Replace this single
+  // `MethodReference` with a `Set<MethodReference>` (one per Tensor/SparseTensor class, using
+  // `TensorFlowTypes.{TENSOR_TYPE, TENSOR_FUNCTIONS_TYPE, SPARSE_TENSOR_TYPE,
+  // SPARSE_TENSOR_FUNCTIONS_TYPE}`) and union the `getShapeSourceCalls` results across them.
+  // Pre-condition for this draft: works empirically only after the loop is implemented. Current
+  // state of this branch leaves the legacy reference in place; testEx1CG fails accordingly.
   private static final MethodReference set_shape =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(

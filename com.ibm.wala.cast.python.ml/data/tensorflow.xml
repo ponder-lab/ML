@@ -69,7 +69,6 @@
         <new def="FixedLenFeature" class="Ltensorflow/functions/FixedLenFeature" />
         <putfield class="LRoot" field="FixedLenFeature" fieldType="LRoot" ref="x" value="FixedLenFeature" />
         <new def="pass_through" class="Ltensorflow/functions/pass_through" />
-        <putfield class="LRoot" field="cast" fieldType="LRoot" ref="x" value="pass_through" />
         <putfield class="LRoot" field="decode_raw" fieldType="LRoot" ref="x" value="pass_through" />
         <new def="estimator" class="Lobject" />
         <putfield class="LRoot" field="estimator" fieldType="LRoot" ref="x" value="estimator" />
@@ -1055,6 +1054,10 @@
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self indices values dense_shape">
           <return value="self" />
         </method>
+        <!-- Recognition anchor for `t.set_shape(shape)` (wala/ML#550). The body is intentionally empty: this method exists so that WALA's class-method dispatch routes `set_shape` callsites here, where the Java seeding layer can pick them up via call-graph lookup instead of an IR-syntactic scan. -->
+        <method name="set_shape" descriptor="()LRoot;" numArgs="2" paramNames="self shape">
+          <return value="self" />
+        </method>
       </class>
       <class name="sparse_eye" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self num_rows num_columns dtype name">
@@ -1490,6 +1493,10 @@
           <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
         </method>
+        <!-- Recognition anchor for `t.set_shape(shape)` (wala/ML#550). See SparseTensor for the same pattern's rationale. -->
+        <method name="set_shape" descriptor="()LRoot;" numArgs="2" paramNames="self shape">
+          <return value="self" />
+        </method>
       </class>
       <class name="convert_to_tensor" allocatable="true">
         <method name="read_data" descriptor="()LRoot;" numArgs="1">
@@ -1703,6 +1710,10 @@
           <new def="x" class="Ltensorflow/python/framework/sparse_tensor/SparseTensor" />
           <return value="x" />
         </method>
+        <!-- Recognition anchor for `t.set_shape(shape)` (wala/ML#550). -->
+        <method name="set_shape" descriptor="()LRoot;" numArgs="2" paramNames="self shape">
+          <return value="self" />
+        </method>
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self indices values dense_shape">
           <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="arg0" numArgs="1" def="x" />
           <putfield class="LRoot" field="indices" fieldType="LRoot" ref="x" value="indices" />
@@ -1869,6 +1880,10 @@
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self op value_index dtype name">
           <new def="x" class="Ltensorflow/python/framework/ops/Tensor" />
           <return value="x" />
+        </method>
+        <!-- Recognition anchor for `t.set_shape(shape)` (wala/ML#550). -->
+        <method name="set_shape" descriptor="()LRoot;" numArgs="2" paramNames="self shape">
+          <return value="self" />
         </method>
       </class>
       <class name="ndarray" allocatable="true">

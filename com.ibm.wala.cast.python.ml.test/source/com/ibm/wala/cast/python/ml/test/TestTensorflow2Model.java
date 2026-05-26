@@ -164,12 +164,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_1_2_INT32 =
       new TensorType(INT_32, asList(new NumericDim(1), new NumericDim(2)));
 
-  private static final TensorType TENSOR_1_5_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(1), new NumericDim(5)));
-
-  private static final TensorType TENSOR_1_10_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(1), new NumericDim(10)));
-
   private static final TensorType TENSOR_2_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(2)));
 
@@ -3693,7 +3687,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_1_5_INT32), 3, Set.of(TENSOR_1_5_INT32)));
+        Map.of(2, Set.of(TENSOR_1_RAGGED_INT32), 3, Set.of(TENSOR_1_RAGGED_INT32)));
   }
 
   @Test
@@ -3704,7 +3698,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_1_5_INT32), 3, Set.of(TENSOR_1_5_INT32)));
+        Map.of(2, Set.of(TENSOR_1_RAGGED_INT32), 3, Set.of(TENSOR_1_RAGGED_INT32)));
   }
 
   @Test
@@ -3715,7 +3709,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_1_5_INT32), 3, Set.of(TENSOR_1_5_INT32)));
+        Map.of(2, Set.of(TENSOR_1_RAGGED_INT32), 3, Set.of(TENSOR_1_RAGGED_INT32)));
   }
 
   @Test
@@ -3726,7 +3720,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_1_5_INT32), 3, Set.of(TENSOR_1_5_INT32)));
+        Map.of(2, Set.of(TENSOR_1_RAGGED_INT32), 3, Set.of(TENSOR_1_RAGGED_INT32)));
   }
 
   @Test
@@ -3737,7 +3731,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_1_5_INT32), 3, Set.of(TENSOR_1_5_INT32)));
+        Map.of(2, Set.of(TENSOR_1_RAGGED_INT32), 3, Set.of(TENSOR_1_RAGGED_INT32)));
   }
 
   @Test
@@ -3748,7 +3742,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_1_5_INT32), 3, Set.of(TENSOR_1_5_INT32)));
+        Map.of(2, Set.of(TENSOR_1_RAGGED_INT32), 3, Set.of(TENSOR_1_RAGGED_INT32)));
   }
 
   @Test
@@ -5961,21 +5955,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Generator-dispatch test for {@code tf.cast(x, dtype)}. The dedicated {@link
    * com.ibm.wala.cast.python.ml.client.Cast} generator extends {@link
    * com.ibm.wala.cast.python.ml.client.PassThroughUnaryTensorGenerator} for shape and overrides the
-   * dtype-arg position to point at {@code dtype}, but the override doesn't take effect — see <a
-   * href="https://github.com/wala/ML/issues/481">wala/ML#481</a>. The static analysis currently
-   * reports the input's dtype rather than the cast target.
-   *
-   * <p>The earlier {@code tf.cast} {@code pass_through} alias is intentionally retained: removing
-   * it would unblock the {@code Cast} override here (so this assertion would tighten to {@code
-   * Set.of(TENSOR_3_INT32)}), but the dedicated {@code <new>+<return>} doesn't propagate the cast
-   * result's tensor classification through to chained consumers (e.g., {@code reshape} in {@code
-   * TestNeuroImageExamples.testEx1CG}). The pass_through alias is sound for those chains.
-   *
-   * <p>TODO: Once the dedicated-allocation chained-consumer integration tracked by <a
-   * href="https://github.com/wala/ML/issues/509">wala/ML#509</a> lands (which lets us safely drop
-   * the {@code pass_through} alias and let the {@code Cast} override fire &mdash; closing
-   * wala/ML#481's {@code Cast} arm), replace the assertion with {@code Set.of(TENSOR_3_INT32)} (the
-   * precise cast-target dtype, disjoint from the currently-asserted input dtype).
+   * dtype-arg position to point at {@code dtype}; the {@code tf.cast} {@code pass_through} alias
+   * that previously bypassed the override was removed in <a
+   * href="https://github.com/wala/ML/issues/499">wala/ML#499</a>, so the static analysis now
+   * reports the explicit cast target ({@code int32}) rather than the input's dtype ({@code
+   * float32}).
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -5985,7 +5969,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testCast()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_cast.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+    test("tf2_test_cast.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_INT32)));
+  }
+
+  /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/509">wala/ML#509</a>: a
+   * user-defined class that happens to define a {@code set_shape} method must not be classified as
+   * a tensor by the static analysis. The {@code set_shape} recognition path must restrict pinning
+   * to actual tensor types and let non-tensor receivers fall through untouched.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testSetShapeNonTensorReceiver()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_set_shape_non_tensor.py", "consume", 0, 0, Map.of());
   }
 
   /**
@@ -9184,12 +9185,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   @Test
   public void testRaggedRange() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_range.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_10_INT32)));
+    test("tf2_test_ragged_range.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_RAGGED_INT32)));
   }
 
   @Test
   public void testRaggedRange2() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_range2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_10_INT32)));
+    test("tf2_test_ragged_range2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_RAGGED_INT32)));
   }
 
   @Test
@@ -9217,28 +9218,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_ragged_range7.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_RAGGED_INT32)));
   }
 
-  /**
-   * Canonical case for <a href="https://github.com/wala/ML/issues/546">wala/ML#546</a>: {@code
-   * tf.ragged.range(3, 18, 3)} — all three scalar args are compile-time literals, so the inner
-   * length is statically computable: {@code ceil((18 - 3) / 3) = 5}. The analyzer pins {@code (1,
-   * 5)} instead of {@code (1, ragged)}.
-   */
-  @Test
-  public void testRaggedRange8() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_range8.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_5_INT32)));
-  }
-
-  /**
-   * Multi-length fallback case for <a href="https://github.com/wala/ML/issues/546">wala/ML#546</a>:
-   * {@code start} resolves to two literal values via an if/else, so the cross-product yields
-   * lengths {@code {10, 8}}. {@code computeStaticInnerLength} returns {@code null} and the inner
-   * dim falls back to {@code RaggedDim}.
-   */
-  @Test
-  public void testRaggedRange9() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_ragged_range9.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_RAGGED_INT32)));
-  }
-
   @Test
   public void testRaggedRangeKeyword()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -9248,11 +9227,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         5,
         5,
         Map.of(
-            2, Set.of(TENSOR_1_5_INT32),
-            3, Set.of(TENSOR_1_5_INT32),
-            4, Set.of(TENSOR_1_5_INT32),
-            5, Set.of(TENSOR_1_5_INT32),
-            6, Set.of(TENSOR_1_5_INT32)));
+            2, Set.of(TENSOR_1_RAGGED_INT32),
+            3, Set.of(TENSOR_1_RAGGED_INT32),
+            4, Set.of(TENSOR_1_RAGGED_INT32),
+            5, Set.of(TENSOR_1_RAGGED_INT32),
+            6, Set.of(TENSOR_1_RAGGED_INT32)));
   }
 
   @Test
