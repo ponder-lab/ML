@@ -4,6 +4,10 @@ import static com.google.common.collect.Sets.newHashSet;
 import static com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory.getGenerator;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATA_PACKAGE_PREFIX;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR_FUNCTIONS_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_FUNCTIONS_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_TYPE;
 import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 
@@ -169,11 +173,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * verified test fixtures.
    */
   private static final Set<TypeReference> SET_SHAPE_RECEIVER_TYPES =
-      Set.of(
-          TensorFlowTypes.TENSOR_FUNCTIONS_TYPE,
-          TensorFlowTypes.TENSOR_TYPE,
-          TensorFlowTypes.SPARSE_TENSOR_FUNCTIONS_TYPE,
-          TensorFlowTypes.SPARSE_TENSOR_TYPE);
+      Set.of(TENSOR_FUNCTIONS_TYPE, TENSOR_TYPE, SPARSE_TENSOR_FUNCTIONS_TYPE, SPARSE_TENSOR_TYPE);
 
   private static final MethodReference convert_to_tensor =
       MethodReference.findOrCreate(
@@ -788,9 +788,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * field). See wala/ML#509.
    *
    * <p>Syntactic recognition decouples the {@code set_shape} pin from the attribute-attachment
-   * chain. In TF code, {@code set_shape} unambiguously refers to {@code tf.Tensor.set_shape};
-   * non-TF Python classes don't typically define this method, so the false-positive surface is
-   * effectively zero.
+   * chain. False positives are possible—any Python class can define a {@code set_shape} method, and
+   * a user-defined class that happens to do so would otherwise tip into the tensor analysis. The
+   * {@link #SET_SHAPE_RECEIVER_TYPES} whitelist is a required safeguard: receivers whose PA
+   * allocation type isn't in the whitelist are skipped, with the empty-PTS allowance documented
+   * inline at the containment-check site. {@code testSetShapeNonTensorReceiver} is the regression
+   * guard for this filtering.
    *
    * @param builder The propagation call graph builder.
    * @return Map from receiver {@link PointsToSetVariable} to the asserted {@link TensorType}.
