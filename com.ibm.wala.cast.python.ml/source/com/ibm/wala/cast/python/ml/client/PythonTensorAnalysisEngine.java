@@ -124,11 +124,6 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   /** A "fake" function name in the summaries that indicates that an API produces a new tensor. */
   public static final String TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME = "read_data";
 
-  /**
-   * A "fake" function name in the summaries that indicates that an API produces a tensor iterable.
-   */
-  private static final String TENSOR_ITERABLE_SYNTHETIC_FUNCTION_NAME = "read_dataset";
-
   private static final Logger LOGGER = Logger.getLogger(PythonTensorAnalysisEngine.class.getName());
 
   private static final MethodReference conv2d =
