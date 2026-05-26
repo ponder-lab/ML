@@ -7,7 +7,6 @@ import com.ibm.wala.cast.python.client.PythonTurtleAnalysisEngine.EdgeType;
 import com.ibm.wala.cast.python.client.PythonTurtleAnalysisEngine.TurtlePath;
 import com.ibm.wala.cast.python.client.PythonTurtleSKLearnClassifierAnalysis;
 import com.ibm.wala.classLoader.Module;
-import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.CallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.SSAPropagationCallGraphBuilder;
@@ -15,7 +14,6 @@ import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import com.ibm.wala.util.NullProgressMonitor;
 import com.ibm.wala.util.collections.HashSetFactory;
-import com.ibm.wala.util.graph.Graph;
 import com.ibm.wala.util.graph.labeled.LabeledGraph;
 import java.io.File;
 import java.io.IOException;
@@ -56,10 +54,7 @@ public class TestPythonTurtleSKLearnClassifierCallGraphShape
     PythonAnalysisEngine<LabeledGraph<TurtlePath, EdgeType>> E = driver.makeEngine(args);
 
     CallGraphBuilder<? super InstanceKey> builder = E.defaultCallGraphBuilder();
-    @SuppressWarnings("unused")
-    CallGraph CG = builder.makeCallGraph(E.getOptions(), new NullProgressMonitor());
-
-    @SuppressWarnings("unused")
-    Graph<TurtlePath> analysis = E.performAnalysis((SSAPropagationCallGraphBuilder) builder);
+    builder.makeCallGraph(E.getOptions(), new NullProgressMonitor());
+    E.performAnalysis((SSAPropagationCallGraphBuilder) builder);
   }
 }
