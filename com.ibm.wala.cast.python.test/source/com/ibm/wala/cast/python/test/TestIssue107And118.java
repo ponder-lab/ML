@@ -2,8 +2,9 @@ package com.ibm.wala.cast.python.test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
+import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -34,19 +35,14 @@ public class TestIssue107And118 extends TestJythonCallGraphShape {
 
     // Look for a CGNode whose method is `D.func` (the inherited method). If wala/ML#107
     // still reproduces, no such node exists.
-    boolean foundInheritedFunc = false;
     for (CGNode n : cg) {
       String name = n.getMethod().toString();
-      if (name.contains("/D/func") || name.contains("/C/func")) {
-        foundInheritedFunc = true;
-        break;
-      }
+      if (name.contains("/D/func") || name.contains("/C/func")) return;
     }
-    assertTrue(
+    fail(
         "wala/ML#107: expected `D.func` (inherited via `class C(D)`) to appear in the call graph;"
             + " saw nodes: "
-            + dumpMethodNames(cg),
-        foundInheritedFunc);
+            + dumpMethodNames(cg));
   }
 
   @Test
@@ -57,8 +53,7 @@ public class TestIssue107And118 extends TestJythonCallGraphShape {
     IClass c =
         cha.lookupClass(
             TypeReference.findOrCreate(
-                com.ibm.wala.cast.python.types.PythonTypes.pythonLoader,
-                TypeName.string2TypeName("Lscript " + FIXTURE + "/C")));
+                PythonTypes.pythonLoader, TypeName.string2TypeName("Lscript " + FIXTURE + "/C")));
     assertNotNull("expected to resolve `C` in the loaded class hierarchy", c);
 
     IClass parent = c.getSuperclass();
