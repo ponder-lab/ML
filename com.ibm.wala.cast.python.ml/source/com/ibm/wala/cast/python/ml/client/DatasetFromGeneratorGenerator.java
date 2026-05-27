@@ -480,7 +480,10 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
       }
     }
 
-    // Default: No dtype information found.
-    return Collections.emptySet();
+    // Default: dtype unknown. `tf.data.Dataset.from_generator` always produces a tensor
+    // iterable; the dtype just isn't statically resolvable here. Per the dtype lattice,
+    // return `DType.UNKNOWN` (⊤) rather than `emptySet()` (⊥/not-a-tensor), so downstream
+    // analysis preserves the "this is a tensor source" signal. See wala/ML#408.
+    return EnumSet.of(DType.UNKNOWN);
   }
 }
