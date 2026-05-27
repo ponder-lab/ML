@@ -179,9 +179,18 @@ jobs:
       uses: actions/download-artifact@v8
       with:
         name: fat-jar
+    # `actions/download-artifact@v8` with only `name:` extracts to the workspace
+    # root (single-artifact archives flatten away their source path). The
+    # `build` job's `upload-artifact` step uploaded the JAR from
+    # `com.ibm.wala.cast.python.ml/target/`, but only the filename survives the
+    # round-trip — so the `files:` glob below must match the bare filename, not
+    # the original on-disk path. `fail_on_unmatched_files: true` makes a future
+    # glob drift fail loudly instead of silently producing an assetless
+    # release. See https://github.com/wala/ML/issues/561.
     - name: Attach fat JAR to GitHub Release
       uses: softprops/action-gh-release@v3
       with:
-        files: com.ibm.wala.cast.python.ml/target/com.ibm.wala.cast.python.ml-*-fat.jar
+        files: com.ibm.wala.cast.python.ml-*-fat.jar
+        fail_on_unmatched_files: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
