@@ -2,12 +2,10 @@ package com.ibm.wala.cast.python.test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.fail;
 
 import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.cast.util.test.TestCallGraphShape.GraphAssertion;
 import com.ibm.wala.classLoader.IClass;
-import com.ibm.wala.classLoader.IMethod;
-import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
@@ -15,6 +13,7 @@ import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
+import java.util.List;
 import org.junit.Test;
 
 /**
@@ -28,21 +27,34 @@ public class TestIssue107And118 extends TestJythonCallGraphShape {
 
   private static final String FIXTURE = "test_issue107_118_repro.py";
 
+  /**
+   * Asserts the call-graph EDGES from {@code c.func(5)} reach the inherited body. The bug was a
+   * missing edge, not just a missing node; node-existence alone could be satisfied by an unrelated
+   * reachability path.
+   */
+  private static final List<GraphAssertion> assertions =
+      List.of(
+          new GraphAssertion(ROOT, new String[] {"script " + FIXTURE}),
+          // Script-level callees: the `c = C()` constructor call and the `c.func(5)`
+          // trampoline. `D` is declared but never instantiated, so no edge from script to D.
+          // The trampoline edge is the load-bearing assertion for wala/ML#107: pre-fix, this
+          // edge was missing entirely (no `c.func(5)` resolution in the call graph at all).
+          new GraphAssertion(
+              "script " + FIXTURE,
+              new String[] {
+                "script " + FIXTURE + "/C", "$script " + FIXTURE + "/D/func:trampoline2"
+              }),
+          // The trampoline must in turn dispatch to `D.func`'s body. Pre-fix, even if the
+          // trampoline node existed, this resolution edge would not.
+          new GraphAssertion(
+              "$script " + FIXTURE + "/D/func:trampoline2",
+              new String[] {"script " + FIXTURE + "/D/func"}));
+
   @Test
-  public void issue107InheritedMethodAppearsInCallGraph()
+  public void issue107InheritedMethodEdgeReachesParentBody()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph cg = this.process(FIXTURE);
-
-    // Look for a CGNode whose method is `D.func` (the inherited method). If wala/ML#107
-    // still reproduces, no such node exists.
-    for (CGNode n : cg) {
-      String name = n.getMethod().toString();
-      if (name.contains("/D/func") || name.contains("/C/func")) return;
-    }
-    fail(
-        "wala/ML#107: expected `D.func` (inherited via `class C(D)`) to appear in the call graph;"
-            + " saw nodes: "
-            + dumpMethodNames(cg));
+    verifyGraphAssertions(cg, assertions);
   }
 
   @Test
@@ -63,14 +75,5 @@ public class TestIssue107And118 extends TestJythonCallGraphShape {
         "wala/ML#118: `C` should report `D` as its declared superclass, not `Object`",
         "Lscript " + FIXTURE + "/D",
         parentName);
-  }
-
-  private static String dumpMethodNames(CallGraph cg) {
-    StringBuilder sb = new StringBuilder();
-    for (CGNode n : cg) {
-      IMethod m = n.getMethod();
-      sb.append("\n  ").append(m.toString());
-    }
-    return sb.toString();
   }
 }
