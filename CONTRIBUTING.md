@@ -36,14 +36,25 @@ You must install the `jython-dev.jar` to your local maven repository.
 	-Dfile=./jython-dev.jar \
 	-DgroupId="org.python" \
 	-DartifactId="jython3" \
-	-Dversion="0.0.2-SNAPSHOT" \
+	-Dversion="0.0.2" \
 	-Dpackaging="jar" \
 	-DgeneratePom=true
 	```
 ### Installing IDE
 
-1. Change directory to `com.ibm.wala.cast.lsp`: `cd com.ibm.wala.cast.lsp`
-1. Build and install to your local Maven repo: `mvn install`
+1. Change directory to `IDE/com.ibm.wala.cast.lsp` (the IDE code lives in a Git submodule at `IDE/`, per `.gitmodules`): `cd IDE/com.ibm.wala.cast.lsp`
+1. Build (without installing): `mvn package -DskipTests`
+1. Install at the non-SNAPSHOT coordinate `0.0.1` (the `cast.lsp` POM declares `0.0.1-SNAPSHOT`, but the release-plugin rejects SNAPSHOT deps; we install under a release coordinate locally so Ariadne's `release:prepare` runs in batch mode without `-DignoreSnapshots`):
+
+	```bash
+	mvn install:install-file \
+	-Dfile=target/com.ibm.wala.cast.lsp-0.0.1-SNAPSHOT.jar \
+	-DgroupId="com.ibm.wala" \
+	-DartifactId="com.ibm.wala.cast.lsp" \
+	-Dversion="0.0.1" \
+	-Dpackaging="jar" \
+	-DgeneratePom=true
+	```
 
 ### Building WALA/ML
 

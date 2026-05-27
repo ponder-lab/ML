@@ -35,7 +35,7 @@
     <dependency>
       <groupId>com.ibm.wala</groupId>
       <artifactId>com.ibm.wala.cast.lsp</artifactId>
-      <version>0.0.1-SNAPSHOT</version>
+      <version>0.0.1</version>
     </dependency>
     <dependency>
       <groupId>${project.groupId}</groupId>
@@ -56,7 +56,7 @@
       <artifactId>commons-cli</artifactId>
     </dependency>
     <!-- `jython3` references `jnr/constants/Constant` (and other `jnr/...`)
-      from its `org.python.modules.posix.PosixModule`. The `0.0.2-SNAPSHOT`
+      from its `org.python.modules.posix.PosixModule`. The `0.0.2`
       `jython-dev.jar` is registered via `mvn install:install-file
       -DgeneratePom=true` (see `CONTRIBUTING.md` and the CI workflow),
       which synthesizes a minimal POM that declares zero dependencies — so
