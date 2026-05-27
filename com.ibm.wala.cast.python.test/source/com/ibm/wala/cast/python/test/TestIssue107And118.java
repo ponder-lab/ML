@@ -50,6 +50,18 @@ public class TestIssue107And118 extends TestJythonCallGraphShape {
               "$script " + FIXTURE + "/D/func:trampoline2",
               new String[] {"script " + FIXTURE + "/D/func"}));
 
+  /**
+   * Pins the wala/ML#107 fix: builds the call graph for the reproducer fixture and verifies that
+   * the {@code c.func(5)} call site resolves through the inherited body. The {@link #assertions}
+   * field captures each load-bearing edge; pre-fix, the {@code script → trampoline} edge was
+   * absent, so {@code verifyGraphAssertions} would fail to find the trampoline node as a successor.
+   *
+   * @throws ClassHierarchyException if the {@code PythonAnalysisEngine} cannot build the class
+   *     hierarchy for the fixture.
+   * @throws IllegalArgumentException if a malformed fixture path is rejected by the engine.
+   * @throws CancelException if call-graph construction is cancelled.
+   * @throws IOException if the fixture source cannot be read.
+   */
   @Test
   public void issue107InheritedMethodEdgeReachesParentBody()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -57,6 +69,17 @@ public class TestIssue107And118 extends TestJythonCallGraphShape {
     verifyGraphAssertions(cg, assertions);
   }
 
+  /**
+   * Regression guard for wala/ML#118: pins that {@code C.getSuperclass()} returns the declared
+   * Python parent {@code D}, not {@code Object}. wala/ML#118 is already fixed on master; the test
+   * exists to catch a future regression and to document the precondition that {@link
+   * #issue107InheritedMethodEdgeReachesParentBody} depends on.
+   *
+   * @throws ClassHierarchyException if the loader cannot build the class hierarchy.
+   * @throws IllegalArgumentException if a malformed fixture path is rejected.
+   * @throws CancelException if hierarchy construction is cancelled.
+   * @throws IOException if the fixture source cannot be read.
+   */
   @Test
   public void issue118SubclassSuperclassIsParent()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
