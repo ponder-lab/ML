@@ -267,6 +267,17 @@ public class TensorType implements Iterable<Dimension<?>> {
     public int hashCode() {
       return RaggedDim.class.hashCode();
     }
+
+    /**
+     * Override paired with {@link #hashCode} to satisfy the {@code equals}/{@code hashCode}
+     * contract under CodeQL's {@code java/inconsistent-equals-and-hashcode}. {@code RaggedDim} is a
+     * singleton, so equality reduces to instance identity — any reachable {@code RaggedDim}
+     * reference is {@link #INSTANCE}.
+     */
+    @Override
+    public boolean equals(Object obj) {
+      return this == obj;
+    }
   }
 
   /**
@@ -335,6 +346,16 @@ public class TensorType implements Iterable<Dimension<?>> {
     @Override
     public int hashCode() {
       return DynamicDim.class.hashCode();
+    }
+
+    /**
+     * Override paired with {@link #hashCode} to satisfy the {@code equals}/{@code hashCode}
+     * contract under CodeQL's {@code java/inconsistent-equals-and-hashcode}. See {@link
+     * RaggedDim#equals} for the shared singleton-identity rationale.
+     */
+    @Override
+    public boolean equals(Object obj) {
+      return this == obj;
     }
   }
 
