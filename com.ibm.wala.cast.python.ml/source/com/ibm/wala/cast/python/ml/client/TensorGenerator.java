@@ -347,7 +347,8 @@ public abstract class TensorGenerator {
                       + ".");
 
               // `None` in a shape arg (e.g., `shape=[None, 4]`) is the dynamic-dim marker.
-              // wala/ML#545: emit `DynamicDim.INSTANCE` instead of raw `null`.
+              // https://github.com/wala/ML/issues/545: emit `DynamicDim.INSTANCE` instead of raw
+              // `null`.
               Dimension<?> dimension =
                   (shapeValue != null)
                       ? new NumericDim(shapeValue.intValue())
@@ -416,7 +417,8 @@ public abstract class TensorGenerator {
         // Build the Cartesian product of dimension possibilities across all positions. Empty
         // positions (where `possibleDimensions[k]` has no resolved constant, e.g., a non-literal
         // `BATCH_SIZE` in `tf.random.normal([BATCH_SIZE, 100])`) contribute `DynamicDim.INSTANCE`
-        // as the single fallback option — wala/ML#545. The prior implementation iterated each
+        // as the single fallback option — https://github.com/wala/ML/issues/545. The prior
+        // implementation iterated each
         // position's set but only retained the last iterated element, producing a
         // non-deterministic single shape per `i` rather than the full product.
         List<Set<Dimension<?>>> resolved = new ArrayList<>(possibleDimensions.length);

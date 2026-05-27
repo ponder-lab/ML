@@ -21,7 +21,8 @@ public class TensorShapeUtil {
 
       // Either side missing (out of rank), a raw-null placeholder, a ragged dim, or a dynamic
       // dim is treated as broadcast-compatible—we lack the precision to reason about the actual
-      // extent, so be permissive. wala/ML#544 introduced `RaggedDim`; wala/ML#545 introduced
+      // extent, so be permissive. https://github.com/wala/ML/issues/544 introduced `RaggedDim`;
+      // https://github.com/wala/ML/issues/545 introduced
       // `DynamicDim` for the "uniform but statically unknown" case (batch/placeholder/Keras
       // `None`). Both join the same permissive branch.
       if (xDim == null
@@ -58,7 +59,8 @@ public class TensorShapeUtil {
 
       // Propagate raggedness or dynamic-ness when either side carries them—broadcasting against
       // anything (including a compatible-rank counterpart) preserves the wider unknown semantics.
-      // wala/ML#544 introduced `RaggedDim`; wala/ML#545 introduced `DynamicDim`. Ragged dominates
+      // https://github.com/wala/ML/issues/544 introduced `RaggedDim`;
+      // https://github.com/wala/ML/issues/545 introduced `DynamicDim`. Ragged dominates
       // dynamic when both are present on the same axis (varies-per-row is the wider unknown).
       if (xDim instanceof RaggedDim) ret.add(xDim);
       else if (yDim instanceof RaggedDim) ret.add(yDim);

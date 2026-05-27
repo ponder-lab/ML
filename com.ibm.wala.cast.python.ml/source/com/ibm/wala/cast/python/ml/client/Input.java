@@ -136,7 +136,8 @@ public class Input extends Ones {
     }
 
     // Treat `null` entries in `batchSizes` (signaling "None" from `getPossibleLongValues`) the
-    // same as an empty `batchSizes`: unknown batch dimension, prepend `DynamicDim`. wala/ML#545.
+    // same as an empty `batchSizes`: unknown batch dimension, prepend `DynamicDim`.
+    // https://github.com/wala/ML/issues/545.
     boolean batchSizeUnknown = batchSizes.isEmpty() || batchSizes.contains(null);
     Set<Long> knownBatchSizes = new java.util.HashSet<>(batchSizes);
     knownBatchSizes.remove(null);

@@ -113,7 +113,8 @@ public class ModelCall extends TensorGenerator {
             if (!outShape.isEmpty() && !inShape.isEmpty()) {
               List<Dimension<?>> newShape = new ArrayList<>(outShape);
               // Keras usually preserves the batch dimension at index 0. If the upstream input's
-              // batch dim came through as raw `null` (a pre-#545 unmigrated path), normalize to
+              // batch dim came through as raw `null` (a pre-https://github.com/wala/ML/issues/545
+              // unmigrated path), normalize to
               // `DynamicDim` here so the call's output shape doesn't propagate the contract
               // violation downstream.
               Dimension<?> batchDim = inShape.get(0);
