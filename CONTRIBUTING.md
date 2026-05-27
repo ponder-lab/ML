@@ -42,7 +42,7 @@ You must install the `jython-dev.jar` to your local maven repository.
 	```
 ### Installing IDE
 
-1. Change directory to `com.ibm.wala.cast.lsp`: `cd com.ibm.wala.cast.lsp`
+1. Change directory to `IDE/com.ibm.wala.cast.lsp` (the IDE code lives in a Git submodule at `IDE/`, per `.gitmodules`): `cd IDE/com.ibm.wala.cast.lsp`
 1. Build (without installing): `mvn package -DskipTests`
 1. Install at the non-SNAPSHOT coordinate `0.0.1` (the `cast.lsp` POM declares `0.0.1-SNAPSHOT`, but the release-plugin rejects SNAPSHOT deps; we install under a release coordinate locally so Ariadne's `release:prepare` runs in batch mode without `-DignoreSnapshots`):
 
