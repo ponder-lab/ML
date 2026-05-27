@@ -153,7 +153,7 @@
             <!-- Override the default `@{project.artifactId}-@{project.version}`.
               The CI deploy gate's tag-check regex matches plain semver
               `X.Y.Z` only, and historical release tags are plain semver.
-              See https://github.com/wala/ML/issues/535. -->
+              See https://github.com/wala/ML/issues/560. -->
             <tagNameFormat>@{project.version}</tagNameFormat>
           </configuration>
         </plugin>
