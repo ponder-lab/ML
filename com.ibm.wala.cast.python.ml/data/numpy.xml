@@ -4,20 +4,20 @@
   <classloader name="PythonLoader">
     <class name="numpy" allocatable="true">
       <method name="import" static="true" descriptor="()Lnumpy;">
-        <new def="x" class="Lnumpy" />
-        <new def="float32" class="Ltensorflow/dtypes/DType" />
-        <putfield class="LRoot" field="float32" fieldType="LRoot" ref="x" value="float32" />
-        <new def="float64" class="Ltensorflow/dtypes/DType" />
-        <putfield class="LRoot" field="float64" fieldType="LRoot" ref="x" value="float64" />
-        <new def="int32" class="Ltensorflow/dtypes/DType" />
-        <putfield class="LRoot" field="int32" fieldType="LRoot" ref="x" value="int32" />
-        <new def="int64" class="Ltensorflow/dtypes/DType" />
-        <putfield class="LRoot" field="int64" fieldType="LRoot" ref="x" value="int64" />
-        <new def="array_fn" class="Lnumpy/array" />
-        <putfield class="LRoot" field="array" fieldType="LRoot" ref="x" value="array_fn" />
-        <new def="reshape_fn" class="Lnumpy/reshape" />
-        <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="x" value="reshape_fn" />
-        <return value="x" />
+        <new def="x" class="Lnumpy"/>
+        <new def="float32" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="float32" fieldType="LRoot" ref="x" value="float32"/>
+        <new def="float64" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="float64" fieldType="LRoot" ref="x" value="float64"/>
+        <new def="int32" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="int32" fieldType="LRoot" ref="x" value="int32"/>
+        <new def="int64" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="int64" fieldType="LRoot" ref="x" value="int64"/>
+        <new def="array_fn" class="Lnumpy/array"/>
+        <putfield class="LRoot" field="array" fieldType="LRoot" ref="x" value="array_fn"/>
+        <new def="reshape_fn" class="Lnumpy/reshape"/>
+        <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="x" value="reshape_fn"/>
+        <return value="x"/>
       </method>
     </class>
     <package name="numpy">
@@ -25,12 +25,12 @@
       <!-- Modeled as a class-per-function so that `np.array` resolves to this class via a field lookup on the numpy module, and the invocation dispatches to its `do` method. The returned ndarray preserves shape from arg 0 and takes dtype from arg 1; see `NpArray`. -->
       <class name="array" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x dtype">
-          <new def="ret" class="Lnumpy/ndarray" />
-          <new def="astype_fn" class="Lnumpy/ndarray/astype" />
-          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn" />
-          <new def="reshape_fn" class="Lnumpy/ndarray/reshape" />
-          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn" />
-          <return value="ret" />
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
         </method>
       </class>
       <!-- Must be declared `allocatable="true"` so that `<new class="Lnumpy/ndarray"/>` in the various array-producing `do()` methods (both here and in `tensorflow.xml`) resolves to a concrete `InstanceKey` in the heap model. Without this declaration, `HeapModel.getInstanceKeyForAllocation` returns
@@ -42,12 +42,12 @@
         arg 1 (target shape); dtype is preserved from arg 0 (input tensor); see `NpReshape`. -->
       <class name="reshape" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x shape">
-          <new def="ret" class="Lnumpy/ndarray" />
-          <new def="astype_fn" class="Lnumpy/ndarray/astype" />
-          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn" />
-          <new def="reshape_fn" class="Lnumpy/ndarray/reshape" />
-          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn" />
-          <return value="ret" />
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
         </method>
       </class>
     </package>
@@ -60,23 +60,23 @@
       <!-- Modeled as a class-per-function (same pattern as `tensorflow/data/shuffle`, etc.) so that attribute access `x.astype` on an ndarray-like value resolves to this class via a field lookup, and the subsequent invocation dispatches to its `do` method. -->
       <class name="astype" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self ndarray dtype">
-          <new def="ret" class="Lnumpy/ndarray" />
-          <new def="astype_fn" class="Lnumpy/ndarray/astype" />
-          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn" />
-          <new def="reshape_fn" class="Lnumpy/ndarray/reshape" />
-          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn" />
-          <return value="ret" />
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
         </method>
       </class>
       <!-- https://numpy.org/doc/stable/reference/generated/numpy.ndarray.reshape.html -->
       <class name="reshape" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self ndarray shape">
-          <new def="ret" class="Lnumpy/ndarray" />
-          <new def="astype_fn" class="Lnumpy/ndarray/astype" />
-          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn" />
-          <new def="reshape_fn" class="Lnumpy/ndarray/reshape" />
-          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn" />
-          <return value="ret" />
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
         </method>
       </class>
     </package>
