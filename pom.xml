@@ -153,7 +153,7 @@
             <!-- Override the default `@{project.artifactId}-@{project.version}`.
               The CI deploy gate's tag-check regex matches plain semver
               `X.Y.Z` only, and historical release tags are plain semver.
-              See https://github.com/wala/ML/issues/535. -->
+              See https://github.com/wala/ML/issues/560. -->
             <tagNameFormat>@{project.version}</tagNameFormat>
           </configuration>
         </plugin>
@@ -268,6 +268,18 @@
                     <file>${maven.multiModuleProjectDirectory}/spotless.xml.prefs</file>
                   </files>
                 </eclipseWtp>
+                <!-- Normalize self-closing tag spacing to the spaceless form
+                  (`<tag/>`), matching `pom.xml`'s sortpom style, the
+                  `maven-release-plugin`'s native output, and Eclipse WTP's
+                  default. The Eclipse WTP XML formatter above has no pref
+                  that controls this; without explicit enforcement,
+                  `tensorflow.xml` drifts to ~2135 spaced vs 5 spaceless.
+                  See https://github.com/wala/ML/issues/535. -->
+                <replaceRegex>
+                  <name>Spaceless self-closing tags</name>
+                  <searchRegex>[ \t]+/&gt;</searchRegex>
+                  <replacement>/&gt;</replacement>
+                </replaceRegex>
                 <trimTrailingWhitespace/>
                 <endWithNewline/>
               </format>
