@@ -65,14 +65,12 @@ public class FlowFromDirectoryGenerator extends DatasetGenerator {
     imageShape.addAll(targetSize);
     imageShape.add(new NumericDim(3)); // Default rgb color_mode
 
-    // 4. Construct labels shape: (batch_size, num_classes)
-    // We don't know num_classes, so we use null (None).
-    // The test tf2_test_dataset19.py has a categorical class_mode but we don't know the exact class
-    // count.
+    // 4. Construct labels shape: (batch_size, num_classes).
+    // `num_classes` is unknown statically — use `DynamicDim` (wala/ML#545). The test
+    // `tf2_test_dataset19.py` has a categorical `class_mode` but we don't know the exact class
+    // count from `tensorflow.xml`'s modeling of `flow_from_directory`.
     List<Dimension<?>> labelShape = new ArrayList<>();
     labelShape.add(new NumericDim(batchSize.intValue()));
-    // For categorical, it's (batch_size, num_classes). For simplicity, just return (batch_size,
-    // dynamic). The second dim is unknown statically; use `DynamicDim` per wala/ML#545.
     labelShape.add(DynamicDim.INSTANCE);
 
     ret.add(imageShape);
