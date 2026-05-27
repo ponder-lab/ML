@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import static java.util.Collections.emptySet;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
@@ -83,7 +84,7 @@ public class RaggedFromRowLengths extends RaggedTensorFromValues {
         }
       }
     } else {
-      possibleRowDims.add(null);
+      possibleRowDims.add(DynamicDim.INSTANCE);
     }
 
     final Set<Dimension<?>> finalPossibleRowDims = possibleRowDims;

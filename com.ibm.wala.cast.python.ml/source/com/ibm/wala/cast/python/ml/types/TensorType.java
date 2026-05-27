@@ -55,7 +55,8 @@ public class TensorType implements Iterable<Dimension<?>> {
     Constant,
     Symbolic,
     Compound,
-    Ragged
+    Ragged,
+    Dynamic
   };
 
   public abstract static class Dimension<T> {
@@ -254,6 +255,107 @@ public class TensorType implements Iterable<Dimension<?>> {
       } else {
         return "ragged";
       }
+    }
+
+    /**
+     * Override {@link Dimension#hashCode} (which hashes only the payload {@code value}) so that
+     * null-payload singletons of different concrete classes don't collide. {@link Dimension#equals}
+     * already distinguishes by {@code getClass()}, so the bucket-level separation here is a
+     * hash-performance fix, not a correctness one.
+     */
+    @Override
+    public int hashCode() {
+      return RaggedDim.class.hashCode();
+    }
+
+    /**
+     * Override paired with {@link #hashCode} to satisfy the {@code equals}/{@code hashCode}
+     * contract under CodeQL's {@code java/inconsistent-equals-and-hashcode}. {@code RaggedDim} is a
+     * singleton, so equality reduces to instance identity — any reachable {@code RaggedDim}
+     * reference is {@link #INSTANCE}.
+     */
+    @Override
+    public boolean equals(Object obj) {
+      return this == obj;
+    }
+  }
+
+  /**
+   * Marker for a dynamic dimension&mdash;a dimension whose size is uniform within a single tensor
+   * instance but unknown statically (e.g., the batch axis of {@code tf.keras.Input(shape=(None,
+   * 4))}, or any axis explicitly modeled as {@code None} in a Keras input signature).
+   *
+   * <p>Dynamic dimensions used to be encoded as raw {@code null} entries in {@code
+   * TensorType.dims}; the typed sentinel restores the implicit non-null-element contract of {@link
+   * TensorType#iterator()} and discriminates "dynamic/batch/placeholder" from ragged (where the
+   * size varies across rows of a single tensor instance, see {@link RaggedDim}). See <a
+   * href="https://github.com/wala/ML/issues/545">wala/ML#545</a>.
+   *
+   * <p>The {@link Dimension#value() value} is always {@code null}&mdash;dynamic-ness carries no
+   * payload beyond its identity. Because every instance is structurally equal to every other, use
+   * the shared {@link #INSTANCE} rather than allocating fresh objects.
+   */
+  public static class DynamicDim extends Dimension<Void> {
+    /** Shared singleton; {@code DynamicDim} carries no per-instance state. */
+    public static final DynamicDim INSTANCE = new DynamicDim();
+
+    /**
+     * @implNote Private&mdash;all callers should use {@link #INSTANCE}. The {@code super(null)}
+     *     call is mechanical: {@link Dimension} requires a value of type {@code T}, and {@code
+     *     Void} has no instances, so {@code null} is the only legal argument. Dynamic-ness carries
+     *     no payload beyond the type's identity.
+     */
+    private DynamicDim() {
+      super(null);
+    }
+
+    @Override
+    DimensionType type() {
+      return DimensionType.Dynamic;
+    }
+
+    @Override
+    int concreteSize() {
+      return -1;
+    }
+
+    @Override
+    int symbolicDims() {
+      return 1;
+    }
+
+    @Override
+    String toMDString() {
+      return "*dynamic*";
+    }
+
+    @Override
+    String toCString(boolean useMarkdown) {
+      if (useMarkdown) {
+        return "*dynamic*";
+      } else {
+        return "dynamic";
+      }
+    }
+
+    /**
+     * Override {@link Dimension#hashCode} (which hashes only the payload {@code value}) so that
+     * null-payload singletons of different concrete classes don't collide. See {@link
+     * RaggedDim#hashCode} for the shared rationale.
+     */
+    @Override
+    public int hashCode() {
+      return DynamicDim.class.hashCode();
+    }
+
+    /**
+     * Override paired with {@link #hashCode} to satisfy the {@code equals}/{@code hashCode}
+     * contract under CodeQL's {@code java/inconsistent-equals-and-hashcode}. See {@link
+     * RaggedDim#equals} for the shared singleton-identity rationale.
+     */
+    @Override
+    public boolean equals(Object obj) {
+      return this == obj;
     }
   }
 

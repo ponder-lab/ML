@@ -5,6 +5,7 @@ import static com.ibm.wala.cast.python.ml.client.RaggedFromRowSplits.Parameters.
 import static java.util.Collections.emptySet;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
@@ -83,12 +84,12 @@ public class RaggedFromRowSplits extends RaggedTensorFromValues {
             int len = ((NumericDim) firstDim).value();
             possibleRowDims.add(new NumericDim(Math.max(0, len - 1)));
           } else {
-            possibleRowDims.add(null);
+            possibleRowDims.add(DynamicDim.INSTANCE);
           }
         }
       }
     } else {
-      possibleRowDims.add(null);
+      possibleRowDims.add(DynamicDim.INSTANCE);
     }
 
     final Set<Dimension<?>> finalPossibleRowDims = possibleRowDims;

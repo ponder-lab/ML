@@ -7,6 +7,7 @@ import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -111,8 +112,13 @@ public class ModelCall extends TensorGenerator {
           for (List<Dimension<?>> inShape : inputShapes) {
             if (!outShape.isEmpty() && !inShape.isEmpty()) {
               List<Dimension<?>> newShape = new ArrayList<>(outShape);
-              // Keras usually preserves the batch dimension at index 0.
-              newShape.set(0, inShape.get(0));
+              // Keras usually preserves the batch dimension at index 0. If the upstream input's
+              // batch dim came through as raw `null` (a pre-https://github.com/wala/ML/issues/545
+              // unmigrated path), normalize to
+              // `DynamicDim` here so the call's output shape doesn't propagate the contract
+              // violation downstream.
+              Dimension<?> batchDim = inShape.get(0);
+              newShape.set(0, batchDim == null ? DynamicDim.INSTANCE : batchDim);
               refinedShapes.add(newShape);
             } else {
               refinedShapes.add(outShape);

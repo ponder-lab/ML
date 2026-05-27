@@ -30,6 +30,7 @@ import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.client.SliceBuiltinOperation;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
@@ -174,22 +175,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(2)));
 
   private static final TensorType TENSOR_NONE_32_FLOAT32 =
-      new TensorType(FLOAT_32, asList(null, new NumericDim(32)));
+      new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(32)));
 
   private static final TensorType TENSOR_NONE_3_FLOAT32 =
-      new TensorType(FLOAT_32, asList(null, new NumericDim(3)));
+      new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(3)));
 
   private static final TensorType TENSOR_NONE_4_FLOAT32 =
-      new TensorType(FLOAT_32, asList(null, new NumericDim(4)));
+      new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(4)));
 
   private static final TensorType TENSOR_NONE_2_FLOAT32 =
-      new TensorType(FLOAT_32, asList(null, new NumericDim(2)));
+      new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(2)));
 
   private static final TensorType TENSOR_NONE_100_FLOAT32 =
-      new TensorType(FLOAT_32, asList(null, new NumericDim(100)));
+      new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(100)));
 
   private static final TensorType TENSOR_NONE_NONE_STRING =
-      new TensorType(STRING, asList(null, null));
+      new TensorType(STRING, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE));
 
   private static final TensorType TENSOR_4_RAGGED_RAGGED_INT32 =
       new TensorType(INT_32, asList(new NumericDim(4), RaggedDim.INSTANCE, RaggedDim.INSTANCE));
@@ -199,7 +200,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_4_RAGGED_RAGGED_NONE_STRING =
       new TensorType(
-          STRING, asList(new NumericDim(4), RaggedDim.INSTANCE, RaggedDim.INSTANCE, null));
+          STRING,
+          asList(new NumericDim(4), RaggedDim.INSTANCE, RaggedDim.INSTANCE, DynamicDim.INSTANCE));
 
   private static final TensorType TENSOR_3_RAGGED_RAGGED_STRING =
       new TensorType(STRING, asList(new NumericDim(3), RaggedDim.INSTANCE, RaggedDim.INSTANCE));
@@ -238,10 +240,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       new TensorType(FLOAT_32, asList(new NumericDim(1), RaggedDim.INSTANCE));
 
   private static final TensorType TENSOR_2_NONE_INT32 =
-      new TensorType(INT_32, asList(new NumericDim(2), null));
+      new TensorType(INT_32, asList(new NumericDim(2), DynamicDim.INSTANCE));
 
   private static final TensorType TENSOR_2_RAGGED_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), RaggedDim.INSTANCE));
+
+  private static final TensorType TENSOR_NONE_RAGGED_INT32 =
+      new TensorType(INT_32, asList(DynamicDim.INSTANCE, RaggedDim.INSTANCE));
 
   private static final TensorType TENSOR_2_RAGGED_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), RaggedDim.INSTANCE));
@@ -989,7 +994,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             FLOAT_32,
             asList(
                 new NumericDim(512), new NumericDim(112), new NumericDim(112), new NumericDim(3)));
-    TensorType labels = new TensorType(FLOAT_32, asList(new NumericDim(512), null));
+    TensorType labels = new TensorType(FLOAT_32, asList(new NumericDim(512), DynamicDim.INSTANCE));
 
     test(
         "tf2_test_dataset19.py", "distributed_train_step", 1, 1, Map.of(2, Set.of(images, labels)));
@@ -3451,7 +3456,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     TensorType t1 = new TensorType(FLOAT_32, asList(new NumericDim(16), new NumericDim(32)));
     TensorType t2 =
         new TensorType(FLOAT_32, asList(new NumericDim(5), new NumericDim(10), new NumericDim(10)));
-    TensorType t3 = new TensorType(FLOAT_32, asList(null, new NumericDim(5)));
+    TensorType t3 = new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(5)));
 
     test(
         "tf2_test_input_batch_size.py",
@@ -3480,7 +3485,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     TensorType t2 =
         new TensorType(FLOAT_32, asList(new NumericDim(16), new NumericDim(5), new NumericDim(5)));
     // input3: shape=(None, 20), dtype=int32
-    TensorType t3 = new TensorType(INT_32, asList(null, new NumericDim(20)));
+    TensorType t3 = new TensorType(INT_32, asList(DynamicDim.INSTANCE, new NumericDim(20)));
 
     test(
         "tf2_test_input_mixed_args.py",
@@ -4106,6 +4111,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             5, Set.of(TENSOR_3_RAGGED_INT32)));
   }
 
+  /**
+   * Coverage guard for the {@code DynamicDim} fallback branch in {@link
+   * com.ibm.wala.cast.python.ml.client.RaggedFromRowStarts}'s nrows inference (<a
+   * href="https://github.com/wala/ML/issues/545">wala/ML#545</a>). When {@code row_starts} has a
+   * non-{@code NumericDim} first dim — here, a {@code DynamicDim} from {@code tf.keras.Input}'s
+   * symbolic batch axis — the generator emits {@code DynamicDim.INSTANCE} for the inferred nrows,
+   * yielding a {@code (DynamicDim, RaggedDim)} shape rather than emitting raw {@code null}.
+   */
+  @Test
+  public void testRaggedFromRowStartsDynamicRowDim()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_from_row_starts_dynamic.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_RAGGED_INT32)));
+  }
+
   @Test
   public void testRaggedFromRowLengths()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -4140,6 +4164,54 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             2, Set.of(TENSOR_4_RAGGED_INT32),
             3, Set.of(TENSOR_4_RAGGED_INT32),
             4, Set.of(TENSOR_4_RAGGED_INT32)));
+  }
+
+  /**
+   * Coverage guard for the {@code DynamicDim} fallback branch in {@link
+   * com.ibm.wala.cast.python.ml.client.RaggedFromRowLengths}'s nrows inference (<a
+   * href="https://github.com/wala/ML/issues/545">wala/ML#545</a>).
+   */
+  @Test
+  public void testRaggedFromRowLengthsDynamicRowDim()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_from_row_lengths_dynamic.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_RAGGED_INT32)));
+  }
+
+  /**
+   * Coverage guard for the {@code DynamicDim} fallback branch in {@link
+   * com.ibm.wala.cast.python.ml.client.RaggedFromRowLimits}'s nrows inference (<a
+   * href="https://github.com/wala/ML/issues/545">wala/ML#545</a>).
+   */
+  @Test
+  public void testRaggedFromRowLimitsDynamicRowDim()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_from_row_limits_dynamic.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_RAGGED_INT32)));
+  }
+
+  /**
+   * Coverage guard for the {@code DynamicDim} fallback branch in {@link
+   * com.ibm.wala.cast.python.ml.client.RaggedFromRowSplits}'s nrows inference (<a
+   * href="https://github.com/wala/ML/issues/545">wala/ML#545</a>).
+   */
+  @Test
+  public void testRaggedFromRowSplitsDynamicRowDim()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_from_row_splits_dynamic.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_RAGGED_INT32)));
   }
 
   @Test

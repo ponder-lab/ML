@@ -10,6 +10,7 @@ import static java.util.Collections.emptySet;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.classLoader.IField;
@@ -135,11 +136,11 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
                 }
               }
               if (!foundRowDim) {
-                possibleRowDims.add(null);
+                possibleRowDims.add(DynamicDim.INSTANCE);
               }
             } else {
               // Should not happen for valid input? Or maybe 0 ragged dims?
-              possibleRowDims.add(null);
+              possibleRowDims.add(DynamicDim.INSTANCE);
             }
           }
         }
@@ -150,7 +151,7 @@ public class RaggedFromNestedRowLengths extends RaggedTensorFromValues {
       possibleK.add(null);
     }
     if (possibleRowDims.isEmpty()) {
-      possibleRowDims.add(null);
+      possibleRowDims.add(DynamicDim.INSTANCE);
     }
 
     // 2. Determine shape of `values`.

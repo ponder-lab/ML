@@ -4,6 +4,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -64,15 +65,14 @@ public class FlowFromDirectoryGenerator extends DatasetGenerator {
     imageShape.addAll(targetSize);
     imageShape.add(new NumericDim(3)); // Default rgb color_mode
 
-    // 4. Construct labels shape: (batch_size, num_classes)
-    // We don't know num_classes, so we use null (None).
-    // The test tf2_test_dataset19.py has a categorical class_mode but we don't know the exact class
-    // count.
+    // 4. Construct labels shape: (batch_size, num_classes).
+    // `num_classes` is unknown statically — use `DynamicDim`
+    // (https://github.com/wala/ML/issues/545). The test
+    // `tf2_test_dataset19.py` has a categorical `class_mode` but we don't know the exact class
+    // count from `tensorflow.xml`'s modeling of `flow_from_directory`.
     List<Dimension<?>> labelShape = new ArrayList<>();
     labelShape.add(new NumericDim(batchSize.intValue()));
-    // For categorical, it's (batch_size, num_classes). For simplicity, just return (batch_size,
-    // null) or just (batch_size, 1) to match test.
-    labelShape.add(null);
+    labelShape.add(DynamicDim.INSTANCE);
 
     ret.add(imageShape);
     ret.add(labelShape);

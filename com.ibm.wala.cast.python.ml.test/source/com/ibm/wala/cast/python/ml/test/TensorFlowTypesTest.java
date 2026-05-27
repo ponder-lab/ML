@@ -12,7 +12,9 @@ import static org.junit.Assert.*;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import org.junit.Test;
 
@@ -150,5 +152,40 @@ public class TensorFlowTypesTest {
   public void testTensorTypeNotEqualsNull() {
     TensorType a = new TensorType("float32", asList(new NumericDim(3)));
     assertNotEquals(a, null);
+  }
+
+  @Test
+  public void testDynamicDimRendering() {
+    // Cover `DynamicDim`'s package-private overrides through `TensorType`'s public
+    // string-rendering methods (https://github.com/wala/ML/issues/545).
+    TensorType t = new TensorType("float32", asList(DynamicDim.INSTANCE, new NumericDim(4)));
+    assertTrue(t.toMDString().contains("*dynamic*"));
+    assertTrue(t.toCString(false).contains("dynamic"));
+    assertTrue(t.toCString(true).contains("*dynamic*"));
+  }
+
+  @Test
+  public void testDynamicDimSymbolicAndConcrete() {
+    // `DynamicDim` reports as a symbolic dim, mirroring `RaggedDim`'s semantics for the
+    // unknown-size axis (https://github.com/wala/ML/issues/545). A `TensorType` whose dims are
+    // {DynamicDim, NumericDim(4)} reports `symbolicDims() == 1` because exactly one dim is
+    // symbolic (the DynamicDim contributes 1 to the count).
+    TensorType t = new TensorType("float32", asList(DynamicDim.INSTANCE, new NumericDim(4)));
+    assertEquals(1, t.symbolicDims());
+  }
+
+  @Test
+  public void testDynamicDimNotEqualsRaggedDim() {
+    // Same `Void` payload value, different class — must not collapse to equal.
+    assertNotEquals(DynamicDim.INSTANCE, RaggedDim.INSTANCE);
+  }
+
+  @Test
+  public void testNullPayloadSentinelsHaveDistinctHashCodes() {
+    // Both `DynamicDim` and `RaggedDim` carry `Void` payload (always `null`). Without per-class
+    // `hashCode` overrides, the inherited `Dimension.hashCode` would hash only the payload and
+    // they'd collide in hash buckets — degrading `HashSet<Dimension<?>>` lookups to O(n) when
+    // both kinds are stored. Verify the per-class overrides keep them in distinct buckets.
+    assertNotEquals(DynamicDim.INSTANCE.hashCode(), RaggedDim.INSTANCE.hashCode());
   }
 }

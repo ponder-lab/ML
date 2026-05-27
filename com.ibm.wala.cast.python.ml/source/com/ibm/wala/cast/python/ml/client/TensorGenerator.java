@@ -24,7 +24,6 @@ import static com.ibm.wala.cast.python.util.Util.getReceiverValueNumber;
 import static com.ibm.wala.cast.python.util.Util.sanitize;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
-import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
@@ -34,6 +33,7 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.CompoundDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
@@ -346,8 +346,13 @@ public abstract class TensorGenerator {
                       + (this.getSource() != null ? this.getSource().getPointerKey() : "null")
                       + ".");
 
-              Dimension<Integer> dimension =
-                  (shapeValue != null) ? new NumericDim(shapeValue.intValue()) : null;
+              // `None` in a shape arg (e.g., `shape=[None, 4]`) is the dynamic-dim marker.
+              // https://github.com/wala/ML/issues/545: emit `DynamicDim.INSTANCE` instead of raw
+              // `null`.
+              Dimension<?> dimension =
+                  (shapeValue != null)
+                      ? new NumericDim(shapeValue.intValue())
+                      : DynamicDim.INSTANCE;
 
               LOGGER.fine("Adding dimension: " + dimension + ".");
               tensorDimensions.add(dimension);
@@ -409,18 +414,33 @@ public abstract class TensorGenerator {
                   + ".");
         }
 
-        for (int i = 0; i < possibleDimensions.length; i++)
-          for (Dimension<?> iDim : possibleDimensions[i]) {
-            @SuppressWarnings({"unchecked", "rawtypes"})
-            Dimension<?>[] dimensions = new Dimension[possibleDimensions.length];
+        // Build the Cartesian product of dimension possibilities across all positions. Empty
+        // positions (where `possibleDimensions[k]` has no resolved constant, e.g., a non-literal
+        // `BATCH_SIZE` in `tf.random.normal([BATCH_SIZE, 100])`) contribute `DynamicDim.INSTANCE`
+        // as the single fallback option — https://github.com/wala/ML/issues/545. The prior
+        // implementation iterated each
+        // position's set but only retained the last iterated element, producing a
+        // non-deterministic single shape per `i` rather than the full product.
+        List<Set<Dimension<?>>> resolved = new ArrayList<>(possibleDimensions.length);
+        for (Set<Dimension<?>> s : possibleDimensions) {
+          if (s == null || s.isEmpty()) resolved.add(Collections.singleton(DynamicDim.INSTANCE));
+          else resolved.add(s);
+        }
 
-            dimensions[i] = iDim;
-
-            for (int j = 0; j < possibleDimensions.length; j++)
-              if (i != j) for (Dimension<?> jDim : possibleDimensions[j]) dimensions[j] = jDim;
-
-            ret.add(asList(dimensions));
+        List<List<Dimension<?>>> shapes = new ArrayList<>();
+        shapes.add(new ArrayList<>());
+        for (Set<Dimension<?>> options : resolved) {
+          List<List<Dimension<?>>> next = new ArrayList<>(shapes.size() * options.size());
+          for (List<Dimension<?>> prefix : shapes) {
+            for (Dimension<?> d : options) {
+              List<Dimension<?>> extended = new ArrayList<>(prefix);
+              extended.add(d);
+              next.add(extended);
+            }
           }
+          shapes = next;
+        }
+        ret.addAll(shapes);
       } else if (asin.getNode()
           .getMethod()
           .getDeclaringClass()
