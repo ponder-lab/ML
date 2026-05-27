@@ -126,9 +126,18 @@ public class PythonInvokeInstruction extends SSAAbstractInvokeInstruction {
     ((PythonInstructionVisitor) v).visitPythonInvoke(this);
   }
 
+  /**
+   * Hashes purely on {@code iIndex()}. {@link SSAInstruction#equals} is {@code final} and compares
+   * only the instruction index, so any wider hash (the prior {@code getCallSite().hashCode() *
+   * result} included a value number) would let two instances be {@code equals}-equal but hash to
+   * different buckets — breaking the {@code HashMap}/{@code HashSet} invariant. See <a
+   * href="https://github.com/wala/ML/issues/478">wala/ML#478</a>.
+   *
+   * @return a hash code consistent with {@link SSAInstruction#equals}.
+   */
   @Override
   public int hashCode() {
-    return getCallSite().hashCode() * result;
+    return iIndex();
   }
 
   @Override
