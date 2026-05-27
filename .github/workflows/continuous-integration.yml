@@ -99,12 +99,19 @@ jobs:
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     # Verify any tag-push deploy is on a commit that's an ancestor of master
-    # (per wala/ML#421). Without this, a feature-branch tag could trigger a
-    # release deploy. Also confirm the tag name is semver-shaped — the deploy
+    # (per https://github.com/wala/ML/issues/421). Without this, a feature-branch tag could trigger
+    # a release deploy. Also confirm the tag name is semver-shaped — the deploy
     # step's `if:` does the same regex via `endsWith`/`startsWith`, but we
     # additionally guard the ancestor check itself so non-semver tags don't
     # error out the run on the merge-base call. The `actions/checkout` above
-    # is shallow so we need a fetch first to get master's history.
+    # is shallow (default `fetch-depth: 1`), and the previous `--depth=1`
+    # fetch of master left both the tag commit and master's tip with no
+    # parent chain in the local object database — so `merge-base
+    # --is-ancestor` couldn't link them even when the tag was on master.
+    # The release-plugin's tag commit lands at master~1 (immediately followed
+    # by the SNAPSHOT-bump), so `--depth=50` gives plenty of headroom while
+    # staying tight. This is the root cause of the 0.44.0/0.45.0 deploy-gate
+    # misses tracked at https://github.com/wala/ML/issues/454.
     - name: Verify tag is a semver release tag on master
       if: startsWith(github.ref, 'refs/tags/')
       run: |
@@ -113,7 +120,7 @@ jobs:
           echo "is_semver_release=false" >> "$GITHUB_OUTPUT"
           exit 0
         fi
-        git fetch --no-tags --depth=1 origin master
+        git fetch --no-tags --depth=50 origin master
         git merge-base --is-ancestor ${{ github.sha }} origin/master
         echo "is_semver_release=true" >> "$GITHUB_OUTPUT"
       id: tag_check
