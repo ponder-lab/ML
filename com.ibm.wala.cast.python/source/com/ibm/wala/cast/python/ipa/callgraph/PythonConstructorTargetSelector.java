@@ -137,7 +137,27 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
           if (receiver instanceof IPythonClass) {
             IPythonClass x = (IPythonClass) receiver;
             innerReferences = x.getInnerReferences();
-            methodReferences = x.getMethodReferences();
+            // Collect own methods first; they take precedence over inherited methods of the same
+            // name (Python override semantics).
+            java.util.Set<Atom> seenMethodNames = new java.util.HashSet<>();
+            for (MethodReference m : x.getMethodReferences()) {
+              methodReferences.add(m);
+              seenMethodNames.add(m.getName());
+            }
+            // wala/ML#107: also stamp methods inherited from supertypes onto the instance, so a
+            // call like `c.func(...)` where `class C(D)` and `D` declares `func` resolves through
+            // the constructor's per-method trampoline instead of silently dropping the edge.
+            // Multiple-supertype iteration is left-first (matching Python's MRO depth-first rule);
+            // the `seenMethodNames` set dedupes when supertypes contribute the same name.
+            for (IClass parent = receiver.getSuperclass();
+                parent instanceof IPythonClass;
+                parent = parent.getSuperclass()) {
+              for (MethodReference m : ((IPythonClass) parent).getMethodReferences()) {
+                if (seenMethodNames.add(m.getName())) {
+                  methodReferences.add(m);
+                }
+              }
+            }
           } else {
             for (IMethod m : receiver.getDeclaredMethods()) {
               if (!m.isInit() && !m.isClinit()) {
