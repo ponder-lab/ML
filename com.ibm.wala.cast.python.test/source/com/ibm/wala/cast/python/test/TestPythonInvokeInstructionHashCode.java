@@ -5,9 +5,9 @@ import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.shrike.shrikeBT.IInvokeInstruction.Dispatch;
-import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.util.collections.Pair;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -27,10 +27,8 @@ import org.junit.Test;
 public class TestPythonInvokeInstructionHashCode {
 
   private static CallSiteReference site(int pc) {
-    MethodReference m =
-        MethodReference.findOrCreate(
-            PythonTypes.CodeBody, "do", "()Lcom/ibm/wala/cast/python/CodeBody;");
-    return CallSiteReference.make(pc, m, Dispatch.VIRTUAL);
+    return CallSiteReference.make(
+        pc, AstMethodReference.fnReference(PythonTypes.CodeBody), Dispatch.VIRTUAL);
   }
 
   private static PythonInvokeInstruction make(
