@@ -978,7 +978,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
     ((CAstControlFlowRecorder) cfg).map(call, call);
 
     if (cfg.getTargetLabels(call).isEmpty()) {
-      LOGGER.fine(() -> "no exceptions for " + CAstPrinter.print(call));
+      LOGGER.finer(() -> "no exceptions for " + CAstPrinter.print(call));
       context.cfg().addPreEdgeToExit(call, true);
     } else {
       cfg.getTargetLabels(call)

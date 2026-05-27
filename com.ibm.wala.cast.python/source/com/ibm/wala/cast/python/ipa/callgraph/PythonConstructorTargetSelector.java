@@ -66,8 +66,8 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
   @Override
   public IMethod getCalleeTarget(CGNode caller, CallSiteReference site, IClass receiver) {
     if (receiver != null) {
-      LOGGER.fine("Getting callee target for receiver: " + receiver);
-      LOGGER.fine("Calling method name is: " + caller.getMethod().getName());
+      LOGGER.finer("Getting callee target for receiver: " + receiver);
+      LOGGER.finer("Calling method name is: " + caller.getMethod().getName());
 
       IClassHierarchy cha = receiver.getClassHierarchy();
       if (cha.isSubclassOf(receiver, cha.lookupClass(PythonTypes.object))
