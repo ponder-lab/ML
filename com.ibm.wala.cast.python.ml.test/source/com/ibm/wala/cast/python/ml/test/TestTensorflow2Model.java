@@ -245,6 +245,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_2_RAGGED_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), RaggedDim.INSTANCE));
 
+  private static final TensorType TENSOR_NONE_RAGGED_INT32 =
+      new TensorType(INT_32, asList(DynamicDim.INSTANCE, RaggedDim.INSTANCE));
+
   private static final TensorType TENSOR_2_RAGGED_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), RaggedDim.INSTANCE));
 
@@ -4108,6 +4111,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             5, Set.of(TENSOR_3_RAGGED_INT32)));
   }
 
+  /**
+   * Coverage guard for the {@code DynamicDim} fallback branch in {@link
+   * com.ibm.wala.cast.python.ml.client.RaggedFromRowStarts}'s nrows inference (<a
+   * href="https://github.com/wala/ML/issues/545">wala/ML#545</a>). When {@code row_starts} has a
+   * non-{@code NumericDim} first dim — here, a {@code DynamicDim} from {@code tf.keras.Input}'s
+   * symbolic batch axis — the generator emits {@code DynamicDim.INSTANCE} for the inferred nrows,
+   * yielding a {@code (DynamicDim, RaggedDim)} shape rather than emitting raw {@code null}.
+   */
+  @Test
+  public void testRaggedFromRowStartsDynamicRowDim()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_from_row_starts_dynamic.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_RAGGED_INT32)));
+  }
+
   @Test
   public void testRaggedFromRowLengths()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -4142,6 +4164,54 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             2, Set.of(TENSOR_4_RAGGED_INT32),
             3, Set.of(TENSOR_4_RAGGED_INT32),
             4, Set.of(TENSOR_4_RAGGED_INT32)));
+  }
+
+  /**
+   * Coverage guard for the {@code DynamicDim} fallback branch in {@link
+   * com.ibm.wala.cast.python.ml.client.RaggedFromRowLengths}'s nrows inference (<a
+   * href="https://github.com/wala/ML/issues/545">wala/ML#545</a>).
+   */
+  @Test
+  public void testRaggedFromRowLengthsDynamicRowDim()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_from_row_lengths_dynamic.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_RAGGED_INT32)));
+  }
+
+  /**
+   * Coverage guard for the {@code DynamicDim} fallback branch in {@link
+   * com.ibm.wala.cast.python.ml.client.RaggedFromRowLimits}'s nrows inference (<a
+   * href="https://github.com/wala/ML/issues/545">wala/ML#545</a>).
+   */
+  @Test
+  public void testRaggedFromRowLimitsDynamicRowDim()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_from_row_limits_dynamic.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_RAGGED_INT32)));
+  }
+
+  /**
+   * Coverage guard for the {@code DynamicDim} fallback branch in {@link
+   * com.ibm.wala.cast.python.ml.client.RaggedFromRowSplits}'s nrows inference (<a
+   * href="https://github.com/wala/ML/issues/545">wala/ML#545</a>).
+   */
+  @Test
+  public void testRaggedFromRowSplitsDynamicRowDim()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_from_row_splits_dynamic.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_RAGGED_INT32)));
   }
 
   @Test
