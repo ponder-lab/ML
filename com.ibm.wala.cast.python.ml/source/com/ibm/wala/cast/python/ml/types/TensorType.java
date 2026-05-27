@@ -256,6 +256,17 @@ public class TensorType implements Iterable<Dimension<?>> {
         return "ragged";
       }
     }
+
+    /**
+     * Override {@link Dimension#hashCode} (which hashes only the payload {@code value}) so that
+     * null-payload singletons of different concrete classes don't collide. {@link Dimension#equals}
+     * already distinguishes by {@code getClass()}, so the bucket-level separation here is a
+     * hash-performance fix, not a correctness one.
+     */
+    @Override
+    public int hashCode() {
+      return RaggedDim.class.hashCode();
+    }
   }
 
   /**
@@ -314,6 +325,16 @@ public class TensorType implements Iterable<Dimension<?>> {
       } else {
         return "dynamic";
       }
+    }
+
+    /**
+     * Override {@link Dimension#hashCode} (which hashes only the payload {@code value}) so that
+     * null-payload singletons of different concrete classes don't collide. See {@link
+     * RaggedDim#hashCode} for the shared rationale.
+     */
+    @Override
+    public int hashCode() {
+      return DynamicDim.class.hashCode();
     }
   }
 

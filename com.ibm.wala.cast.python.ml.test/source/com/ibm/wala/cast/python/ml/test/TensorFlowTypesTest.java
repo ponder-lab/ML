@@ -179,4 +179,13 @@ public class TensorFlowTypesTest {
     // Same `Void` payload value, different class — must not collapse to equal.
     assertNotEquals(DynamicDim.INSTANCE, RaggedDim.INSTANCE);
   }
+
+  @Test
+  public void testNullPayloadSentinelsHaveDistinctHashCodes() {
+    // Both `DynamicDim` and `RaggedDim` carry `Void` payload (always `null`). Without per-class
+    // `hashCode` overrides, the inherited `Dimension.hashCode` would hash only the payload and
+    // they'd collide in hash buckets — degrading `HashSet<Dimension<?>>` lookups to O(n) when
+    // both kinds are stored. Verify the per-class overrides keep them in distinct buckets.
+    assertNotEquals(DynamicDim.INSTANCE.hashCode(), RaggedDim.INSTANCE.hashCode());
+  }
 }
