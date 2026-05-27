@@ -150,10 +150,10 @@
           <artifactId>maven-release-plugin</artifactId>
           <version>3.3.1</version>
           <configuration>
-            <!-- Override the default `@{project.artifactId}-@{project.version}`
-              format (which produces `ml-X.Y.Z`). The CI deploy gate's tag-check
-              regex matches plain semver `X.Y.Z` only, and historical tags
-              `0.40.0`–`0.45.0` are all plain semver. See wala/ML#535. -->
+            <!-- Override the default `@{project.artifactId}-@{project.version}`.
+              The CI deploy gate's tag-check regex matches plain semver
+              `X.Y.Z` only, and historical release tags are plain semver.
+              See https://github.com/wala/ML/issues/535. -->
             <tagNameFormat>@{project.version}</tagNameFormat>
           </configuration>
         </plugin>
