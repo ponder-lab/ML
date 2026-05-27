@@ -56,7 +56,7 @@
       <artifactId>commons-cli</artifactId>
     </dependency>
     <!-- `jython3` references `jnr/constants/Constant` (and other `jnr/...`)
-      from its `org.python.modules.posix.PosixModule`. The `0.0.1-SNAPSHOT`
+      from its `org.python.modules.posix.PosixModule`. The `0.0.2-SNAPSHOT`
       `jython3.jar` is registered via `mvn install:install-file
       -DgeneratePom=true` (see `CONTRIBUTING.md` and the CI workflow),
       which synthesizes a minimal POM that declares zero dependencies — so
@@ -91,8 +91,6 @@
                 <exclude>META-INF/*.SF</exclude>
                 <exclude>META-INF/*.DSA</exclude>
                 <exclude>META-INF/*.RSA</exclude>
-                <!-- Default-package classes break OSGi bundle wrapping in downstream consumers (Tycho 5+ bnd rejects them); ProxyDeserialization is an unused orphan from jython3. -->
-                <exclude>ProxyDeserialization.class</exclude>
               </excludes>
             </filter>
           </filters>
