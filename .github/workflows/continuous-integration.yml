@@ -62,14 +62,15 @@ jobs:
         pushd jython3
         ant
         pushd dist
-        mvn install:install-file -Dfile=./jython-dev.jar -DgroupId="org.python" -DartifactId="jython3" -Dversion="0.0.2-SNAPSHOT" -Dpackaging="jar" -DgeneratePom=true -B
+        mvn install:install-file -Dfile=./jython-dev.jar -DgroupId="org.python" -DartifactId="jython3" -Dversion="0.0.2" -Dpackaging="jar" -DgeneratePom=true -B
         popd
         popd
       shell: bash
     - name: Install IDE
       run: |
         pushd IDE/com.ibm.wala.cast.lsp
-        mvn install -B -q -DskipTests
+        mvn package -B -q -DskipTests
+        mvn install:install-file -Dfile=target/com.ibm.wala.cast.lsp-0.0.1-SNAPSHOT.jar -DgroupId="com.ibm.wala" -DartifactId="com.ibm.wala.cast.lsp" -Dversion="0.0.1" -Dpackaging="jar" -DgeneratePom=true -B
         popd
     - name: Build with Maven
       run: mvn -Dlogging.config.file=./logging.ci.properties verify -B -Pjacoco
