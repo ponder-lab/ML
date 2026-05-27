@@ -98,7 +98,12 @@ public class TensorType implements Iterable<Dimension<?>> {
 
     @Override
     public String toString() {
-      return "D:" + type() + "," + value();
+      // Skip the ",value" suffix for `Void`-payload sentinels (e.g. `DynamicDim`,
+      // `RaggedDim`) whose `value()` is always `null`; the trailing ",null" otherwise
+      // collides visually with the ", " dim separator in shape renderings. See
+      // wala/ML#558.
+      T v = value();
+      return v == null ? "D:" + type() : "D:" + type() + "," + v;
     }
 
     @Override
