@@ -57,7 +57,7 @@
     </dependency>
     <!-- `jython3` references `jnr/constants/Constant` (and other `jnr/...`)
       from its `org.python.modules.posix.PosixModule`. The `0.0.2-SNAPSHOT`
-      `jython3.jar` is registered via `mvn install:install-file
+      `jython-dev.jar` is registered via `mvn install:install-file
       -DgeneratePom=true` (see `CONTRIBUTING.md` and the CI workflow),
       which synthesizes a minimal POM that declares zero dependencies — so
       Maven's dependency graph won't pull `jnr-constants` transitively. We
