@@ -45,7 +45,9 @@ import com.ibm.wala.util.collections.Pair;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Logger;
 
 public class PythonConstructorTargetSelector implements MethodTargetSelector {
@@ -137,7 +139,29 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
           if (receiver instanceof IPythonClass) {
             IPythonClass x = (IPythonClass) receiver;
             innerReferences = x.getInnerReferences();
-            methodReferences = x.getMethodReferences();
+            // Collect own methods first; they take precedence over inherited methods of the same
+            // name (Python override semantics).
+            Set<Atom> seenMethodNames = new HashSet<>();
+            for (MethodReference m : x.getMethodReferences()) {
+              methodReferences.add(m);
+              seenMethodNames.add(m.getName());
+            }
+            // Also stamp methods inherited from supertypes onto the instance, so a call like
+            // `c.func(...)` where `class C(D)` and `D` declares `func` resolves through the
+            // constructor's per-method trampoline instead of silently dropping the edge. Walks
+            // the single supertype chain via `getSuperclass()`; the `seenMethodNames` set keeps
+            // own methods winning on name collision, and the IClass model collapses Python
+            // multi-inheritance to one `superName` per `PythonClass`, so a true left-first MRO
+            // walk isn't representable here without extending the loader. See
+            // https://github.com/wala/ML/issues/107.
+            for (IClass parent = receiver.getSuperclass();
+                parent instanceof IPythonClass;
+                parent = parent.getSuperclass()) {
+              ((IPythonClass) parent)
+                  .getMethodReferences().stream()
+                      .filter(m -> seenMethodNames.add(m.getName()))
+                      .forEach(methodReferences::add);
+            }
           } else {
             for (IMethod m : receiver.getDeclaredMethods()) {
               if (!m.isInit() && !m.isClinit()) {

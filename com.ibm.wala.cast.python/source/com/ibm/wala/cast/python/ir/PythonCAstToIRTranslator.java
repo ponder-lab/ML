@@ -85,6 +85,18 @@ public class PythonCAstToIRTranslator extends AstTranslator {
   private static final Logger LOGGER = Logger.getLogger(PythonCAstToIRTranslator.class.getName());
 
   private final Map<CAstType, TypeName> walaTypeNames = HashMapFactory.make();
+
+  /**
+   * For each class's WALA {@link TypeName}, the user-source names of the members emitted as {@code
+   * putfield}s on that class's class object during {@link #leaveTypeEntity}. The list accumulates
+   * both own and inherited members as propagation runs, so a subclass's entry contains everything
+   * descendants need to inherit. Used to propagate inherited members onto subclass class objects
+   * (<a href="https://github.com/wala/ML/issues/107">wala/ML#107</a>): a property read like {@code
+   * c.func} on an instance of {@code class C(D)} where {@code func} is declared on {@code D} would
+   * otherwise miss because {@code C}'s class-object catalog has no {@code func} entry.
+   */
+  private final Map<TypeName, List<String>> classEmittedMemberNames = HashMapFactory.make();
+
   private final Set<Pair<Scope, String>> globalDeclSet = new HashSet<>();
   private static boolean singleFileAnalysis = true;
 
@@ -780,6 +792,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
     }
     this.entity2ExposedNames.get(context.top()).add(fnName);
 
+    List<String> emittedMemberNames = new ArrayList<>();
     for (CAstEntity field : n.getAllScopedEntities().get(null)) {
       FieldReference fr =
           FieldReference.findOrCreate(
@@ -807,6 +820,57 @@ public class PythonCAstToIRTranslator extends AstTranslator {
           .addInstruction(
               Python.instructionFactory()
                   .PutInstruction(code.cfg().getCurrentInstruction(), v, val, fr));
+      emittedMemberNames.add(field.getName());
+    }
+    classEmittedMemberNames.put(cls.getName(), emittedMemberNames);
+
+    // Propagate members from non-missing supertypes onto this class's class object so that
+    // property reads (e.g., `c.func` where `class C(D)` and `D` declares `func`) find inherited
+    // members via the catalog. Without this pass, the IR for `class C(D): pass` emits `new C`
+    // with no `putfield` statements, and any read of an inherited attribute on a `C` instance
+    // yields an empty PTS — silently dropping the call-graph edge for `c.func(...)`. Each
+    // inherited member is emitted as a `getfield <super>.<name>` followed by a
+    // `putfield <this>.<name>`, so the runtime shape mirrors the per-class loop above. Members
+    // already defined on this class take precedence (Python override semantics); the seen-set
+    // also dedupes when multiple supertypes contribute the same name (left-first wins, matching
+    // Python's MRO). See https://github.com/wala/ML/issues/107.
+    Set<String> propagated = new HashSet<>(emittedMemberNames);
+    for (CAstType superType : n.getType().getSupertypes()) {
+      if (superType instanceof MissingType) continue;
+      TypeName superTypeName = walaTypeNames.get(superType);
+      if (superTypeName == null) continue;
+      IClass superClass = loader.lookupClass(superTypeName);
+      if (superClass == null) continue;
+      List<String> superMembers = classEmittedMemberNames.get(superTypeName);
+      if (superMembers == null || superMembers.isEmpty()) continue;
+
+      int superClassObject = doLocalRead(code, superType.getName(), superClass.getReference());
+
+      for (String memberName : superMembers) {
+        if (!propagated.add(memberName)) continue;
+        int inheritedVal = code.currentScope().allocateTempValue();
+        FieldReference superFr =
+            FieldReference.findOrCreate(
+                superClass.getReference(),
+                Atom.findOrCreateUnicodeAtom(memberName),
+                PythonTypes.Root);
+        code.cfg()
+            .addInstruction(
+                Python.instructionFactory()
+                    .GetInstruction(
+                        code.cfg().getCurrentInstruction(),
+                        inheritedVal,
+                        superClassObject,
+                        superFr));
+        FieldReference thisFr =
+            FieldReference.findOrCreate(
+                type, Atom.findOrCreateUnicodeAtom(memberName), PythonTypes.Root);
+        code.cfg()
+            .addInstruction(
+                Python.instructionFactory()
+                    .PutInstruction(code.cfg().getCurrentInstruction(), v, inheritedVal, thisFr));
+        emittedMemberNames.add(memberName);
+      }
     }
 
     if (cls instanceof PythonClass) {
