@@ -82,7 +82,7 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
     // TODO: Callable detection may need to be moved. See https://github.com/wala/ML/issues/207. If
     // it stays here, we should further document the receiver swapping process.
     if (isCallable(receiver)) {
-      LOGGER.fine("Encountered callable.");
+      LOGGER.finer("Encountered callable.");
 
       PythonInvokeInstruction call = this.getCall(caller, site);
       if (call == null) return super.getCalleeTarget(caller, site, receiver);
@@ -91,7 +91,7 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
       receiver = getCallable(caller, receiver.getClassHierarchy(), call);
 
       if (receiver == null) return null; // not found.
-      else LOGGER.fine("Substituting the receiver with one derived from a callable.");
+      else LOGGER.finer("Substituting the receiver with one derived from a callable.");
     }
 
     return super.getCalleeTarget(caller, site, receiver);
@@ -298,7 +298,7 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
         if (callable == null) {
           // try the workaround for https://github.com/wala/ML/issues/106. NOTE: We cannot verify
           // that the super class is tf.keras.Model due to https://github.com/wala/ML/issues/118.
-          LOGGER.fine("Attempting callable workaround for https://github.com/wala/ML/issues/118.");
+          LOGGER.finer("Attempting callable workaround for https://github.com/wala/ML/issues/118.");
 
           callable =
               cha.lookupClass(
