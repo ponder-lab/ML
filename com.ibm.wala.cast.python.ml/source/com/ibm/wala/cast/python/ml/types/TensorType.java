@@ -572,7 +572,7 @@ public class TensorType implements Iterable<Dimension<?>> {
     return new TensorType(FLOAT32.name().toLowerCase(Locale.ROOT), Arrays.asList(batch, vec));
   }
 
-  public static TensorType shapeArg(CGNode node, int literalVn) throws IOException {
+  public static TensorType shapeArg(CGNode node, int literalVn) {
     logger.fine(() -> node.getIR().toString());
     Map<Integer, Dimension<?>> dims = new TreeMap<>();
     DefUse du = node.getDU();
@@ -632,14 +632,19 @@ public class TensorType implements Iterable<Dimension<?>> {
               ((AstMethod) node.getMethod())
                   .debugInfo()
                   .getInstructionPosition(du.getDef(val).iIndex());
-          System.err.println(p);
-          SourceBuffer b = new SourceBuffer(p);
-          String expr = b.toString();
-          System.err.println(expr);
-          Integer ival = PythonInterpreter.interpretAsInt(expr);
-          if (ival != null) {
-            dims.put(index, new NumericDim(ival));
-            continue;
+          // `SourceBuffer(Position)` reads the underlying source file. If the file
+          // is unavailable (synthetic / detached position), fall through to the
+          // symbolic-dim fallback below rather than propagating the I/O failure.
+          try {
+            SourceBuffer b = new SourceBuffer(p);
+            String expr = b.toString();
+            Integer ival = PythonInterpreter.interpretAsInt(expr);
+            if (ival != null) {
+              dims.put(index, new NumericDim(ival));
+              continue;
+            }
+          } catch (IOException e) {
+            logger.fine(() -> "Could not read source for shape-arg position " + p + ": " + e);
           }
         }
         dims.put(index, new SymbolicDim("?"));
