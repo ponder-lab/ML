@@ -14,4 +14,6 @@ try:
     r = tf.RaggedTensor.from_row_splits(values, row_splits)
     consume(r)
 except (TypeError, ValueError):
+    # Intentional swallow: the symbolic input above only exercises the analyzer; the
+    # runtime rejects it. No state to recover.
     pass
