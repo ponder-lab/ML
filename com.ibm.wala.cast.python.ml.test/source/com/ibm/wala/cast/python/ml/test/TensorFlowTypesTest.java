@@ -165,6 +165,17 @@ public class TensorFlowTypesTest {
   }
 
   @Test
+  public void testVoidPayloadDimensionToString() {
+    // `Void`-payload sentinels skip the ",value" suffix so they don't collide visually
+    // with the ", " dim separator in shape renderings (https://github.com/wala/ML/issues/558).
+    assertEquals("D:Dynamic", DynamicDim.INSTANCE.toString());
+    assertEquals("D:Ragged", RaggedDim.INSTANCE.toString());
+    // Value-carrying dims still include the value suffix.
+    assertEquals("D:Constant,32", new NumericDim(32).toString());
+    assertEquals("D:Symbolic,?", new SymbolicDim("?").toString());
+  }
+
+  @Test
   public void testDynamicDimSymbolicAndConcrete() {
     // `DynamicDim` reports as a symbolic dim, mirroring `RaggedDim`'s semantics for the
     // unknown-size axis (https://github.com/wala/ML/issues/545). A `TensorType` whose dims are

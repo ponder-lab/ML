@@ -36,7 +36,7 @@ You must install the `jython-dev.jar` to your local maven repository.
 	-Dfile=./jython-dev.jar \
 	-DgroupId="org.python" \
 	-DartifactId="jython3" \
-	-Dversion="0.0.1-SNAPSHOT" \
+	-Dversion="0.0.2-SNAPSHOT" \
 	-Dpackaging="jar" \
 	-DgeneratePom=true
 	```
