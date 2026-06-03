@@ -627,24 +627,34 @@ public class TensorType implements Iterable<Dimension<?>> {
         logger.fine("value: " + v);
         dims.put(index, v >= 0 ? new NumericDim((Integer) v) : new SymbolicDim("?"));
       } else {
-        if (du.getDef(val) != null && node.getMethod() instanceof AstMethod) {
+        // Guard `iIndex() >= 0`: synthetic defs have a negative instruction index,
+        // for which `getInstructionPosition` has no valid position (same guard as
+        // `PythonTurtleAnalysisEngine`).
+        if (du.getDef(val) != null
+            && node.getMethod() instanceof AstMethod
+            && du.getDef(val).iIndex() >= 0) {
           Position p =
               ((AstMethod) node.getMethod())
                   .debugInfo()
                   .getInstructionPosition(du.getDef(val).iIndex());
-          // `SourceBuffer(Position)` reads the underlying source file. If the file
-          // is unavailable (synthetic / detached position), fall through to the
-          // symbolic-dim fallback below rather than propagating the I/O failure.
-          try {
-            SourceBuffer b = new SourceBuffer(p);
-            String expr = b.toString();
-            Integer ival = PythonInterpreter.interpretAsInt(expr);
-            if (ival != null) {
-              dims.put(index, new NumericDim(ival));
-              continue;
+          // `SourceBuffer(Position)` reads the underlying source file. If the
+          // position is absent (detached def) or the file is unavailable
+          // (synthetic position), fall through to the symbolic-dim fallback below
+          // rather than crashing the analysis. The `p != null` guard prevents a
+          // `SourceBuffer(null)` NPE, which the `IOException` catch would not
+          // handle.
+          if (p != null) {
+            try {
+              SourceBuffer b = new SourceBuffer(p);
+              String expr = b.toString();
+              Integer ival = PythonInterpreter.interpretAsInt(expr);
+              if (ival != null) {
+                dims.put(index, new NumericDim(ival));
+                continue;
+              }
+            } catch (IOException e) {
+              logger.fine(() -> "Could not read source for shape-arg position " + p + ": " + e);
             }
-          } catch (IOException e) {
-            logger.fine(() -> "Could not read source for shape-arg position " + p + ": " + e);
           }
         }
         dims.put(index, new SymbolicDim("?"));
