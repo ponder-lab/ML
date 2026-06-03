@@ -2270,6 +2270,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Companion to {@link #testConstantFromNumpy} for the {@code np.zeros → tf.constant} bridge:
+   * {@code consume(x)} where {@code x = tf.constant(np.zeros((2, 3), dtype=np.int32))} infers
+   * {@code (2, 3) int32}. Exercises {@link NpZeros} via the {@code createManualGenerator} recovery
+   * path (symmetric to the {@code np.ones} bridge in {@link #testMultilayerPerceptron}, but with a
+   * non-float dtype). Positive regression guard for wala/ML#539.
+   */
+  @Test
+  public void testConstantFromNpZeros()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_constant_from_np_zeros.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_3_INT32)));
+  }
+
+  /**
    * {@code MyModel.call(self, x)} receives {@code x} from {@code model(images)} calls inside {@code
    * train_step} and {@code test_step}. {@code images} comes from iterating {@code train_ds}, {@code
    * valid_ds}, or {@code test_ds} &mdash; all created from mnist data via {@code
