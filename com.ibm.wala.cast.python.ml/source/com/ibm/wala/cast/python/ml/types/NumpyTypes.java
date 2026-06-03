@@ -61,7 +61,7 @@ public class NumpyTypes extends PythonTypes {
   public static final MethodReference ARRAY =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
-              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/core/multiarray/array")),
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/array")),
           AstMethodReference.fnSelector);
 
   private static final String ARRAY_SIGNATURE = "numpy.array()";
@@ -70,7 +70,7 @@ public class NumpyTypes extends PythonTypes {
   public static final MethodReference ZEROS =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
-              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/core/numeric/zeros")),
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/zeros")),
           AstMethodReference.fnSelector);
 
   private static final String ZEROS_SIGNATURE = "numpy.zeros()";
@@ -79,7 +79,7 @@ public class NumpyTypes extends PythonTypes {
   public static final MethodReference ONES =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
-              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/core/numeric/ones")),
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/ones")),
           AstMethodReference.fnSelector);
 
   private static final String ONES_SIGNATURE = "numpy.ones()";
@@ -88,8 +88,7 @@ public class NumpyTypes extends PythonTypes {
   public static final MethodReference RESHAPE =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
-              PythonTypes.pythonLoader,
-              TypeName.string2TypeName("Lnumpy/core/fromnumeric/reshape")),
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/reshape")),
           AstMethodReference.fnSelector);
 
   private static final String RESHAPE_SIGNATURE = "numpy.reshape()";

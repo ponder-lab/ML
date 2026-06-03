@@ -122,8 +122,6 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NEGATIVE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NORMAL_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NOT_EQUAL;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NUMPY_ARRAY;
-import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.NUMPY_RESHAPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONES;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ONE_HOT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.PLACEHOLDER;
@@ -195,6 +193,7 @@ import static java.util.Map.entry;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
+import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
@@ -1101,8 +1100,12 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, MODEL.getDeclaringClass())) return new Model(source);
     else if (isType(calledFunction, TENSOR.getDeclaringClass())
         || isType(calledFunction, NDARRAY.getDeclaringClass())) return new TensorCall(source);
-    else if (isType(calledFunction, NUMPY_ARRAY.getDeclaringClass())) return new NpArray(source);
-    else if (isType(calledFunction, NUMPY_RESHAPE.getDeclaringClass()))
+    else if (isType(calledFunction, NumpyTypes.ARRAY.getDeclaringClass()))
+      return new NpArray(source);
+    else if (isType(calledFunction, NumpyTypes.ONES.getDeclaringClass())) return new NpOnes(source);
+    else if (isType(calledFunction, NumpyTypes.ZEROS.getDeclaringClass()))
+      return new NpZeros(source);
+    else if (isType(calledFunction, NumpyTypes.RESHAPE.getDeclaringClass()))
       return new NpReshape(source);
     else if (isType(calledFunction, DATASET_FROM_TENSOR_SLICES_TYPE))
       return new DatasetFromTensorSlicesGenerator(source);

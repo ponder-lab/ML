@@ -2030,9 +2030,11 @@ public abstract class TensorGenerator {
   }
 
   /**
-   * Returns the TensorFlow function signature represented by this generator.
+   * Returns the TensorFlow or NumPy function signature represented by this generator.
    *
-   * @return The TensorFlow function signature represented by this generator.
+   * @return The TensorFlow or NumPy function signature represented by this generator, or {@code
+   *     <unmapped:...>} if the function has no mapped signature in either {@link TensorFlowTypes}
+   *     or {@link NumpyTypes}.
    */
   protected String getSignature() {
     TypeReference function;
@@ -2041,7 +2043,10 @@ public abstract class TensorGenerator {
     } else {
       function = getFunction(this.getSource());
     }
-    String signature = TYPE_REFERENCE_TO_SIGNATURE.get(function);
+    // TensorFlow signatures live in TensorFlowTypes; numpy signatures in NumpyTypes. Consult both.
+    String signature =
+        TYPE_REFERENCE_TO_SIGNATURE.getOrDefault(
+            function, NumpyTypes.TYPE_REFERENCE_TO_SIGNATURE.get(function));
     if (signature == null) {
       return "<unmapped:" + function + ">";
     }
@@ -2821,6 +2826,10 @@ public abstract class TensorGenerator {
       return new Ones(node);
     } else if (type.equals(TensorFlowTypes.ZEROS.getDeclaringClass())) {
       return new Zeros(node);
+    } else if (type.equals(NumpyTypes.ONES.getDeclaringClass())) {
+      return new NpOnes(node);
+    } else if (type.equals(NumpyTypes.ZEROS.getDeclaringClass())) {
+      return new NpZeros(node);
     } else if (type.equals(TensorFlowTypes.SPARSE_EYE.getDeclaringClass())) {
       return new SparseEye(node);
     } else if (type.equals(TensorFlowTypes.EYE.getDeclaringClass())) {
