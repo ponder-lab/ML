@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.ibm.wala</groupId>
   <artifactId>ml</artifactId>
-  <version>0.46.2-SNAPSHOT</version>
+  <version>0.47.0</version>
   <packaging>pom</packaging>
   <modules>
     <module>com.ibm.wala.cast.python</module>
@@ -19,7 +19,7 @@
   <scm>
     <connection>scm:git:https://github.com/ponder-lab/ML.git</connection>
     <developerConnection>scm:git:git@github.com:ponder-lab/ML.git</developerConnection>
-    <tag>ml-0.45.0</tag>
+    <tag>0.47.0</tag>
     <url>https://github.com/ponder-lab/ML</url>
   </scm>
   <distributionManagement>
@@ -40,7 +40,7 @@
     <parallel>both</parallel>
     <logging.config.file>./logging.properties</logging.config.file>
     <jacoco-version>0.8.14</jacoco-version>
-    <argLine/>
+    <argLine />
     <junit.4.version>4.13.2</junit.4.version>
   </properties>
   <dependencyManagement>
@@ -228,8 +228,8 @@
                   <exclude>IDE/</exclude>
                   <exclude>jython3/</exclude>
                 </excludes>
-                <trimTrailingWhitespace/>
-                <endWithNewline/>
+                <trimTrailingWhitespace />
+                <endWithNewline />
               </format>
               <format>
                 <includes>
@@ -239,8 +239,8 @@
                 <excludes>
                   <exclude>**/target/</exclude>
                 </excludes>
-                <trimTrailingWhitespace/>
-                <endWithNewline/>
+                <trimTrailingWhitespace />
+                <endWithNewline />
                 <indent>
                   <tabs>true</tabs>
                   <spacesPerTab>4</spacesPerTab>
@@ -251,7 +251,7 @@
                   <include>**/*.xml</include>
                   <include>**/.pydevproject</include>
                 </includes>
-                <toggleOffOn/>
+                <toggleOffOn />
                 <excludes>
                   <exclude>**/plugin.xml</exclude>
                   <exclude>**/pom.xml</exclude>
@@ -280,8 +280,8 @@
                   <searchRegex>[ \t]+/&gt;</searchRegex>
                   <replacement>/&gt;</replacement>
                 </replaceRegex>
-                <trimTrailingWhitespace/>
-                <endWithNewline/>
+                <trimTrailingWhitespace />
+                <endWithNewline />
               </format>
             </formats>
             <java>
@@ -289,8 +289,8 @@
                 <version>1.27.0</version>
                 <reflowLongStrings>true</reflowLongStrings>
               </googleJavaFormat>
-              <trimTrailingWhitespace/>
-              <endWithNewline/>
+              <trimTrailingWhitespace />
+              <endWithNewline />
             </java>
             <pom>
               <sortPom>
