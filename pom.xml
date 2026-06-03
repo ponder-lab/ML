@@ -40,7 +40,7 @@
     <parallel>both</parallel>
     <logging.config.file>./logging.properties</logging.config.file>
     <jacoco-version>0.8.14</jacoco-version>
-    <argLine/>
+    <argLine />
     <junit.4.version>4.13.2</junit.4.version>
   </properties>
   <dependencyManagement>
@@ -228,8 +228,8 @@
                   <exclude>IDE/</exclude>
                   <exclude>jython3/</exclude>
                 </excludes>
-                <trimTrailingWhitespace/>
-                <endWithNewline/>
+                <trimTrailingWhitespace />
+                <endWithNewline />
               </format>
               <format>
                 <includes>
@@ -239,8 +239,8 @@
                 <excludes>
                   <exclude>**/target/</exclude>
                 </excludes>
-                <trimTrailingWhitespace/>
-                <endWithNewline/>
+                <trimTrailingWhitespace />
+                <endWithNewline />
                 <indent>
                   <tabs>true</tabs>
                   <spacesPerTab>4</spacesPerTab>
@@ -251,7 +251,7 @@
                   <include>**/*.xml</include>
                   <include>**/.pydevproject</include>
                 </includes>
-                <toggleOffOn/>
+                <toggleOffOn />
                 <excludes>
                   <exclude>**/plugin.xml</exclude>
                   <exclude>**/pom.xml</exclude>
@@ -280,8 +280,8 @@
                   <searchRegex>[ \t]+/&gt;</searchRegex>
                   <replacement>/&gt;</replacement>
                 </replaceRegex>
-                <trimTrailingWhitespace/>
-                <endWithNewline/>
+                <trimTrailingWhitespace />
+                <endWithNewline />
               </format>
             </formats>
             <java>
@@ -289,12 +289,23 @@
                 <version>1.27.0</version>
                 <reflowLongStrings>true</reflowLongStrings>
               </googleJavaFormat>
-              <trimTrailingWhitespace/>
-              <endWithNewline/>
+              <trimTrailingWhitespace />
+              <endWithNewline />
             </java>
             <pom>
               <sortPom>
                 <expandEmptyElements>false</expandEmptyElements>
+                <!-- Emit `<tag />` (space before the self-closing slash) to match
+                  the `maven-release-plugin`'s native POM serialization. Without
+                  this, every `release:prepare` rewrites the POMs to the spaced
+                  form, which `spotless:check` then rejects — failing the tag-push
+                  `build` job and silently skipping the deploy (the root cause of
+                  the 0.47.0 manual-deploy incident). See
+                  https://github.com/wala/ML/issues/566. Only POMs use the spaced
+                  form; the summary XMLs (`tensorflow.xml`, etc.) stay spaceless
+                  via the separate `replaceRegex` step (wala/ML#535), since
+                  nothing rewrites them. -->
+                <spaceBeforeCloseEmptyElement>true</spaceBeforeCloseEmptyElement>
               </sortPom>
             </pom>
           </configuration>
