@@ -15,6 +15,10 @@
         <putfield class="LRoot" field="int64" fieldType="LRoot" ref="x" value="int64"/>
         <new def="array_fn" class="Lnumpy/array"/>
         <putfield class="LRoot" field="array" fieldType="LRoot" ref="x" value="array_fn"/>
+        <new def="ones_fn" class="Lnumpy/ones"/>
+        <putfield class="LRoot" field="ones" fieldType="LRoot" ref="x" value="ones_fn"/>
+        <new def="zeros_fn" class="Lnumpy/zeros"/>
+        <putfield class="LRoot" field="zeros" fieldType="LRoot" ref="x" value="zeros_fn"/>
         <new def="reshape_fn" class="Lnumpy/reshape"/>
         <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="x" value="reshape_fn"/>
         <return value="x"/>
@@ -25,6 +29,32 @@
       <!-- Modeled as a class-per-function so that `np.array` resolves to this class via a field lookup on the numpy module, and the invocation dispatches to its `do` method. The returned ndarray preserves shape from arg 0 and takes dtype from arg 1; see `NpArray`. -->
       <class name="array" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x dtype">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.ones.html -->
+      <!-- Modeled as a class-per-function (same pattern as `array`) so that `np.ones` resolves to this class via a field lookup on the numpy module, and the invocation dispatches to its `do` method. The returned ndarray takes its shape from arg 0 (a shape tuple) and its dtype from the `dtype` argument;
+        see `NpOnes`. -->
+      <class name="ones" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self shape dtype">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.zeros.html -->
+      <!-- Modeled as a class-per-function (same pattern as `array`) so that `np.zeros` resolves to this class via a field lookup on the numpy module, and the invocation dispatches to its `do` method. The returned ndarray takes its shape from arg 0 (a shape tuple) and its dtype from the `dtype` argument;
+        see `NpZeros`. -->
+      <class name="zeros" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self shape dtype">
           <new def="ret" class="Lnumpy/ndarray"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>

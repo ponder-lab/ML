@@ -2824,6 +2824,10 @@ public abstract class TensorGenerator {
       return new Ones(node);
     } else if (type.equals(TensorFlowTypes.ZEROS.getDeclaringClass())) {
       return new Zeros(node);
+    } else if (type.equals(NumpyTypes.ONES.getDeclaringClass())) {
+      return new NpOnes(node);
+    } else if (type.equals(NumpyTypes.ZEROS.getDeclaringClass())) {
+      return new NpZeros(node);
     } else if (type.equals(TensorFlowTypes.SPARSE_EYE.getDeclaringClass())) {
       return new SparseEye(node);
     } else if (type.equals(TensorFlowTypes.EYE.getDeclaringClass())) {

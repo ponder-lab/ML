@@ -23,9 +23,12 @@ import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuild
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
 import com.ibm.wala.cast.python.ml.client.BroadcastTo;
+import com.ibm.wala.cast.python.ml.client.Constant;
 import com.ibm.wala.cast.python.ml.client.Linspace;
 import com.ibm.wala.cast.python.ml.client.NonBroadcastableShapesException;
 import com.ibm.wala.cast.python.ml.client.NpArray;
+import com.ibm.wala.cast.python.ml.client.NpOnes;
+import com.ibm.wala.cast.python.ml.client.NpZeros;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.client.SliceBuiltinOperation;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -220,6 +223,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_2_3_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(3)));
+
+  private static final TensorType TENSOR_2_3_FLOAT64 =
+      new TensorType(FLOAT_64, asList(new NumericDim(2), new NumericDim(3)));
+
+  private static final TensorType TENSOR_4_INT64 =
+      new TensorType(INT_64, asList(new NumericDim(4)));
+
+  private static final TensorType TENSOR_100_784_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(100), new NumericDim(784)));
 
   private static final TensorType TENSOR_3_3_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(3)));
@@ -2200,13 +2212,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * {@code tf.Variable} weights and biases — a different pattern from the {@code Dense}-layer
    * subclass-Model approach already covered by {@code testNeuralNetwork*}.
    *
-   * <p>Empirically, {@code x} is inferred as {@code ⊤ shape / UNKNOWN dtype}. Root cause confirmed
-   * via {@link #testConstantFromNumpy}: the {@code numpy → tf.constant} dtype-loss bug, tracked as
-   * <a href="https://github.com/wala/ML/issues/539">wala/ML#539</a>. The caller's {@code batch_x =
-   * tf.constant(np.ones((100, 784), dtype=np.float32))} loses dtype through the numpy boundary, so
-   * {@code x} arrives with UNKNOWN dtype.
+   * <p>{@code x} is inferred as {@code (100, 784) float32}, flowing from the caller's {@code
+   * batch_x = tf.constant(np.ones((100, 784), dtype=np.float32))}. This relies on the {@code numpy
+   * → tf.constant} dtype/shape bridge fixed in <a
+   * href="https://github.com/wala/ML/issues/539">wala/ML#539</a> (see {@link
+   * #testConstantFromNumpy} for the isolated guard).
    *
-   * <p>TODO: tighten to {@code (100, 784) float32} once wala/ML#539 lands.
+   * <p>The local-tensor count is 16 (up from 14 before wala/ML#539): with {@code x} now typed, two
+   * further {@code tf.matmul}/{@code tf.add} intermediates that consume it are recognized as
+   * tensors.
    */
   @Test
   public void testMultilayerPerceptron()
@@ -2215,8 +2229,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_multilayer_perceptron.py",
         "multilayer_perceptron",
         1,
-        14,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+        16,
+        Map.of(2, Set.of(TENSOR_100_784_FLOAT32)));
   }
 
   /**
@@ -2242,24 +2256,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Isolating regression guard for the {@code numpy → tf.constant} dtype-loss bug (<a
+   * Isolating regression guard for the {@code numpy → tf.constant} dtype/shape bridge (<a
    * href="https://github.com/wala/ML/issues/539">wala/ML#539</a>), surfaced from {@link
    * #testMultilayerPerceptron}. {@code consume(x)} where {@code x = tf.constant(np.ones((2, 3),
-   * dtype=np.float32))} infers {@code ⊤ shape / UNKNOWN dtype} despite the explicit numpy {@code
-   * dtype=np.float32}. Confirms the dtype-loss happens at the {@code numpy → tf.constant} boundary,
-   * independent of any matmul/global-Variable noise.
-   *
-   * <p>TODO: tighten to {@code (2, 3) float32} once wala/ML#539 lands.
+   * dtype=np.float32))} infers {@code (2, 3) float32}: {@code np.ones} is now modeled (see {@link
+   * NpOnes}), so {@link Constant} recovers the numpy producer's shape and dtype through the value
+   * argument rather than falling back to {@code ⊤ shape / UNKNOWN dtype}.
    */
   @Test
   public void testConstantFromNumpy()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_constant_from_numpy.py",
-        "consume",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+    test("tf2_test_constant_from_numpy.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
   }
 
   /**
@@ -9873,6 +9880,47 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TENSOR_60000_28_28_FLOAT32)));
+  }
+
+  /**
+   * Pins {@link NpOnes} directly (isolated from the {@code tf.constant} bridge of {@link
+   * #testConstantFromNumpy}): {@code consume_ones(x)} where {@code x = np.ones((2, 3),
+   * dtype=np.float32)} should yield {@code (2, 3) float32} &mdash; shape from the shape-tuple
+   * argument, dtype from the explicit {@code dtype} argument. Positive regression guard for
+   * wala/ML#539.
+   */
+  @Test
+  public void testNpOnes()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_np_ones_zeros.py", "consume_ones", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
+   * Pins {@link NpZeros} directly: {@code consume_zeros(x)} where {@code x = np.zeros((4,),
+   * dtype=np.int64)} should yield {@code (4,) int64}. Companion to {@link #testNpOnes}; positive
+   * regression guard for wala/ML#539.
+   */
+  @Test
+  public void testNpZeros()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_np_ones_zeros.py", "consume_zeros", 1, 1, Map.of(2, Set.of(TENSOR_4_INT64)));
+  }
+
+  /**
+   * Pins {@link NpOnes}'s default dtype: {@code consume_ones_default(x)} where {@code x =
+   * np.ones((2, 3))} (no {@code dtype} argument) should yield {@code (2, 3) float64}, since NumPy
+   * defaults to {@code float64} (unlike {@code tf.ones}, which defaults to {@code float32}). Guards
+   * the {@code float64} default override in {@link NpOnes#getDefaultDTypes} for wala/ML#539.
+   */
+  @Test
+  public void testNpOnesDefaultDtype()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_ones_zeros.py",
+        "consume_ones_default",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT64)));
   }
 
   /**
