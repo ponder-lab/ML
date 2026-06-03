@@ -2030,9 +2030,11 @@ public abstract class TensorGenerator {
   }
 
   /**
-   * Returns the TensorFlow function signature represented by this generator.
+   * Returns the TensorFlow or NumPy function signature represented by this generator.
    *
-   * @return The TensorFlow function signature represented by this generator.
+   * @return The TensorFlow or NumPy function signature represented by this generator, or {@code
+   *     <unmapped:...>} if the function has no mapped signature in either {@link TensorFlowTypes}
+   *     or {@link NumpyTypes}.
    */
   protected String getSignature() {
     TypeReference function;
