@@ -269,12 +269,15 @@
                   </files>
                 </eclipseWtp>
                 <!-- Normalize self-closing tag spacing to the spaceless form
-                  (`<tag/>`), matching `pom.xml`'s sortpom style, the
-                  `maven-release-plugin`'s native output, and Eclipse WTP's
-                  default. The Eclipse WTP XML formatter above has no pref
-                  that controls this; without explicit enforcement,
-                  `tensorflow.xml` drifts to ~2135 spaced vs 5 spaceless.
-                  See https://github.com/wala/ML/issues/535. -->
+                  (`<tag/>`) for the summary XMLs (this format excludes POMs,
+                  above). The Eclipse WTP XML formatter has no pref that controls
+                  this; without explicit enforcement, `tensorflow.xml` drifts to
+                  ~2135 spaced vs 5 spaceless. See
+                  https://github.com/wala/ML/issues/535. POMs deliberately use
+                  the *spaced* form instead — via sortPom's
+                  `spaceBeforeCloseEmptyElement` — to match the
+                  `maven-release-plugin`'s output; see
+                  https://github.com/wala/ML/issues/566. -->
                 <replaceRegex>
                   <name>Spaceless self-closing tags</name>
                   <searchRegex>[ \t]+/&gt;</searchRegex>
