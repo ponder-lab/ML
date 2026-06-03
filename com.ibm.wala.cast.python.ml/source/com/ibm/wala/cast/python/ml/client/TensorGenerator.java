@@ -2041,7 +2041,10 @@ public abstract class TensorGenerator {
     } else {
       function = getFunction(this.getSource());
     }
-    String signature = TYPE_REFERENCE_TO_SIGNATURE.get(function);
+    // TensorFlow signatures live in TensorFlowTypes; numpy signatures in NumpyTypes. Consult both.
+    String signature =
+        TYPE_REFERENCE_TO_SIGNATURE.getOrDefault(
+            function, NumpyTypes.TYPE_REFERENCE_TO_SIGNATURE.get(function));
     if (signature == null) {
       return "<unmapped:" + function + ">";
     }
