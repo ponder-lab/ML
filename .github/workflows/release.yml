@@ -96,6 +96,16 @@ jobs:
         cache: 'pip'
     - name: Install Python dependencies
       run: pip install -r requirements.txt
+    # Mirror CI's formatting gates BEFORE release:prepare. Spotless is only declared
+    # in `pluginManagement` (not bound to the Maven lifecycle), so release:prepare's
+    # default `clean verify` does not run it — a formatting violation would otherwise
+    # be committed, tagged, and pushed, only to fail the tag-push deploy. Running the
+    # checks here aborts before any mutation. (The version-bumped POMs themselves stay
+    # Spotless-clean per wala/ML#566.)
+    - name: Check formatting with Spotless
+      run: mvn spotless:check -B
+    - name: Check formatting with Black
+      run: black --fast --check --extend-exclude IDE --extend-exclude jython3 .
     - name: Install Jython3
       run: |
         pushd jython3
