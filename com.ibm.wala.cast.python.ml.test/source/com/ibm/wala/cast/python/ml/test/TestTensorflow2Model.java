@@ -239,6 +239,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_4_4_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(4)));
 
+  private static final TensorType TENSOR_2_5_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(5)));
+
   private static final TensorType TENSOR_3_3_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(3)));
 
@@ -2398,6 +2401,30 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             3, Set.of(TENSOR_2_3_4_FLOAT32),
             4, Set.of(TENSOR_4_4_FLOAT32),
             5, Set.of(TENSOR_2_INT32)));
+  }
+
+  /**
+   * Pins {@code create_attention_mask_from_input_mask(from_tensor, to_mask)}'s parameter types.
+   * Function body mirrors {@code create_attention_mask_from_input_mask} from {@code
+   * kyzhouhzau/NLPGNN/nlpgnn/tools.py}, a real-world function that builds a 3D attention mask from
+   * a 2D input mask, for tensor-type inference coverage. Both parameters infer concretely.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCreateAttentionMaskFromInputMask()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_create_attention_mask.py",
+        "create_attention_mask_from_input_mask",
+        2,
+        6,
+        Map.of(
+            2, Set.of(TENSOR_2_3_4_FLOAT32),
+            3, Set.of(TENSOR_2_5_INT32)));
   }
 
   /**
