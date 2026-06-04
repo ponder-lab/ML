@@ -315,6 +315,31 @@
         </plugin>
       </plugins>
     </pluginManagement>
+    <plugins>
+      <!-- Bind `spotless:check` to `verify` so formatting is enforced by the build
+        itself, not only by the standalone CI step and the pre-commit hook. This
+        closes the gap where `mvn release:prepare`'s default `clean verify` did not
+        run Spotless, so a formatting violation could be committed, tagged, and
+        pushed before the tag-push deploy failed on it. `inherited=false` keeps it a
+        single root-level pass over the whole tree — the Spotless `<format>`s use
+        repo-root-relative `**/*` globs, so running it per-module would re-check the
+        root's subtree from each child. The plugin config (formats, sortPom, ...)
+        is inherited from `<pluginManagement>` above. -->
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+        <inherited>false</inherited>
+        <executions>
+          <execution>
+            <id>spotless-check</id>
+            <goals>
+              <goal>check</goal>
+            </goals>
+            <phase>verify</phase>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
   </build>
   <reporting>
     <plugins>
