@@ -31,6 +31,15 @@ on:
 permissions:
   contents: read
 
+# Serialize releases: a fixed group (not keyed by ref) means only one release runs at
+# a time. `cancel-in-progress: false` queues a second dispatch rather than cancelling an
+# in-progress one — cancelling mid-run could leave a partial state (commits pushed, tag
+# not). Without this, two close-together dispatches could both pass the tag-existence
+# check and then race on the version-bump pushes (non-fast-forward / tag collision).
+concurrency:
+  group: cut-release
+  cancel-in-progress: false
+
 jobs:
   cut-release:
     runs-on: ubuntu-latest
