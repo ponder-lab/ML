@@ -1,0 +1,162 @@
+# One-click release cutter (wala/ML#455).
+#
+# Dispatched manually from the Actions UI. Runs `mvn release:prepare` on a runner
+# — no local toolchain, no forgotten flags, no local pre-commit hook (the source
+# of the 0.47.0 manual-deploy incident). `release:prepare` pushes two version-bump
+# commits and the release tag to `master`; the tag push then drives
+# `continuous-integration.yml`'s deploy gate (publish to GitHub Packages) and its
+# `release-upload` job (create the prerelease + attach the fat JAR). End to end,
+# dispatching this workflow is the whole release.
+#
+# SETUP (one-time): this workflow needs a `RELEASE_PAT` repository secret — a
+# *classic* PAT owned by an OrganizationAdmin (so its push bypasses the `master`
+# branch protection) with `repo` scope. The default `GITHUB_TOKEN` cannot be used:
+# `github-actions[bot]` is not a bypass actor on the branch ruleset, so its push to
+# `master` would be rejected. Fine-grained PATs also do not authenticate to
+# `maven.pkg.github.com`; a classic PAT is required.
+name: Cut release
+on:
+  workflow_dispatch:
+    inputs:
+      releaseVersion:
+        description: "Release version — plain semver, e.g. 0.48.0 (must not already exist as a tag)."
+        required: true
+        type: string
+      developmentVersion:
+        description: "Next development version, e.g. 0.48.1-SNAPSHOT."
+        required: true
+        type: string
+
+# The PAT (via the checkout below) performs all writes; the GITHUB_TOKEN stays read-only.
+permissions:
+  contents: read
+
+# Serialize releases: a fixed group (not keyed by ref) means only one release runs at
+# a time. `cancel-in-progress: false` queues a second dispatch rather than cancelling an
+# in-progress one — cancelling mid-run could leave a partial state (commits pushed, tag
+# not). Without this, two close-together dispatches could both pass the tag-existence
+# check and then race on the version-bump pushes (non-fast-forward / tag collision).
+concurrency:
+  group: cut-release
+  cancel-in-progress: false
+
+jobs:
+  cut-release:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Validate dispatch ref, secret, and version inputs
+      # Fail fast before any checkout or mutation. `workflow_dispatch` can run from
+      # an arbitrary ref chosen in the Actions UI, so a release must be cut from
+      # `master`; and the push needs `RELEASE_PAT` (an empty secret would otherwise
+      # surface only as a late, cryptic checkout/auth failure).
+      env:
+        RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
+      run: |
+        if [ "$GITHUB_REF" != "refs/heads/master" ]; then
+          echo "Releases must be cut from master; this run is on '$GITHUB_REF'. Re-run with 'master' selected as the branch." >&2
+          exit 1
+        fi
+        if [ -z "$RELEASE_PAT" ]; then
+          echo "The RELEASE_PAT secret is not set. Add a classic OrganizationAdmin PAT (repo scope) as a repository secret named RELEASE_PAT; see this workflow's header." >&2
+          exit 1
+        fi
+        if ! [[ "${{ inputs.releaseVersion }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "releaseVersion '${{ inputs.releaseVersion }}' must be plain semver X.Y.Z." >&2
+          exit 1
+        fi
+        if ! [[ "${{ inputs.developmentVersion }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+-SNAPSHOT$ ]]; then
+          echo "developmentVersion '${{ inputs.developmentVersion }}' must be X.Y.Z-SNAPSHOT." >&2
+          exit 1
+        fi
+        if [ "${{ inputs.developmentVersion }}" = "${{ inputs.releaseVersion }}-SNAPSHOT" ]; then
+          echo "developmentVersion must advance past releaseVersion; '${{ inputs.developmentVersion }}' would leave the next development version equal to the release just cut." >&2
+          exit 1
+        fi
+      shell: bash
+    - name: Check out wala/ML sources
+      uses: actions/checkout@v6
+      with:
+        submodules: 'recursive'
+        # Full history so the SNAPSHOT-bump commit's parent chain is intact and the
+        # tag-push deploy gate's `--is-ancestor` check (in continuous-integration.yml)
+        # can link the tag to master.
+        fetch-depth: 0
+        # Classic OrganizationAdmin PAT so release:prepare's push to protected master
+        # bypasses the branch ruleset (see header).
+        token: ${{ secrets.RELEASE_PAT }}
+    - name: Fail if the release tag already exists
+      run: |
+        git fetch --tags --quiet origin
+        if git rev-parse -q --verify "refs/tags/${{ inputs.releaseVersion }}" >/dev/null; then
+          echo "Tag ${{ inputs.releaseVersion }} already exists; aborting before any mutation." >&2
+          exit 1
+        fi
+      shell: bash
+    - name: Set up JDK 25
+      uses: actions/setup-java@v5
+      with:
+        java-version: '25'
+        distribution: 'temurin'
+        cache: maven
+    - name: Install Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+    - name: Install Python dependencies
+      run: pip install -r requirements.txt
+    # Mirror CI's formatting gates BEFORE release:prepare. Spotless is only declared
+    # in `pluginManagement` (not bound to the Maven lifecycle), so release:prepare's
+    # default `clean verify` does not run it — a formatting violation would otherwise
+    # be committed, tagged, and pushed, only to fail the tag-push deploy. Running the
+    # checks here aborts before any mutation. (The version-bumped POMs themselves stay
+    # Spotless-clean per wala/ML#566.)
+    - name: Check formatting with Spotless
+      run: mvn spotless:check -B
+    - name: Check formatting with Black
+      run: black --fast --check --extend-exclude IDE --extend-exclude jython3 .
+    - name: Install Jython3
+      run: |
+        pushd jython3
+        ant
+        pushd dist
+        mvn install:install-file -Dfile=./jython-dev.jar -DgroupId="org.python" -DartifactId="jython3" -Dversion="0.0.2" -Dpackaging="jar" -DgeneratePom=true -B
+        popd
+        popd
+      shell: bash
+    - name: Install IDE
+      run: |
+        pushd IDE/com.ibm.wala.cast.lsp
+        mvn package -B -q -DskipTests
+        mvn install:install-file -Dfile=target/com.ibm.wala.cast.lsp-0.0.1-SNAPSHOT.jar -DgroupId="com.ibm.wala" -DartifactId="com.ibm.wala.cast.lsp" -Dversion="0.0.1" -Dpackaging="jar" -DgeneratePom=true -B
+        popd
+    - name: Configure git identity and HTTPS push
+      run: |
+        git config user.name "${{ github.actor }}"
+        git config user.email "${{ github.actor }}@users.noreply.github.com"
+        # The POM's SCM developerConnection is SSH (git@github.com:...); rewrite to
+        # HTTPS so release:prepare's push uses the PAT credential persisted by the
+        # checkout above rather than an (absent) SSH key.
+        git config url."https://github.com/".insteadOf "git@github.com:"
+      shell: bash
+    - name: Run release:prepare
+      # No -Dtag / -DignoreSnapshots / -DallowTimestampedSnapshots needed: the tag
+      # format is pinned to plain X.Y.Z (wala/ML#560) and the local deps are installed
+      # at release coordinates above. The default preparationGoals (`clean verify`)
+      # build and TEST the release version before tagging, so a failure aborts before
+      # anything is committed or pushed. On success, the two commits and the tag are
+      # pushed to master, firing the tag-push deploy + release-upload in
+      # continuous-integration.yml.
+      run: |
+        mvn release:clean -B
+        mvn release:prepare -B \
+          -DreleaseVersion=${{ inputs.releaseVersion }} \
+          -DdevelopmentVersion=${{ inputs.developmentVersion }}
+      shell: bash
+    - name: Summary
+      run: |
+        echo "### Release ${{ inputs.releaseVersion }} cut :rocket:" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo "- Tag \`${{ inputs.releaseVersion }}\` pushed; the tag-push run in **Continuous integration** now deploys to GitHub Packages and creates the prerelease." >> "$GITHUB_STEP_SUMMARY"
+        echo "- Next development version set to \`${{ inputs.developmentVersion }}\`." >> "$GITHUB_STEP_SUMMARY"
+      shell: bash
