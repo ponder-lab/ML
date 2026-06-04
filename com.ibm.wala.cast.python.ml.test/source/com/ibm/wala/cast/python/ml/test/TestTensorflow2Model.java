@@ -233,6 +233,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_100_784_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(100), new NumericDim(784)));
 
+  private static final TensorType TENSOR_2_3_4_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(3), new NumericDim(4)));
+
+  private static final TensorType TENSOR_4_4_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(4)));
+
+  private static final TensorType TENSOR_2_5_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(5)));
+
   private static final TensorType TENSOR_3_3_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(3)));
 
@@ -2231,6 +2240,191 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         16,
         Map.of(2, Set.of(TENSOR_100_784_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code crf_unary_score(tag_indices, sequence_lengths, inputs)}'s parameter types. Function
+   * body mirrors {@code crf_unary_score} from {@code kyzhouhzau/NLPGNN/nlpgnn/metrics/crf.py}, a
+   * real-world linear-chain CRF function exercised for tensor-type inference coverage. Its {@code
+   * tf.reshape} with runtime-derived dimensions ({@code tf.shape(inputs)[0]}) previously crashed
+   * the analysis (wala/ML#567).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCrfUnaryScore()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_crf.py",
+        "crf_unary_score",
+        3,
+        28,
+        Map.of(
+            2, Set.of(TENSOR_2_3_INT32),
+            3, Set.of(TENSOR_2_INT32),
+            4, Set.of(TENSOR_2_3_4_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code crf_binary_score(tag_indices, sequence_lengths, transition_params)}'s parameter
+   * types. Function body mirrors {@code crf_binary_score} from {@code
+   * kyzhouhzau/NLPGNN/nlpgnn/metrics/crf.py} for tensor-type inference coverage.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCrfBinaryScore()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_crf.py",
+        "crf_binary_score",
+        3,
+        16,
+        Map.of(
+            2, Set.of(TENSOR_2_3_INT32),
+            3, Set.of(TENSOR_2_INT32),
+            4, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code crf_sequence_score(inputs, tag_indices, sequence_lengths, transition_params)}'s
+   * parameter types. Function body mirrors {@code crf_sequence_score} from {@code
+   * kyzhouhzau/NLPGNN/nlpgnn/metrics/crf.py} for tensor-type inference coverage.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCrfSequenceScore()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_crf.py",
+        "crf_sequence_score",
+        4,
+        6,
+        Map.of(
+            2, Set.of(TENSOR_2_3_4_FLOAT32),
+            3, Set.of(TENSOR_2_3_INT32),
+            4, Set.of(TENSOR_2_INT32),
+            5, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code crf_log_norm(inputs, sequence_lengths, transition_params)}'s parameter types.
+   * Function body mirrors {@code crf_log_norm} from {@code kyzhouhzau/NLPGNN/nlpgnn/metrics/crf.py}
+   * for tensor-type inference coverage.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCrfLogNorm()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_crf.py",
+        "crf_log_norm",
+        3,
+        6,
+        Map.of(
+            2, Set.of(TENSOR_2_3_4_FLOAT32),
+            3, Set.of(TENSOR_2_INT32),
+            4, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code crf_forward(inputs, state, transition_params, sequence_lengths)}'s parameter types.
+   * Function body mirrors {@code crf_forward} from {@code kyzhouhzau/NLPGNN/nlpgnn/metrics/crf.py}
+   * for tensor-type inference coverage. {@code crf_forward} is reached only through {@code
+   * crf_log_norm} (its sole NLPGNN caller), which passes {@code inputs} and {@code state} from
+   * {@code tf.slice} / {@code tf.squeeze} results. Those two parameters come back {@code ⊤} (only
+   * {@code transition_params} and {@code sequence_lengths}, passed straight through, are
+   * tensor-typed) — i.e., {@code tf.slice} / {@code tf.squeeze} do not propagate tensor types
+   * through to the callee parameter. TODO: Recover {@code inputs} / {@code state} types here once
+   * {@code tf.slice} / {@code tf.squeeze} type propagation lands; tracked by <a
+   * href="https://github.com/wala/ML/issues/568">wala/ML#568</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCrfForward()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_crf.py",
+        "crf_forward",
+        2,
+        9,
+        Map.of(
+            4, Set.of(TENSOR_4_4_FLOAT32),
+            5, Set.of(TENSOR_2_INT32)));
+  }
+
+  /**
+   * Pins {@code crf_decode_forward(inputs, state, transition_params, sequence_lengths)}'s parameter
+   * types. Function body mirrors {@code crf_decode_forward} from {@code
+   * kyzhouhzau/NLPGNN/nlpgnn/metrics/crf.py} for tensor-type inference coverage. The caller passes
+   * {@code inputs} from {@code x[:, 1:, :]} and {@code state} from {@code x[:, 0, :]}, which should
+   * reduce to {@code (2, 2, 4)} and {@code (2, 4)} respectively. They are instead inferred as the
+   * base {@code (2, 3, 4)} because these middle-axis subscript slices fall through to the
+   * base-shape passthrough; recovering them requires the broader slice vocabulary tracked by <a
+   * href="https://github.com/wala/ML/issues/406">wala/ML#406</a>. Unlike {@code crf_forward}
+   * (reached via {@code tf.slice} / {@code tf.squeeze}, which drop to {@code ⊤} — wala/ML#568), the
+   * subscript-slice path keeps the parameters tensor-typed, just shape-imprecise.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCrfDecodeForward()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_crf.py",
+        "crf_decode_forward",
+        4,
+        6,
+        Map.of(
+            2, Set.of(TENSOR_2_3_4_FLOAT32),
+            3, Set.of(TENSOR_2_3_4_FLOAT32),
+            4, Set.of(TENSOR_4_4_FLOAT32),
+            5, Set.of(TENSOR_2_INT32)));
+  }
+
+  /**
+   * Pins {@code create_attention_mask_from_input_mask(from_tensor, to_mask)}'s parameter types.
+   * Function body mirrors {@code create_attention_mask_from_input_mask} from {@code
+   * kyzhouhzau/NLPGNN/nlpgnn/tools.py}, a real-world function that builds a 3D attention mask from
+   * a 2D input mask, for tensor-type inference coverage. Both parameters infer concretely.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCreateAttentionMaskFromInputMask()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_create_attention_mask.py",
+        "create_attention_mask_from_input_mask",
+        2,
+        6,
+        Map.of(
+            2, Set.of(TENSOR_2_3_4_FLOAT32),
+            3, Set.of(TENSOR_2_5_INT32)));
   }
 
   /**
