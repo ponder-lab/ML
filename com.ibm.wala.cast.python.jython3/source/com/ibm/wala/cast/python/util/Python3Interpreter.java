@@ -96,12 +96,20 @@ public class Python3Interpreter extends com.ibm.wala.cast.python.util.PythonInte
       PyObject val = ip.eval(expr);
       if (val.isInteger()) {
         return val.asInt();
-      } else
-        throw new IllegalArgumentException(
-            "Python expression: " + expr + " cannot be evaluated to an integer.");
+      } else {
+        // Not a constant integer (e.g., a non-numeric literal). Return null so callers
+        // fall through to their fallback, matching the Python2 implementation and the
+        // nullable-Integer contract documented above.
+        LOGGER.fine(() -> "Python expression cannot be evaluated to an integer: " + expr);
+        return null;
+      }
     } catch (PyException e) {
-      LOGGER.log(Level.SEVERE, "Unable to interpret Python expression: " + expr, e);
-      throw new IllegalArgumentException("Can't interpret Python expression: " + expr + ".", e);
+      // The expression is not a constant the embedded interpreter can evaluate (e.g., a
+      // runtime-shaped value such as `tf.shape(x)[0]` used as a dimension). This is expected
+      // for dynamic shapes, not an error: return null so callers degrade to a symbolic
+      // dimension rather than crashing the analysis, matching the Python2 implementation.
+      LOGGER.log(Level.FINE, e, () -> "Unable to interpret Python expression: " + expr);
+      return null;
     }
   }
 }
