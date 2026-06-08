@@ -308,6 +308,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_2_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(3)));
 
+  private static final TensorType TENSOR_2_4_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(4)));
+
   private static final TensorType TENSOR_2_6_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2), new NumericDim(6)));
 
@@ -2410,6 +2413,34 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             3, Set.of(TENSOR_2_3_4_FLOAT32),
             4, Set.of(TENSOR_4_4_FLOAT32),
             5, Set.of(TENSOR_2_INT32)));
+  }
+
+  /**
+   * Pins {@code _gather_elements_along_row(data, column_indices)}'s parameter types. Function body
+   * mirrors {@code _gather_elements_along_row} from {@code
+   * deep_recommenders/keras/models/retrieval/sbcnm.py} (identical to {@code _take_long_axis} in
+   * {@code factorized_top_k} per the source), a real-world recommender-systems utility, for
+   * tensor-type inference coverage. Both parameters infer concretely: {@code data} as {@code (2, 4)
+   * float32} and {@code column_indices} as {@code (2, 3) int32}. (The function's
+   * runtime-dimensioned final {@code tf.reshape} leaves the local <em>result</em> symbolic, but the
+   * parameters themselves are exact.)
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGatherElementsAlongRow()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gather_elements_along_row.py",
+        "_gather_elements_along_row",
+        2,
+        7,
+        Map.of(
+            2, Set.of(TENSOR_2_4_FLOAT32),
+            3, Set.of(TENSOR_2_3_INT32)));
   }
 
   /**
