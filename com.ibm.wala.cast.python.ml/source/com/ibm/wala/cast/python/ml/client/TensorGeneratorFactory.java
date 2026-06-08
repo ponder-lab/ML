@@ -155,6 +155,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIGN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SINH;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIZE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SLICE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SLICE_BUILTIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SOFTMAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SOFTMAX_CROSS_ENTROPY_WITH_LOGITS;
@@ -1246,6 +1247,7 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, GATHER_ND.getDeclaringClass())) return new GatherNd(source);
     else if (isType(calledFunction, BOOLEAN_MASK.getDeclaringClass()))
       return new BooleanMask(source);
+    else if (isType(calledFunction, SLICE.getDeclaringClass())) return new Slice(source);
     else if (isType(calledFunction, EXTRACT_PATCHES.getDeclaringClass()))
       return new ExtractPatches(source);
     else if (isType(calledFunction, TAN.getDeclaringClass())) return new Tan(source);
