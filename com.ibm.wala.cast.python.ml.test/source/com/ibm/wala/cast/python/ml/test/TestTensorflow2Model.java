@@ -2148,7 +2148,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * (wala/ML#537): the input shape now only refines a recovered output shape's batch dim, never
    * substitutes for it.
    *
-   * <p>The runtime shape is {@code (256, 1)} / {@code (96, 1)} (verified by running the fixture:
+   * <p>The runtime shape is {@code (256, 1)}/{@code (96, 1)} (verified by running the fixture:
    * {@code noise (256, 100)} -&gt; generator {@code (256, 28, 28, 1)} -&gt; discriminator {@code
    * (256, 1)}), confirming the old {@code (None, 100)} was the noise shape leaking through, not the
    * discriminator output.
@@ -2159,7 +2159,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Flatten} of a {@code Conv2D} chain — isn't shape-tracked; recovering {@code (batch, 1)} needs
    * {@code DenseCall} output-shape inference through chained layer calls (tracked by <a
    * href="https://github.com/wala/ML/issues/358">wala/ML#358</a>), which in turn needs {@code
-   * Conv2D}/{@code Flatten} output-shape modeling. Concrete batch dims 256 / 96 come from {@code
+   * Conv2D}/{@code Flatten} output-shape modeling. Concrete batch dims 256/96 come from {@code
    * train_step}'s {@code images} parameter, per {@link #testGanTutorial}. (wala/ML#537 fixed the
    * unsound mis-propagation; this residual precision is wala/ML#358's domain.)
    */
