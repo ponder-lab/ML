@@ -189,9 +189,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_NONE_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(2)));
 
-  private static final TensorType TENSOR_NONE_100_FLOAT32 =
-      new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(100)));
-
   private static final TensorType TENSOR_NONE_NONE_STRING =
       new TensorType(STRING, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE));
 
@@ -2142,17 +2139,29 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * {@code discriminator(generated_images, ...)}; runtime shape is {@code (batch, 1) float32} since
    * the discriminator ends with a {@code Dense(1)} layer.
    *
-   * <p>Empirically, {@code fake_output} is inferred as {@code (None, 100) float32}. The dtype is
-   * concrete, which confirms the layer-output-parameter pattern works on the dtype axis. The shape
-   * is mis-propagated: {@code 100} is the generator's noise input dim (from {@code
-   * tf.keras.Input((100,))} in {@code make_generator_model}), not the discriminator's {@code
-   * Dense(1)} output dim. The mis-routing is shape-only and orthogonal to dtype-axis precision.
+   * <p>Inferred as {@code float32} with shape {@code ⊤} (unknown). The dtype is concrete and sound.
+   * The shape is unknown rather than wrong: previously {@code ModelCall.getDefaultShapes} fell back
+   * to the call's <em>input</em> shape when no output generator resolved, emitting the unsound
+   * {@code (None, 100)} ({@code 100} is the generator's noise input dim from {@code
+   * tf.keras.Input((100,))}, not the discriminator's {@code Dense(1)} output dim). A {@code
+   * tf.keras.Model} generally transforms its input shape, so that fallback is removed
+   * (wala/ML#537): the input shape now only refines a recovered output shape's batch dim, never
+   * substitutes for it.
    *
-   * <p>TODO: tighten to {@code {(256, 1) float32, (96, 1) float32}} once <a
-   * href="https://github.com/wala/ML/issues/537">wala/ML#537</a> lands the shape propagation
-   * through Keras functional-model chains. Concrete batch dims (256 / 96) come from {@code
-   * train_step}'s {@code images} parameter (per {@link #testGanTutorial}); a complete fix would
-   * propagate those through the discriminator chain rather than dropping to {@code None}.
+   * <p>The runtime shape is {@code (256, 1)} / {@code (96, 1)} (verified by running the fixture:
+   * {@code noise (256, 100)} -&gt; generator {@code (256, 28, 28, 1)} -&gt; discriminator {@code
+   * (256, 1)}), confirming the old {@code (None, 100)} was the noise shape leaking through, not the
+   * discriminator output.
+   *
+   * <p>TODO: tighten to {@code {(256, 1) float32, (96, 1) float32}}. The output node <em>is</em>
+   * reachable now (the {@code outputs} construction argument points at the {@code Dense(1)} call),
+   * but that {@code DenseCall} returns {@code null} shapes here because its input — the {@code
+   * Flatten} of a {@code Conv2D} chain — isn't shape-tracked; recovering {@code (batch, 1)} needs
+   * {@code DenseCall} output-shape inference through chained layer calls (tracked by <a
+   * href="https://github.com/wala/ML/issues/358">wala/ML#358</a>), which in turn needs {@code
+   * Conv2D}/{@code Flatten} output-shape modeling. Concrete batch dims 256 / 96 come from {@code
+   * train_step}'s {@code images} parameter, per {@link #testGanTutorial}. (wala/ML#537 fixed the
+   * unsound mis-propagation; this residual precision is wala/ML#358's domain.)
    */
   @Test
   public void testGanTutorialGeneratorLoss()
@@ -2162,7 +2171,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "generator_loss",
         1,
         2,
-        Map.of(2, Set.of(TENSOR_NONE_100_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
@@ -9869,6 +9878,41 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         2,
         Map.of(2, Set.of(TENSOR_1_2_FLOAT32), 3, Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  /**
+   * Pins the output type of a functional {@code tf.keras.Model} call whose output shape <em>differs
+   * from</em> its input shape: a {@code Dense(3)} model maps a {@code (1, 2)} call input to a
+   * {@code (1, 3)} output. {@code ModelCall} recovers the model's output generator (the {@code
+   * Dense(3)} call, reached via the {@code outputs} construction argument) and reports the
+   * transformed {@code (1, 3)} shape — both for positional ({@code Model(in, out)}) and keyword
+   * ({@code Model(outputs=...)}) construction. Before wala/ML#537, {@code ModelCall} fell back to
+   * the call's input shape when the output generator wasn't reached, which would have reported the
+   * unsound {@code (1, 2)} here (input shape, not output). Companion to {@link #testModelInit}
+   * (whose {@code Dense(2)}-on-dim-2 models are shape-preserving, so they can't distinguish the two
+   * behaviors) and to {@link #testGanTutorialGeneratorLoss} (whose deep convolutional chain leaves
+   * the output generator shapeless, exercising the ⊤ path).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testModelCallOutputShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_call_output_shape.py",
+        "consume_positional",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_3_FLOAT32)));
+    test(
+        "tf2_test_model_call_output_shape.py",
+        "consume_keyword",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_3_FLOAT32)));
   }
 
   @Test
