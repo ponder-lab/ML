@@ -29,19 +29,6 @@ import java.util.Set;
  */
 public class Model extends TensorGenerator {
 
-  /** Field names for the attributes of the {@code Model}. */
-  protected enum Fields {
-    /** The input(s) of the model. */
-    INPUTS,
-
-    /** The output(s) of the model. */
-    OUTPUTS;
-
-    public String getName() {
-      return name().toLowerCase(Locale.ROOT);
-    }
-  }
-
   /** Parameter positions and names for {@code tf.keras.Model}. */
   protected enum Parameters {
     /** The input(s) of the model. */
