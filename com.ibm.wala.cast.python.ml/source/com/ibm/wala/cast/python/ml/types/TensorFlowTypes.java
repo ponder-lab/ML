@@ -1089,6 +1089,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String BOOLEAN_MASK_SIGNATURE = "tf.boolean_mask()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/slice. */
+  public static final MethodReference SLICE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/slice")),
+          AstMethodReference.fnSelector);
+
+  private static final String SLICE_SIGNATURE = "tf.slice()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/image/extract_patches. */
   public static final MethodReference EXTRACT_PATCHES =
       MethodReference.findOrCreate(
@@ -1875,6 +1884,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(EMBEDDING_LOOKUP.getDeclaringClass(), EMBEDDING_LOOKUP_SIGNATURE),
           Map.entry(GATHER_ND.getDeclaringClass(), GATHER_ND_SIGNATURE),
           Map.entry(BOOLEAN_MASK.getDeclaringClass(), BOOLEAN_MASK_SIGNATURE),
+          Map.entry(SLICE.getDeclaringClass(), SLICE_SIGNATURE),
           Map.entry(EXTRACT_PATCHES.getDeclaringClass(), EXTRACT_PATCHES_SIGNATURE),
           Map.entry(TAN.getDeclaringClass(), TAN_SIGNATURE),
           Map.entry(ASIN.getDeclaringClass(), ASIN_SIGNATURE),

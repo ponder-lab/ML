@@ -752,6 +752,10 @@
         <new def="boolean_mask" class="Ltensorflow/functions/boolean_mask"/>
         <putfield class="LRoot" field="boolean_mask" fieldType="LRoot" ref="x" value="boolean_mask"/>
         <putfield class="LRoot" field="boolean_mask" fieldType="LRoot" ref="array_ops" value="boolean_mask"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/slice -->
+        <new def="slice" class="Ltensorflow/functions/slice"/>
+        <putfield class="LRoot" field="slice" fieldType="LRoot" ref="x" value="slice"/>
+        <putfield class="LRoot" field="slice" fieldType="LRoot" ref="array_ops" value="slice"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linspace -->
         <new def="linspace" class="Ltensorflow/functions/linspace"/>
         <putfield class="LRoot" field="linspace" fieldType="LRoot" ref="x" value="linspace"/>
@@ -2045,6 +2049,14 @@
       <class name="boolean_mask" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/boolean_mask. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self tensor mask axis name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="slice" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/slice. Direct `<new>+<return>` paired with the dedicated `Slice` generator (wala/ML#568): dtype inherits from `input_`; shape is left at ⊤ since `tf.slice` reshapes its input by the runtime `begin`/`size` extents (computing it from
+          constant `begin`/`size` is wala/ML#569). -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_ begin size name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
         </method>
