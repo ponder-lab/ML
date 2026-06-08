@@ -2346,11 +2346,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Function body mirrors {@code crf_forward} from {@code kyzhouhzau/NLPGNN/nlpgnn/metrics/crf.py}
    * for tensor-type inference coverage. {@code crf_forward} is reached only through {@code
    * crf_log_norm} (its sole NLPGNN caller), which passes {@code inputs} and {@code state} from
-   * {@code tf.slice} / {@code tf.squeeze} results. Both now infer as {@code float32} with shape
+   * {@code tf.slice}/{@code tf.squeeze} results. Both now infer as {@code float32} with shape
    * {@code ⊤}: the dedicated {@code Slice} generator forwards the input dtype while leaving the
-   * shape unknown (wala/ML#568); the precise {@code begin}/{@code size} shape is the broader
-   * slice-shape vocabulary tracked by <a
-   * href="https://github.com/wala/ML/issues/406">wala/ML#406</a>.
+   * shape unknown (wala/ML#568); computing the precise {@code begin}/{@code size} shape is tracked
+   * by <a href="https://github.com/wala/ML/issues/569">wala/ML#569</a>.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2381,7 +2380,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * base {@code (2, 3, 4)} because these middle-axis subscript slices fall through to the
    * base-shape passthrough; recovering them requires the broader slice vocabulary tracked by <a
    * href="https://github.com/wala/ML/issues/406">wala/ML#406</a>. Like {@code crf_forward} (reached
-   * via {@code tf.slice} / {@code tf.squeeze}, now dtype-typed with shape {@code ⊤} — wala/ML#568),
+   * via {@code tf.slice}/{@code tf.squeeze}, now dtype-typed with shape {@code ⊤} — wala/ML#568),
    * the subscript-slice path keeps the parameters tensor-typed, just shape-imprecise.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.

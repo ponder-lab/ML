@@ -2054,8 +2054,8 @@
         </method>
       </class>
       <class name="slice" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/slice. Direct `<new>+<return>` paired with the dedicated `Slice` generator (wala/ML#568): dtype inherits from `input_`; shape is left at ⊤ since `tf.slice` reshapes its input by the runtime `begin`/`size` extents (the broader slice-shape
-          vocabulary is wala/ML#406). -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/slice. Direct `<new>+<return>` paired with the dedicated `Slice` generator (wala/ML#568): dtype inherits from `input_`; shape is left at ⊤ since `tf.slice` reshapes its input by the runtime `begin`/`size` extents (computing it from
+          constant `begin`/`size` is wala/ML#569). -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_ begin size name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>

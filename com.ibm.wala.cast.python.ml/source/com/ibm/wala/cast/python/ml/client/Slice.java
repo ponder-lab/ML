@@ -11,10 +11,9 @@ import java.util.Set;
  * Generator for {@code tf.slice(input_, begin, size, name=None)}. Output dtype is inherited from
  * the {@code input_} input. Output shape is left at ⊤ for now: the precise shape is determined by
  * the {@code begin}/{@code size} extents (where a {@code size[i]} of {@code -1} means "all
- * remaining elements along axis {@code i}"), which requires the broader slice-shape vocabulary
- * tracked by <a href="https://github.com/wala/ML/issues/406">wala/ML#406</a>. Forwarding only the
- * dtype already recovers it from ⊤ — see <a
- * href="https://github.com/wala/ML/issues/568">wala/ML#568</a>.
+ * remaining elements along axis {@code i}"), tracked by <a
+ * href="https://github.com/wala/ML/issues/569">wala/ML#569</a>. Forwarding only the dtype already
+ * recovers it from ⊤ — see <a href="https://github.com/wala/ML/issues/568">wala/ML#568</a>.
  *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/slice">tf.slice</a>
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
