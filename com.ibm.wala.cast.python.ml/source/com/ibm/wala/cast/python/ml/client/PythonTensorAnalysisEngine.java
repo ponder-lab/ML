@@ -102,15 +102,32 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * Validates the requested k-CFA depth for the targeted context selector. The depth is the
+   * call-string length passed to {@link nCFAContextSelector}, so it must be non-negative (0 is
+   * context-insensitive; higher values are deeper).
+   *
+   * @param targetedCfaDepth The requested depth.
+   * @return {@code targetedCfaDepth} unchanged when valid.
+   * @throws IllegalArgumentException if {@code targetedCfaDepth} is negative.
+   */
+  private static int checkTargetedCfaDepth(int targetedCfaDepth) {
+    if (targetedCfaDepth < 0)
+      throw new IllegalArgumentException(
+          "The targeted k-CFA depth must be non-negative: " + targetedCfaDepth + ".");
+    return targetedCfaDepth;
+  }
+
+  /**
    * Constructs an engine with a configurable k-CFA depth for the targeted context selector.
    *
    * @param targetFramework The framework name prefix whose API methods receive deep context.
    * @param targetedCfaDepth The k-CFA depth to apply (e.g. {@link #DEFAULT_TARGETED_CFA_DEPTH});
-   *     higher values increase precision at the cost of analysis time.
+   *     must be non-negative. Higher values increase precision at the cost of analysis time.
+   * @throws IllegalArgumentException if {@code targetedCfaDepth} is negative.
    */
   public PythonTensorAnalysisEngine(String targetFramework, int targetedCfaDepth) {
     this.targetFramework = targetFramework;
-    this.targetedCfaDepth = targetedCfaDepth;
+    this.targetedCfaDepth = checkTargetedCfaDepth(targetedCfaDepth);
   }
 
   public PythonTensorAnalysisEngine(List<File> pythonPath, String targetFramework) {
@@ -123,13 +140,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * @param pythonPath The additional Python path entries for module resolution.
    * @param targetFramework The framework name prefix whose API methods receive deep context.
    * @param targetedCfaDepth The k-CFA depth to apply (e.g. {@link #DEFAULT_TARGETED_CFA_DEPTH});
-   *     higher values increase precision at the cost of analysis time.
+   *     must be non-negative. Higher values increase precision at the cost of analysis time.
+   * @throws IllegalArgumentException if {@code targetedCfaDepth} is negative.
    */
   public PythonTensorAnalysisEngine(
       List<File> pythonPath, String targetFramework, int targetedCfaDepth) {
     super(pythonPath);
     this.targetFramework = targetFramework;
-    this.targetedCfaDepth = targetedCfaDepth;
+    this.targetedCfaDepth = checkTargetedCfaDepth(targetedCfaDepth);
   }
 
   @Override

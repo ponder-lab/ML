@@ -90,6 +90,10 @@ public class Argmax extends ReduceMean {
     // argmax removes the `axis` dimension (no keepdims), which is exactly ReduceMean's
     // keepdims=False reduction. With per-context layer-output allocations (wala/ML#530), the input
     // shape is resolved per caller, so the result no longer collapses across contexts.
+    //
+    // ReduceMean resolves the reduction axis from the `axis` parameter only, so argmax's deprecated
+    // TF 1.x `dimension` alias is not honored for shape (a `tf.argmax(x, dimension=0)` call would
+    // reduce as `axis=None`). Honoring the alias precisely is tracked by wala/ML#572.
     return super.getDefaultShapes(builder);
   }
 

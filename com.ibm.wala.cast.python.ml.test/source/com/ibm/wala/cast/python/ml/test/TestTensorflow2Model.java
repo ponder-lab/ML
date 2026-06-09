@@ -3004,6 +3004,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * A negative k-CFA depth is invalid (the depth is the call-string length for the targeted context
+   * selector) and is rejected at construction (wala/ML#379).
+   */
+  @Test(expected = IllegalArgumentException.class)
+  public void testNegativeTargetedCfaDepthRejected() {
+    new PythonTensorAnalysisEngine(
+        emptyList(), PythonTensorAnalysisEngine.TENSORFLOW, /* targetedCfaDepth= */ -1);
+  }
+
+  /**
    * {@code encoder(x)} receives {@code x} from call sites {@code decoder(encoder(x))} inside {@code
    * run_optimization} (training loop) and {@code decoder(encoder(batch_x))} at the module-level
    * test loop. Both call sites pass batches of shape {@code (256, 784)} dtype {@code float32}
