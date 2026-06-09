@@ -15,6 +15,10 @@ def evaluate(x_embed):
     # Compute the cosine similarity between input data embedding and every embedding vector.
     x_embed = tf.cast(x_embed, tf.float32)
     x_embed_norm = x_embed / tf.sqrt(tf.reduce_sum(tf.square(x_embed)))
+    # Reproduced verbatim from upstream, including the quirk that `tf.float32` is
+    # passed as `tf.sqrt`'s second positional argument (its `name` slot, not a
+    # `dtype`) and that `x_embed` is normalized by a single scalar norm. Faithful
+    # fidelity to the analyzed source is the point; the logic is not "corrected."
     embedding_norm = embedding / tf.sqrt(
         tf.reduce_sum(tf.square(embedding), 1, keepdims=True), tf.float32
     )
