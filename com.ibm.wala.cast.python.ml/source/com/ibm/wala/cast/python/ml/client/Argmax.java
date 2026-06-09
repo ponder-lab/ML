@@ -20,13 +20,15 @@ import java.util.Set;
  * answer for argmax, which always returns an integer index. The override resolves the {@code
  * output_type} argument via {@link #getDTypeParameterPosition} / {@link #getDTypeParameterName} and
  * uses it instead of the default &mdash; fix for <a
- * href="https://github.com/wala/ML/issues/463">wala/ML#463</a>. Output shape is left at ⊤ for now;
- * computing the precise shape (input.shape with the {@code axis} dimension removed) regresses tests
- * such as {@code testNeuralNetwork*}, where the per-context shape union for {@code y_true} (e.g.
- * {@code [256]} train vs. {@code [10000]} test) cross-products through {@code
- * ElementWiseOperation}'s strict broadcast check. Shape precision can be added once the EWO union
- * behaviour is addressed (<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>). See <a
- * href="https://github.com/wala/ML/issues/449">wala/ML#449</a> (Tier 6).
+ * href="https://github.com/wala/ML/issues/463">wala/ML#463</a>. Output shape is the input shape
+ * with the {@code axis} dimension removed (delegated to {@link ReduceMean}'s keepdims=false
+ * reduction). Earlier this was left at ⊤ because the precise shape regressed {@code
+ * testNeuralNetwork*}: the per-context shape union (e.g. {@code [256]} train vs. {@code [10000]}
+ * test) cross-products through {@code ElementWiseOperation}'s strict broadcast check. That
+ * regression was resolved by per-context layer-output allocations under configurable k-CFA (<a
+ * href="https://github.com/wala/ML/issues/530">wala/ML#530</a>, <a
+ * href="https://github.com/wala/ML/issues/379">wala/ML#379</a>), so the precise shape is now
+ * emitted. See <a href="https://github.com/wala/ML/issues/449">wala/ML#449</a> (Tier 6).
  *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/math/argmax">tf.math.argmax</a>
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
@@ -85,7 +87,10 @@ public class Argmax extends ReduceMean {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    return null;
+    // argmax removes the `axis` dimension (no keepdims), which is exactly ReduceMean's
+    // keepdims=False reduction. With per-context layer-output allocations (wala/ML#530), the input
+    // shape is resolved per caller, so the result no longer collapses across contexts.
+    return super.getDefaultShapes(builder);
   }
 
   /**

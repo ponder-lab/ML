@@ -477,6 +477,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3)));
 
+  private static final TensorType TENSOR_3_INT64 =
+      new TensorType(INT_64, asList(new NumericDim(3)));
+
   private static final TensorType TENSOR_3_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(3)));
 
@@ -5435,19 +5438,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_size.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
-  // wala/ML#449 Tier 6: argmax/argmin produce int64 indices. Output shape is left at ⊤ for now;
-  // see `Argmax.getDefaultShapes` for why precise shape inference regresses `testNeuralNetwork*`.
+  // wala/ML#449 Tier 6: argmax/argmin produce int64 indices. Output shape is the input shape with
+  // the `axis` dimension removed (via `ReduceMean`), unblocked by the per-context layer-output
+  // fix (wala/ML#530) that stopped `testNeuralNetwork*` from regressing on the
+  // `ElementWiseOperation`
+  // cross-context cartesian pair.
 
   /**
    * Verifies that {@code tf.math.argmax(x, axis=0)} routes through the dedicated {@link
    * com.ibm.wala.cast.python.ml.client.Argmax} generator and emits the precise {@code int64} dtype
-   * (the TF default for argmax indices).
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): output shape is left
-   * at ⊤. Precise axis-aware shape composition (reading {@code input.shape[:axis] +
-   * input.shape[axis+1:]}) regresses {@code testNeuralNetwork*} via the {@code
-   * ElementWiseOperation} cartesian-pair issue tracked at #462. Tighten to the precise post-fix
-   * shape once #462 lands.
+   * (the TF default for argmax indices) and the precise {@code (3,)} shape ({@code (2, 3)} with
+   * {@code axis=0} removed). Shape precision was unblocked by wala/ML#530.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -5457,17 +5458,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testArgmax()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_argmax.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT64_UNKNOWN_SHAPE)));
+    test("tf2_test_argmax.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_INT64)));
   }
 
   /**
    * Counterpart of {@link #testArgmax()} for {@code tf.math.argmin}. Same semantics: dtype defaults
    * to {@code int64} (overridable via {@code output_type}, see {@link #testArgminOutputType()}),
-   * shape is left at ⊤. See {@link com.ibm.wala.cast.python.ml.client.Argmin}.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): output shape is left
-   * at ⊤; same {@code ElementWiseOperation} cartesian-pair driver as for {@link #testArgmax()}.
-   * Tighten to the precise post-fix shape once #462 lands.
+   * and shape is the precise {@code (3,)} ({@code (2, 3)} with {@code axis=0} removed), unblocked
+   * by wala/ML#530. See {@link com.ibm.wala.cast.python.ml.client.Argmin}.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -5477,7 +5475,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testArgmin()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_argmin.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT64_UNKNOWN_SHAPE)));
+    test("tf2_test_argmin.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_INT64)));
   }
 
   /**
@@ -5486,12 +5484,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * int64} default. Exercises the dtype-arg dispatch path on {@link
    * com.ibm.wala.cast.python.ml.client.Argmax} after the wala/ML#463 fix. The fixture's sink {@code
    * f(x, y)} has two parameters so that each tensor's inferred type can be checked independently.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the inferred ⊤ shape
-   * on {@code y} (vn=3) is imprecise &mdash; precise axis-aware shape composition (reading {@code
-   * input.shape[:axis] + input.shape[axis+1:]}) regresses {@code testNeuralNetwork*} via the {@code
-   * ElementWiseOperation} cartesian-pair issue tracked at #462. Captured-imprecise per the
-   * prefer-observed-assertion convention; tighten to a precise {@code (3,) int32} once #462 lands.
+   * The result {@code y} (vn=3) has the precise {@code (3,) int32} shape ({@code (2, 3)} with
+   * {@code axis=0} removed), unblocked by wala/ML#530.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -5508,18 +5502,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         Map.of(
             2, Set.of(TENSOR_2_3_FLOAT32),
-            3, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+            3, Set.of(TENSOR_3_INT32)));
   }
 
   /**
    * Counterpart of {@link #testArgmaxOutputType()} for {@code tf.math.argmin}. Same dispatch path
    * via the inherited {@link com.ibm.wala.cast.python.ml.client.Argmin} extends {@link
-   * com.ibm.wala.cast.python.ml.client.Argmax} relationship; same shape-imprecision driver too.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the inferred ⊤ shape
-   * on {@code y} (vn=3) is imprecise &mdash; precise axis-aware shape composition for {@code
-   * Argmin} is gated by the {@code ElementWiseOperation} cartesian-pair issue, same as for {@code
-   * Argmax}. Tighten to the precise post-fix shape once #462 lands.
+   * com.ibm.wala.cast.python.ml.client.Argmax} relationship; the result {@code y} (vn=3) has the
+   * precise {@code (3,) int32} shape, unblocked by wala/ML#530.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -5536,7 +5526,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         Map.of(
             2, Set.of(TENSOR_2_3_FLOAT32),
-            3, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+            3, Set.of(TENSOR_3_INT32)));
   }
 
   /**
@@ -5544,13 +5534,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * call sites* shape: {@code def f(a): ...; f(x); f(y)}. Parameter {@code a} should union {@code
    * x}'s and {@code y}'s tensor types across the two call sites &mdash; verifies that the {@code
    * output_type=tf.int32} override on {@code y} survives the second sink call rather than being
-   * clobbered by the {@code int64} default.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the {@code y}
-   * contribution to the union is currently ⊤-shape ({@code TENSOR_INT32_UNKNOWN_SHAPE}) for the
-   * same reason as {@link #testArgmaxOutputType()} &mdash; gated by the {@code
-   * ElementWiseOperation} cartesian-pair issue. Tighten {@code y}'s contribution to its precise
-   * post-fix shape (a {@code (3,) int32}) once #462 lands.
+   * clobbered by the {@code int64} default. The {@code y} contribution to the union is the precise
+   * {@code (3,) int32} shape, unblocked by wala/ML#530.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -5565,17 +5550,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "f",
         1,
         2,
-        Map.of(2, Set.of(TENSOR_2_3_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32, TENSOR_3_INT32)));
   }
 
   /**
-   * Counterpart of {@link #testArgmaxOutputTypeDoubleSink()} for {@code tf.math.argmin}; same
-   * shape-imprecision driver.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the {@code y}
-   * contribution to the union is currently ⊤-shape ({@code TENSOR_INT32_UNKNOWN_SHAPE}) for the
-   * same reason as {@link #testArgmaxOutputTypeDoubleSink()}. Tighten to the precise {@code (3,)
-   * int32} once #462 lands.
+   * Counterpart of {@link #testArgmaxOutputTypeDoubleSink()} for {@code tf.math.argmin}; the {@code
+   * y} contribution to the union is the precise {@code (3,) int32} shape, unblocked by wala/ML#530.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -5590,7 +5570,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "f",
         1,
         2,
-        Map.of(2, Set.of(TENSOR_2_3_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32, TENSOR_3_INT32)));
   }
 
   // wala/ML#449 Tier 7: linspace/broadcast_to. Shape derives from a shape-arg (`num`/`shape`),
