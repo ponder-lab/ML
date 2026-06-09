@@ -230,6 +230,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_100_784_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(100), new NumericDim(784)));
 
+  private static final TensorType TENSOR_4_10_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(10)));
+
+  private static final TensorType TENSOR_4_1_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(4), new NumericDim(1)));
+
+  private static final TensorType TENSOR_256_256_3_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(256), new NumericDim(256), new NumericDim(3)));
+
   private static final TensorType TENSOR_2_3_4_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(3), new NumericDim(4)));
 
@@ -2252,6 +2261,107 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         16,
         Map.of(2, Set.of(TENSOR_100_784_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code logistic_regression(x)}'s parameter type. Function body mirrors {@code
+   * logistic_regression} from {@code
+   * aymericdamien/TensorFlow-Examples/.../2_BasicModels/logistic_regression.py}, a real-world
+   * image-classification utility (logistic regression: {@code softmax(W x + b)} over global {@code
+   * tf.Variable} weights and biases), for tensor-type inference coverage. Like {@link
+   * #testMultilayerPerceptron}, it uses raw {@code tf.matmul} / {@code tf.nn.softmax} rather than
+   * the {@code Dense}-layer subclass-{@code Model} approach of {@code testNeuralNetwork*}.
+   *
+   * <p>{@code x} is inferred as {@code (100, 784) float32} — both shape and dtype concrete —
+   * flowing from the caller's {@code tf.constant(np.ones((100, 784), dtype=np.float32))} via the
+   * {@code numpy → tf.constant} bridge (<a
+   * href="https://github.com/wala/ML/issues/539">wala/ML#539</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testLogisticRegression()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_logistic_regression.py",
+        "logistic_regression",
+        1,
+        6,
+        Map.of(2, Set.of(TENSOR_100_784_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code nce_loss(x_embed, y)}'s parameter types. Function body mirrors {@code nce_loss}
+   * from {@code aymericdamien/TensorFlow-Examples/.../2_BasicModels/word2vec.py}, a real-world
+   * word-embedding utility (the averaged noise-contrastive-estimation loss over global {@code
+   * tf.Variable} embedding/weight/bias matrices), for tensor-type inference coverage.
+   *
+   * <p>Both parameters are inferred concretely — shape and dtype: {@code x_embed} as {@code (4, 10)
+   * float32} and {@code y} as {@code (4, 1) int32}, flowing from the {@code
+   * tf.constant(np.ones(...))} call site.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNceLoss()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_nce_loss.py",
+        "nce_loss",
+        2,
+        5,
+        Map.of(2, Set.of(TENSOR_4_10_FLOAT32), 3, Set.of(TENSOR_4_1_INT32)));
+  }
+
+  /**
+   * Pins {@code evaluate(x_embed)}'s parameter type. Function body mirrors {@code evaluate} from
+   * {@code aymericdamien/TensorFlow-Examples/.../2_BasicModels/word2vec.py}, a real-world
+   * word-embedding utility (the cosine similarity between an input embedding and every row of the
+   * global embedding matrix), for tensor-type inference coverage.
+   *
+   * <p>{@code x_embed} is inferred as {@code (4, 10) float32} — both shape and dtype concrete —
+   * flowing from the {@code tf.constant(np.ones(...))} call site.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testEvaluate()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_evaluate.py", "evaluate", 1, 13, Map.of(2, Set.of(TENSOR_4_10_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code random_jitter(input_image, real_image)}'s parameter types. Function body (and the
+   * {@code resize}/{@code random_crop} helpers it calls) mirrors {@code random_jitter} from {@code
+   * YunYang1994/TensorFlow2.0-Examples/.../Pix2Pix.py}, a real-world image-to-image translation
+   * utility (random resize/crop/mirror data augmentation), for tensor-type inference coverage.
+   *
+   * <p>Both image parameters are inferred concretely — shape and dtype — as {@code (256, 256, 3)
+   * float32}, flowing from the {@code tf.constant(np.ones(...))} call site.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testRandomJitter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_random_jitter.py",
+        "random_jitter",
+        2,
+        5,
+        Map.of(2, Set.of(TENSOR_256_256_3_FLOAT32), 3, Set.of(TENSOR_256_256_3_FLOAT32)));
   }
 
   /**
