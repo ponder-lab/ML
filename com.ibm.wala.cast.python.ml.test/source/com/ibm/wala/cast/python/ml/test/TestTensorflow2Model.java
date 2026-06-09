@@ -138,6 +138,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_256_784_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(256), new NumericDim(784)));
 
+  private static final TensorType TENSOR_256_28_28_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(256), new NumericDim(28), new NumericDim(28)));
+
   private static final TensorType TENSOR_10000_784_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(10000), new NumericDim(784)));
 
@@ -2362,6 +2365,65 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         5,
         Map.of(2, Set.of(TENSOR_256_256_3_FLOAT32), 3, Set.of(TENSOR_256_256_3_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code MaskSparseCategoricalCrossentropy.__call__(y_true, y_predict, input_mask)}'s
+   * parameter types. Class and method body mirror {@code MaskSparseCategoricalCrossentropy} from
+   * {@code kyzhouhzau/NLPGNN/nlpgnn/metrics/Losess.py}, a real-world NLP utility (a mask-weighted
+   * sparse-categorical-crossentropy loss), for tensor-type inference coverage. Unlike the {@code
+   * tf.keras.Model.call} layer-chain methods ({@code testNeuralNetwork*}), this is a loss {@code
+   * __call__} on a plain class that reduces its inputs to a scalar.
+   *
+   * <p>All three parameters are inferred concretely — shape and dtype: {@code y_true} as {@code
+   * (4,) int32}, {@code y_predict} as {@code (4, 10) float32}, and {@code input_mask} as {@code
+   * (4,) float32}, flowing from the {@code tf.constant(np.ones(...))} call site.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testMaskedSparseCrossentropy()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_masked_sparse_ce.py",
+        "MaskSparseCategoricalCrossentropy.__call__",
+        3,
+        5,
+        Map.of(
+            3, Set.of(TENSOR_4_INT32),
+            4, Set.of(TENSOR_4_10_FLOAT32),
+            5, Set.of(TENSOR_4_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code LSTM.call(x)}'s parameter type. Class and method body mirror the {@code LSTM}
+   * recurrent model from {@code
+   * aymericdamien/TensorFlow-Examples/.../3_NeuralNetworks/recurrent_network.py}, a real-world
+   * sequence-classification utility (a built-in {@code tf.keras.layers.LSTM} followed by a {@code
+   * Dense} read-out), for tensor-type inference coverage.
+   *
+   * <p>The input parameter {@code x} is recovered concretely on both axes — {@code (256, 28, 28)
+   * float32} — flowing from the {@code lstm_net(x, is_training=True)} call site through {@code
+   * tf.keras.Model.__call__} dispatch.
+   *
+   * <p>The forward-pass locals ({@code lstm_layer} output, {@code out} output, {@code softmax}) are
+   * inferred as {@code float32} but with <em>unknown shape</em>: the built-in {@code LSTM}/{@code
+   * Dense} output shapes are not narrowed (the layer-chain shape gap tracked by <a
+   * href="https://github.com/wala/ML/issues/530">wala/ML#530</a>). The dtype axis — the
+   * load-bearing one — is exact; only shape is ⊤.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testLstmCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_lstm_call.py", "LSTM.call", 1, 4, Map.of(3, Set.of(TENSOR_256_28_28_FLOAT32)));
   }
 
   /**
