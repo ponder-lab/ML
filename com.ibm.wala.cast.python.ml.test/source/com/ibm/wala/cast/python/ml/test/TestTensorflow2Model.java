@@ -233,6 +233,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_100_784_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(100), new NumericDim(784)));
 
+  private static final TensorType TENSOR_4_8_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(8)));
+
   private static final TensorType TENSOR_4_10_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(10)));
 
@@ -2424,6 +2427,55 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testLstmCall()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_lstm_call.py", "LSTM.call", 1, 4, Map.of(3, Set.of(TENSOR_256_28_28_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code GCNLayer.call(node_embeddings, adjacency_lists)}'s tensor-parameter type. The
+   * {@code GCNLayer} model and the {@code GraphConvolution}/{@code MessagePassing} layers it builds
+   * on are vendored verbatim from {@code kyzhouhzau/NLPGNN} ({@code nlpgnn/models/GCN.py}, {@code
+   * nlpgnn/gnn/GCNConv.py}, {@code nlpgnn/gnn/messagepassing.py}); only the driver and a
+   * reachable-slice {@code nlpgnn/gnn/utils.py} (just the {@code GNNInput} named tuple) are
+   * bespoke. This is a real-world graph-neural-network utility (a two-layer graph-convolution
+   * message-passing model), exercised for tensor-type inference coverage across a multi-module
+   * import chain.
+   *
+   * <p>The tensor parameter {@code node_embeddings} is recovered concretely on both axes — {@code
+   * (4, 8) float32} — flowing from the driver's {@code model(node_embeddings, adjacency_lists,
+   * training=False)} call site through {@code tf.keras.Model.__call__} dispatch, across the {@code
+   * driver → GCN → GCNConv → MessagePassing} module boundaries. ({@code adjacency_lists} is a
+   * Python list of edge tensors, not a tensor itself, so it is not a tensor parameter.)
+   *
+   * <p>The message-passing <em>output</em> locals (the {@code gc1}/{@code gc2} results) are
+   * inferred as ⊤ on <em>both</em> axes (unknown shape, unknown dtype): the custom aggregation
+   * ({@code tf.scatter_nd}, {@code tf.math.unsorted_segment_sum}, {@code tf.gather}) inside {@code
+   * MessagePassing} is not modeled, so the layer output type is lost. The decorated function's
+   * input signature — the analysis goal — is nonetheless exact.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGcnCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "gcn_proj/nlpgnn/__init__.py",
+          "gcn_proj/nlpgnn/gnn/__init__.py",
+          "gcn_proj/nlpgnn/gnn/utils.py",
+          "gcn_proj/nlpgnn/gnn/messagepassing.py",
+          "gcn_proj/nlpgnn/gnn/GCNConv.py",
+          "gcn_proj/nlpgnn/models/__init__.py",
+          "gcn_proj/nlpgnn/models/GCN.py",
+          "gcn_proj/tf2_test_gcn_call.py"
+        },
+        "nlpgnn/models/GCN.py",
+        "GCNLayer.call",
+        "gcn_proj",
+        1,
+        4,
+        Map.of(3, Set.of(TENSOR_4_8_FLOAT32)));
   }
 
   /**
