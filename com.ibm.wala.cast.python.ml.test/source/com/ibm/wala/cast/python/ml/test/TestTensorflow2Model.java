@@ -2479,6 +2479,46 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Pins {@code Transformer.call(encoder_inputs, decoder_inputs)}'s parameter types. The {@code
+   * Transformer} layer and the {@code MultiHeadAttention}/{@code ScaledDotProductAttention} layers
+   * it builds on are vendored verbatim from {@code LongmaoTeamTf/deep_recommenders} ({@code
+   * deep_recommenders/keras/models/nlp/transformer.py} and {@code .../multi_head_attention.py});
+   * only the driver is bespoke. This is a real-world sequence-to-sequence utility (a
+   * multi-head-attention encoder/decoder transformer), exercised for tensor-type inference coverage
+   * across a multi-module import chain.
+   *
+   * <p>Both token-sequence parameters are recovered concretely on both axes—{@code (2, 5) int32}
+   * each—flowing from the driver's {@code transformer(encoder_inputs, decoder_inputs)} call site
+   * through {@code tf.keras.layers.Layer.__call__} dispatch, across the {@code
+   * deep_recommenders→nlp→transformer} package boundaries.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTransformerCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "tr_proj/deep_recommenders/__init__.py",
+          "tr_proj/deep_recommenders/keras/__init__.py",
+          "tr_proj/deep_recommenders/keras/models/__init__.py",
+          "tr_proj/deep_recommenders/keras/models/nlp/__init__.py",
+          "tr_proj/deep_recommenders/keras/models/nlp/multi_head_attention.py",
+          "tr_proj/deep_recommenders/keras/models/nlp/transformer.py",
+          "tr_proj/tf2_test_transformer_call.py"
+        },
+        "deep_recommenders/keras/models/nlp/transformer.py",
+        "Transformer.call",
+        "tr_proj",
+        2,
+        2,
+        Map.of(3, Set.of(TENSOR_2_5_INT32), 4, Set.of(TENSOR_2_5_INT32)));
+  }
+
+  /**
    * Pins {@code crf_unary_score(tag_indices, sequence_lengths, inputs)}'s parameter types. Function
    * body mirrors {@code crf_unary_score} from {@code kyzhouhzau/NLPGNN/nlpgnn/metrics/crf.py}, a
    * real-world linear-chain CRF function exercised for tensor-type inference coverage. Its {@code
