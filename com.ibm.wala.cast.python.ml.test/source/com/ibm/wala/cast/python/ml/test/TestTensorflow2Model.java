@@ -2278,10 +2278,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * #testMultilayerPerceptron}, it uses raw {@code tf.matmul} / {@code tf.nn.softmax} rather than
    * the {@code Dense}-layer subclass-{@code Model} approach of {@code testNeuralNetwork*}.
    *
-   * <p>{@code x} is inferred as {@code (100, 784) float32} — both shape and dtype concrete —
-   * flowing from the caller's {@code tf.constant(np.ones((100, 784), dtype=np.float32))} via the
-   * {@code numpy → tf.constant} bridge (<a
-   * href="https://github.com/wala/ML/issues/539">wala/ML#539</a>).
+   * <p>{@code x} is inferred as {@code (100, 784) float32}—both shape and dtype concrete—flowing
+   * from the caller's {@code tf.constant(np.ones((100, 784), dtype=np.float32))} via the {@code
+   * numpy→tf.constant} bridge (<a href="https://github.com/wala/ML/issues/539">wala/ML#539</a>).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2305,7 +2304,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * word-embedding utility (the averaged noise-contrastive-estimation loss over global {@code
    * tf.Variable} embedding/weight/bias matrices), for tensor-type inference coverage.
    *
-   * <p>Both parameters are inferred concretely — shape and dtype: {@code x_embed} as {@code (4, 10)
+   * <p>Both parameters are inferred concretely—shape and dtype: {@code x_embed} as {@code (4, 10)
    * float32} and {@code y} as {@code (4, 1) int32}, flowing from the {@code
    * tf.constant(np.ones(...))} call site.
    *
@@ -2331,8 +2330,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * word-embedding utility (the cosine similarity between an input embedding and every row of the
    * global embedding matrix), for tensor-type inference coverage.
    *
-   * <p>{@code x_embed} is inferred as {@code (4, 10) float32} — both shape and dtype concrete —
-   * flowing from the {@code tf.constant(np.ones(...))} call site.
+   * <p>{@code x_embed} is inferred as {@code (4, 10) float32}—both shape and dtype concrete—flowing
+   * from the {@code tf.constant(np.ones(...))} call site.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2351,7 +2350,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * YunYang1994/TensorFlow2.0-Examples/.../Pix2Pix.py}, a real-world image-to-image translation
    * utility (random resize/crop/mirror data augmentation), for tensor-type inference coverage.
    *
-   * <p>Both image parameters are inferred concretely — shape and dtype — as {@code (256, 256, 3)
+   * <p>Both image parameters are inferred concretely—shape and dtype—as {@code (256, 256, 3)
    * float32}, flowing from the {@code tf.constant(np.ones(...))} call site.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
@@ -2378,9 +2377,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * tf.keras.Model.call} layer-chain methods ({@code testNeuralNetwork*}), this is a loss {@code
    * __call__} on a plain class that reduces its inputs to a scalar.
    *
-   * <p>All three parameters are inferred concretely — shape and dtype: {@code y_true} as {@code
-   * (4,) int32}, {@code y_predict} as {@code (4, 10) float32}, and {@code input_mask} as {@code
-   * (4,) float32}, flowing from the {@code tf.constant(np.ones(...))} call site.
+   * <p>All three parameters are inferred concretely—shape and dtype: {@code y_true} as {@code (4,)
+   * int32}, {@code y_predict} as {@code (4, 10) float32}, and {@code input_mask} as {@code (4,)
+   * float32}, flowing from the {@code tf.constant(np.ones(...))} call site.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2408,15 +2407,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * sequence-classification utility (a built-in {@code tf.keras.layers.LSTM} followed by a {@code
    * Dense} read-out), for tensor-type inference coverage.
    *
-   * <p>The input parameter {@code x} is recovered concretely on both axes — {@code (256, 28, 28)
-   * float32} — flowing from the {@code lstm_net(x, is_training=True)} call site through {@code
+   * <p>The input parameter {@code x} is recovered concretely on both axes—{@code (256, 28, 28)
+   * float32}—flowing from the {@code lstm_net(x, is_training=True)} call site through {@code
    * tf.keras.Model.__call__} dispatch.
    *
    * <p>The forward-pass locals ({@code lstm_layer} output, {@code out} output, {@code softmax}) are
    * inferred as {@code float32} but with <em>unknown shape</em>: the built-in {@code LSTM}/{@code
    * Dense} output shapes are not narrowed (the layer-chain shape gap tracked by <a
-   * href="https://github.com/wala/ML/issues/530">wala/ML#530</a>). The dtype axis — the
-   * load-bearing one — is exact; only shape is ⊤.
+   * href="https://github.com/wala/ML/issues/530">wala/ML#530</a>). The dtype axis—the load-bearing
+   * one—is exact; only shape is ⊤.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2439,17 +2438,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * message-passing model), exercised for tensor-type inference coverage across a multi-module
    * import chain.
    *
-   * <p>The tensor parameter {@code node_embeddings} is recovered concretely on both axes — {@code
-   * (4, 8) float32} — flowing from the driver's {@code model(node_embeddings, adjacency_lists,
+   * <p>The tensor parameter {@code node_embeddings} is recovered concretely on both axes—{@code (4,
+   * 8) float32}—flowing from the driver's {@code model(node_embeddings, adjacency_lists,
    * training=False)} call site through {@code tf.keras.Model.__call__} dispatch, across the {@code
-   * driver → GCN → GCNConv → MessagePassing} module boundaries. ({@code adjacency_lists} is a
-   * Python list of edge tensors, not a tensor itself, so it is not a tensor parameter.)
+   * driver→GCN→GCNConv→MessagePassing} module boundaries. ({@code adjacency_lists} is a Python list
+   * of edge tensors, not a tensor itself, so it is not a tensor parameter.)
    *
    * <p>The message-passing <em>output</em> locals (the {@code gc1}/{@code gc2} results) are
    * inferred as ⊤ on <em>both</em> axes (unknown shape, unknown dtype): the custom aggregation
    * ({@code tf.scatter_nd}, {@code tf.math.unsorted_segment_sum}, {@code tf.gather}) inside {@code
    * MessagePassing} is not modeled, so the layer output type is lost. The decorated function's
-   * input signature — the analysis goal — is nonetheless exact.
+   * input signature—the analysis goal—is nonetheless exact.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
