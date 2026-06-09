@@ -2860,18 +2860,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * fc1}, {@code fc2}, {@code out}, {@code softmax}). With the fix for wala/ML#358, the full {@code
    * fc1 → fc2 → out → softmax} chain narrows along the {@code units} axis ({@code 128 → 256 → 10 →
    * 10}) and every intermediate is registered as a tensor variable; combined with the per-context
-   * multiplicity (wala/ML#371) the actual registered count rises to 12. Count held at 12 to
-   * preserve regression detection; when wala/ML#371 Option 2 lands this count will drop to the
-   * source-level total.
+   * multiplicity (wala/ML#371) the actual registered count rises. This test runs at k-CFA depth 4
+   * (wala/ML#379) so {@code NeuralNet.call} is analyzed per caller (train vs. test vs.
+   * visualization) rather than collapsed (wala/ML#530); the extra caller contexts double the
+   * per-context multiplicity to 24. Count held at 24 to preserve regression detection; when
+   * wala/ML#371 Option 2 lands this count will drop to the source-level total.
    */
   @Test
   public void testNeuralNetwork()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
+        4,
         "neural_network.py",
         "NeuralNet.call",
         1,
-        12,
+        24,
         Map.of(3, Set.of(TENSOR_256_784_FLOAT32, TENSOR_10000_784_FLOAT32, TENSOR_5_784_FLOAT32)));
   }
 
@@ -2898,6 +2901,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testNeuralNetwork2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
+        4,
         "neural_network.py",
         "cross_entropy_loss",
         2,
@@ -2932,6 +2936,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testNeuralNetwork3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
+        4,
         "neural_network.py",
         "run_optimization",
         2,
@@ -2960,11 +2965,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * <p>Value 2 ({@code y_pred}) is tracked as a tensor parameter after the fix for wala/ML#358
    * (chained {@code Dense} shape propagation): the final {@code Dense(num_classes=10)} in {@code
    * NeuralNet.call} narrows to {@code (256, 10)} and that shape propagates back into {@code
-   * accuracy}'s {@code y_pred} parameter. The {@code (10000, 10)} shape from the test-set call site
-   * ({@code accuracy(pred, y_test)} where {@code pred = neural_net(x_test, ...)}) does not
-   * currently propagate, because the {@code x_test} chain resolves to a rank-preserving but
-   * shape-unknown tensor by the time it reaches {@code NeuralNet.call}'s first {@code Dense}
-   * operand. The remaining shape-propagation gap is orthogonal to #358.
+   * accuracy}'s {@code y_pred} parameter. This test runs at k-CFA depth 4 (wala/ML#379) so {@code
+   * NeuralNet.call} is analyzed per caller and its layer-output ({@code pred}) no longer collapses
+   * the training shape into the test context (wala/ML#530); value 2 is therefore the per-context
+   * union {@code {(256, 10) float32, ? float32}}. The test-context contribution is ⊤ shape because
+   * the {@code x_test} chain resolves to a rank-preserving but shape-unknown tensor by the time it
+   * reaches {@code NeuralNet.call}'s first {@code Dense} operand; closing that gap would narrow the
+   * ⊤ to {@code (10000, 10)} (orthogonal to #358/#530).
    */
   @Test
   public void testNeuralNetwork4()
@@ -2975,11 +2982,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     // are the argmax call sites and their downstream uses across the call
     // graph. Parameter-type expectations (`y_pred`, `y_true`) unchanged.
     test(
+        4,
         "neural_network.py",
         "accuracy",
         2,
         14,
-        Map.of(2, Set.of(TENSOR_256_10_FLOAT32), 3, Set.of(TENSOR_256_UINT8, TENSOR_10000_UINT8)));
+        Map.of(
+            2,
+            // Per-context union: training call site `accuracy(pred, batch_y)` gives `(256, 10)`;
+            // the test-set call site `accuracy(pred, y_test)` resolves to ⊤ shape because the
+            // `x_test` chain is shape-unknown by the time it reaches `NeuralNet.call`'s first
+            // `Dense` operand. With the depth-4 context separation (wala/ML#530), `argmax`'s result
+            // no longer leaks the training shape into the test context. TODO: the test-context ⊤
+            // should narrow to `(10000, 10)` once the `x_test` shape gap is closed.
+            Set.of(TENSOR_256_10_FLOAT32, TENSOR_UNKNOWN_SHAPE_FLOAT32),
+            3,
+            Set.of(TENSOR_256_UINT8, TENSOR_10000_UINT8)));
   }
 
   /**
@@ -10571,6 +10589,37 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         expectedTensorParameterValueNumberToTypes);
   }
 
+  /**
+   * Single-file test helper with a configurable k-CFA depth. Delegates to the core depth-aware
+   * {@code test(...)}; used by tests that need deeper context sensitivity than the default
+   * (wala/ML#379, wala/ML#530).
+   *
+   * @param targetedCfaDepth The k-CFA depth for the targeted context selector.
+   * @param filename The file declaring the function under test.
+   * @param functionName The function whose tensor types are checked.
+   * @param expectedNumberOfTensorParameters The expected number of tensor parameters.
+   * @param expectedNumberOfTensorVariables The expected number of function-local tensor variables.
+   * @param expectedTensorParameterValueNumberToTypes The expected per-parameter tensor types.
+   */
+  protected void test(
+      int targetedCfaDepth,
+      String filename,
+      String functionName,
+      int expectedNumberOfTensorParameters,
+      int expectedNumberOfTensorVariables,
+      Map<Integer, Set<TensorType>> expectedTensorParameterValueNumberToTypes)
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        targetedCfaDepth,
+        new String[] {filename},
+        filename,
+        functionName,
+        "",
+        expectedNumberOfTensorParameters,
+        expectedNumberOfTensorVariables,
+        expectedTensorParameterValueNumberToTypes);
+  }
+
   protected void test(
       String[] projectFilenames,
       String filename,
@@ -10580,8 +10629,45 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       int expectedNumberOfFunctionTensorVariables,
       Map<Integer, Set<TensorType>> expectedTensorParameterValueNumberToTypes)
       throws ClassHierarchyException, CancelException, IOException {
+    test(
+        PythonTensorAnalysisEngine.DEFAULT_TARGETED_CFA_DEPTH,
+        projectFilenames,
+        filename,
+        functionName,
+        pythonPath,
+        expectedNumberOfTensorParameters,
+        expectedNumberOfFunctionTensorVariables,
+        expectedTensorParameterValueNumberToTypes);
+  }
+
+  /**
+   * Core test helper with a configurable k-CFA depth. Most tests use the default-depth overloads;
+   * tests that exercise per-context layer-output precision (e.g. {@code testNeuralNetwork*}) opt
+   * into a deeper depth so a user model invoked from multiple sites does not collapse its
+   * layer-output allocations (wala/ML#379, wala/ML#530).
+   *
+   * @param targetedCfaDepth The k-CFA depth for the targeted context selector.
+   * @param projectFilenames The script module file names making up the project.
+   * @param filename The file declaring the function under test.
+   * @param functionName The function whose tensor types are checked.
+   * @param pythonPath The Python path root for module resolution.
+   * @param expectedNumberOfTensorParameters The expected number of tensor parameters.
+   * @param expectedNumberOfFunctionTensorVariables The expected number of function-local tensor
+   *     variables.
+   * @param expectedTensorParameterValueNumberToTypes The expected per-parameter tensor types.
+   */
+  protected void test(
+      int targetedCfaDepth,
+      String[] projectFilenames,
+      String filename,
+      String functionName,
+      String pythonPath,
+      int expectedNumberOfTensorParameters,
+      int expectedNumberOfFunctionTensorVariables,
+      Map<Integer, Set<TensorType>> expectedTensorParameterValueNumberToTypes)
+      throws ClassHierarchyException, CancelException, IOException {
     List<File> pathFiles = this.getPathFiles(pythonPath);
-    PythonTensorAnalysisEngine engine = makeEngine(pathFiles, projectFilenames);
+    PythonTensorAnalysisEngine engine = makeEngine(targetedCfaDepth, pathFiles, projectFilenames);
     PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
 
     addPytestEntrypoints(builder);

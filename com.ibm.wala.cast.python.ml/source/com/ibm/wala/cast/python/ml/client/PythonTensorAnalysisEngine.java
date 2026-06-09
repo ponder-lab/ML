@@ -73,7 +73,21 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
   public static final String TENSORFLOW = TensorFlowTypes.TENSORFLOW;
 
+  /**
+   * The default k-CFA depth applied to framework API methods (and user model subclasses). The
+   * migration from {@code read_data} synthetic methods to inline {@code do()} allocations required
+   * 2-CFA to keep framework-API precision; deeper context is occasionally needed when allocations
+   * merge across call sites (wala/ML#379, wala/ML#530).
+   */
+  public static final int DEFAULT_TARGETED_CFA_DEPTH = 2;
+
   private final String targetFramework;
+
+  /**
+   * The k-CFA depth applied to the targeted context selector. See {@link
+   * #DEFAULT_TARGETED_CFA_DEPTH}.
+   */
+  private final int targetedCfaDepth;
 
   public PythonTensorAnalysisEngine() {
     this(TENSORFLOW);
@@ -84,12 +98,38 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   public PythonTensorAnalysisEngine(String targetFramework) {
+    this(targetFramework, DEFAULT_TARGETED_CFA_DEPTH);
+  }
+
+  /**
+   * Constructs an engine with a configurable k-CFA depth for the targeted context selector.
+   *
+   * @param targetFramework The framework name prefix whose API methods receive deep context.
+   * @param targetedCfaDepth The k-CFA depth to apply (e.g. {@link #DEFAULT_TARGETED_CFA_DEPTH});
+   *     higher values increase precision at the cost of analysis time.
+   */
+  public PythonTensorAnalysisEngine(String targetFramework, int targetedCfaDepth) {
     this.targetFramework = targetFramework;
+    this.targetedCfaDepth = targetedCfaDepth;
   }
 
   public PythonTensorAnalysisEngine(List<File> pythonPath, String targetFramework) {
+    this(pythonPath, targetFramework, DEFAULT_TARGETED_CFA_DEPTH);
+  }
+
+  /**
+   * Constructs an engine with an explicit Python path and a configurable k-CFA depth.
+   *
+   * @param pythonPath The additional Python path entries for module resolution.
+   * @param targetFramework The framework name prefix whose API methods receive deep context.
+   * @param targetedCfaDepth The k-CFA depth to apply (e.g. {@link #DEFAULT_TARGETED_CFA_DEPTH});
+   *     higher values increase precision at the cost of analysis time.
+   */
+  public PythonTensorAnalysisEngine(
+      List<File> pythonPath, String targetFramework, int targetedCfaDepth) {
     super(pythonPath);
     this.targetFramework = targetFramework;
+    this.targetedCfaDepth = targetedCfaDepth;
   }
 
   @Override
@@ -98,8 +138,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     PythonSSAPropagationCallGraphBuilder builder = super.getCallGraphBuilder(cha, options, cache2);
 
     final ContextSelector base = builder.getContextSelector();
-    final ContextSelector targeted2CFA =
-        new nCFAContextSelector(2, new ContextInsensitiveSelector());
+    final ContextSelector targetedCFA =
+        new nCFAContextSelector(this.targetedCfaDepth, new ContextInsensitiveSelector());
+    final IClass modelClass = cha.lookupClass(TensorFlowTypes.MODEL.getDeclaringClass());
 
     builder.setContextSelector(
         new ContextSelector() {
@@ -110,9 +151,15 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               IMethod callee,
               InstanceKey[] actualParameters) {
             String calleeClass = callee.getDeclaringClass().getName().toString();
-            // Apply 2-CFA for any methods in the target framework, which includes internal helpers.
-            if (calleeClass.contains(targetFramework)) {
-              return targeted2CFA.getCalleeTarget(caller, site, callee, actualParameters);
+            // Apply k-CFA for any methods in the target framework, which includes internal helpers,
+            // as well as methods declared on user-defined `tf.keras.Model` subclasses (e.g.
+            // `NeuralNet.call`). Without the latter, a user model called from multiple sites (train
+            // vs. test) merges into one context-insensitive node, collapsing its layer-output
+            // allocations across callers and losing per-context shape (wala/ML#530).
+            if (calleeClass.contains(targetFramework)
+                || isModelSubclassMethod(callee, modelClass)
+                || isUserModelForwardMethod(calleeClass)) {
+              return targetedCFA.getCalleeTarget(caller, site, callee, actualParameters);
             }
             return base.getCalleeTarget(caller, site, callee, actualParameters);
           }
@@ -124,6 +171,46 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         });
 
     return builder;
+  }
+
+  /**
+   * Determines whether {@code callee} is declared on a user-defined subclass of {@code
+   * tf.keras.Model}. Walks the declaring class's superclass chain looking for {@code modelClass}.
+   * Methods on such classes (the forward-pass {@code call}/{@code predict}) receive deep context so
+   * a model invoked from multiple call sites does not merge its layer-output allocations
+   * (wala/ML#530).
+   *
+   * @param callee The method being dispatched.
+   * @param modelClass The resolved {@code tf.keras.Model} class, or {@code null} if it is absent
+   *     from the class hierarchy (in which case no method is treated as a model-subclass method).
+   * @return {@code true} if {@code callee}'s declaring class transitively extends {@code
+   *     modelClass}; {@code false} otherwise.
+   */
+  private static boolean isModelSubclassMethod(IMethod callee, IClass modelClass) {
+    if (modelClass == null) return false;
+    for (IClass c = callee.getDeclaringClass(); c != null; c = c.getSuperclass())
+      if (c.equals(modelClass)) return true;
+    return false;
+  }
+
+  /**
+   * Heuristic fallback for {@link #isModelSubclassMethod}: the front-end does not yet record a user
+   * model class's framework base class, so {@code class NeuralNet(Model)} has superclass {@code
+   * Lobject} rather than {@code tf.keras.Model} and the CHA-subtype check above never matches (see
+   * <a href="https://github.com/wala/ML/issues/571">wala/ML#571</a>). Until then, recognize a user
+   * model's forward method structurally by its declaring class name: a script-defined class whose
+   * final segment is a Keras forward-pass method ({@code call}, {@code __call__}, or {@code
+   * predict}). Once wala/ML#571 lands, this heuristic can be removed in favor of {@link
+   * #isModelSubclassMethod}.
+   *
+   * @param calleeClass The declaring class name of the dispatched method.
+   * @return {@code true} if {@code calleeClass} names a user-defined model forward method.
+   */
+  private static boolean isUserModelForwardMethod(String calleeClass) {
+    return calleeClass.contains("script ")
+        && (calleeClass.endsWith("/call")
+            || calleeClass.endsWith("/__call__")
+            || calleeClass.endsWith("/predict"));
   }
 
   /** A "fake" function name in the summaries that indicates that an API produces a new tensor. */

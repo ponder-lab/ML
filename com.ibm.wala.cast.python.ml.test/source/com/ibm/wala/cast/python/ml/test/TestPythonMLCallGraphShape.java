@@ -46,7 +46,26 @@ public abstract class TestPythonMLCallGraphShape extends TestJythonCallGraphShap
   @Override
   protected PythonTensorAnalysisEngine makeEngine(List<File> pythonPath, String... name)
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    PythonTensorAnalysisEngine engine = new PythonTensorAnalysisEngine(pythonPath);
+    return makeEngine(PythonTensorAnalysisEngine.DEFAULT_TARGETED_CFA_DEPTH, pythonPath, name);
+  }
+
+  /**
+   * Builds an engine with a specific k-CFA depth. Mirrors the depth-parameterized analyzer
+   * construction used in the Java streams tooling so individual tests can opt into deeper context
+   * sensitivity (wala/ML#379, wala/ML#530) while the default stays at {@link
+   * PythonTensorAnalysisEngine#DEFAULT_TARGETED_CFA_DEPTH}.
+   *
+   * @param targetedCfaDepth The k-CFA depth for the targeted context selector.
+   * @param pythonPath The additional Python path entries for module resolution.
+   * @param name The script module file names to analyze.
+   * @return The configured engine.
+   */
+  protected PythonTensorAnalysisEngine makeEngine(
+      int targetedCfaDepth, List<File> pythonPath, String... name)
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonTensorAnalysisEngine engine =
+        new PythonTensorAnalysisEngine(
+            pythonPath, PythonTensorAnalysisEngine.TENSORFLOW, targetedCfaDepth);
     Set<Module> modules = HashSetFactory.make();
     for (String n : name) {
       modules.add(getScript(n));
