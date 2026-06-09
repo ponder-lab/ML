@@ -159,6 +159,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     final ContextSelector targetedCFA =
         new nCFAContextSelector(this.targetedCfaDepth, new ContextInsensitiveSelector());
     final IClass modelClass = cha.lookupClass(TensorFlowTypes.MODEL.getDeclaringClass());
+    // Deepening user model forward methods is only worthwhile when the caller has opted into a
+    // depth above the default: a user model invoked from multiple sites collapses its layer-output
+    // allocations through a chain (model __call__ -> forward method -> layer __call__), and
+    // retaining the script-level caller frame needs more than the default depth (wala/ML#530). At
+    // the default depth this would add context-sensitivity to every user
+    // `call`/`__call__`/`predict`
+    // suite-wide without retaining enough frames to help, so gate it on the opt-in.
+    final boolean deepenModelMethods = this.targetedCfaDepth > DEFAULT_TARGETED_CFA_DEPTH;
 
     builder.setContextSelector(
         new ContextSelector() {
@@ -170,13 +178,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               InstanceKey[] actualParameters) {
             String calleeClass = callee.getDeclaringClass().getName().toString();
             // Apply k-CFA for any methods in the target framework, which includes internal helpers,
-            // as well as methods declared on user-defined `tf.keras.Model` subclasses (e.g.
-            // `NeuralNet.call`). Without the latter, a user model called from multiple sites (train
-            // vs. test) merges into one context-insensitive node, collapsing its layer-output
-            // allocations across callers and losing per-context shape (wala/ML#530).
+            // as well as (when opted in) methods declared on user-defined `tf.keras.Model`
+            // subclasses (e.g. `NeuralNet.call`), so a model called from multiple sites does not
+            // merge into one context-insensitive node and collapse its layer-output allocations
+            // (wala/ML#530).
             if (calleeClass.contains(targetFramework)
-                || isModelSubclassMethod(callee, modelClass)
-                || isUserModelForwardMethod(calleeClass)) {
+                || (deepenModelMethods
+                    && (isModelSubclassMethod(callee, modelClass)
+                        || isUserModelForwardMethod(calleeClass)))) {
               return targetedCFA.getCalleeTarget(caller, site, callee, actualParameters);
             }
             return base.getCalleeTarget(caller, site, callee, actualParameters);
