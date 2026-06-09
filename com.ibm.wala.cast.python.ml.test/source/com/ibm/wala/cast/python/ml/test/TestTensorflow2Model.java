@@ -2447,8 +2447,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * <p>The message-passing <em>output</em> locals (the {@code gc1}/{@code gc2} results) are
    * inferred as ⊤ on <em>both</em> axes (unknown shape, unknown dtype): the custom aggregation
    * ({@code tf.scatter_nd}, {@code tf.math.unsorted_segment_sum}, {@code tf.gather}) inside {@code
-   * MessagePassing} is not modeled, so the layer output type is lost. The decorated function's
-   * input signature—the analysis goal—is nonetheless exact.
+   * MessagePassing} is not modeled (tracked by <a
+   * href="https://github.com/wala/ML/issues/570">wala/ML#570</a>), so the layer output type is
+   * lost. The decorated function's input signature—the analysis goal—is nonetheless exact.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
