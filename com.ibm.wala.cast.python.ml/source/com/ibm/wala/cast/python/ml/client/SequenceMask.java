@@ -11,11 +11,11 @@ import java.util.Set;
 
 /**
  * Generator for {@code tf.sequence_mask}. Output dtype defaults to {@link DType#BOOL} per the
- * TensorFlow API; the optional {@code dtype} argument that can override it is exposed in {@code
- * tensorflow.xml} (see {@code sequence_mask}'s {@code paramNames}, which include {@code dtype}) but
- * is not yet honored by this generator, so it emits {@code BOOL} unconditionally — similar to
- * {@link Argmax}'s {@code INT64} default (whose {@code output_type} override, by contrast, isn't
- * yet surfaced in the XML at all). Output shape is left at ⊤: the precise shape is {@code
+ * TensorFlow API; the optional {@code dtype} argument that overrides it (e.g. {@code
+ * dtype=tf.int32}) is exposed in {@code tensorflow.xml} (see {@code sequence_mask}'s {@code
+ * paramNames}, which include {@code dtype}) and is honored here by surfacing the {@code dtype}
+ * parameter to the canonical dtype-argument dispatch in {@link TensorGenerator#getDTypes}, falling
+ * back to {@code BOOL} when it is absent. Output shape is left at ⊤: the precise shape is {@code
  * (*lengths.shape, maxlen)} which requires combining one input's shape with another input's runtime
  * value. See wala/ML#449 (Tier 8).
  *
@@ -40,5 +40,26 @@ public class SequenceMask extends PassThroughUnaryTensorGenerator {
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     return EnumSet.of(DType.BOOL);
+  }
+
+  /**
+   * Positional index of the {@code dtype} override argument. {@code tf.sequence_mask(lengths,
+   * maxlen, dtype, name)} places {@code dtype} third among the user-facing arguments.
+   *
+   * @return The zero-based positional index of the {@code dtype} argument.
+   */
+  @Override
+  protected int getDTypeParameterPosition() {
+    return 2;
+  }
+
+  /**
+   * Keyword name of the {@code dtype} override argument.
+   *
+   * @return {@code "dtype"}.
+   */
+  @Override
+  protected String getDTypeParameterName() {
+    return "dtype";
   }
 }

@@ -5830,16 +5830,35 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Generator-dispatch test for {@code tf.sequence_mask}. Output dtype is the TF-default {@code
-   * bool}; the optional {@code dtype} override is exposed in {@code tensorflow.xml}'s {@code
-   * paramNames} but is not yet honored by the {@link
-   * com.ibm.wala.cast.python.ml.client.SequenceMask} generator, which emits {@code bool}
-   * unconditionally. Shape is ⊤. (wala/ML#449 Tier 8.)
+   * Generator-dispatch test for {@code tf.sequence_mask}. With no {@code dtype} argument the output
+   * dtype is the TF-default {@code bool}. Shape is ⊤. (wala/ML#449 Tier 8.)
    */
   @Test
   public void testSequenceMask()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_sequence_mask.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_BOOL)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.sequence_mask} with an explicit {@code dtype} override
+   * ({@code tf.sequence_mask(..., dtype=tf.int32)}). The output dtype follows the argument ({@code
+   * int32}) rather than the default {@code bool}; shape remains ⊤. Regression guard for surfacing
+   * the {@code dtype} parameter through {@link com.ibm.wala.cast.python.ml.client.SequenceMask}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testSequenceMaskDType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sequence_mask_dtype.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
   }
 
   /**
