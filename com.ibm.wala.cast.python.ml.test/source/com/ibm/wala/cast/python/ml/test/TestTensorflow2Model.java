@@ -5863,14 +5863,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Generator-dispatch test for {@code tf.nn.embedding_lookup}. Output dtype is inherited from the
-   * {@code params} input (here float32), shape is ⊤. See {@link
+   * {@code params} input (here float32); the output shape is {@code ids.shape + params.shape[1:]},
+   * so a (3, 2) table looked up by (2,) ids yields (2, 2). See {@link
    * com.ibm.wala.cast.python.ml.client.EmbeddingLookup} (wala/ML#449 Tier 8).
    */
   @Test
   public void testEmbeddingLookup()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_embedding_lookup.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test("tf2_test_embedding_lookup.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   /**
