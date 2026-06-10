@@ -44,6 +44,26 @@ public class ReduceMean extends TensorGenerator {
   }
 
   /**
+   * The positional index of the input-tensor parameter. Overridable so subclasses whose op names
+   * the input differently (e.g. {@code argmax}'s {@code input}) resolve keyword calls correctly.
+   *
+   * @return The zero-based positional index of the input-tensor parameter.
+   */
+  protected int getInputTensorParameterPosition() {
+    return Parameters.INPUT_TENSOR.getIndex();
+  }
+
+  /**
+   * The keyword name of the input-tensor parameter. Overridable so subclasses whose op names the
+   * input differently (e.g. {@code argmax}'s {@code input}) resolve keyword calls correctly.
+   *
+   * @return The keyword name of the input-tensor parameter.
+   */
+  protected String getInputTensorParameterName() {
+    return Parameters.INPUT_TENSOR.getName();
+  }
+
+  /**
    * Resolves the possible {@code keepdims} values for this reduction from the {@code keepdims}
    * argument. When the argument is absent, defaults to {@code {false}}; a non-boolean, non-numeric
    * constant (which can never be a boolean flag) widens to {@code {false, true}} to stay sound.
@@ -96,7 +116,10 @@ public class ReduceMean extends TensorGenerator {
 
     int inputValNum =
         this.getArgumentValueNumber(
-            builder, Parameters.INPUT_TENSOR.getIndex(), Parameters.INPUT_TENSOR.getName(), false);
+            builder,
+            this.getInputTensorParameterPosition(),
+            this.getInputTensorParameterName(),
+            false);
     Set<List<Dimension<?>>> inputShapes = this.getShapes(builder, inputValNum);
     if (inputShapes == null) return null;
 

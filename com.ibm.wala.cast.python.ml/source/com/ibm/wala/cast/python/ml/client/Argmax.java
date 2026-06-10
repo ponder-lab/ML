@@ -85,6 +85,30 @@ public class Argmax extends ReduceMean {
     super(source);
   }
 
+  /**
+   * {@code argmax}'s input parameter is named {@code input} (not {@code reduce_mean}'s {@code
+   * input_tensor}), so resolving it by the superclass name would fail keyword calls like {@code
+   * tf.math.argmax(input=x, axis=0)}.
+   *
+   * @return The positional index of {@code argmax}'s {@code input} parameter.
+   */
+  @Override
+  protected int getInputTensorParameterPosition() {
+    return Parameters.INPUT.getIndex();
+  }
+
+  /**
+   * {@code argmax}'s input parameter is named {@code input} (not {@code reduce_mean}'s {@code
+   * input_tensor}), so resolving it by the superclass name would fail keyword calls like {@code
+   * tf.math.argmax(input=x, axis=0)}.
+   *
+   * @return The keyword name ({@code input}) of {@code argmax}'s input parameter.
+   */
+  @Override
+  protected String getInputTensorParameterName() {
+    return Parameters.INPUT.getName();
+  }
+
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     // argmax removes the `axis` dimension (no keepdims), which is exactly ReduceMean's

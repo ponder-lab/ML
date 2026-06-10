@@ -5542,6 +5542,32 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Tests that {@code tf.math.argmax} resolves its input when passed by keyword ({@code
+   * tf.math.argmax(input=x, axis=0)}). {@link com.ibm.wala.cast.python.ml.client.Argmax} delegates
+   * shape inference to {@link com.ibm.wala.cast.python.ml.client.ReduceMean}, whose input parameter
+   * is named {@code input_tensor}; argmax's is named {@code input}, so without overriding the
+   * input-parameter name the keyword lookup fails and shape inference throws {@code
+   * IllegalStateException}. The result {@code y} (vn=3) is the precise {@code (3,) int64}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgmaxInputKeyword()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_argmax_input_keyword.py",
+        "f",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_2_3_FLOAT32),
+            3, Set.of(TENSOR_3_INT64)));
+  }
+
+  /**
    * Counterpart of {@link #testArgmaxOutputType()} for {@code tf.math.argmin}. Same dispatch path
    * via the inherited {@link com.ibm.wala.cast.python.ml.client.Argmin} extends {@link
    * com.ibm.wala.cast.python.ml.client.Argmax} relationship; the result {@code y} (vn=3) has the
