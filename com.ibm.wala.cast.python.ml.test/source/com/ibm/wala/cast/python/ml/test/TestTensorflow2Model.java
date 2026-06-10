@@ -5756,13 +5756,38 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Generator-dispatch test for {@code tf.linalg.trace}. Output dtype is inherited from the {@code
-   * x} input (here float32), shape is ⊤. See {@link com.ibm.wala.cast.python.ml.client.Trace}
-   * (wala/ML#449).
+   * x} input (here float32); the output shape is the input shape with the last two dimensions
+   * dropped, so a (2, 2) input yields a scalar. See {@link
+   * com.ibm.wala.cast.python.ml.client.Trace} (wala/ML#449).
    */
   @Test
   public void testTrace()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_trace.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test("tf2_test_trace.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.linalg.trace} on a batched input. The trace collapses the
+   * last two dimensions, so a (3, 2, 2) input yields a (3,) output that inherits the input dtype.
+   * Exercises the leading-dimensions path of {@link com.ibm.wala.cast.python.ml.client.Trace}
+   * (wala/ML#449).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testTraceBatched()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_trace_batched.py",
+        "f",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_3_2_2_FLOAT32),
+            3, Set.of(TENSOR_3_FLOAT32)));
   }
 
   /**
