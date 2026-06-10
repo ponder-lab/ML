@@ -72,6 +72,11 @@ public class ReduceMean extends TensorGenerator {
             keepDimsValues.add(((Number) val).intValue() != 0);
           } else if (val == null) {
             keepDimsValues.add(false); // Default if None passed?
+          } else {
+            // A non-boolean, non-numeric constant can never be a boolean flag; widen to both for
+            // soundness.
+            keepDimsValues.add(false);
+            keepDimsValues.add(true);
           }
         } else {
           // assume both? or false?
