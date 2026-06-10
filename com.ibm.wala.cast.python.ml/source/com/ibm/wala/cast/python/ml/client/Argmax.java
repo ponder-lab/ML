@@ -20,13 +20,15 @@ import java.util.Set;
  * answer for argmax, which always returns an integer index. The override resolves the {@code
  * output_type} argument via {@link #getDTypeParameterPosition} / {@link #getDTypeParameterName} and
  * uses it instead of the default &mdash; fix for <a
- * href="https://github.com/wala/ML/issues/463">wala/ML#463</a>. Output shape is left at ⊤ for now;
- * computing the precise shape (input.shape with the {@code axis} dimension removed) regresses tests
- * such as {@code testNeuralNetwork*}, where the per-context shape union for {@code y_true} (e.g.
- * {@code [256]} train vs. {@code [10000]} test) cross-products through {@code
- * ElementWiseOperation}'s strict broadcast check. Shape precision can be added once the EWO union
- * behaviour is addressed (<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>). See <a
- * href="https://github.com/wala/ML/issues/449">wala/ML#449</a> (Tier 6).
+ * href="https://github.com/wala/ML/issues/463">wala/ML#463</a>. Output shape is the input shape
+ * with the {@code axis} dimension removed (delegated to {@link ReduceMean}'s keepdims=false
+ * reduction). Earlier this was left at ⊤ because the precise shape regressed {@code
+ * testNeuralNetwork*}: the per-context shape union (e.g. {@code [256]} train vs. {@code [10000]}
+ * test) cross-products through {@code ElementWiseOperation}'s strict broadcast check. That
+ * regression was resolved by per-context layer-output allocations under configurable k-CFA (<a
+ * href="https://github.com/wala/ML/issues/530">wala/ML#530</a>, <a
+ * href="https://github.com/wala/ML/issues/379">wala/ML#379</a>), so the precise shape is now
+ * emitted. See <a href="https://github.com/wala/ML/issues/449">wala/ML#449</a> (Tier 6).
  *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/math/argmax">tf.math.argmax</a>
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
@@ -83,9 +85,56 @@ public class Argmax extends ReduceMean {
     super(source);
   }
 
+  /**
+   * {@code argmax}'s input parameter is named {@code input} (not {@code reduce_mean}'s {@code
+   * input_tensor}), so resolving it by the superclass name would fail keyword calls like {@code
+   * tf.math.argmax(input=x, axis=0)}.
+   *
+   * @return The positional index of {@code argmax}'s {@code input} parameter.
+   */
+  @Override
+  protected int getInputTensorParameterPosition() {
+    return Parameters.INPUT.getIndex();
+  }
+
+  /**
+   * {@code argmax}'s input parameter is named {@code input} (not {@code reduce_mean}'s {@code
+   * input_tensor}), so resolving it by the superclass name would fail keyword calls like {@code
+   * tf.math.argmax(input=x, axis=0)}.
+   *
+   * @return The keyword name ({@code input}) of {@code argmax}'s input parameter.
+   */
+  @Override
+  protected String getInputTensorParameterName() {
+    return Parameters.INPUT.getName();
+  }
+
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    return null;
+    // argmax removes the `axis` dimension (no keepdims), which is exactly ReduceMean's
+    // keepdims=False reduction. With per-context layer-output allocations (wala/ML#530), the input
+    // shape is resolved per caller, so the result no longer collapses across contexts.
+    //
+    // ReduceMean resolves the reduction axis from the `axis` parameter only, so argmax's deprecated
+    // TF 1.x `dimension` alias is not honored for shape (a `tf.argmax(x, dimension=0)` call would
+    // reduce as `axis=None`). Honoring the alias precisely is tracked by wala/ML#572.
+    return super.getDefaultShapes(builder);
+  }
+
+  /**
+   * Forces {@code keepdims=false}: {@code argmax} (and {@code argmin}) have no {@code keepdims}
+   * parameter and always remove the scanned axis. This also prevents {@link ReduceMean} from
+   * misreading {@code argmax}'s {@code output_type} argument &mdash; which sits at the same
+   * positional index as {@code ReduceMean}'s {@code keepdims} &mdash; as a {@code keepdims} flag,
+   * which would otherwise union a spurious {@code keepdims=true} shape for a positional call like
+   * {@code tf.argmax(x, 0, tf.int32)}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return {@code Set.of(false)}.
+   */
+  @Override
+  protected Set<Boolean> getKeepDimsValues(PropagationCallGraphBuilder builder) {
+    return Set.of(false);
   }
 
   /**

@@ -477,6 +477,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_3_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3)));
 
+  private static final TensorType TENSOR_3_INT64 =
+      new TensorType(INT_64, asList(new NumericDim(3)));
+
   private static final TensorType TENSOR_3_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(3)));
 
@@ -2860,18 +2863,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * fc1}, {@code fc2}, {@code out}, {@code softmax}). With the fix for wala/ML#358, the full {@code
    * fc1 → fc2 → out → softmax} chain narrows along the {@code units} axis ({@code 128 → 256 → 10 →
    * 10}) and every intermediate is registered as a tensor variable; combined with the per-context
-   * multiplicity (wala/ML#371) the actual registered count rises to 12. Count held at 12 to
-   * preserve regression detection; when wala/ML#371 Option 2 lands this count will drop to the
-   * source-level total.
+   * multiplicity (wala/ML#371) the actual registered count rises. This test runs at k-CFA depth 4
+   * (wala/ML#379) so {@code NeuralNet.call} is analyzed per caller (train vs. test vs.
+   * visualization) rather than collapsed (wala/ML#530); the extra caller contexts double the
+   * per-context multiplicity to 24. Count held at 24 to preserve regression detection; when
+   * wala/ML#371 Option 2 lands this count will drop to the source-level total.
    */
   @Test
   public void testNeuralNetwork()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
+        4,
         "neural_network.py",
         "NeuralNet.call",
         1,
-        12,
+        24,
         Map.of(3, Set.of(TENSOR_256_784_FLOAT32, TENSOR_10000_784_FLOAT32, TENSOR_5_784_FLOAT32)));
   }
 
@@ -2898,6 +2904,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testNeuralNetwork2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
+        4,
         "neural_network.py",
         "cross_entropy_loss",
         2,
@@ -2932,6 +2939,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testNeuralNetwork3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
+        4,
         "neural_network.py",
         "run_optimization",
         2,
@@ -2960,11 +2968,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * <p>Value 2 ({@code y_pred}) is tracked as a tensor parameter after the fix for wala/ML#358
    * (chained {@code Dense} shape propagation): the final {@code Dense(num_classes=10)} in {@code
    * NeuralNet.call} narrows to {@code (256, 10)} and that shape propagates back into {@code
-   * accuracy}'s {@code y_pred} parameter. The {@code (10000, 10)} shape from the test-set call site
-   * ({@code accuracy(pred, y_test)} where {@code pred = neural_net(x_test, ...)}) does not
-   * currently propagate, because the {@code x_test} chain resolves to a rank-preserving but
-   * shape-unknown tensor by the time it reaches {@code NeuralNet.call}'s first {@code Dense}
-   * operand. The remaining shape-propagation gap is orthogonal to #358.
+   * accuracy}'s {@code y_pred} parameter. This test runs at k-CFA depth 4 (wala/ML#379) so {@code
+   * NeuralNet.call} is analyzed per caller and its layer-output ({@code pred}) no longer collapses
+   * the training shape into the test context (wala/ML#530); value 2 is therefore the per-context
+   * union {@code {(256, 10) float32, ? float32}}. The test-context contribution is ⊤ shape because
+   * the {@code x_test} chain resolves to a rank-preserving but shape-unknown tensor by the time it
+   * reaches {@code NeuralNet.call}'s first {@code Dense} operand; closing that gap would narrow the
+   * ⊤ to {@code (10000, 10)} (orthogonal to #358/#530).
    */
   @Test
   public void testNeuralNetwork4()
@@ -2975,11 +2985,32 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     // are the argmax call sites and their downstream uses across the call
     // graph. Parameter-type expectations (`y_pred`, `y_true`) unchanged.
     test(
+        4,
         "neural_network.py",
         "accuracy",
         2,
         14,
-        Map.of(2, Set.of(TENSOR_256_10_FLOAT32), 3, Set.of(TENSOR_256_UINT8, TENSOR_10000_UINT8)));
+        Map.of(
+            2,
+            // Per-context union: training call site `accuracy(pred, batch_y)` gives `(256, 10)`;
+            // the test-set call site `accuracy(pred, y_test)` resolves to ⊤ shape because the
+            // `x_test` chain is shape-unknown by the time it reaches `NeuralNet.call`'s first
+            // `Dense` operand. With the depth-4 context separation (wala/ML#530), `argmax`'s result
+            // no longer leaks the training shape into the test context. TODO: the test-context ⊤
+            // should narrow to `(10000, 10)` once the `x_test` shape gap is closed.
+            Set.of(TENSOR_256_10_FLOAT32, TENSOR_UNKNOWN_SHAPE_FLOAT32),
+            3,
+            Set.of(TENSOR_256_UINT8, TENSOR_10000_UINT8)));
+  }
+
+  /**
+   * A negative k-CFA depth is invalid (the depth is the call-string length for the targeted context
+   * selector) and is rejected at construction (wala/ML#379).
+   */
+  @Test(expected = IllegalArgumentException.class)
+  public void testNegativeTargetedCfaDepthRejected() {
+    new PythonTensorAnalysisEngine(
+        emptyList(), PythonTensorAnalysisEngine.TENSORFLOW, /* targetedCfaDepth= */ -1);
   }
 
   /**
@@ -5417,19 +5448,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_size.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
-  // wala/ML#449 Tier 6: argmax/argmin produce int64 indices. Output shape is left at ⊤ for now;
-  // see `Argmax.getDefaultShapes` for why precise shape inference regresses `testNeuralNetwork*`.
+  // wala/ML#449 Tier 6: argmax/argmin produce int64 indices. Output shape is the input shape with
+  // the `axis` dimension removed (via `ReduceMean`), unblocked by the per-context layer-output
+  // fix (wala/ML#530) that stopped `testNeuralNetwork*` from regressing on the
+  // `ElementWiseOperation`
+  // cross-context cartesian pair.
 
   /**
    * Verifies that {@code tf.math.argmax(x, axis=0)} routes through the dedicated {@link
    * com.ibm.wala.cast.python.ml.client.Argmax} generator and emits the precise {@code int64} dtype
-   * (the TF default for argmax indices).
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): output shape is left
-   * at ⊤. Precise axis-aware shape composition (reading {@code input.shape[:axis] +
-   * input.shape[axis+1:]}) regresses {@code testNeuralNetwork*} via the {@code
-   * ElementWiseOperation} cartesian-pair issue tracked at #462. Tighten to the precise post-fix
-   * shape once #462 lands.
+   * (the TF default for argmax indices) and the precise {@code (3,)} shape ({@code (2, 3)} with
+   * {@code axis=0} removed). Shape precision was unblocked by wala/ML#530.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -5439,17 +5468,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testArgmax()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_argmax.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT64_UNKNOWN_SHAPE)));
+    test("tf2_test_argmax.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_INT64)));
   }
 
   /**
    * Counterpart of {@link #testArgmax()} for {@code tf.math.argmin}. Same semantics: dtype defaults
    * to {@code int64} (overridable via {@code output_type}, see {@link #testArgminOutputType()}),
-   * shape is left at ⊤. See {@link com.ibm.wala.cast.python.ml.client.Argmin}.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): output shape is left
-   * at ⊤; same {@code ElementWiseOperation} cartesian-pair driver as for {@link #testArgmax()}.
-   * Tighten to the precise post-fix shape once #462 lands.
+   * and shape is the precise {@code (3,)} ({@code (2, 3)} with {@code axis=0} removed), unblocked
+   * by wala/ML#530. See {@link com.ibm.wala.cast.python.ml.client.Argmin}.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -5459,7 +5485,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testArgmin()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_argmin.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT64_UNKNOWN_SHAPE)));
+    test("tf2_test_argmin.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_INT64)));
   }
 
   /**
@@ -5468,12 +5494,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * int64} default. Exercises the dtype-arg dispatch path on {@link
    * com.ibm.wala.cast.python.ml.client.Argmax} after the wala/ML#463 fix. The fixture's sink {@code
    * f(x, y)} has two parameters so that each tensor's inferred type can be checked independently.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the inferred ⊤ shape
-   * on {@code y} (vn=3) is imprecise &mdash; precise axis-aware shape composition (reading {@code
-   * input.shape[:axis] + input.shape[axis+1:]}) regresses {@code testNeuralNetwork*} via the {@code
-   * ElementWiseOperation} cartesian-pair issue tracked at #462. Captured-imprecise per the
-   * prefer-observed-assertion convention; tighten to a precise {@code (3,) int32} once #462 lands.
+   * The result {@code y} (vn=3) has the precise {@code (3,) int32} shape ({@code (2, 3)} with
+   * {@code axis=0} removed), unblocked by wala/ML#530.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -5490,18 +5512,66 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         Map.of(
             2, Set.of(TENSOR_2_3_FLOAT32),
-            3, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+            3, Set.of(TENSOR_3_INT32)));
+  }
+
+  /**
+   * Like {@link #testArgmaxOutputType()} but passes {@code output_type} positionally ({@code
+   * tf.math.argmax(x, 0, tf.int32)}). Shape inference must not misread the positional {@code
+   * output_type} argument as {@link com.ibm.wala.cast.python.ml.client.ReduceMean}'s {@code
+   * keepdims} (they share positional index 2); the result {@code y} (vn=3) is the precise {@code
+   * (3,) int32}, not a {@code keepdims=true} union (e.g. {@code (1, 3)}). Regression guard for the
+   * {@code getKeepDimsValues} override on {@link com.ibm.wala.cast.python.ml.client.Argmax}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgmaxOutputTypePositional()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_argmax_output_type_positional.py",
+        "f",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_2_3_FLOAT32),
+            3, Set.of(TENSOR_3_INT32)));
+  }
+
+  /**
+   * Tests that {@code tf.math.argmax} resolves its input when passed by keyword ({@code
+   * tf.math.argmax(input=x, axis=0)}). {@link com.ibm.wala.cast.python.ml.client.Argmax} delegates
+   * shape inference to {@link com.ibm.wala.cast.python.ml.client.ReduceMean}, whose input parameter
+   * is named {@code input_tensor}; argmax's is named {@code input}, so without overriding the
+   * input-parameter name the keyword lookup fails and shape inference throws {@code
+   * IllegalStateException}. The result {@code y} (vn=3) is the precise {@code (3,) int64}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgmaxInputKeyword()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_argmax_input_keyword.py",
+        "f",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_2_3_FLOAT32),
+            3, Set.of(TENSOR_3_INT64)));
   }
 
   /**
    * Counterpart of {@link #testArgmaxOutputType()} for {@code tf.math.argmin}. Same dispatch path
    * via the inherited {@link com.ibm.wala.cast.python.ml.client.Argmin} extends {@link
-   * com.ibm.wala.cast.python.ml.client.Argmax} relationship; same shape-imprecision driver too.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the inferred ⊤ shape
-   * on {@code y} (vn=3) is imprecise &mdash; precise axis-aware shape composition for {@code
-   * Argmin} is gated by the {@code ElementWiseOperation} cartesian-pair issue, same as for {@code
-   * Argmax}. Tighten to the precise post-fix shape once #462 lands.
+   * com.ibm.wala.cast.python.ml.client.Argmax} relationship; the result {@code y} (vn=3) has the
+   * precise {@code (3,) int32} shape, unblocked by wala/ML#530.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -5518,7 +5588,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         Map.of(
             2, Set.of(TENSOR_2_3_FLOAT32),
-            3, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+            3, Set.of(TENSOR_3_INT32)));
   }
 
   /**
@@ -5526,13 +5596,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * call sites* shape: {@code def f(a): ...; f(x); f(y)}. Parameter {@code a} should union {@code
    * x}'s and {@code y}'s tensor types across the two call sites &mdash; verifies that the {@code
    * output_type=tf.int32} override on {@code y} survives the second sink call rather than being
-   * clobbered by the {@code int64} default.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the {@code y}
-   * contribution to the union is currently ⊤-shape ({@code TENSOR_INT32_UNKNOWN_SHAPE}) for the
-   * same reason as {@link #testArgmaxOutputType()} &mdash; gated by the {@code
-   * ElementWiseOperation} cartesian-pair issue. Tighten {@code y}'s contribution to its precise
-   * post-fix shape (a {@code (3,) int32}) once #462 lands.
+   * clobbered by the {@code int64} default. The {@code y} contribution to the union is the precise
+   * {@code (3,) int32} shape, unblocked by wala/ML#530.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -5547,17 +5612,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "f",
         1,
         2,
-        Map.of(2, Set.of(TENSOR_2_3_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32, TENSOR_3_INT32)));
   }
 
   /**
-   * Counterpart of {@link #testArgmaxOutputTypeDoubleSink()} for {@code tf.math.argmin}; same
-   * shape-imprecision driver.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/462">wala/ML#462</a>): the {@code y}
-   * contribution to the union is currently ⊤-shape ({@code TENSOR_INT32_UNKNOWN_SHAPE}) for the
-   * same reason as {@link #testArgmaxOutputTypeDoubleSink()}. Tighten to the precise {@code (3,)
-   * int32} once #462 lands.
+   * Counterpart of {@link #testArgmaxOutputTypeDoubleSink()} for {@code tf.math.argmin}; the {@code
+   * y} contribution to the union is the precise {@code (3,) int32} shape, unblocked by wala/ML#530.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -5572,7 +5632,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "f",
         1,
         2,
-        Map.of(2, Set.of(TENSOR_2_3_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32, TENSOR_3_INT32)));
   }
 
   // wala/ML#449 Tier 7: linspace/broadcast_to. Shape derives from a shape-arg (`num`/`shape`),
@@ -10571,6 +10631,37 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         expectedTensorParameterValueNumberToTypes);
   }
 
+  /**
+   * Single-file test helper with a configurable k-CFA depth. Delegates to the core depth-aware
+   * {@code test(...)}; used by tests that need deeper context sensitivity than the default
+   * (wala/ML#379, wala/ML#530).
+   *
+   * @param targetedCfaDepth The k-CFA depth for the targeted context selector.
+   * @param filename The file declaring the function under test.
+   * @param functionName The function whose tensor types are checked.
+   * @param expectedNumberOfTensorParameters The expected number of tensor parameters.
+   * @param expectedNumberOfTensorVariables The expected number of function-local tensor variables.
+   * @param expectedTensorParameterValueNumberToTypes The expected per-parameter tensor types.
+   */
+  protected void test(
+      int targetedCfaDepth,
+      String filename,
+      String functionName,
+      int expectedNumberOfTensorParameters,
+      int expectedNumberOfTensorVariables,
+      Map<Integer, Set<TensorType>> expectedTensorParameterValueNumberToTypes)
+      throws ClassHierarchyException, CancelException, IOException {
+    test(
+        targetedCfaDepth,
+        new String[] {filename},
+        filename,
+        functionName,
+        "",
+        expectedNumberOfTensorParameters,
+        expectedNumberOfTensorVariables,
+        expectedTensorParameterValueNumberToTypes);
+  }
+
   protected void test(
       String[] projectFilenames,
       String filename,
@@ -10580,8 +10671,45 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       int expectedNumberOfFunctionTensorVariables,
       Map<Integer, Set<TensorType>> expectedTensorParameterValueNumberToTypes)
       throws ClassHierarchyException, CancelException, IOException {
+    test(
+        PythonTensorAnalysisEngine.DEFAULT_TARGETED_CFA_DEPTH,
+        projectFilenames,
+        filename,
+        functionName,
+        pythonPath,
+        expectedNumberOfTensorParameters,
+        expectedNumberOfFunctionTensorVariables,
+        expectedTensorParameterValueNumberToTypes);
+  }
+
+  /**
+   * Core test helper with a configurable k-CFA depth. Most tests use the default-depth overloads;
+   * tests that exercise per-context layer-output precision (e.g. {@code testNeuralNetwork*}) opt
+   * into a deeper depth so a user model invoked from multiple sites does not collapse its
+   * layer-output allocations (wala/ML#379, wala/ML#530).
+   *
+   * @param targetedCfaDepth The k-CFA depth for the targeted context selector.
+   * @param projectFilenames The script module file names making up the project.
+   * @param filename The file declaring the function under test.
+   * @param functionName The function whose tensor types are checked.
+   * @param pythonPath The Python path root for module resolution.
+   * @param expectedNumberOfTensorParameters The expected number of tensor parameters.
+   * @param expectedNumberOfFunctionTensorVariables The expected number of function-local tensor
+   *     variables.
+   * @param expectedTensorParameterValueNumberToTypes The expected per-parameter tensor types.
+   */
+  protected void test(
+      int targetedCfaDepth,
+      String[] projectFilenames,
+      String filename,
+      String functionName,
+      String pythonPath,
+      int expectedNumberOfTensorParameters,
+      int expectedNumberOfFunctionTensorVariables,
+      Map<Integer, Set<TensorType>> expectedTensorParameterValueNumberToTypes)
+      throws ClassHierarchyException, CancelException, IOException {
     List<File> pathFiles = this.getPathFiles(pythonPath);
-    PythonTensorAnalysisEngine engine = makeEngine(pathFiles, projectFilenames);
+    PythonTensorAnalysisEngine engine = makeEngine(targetedCfaDepth, pathFiles, projectFilenames);
     PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
 
     addPytestEntrypoints(builder);
