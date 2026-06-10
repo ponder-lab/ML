@@ -424,6 +424,9 @@ public class TensorGeneratorFactory {
 
   private static PointsToSetVariable getPointsToSetVariable(
       PointerKey key, PropagationCallGraphBuilder builder) {
+    // Materializing an implicitly-represented key makes WALA dump the entire call graph's IR via a
+    // no-op-assertion debug path (wala/ML#573); skip it (the caller treats null as "no PTS").
+    if (builder.getPropagationSystem().isImplicit(key)) return null;
     try {
       return builder.getPropagationSystem().findOrCreatePointsToSet(key);
     } catch (UnimplementedError e) {

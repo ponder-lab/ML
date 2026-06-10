@@ -864,16 +864,20 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         op,
         builder,
         (CGNode src, SSAAbstractInvokeInstruction call) -> {
-          if (call.getNumberOfUses() > param)
-            targets.put(
+          if (call.getNumberOfUses() > param) {
+            PointerKey defKey =
                 builder
-                    .getPropagationSystem()
-                    .findOrCreatePointsToSet(
-                        builder
-                            .getPointerAnalysis()
-                            .getHeapModel()
-                            .getPointerKeyForLocal(src, call.getDef())),
-                TensorType.shapeArg(src, call.getUse(param)));
+                    .getPointerAnalysis()
+                    .getHeapModel()
+                    .getPointerKeyForLocal(src, call.getDef());
+            // Materializing an implicitly-represented key would make WALA dump the entire call
+            // graph's IR (a no-op-assertion debug path), so skip it; implicit keys carry no
+            // explicit dataflow variable to pin (wala/ML#573).
+            if (!builder.getPropagationSystem().isImplicit(defKey))
+              targets.put(
+                  builder.getPropagationSystem().findOrCreatePointsToSet(defKey),
+                  TensorType.shapeArg(src, call.getUse(param)));
+          }
         });
     return targets;
   }
@@ -965,6 +969,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           }
         }
         if (!receiverEligible) continue;
+        // Skip implicitly-represented receivers: materializing one makes WALA dump the entire
+        // call graph's IR via a no-op-assertion debug path (wala/ML#573), and an implicit key has
+        // no explicit dataflow variable to pin.
+        if (builder.getPropagationSystem().isImplicit(receiverKey)) continue;
         targets.put(
             builder.getPropagationSystem().findOrCreatePointsToSet(receiverKey),
             TensorType.shapeArg(caller, call.getUse(1)));
@@ -980,14 +988,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         op,
         builder,
         (CGNode src, SSAAbstractInvokeInstruction call) -> {
-          lvals.add(
-              builder
-                  .getPropagationSystem()
-                  .findOrCreatePointsToSet(
-                      builder
-                          .getPointerAnalysis()
-                          .getHeapModel()
-                          .getPointerKeyForLocal(src, call.getDef())));
+          PointerKey defKey =
+              builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(src, call.getDef());
+          // Skip implicitly-represented keys: materializing one makes WALA dump the entire call
+          // graph's IR via a no-op-assertion debug path (wala/ML#573), and an implicit key has no
+          // explicit dataflow variable to track.
+          if (!builder.getPropagationSystem().isImplicit(defKey))
+            lvals.add(builder.getPropagationSystem().findOrCreatePointsToSet(defKey));
         });
     return lvals;
   }
