@@ -226,8 +226,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    */
   private static boolean isUserModelForwardMethod(String calleeClass) {
     return calleeClass.contains("script ")
-        && (calleeClass.endsWith("/call")
-            || calleeClass.endsWith("/__call__")
+        && (calleeClass.endsWith("/" + PythonTypes.CALLABLE_METHOD_NAME_FOR_KERAS_MODELS)
+            || calleeClass.endsWith("/" + PythonTypes.CALLABLE_METHOD_NAME)
             || calleeClass.endsWith("/predict"));
   }
 
