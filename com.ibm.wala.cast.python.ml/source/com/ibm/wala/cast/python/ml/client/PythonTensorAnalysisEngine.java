@@ -862,7 +862,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                     .getHeapModel()
                     .getPointerKeyForLocal(src, call.getDef());
             // Materializing an implicitly-represented key would make WALA dump the entire call
-            // graph's IR (a no-op-assertion debug path), so skip it; implicit keys carry no
+            // graph's IR (an unconditional debug print), so skip it; implicit keys carry no
             // explicit dataflow variable to pin (wala/ML#573).
             if (!builder.getPropagationSystem().isImplicit(defKey))
               targets.put(
@@ -961,7 +961,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         }
         if (!receiverEligible) continue;
         // Skip implicitly-represented receivers: materializing one makes WALA dump the entire
-        // call graph's IR via a no-op-assertion debug path (wala/ML#573), and an implicit key has
+        // call graph's IR via an unconditional debug print (wala/ML#573), and an implicit key has
         // no explicit dataflow variable to pin.
         if (builder.getPropagationSystem().isImplicit(receiverKey)) continue;
         targets.put(
@@ -982,7 +982,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           PointerKey defKey =
               builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(src, call.getDef());
           // Skip implicitly-represented keys: materializing one makes WALA dump the entire call
-          // graph's IR via a no-op-assertion debug path (wala/ML#573), and an implicit key has no
+          // graph's IR via an unconditional debug print (wala/ML#573), and an implicit key has no
           // explicit dataflow variable to track.
           if (!builder.getPropagationSystem().isImplicit(defKey))
             lvals.add(builder.getPropagationSystem().findOrCreatePointsToSet(defKey));
