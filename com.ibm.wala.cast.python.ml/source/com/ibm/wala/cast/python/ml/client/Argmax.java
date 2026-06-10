@@ -98,6 +98,22 @@ public class Argmax extends ReduceMean {
   }
 
   /**
+   * Forces {@code keepdims=false}: {@code argmax} (and {@code argmin}) have no {@code keepdims}
+   * parameter and always remove the scanned axis. This also prevents {@link ReduceMean} from
+   * misreading {@code argmax}'s {@code output_type} argument &mdash; which sits at the same
+   * positional index as {@code ReduceMean}'s {@code keepdims} &mdash; as a {@code keepdims} flag,
+   * which would otherwise union a spurious {@code keepdims=true} shape for a positional call like
+   * {@code tf.argmax(x, 0, tf.int32)}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return {@code Set.of(false)}.
+   */
+  @Override
+  protected Set<Boolean> getKeepDimsValues(PropagationCallGraphBuilder builder) {
+    return Set.of(false);
+  }
+
+  /**
    * The default output dtype when no {@code output_type} argument is passed. {@link
    * TensorGenerator#getDTypes} dispatches here only when the dtype-arg path returns no resolved
    * dtype, so this is the fallback. TF 2.9 default is {@code int64}.

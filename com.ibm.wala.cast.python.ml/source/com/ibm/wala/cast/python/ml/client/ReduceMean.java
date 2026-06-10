@@ -43,26 +43,22 @@ public class ReduceMean extends TensorGenerator {
     super(source);
   }
 
-  @Override
-  protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    // If no axis is specified, it reduces all dimensions to a scalar (unless keepdims=True).
-    // Default keepdims is False.
-
-    int inputValNum =
-        this.getArgumentValueNumber(
-            builder, Parameters.INPUT_TENSOR.getIndex(), Parameters.INPUT_TENSOR.getName(), false);
-    Set<List<Dimension<?>>> inputShapes = this.getShapes(builder, inputValNum);
-    if (inputShapes == null) return null;
-
-    OrdinalSet<InstanceKey> axisPts =
-        this.getArgumentPointsToSet(builder, Parameters.AXIS.getIndex(), Parameters.AXIS.getName());
+  /**
+   * Resolves the possible {@code keepdims} values for this reduction from the {@code keepdims}
+   * argument. When the argument is absent, defaults to {@code {false}}; a non-boolean, non-numeric
+   * constant (which can never be a boolean flag) widens to {@code {false, true}} to stay sound.
+   * Subclasses whose op has no {@code keepdims} parameter (e.g. {@code argmax}) override this to
+   * force {@code {false}}, which also prevents misreading an argument that sits at the same
+   * positional index as {@code keepdims} (see {@link Argmax}).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The set of possible {@code keepdims} values; never empty.
+   */
+  protected Set<Boolean> getKeepDimsValues(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> keepDimsPts =
         this.getArgumentPointsToSet(
             builder, Parameters.KEEPDIMS.getIndex(), Parameters.KEEPDIMS.getName());
 
-    Set<List<Dimension<?>>> ret = HashSetFactory.make();
-
-    // Determine possible values for keepdims
     Set<Boolean> keepDimsValues = new HashSet<>();
     if (keepDimsPts == null || keepDimsPts.isEmpty()) {
       keepDimsValues.add(false); // Default
@@ -85,6 +81,26 @@ public class ReduceMean extends TensorGenerator {
       }
     }
     if (keepDimsValues.isEmpty()) keepDimsValues.add(false);
+    return keepDimsValues;
+  }
+
+  @Override
+  protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    // If no axis is specified, it reduces all dimensions to a scalar (unless keepdims=True).
+    // Default keepdims is False.
+
+    int inputValNum =
+        this.getArgumentValueNumber(
+            builder, Parameters.INPUT_TENSOR.getIndex(), Parameters.INPUT_TENSOR.getName(), false);
+    Set<List<Dimension<?>>> inputShapes = this.getShapes(builder, inputValNum);
+    if (inputShapes == null) return null;
+
+    OrdinalSet<InstanceKey> axisPts =
+        this.getArgumentPointsToSet(builder, Parameters.AXIS.getIndex(), Parameters.AXIS.getName());
+
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+
+    Set<Boolean> keepDimsValues = this.getKeepDimsValues(builder);
 
     // Determine possible values for axis
     Set<Set<Integer>> axisValues = new HashSet<>(); // Each element is a set of axes to reduce

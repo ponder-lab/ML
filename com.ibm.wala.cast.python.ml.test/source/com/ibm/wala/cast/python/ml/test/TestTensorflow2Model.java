@@ -5516,6 +5516,32 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Like {@link #testArgmaxOutputType()} but passes {@code output_type} positionally ({@code
+   * tf.math.argmax(x, 0, tf.int32)}). Shape inference must not misread the positional {@code
+   * output_type} argument as {@link com.ibm.wala.cast.python.ml.client.ReduceMean}'s {@code
+   * keepdims} (they share positional index 2); the result {@code y} (vn=3) is the precise {@code
+   * (3,) int32}, not a {@code keepdims=true} union (e.g. {@code (1, 3)}). Regression guard for the
+   * {@code getKeepDimsValues} override on {@link com.ibm.wala.cast.python.ml.client.Argmax}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testArgmaxOutputTypePositional()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_argmax_output_type_positional.py",
+        "f",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_2_3_FLOAT32),
+            3, Set.of(TENSOR_3_INT32)));
+  }
+
+  /**
    * Counterpart of {@link #testArgmaxOutputType()} for {@code tf.math.argmin}. Same dispatch path
    * via the inherited {@link com.ibm.wala.cast.python.ml.client.Argmin} extends {@link
    * com.ibm.wala.cast.python.ml.client.Argmax} relationship; the result {@code y} (vn=3) has the
