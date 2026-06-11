@@ -489,6 +489,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_2_2_BOOL =
       new TensorType(BOOL, asList(new NumericDim(2), new NumericDim(2)));
 
+  private static final TensorType TENSOR_3_5_BOOL =
+      new TensorType(BOOL, asList(new NumericDim(3), new NumericDim(5)));
+
+  private static final TensorType TENSOR_3_5_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(3), new NumericDim(5)));
+
   private static final TensorType TENSOR_4_FLOAT64 =
       new TensorType(FLOAT_64, asList(new NumericDim(4)));
 
@@ -5831,19 +5837,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Generator-dispatch test for {@code tf.sequence_mask}. With no {@code dtype} argument the output
-   * dtype is the TF-default {@code bool}. Shape is ⊤. (wala/ML#449 Tier 8.)
+   * dtype is the TF-default {@code bool}; with a constant {@code maxlen} the shape is {@code
+   * lengths.shape + [maxlen]}, so {@code sequence_mask([1, 3, 2], maxlen=5)} yields (3, 5).
+   * (wala/ML#449 Tier 8.)
    */
   @Test
   public void testSequenceMask()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_sequence_mask.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_BOOL)));
+    test("tf2_test_sequence_mask.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_5_BOOL)));
   }
 
   /**
    * Generator-dispatch test for {@code tf.sequence_mask} with an explicit {@code dtype} override
-   * ({@code tf.sequence_mask(..., dtype=tf.int32)}). The output dtype follows the argument ({@code
-   * int32}) rather than the default {@code bool}; shape remains ⊤. Regression guard for surfacing
-   * the {@code dtype} parameter through {@link com.ibm.wala.cast.python.ml.client.SequenceMask}.
+   * ({@code tf.sequence_mask(..., maxlen=5, dtype=tf.int32)}). The output dtype follows the
+   * argument ({@code int32}) rather than the default {@code bool}, and the constant {@code maxlen}
+   * gives the precise (3, 5) shape. Regression guard for surfacing the {@code dtype} parameter
+   * through {@link com.ibm.wala.cast.python.ml.client.SequenceMask}.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -5853,12 +5862,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testSequenceMaskDType()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_sequence_mask_dtype.py",
-        "f",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+    test("tf2_test_sequence_mask_dtype.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_5_INT32)));
   }
 
   /**
