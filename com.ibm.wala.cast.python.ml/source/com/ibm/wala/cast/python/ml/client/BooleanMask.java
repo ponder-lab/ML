@@ -10,16 +10,18 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 /**
  * Generator for {@code tf.boolean_mask}. Output dtype is inherited from the {@code tensor} input.
- * Output shape collapses the masked axes ({@code axis .. axis + mask.rank}) into a single dimension
- * whose length is the number of {@code True} entries in {@code mask} — a runtime quantity static
- * analysis cannot recover — keeping the rest of {@code tensor.shape}. That collapsed dimension is
- * therefore emitted as a {@link DynamicDim}; the rank and the surrounding dimensions are precise.
- * See wala/ML#449 (Tier 8).
+ * Output shape collapses the {@code mask.rank} axes starting at {@code axis} (i.e. the half-open
+ * range {@code [axis, axis + mask.rank)}) into a single dimension whose length is the number of
+ * {@code True} entries in {@code mask} — a runtime quantity static analysis cannot recover —
+ * keeping the rest of {@code tensor.shape}. That collapsed dimension is therefore emitted as a
+ * {@link DynamicDim}; the rank and the surrounding dimensions are precise. See wala/ML#449 (Tier
+ * 8).
  *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/boolean_mask">tf.boolean_mask</a>
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
@@ -63,27 +65,32 @@ public class BooleanMask extends PassThroughUnaryTensorGenerator {
         this.getShapes(builder, this.getArgumentValueNumber(builder, 1, "mask", false));
     if (tensorShapes == null || maskShapes == null) return null;
 
-    int axis = 0;
+    // axis defaults to 0; collect the constant override value(s) across contexts (None -> 0).
+    Set<Integer> axes = new HashSet<>();
     OrdinalSet<InstanceKey> axisPts = this.getArgumentPointsToSet(builder, 2, "axis");
-    if (axisPts != null && !axisPts.isEmpty()) {
+    if (axisPts == null || axisPts.isEmpty()) {
+      axes.add(0);
+    } else {
       for (InstanceKey ik : axisPts) {
         if (!(ik instanceof ConstantKey)) return null;
         Object val = ((ConstantKey<?>) ik).getValue();
-        if (val == null) continue; // None -> default axis 0
-        if (!(val instanceof Number)) return null;
-        axis = ((Number) val).intValue();
+        if (val == null) axes.add(0); // None -> default axis 0
+        else if (val instanceof Number) axes.add(((Number) val).intValue());
+        else return null;
       }
     }
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
-    for (List<Dimension<?>> tensor : tensorShapes) {
-      for (List<Dimension<?>> mask : maskShapes) {
-        int maskRank = mask.size();
-        if (axis < 0 || maskRank < 1 || axis + maskRank > tensor.size()) continue;
-        List<Dimension<?>> out = new ArrayList<>(tensor.subList(0, axis));
-        out.add(DynamicDim.INSTANCE);
-        out.addAll(tensor.subList(axis + maskRank, tensor.size()));
-        ret.add(out);
+    for (int axis : axes) {
+      for (List<Dimension<?>> tensor : tensorShapes) {
+        for (List<Dimension<?>> mask : maskShapes) {
+          int maskRank = mask.size();
+          if (axis < 0 || maskRank < 1 || axis + maskRank > tensor.size()) continue;
+          List<Dimension<?>> out = new ArrayList<>(tensor.subList(0, axis));
+          out.add(DynamicDim.INSTANCE);
+          out.addAll(tensor.subList(axis + maskRank, tensor.size()));
+          ret.add(out);
+        }
       }
     }
     return ret.isEmpty() ? null : ret;
