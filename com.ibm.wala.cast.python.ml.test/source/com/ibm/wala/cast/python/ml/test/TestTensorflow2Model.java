@@ -251,6 +251,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_2_2_4_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(2), new NumericDim(4)));
 
+  private static final TensorType TENSOR_2_2_1_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(2), new NumericDim(1)));
+
   private static final TensorType TENSOR_2_5_6_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(5), new NumericDim(6)));
 
@@ -2756,6 +2759,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TENSOR_4_6_FLOAT32)));
+  }
+
+  /**
+   * Pins the output shape of a multi-dim subscript that mixes a slice, an ellipsis, and a newaxis
+   * (wala/ML#406). {@code a[:2, ..., tf.newaxis]} over a {@code (3, 2)} tensor slices the first
+   * axis to 2, lets the ellipsis fill the remaining axis (2), and appends a size-1 axis for the
+   * newaxis: {@code (2, 2, 1)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptNewaxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_subscript_newaxis.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_2_1_FLOAT32)));
   }
 
   /**
