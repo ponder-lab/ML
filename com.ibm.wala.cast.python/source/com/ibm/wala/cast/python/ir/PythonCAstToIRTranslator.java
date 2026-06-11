@@ -938,15 +938,7 @@ public class PythonCAstToIRTranslator extends AstTranslator {
     pospos.add(context.getSourceMap().getPosition(call.getChild(0)));
     for (int i = 2; i < call.getChildCount(); i++) {
       CAstNode cl = call.getChild(i);
-      // A keyword argument is lowered (in `visitCall`) as a 2-child `ARRAY_LITERAL(name, value)`.
-      // A slice dimension is lowered (in `visitSlice`) as a 3-child `ARRAY_LITERAL(lower, upper,
-      // step)`. Only the former is a keyword; treating the latter as one folds `lower` into the
-      // keyword name and discards `step` and the dimension's positional order, which is the lossy
-      // multi-dim-subscript encoding tracked by wala/ML#406. Route slice literals positionally so
-      // the dimension order survives. WIP: the slice still needs a faithful (lower, upper, step)
-      // grouping (a slice-object allocation) so it is distinguishable from an integer index and so
-      // its result is tracked by the pointer analysis (wala/ML#400).
-      if (cl.getKind() == CAstNode.ARRAY_LITERAL && cl.getChildCount() == 2) {
+      if (cl.getKind() == CAstNode.ARRAY_LITERAL) {
         keyp.add(
             Pair.make(String.valueOf(cl.getChild(0).getValue()), context.getValue(cl.getChild(1))));
         keypos.add(context.getSourceMap().getPosition(cl));

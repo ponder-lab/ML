@@ -1949,11 +1949,23 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
     @Override
     public CAstNode visitSlice(Slice arg0) throws Exception {
-      return Ast.makeNode(
-          CAstNode.ARRAY_LITERAL,
-          acceptOrNull(arg0.getInternalLower()),
-          acceptOrNull(arg0.getInternalUpper()),
-          acceptOrNull(arg0.getInternalStep()));
+      // Lower a slice dimension (a `:`-style element of a multi-dim subscript) to a `slice(lower,
+      // upper, step)` object construction rather than a bare `ARRAY_LITERAL`. The prior
+      // `ARRAY_LITERAL` representation collided with the keyword-argument convention in
+      // `PythonCAstToIRTranslator.doCall` (which folds an `ARRAY_LITERAL` call argument into a
+      // keyword named after `lower`, discarding `step` and the dimension order), the lossy
+      // multi-dim-subscript encoding tracked by wala/ML#406. As a positional `slice(...)` value the
+      // dimension survives faithfully — grouped, ordered, and distinguishable from an integer
+      // index.
+      return notePosition(
+          Ast.makeNode(
+              CAstNode.CALL,
+              Ast.makeNode(CAstNode.VAR, Ast.makeConstant("slice")),
+              Ast.makeNode(CAstNode.EMPTY),
+              acceptOrNull(arg0.getInternalLower()),
+              acceptOrNull(arg0.getInternalUpper()),
+              acceptOrNull(arg0.getInternalStep())),
+          arg0);
     }
 
     @Override
