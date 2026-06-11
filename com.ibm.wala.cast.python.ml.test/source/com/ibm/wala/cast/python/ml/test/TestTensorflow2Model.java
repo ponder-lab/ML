@@ -2079,11 +2079,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Isolated repro for the slice-subscript PA-allocation gap — parallel to wala/ML#398 but for
-   * subscript instead of binop. Python {@code a_sliced = a[:2, ..., tf.newaxis];
-   * from_tensor_slices((a_sliced, y))} — the slice-subscript result has no PA allocation
-   * (NdarraySubscriptOperation only matches pure ellipsis+None patterns, a leading slice
-   * disqualifies), so the dataset's per-index walk returns ⊤.
+   * Isolated repro for the slice-subscript-into-dataset gap (wala/ML#400). Python {@code a_sliced =
+   * a[:2, ..., tf.newaxis]; from_tensor_slices((a_sliced, y))}. With the multi-dim subscript-slice
+   * modeling (wala/ML#406) the result is no longer ⊤, but two gaps remain: (1) the {@code slice}
+   * builtin returns its receiver ({@code Either.forRight(2)}), so {@code a_sliced} aliases {@code
+   * a} and {@code from_tensor_slices} iterates the receiver's first axis — yielding {@code (2,)}
+   * rather than {@code a_sliced}'s {@code (2, 2, 1)} element {@code (2, 1)}; fixing this needs a
+   * distinct Tensor allocation for the subscript result (the regression-prone part — a generic
+   * {@code Lobject} allocation suppressed tensor identification when the wala/ML#398 binop analogue
+   * tried it). (2) The {@code ..., tf.newaxis} elements are not yet handled by the multi-dim path.
    *
    * <p>TODO: When wala/ML#400 is fixed, flip the annotation to plain {@code @Test} and remove this
    * TODO line.
