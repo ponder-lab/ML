@@ -19,10 +19,11 @@ import java.util.logging.Logger;
 /**
  * Generator for {@code tf.squeeze(input, axis=None, name=None)}. Output dtype is inherited from the
  * {@code input} input. Output shape drops singleton axes: when {@code axis} is absent every
- * statically size-1 dimension is removed; when {@code axis} names specific axes, those (which TF
- * requires to be size 1) are removed. Dynamic/symbolic dimensions are never dropped under the
- * {@code axis}-absent form (they are not statically known to be 1). See <a
- * href="https://github.com/wala/ML/issues/513">wala/ML#513</a> (Bucket 2a).
+ * statically size-1 dimension is removed; when {@code axis} names specific axes, each is removed
+ * only when it is statically size-1. Dimensions that are not statically known to be 1
+ * (dynamic/symbolic), out-of-range named axes, and known non-1 named axes all fall back to ⊤ rather
+ * than risk an unsound shape. See <a href="https://github.com/wala/ML/issues/513">wala/ML#513</a>
+ * (Bucket 2a).
  *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/squeeze">tf.squeeze</a>
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
@@ -139,8 +140,8 @@ public class Squeeze extends PassThroughUnaryTensorGenerator {
    *
    * @param input The {@code input} shape.
    * @param axes The axes to drop, or {@code null} to drop all statically size-1 axes.
-   * @return The squeezed shape, or {@code null} when a named axis is a known non-1 dimension (an
-   *     invalid {@code tf.squeeze} on a non-singleton axis).
+   * @return The squeezed shape, or {@code null} (⊤) when a named axis is out of range or is not
+   *     statically size-1.
    */
   private static List<Dimension<?>> squeezeShape(List<Dimension<?>> input, Set<Integer> axes) {
     if (axes == null) {
@@ -151,13 +152,20 @@ public class Squeeze extends PassThroughUnaryTensorGenerator {
     }
     int rank = input.size();
     Set<Integer> normalized = new HashSet<>();
-    for (int a : axes) normalized.add(a < 0 ? a + rank : a);
+    for (int a : axes) {
+      int norm = a < 0 ? a + rank : a;
+      // An out-of-range axis is invalid in TensorFlow; fall back to ⊤ rather than silently
+      // producing the unsqueezed shape.
+      if (norm < 0 || norm >= rank) return null;
+      normalized.add(norm);
+    }
     List<Dimension<?>> out = new ArrayList<>(input.size());
     for (int i = 0; i < rank; i++) {
       if (normalized.contains(i)) {
+        // A named axis must be size 1; only drop it when that is statically certain. A dynamic,
+        // symbolic, or known non-1 dimension falls back to ⊤ rather than risk an unsound shape.
         Dimension<?> d = input.get(i);
-        if (d instanceof NumericDim && ((NumericDim) d).value() != 1)
-          return null; // not squeezable.
+        if (!(d instanceof NumericDim && ((NumericDim) d).value() == 1)) return null;
         // Else drop this axis.
       } else {
         out.add(input.get(i));
