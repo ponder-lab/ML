@@ -5879,13 +5879,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Generator-dispatch test for {@code tf.gather_nd}. Output dtype is inherited from the {@code
-   * params} input (here float32), shape is ⊤. See {@link
-   * com.ibm.wala.cast.python.ml.client.GatherNd} (wala/ML#449 Tier 8).
+   * params} input (here float32); the output shape is {@code indices.shape[:-1] +
+   * params.shape[indices.shape[-1]:]}, so a (2, 2) table indexed by (2, 2) depth-2 indices yields
+   * (2,). See {@link com.ibm.wala.cast.python.ml.client.GatherNd} (wala/ML#449 Tier 8).
    */
   @Test
   public void testGatherNd()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_gather_nd.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test("tf2_test_gather_nd.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
   }
 
   /**
