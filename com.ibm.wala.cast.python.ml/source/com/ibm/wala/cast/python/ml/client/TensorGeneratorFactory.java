@@ -168,6 +168,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_SOFTMAX_C
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SQRT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SQUARE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SQUEEZE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.STACK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.STOP_GRADIENT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SUBTRACT;
@@ -1251,6 +1252,7 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, BOOLEAN_MASK.getDeclaringClass()))
       return new BooleanMask(source);
     else if (isType(calledFunction, SLICE.getDeclaringClass())) return new Slice(source);
+    else if (isType(calledFunction, SQUEEZE.getDeclaringClass())) return new Squeeze(source);
     else if (isType(calledFunction, EXTRACT_PATCHES.getDeclaringClass()))
       return new ExtractPatches(source);
     else if (isType(calledFunction, TAN.getDeclaringClass())) return new Tan(source);
