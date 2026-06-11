@@ -11,6 +11,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
+import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -19,8 +20,12 @@ import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.types.FieldReference;
+import com.ibm.wala.types.TypeName;
+import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
@@ -41,6 +46,11 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
 
   private static final Logger LOGGER =
       Logger.getLogger(DatasetFromTensorSlicesGenerator.class.getName());
+
+  /** The synthetic type of the Python {@code slice} builtin (see {@code SliceBuiltinOperation}). */
+  private static final TypeReference SLICE_BUILTIN =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.string2TypeName("Lwala/builtin/slice"));
 
   protected enum Parameters {
     TENSORS,
@@ -223,15 +233,41 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
               IField f = builder.getClassHierarchy().resolveField(subscript);
               if (f != null) {
                 PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
-                Set<List<Dimension<?>>> fieldShapes =
-                    this.getShapesOfValue(builder, builder.getPointerAnalysis().getPointsToSet(pk));
+                int storedVn =
+                    findTupleFieldStoreForIndex(asin.getNode(), asin, fieldIndex, builder);
+                Set<List<Dimension<?>>> fieldShapes = null;
+                // A slice-subscript result aliases its receiver (the `slice` builtin returns its
+                // receiver), so the field's PTS-based shape would be the receiver's, not the
+                // slice's. Prefer the generator-computed shape via the stored value number. See
+                // wala/ML#400.
+                if (storedVn > 0 && isSliceSubscriptResult(asin.getNode(), storedVn)) {
+                  // `getShapes`/`getShapesOrSSAChain` would follow the receiver alias (the field's
+                  // PTS is the receiver's). Dispatch `SliceBuiltinOperation` directly on the slice
+                  // result to get its computed shape.
+                  PointerKey spk =
+                      builder
+                          .getPointerAnalysis()
+                          .getHeapModel()
+                          .getPointerKeyForLocal(asin.getNode(), storedVn);
+                  if (!builder.getPropagationSystem().isImplicit(spk)) {
+                    PointsToSetVariable svar =
+                        builder.getPropagationSystem().findOrCreatePointsToSet(spk);
+                    try {
+                      fieldShapes = new SliceBuiltinOperation(svar).getShapes(builder);
+                    } catch (IllegalArgumentException e) {
+                      // leave as null
+                    }
+                  }
+                }
+                if (fieldShapes == null || fieldShapes.isEmpty())
+                  fieldShapes =
+                      this.getShapesOfValue(
+                          builder, builder.getPointerAnalysis().getPointsToSet(pk));
                 if (fieldShapes == null || fieldShapes.isEmpty()) {
                   // Implicit-PK fallback mirroring `getShapesOfTensorsArgument`: when the
                   // tuple-field's PTS is empty because the stored value is a synthetic-method
                   // return (e.g., `x_train / 255.0`), walk the SSA chain to recover the shape.
                   // See wala/WALA#1889.
-                  int storedVn =
-                      findTupleFieldStoreForIndex(asin.getNode(), asin, fieldIndex, builder);
                   if (storedVn > 0) {
                     try {
                       Set<List<Dimension<?>>> viaChain =
@@ -441,6 +477,28 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
       return this.getShapesOfValue(builder, valuePointsToSet);
     }
     return ret;
+  }
+
+  /**
+   * Returns whether {@code vn}'s defining instruction is a subscript-slice result &mdash; an invoke
+   * whose callee is the {@code slice} builtin allocation ({@link #SLICE_BUILTIN}). Such a result
+   * aliases its receiver (the builtin returns its first argument), so its field-PTS shape is the
+   * receiver's rather than the slice's; the caller recovers the slice's shape from {@code vn}
+   * instead. See wala/ML#400.
+   *
+   * @param node The CG node whose IR contains {@code vn}.
+   * @param vn The value number to inspect.
+   * @return {@code true} iff {@code vn} is defined by a slice-subscript invoke.
+   */
+  private static boolean isSliceSubscriptResult(CGNode node, int vn) {
+    if (vn <= 0) return false;
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (!(def instanceof SSAAbstractInvokeInstruction)) return false;
+    SSAAbstractInvokeInstruction inv = (SSAAbstractInvokeInstruction) def;
+    if (inv.getNumberOfUses() < 2) return false;
+    SSAInstruction funcDef = node.getDU().getDef(inv.getUse(0));
+    return funcDef instanceof SSANewInstruction
+        && ((SSANewInstruction) funcDef).getNewSite().getDeclaredType().equals(SLICE_BUILTIN);
   }
 
   /**

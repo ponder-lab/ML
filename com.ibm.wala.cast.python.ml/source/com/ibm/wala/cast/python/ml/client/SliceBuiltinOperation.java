@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.types.PythonTypes.ELLIPSIS;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
@@ -451,9 +452,60 @@ public class SliceBuiltinOperation extends TensorGenerator {
           bound(builder, caller, inv.getUse(2)),
           bound(builder, caller, inv.getUse(3)));
     }
+    // Ellipsis (`...`) expands to fill the unconsumed axes; newaxis (`None` or `tf.newaxis`)
+    // inserts a size-1 axis. (In a single `[:k]` slice the bare `None` bounds are not reached
+    // here — that form has no slice object, so `parseSubscriptDims` discards it.)
+    DimKind special = classifyEllipsisNewaxis(ptsOf(builder, caller, argVn));
+    if (special == DimKind.ELLIPSIS) return SubscriptDim.ellipsis();
+    if (special == DimKind.NEWAXIS) return SubscriptDim.newaxis();
     // A constant integer index drops its axis; the index value itself is not needed.
     if (constInt(builder, caller, argVn) != null) return SubscriptDim.index();
     return null;
+  }
+
+  /**
+   * Classifies a subscript argument's points-to set as ellipsis ({@code ...}) or newaxis ({@code
+   * None} / {@code tf.newaxis}), mirroring {@link NdarraySubscriptOperation}'s classifier.
+   *
+   * @param pts The argument's points-to set.
+   * @return {@link DimKind#ELLIPSIS} or {@link DimKind#NEWAXIS}, or {@code null} when the argument
+   *     is neither (an integer, a non-constant, an empty set, or an ambiguous mix).
+   */
+  private static DimKind classifyEllipsisNewaxis(OrdinalSet<InstanceKey> pts) {
+    if (pts == null || pts.isEmpty()) return null;
+    boolean ellipsis = false;
+    boolean newaxis = false;
+    for (InstanceKey ik : pts) {
+      if (ik instanceof ConstantKey) {
+        Object v = ((ConstantKey<?>) ik).getValue();
+        if (ELLIPSIS.equals(v)) ellipsis = true;
+        else if (v == null) newaxis = true; // `None` is `np.newaxis`.
+        else return null; // integer/other — not special.
+      } else {
+        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        if (asin != null && asin.getConcreteType().getReference().equals(TensorFlowTypes.NEWAXIS))
+          newaxis = true;
+        else return null;
+      }
+    }
+    if (ellipsis && newaxis) return null; // ambiguous.
+    return ellipsis ? DimKind.ELLIPSIS : newaxis ? DimKind.NEWAXIS : null;
+  }
+
+  /**
+   * Returns the points-to set of {@code vn} in {@code caller}, or {@code null} if {@code vn} is
+   * invalid.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} providing the pointer analysis.
+   * @param caller The caller {@link CGNode}.
+   * @param vn The value number.
+   * @return The points-to set, or {@code null}.
+   */
+  private static OrdinalSet<InstanceKey> ptsOf(
+      PropagationCallGraphBuilder builder, CGNode caller, int vn) {
+    if (vn <= 0) return null;
+    PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, vn);
+    return builder.getPointerAnalysis().getPointsToSet(pk);
   }
 
   /**
@@ -501,15 +553,38 @@ public class SliceBuiltinOperation extends TensorGenerator {
    */
   private static List<Dimension<?>> applySubscriptDims(
       List<Dimension<?>> input, List<SubscriptDim> dims) {
+    // A slice or index consumes one receiver axis; newaxis and ellipsis do not. An ellipsis
+    // expands to the axes left over after the consuming dimensions; absent an ellipsis, those
+    // left-over axes form an implicit trailing `:`.
+    int consuming = 0;
+    int ellipsisCount = 0;
+    for (SubscriptDim d : dims) {
+      DimKind k = d.kind();
+      if (k == DimKind.SLICE || k == DimKind.INDEX) consuming++;
+      else if (k == DimKind.ELLIPSIS) ellipsisCount++;
+    }
+    if (ellipsisCount > 1 || consuming > input.size()) return null;
+    int ellipsisFill = input.size() - consuming;
+
     List<Dimension<?>> out = new ArrayList<>();
     int axis = 0;
     for (SubscriptDim d : dims) {
-      if (axis >= input.size()) return null; // more subscript dims than receiver rank.
-      if (d.isSlice()) out.add(sliceExtent(input.get(axis), d));
-      // An index dimension consumes the axis without contributing an output dim.
-      axis++;
+      switch (d.kind()) {
+        case NEWAXIS:
+          out.add(new NumericDim(1));
+          break;
+        case ELLIPSIS:
+          for (int k = 0; k < ellipsisFill; k++) out.add(input.get(axis++));
+          break;
+        case SLICE:
+          out.add(sliceExtent(input.get(axis++), d));
+          break;
+        case INDEX:
+          axis++; // drop the axis.
+          break;
+      }
     }
-    for (; axis < input.size(); axis++) out.add(input.get(axis));
+    for (; axis < input.size(); axis++) out.add(input.get(axis)); // implicit trailing `:`.
     return out;
   }
 
@@ -565,21 +640,37 @@ public class SliceBuiltinOperation extends TensorGenerator {
     }
   }
 
+  /** The kind of a multi-dim subscript dimension. */
+  private enum DimKind {
+    SLICE,
+    INDEX,
+    NEWAXIS,
+    ELLIPSIS
+  }
+
   /**
    * One dimension of a multi-dim subscript: a slice (carrying {@code lower}/{@code upper}/{@code
-   * step} bounds) or an integer index.
+   * step} bounds), an integer index, a newaxis, or an ellipsis.
    */
-  private record SubscriptDim(boolean slice, Bound lower, Bound upper, Bound step) {
+  private record SubscriptDim(DimKind kind, Bound lower, Bound upper, Bound step) {
     static SubscriptDim slice(Bound lower, Bound upper, Bound step) {
-      return new SubscriptDim(true, lower, upper, step);
+      return new SubscriptDim(DimKind.SLICE, lower, upper, step);
     }
 
     static SubscriptDim index() {
-      return new SubscriptDim(false, null, null, null);
+      return new SubscriptDim(DimKind.INDEX, null, null, null);
+    }
+
+    static SubscriptDim newaxis() {
+      return new SubscriptDim(DimKind.NEWAXIS, null, null, null);
+    }
+
+    static SubscriptDim ellipsis() {
+      return new SubscriptDim(DimKind.ELLIPSIS, null, null, null);
     }
 
     boolean isSlice() {
-      return slice;
+      return kind == DimKind.SLICE;
     }
   }
 
