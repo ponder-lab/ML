@@ -451,8 +451,8 @@ public class SliceBuiltinOperation extends TensorGenerator {
           bound(builder, caller, inv.getUse(2)),
           bound(builder, caller, inv.getUse(3)));
     }
-    Integer idx = constInt(builder, caller, argVn);
-    if (idx != null) return SubscriptDim.index(idx);
+    // A constant integer index drops its axis; the index value itself is not needed.
+    if (constInt(builder, caller, argVn) != null) return SubscriptDim.index();
     return null;
   }
 
@@ -574,7 +574,7 @@ public class SliceBuiltinOperation extends TensorGenerator {
       return new SubscriptDim(true, lower, upper, step);
     }
 
-    static SubscriptDim index(int unused) {
+    static SubscriptDim index() {
       return new SubscriptDim(false, null, null, null);
     }
 
