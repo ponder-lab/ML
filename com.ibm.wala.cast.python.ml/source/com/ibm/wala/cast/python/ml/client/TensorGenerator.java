@@ -245,38 +245,37 @@ public abstract class TensorGenerator {
   /**
    * Returns the possible shapes of the tensor returned by this generator.
    *
-   * <p>The strict-throw contract for unrecognized top-level forms is intentional: an unrecognized
-   * shape form means missing or incorrect modeling, and silencing it via a {@code null} return
-   * would suppress that diagnostic signal across the whole generator surface during development.
-   * The deeper fix (change the helper's contract to return {@code null} instead of throw) is
-   * tracked at <a href="https://github.com/wala/ML/issues/471">wala/ML#471</a>; for now the
-   * tolerance is localized to the one caller where runtime-tensor shape arguments are the
-   * legitimate use case &mdash; {@link BroadcastTo#getDefaultShapes} wraps this helper in a {@code
-   * try/catch (IllegalStateException)} that returns {@code null} (lattice ⊤). Other callers stay
-   * strict; a missing case there surfaces as an analysis-aborting exception, which is the
-   * load-bearing "modeling gap" signal.
+   * <p>An unrecognized shape form (a runtime tensor such as the result of {@code tf.shape(y)}, an
+   * opaque builder value, or anything that isn't a list/tuple, {@code tf.constant}, {@code
+   * TensorSpec}, or {@code RaggedTensorSpec}) degrades to {@code null} (lattice ⊤, "tensor of
+   * unknown shape") rather than throwing, so the analysis doesn't abort on otherwise-valid programs
+   * (<a href="https://github.com/wala/ML/issues/471">wala/ML#471</a>). Callers that depend on the
+   * {@code shape} argument (e.g. {@link BroadcastTo}, {@link Reshape}) propagate that ⊤ rather than
+   * unsoundly falling back to input-shape inference; the {@code FINE}-level log records the
+   * unrecognized form for diagnosing modeling gaps.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param pointsToSet The points-to set of the shape argument. FIXME: Why not take a value number?
-   * @return A set of possible shapes, or {@code null} (lattice ⊤) for sub-parse failures during
-   *     recursive descent: when a {@code tf.constant} value PTS is empty after the call-site walk,
-   *     when a {@link com.ibm.wala.cast.python.ml.types.TensorFlowTypes#TENSOR_SPEC} or {@link
-   *     com.ibm.wala.cast.python.ml.types.TensorFlowTypes#RAGGED_TENSOR_SPEC} shape field has empty
-   *     PTS, or when a recursive call on any of these returns {@code null}. The {@code null}
-   *     returns signal "this shape's structure is recognized but the leaves aren't statically
-   *     resolvable" &mdash; distinct from the strict-throw contract for unrecognized top-level
-   *     forms, which signals "this kind of shape isn't modeled at all."
+   * @return A set of possible shapes, or {@code null} (lattice ⊤) when the shape cannot be resolved
+   *     statically. This covers sub-parse failures during recursive descent (an empty {@code
+   *     tf.constant} value PTS after the call-site walk, an empty {@link
+   *     com.ibm.wala.cast.python.ml.types.TensorFlowTypes#TENSOR_SPEC} or {@link
+   *     com.ibm.wala.cast.python.ml.types.TensorFlowTypes#RAGGED_TENSOR_SPEC} shape field, or a
+   *     recursive call returning {@code null}) and unrecognized forms — a runtime tensor (e.g. the
+   *     result of {@code tf.shape(y)}), an opaque builder object, or anything that isn't a
+   *     list/tuple, {@code tf.constant}, {@code TensorSpec}, or {@code RaggedTensorSpec}. Returning
+   *     ⊤ for unrecognized forms (rather than throwing) keeps the analysis from aborting on
+   *     otherwise-valid programs (wala/ML#471). Non-allocation {@code InstanceKey}s in the PTS
+   *     (e.g. a {@code ConstantKey} for a scalar Python int passed as the shape) are silently
+   *     skipped; if every key in the PTS is non-allocation, the method returns the empty set rather
+   *     than {@code null}.
    * @throws IllegalArgumentException when the {@code pointsToSet} parameter is itself empty or
    *     {@code null}. That's a caller-contract violation (callers should check for empty PTS before
    *     invoking this helper); distinct from "shape was a runtime tensor."
-   * @throws IllegalStateException when the shape argument's PTS contains an {@code
-   *     AllocationSiteInNode} of a type this method does not recognize as a static shape &mdash;
-   *     runtime tensors (e.g. the result of {@code tf.shape(y)}), opaque builder objects, or
-   *     anything that isn't a list/tuple, {@code tf.constant}, {@code TensorSpec}, or {@code
-   *     RaggedTensorSpec}. Non-allocation {@code InstanceKey}s in the PTS (e.g., {@code
-   *     ConstantKey} for a scalar Python int passed as the shape) are silently skipped rather than
-   *     throwing &mdash; if every key in the PTS is non-allocation, the method returns the empty
-   *     set rather than {@code null} or an exception.
+   * @throws IllegalStateException when a list/tuple's object-catalog field index is a non-integer
+   *     string (via {@link #getFieldIndex}) — an internal invariant violation (the catalog keys
+   *     should always be integer indices), distinct from an unrecognized shape form (which returns
+   *     ⊤).
    */
   protected Set<List<Dimension<?>>> getShapesFromShapeArgument(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
@@ -372,20 +371,26 @@ public abstract class TensorGenerator {
                 if (nestedShapes == null) return null;
                 for (List<Dimension<?>> nestedShape : nestedShapes)
                   tensorDimensions.add(new CompoundDim(nestedShape));
-              } else
-                throw new IllegalStateException(
-                    "Expected a constant key or nested structure for instance field: "
+              } else {
+                // Nested element of an unrecognized form; the shape's structure isn't statically
+                // resolvable, so return ⊤ rather than aborting (wala/ML#471).
+                LOGGER.fine(
+                    "Unrecognized nested shape element for instance field: "
                         + pointerKeyForInstanceField
-                        + ", but got: "
+                        + ", got: "
                         + instanceFieldIK
-                        + ".");
-            } else
-              throw new IllegalStateException(
-                  "Expected a constant key or nested structure for instance field: "
+                        + "; treating the shape as unknown (⊤).");
+                return null;
+              }
+            } else {
+              LOGGER.fine(
+                  "Unrecognized shape element for instance field: "
                       + pointerKeyForInstanceField
-                      + ", but got: "
+                      + ", got: "
                       + instanceFieldIK
-                      + ".");
+                      + "; treating the shape as unknown (⊤).");
+              return null;
+            }
           }
 
           LOGGER.fine(
@@ -499,9 +504,20 @@ public abstract class TensorGenerator {
         Set<List<Dimension<?>>> specShapes = this.getShapesFromShapeArgument(builder, shapePts);
         if (specShapes == null) return null;
         ret.addAll(specShapes);
-      } else
-        throw new IllegalStateException(
-            "Expected a " + list + " or " + tuple + " for the shape, but got: " + reference + ".");
+      } else {
+        // Unrecognized top-level shape form — e.g. a runtime tensor such as the result of
+        // `tf.shape(y)`, an opaque builder value, or any type that isn't a list/tuple,
+        // `tf.constant`,
+        // `TensorSpec`, or `RaggedTensorSpec`. Return ⊤ ("tensor of unknown shape") rather than
+        // aborting the analysis on otherwise-valid programs (wala/ML#471).
+        LOGGER.fine(
+            "Unrecognized shape argument form: "
+                + reference
+                + " for source: "
+                + this.getSource()
+                + "; treating the shape as unknown (⊤).");
+        return null;
+      }
     }
 
     return ret;

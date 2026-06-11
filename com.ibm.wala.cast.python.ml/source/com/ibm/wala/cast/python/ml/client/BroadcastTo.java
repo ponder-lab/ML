@@ -73,27 +73,18 @@ public class BroadcastTo extends TensorGenerator {
         this.getArgumentPointsToSet(
             builder, Parameters.SHAPE.getIndex(), Parameters.SHAPE.getName());
     if (shapePts == null || shapePts.isEmpty()) return null;
-    Set<List<Dimension<?>>> shapes;
-    try {
-      // `getShapesFromShapeArgument` throws `IllegalStateException` for shape forms it doesn't
-      // recognize. For `BroadcastTo` specifically, a runtime-tensor shape argument is an
-      // expected input pattern (e.g., `tf.broadcast_to(x, tf.shape(y))`), so we tolerate the
-      // throw here and degrade to ⊤ ("tensor of unknown shape"). Other callers let the throw
-      // propagate as a loud signal that modeling work is missing — see wala/ML#471's design
-      // discussion on PR #245.
-      shapes = this.getShapesFromShapeArgument(builder, shapePts);
-    } catch (IllegalStateException e) {
-      return null;
-    }
+    // A runtime-tensor shape argument (e.g. `tf.broadcast_to(x, tf.shape(y))`) is an expected input
+    // pattern; `getShapesFromShapeArgument` degrades such unrecognized forms to ⊤ rather than
+    // throwing (wala/ML#471).
+    Set<List<Dimension<?>>> shapes = this.getShapesFromShapeArgument(builder, shapePts);
     return shapes == null || shapes.isEmpty() ? null : shapes;
   }
 
   /**
-   * Routes the shape query through {@link #getDefaultShapes} unconditionally rather than deferring
-   * to the parent's PTS-based dispatch (which would call {@link #getShapesFromShapeArgument}
-   * directly without the tolerate-runtime-tensor catch). The point of this generator is the
-   * localized catch on `tf.broadcast_to(x, tf.shape(y))`; letting the parent's dispatch bypass it
-   * would defeat the purpose.
+   * Routes the shape query through {@link #getDefaultShapes} unconditionally so the output shape is
+   * read from the {@code shape} argument (via {@link #getShapesFromShapeArgument}) rather than the
+   * parent's input-passthrough dispatch. A runtime-tensor {@code shape} (e.g. {@code
+   * tf.broadcast_to(x, tf.shape(y))}) degrades to ⊤ instead of aborting (wala/ML#471).
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @return The shapes per {@link #getDefaultShapes}.
