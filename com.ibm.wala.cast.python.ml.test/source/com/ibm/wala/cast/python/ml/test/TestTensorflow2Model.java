@@ -5750,14 +5750,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Generator-dispatch test for {@code tf.linalg.tensordot}. Output dtype is inherited from the
-   * {@code a} input (here float32), shape is ⊤. See {@link
+   * Generator-dispatch test for {@code tf.linalg.tensordot} with a scalar {@code axes}. Output
+   * dtype is inherited from the {@code a} input (here float32); with {@code axes=1} the output
+   * shape is {@code a.shape[:-1] + b.shape[1:]}, so two (2, 2) inputs yield (2, 2). See {@link
    * com.ibm.wala.cast.python.ml.client.Tensordot} (wala/ML#449).
    */
   @Test
   public void testTensordot()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_tensordot.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test("tf2_test_tensordot.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   /**
