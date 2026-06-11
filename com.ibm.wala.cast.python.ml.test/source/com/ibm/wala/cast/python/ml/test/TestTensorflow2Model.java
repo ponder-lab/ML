@@ -5892,13 +5892,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Generator-dispatch test for {@code tf.boolean_mask}. Output dtype is inherited from the {@code
-   * tensor} input (here float32), shape is ⊤. See {@link
+   * tensor} input (here float32); the masked axis collapses to a dynamic dimension (the runtime
+   * {@code True} count), so masking a (3, 2) tensor with a rank-1 mask yields {@code [Dynamic, 2]}.
+   * The leading dimension is inherently runtime, so it stays dynamic. See {@link
    * com.ibm.wala.cast.python.ml.client.BooleanMask} (wala/ML#449 Tier 8).
    */
   @Test
   public void testBooleanMask()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_boolean_mask.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test("tf2_test_boolean_mask.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_NONE_2_FLOAT32)));
   }
 
   /**
