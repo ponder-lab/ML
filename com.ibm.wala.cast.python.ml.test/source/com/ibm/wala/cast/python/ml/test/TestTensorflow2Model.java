@@ -224,6 +224,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_2_3_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(3)));
 
+  private static final TensorType TENSOR_2_3_1_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(3), new NumericDim(1)));
+
   private static final TensorType TENSOR_2_3_FLOAT64 =
       new TensorType(FLOAT_64, asList(new NumericDim(2), new NumericDim(3)));
 
@@ -2664,18 +2667,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Function body mirrors {@code crf_forward} from {@code kyzhouhzau/NLPGNN/nlpgnn/metrics/crf.py}
    * for tensor-type inference coverage. {@code crf_forward} is reached only through {@code
    * crf_log_norm} (its sole NLPGNN caller), which passes {@code inputs} and {@code state} from
-   * {@code tf.slice}/{@code tf.squeeze} results over a {@code (2, 3, 4)} constant. With the {@code
-   * begin}/{@code size} shape derivation (wala/ML#569), {@code inputs} (from {@code
-   * tf.slice(inputs, [0, 1, 0], [-1, -1, -1])}) now infers as {@code (2, 2, 4)}. {@code state}
-   * (from {@code tf.squeeze(tf.slice(inputs, [0, 0, 0], [-1, 1, -1]), [1])}) infers as the
-   * pre-squeeze {@code (2, 1, 4)} rather than the runtime {@code (2, 4)}: the {@code Slice} shape
-   * flows through, but {@code tf.squeeze}'s axis removal is not yet modeled. Both were previously
-   * {@code ⊤}-shaped (dtype only, wala/ML#568).
-   *
-   * <p>TODO: Tighten {@code state} to {@code (2, 4)} once {@code tf.squeeze} drops its singleton
-   * axis instead of passing the shape through; {@code tf.squeeze} is a {@code pass_through} alias
-   * whose shape semantics are tracked by <a
-   * href="https://github.com/wala/ML/issues/513">wala/ML#513</a> (Bucket 2).
+   * {@code tf.slice}/{@code tf.squeeze} results over a {@code (2, 3, 4)} constant. {@code inputs}
+   * (from {@code tf.slice(inputs, [0, 1, 0], [-1, -1, -1])}) infers as {@code (2, 2, 4)} via the
+   * {@code begin}/{@code size} shape derivation (wala/ML#569). {@code state} (from {@code
+   * tf.squeeze(tf.slice(inputs, [0, 0, 0], [-1, 1, -1]), [1])}) infers as {@code (2, 4)}: the
+   * {@code Slice} shape gives {@code (2, 1, 4)} and {@code tf.squeeze}'s axis-1 removal
+   * (wala/ML#513) drops the singleton. Both were previously {@code ⊤}-shaped (dtype only,
+   * wala/ML#568).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2692,9 +2690,69 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         14,
         Map.of(
             2, Set.of(TENSOR_2_2_4_FLOAT32),
-            3, Set.of(TENSOR_2_1_4_FLOAT32),
+            3, Set.of(TENSOR_2_4_FLOAT32),
             4, Set.of(TENSOR_4_4_FLOAT32),
             5, Set.of(TENSOR_2_INT32)));
+  }
+
+  /**
+   * Pins the output shape of {@code tf.squeeze} with a named axis (wala/ML#513). {@code
+   * tf.squeeze(x, [1])} over a {@code (2, 1, 3, 1)} tensor drops only axis 1: {@code (2, 3, 1)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSqueezeAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_squeeze.py", "consume_axis", 1, 1, Map.of(2, Set.of(TENSOR_2_3_1_FLOAT32)));
+  }
+
+  /**
+   * Pins the output shape of {@code tf.squeeze} with no axis (wala/ML#513). {@code tf.squeeze(x)}
+   * over a {@code (2, 1, 3, 1)} tensor drops every statically size-1 axis: {@code (2, 3)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSqueezeAll()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_squeeze.py", "consume_all", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code tf.squeeze} with a single (non-list) integer axis (wala/ML#513). {@code
+   * tf.squeeze(x, 1)} over a {@code (2, 1, 3, 1)} tensor drops axis 1: {@code (2, 3, 1)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSqueezeSingleAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_squeeze.py", "consume_single", 1, 1, Map.of(2, Set.of(TENSOR_2_3_1_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code tf.squeeze} with multiple named axes (wala/ML#513). {@code tf.squeeze(x, [1, 3])}
+   * over a {@code (2, 1, 3, 1)} tensor drops both size-1 axes: {@code (2, 3)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSqueezeMultiAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_squeeze.py", "consume_multi", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
   }
 
   /**
