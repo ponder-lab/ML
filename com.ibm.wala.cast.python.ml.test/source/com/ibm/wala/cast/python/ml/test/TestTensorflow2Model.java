@@ -248,6 +248,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_2_3_4_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(3), new NumericDim(4)));
 
+  private static final TensorType TENSOR_2_2_4_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(2), new NumericDim(4)));
+
+  private static final TensorType TENSOR_2_1_4_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(1), new NumericDim(4)));
+
   private static final TensorType TENSOR_4_4_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(4)));
 
@@ -2621,14 +2627,55 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Pins the {@code tf.slice} output shape derived from constant {@code begin}/{@code size}
+   * arguments (wala/ML#569). {@code tf.slice(x, [0, 1], [2, 2])} over a {@code (3, 4)} input yields
+   * {@code (2, 2)} — all {@code size} entries are non-negative, so the output shape is {@code size}
+   * exactly, independent of the input shape.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSlice()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_slice.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  /**
+   * Pins the {@code tf.slice} output shape for the "all remaining" case (wala/ML#569). A {@code
+   * size[i]} of {@code -1} resolves to {@code input.shape[i] - begin[i]}: {@code tf.slice(x, [1,
+   * 0], [-1, 3])} over a {@code (3, 4)} input yields {@code (3 - 1, 3) = (2, 3)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceRemaining()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_slice.py", "consume_remaining", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
    * Pins {@code crf_forward(inputs, state, transition_params, sequence_lengths)}'s parameter types.
    * Function body mirrors {@code crf_forward} from {@code kyzhouhzau/NLPGNN/nlpgnn/metrics/crf.py}
    * for tensor-type inference coverage. {@code crf_forward} is reached only through {@code
    * crf_log_norm} (its sole NLPGNN caller), which passes {@code inputs} and {@code state} from
-   * {@code tf.slice}/{@code tf.squeeze} results. Both now infer as {@code float32} with shape
-   * {@code ⊤}: the dedicated {@code Slice} generator forwards the input dtype while leaving the
-   * shape unknown (wala/ML#568); computing the precise {@code begin}/{@code size} shape is tracked
-   * by <a href="https://github.com/wala/ML/issues/569">wala/ML#569</a>.
+   * {@code tf.slice}/{@code tf.squeeze} results over a {@code (2, 3, 4)} constant. With the {@code
+   * begin}/{@code size} shape derivation (wala/ML#569), {@code inputs} (from {@code
+   * tf.slice(inputs, [0, 1, 0], [-1, -1, -1])}) now infers as {@code (2, 2, 4)}. {@code state}
+   * (from {@code tf.squeeze(tf.slice(inputs, [0, 0, 0], [-1, 1, -1]), [1])}) infers as the
+   * pre-squeeze {@code (2, 1, 4)} rather than the runtime {@code (2, 4)}: the {@code Slice} shape
+   * flows through, but {@code tf.squeeze}'s axis removal is not yet modeled. Both were previously
+   * {@code ⊤}-shaped (dtype only, wala/ML#568).
+   *
+   * <p>TODO: Tighten {@code state} to {@code (2, 4)} once {@code tf.squeeze} drops its singleton
+   * axis instead of passing the shape through; {@code tf.squeeze} is a {@code pass_through} alias
+   * whose shape semantics are tracked by <a
+   * href="https://github.com/wala/ML/issues/513">wala/ML#513</a> (Bucket 2).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2644,8 +2691,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         4,
         14,
         Map.of(
-            2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32),
-            3, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32),
+            2, Set.of(TENSOR_2_2_4_FLOAT32),
+            3, Set.of(TENSOR_2_1_4_FLOAT32),
             4, Set.of(TENSOR_4_4_FLOAT32),
             5, Set.of(TENSOR_2_INT32)));
   }
