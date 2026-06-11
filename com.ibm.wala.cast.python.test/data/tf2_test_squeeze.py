@@ -9,6 +9,14 @@ def consume_all(b):
     pass
 
 
+def consume_single(c):
+    pass
+
+
+def consume_multi(d):
+    pass
+
+
 x = tf.ones((2, 1, 3, 1), dtype=tf.float32)
 assert x.shape == (2, 1, 3, 1) and x.dtype == tf.float32
 
@@ -21,3 +29,13 @@ consume_axis(a)
 b = tf.squeeze(x)
 assert b.shape == (2, 3)
 consume_all(b)
+
+# A single (non-list) integer axis -> (2, 3, 1).
+c = tf.squeeze(x, 1)
+assert c.shape == (2, 3, 1)
+consume_single(c)
+
+# Multiple named axes -> (2, 3).
+d = tf.squeeze(x, [1, 3])
+assert d.shape == (2, 3)
+consume_multi(d)

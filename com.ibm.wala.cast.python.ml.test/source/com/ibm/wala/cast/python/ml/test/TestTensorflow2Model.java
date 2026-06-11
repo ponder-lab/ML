@@ -2726,6 +2726,36 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Pins {@code tf.squeeze} with a single (non-list) integer axis (wala/ML#513). {@code
+   * tf.squeeze(x, 1)} over a {@code (2, 1, 3, 1)} tensor drops axis 1: {@code (2, 3, 1)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSqueezeSingleAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_squeeze.py", "consume_single", 1, 1, Map.of(2, Set.of(TENSOR_2_3_1_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code tf.squeeze} with multiple named axes (wala/ML#513). {@code tf.squeeze(x, [1, 3])}
+   * over a {@code (2, 1, 3, 1)} tensor drops both size-1 axes: {@code (2, 3)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSqueezeMultiAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_squeeze.py", "consume_multi", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
    * Pins {@code crf_decode_forward(inputs, state, transition_params, sequence_lengths)}'s parameter
    * types. Function body mirrors {@code crf_decode_forward} from {@code
    * kyzhouhzau/NLPGNN/nlpgnn/metrics/crf.py} for tensor-type inference coverage. The caller passes
