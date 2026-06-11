@@ -248,6 +248,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_2_3_4_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(3), new NumericDim(4)));
 
+  private static final TensorType TENSOR_1_2_2_27_FLOAT32 =
+      new TensorType(
+          FLOAT_32,
+          asList(new NumericDim(1), new NumericDim(2), new NumericDim(2), new NumericDim(27)));
+
   private static final TensorType TENSOR_4_4_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(4)));
 
@@ -5905,13 +5910,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Generator-dispatch test for {@code tf.image.extract_patches}. Output dtype is inherited from
-   * the {@code images} input (here float32), shape is ⊤. See {@link
-   * com.ibm.wala.cast.python.ml.client.ExtractPatches} (wala/ML#449 Tier 8).
+   * the {@code images} input (here float32); the output shape is {@code [batch, out_rows, out_cols,
+   * sizes_r * sizes_c * channels]}, so a (1, 10, 10, 3) image with {@code sizes=[1, 3, 3, 1]},
+   * {@code strides=[1, 5, 5, 1]}, {@code rates=[1, 1, 1, 1]} and {@code VALID} padding yields (1,
+   * 2, 2, 27). See {@link com.ibm.wala.cast.python.ml.client.ExtractPatches} (wala/ML#449 Tier 8).
    */
   @Test
   public void testExtractPatches()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_extract_patches.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test("tf2_test_extract_patches.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_2_2_27_FLOAT32)));
   }
 
   /** Pure-passthrough generator test for {@code tf.math.tan} (wala/ML#422). */
