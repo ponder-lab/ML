@@ -5,7 +5,9 @@ import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -18,6 +20,9 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSANewInstruction;
+import com.ibm.wala.types.TypeName;
+import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
@@ -47,6 +52,16 @@ import java.util.logging.Logger;
 public class SliceBuiltinOperation extends TensorGenerator {
 
   private static final Logger LOGGER = Logger.getLogger(SliceBuiltinOperation.class.getName());
+
+  /**
+   * The synthetic type of the Python {@code slice} builtin allocation. A multi-dim subscript {@code
+   * x[d0, d1, ...]} lowers to {@code slice(x, d0, d1, ...)} where each {@code :}-style dimension is
+   * a {@code slice(lower, upper, step)} object of this type (see {@code PythonParser.visitSlice}).
+   * Used to tell a slice dimension apart from an integer-index dimension.
+   */
+  private static final TypeReference SLICE_BUILTIN =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.string2TypeName("Lwala/builtin/slice"));
 
   public SliceBuiltinOperation(PointsToSetVariable source) {
     super(source);
@@ -87,6 +102,22 @@ public class SliceBuiltinOperation extends TensorGenerator {
                 + " receiverShapes="
                 + capturedReceiverShapes);
     if (receiverShapes == null || receiverShapes.isEmpty()) return null;
+
+    // Multi-dim subscript: `slice(receiver, dim0, dim1, ...)` where each dimension is a
+    // `slice(lower, upper, step)` object or an integer index (wala/ML#406). Distinguished from the
+    // single `[:k]` form below by the presence of at least one slice-object argument.
+    List<SubscriptDim> dims = parseSubscriptDims(builder, view);
+    if (dims != null) {
+      Set<List<Dimension<?>>> ret = HashSetFactory.make();
+      for (List<Dimension<?>> shape : receiverShapes) {
+        List<Dimension<?>> out = applySubscriptDims(shape, dims);
+        if (out != null) ret.add(out);
+      }
+      if (!ret.isEmpty()) {
+        LOGGER.fine(() -> "Matched multi-dim subscript " + dims + " → " + ret);
+        return ret;
+      }
+    }
 
     boolean startOK =
         isNone(builder, view.callerNode(), view.startVn())
@@ -285,9 +316,19 @@ public class SliceBuiltinOperation extends TensorGenerator {
    *     {@code null} if the invoke's use count is smaller than expected.
    */
   private static CallSiteView viewOf(CGNode caller, SSAAbstractInvokeInstruction call) {
-    if (call.getNumberOfUses() < 5) return null;
+    // use(0) is the slice builtin; use(1) is the receiver; the rest are arguments. The single
+    // `[:k]` form has exactly `slice(receiver, start, stop, step)` (5 uses); multi-dim subscripts
+    // (wala/ML#406) can have fewer (e.g. `x[:, 1:]` is 4 uses) or more. Require only the receiver
+    // and at least one argument; absent start/stop/step slots are filled with -1.
+    if (call.getNumberOfUses() < 3) return null;
+    int n = call.getNumberOfUses();
     return new CallSiteView(
-        caller, call, call.getUse(1), call.getUse(2), call.getUse(3), call.getUse(4));
+        caller,
+        call,
+        call.getUse(1),
+        n > 2 ? call.getUse(2) : -1,
+        n > 3 ? call.getUse(3) : -1,
+        n > 4 ? call.getUse(4) : -1);
   }
 
   /**
@@ -359,6 +400,187 @@ public class SliceBuiltinOperation extends TensorGenerator {
       else if (result != n) return null;
     }
     return result;
+  }
+
+  /**
+   * Parses the arguments of a {@code slice(receiver, dim0, dim1, ...)} invoke as multi-dim
+   * subscript dimensions. Each argument is either a {@code slice(lower, upper, step)} object (a
+   * {@code :}-style dimension) or a constant integer (an index dimension that drops an axis).
+   * Returns the parsed dimensions only when at least one is a slice object; otherwise returns
+   * {@code null} so the caller falls through to the single {@code [:k]} form (whose bound arguments
+   * are bare constants, not slice objects).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} providing the pointer analysis.
+   * @param view The resolved slice call site.
+   * @return The parsed dimensions, or {@code null} if this is not a multi-dim subscript or any
+   *     argument is unrecognized.
+   */
+  private List<SubscriptDim> parseSubscriptDims(
+      PropagationCallGraphBuilder builder, CallSiteView view) {
+    SSAAbstractInvokeInstruction call = view.call();
+    CGNode caller = view.callerNode();
+    int n = call.getNumberOfUses();
+    List<SubscriptDim> dims = new ArrayList<>();
+    boolean sawSlice = false;
+    for (int u = 2; u < n; u++) {
+      SubscriptDim d = classifyDim(builder, caller, call.getUse(u));
+      if (d == null) return null; // bare bound (single `[:k]` form) or unrecognized.
+      if (d.isSlice()) sawSlice = true;
+      dims.add(d);
+    }
+    return sawSlice ? dims : null;
+  }
+
+  /**
+   * Classifies a single subscript-argument value number as a slice dimension or an integer index.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} providing the pointer analysis.
+   * @param caller The caller {@link CGNode}.
+   * @param argVn The argument value number.
+   * @return a slice or index {@link SubscriptDim}, or {@code null} when the argument is neither (a
+   *     bare {@code None}/non-constant — i.e. the single {@code [:k]} bound form).
+   */
+  private SubscriptDim classifyDim(PropagationCallGraphBuilder builder, CGNode caller, int argVn) {
+    if (argVn <= 0) return null;
+    if (isSliceObject(caller, argVn)) {
+      SSAAbstractInvokeInstruction inv =
+          (SSAAbstractInvokeInstruction) caller.getDU().getDef(argVn);
+      // slice(lower, upper, step): uses 1, 2, 3.
+      return SubscriptDim.slice(
+          bound(builder, caller, inv.getUse(1)),
+          bound(builder, caller, inv.getUse(2)),
+          bound(builder, caller, inv.getUse(3)));
+    }
+    // A constant integer index drops its axis; the index value itself is not needed.
+    if (constInt(builder, caller, argVn) != null) return SubscriptDim.index();
+    return null;
+  }
+
+  /**
+   * Returns whether {@code argVn}'s defining instruction is a {@code slice(...)} object
+   * construction (an invoke whose callee is the {@link #SLICE_BUILTIN} allocation).
+   *
+   * @param caller The caller {@link CGNode}.
+   * @param argVn The argument value number.
+   * @return {@code true} iff {@code argVn} is defined by a slice-object construction.
+   */
+  private static boolean isSliceObject(CGNode caller, int argVn) {
+    SSAInstruction def = caller.getDU().getDef(argVn);
+    if (!(def instanceof SSAAbstractInvokeInstruction)) return false;
+    SSAAbstractInvokeInstruction inv = (SSAAbstractInvokeInstruction) def;
+    if (inv.getNumberOfUses() < 4) return false;
+    SSAInstruction funcDef = caller.getDU().getDef(inv.getUse(0));
+    return funcDef instanceof SSANewInstruction
+        && ((SSANewInstruction) funcDef).getNewSite().getDeclaredType().equals(SLICE_BUILTIN);
+  }
+
+  /**
+   * Resolves a slice bound ({@code lower}, {@code upper}, or {@code step}) value number to a {@link
+   * Bound}: a constant integer, {@code None}, or unknown (non-constant).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} providing the pointer analysis.
+   * @param caller The caller {@link CGNode}.
+   * @param vn The bound's value number.
+   * @return The resolved {@link Bound}.
+   */
+  private static Bound bound(PropagationCallGraphBuilder builder, CGNode caller, int vn) {
+    if (isNone(builder, caller, vn)) return Bound.NONE;
+    Integer v = constInt(builder, caller, vn);
+    return v != null ? Bound.of(v) : Bound.UNKNOWN;
+  }
+
+  /**
+   * Applies the parsed subscript dimensions to a single receiver shape. Walks the receiver's axes
+   * in order: a slice dimension maps its axis to the sliced extent; an index dimension drops its
+   * axis. Any receiver axes beyond the explicit dimensions are preserved (an implicit trailing
+   * {@code :}).
+   *
+   * @param input The receiver's shape dims, in order.
+   * @param dims The parsed subscript dimensions, in order.
+   * @return The output shape, or {@code null} when there are more dimensions than receiver axes.
+   */
+  private static List<Dimension<?>> applySubscriptDims(
+      List<Dimension<?>> input, List<SubscriptDim> dims) {
+    List<Dimension<?>> out = new ArrayList<>();
+    int axis = 0;
+    for (SubscriptDim d : dims) {
+      if (axis >= input.size()) return null; // more subscript dims than receiver rank.
+      if (d.isSlice()) out.add(sliceExtent(input.get(axis), d));
+      // An index dimension consumes the axis without contributing an output dim.
+      axis++;
+    }
+    for (; axis < input.size(); axis++) out.add(input.get(axis));
+    return out;
+  }
+
+  /**
+   * Computes the output extent of one axis under a slice dimension, per Python slice semantics with
+   * a unit (or absent) step. A full slice ({@code :}) preserves the axis. Constant bounds against a
+   * numeric axis compute the extent numerically (negative bounds index from the end); a {@code :k}
+   * slice against an unknown axis still yields {@code k}. Anything else degrades to a {@link
+   * DynamicDim} (the axis stays present but its extent is unknown), never to ⊤.
+   *
+   * @param recv The receiver's dimension for this axis.
+   * @param d The slice dimension.
+   * @return The output dimension for this axis.
+   */
+  private static Dimension<?> sliceExtent(Dimension<?> recv, SubscriptDim d) {
+    Bound lower = d.lower(), upper = d.upper(), step = d.step();
+    if (lower.isNone() && upper.isNone() && step.isNone()) return recv; // `:`
+    int s = step.isNone() ? 1 : (step.isInt() ? step.value() : 0);
+    if (s != 1) return DynamicDim.INSTANCE; // non-unit/non-constant/negative step.
+    Integer n = (recv instanceof NumericDim) ? ((NumericDim) recv).value() : null;
+    if (n == null) {
+      // Unknown axis: only `:k` (lower None, constant non-negative upper) is computable.
+      if (lower.isNone() && upper.isInt() && upper.value() >= 0)
+        return new NumericDim(upper.value());
+      return DynamicDim.INSTANCE;
+    }
+    if ((!lower.isNone() && !lower.isInt()) || (!upper.isNone() && !upper.isInt()))
+      return DynamicDim.INSTANCE; // non-constant bound against a known axis.
+    int lo = lower.isNone() ? 0 : lower.value();
+    int hi = upper.isNone() ? n : upper.value();
+    if (lo < 0) lo = Math.max(0, n + lo);
+    if (hi < 0) hi = Math.max(0, n + hi);
+    lo = Math.min(lo, n);
+    hi = Math.min(hi, n);
+    return new NumericDim(Math.max(0, hi - lo));
+  }
+
+  /** A resolved slice bound: a constant integer, {@code None}, or unknown (non-constant). */
+  private record Bound(Integer value, boolean none, boolean unknown) {
+    static final Bound NONE = new Bound(null, true, false);
+    static final Bound UNKNOWN = new Bound(null, false, true);
+
+    static Bound of(int v) {
+      return new Bound(v, false, false);
+    }
+
+    boolean isNone() {
+      return none;
+    }
+
+    boolean isInt() {
+      return value != null;
+    }
+  }
+
+  /**
+   * One dimension of a multi-dim subscript: a slice (carrying {@code lower}/{@code upper}/{@code
+   * step} bounds) or an integer index.
+   */
+  private record SubscriptDim(boolean slice, Bound lower, Bound upper, Bound step) {
+    static SubscriptDim slice(Bound lower, Bound upper, Bound step) {
+      return new SubscriptDim(true, lower, upper, step);
+    }
+
+    static SubscriptDim index() {
+      return new SubscriptDim(false, null, null, null);
+    }
+
+    boolean isSlice() {
+      return slice;
+    }
   }
 
   /**
