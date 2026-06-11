@@ -272,6 +272,10 @@ public abstract class TensorGenerator {
    * @throws IllegalArgumentException when the {@code pointsToSet} parameter is itself empty or
    *     {@code null}. That's a caller-contract violation (callers should check for empty PTS before
    *     invoking this helper); distinct from "shape was a runtime tensor."
+   * @throws IllegalStateException when a list/tuple's object-catalog field index is a non-integer
+   *     string (via {@link #getFieldIndex}) — an internal invariant violation (the catalog keys
+   *     should always be integer indices), distinct from an unrecognized shape form (which returns
+   *     ⊤).
    */
   protected Set<List<Dimension<?>>> getShapesFromShapeArgument(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
