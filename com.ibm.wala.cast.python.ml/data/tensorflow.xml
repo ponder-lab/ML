@@ -562,9 +562,11 @@
         <new def="gather_nd" class="Ltensorflow/functions/gather_nd"/>
         <putfield class="LRoot" field="gather_nd" fieldType="LRoot" ref="x" value="gather_nd"/>
         <putfield class="LRoot" field="gather_nd" fieldType="LRoot" ref="array_ops" value="gather_nd"/>
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/squeeze -->
-        <putfield class="LRoot" field="squeeze" fieldType="LRoot" ref="x" value="pass_through"/>
-        <putfield class="LRoot" field="squeeze" fieldType="LRoot" ref="array_ops" value="pass_through"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/squeeze. Direct `<new>+<return>` paired with the dedicated `Squeeze` generator (wala/ML#513, Bucket 2a): dtype inherits from `input`; shape drops the singleton axes named by `axis` (or all statically size-1 axes when `axis` is absent).
+          Was `pass_through`, which leaked the input shape unchanged. -->
+        <new def="squeeze" class="Ltensorflow/functions/squeeze"/>
+        <putfield class="LRoot" field="squeeze" fieldType="LRoot" ref="x" value="squeeze"/>
+        <putfield class="LRoot" field="squeeze" fieldType="LRoot" ref="array_ops" value="squeeze"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/io/decode_png -->
         <!-- TODO: Return a dtype other than the input -->
         <putfield class="LRoot" field="decode_png" fieldType="LRoot" ref="image" value="pass_through"/>
@@ -2057,6 +2059,14 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/slice. Direct `<new>+<return>` paired with the dedicated `Slice` generator (wala/ML#568): dtype inherits from `input_`; shape is left at ⊤ since `tf.slice` reshapes its input by the runtime `begin`/`size` extents (computing it from
           constant `begin`/`size` is wala/ML#569). -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_ begin size name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="squeeze" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/squeeze. Direct `<new>+<return>` paired with the dedicated `Squeeze` generator (wala/ML#513, Bucket 2a): dtype inherits from `input`; the generator drops the singleton axes named by `axis` (or all statically size-1 axes when `axis`
+          is absent). -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self input axis name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
         </method>
