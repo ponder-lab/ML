@@ -254,6 +254,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_2_2_4_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(2), new NumericDim(4)));
 
+  private static final TensorType TENSOR_2_2_1_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(2), new NumericDim(1)));
+
+  private static final TensorType TENSOR_2_5_6_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(5), new NumericDim(6)));
+
+  private static final TensorType TENSOR_4_4_6_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(4), new NumericDim(6)));
+
+  private static final TensorType TENSOR_4_6_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(6)));
+
   private static final TensorType TENSOR_1_2_2_27_FLOAT32 =
       new TensorType(
           FLOAT_32,
@@ -2084,16 +2096,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Isolated repro for the slice-subscript PA-allocation gap — parallel to wala/ML#398 but for
-   * subscript instead of binop. Python {@code a_sliced = a[:2, ..., tf.newaxis];
-   * from_tensor_slices((a_sliced, y))} — the slice-subscript result has no PA allocation
-   * (NdarraySubscriptOperation only matches pure ellipsis+None patterns, a leading slice
-   * disqualifies), so the dataset's per-index walk returns ⊤.
+   * Pins a slice-subscript result flowing into a dataset (wala/ML#400). Python {@code a_sliced =
+   * a[:2, ..., tf.newaxis]; from_tensor_slices((a_sliced, y))} over a {@code (3, 2)} tensor: the
+   * subscript is {@code (2, 2, 1)} (slice, ellipsis-fill, newaxis), so each iterated element is
+   * {@code (2, 1)}. Because the {@code slice} builtin returns its receiver ({@code
+   * Either.forRight(2)}), {@code a_sliced} aliases {@code a}; {@link
+   * DatasetFromTensorSlicesGenerator} recovers the slice's shape by dispatching {@link
+   * com.ibm.wala.cast.python.ml.client.SliceBuiltinOperation} on the stored value rather than
+   * reading the receiver-aliased field PTS.
    *
-   * <p>TODO: When wala/ML#400 is fixed, flip the annotation to plain {@code @Test} and remove this
-   * TODO line.
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testSliceSubscriptThroughDataset()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_iso_slicesub_ds.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_1_FLOAT32)));
@@ -2767,13 +2784,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Pins {@code crf_decode_forward(inputs, state, transition_params, sequence_lengths)}'s parameter
    * types. Function body mirrors {@code crf_decode_forward} from {@code
    * kyzhouhzau/NLPGNN/nlpgnn/metrics/crf.py} for tensor-type inference coverage. The caller passes
-   * {@code inputs} from {@code x[:, 1:, :]} and {@code state} from {@code x[:, 0, :]}, which should
-   * reduce to {@code (2, 2, 4)} and {@code (2, 4)} respectively. They are instead inferred as the
-   * base {@code (2, 3, 4)} because these middle-axis subscript slices fall through to the
-   * base-shape passthrough; recovering them requires the broader slice vocabulary tracked by <a
-   * href="https://github.com/wala/ML/issues/406">wala/ML#406</a>. Like {@code crf_forward} (reached
-   * via {@code tf.slice}/{@code tf.squeeze}, now dtype-typed with shape {@code ⊤} — wala/ML#568),
-   * the subscript-slice path keeps the parameters tensor-typed, just shape-imprecise.
+   * {@code inputs} from {@code x[:, 1:, :]} and {@code state} from {@code x[:, 0, :]}, recovered as
+   * {@code (2, 2, 4)} and {@code (2, 4)} respectively via the multi-dim subscript-slice modeling
+   * (wala/ML#406): {@code inputs[:, 1:, :]} drops the leading element of the middle axis ({@code 3
+   * → 2}) and {@code inputs[:, 0, :]} drops the middle axis entirely (an integer index).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2789,10 +2803,90 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         4,
         6,
         Map.of(
-            2, Set.of(TENSOR_2_3_4_FLOAT32),
-            3, Set.of(TENSOR_2_3_4_FLOAT32),
+            2, Set.of(TENSOR_2_2_4_FLOAT32),
+            3, Set.of(TENSOR_2_4_FLOAT32),
             4, Set.of(TENSOR_4_4_FLOAT32),
             5, Set.of(TENSOR_2_INT32)));
+  }
+
+  /**
+   * Pins the output shape of a non-zero-start slice on the first axis of a multi-dim subscript
+   * (wala/ML#406). {@code x[1:3, :, :]} over a {@code (4, 5, 6)} tensor keeps 2 rows and the
+   * trailing axes intact: {@code (2, 5, 6)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptMultidimRows()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_subscript_multidim.py",
+        "consume_rows",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_5_6_FLOAT32)));
+  }
+
+  /**
+   * Pins the output shape of a middle-axis slice in a multi-dim subscript (wala/ML#406). {@code
+   * x[:, 1:, :]} over a {@code (4, 5, 6)} tensor drops the leading element of the middle axis:
+   * {@code (4, 4, 6)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptMultidimCols()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_subscript_multidim.py",
+        "consume_cols",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_4_6_FLOAT32)));
+  }
+
+  /**
+   * Pins the output shape of an integer index on the middle axis of a multi-dim subscript
+   * (wala/ML#406). {@code x[:, 0, :]} over a {@code (4, 5, 6)} tensor drops the middle axis
+   * entirely: {@code (4, 6)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptMultidimIndex()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_subscript_multidim.py",
+        "consume_index",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_6_FLOAT32)));
+  }
+
+  /**
+   * Pins the output shape of a multi-dim subscript that mixes a slice, an ellipsis, and a newaxis
+   * (wala/ML#406). {@code a[:2, ..., tf.newaxis]} over a {@code (3, 2)} tensor slices the first
+   * axis to 2, lets the ellipsis fill the remaining axis (2), and appends a size-1 axis for the
+   * newaxis: {@code (2, 2, 1)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSubscriptNewaxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_subscript_newaxis.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_2_1_FLOAT32)));
   }
 
   /**
