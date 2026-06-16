@@ -103,17 +103,23 @@ public class Squeeze extends PassThroughUnaryTensorGenerator {
    * Resolves the {@code axis} argument to its constant integer axes, accepting a single integer or
    * a constant list/tuple of integers.
    *
+   * <p>Each constant integer or list/tuple is an alternative axis candidate. When the analysis sees
+   * more than one distinct candidate (e.g. {@code axis} may be {@code 1} or {@code [1, 3]}),
+   * unioning them would unsoundly squeeze the union, so the method conservatively returns {@code
+   * null} (⊤).
+   *
    * @param builder The {@link PropagationCallGraphBuilder} providing the pointer analysis.
    * @param axisPts The {@code axis} argument's points-to set.
-   * @return The set of axes, or {@code null} when any element is non-constant.
+   * @return The single resolved axis set, or {@code null} when any element is non-constant or there
+   *     is more than one distinct candidate.
    */
   private Set<Integer> resolveAxisInts(
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> axisPts) {
-    Set<Integer> axes = new HashSet<>();
+    Set<Set<Integer>> candidates = new HashSet<>();
     for (InstanceKey ik : axisPts) {
       if (ik instanceof ConstantKey) {
         Object v = ((ConstantKey<?>) ik).getValue();
-        if (v instanceof Number) axes.add(((Number) v).intValue());
+        if (v instanceof Number) candidates.add(Set.of(((Number) v).intValue()));
         else return null;
       } else {
         // A list/tuple of axes: resolve its elements via the shape-argument parser.
@@ -124,14 +130,18 @@ public class Squeeze extends PassThroughUnaryTensorGenerator {
           return null;
         }
         if (lists == null) return null;
-        for (List<Dimension<?>> list : lists)
+        for (List<Dimension<?>> list : lists) {
+          Set<Integer> candidate = new HashSet<>();
           for (Dimension<?> d : list) {
             if (!(d instanceof NumericDim)) return null;
-            axes.add(((NumericDim) d).value());
+            candidate.add(((NumericDim) d).value());
           }
+          candidates.add(candidate);
+        }
       }
     }
-    return axes;
+    // Exactly one distinct candidate is the resolved axis set; zero or several is ⊤.
+    return candidates.size() == 1 ? candidates.iterator().next() : null;
   }
 
   /**
