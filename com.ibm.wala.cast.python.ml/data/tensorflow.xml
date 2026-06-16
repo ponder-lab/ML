@@ -628,6 +628,18 @@
         <putfield class="LRoot" field="reduce_logsumexp" fieldType="LRoot" ref="x" value="reduce_logsumexp"/>
         <putfield class="LRoot" field="reduce_logsumexp" fieldType="LRoot" ref="math" value="reduce_logsumexp"/>
         <putfield class="LRoot" field="reduce_logsumexp" fieldType="LRoot" ref="math_ops" value="reduce_logsumexp"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/unsorted_segment_sum -->
+        <new def="unsorted_segment_sum" class="Ltensorflow/math/unsorted_segment_sum"/>
+        <putfield class="LRoot" field="unsorted_segment_sum" fieldType="LRoot" ref="math" value="unsorted_segment_sum"/>
+        <putfield class="LRoot" field="unsorted_segment_sum" fieldType="LRoot" ref="math_ops" value="unsorted_segment_sum"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/unsorted_segment_max -->
+        <new def="unsorted_segment_max" class="Ltensorflow/math/unsorted_segment_max"/>
+        <putfield class="LRoot" field="unsorted_segment_max" fieldType="LRoot" ref="math" value="unsorted_segment_max"/>
+        <putfield class="LRoot" field="unsorted_segment_max" fieldType="LRoot" ref="math_ops" value="unsorted_segment_max"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/unsorted_segment_mean -->
+        <new def="unsorted_segment_mean" class="Ltensorflow/math/unsorted_segment_mean"/>
+        <putfield class="LRoot" field="unsorted_segment_mean" fieldType="LRoot" ref="math" value="unsorted_segment_mean"/>
+        <putfield class="LRoot" field="unsorted_segment_mean" fieldType="LRoot" ref="math_ops" value="unsorted_segment_mean"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/acos -->
         <new def="acos" class="Ltensorflow/math/acos"/>
         <putfield class="LRoot" field="acos" fieldType="LRoot" ref="x" value="acos"/>
@@ -1474,6 +1486,28 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_logsumexp. Modeled as `<new>+<return>` for the same reason — wala/ML#449 Tier 3. Output dtype inherits from input (`reduce_logsumexp` requires float input at runtime; static analysis just preserves whatever the input
           dtype was). -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="unsorted_segment_sum" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/math/unsorted_segment_sum. Direct `<new>+<return>` paired with the dedicated `UnsortedSegmentReduction` generator (wala/ML#570): dtype inherits from `data`; shape is left at ⊤ since the output's leading axis is the runtime `num_segments` value
+          (forwarding `data`'s shape would be unsound). -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self data segment_ids num_segments name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="unsorted_segment_max" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/math/unsorted_segment_max. See `unsorted_segment_sum` above; same `<new>+<return>` + `UnsortedSegmentReduction` modeling (wala/ML#570). -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self data segment_ids num_segments name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="unsorted_segment_mean" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/math/unsorted_segment_mean. See `unsorted_segment_sum` above; same `<new>+<return>` + `UnsortedSegmentReduction` modeling (wala/ML#570). -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self data segment_ids num_segments name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
         </method>

@@ -746,6 +746,36 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String REDUCE_LOGSUMEXP_SIGNATURE = "tf.reduce_logsumexp()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/math/unsorted_segment_sum. */
+  public static final MethodReference UNSORTED_SEGMENT_SUM =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/math/unsorted_segment_sum")),
+          AstMethodReference.fnSelector);
+
+  private static final String UNSORTED_SEGMENT_SUM_SIGNATURE = "tf.math.unsorted_segment_sum()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/unsorted_segment_max. */
+  public static final MethodReference UNSORTED_SEGMENT_MAX =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/math/unsorted_segment_max")),
+          AstMethodReference.fnSelector);
+
+  private static final String UNSORTED_SEGMENT_MAX_SIGNATURE = "tf.math.unsorted_segment_max()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/math/unsorted_segment_mean. */
+  public static final MethodReference UNSORTED_SEGMENT_MEAN =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/math/unsorted_segment_mean")),
+          AstMethodReference.fnSelector);
+
+  private static final String UNSORTED_SEGMENT_MEAN_SIGNATURE = "tf.math.unsorted_segment_mean()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/math/reduce_all. */
   public static final MethodReference REDUCE_ALL =
       MethodReference.findOrCreate(
@@ -1845,6 +1875,9 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(REDUCE_MAX.getDeclaringClass(), REDUCE_MAX_SIGNATURE),
           Map.entry(REDUCE_PROD.getDeclaringClass(), REDUCE_PROD_SIGNATURE),
           Map.entry(REDUCE_LOGSUMEXP.getDeclaringClass(), REDUCE_LOGSUMEXP_SIGNATURE),
+          Map.entry(UNSORTED_SEGMENT_SUM.getDeclaringClass(), UNSORTED_SEGMENT_SUM_SIGNATURE),
+          Map.entry(UNSORTED_SEGMENT_MAX.getDeclaringClass(), UNSORTED_SEGMENT_MAX_SIGNATURE),
+          Map.entry(UNSORTED_SEGMENT_MEAN.getDeclaringClass(), UNSORTED_SEGMENT_MEAN_SIGNATURE),
           Map.entry(REDUCE_ALL.getDeclaringClass(), REDUCE_ALL_SIGNATURE),
           Map.entry(MODEL.getDeclaringClass(), MODEL_SIGNATURE),
           Map.entry(MODEL_CALL.getDeclaringClass(), MODEL_CALL_SIGNATURE),

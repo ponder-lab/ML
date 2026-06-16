@@ -184,6 +184,9 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNIFORM_OP;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNSORTED_SEGMENT_MAX;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNSORTED_SEGMENT_MEAN;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNSORTED_SEGMENT_SUM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VARIABLE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.WHERE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS;
@@ -1212,6 +1215,10 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, REDUCE_PROD.getDeclaringClass())) return new ReduceProd(source);
     else if (isType(calledFunction, REDUCE_LOGSUMEXP.getDeclaringClass()))
       return new ReduceLogSumExp(source);
+    else if (isType(calledFunction, UNSORTED_SEGMENT_SUM.getDeclaringClass())
+        || isType(calledFunction, UNSORTED_SEGMENT_MAX.getDeclaringClass())
+        || isType(calledFunction, UNSORTED_SEGMENT_MEAN.getDeclaringClass()))
+      return new UnsortedSegmentReduction(source);
     else if (isType(calledFunction, REDUCE_ALL.getDeclaringClass())) return new ReduceAll(source);
     else if (isType(calledFunction, PLACEHOLDER.getDeclaringClass()))
       return new Placeholder(source);
