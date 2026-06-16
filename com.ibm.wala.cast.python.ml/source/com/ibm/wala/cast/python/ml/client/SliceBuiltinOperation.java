@@ -405,16 +405,21 @@ public class SliceBuiltinOperation extends TensorGenerator {
 
   /**
    * Parses the arguments of a {@code slice(receiver, dim0, dim1, ...)} invoke as multi-dim
-   * subscript dimensions. Each argument is either a {@code slice(lower, upper, step)} object (a
-   * {@code :}-style dimension) or a constant integer (an index dimension that drops an axis).
-   * Returns the parsed dimensions only when at least one is a slice object; otherwise returns
-   * {@code null} so the caller falls through to the single {@code [:k]} form (whose bound arguments
-   * are bare constants, not slice objects).
+   * subscript dimensions. Each argument is a {@code slice(lower, upper, step)} object (a {@code
+   * :}-style dimension), an ellipsis, a newaxis, or a constant integer index (which drops an axis).
+   *
+   * <p>Engages multi-dim handling only when at least one argument is a slice object, which is the
+   * marker that distinguishes a multi-dim subscript carrying a {@code :} from the single {@code
+   * [:k]} form (whose arguments are bare {@code None}/integer bounds, not slice objects).
+   * Subscripts with no slice &mdash; a pure-integer index like {@code x[0, 1]} or a pure
+   * ellipsis/newaxis like {@code x[..., None]} &mdash; are lowered to a different IR form (a {@code
+   * PythonPropertyRead} / {@code OBJECT_REF}) handled by {@link TensorElementGenerator} or {@link
+   * NdarraySubscriptOperation}, so they do not reach this method.
    *
    * @param builder The {@link PropagationCallGraphBuilder} providing the pointer analysis.
    * @param view The resolved slice call site.
-   * @return The parsed dimensions, or {@code null} if this is not a multi-dim subscript or any
-   *     argument is unrecognized.
+   * @return The parsed dimensions, or {@code null} if there is no slice object (the single {@code
+   *     [:k]} form) or any argument is unrecognized.
    */
   private List<SubscriptDim> parseSubscriptDims(
       PropagationCallGraphBuilder builder, CallSiteView view) {
