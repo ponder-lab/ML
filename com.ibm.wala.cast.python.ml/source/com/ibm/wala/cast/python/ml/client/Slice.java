@@ -82,7 +82,10 @@ public class Slice extends PassThroughUnaryTensorGenerator {
       for (List<Dimension<?>> begin : beginLists)
         for (List<Dimension<?>> size : sizeLists) {
           List<Dimension<?>> out = sliceShape(input, begin, size);
-          if (out != null) ret.add(out);
+          // A ⊤ (null) for any combination joins to ⊤ for the whole result: returning only the
+          // concrete subset would under-approximate the possible shapes.
+          if (out == null) return null;
+          ret.add(out);
         }
     return ret.isEmpty() ? null : ret;
   }
@@ -104,7 +107,9 @@ public class Slice extends PassThroughUnaryTensorGenerator {
     try {
       Set<List<Dimension<?>>> lists = this.getShapesFromShapeArgument(builder, pts);
       return (lists == null || lists.isEmpty()) ? null : lists;
-    } catch (RuntimeException e) {
+    } catch (IllegalStateException e) {
+      // `getShapesFromShapeArgument` throws `IllegalStateException` for an unrecognized shape form;
+      // degrade that to ⊤. Other runtime exceptions propagate as intended diagnostics.
       LOGGER.fine(() -> "Could not resolve " + name + " of " + this.getSource() + ": " + e + ".");
       return null;
     }
@@ -117,8 +122,9 @@ public class Slice extends PassThroughUnaryTensorGenerator {
    * @param input The {@code input_} shape.
    * @param begin The constant {@code begin} offsets.
    * @param size The constant {@code size} extents.
-   * @return The output shape, or {@code null} when the ranks disagree, a {@code size} entry is
-   *     non-constant, or a {@code size} entry is invalid ({@code < -1}).
+   * @return The output shape, or {@code null} (⊤) when the ranks disagree, a {@code size} entry is
+   *     non-constant or invalid ({@code < -1}), or a {@code size}-of-{@code -1} axis computes a
+   *     negative extent ({@code begin} past the axis).
    */
   private static List<Dimension<?>> sliceShape(
       List<Dimension<?>> input, List<Dimension<?>> begin, List<Dimension<?>> size) {
@@ -136,9 +142,12 @@ public class Slice extends PassThroughUnaryTensorGenerator {
         // "all remaining" along axis i: input_.shape[i] - begin[i], when both are constant.
         Dimension<?> inDim = input.get(i);
         Dimension<?> beginDim = begin.get(i);
-        if (inDim instanceof NumericDim && beginDim instanceof NumericDim)
-          out.add(new NumericDim(((NumericDim) inDim).value() - ((NumericDim) beginDim).value()));
-        else out.add(DynamicDim.INSTANCE); // keep the rank; this axis is dynamic.
+        if (inDim instanceof NumericDim && beginDim instanceof NumericDim) {
+          int extent = ((NumericDim) inDim).value() - ((NumericDim) beginDim).value();
+          // A `begin` past the axis would yield a negative (invalid) extent; degrade to ⊤.
+          if (extent < 0) return null;
+          out.add(new NumericDim(extent));
+        } else out.add(DynamicDim.INSTANCE); // keep the rank; this axis is dynamic.
       } else {
         return null; // size < -1 is invalid for tf.slice.
       }
