@@ -2486,11 +2486,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * tf.math.unsorted_segment_sum} is now modeled (dtype inherits from {@code data}, shape ⊤; <a
    * href="https://github.com/wala/ML/issues/570">wala/ML#570</a>), so the aggregation results are
    * recognized as tensor allocations — hence six tracked tensor variables rather than four. Their
-   * dtype is still ⊤, though: it never reaches the aggregation's {@code data} argument because the
-   * message-construction chain feeding it ({@code tf.gather} → {@code tf.reshape} → Python-list
-   * {@code append} → {@code tf.concat}, across {@code MessagePassing._calculate_messages_all_type})
-   * does not forward dtype. That chain-forwarding gap is the remaining wala/ML#570 work. The
-   * decorated function's input signature—the analysis goal—is nonetheless exact.
+   * dtype is still ⊤, though, and the root cause is upstream of the aggregation: {@code
+   * GraphConvolution.call} receives its input as a {@code GNNInput} {@code NamedTuple} and unwraps
+   * it with {@code node_embeddings = inputs.node_embeddings}, but a tensor read back from a
+   * user-defined {@code NamedTuple} field is not tracked as a tensor (<a
+   * href="https://github.com/wala/ML/issues/579">wala/ML#579</a>). So {@code node_embeddings}
+   * arrives ⊤, the immediately-following {@code tf.linalg.matmul} produces ⊤, and every downstream
+   * op (including the modeled aggregation) inherits it. Resolving wala/ML#579 is the prerequisite
+   * for typing these layer outputs. The decorated function's input signature—the analysis goal—is
+   * nonetheless exact.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
