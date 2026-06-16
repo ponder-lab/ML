@@ -56,7 +56,8 @@ public class Squeeze extends PassThroughUnaryTensorGenerator {
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @return The set of possible output shapes, or {@code null} (⊤) when {@code input}'s shape is
-   *     unknown or {@code axis} is a non-constant.
+   *     unknown, {@code axis} is a non-constant, or any input alternative squeezes to ⊤ (a named
+   *     axis is out of range or not statically size-1).
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
@@ -79,7 +80,10 @@ public class Squeeze extends PassThroughUnaryTensorGenerator {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     for (List<Dimension<?>> input : inputShapes) {
       List<Dimension<?>> out = squeezeShape(input, axes);
-      if (out != null) ret.add(out);
+      // A ⊤ (null) for any input alternative joins to ⊤ for the whole result: returning only the
+      // concrete subset would under-approximate the possible shapes.
+      if (out == null) return null;
+      ret.add(out);
     }
     return ret.isEmpty() ? null : ret;
   }
@@ -126,7 +130,10 @@ public class Squeeze extends PassThroughUnaryTensorGenerator {
         Set<List<Dimension<?>>> lists;
         try {
           lists = this.getShapesFromShapeArgument(builder, Collections.singleton(ik));
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException e) {
+          // `getShapesFromShapeArgument` throws `IllegalStateException` for an unrecognized shape
+          // form; degrade that to ⊤. Other runtime exceptions propagate as intended diagnostics.
+          LOGGER.fine(() -> "Could not resolve axis of " + this.getSource() + ": " + e + ".");
           return null;
         }
         if (lists == null) return null;
