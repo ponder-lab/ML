@@ -58,9 +58,10 @@ public class SliceBuiltinOperation extends TensorGenerator {
    * The synthetic type of the Python {@code slice} builtin allocation. A multi-dim subscript {@code
    * x[d0, d1, ...]} lowers to {@code slice(x, d0, d1, ...)} where each {@code :}-style dimension is
    * a {@code slice(lower, upper, step)} object of this type (see {@code PythonParser.visitSlice}).
-   * Used to tell a slice dimension apart from an integer-index dimension.
+   * Used to tell a slice dimension apart from an integer-index dimension. Package-private so {@link
+   * DatasetFromTensorSlicesGenerator} keys its slice-subscript detection off the same definition.
    */
-  private static final TypeReference SLICE_BUILTIN =
+  static final TypeReference SLICE_BUILTIN =
       TypeReference.findOrCreate(
           PythonTypes.pythonLoader, TypeName.string2TypeName("Lwala/builtin/slice"));
 
@@ -307,14 +308,17 @@ public class SliceBuiltinOperation extends TensorGenerator {
   }
 
   /**
-   * Constructs a {@link CallSiteView} for a {@code slice(x, start, stop, step)} invoke. Returns
-   * {@code null} if the invoke doesn't have the expected 4-arg shape (self + 4 positional args = 5
-   * uses); this defends against malformed invokes without throwing.
+   * Constructs a {@link CallSiteView} for a {@code slice(receiver, ...)} invoke. The single {@code
+   * [:k]} form is {@code slice(receiver, start, stop, step)} (5 uses); multi-dim subscripts
+   * (wala/ML#406) carry a variable number of dimension arguments. Requires only the receiver plus
+   * at least one argument ({@code >= 3} uses); absent {@code start}/{@code stop}/{@code step} slots
+   * are filled with {@code -1}. Returns {@code null} for a smaller use count, defending against
+   * malformed invokes without throwing.
    *
    * @param caller The caller {@link CGNode} whose IR contains the invoke.
    * @param call The {@link SSAAbstractInvokeInstruction} for the slice call.
-   * @return A {@link CallSiteView} populated with the caller and the four arg value numbers, or
-   *     {@code null} if the invoke's use count is smaller than expected.
+   * @return A {@link CallSiteView} with the caller and the receiver/start/stop/step value numbers
+   *     (the latter three {@code -1} when absent), or {@code null} if the use count is below 3.
    */
   private static CallSiteView viewOf(CGNode caller, SSAAbstractInvokeInstruction call) {
     // use(0) is the slice builtin; use(1) is the receiver; the rest are arguments. The single

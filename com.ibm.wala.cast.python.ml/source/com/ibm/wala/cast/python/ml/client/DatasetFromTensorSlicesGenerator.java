@@ -11,7 +11,6 @@ import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
-import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -24,8 +23,6 @@ import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.types.FieldReference;
-import com.ibm.wala.types.TypeName;
-import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
@@ -46,11 +43,6 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
 
   private static final Logger LOGGER =
       Logger.getLogger(DatasetFromTensorSlicesGenerator.class.getName());
-
-  /** The synthetic type of the Python {@code slice} builtin (see {@code SliceBuiltinOperation}). */
-  private static final TypeReference SLICE_BUILTIN =
-      TypeReference.findOrCreate(
-          PythonTypes.pythonLoader, TypeName.string2TypeName("Lwala/builtin/slice"));
 
   protected enum Parameters {
     TENSORS,
@@ -481,10 +473,10 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
 
   /**
    * Returns whether {@code vn}'s defining instruction is a subscript-slice result &mdash; an invoke
-   * whose callee is the {@code slice} builtin allocation ({@link #SLICE_BUILTIN}). Such a result
-   * aliases its receiver (the builtin returns its first argument), so its field-PTS shape is the
-   * receiver's rather than the slice's; the caller recovers the slice's shape from {@code vn}
-   * instead. See wala/ML#400.
+   * whose callee is the {@code slice} builtin allocation ({@link
+   * SliceBuiltinOperation#SLICE_BUILTIN}). Such a result aliases its receiver (the builtin returns
+   * its first argument), so its field-PTS shape is the receiver's rather than the slice's; the
+   * caller recovers the slice's shape from {@code vn} instead. See wala/ML#400.
    *
    * @param node The CG node whose IR contains {@code vn}.
    * @param vn The value number to inspect.
@@ -498,7 +490,10 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
     if (inv.getNumberOfUses() < 2) return false;
     SSAInstruction funcDef = node.getDU().getDef(inv.getUse(0));
     return funcDef instanceof SSANewInstruction
-        && ((SSANewInstruction) funcDef).getNewSite().getDeclaredType().equals(SLICE_BUILTIN);
+        && ((SSANewInstruction) funcDef)
+            .getNewSite()
+            .getDeclaredType()
+            .equals(SliceBuiltinOperation.SLICE_BUILTIN);
   }
 
   /**
