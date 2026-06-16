@@ -11,6 +11,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
+import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -473,10 +474,10 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
 
   /**
    * Returns whether {@code vn}'s defining instruction is a subscript-slice result &mdash; an invoke
-   * whose callee is the {@code slice} builtin allocation ({@link
-   * SliceBuiltinOperation#SLICE_BUILTIN}). Such a result aliases its receiver (the builtin returns
-   * its first argument), so its field-PTS shape is the receiver's rather than the slice's; the
-   * caller recovers the slice's shape from {@code vn} instead. See wala/ML#400.
+   * whose callee is the {@code slice} builtin allocation ({@link PythonTypes#SLICE_BUILTIN}). Such
+   * a result aliases its receiver (the builtin returns its first argument), so its field-PTS shape
+   * is the receiver's rather than the slice's; the caller recovers the slice's shape from {@code
+   * vn} instead. See wala/ML#400.
    *
    * @param node The CG node whose IR contains {@code vn}.
    * @param vn The value number to inspect.
@@ -493,7 +494,7 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
         && ((SSANewInstruction) funcDef)
             .getNewSite()
             .getDeclaredType()
-            .equals(SliceBuiltinOperation.SLICE_BUILTIN);
+            .equals(PythonTypes.SLICE_BUILTIN);
   }
 
   /**

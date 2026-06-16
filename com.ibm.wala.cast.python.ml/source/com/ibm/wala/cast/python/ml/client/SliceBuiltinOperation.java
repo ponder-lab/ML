@@ -22,8 +22,6 @@ import com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
-import com.ibm.wala.types.TypeName;
-import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
@@ -53,17 +51,6 @@ import java.util.logging.Logger;
 public class SliceBuiltinOperation extends TensorGenerator {
 
   private static final Logger LOGGER = Logger.getLogger(SliceBuiltinOperation.class.getName());
-
-  /**
-   * The synthetic type of the Python {@code slice} builtin allocation. A multi-dim subscript {@code
-   * x[d0, d1, ...]} lowers to {@code slice(x, d0, d1, ...)} where each {@code :}-style dimension is
-   * a {@code slice(lower, upper, step)} object of this type (see {@code PythonParser.visitSlice}).
-   * Used to tell a slice dimension apart from an integer-index dimension. Package-private so {@link
-   * DatasetFromTensorSlicesGenerator} keys its slice-subscript detection off the same definition.
-   */
-  static final TypeReference SLICE_BUILTIN =
-      TypeReference.findOrCreate(
-          PythonTypes.pythonLoader, TypeName.string2TypeName("Lwala/builtin/slice"));
 
   public SliceBuiltinOperation(PointsToSetVariable source) {
     super(source);
@@ -519,7 +506,7 @@ public class SliceBuiltinOperation extends TensorGenerator {
 
   /**
    * Returns whether {@code argVn}'s defining instruction is a {@code slice(...)} object
-   * construction (an invoke whose callee is the {@link #SLICE_BUILTIN} allocation).
+   * construction (an invoke whose callee is the {@link PythonTypes#SLICE_BUILTIN} allocation).
    *
    * @param caller The caller {@link CGNode}.
    * @param argVn The argument value number.
@@ -532,7 +519,10 @@ public class SliceBuiltinOperation extends TensorGenerator {
     if (inv.getNumberOfUses() < 4) return false;
     SSAInstruction funcDef = caller.getDU().getDef(inv.getUse(0));
     return funcDef instanceof SSANewInstruction
-        && ((SSANewInstruction) funcDef).getNewSite().getDeclaredType().equals(SLICE_BUILTIN);
+        && ((SSANewInstruction) funcDef)
+            .getNewSite()
+            .getDeclaredType()
+            .equals(PythonTypes.SLICE_BUILTIN);
   }
 
   /**
