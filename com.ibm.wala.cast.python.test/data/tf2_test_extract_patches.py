@@ -14,6 +14,8 @@ y = tf.image.extract_patches(
     padding="VALID",
 )
 assert isinstance(y, tf.Tensor)
+# VALID padding: out = (10 - 3) // 5 + 1 = 2 per spatial axis; depth = 3 * 3 * 3 = 27.
+assert y.shape == (1, 2, 2, 27)
 assert y.dtype == tf.float32
 
 f(y)

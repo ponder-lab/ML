@@ -1,17 +1,25 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
 /**
  * Generator for {@code tf.image.extract_patches}. Output dtype is inherited from the {@code images}
- * input. Output shape is left at ⊤ for now: the precise shape depends on the {@code sizes}, {@code
- * strides}, {@code rates}, and {@code padding} arguments together with {@code images.shape}, which
- * is non-trivial to compute and not yet supported by the tier framework. See wala/ML#449 (Tier 8).
+ * input. Output shape is {@code [batch, out_rows, out_cols, sizes_r * sizes_c * channels]} for the
+ * NHWC {@code images}, where {@code out_rows}/{@code out_cols} follow the standard windowed-extent
+ * arithmetic over the spatial axes given {@code sizes}, {@code strides}, {@code rates}, and {@code
+ * padding}. Derivable when those argument lists and the {@code padding} string are constants and
+ * the spatial/channel dimensions of {@code images} are known. See wala/ML#449 (Tier 8).
  *
  * @see <a
  *     href="https://www.tensorflow.org/api_docs/python/tf/image/extract_patches">tf.image.extract_patches</a>
@@ -37,8 +45,130 @@ public class ExtractPatches extends PassThroughUnaryTensorGenerator {
     return "images";
   }
 
+  /**
+   * Derives the output shape {@code [batch, out_rows, out_cols, sizes_r * sizes_c * channels]}. The
+   * spatial extents follow {@code out = (in - ((size - 1) * rate + 1)) / stride + 1} for {@code
+   * VALID} padding and {@code out = ceil(in / stride)} for {@code SAME}. Returns ⊤ unless the
+   * {@code sizes}/{@code strides}/{@code rates} lists and the {@code padding} string are constants
+   * and the rank-4 {@code images} has known spatial and channel dimensions.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The set of possible output shapes, or {@code null} (⊤) when the shape cannot be
+   *     derived.
+   */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    // images=arg0 (NHWC); sizes=arg1; strides=arg2; rates=arg3; padding=arg4.
+    Set<List<Dimension<?>>> imageShapes =
+        this.getShapes(builder, this.getArgumentValueNumber(builder, 0, "images", false));
+    if (imageShapes == null) return null;
+
+    List<Integer> sizes = resolveIntList(builder, 1, "sizes");
+    List<Integer> strides = resolveIntList(builder, 2, "strides");
+    List<Integer> rates = resolveIntList(builder, 3, "rates");
+    String padding = resolveStringArgument(builder, 4, "padding");
+    if (sizes == null || strides == null || rates == null || padding == null) return null;
+    if (sizes.size() != 4 || strides.size() != 4 || rates.size() != 4) return null;
+
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    for (List<Dimension<?>> image : imageShapes) {
+      // extract_patches operates on rank-4 NHWC tensors.
+      if (image.size() != 4) continue;
+      Dimension<?> rowsDim = image.get(1);
+      Dimension<?> colsDim = image.get(2);
+      Dimension<?> channelsDim = image.get(3);
+      if (!(rowsDim instanceof NumericDim)
+          || !(colsDim instanceof NumericDim)
+          || !(channelsDim instanceof NumericDim)) continue;
+
+      Integer outRows =
+          windowedExtent(
+              ((NumericDim) rowsDim).value(), sizes.get(1), strides.get(1), rates.get(1), padding);
+      Integer outCols =
+          windowedExtent(
+              ((NumericDim) colsDim).value(), sizes.get(2), strides.get(2), rates.get(2), padding);
+      if (outRows == null || outCols == null) continue;
+
+      int depth = sizes.get(1) * sizes.get(2) * ((NumericDim) channelsDim).value();
+
+      List<Dimension<?>> out = new ArrayList<>();
+      out.add(image.get(0)); // batch, carried through (numeric or dynamic)
+      out.add(new NumericDim(outRows));
+      out.add(new NumericDim(outCols));
+      out.add(new NumericDim(depth));
+      ret.add(out);
+    }
+    return ret.isEmpty() ? null : ret;
+  }
+
+  /**
+   * Computes the windowed output extent along one spatial axis.
+   *
+   * @param in The input extent.
+   * @param size The patch size along this axis.
+   * @param stride The stride along this axis.
+   * @param rate The dilation rate along this axis.
+   * @param padding The padding mode ({@code "VALID"} or {@code "SAME"}).
+   * @return The output extent, or {@code null} when {@code padding} is unrecognized or no window
+   *     fits.
+   */
+  private static Integer windowedExtent(int in, int size, int stride, int rate, String padding) {
+    if (stride <= 0) return null;
+    if (padding.equalsIgnoreCase("VALID")) {
+      int effectiveSize = (size - 1) * rate + 1;
+      if (in < effectiveSize) return null;
+      return (in - effectiveSize) / stride + 1;
+    }
+    if (padding.equalsIgnoreCase("SAME")) {
+      return (in + stride - 1) / stride; // ceil(in / stride)
+    }
     return null;
+  }
+
+  /**
+   * Resolves a constant integer-list argument (e.g. {@code sizes=[1, 3, 3, 1]}) to its values.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param position The positional index of the argument.
+   * @param name The keyword name of the argument.
+   * @return The list of integer values, or {@code null} when the argument is absent, non-constant,
+   *     or not a flat list of integers.
+   */
+  private List<Integer> resolveIntList(
+      PropagationCallGraphBuilder builder, int position, String name) {
+    OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, position, name);
+    if (pts == null || pts.isEmpty()) return null;
+    Set<List<Dimension<?>>> parsed = this.getShapesFromShapeArgument(builder, pts);
+    if (parsed == null || parsed.size() != 1) return null;
+    List<Integer> values = new ArrayList<>();
+    for (Dimension<?> d : parsed.iterator().next()) {
+      if (!(d instanceof NumericDim)) return null;
+      values.add(((NumericDim) d).value());
+    }
+    return values;
+  }
+
+  /**
+   * Resolves a constant string argument (e.g. {@code padding="VALID"}) to its value.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param position The positional index of the argument.
+   * @param name The keyword name of the argument.
+   * @return The string value, or {@code null} when the argument is absent, non-constant, or
+   *     ambiguous across contexts.
+   */
+  private String resolveStringArgument(
+      PropagationCallGraphBuilder builder, int position, String name) {
+    OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, position, name);
+    if (pts == null || pts.isEmpty()) return null;
+    String result = null;
+    for (InstanceKey ik : pts) {
+      if (!(ik instanceof ConstantKey)) return null;
+      Object val = ((ConstantKey<?>) ik).getValue();
+      if (!(val instanceof String)) return null;
+      if (result != null && !result.equals(val)) return null;
+      result = (String) val;
+    }
+    return result;
   }
 }
