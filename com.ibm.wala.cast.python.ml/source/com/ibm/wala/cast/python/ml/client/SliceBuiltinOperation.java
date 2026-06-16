@@ -622,13 +622,16 @@ public class SliceBuiltinOperation extends TensorGenerator {
     return new NumericDim(Math.max(0, hi - lo));
   }
 
-  /** A resolved slice bound: a constant integer, {@code None}, or unknown (non-constant). */
-  private record Bound(Integer value, boolean none, boolean unknown) {
-    static final Bound NONE = new Bound(null, true, false);
-    static final Bound UNKNOWN = new Bound(null, false, true);
+  /**
+   * A resolved slice bound: a constant integer ({@code value} non-null), {@code None} ({@code
+   * none}), or unknown/non-constant (neither).
+   */
+  private record Bound(Integer value, boolean none) {
+    static final Bound NONE = new Bound(null, true);
+    static final Bound UNKNOWN = new Bound(null, false);
 
     static Bound of(int v) {
-      return new Bound(v, false, false);
+      return new Bound(v, false);
     }
 
     boolean isNone() {
