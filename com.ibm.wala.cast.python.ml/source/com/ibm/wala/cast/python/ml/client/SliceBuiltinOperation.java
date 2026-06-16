@@ -22,8 +22,6 @@ import com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
-import com.ibm.wala.types.TypeName;
-import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
@@ -53,16 +51,6 @@ import java.util.logging.Logger;
 public class SliceBuiltinOperation extends TensorGenerator {
 
   private static final Logger LOGGER = Logger.getLogger(SliceBuiltinOperation.class.getName());
-
-  /**
-   * The synthetic type of the Python {@code slice} builtin allocation. A multi-dim subscript {@code
-   * x[d0, d1, ...]} lowers to {@code slice(x, d0, d1, ...)} where each {@code :}-style dimension is
-   * a {@code slice(lower, upper, step)} object of this type (see {@code PythonParser.visitSlice}).
-   * Used to tell a slice dimension apart from an integer-index dimension.
-   */
-  private static final TypeReference SLICE_BUILTIN =
-      TypeReference.findOrCreate(
-          PythonTypes.pythonLoader, TypeName.string2TypeName("Lwala/builtin/slice"));
 
   public SliceBuiltinOperation(PointsToSetVariable source) {
     super(source);
@@ -307,14 +295,17 @@ public class SliceBuiltinOperation extends TensorGenerator {
   }
 
   /**
-   * Constructs a {@link CallSiteView} for a {@code slice(x, start, stop, step)} invoke. Returns
-   * {@code null} if the invoke doesn't have the expected 4-arg shape (self + 4 positional args = 5
-   * uses); this defends against malformed invokes without throwing.
+   * Constructs a {@link CallSiteView} for a {@code slice(receiver, ...)} invoke. The single {@code
+   * [:k]} form is {@code slice(receiver, start, stop, step)} (5 uses); multi-dim subscripts
+   * (wala/ML#406) carry a variable number of dimension arguments. Requires only the receiver plus
+   * at least one argument ({@code >= 3} uses); absent {@code start}/{@code stop}/{@code step} slots
+   * are filled with {@code -1}. Returns {@code null} for a smaller use count, defending against
+   * malformed invokes without throwing.
    *
    * @param caller The caller {@link CGNode} whose IR contains the invoke.
    * @param call The {@link SSAAbstractInvokeInstruction} for the slice call.
-   * @return A {@link CallSiteView} populated with the caller and the four arg value numbers, or
-   *     {@code null} if the invoke's use count is smaller than expected.
+   * @return A {@link CallSiteView} with the caller and the receiver/start/stop/step value numbers
+   *     (the latter three {@code -1} when absent), or {@code null} if the use count is below 3.
    */
   private static CallSiteView viewOf(CGNode caller, SSAAbstractInvokeInstruction call) {
     // use(0) is the slice builtin; use(1) is the receiver; the rest are arguments. The single
@@ -515,7 +506,7 @@ public class SliceBuiltinOperation extends TensorGenerator {
 
   /**
    * Returns whether {@code argVn}'s defining instruction is a {@code slice(...)} object
-   * construction (an invoke whose callee is the {@link #SLICE_BUILTIN} allocation).
+   * construction (an invoke whose callee is the {@link PythonTypes#SLICE_BUILTIN} allocation).
    *
    * @param caller The caller {@link CGNode}.
    * @param argVn The argument value number.
@@ -528,7 +519,10 @@ public class SliceBuiltinOperation extends TensorGenerator {
     if (inv.getNumberOfUses() < 4) return false;
     SSAInstruction funcDef = caller.getDU().getDef(inv.getUse(0));
     return funcDef instanceof SSANewInstruction
-        && ((SSANewInstruction) funcDef).getNewSite().getDeclaredType().equals(SLICE_BUILTIN);
+        && ((SSANewInstruction) funcDef)
+            .getNewSite()
+            .getDeclaredType()
+            .equals(PythonTypes.SLICE_BUILTIN);
   }
 
   /**

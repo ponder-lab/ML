@@ -119,6 +119,14 @@ public class PythonTypes extends AstTypeReference {
   public static final TypeReference NEXT_BUILTIN =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lwala/builtin/next"));
 
+  /**
+   * The synthetic type of the Python {@code slice} builtin allocation. A multi-dim subscript {@code
+   * x[d0, d1, ...]} lowers to {@code slice(x, d0, d1, ...)} where each {@code :}-style dimension is
+   * a {@code slice(lower, upper, step)} object of this type (see {@code PythonParser.visitSlice}).
+   */
+  public static final TypeReference SLICE_BUILTIN =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Lwala/builtin/slice"));
+
   public static final TypeReference trampoline =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltrampoline"));
 

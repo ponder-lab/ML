@@ -38,6 +38,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
+import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
@@ -2961,7 +2962,7 @@ public abstract class TensorGenerator {
           return "dtype";
         }
       };
-    } else if (type.equals(TensorFlowTypes.SLICE_BUILTIN)) {
+    } else if (type.equals(PythonTypes.SLICE_BUILTIN)) {
       return new SliceBuiltinOperation(node);
     } else if (type.equals(PLACEHOLDER.getDeclaringClass())) {
       return new Placeholder(node);
