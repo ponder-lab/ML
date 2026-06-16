@@ -8507,6 +8507,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression guard for the {@code @dataclass} half of <a
+   * href="https://github.com/wala/ML/issues/205">wala/ML#205</a>: a module containing a {@code
+   * @dataclass} definition loads and analyzes without a front-end parse error. The dataclass is
+   * defined but unused in the dataflow; {@code f} receives a tensor directly, so its parameter type
+   * is recovered iff the module parsed. Companion to {@link #testModule68}/{@link #testModule69},
+   * which guard the same for {@code NamedTuple}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDataclassParse()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataclass_parse.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_2_FLOAT32)));
+  }
+
+  /**
    * Test https://github.com/wala/ML/issues/210.
    *
    * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#210 is fixed.
