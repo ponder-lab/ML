@@ -256,6 +256,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_2_1_4_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(1), new NumericDim(4)));
+  private static final TensorType TENSOR_1_2_2_27_FLOAT32 =
+      new TensorType(
+          FLOAT_32,
+          asList(new NumericDim(1), new NumericDim(2), new NumericDim(2), new NumericDim(27)));
 
   private static final TensorType TENSOR_4_4_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(4)));
@@ -497,6 +501,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_2_2_BOOL =
       new TensorType(BOOL, asList(new NumericDim(2), new NumericDim(2)));
+
+  private static final TensorType TENSOR_3_5_BOOL =
+      new TensorType(BOOL, asList(new NumericDim(3), new NumericDim(5)));
+
+  private static final TensorType TENSOR_3_5_INT32 =
+      new TensorType(INT_32, asList(new NumericDim(3), new NumericDim(5)));
 
   private static final TensorType TENSOR_4_FLOAT64 =
       new TensorType(FLOAT_64, asList(new NumericDim(4)));
@@ -5849,25 +5859,51 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Generator-dispatch test for {@code tf.linalg.tensordot}. Output dtype is inherited from the
-   * {@code a} input (here float32), shape is ⊤. See {@link
+   * Generator-dispatch test for {@code tf.linalg.tensordot} with a scalar {@code axes}. Output
+   * dtype is inherited from the {@code a} input (here float32); with {@code axes=1} the output
+   * shape is {@code a.shape[:-1] + b.shape[1:]}, so two (2, 2) inputs yield (2, 2). See {@link
    * com.ibm.wala.cast.python.ml.client.Tensordot} (wala/ML#449).
    */
   @Test
   public void testTensordot()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_tensordot.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test("tf2_test_tensordot.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   /**
    * Generator-dispatch test for {@code tf.linalg.trace}. Output dtype is inherited from the {@code
-   * x} input (here float32), shape is ⊤. See {@link com.ibm.wala.cast.python.ml.client.Trace}
-   * (wala/ML#449).
+   * x} input (here float32); the output shape is the input shape with the last two dimensions
+   * dropped, so a (2, 2) input yields a scalar. See {@link
+   * com.ibm.wala.cast.python.ml.client.Trace} (wala/ML#449).
    */
   @Test
   public void testTrace()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_trace.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test("tf2_test_trace.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.linalg.trace} on a batched input. The trace collapses the
+   * last two dimensions, so a (3, 2, 2) input yields a (3,) output that inherits the input dtype.
+   * Exercises the leading-dimensions path of {@link com.ibm.wala.cast.python.ml.client.Trace}
+   * (wala/ML#449).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testTraceBatched()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_trace_batched.py",
+        "f",
+        2,
+        2,
+        Map.of(
+            2, Set.of(TENSOR_3_2_2_FLOAT32),
+            3, Set.of(TENSOR_3_FLOAT32)));
   }
 
   /**
@@ -5910,61 +5946,83 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Generator-dispatch test for {@code tf.sequence_mask}. Output dtype is the TF-default {@code
-   * bool}; the optional {@code dtype} override is exposed in {@code tensorflow.xml}'s {@code
-   * paramNames} but is not yet honored by the {@link
-   * com.ibm.wala.cast.python.ml.client.SequenceMask} generator, which emits {@code bool}
-   * unconditionally. Shape is ⊤. (wala/ML#449 Tier 8.)
+   * Generator-dispatch test for {@code tf.sequence_mask}. With no {@code dtype} argument the output
+   * dtype is the TF-default {@code bool}; with a constant {@code maxlen} the shape is {@code
+   * lengths.shape + [maxlen]}, so {@code sequence_mask([1, 3, 2], maxlen=5)} yields (3, 5).
+   * (wala/ML#449 Tier 8.)
    */
   @Test
   public void testSequenceMask()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_sequence_mask.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_BOOL)));
+    test("tf2_test_sequence_mask.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_5_BOOL)));
+  }
+
+  /**
+   * Generator-dispatch test for {@code tf.sequence_mask} with an explicit {@code dtype} override
+   * ({@code tf.sequence_mask(..., maxlen=5, dtype=tf.int32)}). The output dtype follows the
+   * argument ({@code int32}) rather than the default {@code bool}, and the constant {@code maxlen}
+   * gives the precise (3, 5) shape. Regression guard for surfacing the {@code dtype} parameter
+   * through {@link com.ibm.wala.cast.python.ml.client.SequenceMask}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testSequenceMaskDType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_sequence_mask_dtype.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_5_INT32)));
   }
 
   /**
    * Generator-dispatch test for {@code tf.nn.embedding_lookup}. Output dtype is inherited from the
-   * {@code params} input (here float32), shape is ⊤. See {@link
+   * {@code params} input (here float32); the output shape is {@code ids.shape + params.shape[1:]},
+   * so a (3, 2) table looked up by (2,) ids yields (2, 2). See {@link
    * com.ibm.wala.cast.python.ml.client.EmbeddingLookup} (wala/ML#449 Tier 8).
    */
   @Test
   public void testEmbeddingLookup()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_embedding_lookup.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test("tf2_test_embedding_lookup.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   /**
    * Generator-dispatch test for {@code tf.gather_nd}. Output dtype is inherited from the {@code
-   * params} input (here float32), shape is ⊤. See {@link
-   * com.ibm.wala.cast.python.ml.client.GatherNd} (wala/ML#449 Tier 8).
+   * params} input (here float32); the output shape is {@code indices.shape[:-1] +
+   * params.shape[indices.shape[-1]:]}, so a (2, 2) table indexed by (2, 2) depth-2 indices yields
+   * (2,). See {@link com.ibm.wala.cast.python.ml.client.GatherNd} (wala/ML#449 Tier 8).
    */
   @Test
   public void testGatherNd()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_gather_nd.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test("tf2_test_gather_nd.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
   }
 
   /**
    * Generator-dispatch test for {@code tf.boolean_mask}. Output dtype is inherited from the {@code
-   * tensor} input (here float32), shape is ⊤. See {@link
+   * tensor} input (here float32); the masked axis collapses to a dynamic dimension (the runtime
+   * {@code True} count), so masking a (3, 2) tensor with a rank-1 mask yields {@code [Dynamic, 2]}.
+   * The leading dimension is inherently runtime, so it stays dynamic. See {@link
    * com.ibm.wala.cast.python.ml.client.BooleanMask} (wala/ML#449 Tier 8).
    */
   @Test
   public void testBooleanMask()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_boolean_mask.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test("tf2_test_boolean_mask.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_NONE_2_FLOAT32)));
   }
 
   /**
    * Generator-dispatch test for {@code tf.image.extract_patches}. Output dtype is inherited from
-   * the {@code images} input (here float32), shape is ⊤. See {@link
-   * com.ibm.wala.cast.python.ml.client.ExtractPatches} (wala/ML#449 Tier 8).
+   * the {@code images} input (here float32); the output shape is {@code [batch, out_rows, out_cols,
+   * sizes_r * sizes_c * channels]}, so a (1, 10, 10, 3) image with {@code sizes=[1, 3, 3, 1]},
+   * {@code strides=[1, 5, 5, 1]}, {@code rates=[1, 1, 1, 1]} and {@code VALID} padding yields (1,
+   * 2, 2, 27). See {@link com.ibm.wala.cast.python.ml.client.ExtractPatches} (wala/ML#449 Tier 8).
    */
   @Test
   public void testExtractPatches()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_extract_patches.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test("tf2_test_extract_patches.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_2_2_27_FLOAT32)));
   }
 
   /** Pure-passthrough generator test for {@code tf.math.tan} (wala/ML#422). */
