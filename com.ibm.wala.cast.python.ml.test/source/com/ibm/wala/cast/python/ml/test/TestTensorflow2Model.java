@@ -2528,10 +2528,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * is the runtime {@code num_segments} value. Verified via a {@code consume_sum} sink on the
    * aggregation result.
    *
-   * @throws ClassHierarchyException On WALA class-hierarchy error.
-   * @throws IllegalArgumentException On illegal argument.
-   * @throws CancelException On analysis cancellation.
-   * @throws IOException On I/O error reading the test file.
+   * <p>TODO: Recover the concrete shape when {@code num_segments} is static, per <a
+   * href="https://github.com/wala/ML/issues/582">wala/ML#582</a>.
    */
   @Test
   public void testUnsortedSegmentSum()
@@ -2547,11 +2545,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Pins the output type of {@code tf.math.unsorted_segment_max} (wala/ML#570). Same dtype-from-
    * {@code data}, ⊤-shape modeling as {@link #testUnsortedSegmentSum}.
-   *
-   * @throws ClassHierarchyException On WALA class-hierarchy error.
-   * @throws IllegalArgumentException On illegal argument.
-   * @throws CancelException On analysis cancellation.
-   * @throws IOException On I/O error reading the test file.
    */
   @Test
   public void testUnsortedSegmentMax()
@@ -2567,11 +2560,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Pins the output type of {@code tf.math.unsorted_segment_mean} (wala/ML#570). Same dtype-from-
    * {@code data}, ⊤-shape modeling as {@link #testUnsortedSegmentSum}.
-   *
-   * @throws ClassHierarchyException On WALA class-hierarchy error.
-   * @throws IllegalArgumentException On illegal argument.
-   * @throws CancelException On analysis cancellation.
-   * @throws IOException On I/O error reading the test file.
    */
   @Test
   public void testUnsortedSegmentMean()
@@ -6193,6 +6181,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * href="https://github.com/wala/ML/issues/584">wala/ML#584</a>. The result must still be
    * recognized as a tensor; the {@code int32} dtype is inherited from the literal and the shape is
    * ⊤ (the list-literal shape is not statically propagated through the op).
+   *
+   * <p>TODO: Tighten the shape from ⊤ to the concrete value once <a
+   * href="https://github.com/wala/ML/issues/585">wala/ML#585</a> infers a tensor's shape from a
+   * list literal.
    */
   @Test
   public void testExtractPatches2()
@@ -6726,6 +6718,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Rather than throw an exception that aborts the whole analysis, the element-wise generator
    * degrades the result shape to ⊤ (unknown) and continues; the {@code int32} dtype is still
    * recovered (<a href="https://github.com/wala/ML/issues/583">wala/ML#583</a>).
+   *
+   * <p>Here ⊤ is the correct final result — incompatible operands have no valid broadcast shape —
+   * so, unlike the recoverable list-literal case ({@link #testExtractPatches2}), there is no
+   * precision to recover and no shape-tightening TODO.
    */
   @Test
   public void testMultiply6()
