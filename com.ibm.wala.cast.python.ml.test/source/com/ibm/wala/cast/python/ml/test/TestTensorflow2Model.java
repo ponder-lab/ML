@@ -8646,6 +8646,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Verifies tensor types propagate through a {@code typing.Tuple}-annotated tuple-of-tensors
+   * parameter: a 2-tuple of tensors passed to {@code f} and unpacked ({@code x, y = inputs}) keeps
+   * each element's type, so {@code consume(x)} sees {@code (4, 8) float32}. This mirrors the
+   * perf-eval corpus's {@code deep_recommenders} {@code CIN.call(self, inputs: Tuple[tf.Tensor,
+   * tf.Tensor])} — an {@code @tf.function}-decorated function the Hybridize tool refactors — and is
+   * the tuple-parameter analogue of {@link #testNamedTupleFieldRead}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTupleParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_tuple_param.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
+  /**
    * Verifies a module-level PEP-526 annotated assignment with a value (`t: tf.Tensor = tf.ones([2,
    * 3])`) declares its target and propagates the value (wala/ML#579). Outside a class body
    * `visitAnnAssign` must declare a simple-name target like `visitAssign` does; otherwise the
