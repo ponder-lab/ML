@@ -519,7 +519,8 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
         }
         return assign;
       } else {
-        // An annotation-only declaration outside a class body has no runtime effect.
+        // An annotation-only declaration outside a class body has no effect on variable binding or
+        // dataflow (it records the annotation in `__annotations__`, which is not modeled).
         return Ast.makeNode(CAstNode.EMPTY);
       }
     }
