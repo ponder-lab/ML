@@ -21,6 +21,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.cast.python.util.PythonInterpreter;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
@@ -1147,6 +1148,20 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // this keeps memory predictable in long-running clients (LSP server, repeated-analysis
     // daemons) where builders may be held in other caches after their analysis completes.
     TensorGenerator.clearCaches(builder);
+
+    // wala/ML#444: if the interpreter was unavailable during this run, surface the aggregate
+    // precision loss as one end-of-analysis summary rather than relying on the single early WARNING
+    // the interpreter emits on its first miss (easily lost in build noise). Reset for the next run.
+    final int interpreterMisses = PythonInterpreter.getInterpreterUnavailableMisses();
+    if (interpreterMisses > 0) {
+      LOGGER.warning(
+          () ->
+              interpreterMisses
+                  + " shape expression(s) could not be evaluated because the Jython interpreter was"
+                  + " unavailable; the affected tensor dimensions fell back to symbolic, so shape"
+                  + " precision is reduced for this run.");
+      PythonInterpreter.resetInterpreterUnavailableMisses();
+    }
 
     return tt;
   }

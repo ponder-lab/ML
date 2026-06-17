@@ -80,6 +80,9 @@ public class Python3Interpreter extends com.ibm.wala.cast.python.util.PythonInte
       // Log the first such call at WARNING (so operators see that some shape inference is being
       // skipped because of the earlier init failure); subsequent calls log at FINE only, since
       // the underlying init failure has already been announced from {@link #getInterp()}.
+      // Count this miss so a client can summarize the total precision lost to interpreter
+      // unavailability at the end of a run (wala/ML#444).
+      recordInterpreterUnavailableMiss();
       if (unavailableWarned.compareAndSet(false, true)) {
         LOGGER.log(
             Level.WARNING,
