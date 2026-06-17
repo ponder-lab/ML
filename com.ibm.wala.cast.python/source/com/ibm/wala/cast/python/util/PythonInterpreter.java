@@ -74,16 +74,15 @@ public abstract class PythonInterpreter {
   }
 
   /**
-   * Returns the number of expressions skipped because the interpreter was unavailable.
+   * Atomically returns the current interpreter-unavailable miss count and resets it to zero.
+   * Reading and resetting in one operation means a concurrent {@link
+   * #recordInterpreterUnavailableMiss()} can't be lost between a separate read and reset, which
+   * would otherwise undercount the next run. See <a
+   * href="https://github.com/wala/ML/issues/444">wala/ML#444</a>.
    *
-   * @return The current interpreter-unavailable miss count.
+   * @return The interpreter-unavailable miss count immediately before the reset.
    */
-  public static int getInterpreterUnavailableMisses() {
-    return interpreterUnavailableMisses.get();
-  }
-
-  /** Resets the interpreter-unavailable miss count (e.g., at the end of one analysis run). */
-  public static void resetInterpreterUnavailableMisses() {
-    interpreterUnavailableMisses.set(0);
+  public static int getAndResetInterpreterUnavailableMisses() {
+    return interpreterUnavailableMisses.getAndSet(0);
   }
 }
