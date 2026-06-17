@@ -484,9 +484,26 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
             });
         return Ast.makeNode(CAstNode.EMPTY);
       } else if (value != null) {
-        // `target: annotation = value` outside a class body is an ordinary assignment.
-        return notePosition(
-            Ast.makeNode(CAstNode.ASSIGN, notePosition(target.accept(this), target), v), target);
+        // `target: annotation = value` outside a class body is an ordinary assignment. Mirror
+        // `visitAssign`: a simple-name target must be declared (wrapped in a DECL_STMT and
+        // registered via addDefinedName), otherwise it is left undeclared and trips leaveVar's
+        // symbol assertion.
+        CAstNode assign =
+            notePosition(
+                Ast.makeNode(CAstNode.ASSIGN, notePosition(target.accept(this), target), v),
+                target);
+        CAstNode targetNode = assign.getChild(0);
+        if (targetNode.getKind() == CAstNode.VAR
+            && targetNode.getChild(0).getValue() instanceof String) {
+          String name = (String) targetNode.getChild(0).getValue();
+          context.addDefinedName(name);
+          return Ast.makeNode(
+              CAstNode.BLOCK_STMT,
+              Ast.makeNode(
+                  CAstNode.DECL_STMT, Ast.makeConstant(new CAstSymbolImpl(name, CAstType.DYNAMIC))),
+              assign);
+        }
+        return assign;
       } else {
         // An annotation-only declaration outside a class body has no runtime effect.
         return Ast.makeNode(CAstNode.EMPTY);

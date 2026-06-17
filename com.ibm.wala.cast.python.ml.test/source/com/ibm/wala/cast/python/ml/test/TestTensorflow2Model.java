@@ -8548,6 +8548,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Verifies a module-level PEP-526 annotated assignment with a value (`t: tf.Tensor = tf.ones([2,
+   * 3])`) declares its target and propagates the value (wala/ML#579). Outside a class body
+   * `visitAnnAssign` must declare a simple-name target like `visitAssign` does; otherwise the
+   * target is left undeclared. The tensor flows to `consume` as `(2, 3) float32`.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAnnAssignLocal()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_annassign_local.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
    * Test https://github.com/wala/ML/issues/210.
    *
    * <p>TODO: Remove {@code expected = AssertionError.class} once wala/ML#210 is fixed.
