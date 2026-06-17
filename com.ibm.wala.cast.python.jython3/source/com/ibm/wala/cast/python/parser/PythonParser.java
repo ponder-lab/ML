@@ -441,14 +441,20 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
     private int assign = 0;
 
+    /**
+     * Translates a PEP-526 annotated assignment {@code target: annotation [= value]}. In a class
+     * body this declares a field (the {@code NamedTuple}/dataclass case, <a
+     * href="https://github.com/wala/ML/issues/579">wala/ML#579</a>); the field name and its
+     * declaration order are what downstream needs, so emit a field entity mirroring {@code
+     * visitAssign}. The annotation expression itself is not modeled. When a value is present it is
+     * the field's AST; an annotation-only declaration uses a {@code None} placeholder.
+     *
+     * @param arg0 the {@code AnnAssign} AST node to translate.
+     * @return the translated {@link CAstNode}.
+     * @throws Exception if translating the value or target subtree fails.
+     */
     @Override
     public CAstNode visitAnnAssign(AnnAssign arg0) throws Exception {
-      // A PEP-526 annotated assignment `target: annotation [= value]`. In a class body this
-      // declares
-      // a field (the NamedTuple/dataclass case, wala/ML#579); the field name and its declaration
-      // order are what downstream needs, so emit a field entity mirroring `visitAssign`. The
-      // annotation expression itself is not modeled. When a value is present it is the field's AST;
-      // an annotation-only declaration uses a `None` placeholder.
       expr target = arg0.getInternalTarget();
       expr value = arg0.getInternalValue();
       final CAstNode v =
@@ -484,10 +490,12 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
             });
         return Ast.makeNode(CAstNode.EMPTY);
       } else if (value != null) {
-        // `target: annotation = value` outside a class body is an ordinary assignment. Mirror
-        // `visitAssign`: a simple-name target must be declared (wrapped in a DECL_STMT and
-        // registered via addDefinedName), otherwise it is left undeclared and trips leaveVar's
-        // symbol assertion.
+        /*
+         * `target: annotation = value` outside a class body is an ordinary assignment. Mirror
+         * `visitAssign`: a simple-name target must be declared (wrapped in a DECL_STMT and
+         * registered via addDefinedName), otherwise it is left undeclared and trips leaveVar's
+         * symbol assertion.
+         */
         CAstNode assign =
             notePosition(
                 Ast.makeNode(CAstNode.ASSIGN, notePosition(target.accept(this), target), v),
