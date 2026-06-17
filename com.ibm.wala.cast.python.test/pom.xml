@@ -4,7 +4,7 @@
   <parent>
     <groupId>com.ibm.wala</groupId>
     <artifactId>ml</artifactId>
-    <version>0.48.1-SNAPSHOT</version>
+    <version>0.49.0</version>
   </parent>
   <artifactId>com.ibm.wala.cast.python.test</artifactId>
   <properties>
