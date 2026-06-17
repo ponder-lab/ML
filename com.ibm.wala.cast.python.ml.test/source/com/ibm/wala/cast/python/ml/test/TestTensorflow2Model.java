@@ -8526,17 +8526,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Documents the <a href="https://github.com/wala/ML/issues/579">wala/ML#579</a> gap: a tensor
-   * stored in a user-defined {@code NamedTuple} field and read back ({@code b = w.tensor}) loses
-   * its tensor type. At runtime {@code b} is the original {@code (4, 8) float32} tensor, but the
-   * analysis currently recovers {@code consume}'s parameter as <em>no</em> tensor at all (zero
-   * tensor variables). Unlike {@link #testModule68}/{@link #testModule69} — which only confirm a
-   * {@code NamedTuple} <em>definition</em> parses — this exercises actual field dataflow. It is the
-   * minimal form of the GCN blocker in wala/ML#570, where {@code GraphConvolution.call} unwraps a
-   * {@code GNNInput} {@code NamedTuple} the same way.
-   *
-   * <p>TODO: Tighten to {@code Map.of(2, Set.of(TENSOR_4_8_FLOAT32))} once wala/ML#579 propagates
-   * tensor types through {@code NamedTuple} fields.
+   * Verifies tensor types propagate through a user-defined {@code NamedTuple} field (<a
+   * href="https://github.com/wala/ML/issues/579">wala/ML#579</a>): a tensor stored in a {@code
+   * NamedTuple} field and read back ({@code b = w.tensor}) keeps its {@code (4, 8) float32} type.
+   * Unlike {@link #testModule68}/{@link #testModule69} — which only confirm a {@code NamedTuple}
+   * <em>definition</em> parses — this exercises actual field dataflow: PEP-526 annotated fields now
+   * reach the CAst as ordered field entities (jython3 grammar/AST support), and the synthesized
+   * constructor populates them positionally. It is the minimal form of the GCN blocker in
+   * wala/ML#570, where {@code GraphConvolution.call} unwraps a {@code GNNInput} {@code NamedTuple}
+   * the same way.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -8546,7 +8544,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testNamedTupleFieldRead()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_namedtuple_field.py", "consume", 0, 0);
+    test("tf2_test_namedtuple_field.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
   }
 
   /**
