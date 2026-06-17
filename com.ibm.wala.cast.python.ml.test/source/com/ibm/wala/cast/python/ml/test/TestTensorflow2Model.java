@@ -3137,7 +3137,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testNeuralNetwork()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        4,
+        PythonTensorAnalysisEngine.MODEL_FORWARD_CFA_DEPTH,
         "neural_network.py",
         "NeuralNet.call",
         1,
@@ -3168,7 +3168,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testNeuralNetwork2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        4,
+        PythonTensorAnalysisEngine.MODEL_FORWARD_CFA_DEPTH,
         "neural_network.py",
         "cross_entropy_loss",
         2,
@@ -3203,7 +3203,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testNeuralNetwork3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        4,
+        PythonTensorAnalysisEngine.MODEL_FORWARD_CFA_DEPTH,
         "neural_network.py",
         "run_optimization",
         2,
@@ -3249,7 +3249,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     // are the argmax call sites and their downstream uses across the call
     // graph. Parameter-type expectations (`y_pred`, `y_true`) unchanged.
     test(
-        4,
+        PythonTensorAnalysisEngine.MODEL_FORWARD_CFA_DEPTH,
         "neural_network.py",
         "accuracy",
         2,
