@@ -90,8 +90,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * per-call-site layer-output allocations distinct; at the back-compat {@link
    * #DEFAULT_TARGETED_CFA_DEPTH} they merge and the per-context shapes collapse to &#8868;
    * (unknown). Depth 4 separates the typical two-to-four-layer chain &mdash; validated by {@code
-   * testNeuralNetwork1-4}, which recover e.g. {@code accuracy}'s {@code y_pred} as the per-context
-   * union {@code {(256, 10) float32, ? float32}} (wala/ML#379, wala/ML#530).
+   * testNeuralNetwork} through {@code testNeuralNetwork4}, which recover e.g. {@code accuracy}'s
+   * {@code y_pred} as the per-context union {@code {(256, 10) float32, ? float32}} (wala/ML#379,
+   * wala/ML#530).
    *
    * <p>This is a recommended default for the archetype, not a universal constant: the depth a model
    * needs scales with its layer-chain length and call-site nesting. The targeted context selector
