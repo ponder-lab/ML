@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.ibm.wala</groupId>
   <artifactId>ml</artifactId>
-  <version>0.49.2-SNAPSHOT</version>
+  <version>0.50.0</version>
   <packaging>pom</packaging>
   <modules>
     <module>com.ibm.wala.cast.python</module>
@@ -19,7 +19,7 @@
   <scm>
     <connection>scm:git:https://github.com/ponder-lab/ML.git</connection>
     <developerConnection>scm:git:git@github.com:ponder-lab/ML.git</developerConnection>
-    <tag>ml-0.45.0</tag>
+    <tag>0.50.0</tag>
     <url>https://github.com/ponder-lab/ML</url>
   </scm>
   <distributionManagement>
