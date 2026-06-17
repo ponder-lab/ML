@@ -657,6 +657,10 @@ public class TensorType implements Iterable<Dimension<?>> {
             }
           }
         }
+        // TODO(https://github.com/wala/ML/issues/581): when the dim is a binary op over
+        // constant-valued operands (field reads such as `self.heads * self.out_features`, globals),
+        // fold it via the analysis instead of degrading to a symbolic dim. `interpretAsInt` above
+        // only handles pure-literal source text, so the generator-side path should own this.
         dims.put(index, new SymbolicDim("?"));
       }
     }

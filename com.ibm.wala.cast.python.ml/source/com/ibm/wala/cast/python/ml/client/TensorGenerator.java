@@ -429,6 +429,10 @@ public abstract class TensorGenerator {
         // non-deterministic single shape per `i` rather than the full product.
         List<Set<Dimension<?>>> resolved = new ArrayList<>(possibleDimensions.length);
         for (Set<Dimension<?>> s : possibleDimensions) {
+          // TODO(https://github.com/wala/ML/issues/581): an empty position holding a binary op over
+          // constant-valued operands (e.g. `self.heads * self.out_features`) could be folded to a
+          // `NumericDim` via the analysis instead of degrading to `DynamicDim`. This is the
+          // generator-side half of the shape-argument-extraction reconciliation.
           if (s == null || s.isEmpty()) resolved.add(Collections.singleton(DynamicDim.INSTANCE));
           else resolved.add(s);
         }

@@ -238,6 +238,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_4_8_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(8)));
 
+  private static final TensorType TENSOR_UNKNOWN_DYNAMIC_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE));
+
+  private static final TensorType TENSOR_UNKNOWN_UNKNOWN_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new SymbolicDim("?")));
+
   private static final TensorType TENSOR_4_10_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(10)));
 
@@ -8662,6 +8668,38 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testTupleParam()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_tuple_param.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
+  /**
+   * Documents the current imprecision for <a
+   * href="https://github.com/wala/ML/issues/581">wala/ML#581</a>: a {@code tf.reshape} whose dim is
+   * arithmetic over instance attributes ({@code self.heads * self.out_features}) infers the
+   * per-context union {@code {(?, ?), (?, Dynamic)}} rather than the precise {@code (4, 512)}.
+   * Neither shape-argument extraction path folds it: the interpreter-based {@code
+   * TensorType.shapeArg} cannot evaluate {@code self.X} as source text, and the generator-side
+   * {@code getShapesFromShapeArgument} emits a {@code DynamicDim} for the unresolved binary op.
+   * Resolving it needs the generator-side path to fold a binary op over constant-valued field reads
+   * via the analysis (not the interpreter). This guard pins the current result so it flips when
+   * #581 lands.
+   *
+   * <p>TODO: tighten to {@code (4, 512)} once <a
+   * href="https://github.com/wala/ML/issues/581">wala/ML#581</a> reconciles the two shape-argument
+   * extraction paths.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testReshapeSelfArith()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_self_arith.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_UNKNOWN_FLOAT32, TENSOR_UNKNOWN_DYNAMIC_FLOAT32)));
   }
 
   /**
