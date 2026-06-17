@@ -4,6 +4,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.python.core.PyException;
+import org.python.core.PyInteger;
+import org.python.core.PyLong;
 import org.python.core.PyObject;
 import org.python.core.PySystemState;
 import org.python.util.PythonInterpreter;
@@ -98,7 +100,11 @@ public class Python3Interpreter extends com.ibm.wala.cast.python.util.PythonInte
     }
     try {
       PyObject val = ip.eval(expr);
-      if (val.isInteger()) {
+      // Accept only genuine Python integers. `PyObject.isInteger()` is lenient — a float such as
+      // `2.5` passes and `asInt()` then truncates it to `2`, so `evalAsInteger("2.5")` wrongly
+      // returned `2` instead of `null`. A strict type check keeps non-integers (floats, etc.) on
+      // the null-returning fallback, matching the nullable-Integer contract.
+      if (val instanceof PyInteger || val instanceof PyLong) {
         return val.asInt();
       } else {
         // Not a constant integer (e.g., a non-numeric literal). Return null so callers
