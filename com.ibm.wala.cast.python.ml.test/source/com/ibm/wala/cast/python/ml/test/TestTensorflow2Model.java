@@ -2482,11 +2482,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * of edge tensors, not a tensor itself, so it is not a tensor parameter.)
    *
    * <p>The message-passing <em>output</em> locals (the {@code gc1}/{@code gc2} results) are
-   * inferred as ⊤ on <em>both</em> axes (unknown shape, unknown dtype): the custom aggregation
-   * ({@code tf.scatter_nd}, {@code tf.math.unsorted_segment_sum}, {@code tf.gather}) inside {@code
-   * MessagePassing} is not modeled (tracked by <a
-   * href="https://github.com/wala/ML/issues/570">wala/ML#570</a>), so the layer output type is
-   * lost. The decorated function's input signature—the analysis goal—is nonetheless exact.
+   * inferred as ⊤ on <em>both</em> axes (unknown shape, unknown dtype). {@code
+   * tf.math.unsorted_segment_sum} is now modeled (dtype inherits from {@code data}, shape ⊤; <a
+   * href="https://github.com/wala/ML/issues/570">wala/ML#570</a>), so the aggregation results are
+   * recognized as tensor allocations — hence six tracked tensor variables rather than four. Their
+   * dtype is still ⊤, though, and the root cause is upstream of the aggregation: {@code
+   * GraphConvolution.call} receives its input as a {@code GNNInput} {@code NamedTuple} and unwraps
+   * it with {@code node_embeddings = inputs.node_embeddings}, but a tensor read back from a
+   * user-defined {@code NamedTuple} field is not tracked as a tensor (<a
+   * href="https://github.com/wala/ML/issues/579">wala/ML#579</a>). So {@code node_embeddings}
+   * arrives ⊤, the immediately-following {@code tf.linalg.matmul} produces ⊤, and every downstream
+   * op (including the modeled aggregation) inherits it. Resolving wala/ML#579 is the prerequisite
+   * for typing these layer outputs. The decorated function's input signature—the analysis goal—is
+   * nonetheless exact.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2511,8 +2519,70 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "GCNLayer.call",
         "gcn_proj",
         1,
-        4,
+        6,
         Map.of(3, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
+  /**
+   * Pins the output type of {@code tf.math.unsorted_segment_sum} (wala/ML#570). The output dtype
+   * inherits from the {@code data} input ({@code float32}); the shape is ⊤ because the leading axis
+   * is the runtime {@code num_segments} value. Verified via a {@code consume_sum} sink on the
+   * aggregation result.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testUnsortedSegmentSum()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_unsorted_segment.py",
+        "consume_sum",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Pins the output type of {@code tf.math.unsorted_segment_max} (wala/ML#570). Same dtype-from-
+   * {@code data}, ⊤-shape modeling as {@link #testUnsortedSegmentSum}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testUnsortedSegmentMax()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_unsorted_segment.py",
+        "consume_max",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Pins the output type of {@code tf.math.unsorted_segment_mean} (wala/ML#570). Same dtype-from-
+   * {@code data}, ⊤-shape modeling as {@link #testUnsortedSegmentSum}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testUnsortedSegmentMean()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_unsorted_segment.py",
+        "consume_mean",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
