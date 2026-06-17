@@ -145,10 +145,13 @@ public class ElementWiseOperation extends ZerosLike {
       // throwing an exception that aborts the whole run; the dtype is still recovered by
       // getDefaultDTypes. Per-context separation (so each context sees only its own operands) is
       // the
-      // precise fix and is tracked separately.
+      // precise fix and is tracked separately. Log at FINE, not WARNING: element-wise ops are
+      // common
+      // and the other degrade-to-⊤ paths (Slice, Squeeze) are quiet, so a per-occurrence WARNING
+      // would flood normal runs.
       final List<Dimension<?>> x = sampleNonBroadcastableX;
       final List<Dimension<?>> y = sampleNonBroadcastableY;
-      LOGGER.warning(
+      LOGGER.fine(
           () ->
               "EWO.getDefaultShapes: all operand-shape pairs are non-broadcastable ("
                   + x
