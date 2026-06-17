@@ -8642,11 +8642,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * branch of {@code visitAnnAssign}: unlike an annotation-only declaration ({@code x: T}, which
    * declares the field but emits no member {@code put}), a value-bearing class field still emits
    * the {@code put}, so the attribute is typed.
-   *
-   * @throws ClassHierarchyException On WALA class-hierarchy error.
-   * @throws IllegalArgumentException On illegal argument.
-   * @throws CancelException On analysis cancellation.
-   * @throws IOException On I/O error reading the test file.
    */
   @Test
   public void testClassAttrAnnAssign()
