@@ -6200,6 +6200,26 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_extract_patches2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
   }
 
+  /**
+   * Regression guard for {@code tf.image.extract_patches} called with an {@code images} argument
+   * built from a nested list <em>comprehension</em> (the wala/ML#584 corpus case), per <a
+   * href="https://github.com/wala/ML/issues/584">wala/ML#584</a>. Resolving such an {@code images}
+   * operand throws inside the generator; before the fix that aborted the whole type computation and
+   * the result dropped its tensor classification entirely. The result must still be recognized as a
+   * tensor — here ⊤ shape and ⊤ dtype, since a comprehension's computed elements (unlike a
+   * literal's constants) yield no statically inferable dtype.
+   */
+  @Test
+  public void testExtractPatchesComprehension()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_extract_patches_comprehension.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
   /** Pure-passthrough generator test for {@code tf.math.tan} (wala/ML#422). */
   @Test
   public void testTan()

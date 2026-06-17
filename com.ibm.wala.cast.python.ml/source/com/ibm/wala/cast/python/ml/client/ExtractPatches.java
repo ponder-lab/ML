@@ -59,8 +59,16 @@ public class ExtractPatches extends PassThroughUnaryTensorGenerator {
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     // images=arg0 (NHWC); sizes=arg1; strides=arg2; rates=arg3; padding=arg4.
-    Set<List<Dimension<?>>> imageShapes =
-        this.getShapes(builder, this.getArgumentValueNumber(builder, 0, "images", false));
+    Set<List<Dimension<?>>> imageShapes;
+    try {
+      imageShapes =
+          this.getShapes(builder, this.getArgumentValueNumber(builder, 0, "images", false));
+    } catch (IllegalArgumentException e) {
+      // wala/ML#584: the `images` operand can't be resolved to a tensor (e.g. a comprehension-built
+      // list, whose generator dispatch throws). The result is still a tensor, so degrade to ⊤ shape
+      // rather than letting the throw abort the whole type computation and drop the result.
+      return null;
+    }
     if (imageShapes == null) return null;
 
     List<Integer> sizes = resolveIntList(builder, 1, "sizes");
