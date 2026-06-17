@@ -447,7 +447,8 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
      * href="https://github.com/wala/ML/issues/579">wala/ML#579</a>); the field name and its
      * declaration order are what downstream needs, so emit a field entity mirroring {@code
      * visitAssign}. The annotation expression itself is not modeled. When a value is present it is
-     * the field's AST; an annotation-only declaration uses a {@code None} placeholder.
+     * the field's AST; an annotation-only declaration uses an {@link CAstNode#EMPTY} AST so {@code
+     * leaveTypeEntity} records the field but emits no member {@code put} for it.
      *
      * @param arg0 the {@code AnnAssign} AST node to translate.
      * @return the translated {@link CAstNode}.
