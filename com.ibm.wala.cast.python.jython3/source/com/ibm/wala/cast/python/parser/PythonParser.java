@@ -452,6 +452,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
      *
      * @param arg0 the {@code AnnAssign} AST node to translate.
      * @return the translated {@link CAstNode}.
+     * @throws Exception if translating the value or target subtree fails.
      */
     @Override
     public CAstNode visitAnnAssign(AnnAssign arg0) throws Exception {
