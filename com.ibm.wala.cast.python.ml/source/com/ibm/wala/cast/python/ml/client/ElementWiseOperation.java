@@ -139,16 +139,13 @@ public class ElementWiseOperation extends ZerosLike {
 
     if (ret.isEmpty() && sampleNonBroadcastableX != null) {
       // wala/ML#583: every operand-shape pair is non-broadcastable. This is usually a
-      // context-collapse artifact (e.g., `accuracy(y_pred, y_true)` analyzed with `[256]` from
-      // training and `[10000]` from test, whose per-context shapes get crossed), not a real program
-      // error. Degrade the result shape to ⊤ (unknown) so the analysis continues, rather than
-      // throwing an exception that aborts the whole run; the dtype is still recovered by
-      // getDefaultDTypes. Per-context separation (so each context sees only its own operands) is
-      // the
-      // precise fix and is tracked separately. Log at FINE, not WARNING: element-wise ops are
-      // common
-      // and the other degrade-to-⊤ paths (Slice, Squeeze) are quiet, so a per-occurrence WARNING
-      // would flood normal runs.
+      // context-collapse artifact (e.g. `accuracy(y_pred, y_true)` analyzed with `[256]` from
+      // training and `[10000]` from test, whose per-context shapes get crossed), not a real
+      // program error. Degrade the result shape to ⊤ (unknown) so the analysis continues, rather
+      // than throwing an exception that aborts the whole run; the dtype is still recovered by
+      // getDefaultDTypes. Per-context separation is the precise fix and is tracked separately.
+      // Log at FINE, not WARNING: element-wise ops are common and the other degrade-to-⊤ paths
+      // (Slice, Squeeze) are quiet, so a per-occurrence WARNING would flood normal runs.
       final List<Dimension<?>> x = sampleNonBroadcastableX;
       final List<Dimension<?>> y = sampleNonBroadcastableY;
       LOGGER.fine(
