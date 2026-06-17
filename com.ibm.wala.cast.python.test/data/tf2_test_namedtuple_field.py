@@ -1,15 +1,16 @@
+"""Exercises tensor-type propagation through a user-defined ``NamedTuple`` field (wala/ML#579).
+
+A tensor stored in a ``NamedTuple`` field and read back out (``b = w.tensor``) keeps its original
+``(4, 8) float32`` type. This is the minimal form of the GCN blocker in wala/ML#570, where
+``GraphConvolution.call`` unwraps a ``GNNInput`` ``NamedTuple`` the same way.
+"""
+
 from typing import NamedTuple, List
 
 import numpy as np
 import tensorflow as tf
 
 
-# Documents the wala/ML#579 gap: a tensor stored in a user-defined `NamedTuple`
-# field and read back out loses its tensor type. At runtime `b` is the original
-# `(4, 8) float32` tensor (the asserts below hold), but the static analysis
-# currently recovers `consume`'s parameter as *no* tensor at all. This is the
-# concrete blocker for typing the GCN layer outputs in wala/ML#570, where
-# `GraphConvolution.call` unwraps a `GNNInput` `NamedTuple` the same way.
 class Wrapper(NamedTuple):
     tensor: tf.Tensor
     rest: List
