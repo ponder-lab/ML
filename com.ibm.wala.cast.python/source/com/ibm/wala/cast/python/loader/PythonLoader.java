@@ -100,8 +100,10 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
   }
 
   public class PythonClass extends CoreClass implements IPythonClass {
-    // Insertion-ordered so declared fields keep declaration order for positional
-    // NamedTuple/dataclass construction (wala/ML#579).
+    /*
+     * Insertion-ordered so declared fields keep declaration order for positional
+     * NamedTuple/dataclass construction (wala/ML#579).
+     */
     Set<IField> staticFields = new java.util.LinkedHashSet<>();
     Set<MethodReference> methodTypes = HashSetFactory.make();
     private java.util.Set<TypeReference> innerTypes = HashSetFactory.make();

@@ -146,10 +146,11 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
               insts.NewInstruction(pc, inst, NewSiteReference.make(pc, PythonTypes.object)));
           pc++;
 
-          // wala/ML#579: store each positional constructor argument into the corresponding declared
-          // field, in declaration order. Param 1 is the callable; the positional arguments are
-          // value
-          // numbers 2, 3, ... So field[i] is populated from argument value number 2 + i.
+          /*
+           * wala/ML#579: store each positional constructor argument into the corresponding declared
+           * field, in declaration order. Param 1 is the callable; the positional arguments are value
+           * numbers 2, 3, ... So field[i] is populated from argument value number 2 + i.
+           */
           for (int i = 0; i < tupleFields.size(); i++) {
             ctor.addStatement(
                 insts.PutInstruction(
