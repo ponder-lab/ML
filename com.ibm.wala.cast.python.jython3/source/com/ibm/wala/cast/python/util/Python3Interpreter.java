@@ -100,10 +100,12 @@ public class Python3Interpreter extends com.ibm.wala.cast.python.util.PythonInte
     }
     try {
       PyObject val = ip.eval(expr);
-      // Accept only genuine Python integers. `PyObject.isInteger()` is lenient — a float such as
-      // `2.5` passes and `asInt()` then truncates it to `2`, so `evalAsInteger("2.5")` wrongly
-      // returned `2` instead of `null`. A strict type check keeps non-integers (floats, etc.) on
-      // the null-returning fallback, matching the nullable-Integer contract.
+      /*
+       * Accept only genuine Python integers. `PyObject.isInteger()` is lenient — a float such as
+       * `2.5` passes and `asInt()` then truncates it to `2`, so `evalAsInteger("2.5")` wrongly
+       * returned `2` instead of `null`. A strict type check keeps non-integers (floats, etc.) on
+       * the null-returning fallback, matching the nullable-Integer contract.
+       */
       if (val instanceof PyInteger || val instanceof PyLong) {
         return val.asInt();
       } else {
