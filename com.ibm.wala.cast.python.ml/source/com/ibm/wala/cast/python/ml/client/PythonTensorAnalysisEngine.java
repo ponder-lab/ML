@@ -21,6 +21,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.types.PythonTypes;
+import com.ibm.wala.cast.python.util.PythonInterpreter;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
@@ -1064,91 +1065,114 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   @Override
   public TensorTypeAnalysis performAnalysis(PropagationCallGraphBuilder builder)
       throws CancelException {
-    Graph<PointsToSetVariable> dataflow =
-        SlowSparseNumberedGraph.duplicate(
-            builder.getPropagationSystem().getFlowGraphIncludingImplicitConstraints());
+    try {
+      Graph<PointsToSetVariable> dataflow =
+          SlowSparseNumberedGraph.duplicate(
+              builder.getPropagationSystem().getFlowGraphIncludingImplicitConstraints());
 
-    Set<PointsToSetVariable> sources = getDataflowSources(builder, dataflow);
+      Set<PointsToSetVariable> sources = getDataflowSources(builder, dataflow);
 
-    Map<PointsToSetVariable, Set<TensorType>> init = HashMapFactory.make();
+      Map<PointsToSetVariable, Set<TensorType>> init = HashMapFactory.make();
 
-    for (PointsToSetVariable v : sources) init.put(v, getTensorTypes(v, builder));
+      for (PointsToSetVariable v : sources) init.put(v, getTensorTypes(v, builder));
 
-    Map<PointsToSetVariable, TensorType> placeholders =
-        handleShapeSourceOp(builder, dataflow, placeholder, 2);
-    LOGGER.fine("Placeholders: " + placeholders);
+      Map<PointsToSetVariable, TensorType> placeholders =
+          handleShapeSourceOp(builder, dataflow, placeholder, 2);
+      LOGGER.fine("Placeholders: " + placeholders);
 
-    for (Map.Entry<PointsToSetVariable, TensorType> e : placeholders.entrySet())
-      init.put(e.getKey(), Set.of(e.getValue()));
+      for (Map.Entry<PointsToSetVariable, TensorType> e : placeholders.entrySet())
+        init.put(e.getKey(), Set.of(e.getValue()));
 
-    // wala/ML#509: recognize `x.set_shape(s)` via IR scanning rather than call-graph dispatch on
-    // the `Ltensorflow/functions/set_shape` synthetic class. The legacy dispatch path requires
-    // the receiver to have the `set_shape` attribute attached (via FixedLenFeature.do's
-    // <putfield>) and breaks when the cast pass_through alias is removed.
-    Map<PointsToSetVariable, TensorType> setCalls = getSetShapeCallsSyntactic(builder);
+      // wala/ML#509: recognize `x.set_shape(s)` via IR scanning rather than call-graph dispatch on
+      // the `Ltensorflow/functions/set_shape` synthetic class. The legacy dispatch path requires
+      // the receiver to have the `set_shape` attribute attached (via FixedLenFeature.do's
+      // <putfield>) and breaks when the cast pass_through alias is removed.
+      Map<PointsToSetVariable, TensorType> setCalls = getSetShapeCallsSyntactic(builder);
 
-    // wala/ML#509: `set_shape` is a user-supplied OVERRIDE of any per-op-generator init seed on
-    // the receiver. Remove receivers from `init` so the SetShapeOp edge transfer is the sole
-    // source of state for those variables; otherwise the meet-time union re-introduces the
-    // generator-seeded type (e.g., Cast generator's (?, float32) on the cast-result variable).
-    for (PointsToSetVariable recv : setCalls.keySet()) init.remove(recv);
+      // wala/ML#509: `set_shape` is a user-supplied OVERRIDE of any per-op-generator init seed on
+      // the receiver. Remove receivers from `init` so the SetShapeOp edge transfer is the sole
+      // source of state for those variables; otherwise the meet-time union re-introduces the
+      // generator-seeded type (e.g., Cast generator's (?, float32) on the cast-result variable).
+      for (PointsToSetVariable recv : setCalls.keySet()) init.remove(recv);
 
-    // Route subscript results through `setCalls` so `TensorTypeAnalysis`'s edge-transfer replaces
-    // predecessor types rather than unioning them — the receiver's pre-subscript shape would
-    // otherwise leak in via the PA assignment graph (wala/ML#405).
-    for (PointsToSetVariable src : sources) {
-      if (!(src.getPointerKey() instanceof LocalPointerKey)) continue;
-      TensorGenerator generator;
-      try {
-        generator = getGenerator(src, builder);
-      } catch (IllegalArgumentException e) {
-        continue;
+      // Route subscript results through `setCalls` so `TensorTypeAnalysis`'s edge-transfer replaces
+      // predecessor types rather than unioning them — the receiver's pre-subscript shape would
+      // otherwise leak in via the PA assignment graph (wala/ML#405).
+      for (PointsToSetVariable src : sources) {
+        if (!(src.getPointerKey() instanceof LocalPointerKey)) continue;
+        TensorGenerator generator;
+        try {
+          generator = getGenerator(src, builder);
+        } catch (IllegalArgumentException e) {
+          continue;
+        }
+        if (!(generator instanceof SliceBuiltinOperation)
+            && !(generator instanceof NdarraySubscriptOperation)) continue;
+        Set<TensorType> types = init.get(src);
+        if (types == null || types.size() != 1) continue;
+        TensorType onlyType = types.iterator().next();
+        if (onlyType.getDims() == null) continue;
+        setCalls.put(src, onlyType);
       }
-      if (!(generator instanceof SliceBuiltinOperation)
-          && !(generator instanceof NdarraySubscriptOperation)) continue;
-      Set<TensorType> types = init.get(src);
-      if (types == null || types.size() != 1) continue;
-      TensorType onlyType = types.iterator().next();
-      if (onlyType.getDims() == null) continue;
-      setCalls.put(src, onlyType);
+
+      Map<PointsToSetVariable, TensorType> shapeOps = HashMapFactory.make();
+      shapeOps.putAll(handleShapeSourceOp(builder, dataflow, reshape, 2));
+
+      handlePassThroughOp(builder, dataflow, convert_to_tensor, 1);
+
+      Set<PointsToSetVariable> conv2ds = getKeysDefinedByCall(conv2d, builder);
+
+      Set<PointsToSetVariable> conv3ds = getKeysDefinedByCall(conv3d, builder);
+
+      // Detect enumerate-first-field reads (the `step` slot of `for step, x in enumerate(...)`) and
+      // pin their tensor-type state to empty via a `DropOp` edge transfer. Without this, the
+      // PA assignment graph leaks the underlying dataset's field-0 tensor type into the integer
+      // index slot, which then propagates to any function that receives `step` as an argument.
+      // The factory already throws `IllegalArgumentException` for these PropertyReads in
+      // `TensorGeneratorFactory.getGenerator`, but that only prevents generator-level seeding; it
+      // doesn't block the PTS-graph edge. See wala/ML#409.
+      Set<PointsToSetVariable> drops = HashSetFactory.make();
+      for (PointsToSetVariable v : dataflow) {
+        if (isEnumerateFirstFieldRead(v, builder)) drops.add(v);
+      }
+      LOGGER.fine(() -> "wala/ML#409 drops (enumerate-first-field): " + drops.size());
+      for (PointsToSetVariable d : drops) LOGGER.fine(() -> "  drop: " + d.getPointerKey());
+
+      TensorTypeAnalysis tt =
+          new TensorTypeAnalysis(
+              dataflow, init, shapeOps, setCalls, conv2ds, conv3ds, drops, errorLog);
+
+      tt.solve(new NullProgressMonitor());
+
+      return tt;
+    } finally {
+      // `TensorGenerator.getShapes`/`getDTypes` memoize per-builder. Clear those caches now that
+      // the analysis is done rather than waiting for the builder to be garbage-collected &mdash;
+      // this keeps memory predictable in long-running clients (LSP server, repeated-analysis
+      // daemons) where builders may be held in other caches after their analysis completes. The
+      // `finally` ensures the caches are cleared and the interpreter-miss counter is reset even
+      // when the analysis exits early via `CancelException`, so neither leaks into the next run.
+      TensorGenerator.clearCaches(builder);
+      reportAndResetInterpreterUnavailableMisses();
     }
+  }
 
-    Map<PointsToSetVariable, TensorType> shapeOps = HashMapFactory.make();
-    shapeOps.putAll(handleShapeSourceOp(builder, dataflow, reshape, 2));
-
-    handlePassThroughOp(builder, dataflow, convert_to_tensor, 1);
-
-    Set<PointsToSetVariable> conv2ds = getKeysDefinedByCall(conv2d, builder);
-
-    Set<PointsToSetVariable> conv3ds = getKeysDefinedByCall(conv3d, builder);
-
-    // Detect enumerate-first-field reads (the `step` slot of `for step, x in enumerate(...)`) and
-    // pin their tensor-type state to empty via a `DropOp` edge transfer. Without this, the
-    // PA assignment graph leaks the underlying dataset's field-0 tensor type into the integer
-    // index slot, which then propagates to any function that receives `step` as an argument.
-    // The factory already throws `IllegalArgumentException` for these PropertyReads in
-    // `TensorGeneratorFactory.getGenerator`, but that only prevents generator-level seeding; it
-    // doesn't block the PTS-graph edge. See wala/ML#409.
-    Set<PointsToSetVariable> drops = HashSetFactory.make();
-    for (PointsToSetVariable v : dataflow) {
-      if (isEnumerateFirstFieldRead(v, builder)) drops.add(v);
+  /**
+   * Emits the wala/ML#444 end-of-analysis summary when the interpreter was unavailable for one or
+   * more shape expressions during the run, then atomically resets the counter for the next run.
+   * Surfacing the aggregate precision loss once is easier to notice than the single early WARNING
+   * the interpreter emits on its first miss (easily lost in build noise).
+   */
+  static void reportAndResetInterpreterUnavailableMisses() {
+    final int interpreterMisses = PythonInterpreter.getAndResetInterpreterUnavailableMisses();
+    if (interpreterMisses > 0) {
+      LOGGER.warning(
+          () ->
+              interpreterMisses
+                  + " shape expression(s) could not be evaluated because the Jython interpreter was"
+                  + " unavailable; the affected tensor dimensions fell back to symbolic, so shape"
+                  + " precision is reduced for this run.");
     }
-    LOGGER.fine(() -> "wala/ML#409 drops (enumerate-first-field): " + drops.size());
-    for (PointsToSetVariable d : drops) LOGGER.fine(() -> "  drop: " + d.getPointerKey());
-
-    TensorTypeAnalysis tt =
-        new TensorTypeAnalysis(
-            dataflow, init, shapeOps, setCalls, conv2ds, conv3ds, drops, errorLog);
-
-    tt.solve(new NullProgressMonitor());
-
-    // `TensorGenerator.getShapes`/`getDTypes` memoize per-builder. Clear those caches now that
-    // the analysis is done rather than waiting for the builder to be garbage-collected &mdash;
-    // this keeps memory predictable in long-running clients (LSP server, repeated-analysis
-    // daemons) where builders may be held in other caches after their analysis completes.
-    TensorGenerator.clearCaches(builder);
-
-    return tt;
   }
 
   /**
