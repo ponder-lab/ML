@@ -25,7 +25,6 @@ import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
 import com.ibm.wala.cast.python.ml.client.BroadcastTo;
 import com.ibm.wala.cast.python.ml.client.Constant;
 import com.ibm.wala.cast.python.ml.client.Linspace;
-import com.ibm.wala.cast.python.ml.client.NonBroadcastableShapesException;
 import com.ibm.wala.cast.python.ml.client.NpArray;
 import com.ibm.wala.cast.python.ml.client.NpOnes;
 import com.ibm.wala.cast.python.ml.client.NpZeros;
@@ -2529,10 +2528,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * is the runtime {@code num_segments} value. Verified via a {@code consume_sum} sink on the
    * aggregation result.
    *
-   * @throws ClassHierarchyException On WALA class-hierarchy error.
-   * @throws IllegalArgumentException On illegal argument.
-   * @throws CancelException On analysis cancellation.
-   * @throws IOException On I/O error reading the test file.
+   * <p>TODO: Recover the concrete shape when {@code num_segments} is static, per <a
+   * href="https://github.com/wala/ML/issues/582">wala/ML#582</a>.
    */
   @Test
   public void testUnsortedSegmentSum()
@@ -2548,11 +2545,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Pins the output type of {@code tf.math.unsorted_segment_max} (wala/ML#570). Same dtype-from-
    * {@code data}, ⊤-shape modeling as {@link #testUnsortedSegmentSum}.
-   *
-   * @throws ClassHierarchyException On WALA class-hierarchy error.
-   * @throws IllegalArgumentException On illegal argument.
-   * @throws CancelException On analysis cancellation.
-   * @throws IOException On I/O error reading the test file.
    */
   @Test
   public void testUnsortedSegmentMax()
@@ -2568,11 +2560,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Pins the output type of {@code tf.math.unsorted_segment_mean} (wala/ML#570). Same dtype-from-
    * {@code data}, ⊤-shape modeling as {@link #testUnsortedSegmentSum}.
-   *
-   * @throws ClassHierarchyException On WALA class-hierarchy error.
-   * @throws IllegalArgumentException On illegal argument.
-   * @throws CancelException On analysis cancellation.
-   * @throws IOException On I/O error reading the test file.
    */
   @Test
   public void testUnsortedSegmentMean()
@@ -3150,7 +3137,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testNeuralNetwork()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        4,
+        PythonTensorAnalysisEngine.MODEL_FORWARD_CFA_DEPTH,
         "neural_network.py",
         "NeuralNet.call",
         1,
@@ -3181,7 +3168,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testNeuralNetwork2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        4,
+        PythonTensorAnalysisEngine.MODEL_FORWARD_CFA_DEPTH,
         "neural_network.py",
         "cross_entropy_loss",
         2,
@@ -3216,7 +3203,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testNeuralNetwork3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        4,
+        PythonTensorAnalysisEngine.MODEL_FORWARD_CFA_DEPTH,
         "neural_network.py",
         "run_optimization",
         2,
@@ -3262,7 +3249,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     // are the argmax call sites and their downstream uses across the call
     // graph. Parameter-type expectations (`y_pred`, `y_true`) unchanged.
     test(
-        4,
+        PythonTensorAnalysisEngine.MODEL_FORWARD_CFA_DEPTH,
         "neural_network.py",
         "accuracy",
         2,
@@ -5354,8 +5341,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    *
    * The analysis retains the broadcastable result ({@code [2, 2]}) and discards the
    * non-broadcastable cross-pair as analysis-level imprecision rather than a runtime error &mdash;
-   * the cross-pair would never co-occur at runtime under matched contexts. A {@link
-   * NonBroadcastableShapesException} is only thrown when <em>every</em> pair is non-broadcastable.
+   * the cross-pair would never co-occur at runtime under matched contexts. When <em>every</em> pair
+   * is non-broadcastable, the result shape instead degrades to ⊤ (<a
+   * href="https://github.com/wala/ML/issues/583">wala/ML#583</a>).
    *
    * @see #testAdd117a()
    */
@@ -6187,6 +6175,43 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_extract_patches.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_2_2_27_FLOAT32)));
   }
 
+  /**
+   * Regression guard for {@code tf.image.extract_patches} called with a Python <em>list
+   * literal</em> {@code images} argument (rather than a {@code tf.Tensor}), per <a
+   * href="https://github.com/wala/ML/issues/584">wala/ML#584</a>. The result must still be
+   * recognized as a tensor; the {@code int32} dtype is inherited from the literal and the shape is
+   * ⊤ (the list-literal shape is not statically propagated through the op).
+   *
+   * <p>TODO: Tighten the shape from ⊤ to the concrete value once <a
+   * href="https://github.com/wala/ML/issues/585">wala/ML#585</a> infers a tensor's shape from a
+   * list literal.
+   */
+  @Test
+  public void testExtractPatches2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_extract_patches2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Regression guard for {@code tf.image.extract_patches} called with an {@code images} argument
+   * built from a nested list <em>comprehension</em> (the wala/ML#584 corpus case), per <a
+   * href="https://github.com/wala/ML/issues/584">wala/ML#584</a>. Resolving such an {@code images}
+   * operand throws inside the generator; before the fix that aborted the whole type computation and
+   * the result dropped its tensor classification entirely. The result must still be recognized as a
+   * tensor — here ⊤ shape and ⊤ dtype, since a comprehension's computed elements (unlike a
+   * literal's constants) yield no statically inferable dtype.
+   */
+  @Test
+  public void testExtractPatchesComprehension()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_extract_patches_comprehension.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
   /** Pure-passthrough generator test for {@code tf.math.tan} (wala/ML#422). */
   @Test
   public void testTan()
@@ -6689,16 +6714,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * This is an invalid case since the inputs have different ranks.
+   * Operands of different ranks ({@code (2, 3)} and {@code (2,)}) are genuinely non-broadcastable.
+   * Rather than throw an exception that aborts the whole analysis, the element-wise generator
+   * degrades the result shape to ⊤ (unknown) and continues; the {@code int32} dtype is still
+   * recovered (<a href="https://github.com/wala/ML/issues/583">wala/ML#583</a>).
    *
-   * <p>For now, we are throwing an exception. But, this is invalid code.
-   *
-   * <p>TODO: We'll need to come up with a suitable way to handle this in the future.
+   * <p>Here ⊤ is the correct final result — incompatible operands have no valid broadcast shape —
+   * so, unlike the recoverable list-literal case ({@link #testExtractPatches2}), there is no
+   * precision to recover and no shape-tightening TODO.
    */
-  @Test(expected = NonBroadcastableShapesException.class)
+  @Test
   public void testMultiply6()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_multiply6.py", "f", 1, 1);
+    test("tf2_test_multiply6.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
   }
 
   @Test
@@ -8615,6 +8643,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testNamedTupleFieldRead()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_namedtuple_field.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
+  /**
+   * Verifies tensor types propagate through a {@code typing.Tuple}-annotated tuple-of-tensors
+   * parameter: a 2-tuple of tensors passed to {@code f} and unpacked ({@code x, y = inputs}) keeps
+   * each element's type, so {@code consume(x)} sees {@code (4, 8) float32}. This mirrors the
+   * perf-eval corpus's {@code deep_recommenders} {@code CIN.call(self, inputs: Tuple[tf.Tensor,
+   * tf.Tensor])} — an {@code @tf.function}-decorated function the Hybridize tool refactors — and is
+   * the tuple-parameter analogue of {@link #testNamedTupleFieldRead}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTupleParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_tuple_param.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
   }
 
   /**

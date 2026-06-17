@@ -1,30 +1,22 @@
 name: Continuous integration
 on:
   push:
-    # GitHub Merge Queue creates branches under `refs/heads/gh-readonly-queue/...` and pushes
-    # the queue's test commit there. That push fires this workflow's `push:` trigger AS WELL
-    # AS the `merge_group:` trigger — two runs in the same concurrency group, where the second
-    # cancels the first. The cancelled run is reported as failed to the merge queue, which
-    # kicks the PR out (per the PR #217 fix's known incompleteness — Copilot caught this on
-    # the equivalent Hybridize PR #443). Filtering out queue branches from `push:` lets
-    # `merge_group:` be the sole trigger for queue-branch pushes.
+    # Ignore queue branches (`gh-readonly-queue/...`): their pushes fire both `push:` and
+    # `merge_group:`, and the two runs collide in the concurrency group — the cancelled one is
+    # reported failed and kicks the PR out of the queue (wala/ML#217). Let `merge_group:` be their
+    # sole trigger.
     branches-ignore:
       - 'gh-readonly-queue/**'
-    # When only `branches`/`branches-ignore` is set on `push:`, GitHub Actions silently
-    # filters out tag-push events too. The release-deploy gate at the bottom of this
-    # workflow depends on `refs/tags/0.*` pushes firing the workflow, so explicitly
-    # allow all tags here.
+    # Setting `branches`/`branches-ignore` on `push:` silently drops tag-push events too; the
+    # release-deploy gate below needs `refs/tags/` pushes, so allow all tags explicitly.
     tags:
       - '**'
   pull_request:
   merge_group:
 concurrency:
-  # Group includes the workflow name so merge_group runs from different workflows don't collide.
-  # Cancel-in-progress is allowed for `pull_request` (new push to PR supersedes prior runs) and
-  # for non-tag `push` events (commits to a branch supersede prior runs); explicitly NOT for
-  # `merge_group` events, because GitHub Merge Queue spawns concurrent runs on the queue branch
-  # and cancellation marks the cancelled run as failed, kicking the PR out of the queue.
-  # Tags also run to completion so the deploy gate isn't accidentally cancelled.
+  # Cancel-in-progress for `pull_request` and non-tag `push` (a newer run supersedes), but NOT for
+  # `merge_group` or tags: cancelling a queue run marks it failed and kicks the PR out, and tags
+  # must finish so the deploy gate isn't cancelled.
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')) }}
 permissions:
@@ -74,11 +66,8 @@ jobs:
         popd
     - name: Build with Maven
       run: mvn -Dlogging.config.file=./logging.ci.properties verify -B -Pjacoco
-    # Catch the kind of drift that prompted https://github.com/wala/ML/issues/525:
-    # `run.sh`'s JAR path falling behind the project's actual version (previously
-    # hardcoded `0.40.0-SNAPSHOT`, ~5 minor versions stale). Verifies post-build
-    # that the script's glob resolves to exactly one fat JAR and that the JAR
-    # carries the standalone driver's `Main-Class` manifest entry.
+    # Guard against `run.sh`'s JAR path drifting behind the project version (wala/ML#525): verify
+    # its glob resolves to exactly one fat JAR carrying the driver's `Main-Class` manifest entry.
     - name: Smoke-test `run.sh` fat-JAR resolution
       run: |
         cd com.ibm.wala.cast.python.ml
@@ -99,20 +88,11 @@ jobs:
         slug: ponder-lab/ML
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-    # Verify any tag-push deploy is on a commit that's an ancestor of master
-    # (per https://github.com/wala/ML/issues/421). Without this, a feature-branch tag could trigger
-    # a release deploy. Also confirm the tag name is semver-shaped — the deploy
-    # step's `if:` does the same regex via `endsWith`/`startsWith`, but we
-    # additionally guard the ancestor check itself so non-semver tags don't
-    # error out the run on the merge-base call. The `actions/checkout` above
-    # is shallow (default `fetch-depth: 1`), and the previous `--depth=1`
-    # fetch of master left both the tag commit and master's tip with no
-    # parent chain in the local object database — so `merge-base
-    # --is-ancestor` couldn't link them even when the tag was on master.
-    # The release-plugin's tag commit lands at master~1 (immediately followed
-    # by the SNAPSHOT-bump), so `--depth=50` gives plenty of headroom while
-    # staying tight. This is the root cause of the 0.44.0/0.45.0 deploy-gate
-    # misses tracked at https://github.com/wala/ML/issues/454.
+    # Gate the deploy: only a semver-shaped tag that's an ancestor of master, so a feature-branch
+    # tag can't trigger a release deploy (wala/ML#421). The non-semver early-exit also keeps the
+    # `merge-base` call from erroring on legacy tags. `--depth=50` (not the checkout's shallow
+    # `fetch-depth: 1`) gives the tag commit and master's tip a shared parent chain so `--is-ancestor`
+    # can link them — the root cause of the 0.44.0/0.45.0 deploy-gate misses (wala/ML#454).
     - name: Verify tag is a semver release tag on master
       if: startsWith(github.ref, 'refs/tags/')
       run: |
@@ -131,22 +111,11 @@ jobs:
       env:
         GITHUB_USERNAME: ${{ secrets.GITHUB_USERNAME }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # Hybrid deploy gate (per wala/ML#421). Master pushes deploy SNAPSHOT
-      # versions (continuous SNAPSHOT publishing for downstream consumers
-      # like ponder-lab/Hybridize-Functions-Refactoring). Tag pushes deploy
-      # the immutable release. Tag pushes are critical for releases: the
-      # canonical `mvn release:prepare` flow lands two consecutive master
-      # commits ("Prepare for release X.Y.0." and "Set version for next
-      # development iteration to ...") in quick succession, and
-      # `concurrency: cancel-in-progress` cancels the first one — so the
-      # release version is only ever briefly on master and the
-      # SNAPSHOT-bump's run cancels the release run before its deploy step
-      # completes. Tag pushes are exempt from `cancel-in-progress` (per the
-      # workflow's `concurrency` block) and therefore reliably finish the
-      # deploy. The semver-tag regex (in `tag_check` above) keeps legacy /
-      # non-release tags (`todo_review`, `jython3`, etc.) from re-deploying;
-      # the ancestor-of-master check in the same step blocks feature-branch
-      # tags from sneaking through.
+      # Hybrid deploy gate (wala/ML#421): master pushes deploy SNAPSHOTs (for downstream consumers
+      # like ponder-lab/Hybridize-Functions-Refactoring); semver tag pushes deploy the immutable
+      # release. Tag pushes are exempt from `cancel-in-progress` (see the `concurrency` block) so the
+      # release deploy reliably finishes — release:prepare lands two master commits in quick
+      # succession, and the SNAPSHOT-bump run would otherwise cancel the release run mid-deploy.
       if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/master' || (startsWith(github.ref, 'refs/tags/') && steps.tag_check.outputs.is_semver_release == 'true')) }}
     # On semver tag-push, upload the fat-classifier JAR as a CI artifact for the
     # downstream `release-upload` job to attach to the GitHub Release.
@@ -158,15 +127,9 @@ jobs:
         path: com.ibm.wala.cast.python.ml/target/com.ibm.wala.cast.python.ml-*-fat.jar
         if-no-files-found: error
         retention-days: 1
-  # Attach the fat-classifier JAR to the GitHub Release on semver tag-push. The
-  # Maven deploy step in `build` above publishes both jars (slim default + `-fat`
-  # classifier) to GitHub Packages, which requires a classic PAT with
-  # `read:packages` scope for downstream consumers. Attaching the fat JAR to the
-  # Release lets standalone-driver users (`java -jar`) fetch it directly with no
-  # auth.
-  #
-  # Run as a separate job (rather than a step in `build`) so the elevated
-  # `contents: write` permission is scoped to release tag-pushes only —
+  # Attach the fat-classifier JAR to the GitHub Release on semver tag-push, so standalone-driver
+  # users (`java -jar`) can fetch it without the `read:packages` PAT that GitHub Packages requires.
+  # A separate job scopes the elevated `contents: write` permission to release tag-pushes only;
   # PR/branch-push runs of `build` keep the workflow-level `contents: read`.
   release-upload:
     needs: build
@@ -179,26 +142,28 @@ jobs:
       uses: actions/download-artifact@v8
       with:
         name: fat-jar
-    # `actions/download-artifact@v8` with only `name:` extracts to the workspace
-    # root (single-artifact archives flatten away their source path). The
-    # `build` job's `upload-artifact` step uploaded the JAR from
-    # `com.ibm.wala.cast.python.ml/target/`, but only the filename survives the
-    # round-trip — so the `files:` glob below must match the bare filename, not
-    # the original on-disk path. `fail_on_unmatched_files: true` makes a future
-    # glob drift fail loudly instead of silently producing an assetless
-    # release. See https://github.com/wala/ML/issues/561.
+    # `download-artifact@v8` with only `name:` flattens to the workspace root, so the `files:` glob
+    # below matches the bare filename (not the original `…/target/` path); `fail_on_unmatched_files:
+    # true` makes a future glob drift fail loudly rather than ship an assetless release (wala/ML#561).
     # `action-gh-release` creates the Release for the pushed tag if one doesn't
-    # already exist, then attaches the fat JAR. `prerelease: true` matches the
-    # project's release convention; `generate_release_notes: true` fills the body
-    # from the PRs merged since the previous tag. Together with the `release.yml`
-    # dispatch (wala/ML#455), this makes cutting a release fully hands-off — no
-    # manual `gh release create`.
-    - name: Create prerelease and attach fat JAR
+    # already exist, then attaches the fat JAR. A tag carrying a SemVer pre-release
+    # suffix (e.g. `1.0.0-rc.1`, which `tag_check` permits) is published as a GitHub
+    # pre-release; a plain `X.Y.Z` tag (a `0.x` is NOT a SemVer pre-release — the
+    # major-zero already signals the unstable phase, no `-identifier` suffix) is a
+    # full release. `make_latest: legacy` delegates the "Latest" badge to GitHub,
+    # which awards it to the highest semantic version among non-pre-releases — so we
+    # do NOT force it: cutting an *older* release (a backport like `0.46.2` after
+    # `0.49.0`, or re-running on an old tag) won't steal the badge from the newer
+    # one. `generate_release_notes: true` fills the body from the PRs merged since
+    # the previous tag. Together with the `release.yml` dispatch (wala/ML#455), this
+    # makes cutting a release fully hands-off — no manual `gh release create`.
+    - name: Create release and attach fat JAR
       uses: softprops/action-gh-release@v3
       with:
         files: com.ibm.wala.cast.python.ml-*-fat.jar
         fail_on_unmatched_files: true
-        prerelease: true
+        prerelease: ${{ contains(github.ref_name, '-') }}
+        make_latest: legacy
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

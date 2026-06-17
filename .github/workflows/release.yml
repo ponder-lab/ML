@@ -1,19 +1,12 @@
-# One-click release cutter (wala/ML#455).
+# One-click release cutter (wala/ML#455). Dispatched manually; runs `mvn release:prepare` on a
+# runner (no local toolchain/flags/pre-commit hook — the source of the 0.47.0 manual-deploy
+# incident). It pushes two version-bump commits and the release tag to `master`; the tag push then
+# drives `continuous-integration.yml`'s deploy gate and `release-upload` job.
 #
-# Dispatched manually from the Actions UI. Runs `mvn release:prepare` on a runner
-# — no local toolchain, no forgotten flags, no local pre-commit hook (the source
-# of the 0.47.0 manual-deploy incident). `release:prepare` pushes two version-bump
-# commits and the release tag to `master`; the tag push then drives
-# `continuous-integration.yml`'s deploy gate (publish to GitHub Packages) and its
-# `release-upload` job (create the prerelease + attach the fat JAR). End to end,
-# dispatching this workflow is the whole release.
-#
-# SETUP (one-time): this workflow needs a `RELEASE_PAT` repository secret — a
-# *classic* PAT owned by an OrganizationAdmin (so its push bypasses the `master`
-# branch protection) with `repo` scope. The default `GITHUB_TOKEN` cannot be used:
-# `github-actions[bot]` is not a bypass actor on the branch ruleset, so its push to
-# `master` would be rejected. Fine-grained PATs also do not authenticate to
-# `maven.pkg.github.com`; a classic PAT is required.
+# SETUP (one-time): needs a `RELEASE_PAT` secret — a *classic* PAT from an OrganizationAdmin (so its
+# push bypasses `master` branch protection) with `repo` scope. The default `GITHUB_TOKEN` can't push
+# to `master` (not a bypass actor), and fine-grained PATs can't authenticate to
+# `maven.pkg.github.com`.
 name: Cut release
 on:
   workflow_dispatch:
@@ -31,11 +24,9 @@ on:
 permissions:
   contents: read
 
-# Serialize releases: a fixed group (not keyed by ref) means only one release runs at
-# a time. `cancel-in-progress: false` queues a second dispatch rather than cancelling an
-# in-progress one — cancelling mid-run could leave a partial state (commits pushed, tag
-# not). Without this, two close-together dispatches could both pass the tag-existence
-# check and then race on the version-bump pushes (non-fast-forward / tag collision).
+# Serialize releases: a fixed group (not keyed by ref) runs one release at a time, and
+# `cancel-in-progress: false` queues a second dispatch rather than cancelling a mid-run one (which
+# could leave a partial state — commits pushed, tag not).
 concurrency:
   group: cut-release
   cancel-in-progress: false
@@ -105,12 +96,9 @@ jobs:
         cache: 'pip'
     - name: Install Python dependencies
       run: pip install -r requirements.txt
-    # Mirror CI's formatting gates BEFORE release:prepare. Spotless is only declared
-    # in `pluginManagement` (not bound to the Maven lifecycle), so release:prepare's
-    # default `clean verify` does not run it — a formatting violation would otherwise
-    # be committed, tagged, and pushed, only to fail the tag-push deploy. Running the
-    # checks here aborts before any mutation. (The version-bumped POMs themselves stay
-    # Spotless-clean per wala/ML#566.)
+    # Run the formatting gates BEFORE release:prepare: Spotless is only in `pluginManagement` (not
+    # bound to the lifecycle), so release:prepare's `clean verify` skips it — a violation would
+    # otherwise be committed, tagged, and pushed only to fail the tag-push deploy (wala/ML#566).
     - name: Check formatting with Spotless
       run: mvn spotless:check -B
     - name: Check formatting with Black
@@ -140,13 +128,10 @@ jobs:
         git config url."https://github.com/".insteadOf "git@github.com:"
       shell: bash
     - name: Run release:prepare
-      # No -Dtag / -DignoreSnapshots / -DallowTimestampedSnapshots needed: the tag
-      # format is pinned to plain X.Y.Z (wala/ML#560) and the local deps are installed
-      # at release coordinates above. The default preparationGoals (`clean verify`)
-      # build and TEST the release version before tagging, so a failure aborts before
-      # anything is committed or pushed. On success, the two commits and the tag are
-      # pushed to master, firing the tag-push deploy + release-upload in
-      # continuous-integration.yml.
+      # No extra flags needed: the tag format is pinned to plain X.Y.Z (wala/ML#560) and the deps
+      # are installed at release coordinates above. `clean verify` builds and tests the release
+      # version before tagging, so a failure aborts before any commit or push; on success the two
+      # commits and the tag are pushed to master, firing the tag-push deploy + release-upload.
       run: |
         mvn release:clean -B
         mvn release:prepare -B \
@@ -157,6 +142,6 @@ jobs:
       run: |
         echo "### Release ${{ inputs.releaseVersion }} cut :rocket:" >> "$GITHUB_STEP_SUMMARY"
         echo "" >> "$GITHUB_STEP_SUMMARY"
-        echo "- Tag \`${{ inputs.releaseVersion }}\` pushed; the tag-push run in **Continuous integration** now deploys to GitHub Packages and creates the prerelease." >> "$GITHUB_STEP_SUMMARY"
+        echo "- Tag \`${{ inputs.releaseVersion }}\` pushed; the tag-push run in **Continuous integration** now deploys to GitHub Packages and creates the release." >> "$GITHUB_STEP_SUMMARY"
         echo "- Next development version set to \`${{ inputs.developmentVersion }}\`." >> "$GITHUB_STEP_SUMMARY"
       shell: bash

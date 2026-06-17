@@ -82,6 +82,31 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    */
   public static final int DEFAULT_TARGETED_CFA_DEPTH = 2;
 
+  /**
+   * The recommended targeted k-CFA depth for consumers analyzing the <em>model-forward
+   * archetype</em>: {@code tf.keras.Model} subclasses whose {@code call}/{@code predict} chain
+   * layer invocations ({@code x = self.layer1(x); x = self.layer2(x)}). Such a model invoked from
+   * multiple call sites (e.g. train vs. test) needs enough call-string context to keep its
+   * per-call-site layer-output allocations distinct; at the back-compat {@link
+   * #DEFAULT_TARGETED_CFA_DEPTH} they merge and the per-context shapes collapse to &#8868;
+   * (unknown). Depth 4 separates the typical two-to-four-layer chain &mdash; validated by {@code
+   * testNeuralNetwork} through {@code testNeuralNetwork4}, which recover e.g. {@code accuracy}'s
+   * {@code y_pred} as the per-context union {@code {(256, 10) float32, ? float32}} (wala/ML#379,
+   * wala/ML#530).
+   *
+   * <p>This is a recommended default for the archetype, not a universal constant: the depth a model
+   * needs scales with its layer-chain length and call-site nesting. The targeted context selector
+   * applies deep context only to framework-API methods and {@code tf.keras.Model} forward methods
+   * (all other code stays context-insensitive), so the cost stays bounded to that subgraph rather
+   * than whole-program k-CFA; within it, context count still grows with depth. Deepen past this
+   * only when per-context layer outputs still merge (the symptom: a shape that should be a
+   * per-context union stays &#8868; or single-valued), and measure on the deepest model before
+   * raising it.
+   *
+   * <p>Usage: {@code new PythonTensorAnalysisEngine(TENSORFLOW, MODEL_FORWARD_CFA_DEPTH)}.
+   */
+  public static final int MODEL_FORWARD_CFA_DEPTH = 4;
+
   private final String targetFramework;
 
   /**
@@ -122,8 +147,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * Constructs an engine with a configurable k-CFA depth for the targeted context selector.
    *
    * @param targetFramework The framework name prefix whose API methods receive deep context.
-   * @param targetedCfaDepth The k-CFA depth to apply (e.g. {@link #DEFAULT_TARGETED_CFA_DEPTH});
-   *     must be non-negative. Higher values increase precision at the cost of analysis time.
+   * @param targetedCfaDepth The k-CFA depth for the targeted context selector; must be
+   *     non-negative. Use {@link #DEFAULT_TARGETED_CFA_DEPTH} for framework-API precision, or
+   *     {@link #MODEL_FORWARD_CFA_DEPTH} when analyzing chained-layer {@code tf.keras.Model}
+   *     forward passes. Higher values increase precision at the cost of analysis time.
    * @throws IllegalArgumentException if {@code targetedCfaDepth} is negative.
    */
   public PythonTensorAnalysisEngine(String targetFramework, int targetedCfaDepth) {
@@ -140,8 +167,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    *
    * @param pythonPath The additional Python path entries for module resolution.
    * @param targetFramework The framework name prefix whose API methods receive deep context.
-   * @param targetedCfaDepth The k-CFA depth to apply (e.g. {@link #DEFAULT_TARGETED_CFA_DEPTH});
-   *     must be non-negative. Higher values increase precision at the cost of analysis time.
+   * @param targetedCfaDepth The k-CFA depth for the targeted context selector; must be
+   *     non-negative. Use {@link #DEFAULT_TARGETED_CFA_DEPTH} for framework-API precision, or
+   *     {@link #MODEL_FORWARD_CFA_DEPTH} when analyzing chained-layer {@code tf.keras.Model}
+   *     forward passes. Higher values increase precision at the cost of analysis time.
    * @throws IllegalArgumentException if {@code targetedCfaDepth} is negative.
    */
   public PythonTensorAnalysisEngine(
