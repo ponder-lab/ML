@@ -21,11 +21,13 @@ import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.loader.IPythonClass;
+import com.ibm.wala.cast.python.loader.PythonLoader;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
+import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.classLoader.NewSiteReference;
 import com.ibm.wala.core.util.strings.Atom;
@@ -46,6 +48,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -78,7 +81,19 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
                   receiver.getClassLoader().getReference(), receiver.getName() + "/__init__");
           IClass ctorCls = cha.lookupClass(ctorRef);
           IMethod init = ctorCls == null ? null : ctorCls.getMethod(AstMethodReference.fnSelector);
-          int params = init == null ? 1 : init.getNumberOfParameters();
+          /*
+           * https://github.com/wala/ML/issues/579: a NamedTuple with no explicit __init__ maps
+           * positional constructor arguments to its declared fields in declaration order. Collect
+           * those fields so the synthesized constructor can populate them on the new instance below.
+           */
+          List<IField> tupleFields =
+              init == null && isPositionalFieldClass(receiver)
+                  ? new ArrayList<>(receiver.getDeclaredStaticFields())
+                  : Collections.emptyList();
+          int params =
+              init != null
+                  ? init.getNumberOfParameters()
+                  : (tupleFields.isEmpty() ? 1 : 1 + tupleFields.size());
           int v = params + 2;
           int pc = 0;
           int inst = v++;
@@ -132,6 +147,22 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
           ctor.addStatement(
               insts.NewInstruction(pc, inst, NewSiteReference.make(pc, PythonTypes.object)));
           pc++;
+
+          /*
+           * https://github.com/wala/ML/issues/579: store each positional constructor argument into
+           * the corresponding declared field, in declaration order. Param 1 is the callable; the
+           * positional arguments are value numbers 2, 3, ... So field[i] is populated from argument
+           * value number 2 + i.
+           */
+          for (int i = 0; i < tupleFields.size(); i++) {
+            ctor.addStatement(
+                insts.PutInstruction(
+                    pc++,
+                    inst,
+                    2 + i,
+                    FieldReference.findOrCreate(
+                        PythonTypes.Root, tupleFields.get(i).getName(), PythonTypes.Root)));
+          }
 
           Collection<TypeReference> innerReferences = Collections.emptyList();
           Collection<MethodReference> methodReferences = new ArrayList<>();
@@ -301,5 +332,26 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
       }
     }
     return base.getCalleeTarget(caller, site, receiver);
+  }
+
+  /**
+   * Whether {@code receiver} is a class whose constructor maps positional arguments to declared
+   * fields in declaration order &mdash; i.e. a {@code typing.NamedTuple} subclass. Such a class
+   * carries no explicit {@code __init__}; its fields come from PEP-526 annotations and are
+   * populated positionally (wala/ML#579). Detected via the unresolved {@code NamedTuple} supertype
+   * the loader records.
+   *
+   * @param receiver The class being constructed.
+   * @return {@code true} iff positional field population applies.
+   */
+  private static boolean isPositionalFieldClass(IClass receiver) {
+    if (!(receiver instanceof PythonLoader.PythonClass)) return false;
+    return ((PythonLoader.PythonClass) receiver)
+        .getMissingTypeNames().stream()
+            .anyMatch(
+                n ->
+                    n.equals("NamedTuple")
+                        || n.endsWith(".NamedTuple")
+                        || n.endsWith("/NamedTuple"));
   }
 }

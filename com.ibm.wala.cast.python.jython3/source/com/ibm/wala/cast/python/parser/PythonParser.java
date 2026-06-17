@@ -67,6 +67,7 @@ import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.python.antlr.PythonTree;
+import org.python.antlr.ast.AnnAssign;
 import org.python.antlr.ast.Assert;
 import org.python.antlr.ast.Assign;
 import org.python.antlr.ast.AsyncFor;
@@ -440,6 +441,89 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
     private int assign = 0;
 
+    /**
+     * Translates a PEP-526 annotated assignment {@code target: annotation [= value]}. In a class
+     * body this declares a field (the {@code NamedTuple}/dataclass case, <a
+     * href="https://github.com/wala/ML/issues/579">wala/ML#579</a>); the field name and its
+     * declaration order are what downstream needs, so emit a field entity mirroring {@code
+     * visitAssign}. The annotation expression itself is not modeled. When a value is present it is
+     * the field's AST; an annotation-only declaration uses an {@link CAstNode#EMPTY} AST so {@code
+     * leaveTypeEntity} records the field but emits no member {@code put} for it.
+     *
+     * @param arg0 the {@code AnnAssign} AST node to translate.
+     * @return the translated {@link CAstNode}.
+     * @throws Exception if translating the value or target subtree fails.
+     */
+    @Override
+    public CAstNode visitAnnAssign(AnnAssign arg0) throws Exception {
+      expr target = arg0.getInternalTarget();
+      expr value = arg0.getInternalValue();
+      final CAstNode v =
+          value != null
+              ? notePosition(value.accept(this), value)
+              : Ast.makeNode(CAstNode.VAR, Ast.makeConstant("None"));
+
+      if (context.entity().getKind() == CAstEntity.TYPE_ENTITY) {
+        // Only `target: T = value` assigns the class attribute; a bare `target: T` annotation
+        // declares the field (name and order) without creating the attribute, matching Python,
+        // where it populates `__annotations__` only. Give the annotation-only case an EMPTY AST so
+        // leaveTypeEntity records the field but emits no member `put` (wala/ML#579).
+        final CAstNode fieldAst = value != null ? v : Ast.makeNode(CAstNode.EMPTY);
+        context.addScopedEntity(
+            null,
+            new AbstractFieldEntity(
+                target.getText(),
+                PythonCAstToIRTranslator.Any,
+                Collections.emptySet(),
+                false,
+                context.entity(),
+                makePosition(target),
+                makePosition(target)) {
+              @Override
+              public CAstNode getAST() {
+                return fieldAst;
+              }
+
+              @Override
+              public Position getPosition(int arg) {
+                return null;
+              }
+
+              @Override
+              public Position getNamePosition() {
+                return makePosition(target);
+              }
+            });
+        return Ast.makeNode(CAstNode.EMPTY);
+      } else if (value != null) {
+        /*
+         * `target: annotation = value` outside a class body is an ordinary assignment. Mirror
+         * `visitAssign`: a simple-name target must be declared (wrapped in a DECL_STMT and
+         * registered via addDefinedName), otherwise it is left undeclared and trips leaveVar's
+         * symbol assertion.
+         */
+        CAstNode assign =
+            notePosition(
+                Ast.makeNode(CAstNode.ASSIGN, notePosition(target.accept(this), target), v),
+                target);
+        CAstNode targetNode = assign.getChild(0);
+        if (targetNode.getKind() == CAstNode.VAR
+            && targetNode.getChild(0).getValue() instanceof String) {
+          String name = (String) targetNode.getChild(0).getValue();
+          context.addDefinedName(name);
+          return Ast.makeNode(
+              CAstNode.BLOCK_STMT,
+              Ast.makeNode(
+                  CAstNode.DECL_STMT, Ast.makeConstant(new CAstSymbolImpl(name, CAstType.DYNAMIC))),
+              assign);
+        }
+        return assign;
+      } else {
+        // An annotation-only declaration outside a class body has no runtime effect.
+        return Ast.makeNode(CAstNode.EMPTY);
+      }
+    }
+
     @Override
     public CAstNode visitAssign(Assign arg0) throws Exception {
       String rvalName = "rval" + assign++;
@@ -726,7 +810,9 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       // TODO: CURRENTLY THIS WILL NOT BE CORRECT FOR EXTENDING CLASSES IMPORTED FROM ANOTHER MODULE
       types.map(arg0.getInternalName(), cls);
 
-      Collection<CAstEntity> members = HashSetFactory.make();
+      // Insertion-ordered so a class's members (notably annotated fields) keep declaration order,
+      // which positional NamedTuple/dataclass construction relies on (wala/ML#579).
+      Collection<CAstEntity> members = new java.util.LinkedHashSet<>();
 
       CAstEntity clse =
           new AbstractClassEntity(cls) {
