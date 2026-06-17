@@ -799,8 +799,16 @@ public class PythonCAstToIRTranslator extends AstTranslator {
               type, Atom.findOrCreateUnicodeAtom(field.getName()), PythonTypes.Root);
       int val;
       if (field.getKind() == CAstEntity.FIELD_ENTITY) {
-        this.visit(field.getAST(), code, this);
-        val = code.getValue(field.getAST());
+        CAstNode fieldAst = field.getAST();
+        if (fieldAst == null || fieldAst.getKind() == CAstNode.EMPTY) {
+          // Annotation-only field declaration (PEP-526 `x: T` in a class body): the loader already
+          // recorded the field name and order via defineField, so emit no member put. This matches
+          // Python, where a bare annotation populates `__annotations__` only and does not
+          // create/overwrite the class attribute (wala/ML#579).
+          continue;
+        }
+        this.visit(fieldAst, code, this);
+        val = code.getValue(fieldAst);
       } else if (field.getKind() == CAstEntity.TYPE_ENTITY) {
         String className = composeEntityName(typeContext, field);
         val = doGlobalRead(null, code, className, PythonTypes.Root);

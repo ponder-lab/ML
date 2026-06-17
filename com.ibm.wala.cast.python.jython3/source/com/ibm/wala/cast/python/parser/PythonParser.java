@@ -463,6 +463,11 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
               : Ast.makeNode(CAstNode.VAR, Ast.makeConstant("None"));
 
       if (context.entity().getKind() == CAstEntity.TYPE_ENTITY) {
+        // Only `target: T = value` assigns the class attribute; a bare `target: T` annotation
+        // declares the field (name and order) without creating the attribute, matching Python,
+        // where it populates `__annotations__` only. Give the annotation-only case an EMPTY AST so
+        // leaveTypeEntity records the field but emits no member `put` (wala/ML#579).
+        final CAstNode fieldAst = value != null ? v : Ast.makeNode(CAstNode.EMPTY);
         context.addScopedEntity(
             null,
             new AbstractFieldEntity(
@@ -475,7 +480,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
                 makePosition(target)) {
               @Override
               public CAstNode getAST() {
-                return v;
+                return fieldAst;
               }
 
               @Override
