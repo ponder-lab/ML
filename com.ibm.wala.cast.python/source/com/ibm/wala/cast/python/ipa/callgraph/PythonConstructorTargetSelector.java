@@ -81,9 +81,11 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
                   receiver.getClassLoader().getReference(), receiver.getName() + "/__init__");
           IClass ctorCls = cha.lookupClass(ctorRef);
           IMethod init = ctorCls == null ? null : ctorCls.getMethod(AstMethodReference.fnSelector);
-          // wala/ML#579: a NamedTuple with no explicit __init__ maps positional constructor
-          // arguments to its declared fields in declaration order. Collect those fields so the
-          // synthesized constructor can populate them on the new instance below.
+          /*
+           * https://github.com/wala/ML/issues/579: a NamedTuple with no explicit __init__ maps
+           * positional constructor arguments to its declared fields in declaration order. Collect
+           * those fields so the synthesized constructor can populate them on the new instance below.
+           */
           List<IField> tupleFields =
               init == null && isPositionalFieldClass(receiver)
                   ? new ArrayList<>(receiver.getDeclaredStaticFields())
@@ -147,9 +149,10 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
           pc++;
 
           /*
-           * wala/ML#579: store each positional constructor argument into the corresponding declared
-           * field, in declaration order. Param 1 is the callable; the positional arguments are value
-           * numbers 2, 3, ... So field[i] is populated from argument value number 2 + i.
+           * https://github.com/wala/ML/issues/579: store each positional constructor argument into
+           * the corresponding declared field, in declaration order. Param 1 is the callable; the
+           * positional arguments are value numbers 2, 3, ... So field[i] is populated from argument
+           * value number 2 + i.
            */
           for (int i = 0; i < tupleFields.size(); i++) {
             ctor.addStatement(
