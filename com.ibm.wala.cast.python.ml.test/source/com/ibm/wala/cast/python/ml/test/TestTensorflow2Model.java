@@ -6187,6 +6187,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_extract_patches.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_2_2_27_FLOAT32)));
   }
 
+  /**
+   * Regression guard for {@code tf.image.extract_patches} called with a Python <em>list
+   * literal</em> {@code images} argument (rather than a {@code tf.Tensor}), per <a
+   * href="https://github.com/wala/ML/issues/584">wala/ML#584</a>. The result must still be
+   * recognized as a tensor; the {@code int32} dtype is inherited from the literal and the shape is
+   * ⊤ (the list-literal shape is not statically propagated through the op).
+   */
+  @Test
+  public void testExtractPatches2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_extract_patches2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
   /** Pure-passthrough generator test for {@code tf.math.tan} (wala/ML#422). */
   @Test
   public void testTan()
