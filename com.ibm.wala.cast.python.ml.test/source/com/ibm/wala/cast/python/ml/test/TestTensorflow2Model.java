@@ -25,7 +25,6 @@ import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
 import com.ibm.wala.cast.python.ml.client.BroadcastTo;
 import com.ibm.wala.cast.python.ml.client.Constant;
 import com.ibm.wala.cast.python.ml.client.Linspace;
-import com.ibm.wala.cast.python.ml.client.NonBroadcastableShapesException;
 import com.ibm.wala.cast.python.ml.client.NpArray;
 import com.ibm.wala.cast.python.ml.client.NpOnes;
 import com.ibm.wala.cast.python.ml.client.NpZeros;
@@ -5354,8 +5353,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    *
    * The analysis retains the broadcastable result ({@code [2, 2]}) and discards the
    * non-broadcastable cross-pair as analysis-level imprecision rather than a runtime error &mdash;
-   * the cross-pair would never co-occur at runtime under matched contexts. A {@link
-   * NonBroadcastableShapesException} is only thrown when <em>every</em> pair is non-broadcastable.
+   * the cross-pair would never co-occur at runtime under matched contexts. When <em>every</em> pair
+   * is non-broadcastable, the result shape instead degrades to ⊤ (<a
+   * href="https://github.com/wala/ML/issues/583">wala/ML#583</a>).
    *
    * @see #testAdd117a()
    */
@@ -6702,16 +6702,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * This is an invalid case since the inputs have different ranks.
-   *
-   * <p>For now, we are throwing an exception. But, this is invalid code.
-   *
-   * <p>TODO: We'll need to come up with a suitable way to handle this in the future.
+   * Operands of different ranks ({@code (2, 3)} and {@code (2,)}) are genuinely non-broadcastable.
+   * Rather than throw an exception that aborts the whole analysis, the element-wise generator
+   * degrades the result shape to ⊤ (unknown) and continues; the {@code int32} dtype is still
+   * recovered (<a href="https://github.com/wala/ML/issues/583">wala/ML#583</a>).
    */
-  @Test(expected = NonBroadcastableShapesException.class)
+  @Test
   public void testMultiply6()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_multiply6.py", "f", 1, 1);
+    test("tf2_test_multiply6.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
   }
 
   @Test

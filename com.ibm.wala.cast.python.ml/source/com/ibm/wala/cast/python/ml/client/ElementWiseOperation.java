@@ -116,8 +116,8 @@ public class ElementWiseOperation extends ZerosLike {
     // wala/ML#462: when the operands carry per-context shape unions (e.g., `y_true ∈ {[256],
     // [10000]}` for train vs. test), the cartesian product surfaces cross-context pairs (e.g.,
     // `(256, 10000)`) that would never co-occur at runtime under matched contexts. Discard those
-    // silently as analysis-level imprecision; only throw when *every* pair is non-broadcastable
-    // (i.e., no plausible runtime that the static analysis would model).
+    // silently as analysis-level imprecision; only when *every* pair is non-broadcastable does the
+    // result shape degrade to ⊤ below (wala/ML#583).
     List<Dimension<?>> sampleNonBroadcastableX = null;
     List<Dimension<?>> sampleNonBroadcastableY = null;
     for (List<Dimension<?>> xShape : xShapes)
@@ -137,9 +137,26 @@ public class ElementWiseOperation extends ZerosLike {
                       + yShape);
         }
 
-    if (ret.isEmpty() && sampleNonBroadcastableX != null)
-      throw new NonBroadcastableShapesException(
-          this, sampleNonBroadcastableX, sampleNonBroadcastableY);
+    if (ret.isEmpty() && sampleNonBroadcastableX != null) {
+      // wala/ML#583: every operand-shape pair is non-broadcastable. This is usually a
+      // context-collapse artifact (e.g. `accuracy(y_pred, y_true)` analyzed with `[256]` from
+      // training and `[10000]` from test, whose per-context shapes get crossed), not a real
+      // program error. Degrade the result shape to ⊤ (unknown) so the analysis continues, rather
+      // than throwing an exception that aborts the whole run; the dtype is still recovered by
+      // getDefaultDTypes. Per-context separation is the precise fix and is tracked separately.
+      // Log at FINE, not WARNING: element-wise ops are common and the other degrade-to-⊤ paths
+      // (Slice, Squeeze) are quiet, so a per-occurrence WARNING would flood normal runs.
+      final List<Dimension<?>> x = sampleNonBroadcastableX;
+      final List<Dimension<?>> y = sampleNonBroadcastableY;
+      LOGGER.fine(
+          () ->
+              "EWO.getDefaultShapes: all operand-shape pairs are non-broadcastable ("
+                  + x
+                  + " vs. "
+                  + y
+                  + "); degrading the result shape to unknown (wala/ML#583).");
+      return null;
+    }
 
     return ret;
   }
