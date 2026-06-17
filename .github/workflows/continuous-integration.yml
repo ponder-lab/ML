@@ -188,17 +188,20 @@ jobs:
     # glob drift fail loudly instead of silently producing an assetless
     # release. See https://github.com/wala/ML/issues/561.
     # `action-gh-release` creates the Release for the pushed tag if one doesn't
-    # already exist, then attaches the fat JAR. `prerelease: true` matches the
-    # project's release convention; `generate_release_notes: true` fills the body
-    # from the PRs merged since the previous tag. Together with the `release.yml`
-    # dispatch (wala/ML#455), this makes cutting a release fully hands-off — no
-    # manual `gh release create`.
-    - name: Create prerelease and attach fat JAR
+    # already exist, then attaches the fat JAR. The releases are full (non-pre)
+    # releases marked as latest: a `0.x` version is not a SemVer pre-release (which
+    # would carry a `-identifier` suffix) — the major-zero already signals the
+    # unstable-API phase — so the newest tag should win GitHub's "Latest" badge.
+    # `generate_release_notes: true` fills the body from the PRs merged since the
+    # previous tag. Together with the `release.yml` dispatch (wala/ML#455), this
+    # makes cutting a release fully hands-off — no manual `gh release create`.
+    - name: Create release and attach fat JAR
       uses: softprops/action-gh-release@v3
       with:
         files: com.ibm.wala.cast.python.ml-*-fat.jar
         fail_on_unmatched_files: true
-        prerelease: true
+        prerelease: false
+        make_latest: "true"
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
