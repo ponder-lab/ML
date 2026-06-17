@@ -188,17 +188,14 @@ jobs:
     # glob drift fail loudly instead of silently producing an assetless
     # release. See https://github.com/wala/ML/issues/561.
     # `action-gh-release` creates the Release for the pushed tag if one doesn't
-    # already exist, then attaches the fat JAR. A tag carrying a SemVer pre-release
+    # already exist, then attaches the fat JAR. A tag with a SemVer pre-release
     # suffix (e.g. `1.0.0-rc.1`, which `tag_check` permits) is published as a GitHub
-    # pre-release; a plain `X.Y.Z` tag (a `0.x` is NOT a SemVer pre-release — the
-    # major-zero already signals the unstable phase, no `-identifier` suffix) is a
-    # full release. `make_latest: legacy` delegates the "Latest" badge to GitHub,
-    # which awards it to the highest semantic version among non-pre-releases — so we
-    # do NOT force it: cutting an *older* release (a backport like `0.46.2` after
-    # `0.49.0`, or re-running on an old tag) won't steal the badge from the newer
-    # one. `generate_release_notes: true` fills the body from the PRs merged since
-    # the previous tag. Together with the `release.yml` dispatch (wala/ML#455), this
-    # makes cutting a release fully hands-off — no manual `gh release create`.
+    # pre-release; a plain `X.Y.Z` tag is a full release (a `0.x` is not a SemVer
+    # pre-release — the major-zero marks the unstable phase, not a `-identifier`
+    # suffix). `make_latest: legacy` lets GitHub award "Latest" to the highest
+    # semantic version rather than forcing this tag. `generate_release_notes: true`
+    # fills the body from the PRs merged since the previous tag; with the
+    # `release.yml` dispatch (wala/ML#455), cutting a release is hands-off.
     - name: Create release and attach fat JAR
       uses: softprops/action-gh-release@v3
       with:
