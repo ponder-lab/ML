@@ -188,17 +188,22 @@ jobs:
     # glob drift fail loudly instead of silently producing an assetless
     # release. See https://github.com/wala/ML/issues/561.
     # `action-gh-release` creates the Release for the pushed tag if one doesn't
-    # already exist, then attaches the fat JAR. `prerelease: true` matches the
-    # project's release convention; `generate_release_notes: true` fills the body
-    # from the PRs merged since the previous tag. Together with the `release.yml`
-    # dispatch (wala/ML#455), this makes cutting a release fully hands-off — no
-    # manual `gh release create`.
-    - name: Create prerelease and attach fat JAR
+    # already exist, then attaches the fat JAR. Whether it's a full "latest" release
+    # is driven off the tag: a plain `X.Y.Z` tag is a full release marked latest (a
+    # `0.x` is NOT a SemVer pre-release — the major-zero already signals the unstable
+    # phase, no `-identifier` suffix), while a tag carrying a SemVer pre-release
+    # suffix (e.g. `1.0.0-rc.1`, which `tag_check` permits) is published as a GitHub
+    # pre-release and does not steal the "Latest" badge. `generate_release_notes:
+    # true` fills the body from the PRs merged since the previous tag. Together with
+    # the `release.yml` dispatch (wala/ML#455), this makes cutting a release fully
+    # hands-off — no manual `gh release create`.
+    - name: Create release and attach fat JAR
       uses: softprops/action-gh-release@v3
       with:
         files: com.ibm.wala.cast.python.ml-*-fat.jar
         fail_on_unmatched_files: true
-        prerelease: true
+        prerelease: ${{ contains(github.ref_name, '-') }}
+        make_latest: ${{ contains(github.ref_name, '-') && 'false' || 'true' }}
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

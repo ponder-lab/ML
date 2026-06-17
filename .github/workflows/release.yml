@@ -5,7 +5,7 @@
 # of the 0.47.0 manual-deploy incident). `release:prepare` pushes two version-bump
 # commits and the release tag to `master`; the tag push then drives
 # `continuous-integration.yml`'s deploy gate (publish to GitHub Packages) and its
-# `release-upload` job (create the prerelease + attach the fat JAR). End to end,
+# `release-upload` job (create the release + attach the fat JAR). End to end,
 # dispatching this workflow is the whole release.
 #
 # SETUP (one-time): this workflow needs a `RELEASE_PAT` repository secret — a
@@ -157,6 +157,6 @@ jobs:
       run: |
         echo "### Release ${{ inputs.releaseVersion }} cut :rocket:" >> "$GITHUB_STEP_SUMMARY"
         echo "" >> "$GITHUB_STEP_SUMMARY"
-        echo "- Tag \`${{ inputs.releaseVersion }}\` pushed; the tag-push run in **Continuous integration** now deploys to GitHub Packages and creates the prerelease." >> "$GITHUB_STEP_SUMMARY"
+        echo "- Tag \`${{ inputs.releaseVersion }}\` pushed; the tag-push run in **Continuous integration** now deploys to GitHub Packages and creates the release." >> "$GITHUB_STEP_SUMMARY"
         echo "- Next development version set to \`${{ inputs.developmentVersion }}\`." >> "$GITHUB_STEP_SUMMARY"
       shell: bash
