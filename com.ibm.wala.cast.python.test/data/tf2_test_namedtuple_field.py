@@ -1,7 +1,7 @@
-"""Exercises tensor-type propagation through a user-defined ``NamedTuple`` field (wala/ML#579).
+"""Exercises tensor-type propagation through a user-defined ``NamedTuple`` field (https://github.com/wala/ML/issues/579).
 
 A tensor stored in a ``NamedTuple`` field and read back out (``b = w.tensor``) keeps its original ``(4, 8) float32`` type.
-This is the minimal form of the GCN blocker in wala/ML#570, where ``GraphConvolution.call`` unwraps a ``GNNInput`` ``NamedTuple`` the same way.
+This is the minimal form of the GCN blocker in https://github.com/wala/ML/issues/570, where ``GraphConvolution.call`` unwraps a ``GNNInput`` ``NamedTuple`` the same way.
 """
 
 from typing import NamedTuple, List
