@@ -81,8 +81,10 @@ public class Python3Interpreter extends com.ibm.wala.cast.python.util.PythonInte
       // skipped because of the earlier init failure); subsequent calls log at FINE only, since
       // the underlying init failure has already been announced from {@link #getInterp()}.
       // Count this miss so a client can summarize the total precision lost to interpreter
-      // unavailability at the end of a run (wala/ML#444).
-      recordInterpreterUnavailableMiss();
+      // unavailability at the end of a run (wala/ML#444). Fully qualify the inherited WALA static
+      // so
+      // it isn't misread as a member of the imported Jython `org.python.util.PythonInterpreter`.
+      com.ibm.wala.cast.python.util.PythonInterpreter.recordInterpreterUnavailableMiss();
       if (unavailableWarned.compareAndSet(false, true)) {
         LOGGER.log(
             Level.WARNING,
