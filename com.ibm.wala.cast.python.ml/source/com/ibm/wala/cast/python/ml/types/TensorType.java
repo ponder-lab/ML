@@ -491,7 +491,7 @@ public class TensorType implements Iterable<Dimension<?>> {
    * @return A dense {@link TensorType} or a {@link SparseTensorType}, per {@code layout}.
    */
   public static TensorType of(DType dtype, List<Dimension<?>> dims, Layout layout) {
-    Objects.requireNonNull(layout, "TensorType layout must not be null");
+    Objects.requireNonNull(layout, TensorType.class.getSimpleName() + " layout must not be null");
     return switch (layout) {
       case DENSE -> new TensorType(dtype, dims);
       case SPARSE -> new SparseTensorType(dtype, dims);
