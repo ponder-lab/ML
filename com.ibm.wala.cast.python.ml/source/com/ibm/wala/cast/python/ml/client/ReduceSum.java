@@ -8,7 +8,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  * @see <a
  *     href="https://www.tensorflow.org/api_docs/python/tf/math/reduce_sum">tf.math.reduce_sum</a>
  */
-public class ReduceSum extends ReduceMean {
+public class ReduceSum extends Reduction {
 
   public ReduceSum(PointsToSetVariable source) {
     super(source);

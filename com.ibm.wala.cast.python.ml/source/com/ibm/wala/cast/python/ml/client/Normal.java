@@ -10,7 +10,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  *     random.normal() API</a>.
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class Normal extends Uniform {
+public class Normal extends RandomDistribution {
 
   public Normal(PointsToSetVariable source) {
     super(source);

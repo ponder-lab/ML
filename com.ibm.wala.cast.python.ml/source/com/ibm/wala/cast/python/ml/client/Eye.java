@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-public class Eye extends SparseEye {
+public class Eye extends EyeBase {
 
   protected enum Parameters {
     NUM_ROWS,

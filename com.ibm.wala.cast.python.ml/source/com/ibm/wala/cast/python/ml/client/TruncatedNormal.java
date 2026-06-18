@@ -11,7 +11,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  *     API</a>.
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class TruncatedNormal extends Normal {
+public class TruncatedNormal extends RandomDistribution {
 
   public TruncatedNormal(PointsToSetVariable source) {
     super(source);
