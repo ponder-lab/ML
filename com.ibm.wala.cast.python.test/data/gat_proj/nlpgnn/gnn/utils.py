@@ -3,6 +3,7 @@
 """
 @Author:Kaiyin Zhou
 """
+
 # Reachable slice of `kyzhouhzau/NLPGNN/nlpgnn/gnn/utils.py` for `GATLayer.call`:
 # `GNNInput` (the message-passing input tuple), plus `masksoftmax` and its helper
 # `maybe_num_nodes`, which `GraphAttentionConvolution.message_function` calls. The
