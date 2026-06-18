@@ -17,8 +17,9 @@ node_embeddings = tf.constant(np.ones((num_nodes, num_features), dtype=np.float3
 # One edge type: an `[E, 2]` list of (source, target) node-index pairs.
 adjacency_lists = [tf.constant([[0, 1], [1, 2], [2, 3], [3, 0]], dtype=tf.int32)]
 
-model = GATLayer(hidden_dim=8, num_class=3, heads=8)
+num_class = 3
+model = GATLayer(hidden_dim=8, num_class=num_class, heads=8)
 result = model(node_embeddings, adjacency_lists, training=False)
 assert node_embeddings.shape == (num_nodes, num_features)
 assert node_embeddings.dtype == tf.float32
-assert result.dtype == tf.float32
+assert result.shape == (num_nodes, num_class) and result.dtype == tf.float32
