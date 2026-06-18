@@ -429,15 +429,17 @@ public class TensorType implements Iterable<Dimension<?>> {
   private final List<Dimension<?>> dims;
 
   /**
-   * Whether the tensor is stored sparsely (a {@code tf.sparse.SparseTensor} / {@code
-   * tf.SparseTensor}), as opposed to a dense tensor. Sparseness is a tensor-level storage property,
-   * orthogonal to {@link #dims}: a sparse tensor has the same dense shape as its dense counterpart,
-   * so this is a flag on the whole type rather than a {@link Dimension} (contrast {@link
-   * RaggedDim}, which is genuinely per-axis). It lets a consumer reading the per-parameter {@code
-   * TensorType} distinguish a sparse parameter (and emit {@code tf.SparseTensorSpec}) from a dense
-   * one. See <a href="https://github.com/wala/ML/issues/588">wala/ML#588</a>.
+   * The storage layout of a tensor. Sparseness is a tensor-level storage property orthogonal to
+   * {@link #dims} (a sparse tensor has the same dense shape as its dense counterpart), so it is
+   * modeled as the concrete type ({@link SparseTensorType}) rather than a {@link Dimension}
+   * (contrast {@link RaggedDim}, which is genuinely per-axis). A consumer reading a per-parameter
+   * {@code TensorType} can branch on {@link #layout()} to emit the right spec. See <a
+   * href="https://github.com/wala/ML/issues/588">wala/ML#588</a>.
    */
-  private final boolean sparse;
+  public enum Layout {
+    DENSE,
+    SPARSE
+  }
 
   /**
    * Constructs a {@code TensorType} from a {@code cellType} string. The string must map to a known
@@ -464,7 +466,6 @@ public class TensorType implements Iterable<Dimension<?>> {
           "Cell type: " + cellType + " does not map to a known " + DType.class.getName() + ".", e);
     }
     this.dims = dims;
-    this.sparse = false;
   }
 
   /**
@@ -475,39 +476,39 @@ public class TensorType implements Iterable<Dimension<?>> {
    * @param dims The dimensions of the tensor; may be null to indicate unknown rank (⊤ shape).
    */
   public TensorType(DType dtype, List<Dimension<?>> dims) {
-    this(dtype, dims, false);
-  }
-
-  /**
-   * Primary constructor.
-   *
-   * @param dtype The tensor element type. Must not be null.
-   * @param dims The dimensions of the tensor; may be null to indicate unknown rank (⊤ shape).
-   * @param sparse Whether the tensor is stored sparsely; see {@link #sparse}.
-   */
-  public TensorType(DType dtype, List<Dimension<?>> dims, boolean sparse) {
     this.dtype = Objects.requireNonNull(dtype, "TensorType dtype must not be null");
     this.dims = dims;
-    this.sparse = sparse;
   }
 
   /**
-   * Returns whether this tensor is stored sparsely; see {@link #sparse}.
+   * The storage layout of this tensor: the polymorphic source of truth for sparseness. Overridden
+   * by {@link SparseTensorType}; the base {@code TensorType} is always {@link Layout#DENSE}.
    *
-   * @return {@code true} if this is a sparse tensor, {@code false} if dense.
+   * @return {@link Layout#DENSE} for a dense tensor, {@link Layout#SPARSE} for a sparse one.
    */
-  public boolean isSparse() {
-    return this.sparse;
+  public Layout layout() {
+    return Layout.DENSE;
   }
 
   /**
-   * Returns a sparse view of this type: the same dtype and dims, marked sparse. Returns {@code
-   * this} when already sparse.
+   * Convenience predicate derived from {@link #layout()}.
    *
-   * @return A {@code TensorType} equal to this one but with {@link #isSparse()} {@code true}.
+   * @return {@code true} if this is a sparse tensor ({@link Layout#SPARSE}), {@code false} if
+   *     dense.
+   */
+  public final boolean isSparse() {
+    return this.layout() == Layout.SPARSE;
+  }
+
+  /**
+   * Returns a sparse view of this type: the same dtype and dims, as a {@link SparseTensorType}.
+   * Returns {@code this} when already sparse.
+   *
+   * @return A {@link SparseTensorType} with this type's dtype and dims, or {@code this} if already
+   *     sparse.
    */
   public TensorType asSparse() {
-    return this.sparse ? this : new TensorType(this.dtype, this.dims, true);
+    return this.isSparse() ? this : new SparseTensorType(this.dtype, this.dims);
   }
 
   String toFormattedString(Format fmt) {
@@ -585,7 +586,7 @@ public class TensorType implements Iterable<Dimension<?>> {
         + (getDims() == null ? "?" : getDims().toString())
         + " of "
         + getCellType()
-        + (this.sparse ? " (sparse)" : "")
+        + (this.isSparse() ? " (sparse)" : "")
         + "}";
   }
 
@@ -595,7 +596,7 @@ public class TensorType implements Iterable<Dimension<?>> {
     int result = 1;
     result = prime * result + ((getCellType() == null) ? 0 : getCellType().hashCode());
     result = prime * result + ((getDims() == null) ? 0 : getDims().hashCode());
-    result = prime * result + (this.sparse ? 1231 : 1237);
+    result = prime * result + (this.isSparse() ? 1231 : 1237);
     return result;
   }
 
@@ -605,7 +606,9 @@ public class TensorType implements Iterable<Dimension<?>> {
     if (obj == null) return false;
     if (getClass() != obj.getClass()) return false;
     TensorType other = (TensorType) obj;
-    if (this.sparse != other.sparse) return false;
+    // Dense vs. sparse is already distinguished by the getClass() check above (SparseTensorType is
+    // a
+    // distinct class), so layout need not be re-compared here.
     if (getCellType() == null) {
       if (other.getCellType() != null) return false;
     } else if (!getCellType().equals(other.getCellType())) return false;
