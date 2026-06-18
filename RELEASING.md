@@ -1,6 +1,6 @@
 # Releasing
 
-Releases are published to GitHub Packages (`maven.pkg.github.com/ponder-lab/ML`), including the consumer-facing fat JAR `com.ibm.wala.cast.python.ml-X.Y.Z-fat.jar`. The mechanism is `maven-release-plugin`: it pushes two version-bump commits and a plain-semver tag to `master`, and the tag push drives CI's deploy gate (publish to GitHub Packages) and `release-upload` job (create the prerelease with generated notes and attach the fat JAR). There is no manual `mvn deploy` or `gh release create` step.
+Releases are published to GitHub Packages (`maven.pkg.github.com/ponder-lab/ML`), including the consumer-facing fat JAR `com.ibm.wala.cast.python.ml-X.Y.Z-fat.jar`. The mechanism is `maven-release-plugin`: it pushes two version-bump commits and a plain-semver tag to `master`, and the tag push drives CI's deploy gate (publish to GitHub Packages) and `release-upload` job (create the GitHub Release with generated notes and attach the fat JAR; the release is marked a pre-release only when the tag carries a `-` suffix). The normal path needs no manual `mvn deploy` or `gh release create` step (a manual-deploy fallback for CI failures is in [Troubleshooting](#troubleshooting) below).
 
 ## One-Click Release (Preferred)
 
@@ -11,7 +11,7 @@ gh workflow run release.yml --repo ponder-lab/ML --ref master \
 	-f releaseVersion=0.48.0 -f developmentVersion=0.48.1-SNAPSHOT
 ```
 
-`releaseVersion` is plain semver (`X.Y.Z`); `developmentVersion` is the next snapshot (`X.Y.W-SNAPSHOT`). The workflow validates the inputs, tests the release version before tagging, pushes the commits and tag, and the tag-push CI then deploys and creates the prerelease. Confirm the published version afterward:
+`releaseVersion` is plain semver (`X.Y.Z`); `developmentVersion` is the next snapshot (`X.Y.W-SNAPSHOT`). The workflow validates the inputs, tests the release version before tagging, pushes the commits and tag, and the tag-push CI then deploys and creates the release. Confirm the published version afterward:
 
 ```bash
 gh api "/orgs/ponder-lab/packages/maven/com.ibm.wala.com.ibm.wala.cast.python.ml/versions" --jq '.[].name' | head
@@ -34,7 +34,7 @@ If you need to cut a release locally, the prerequisites are the local-dependency
 
 	No other flags are needed: the tag format is pinned to plain `X.Y.Z` ([wala/ML#560](https://github.com/wala/ML/issues/560)) and the local dependencies are installed at release coordinates, so `-Dtag`, `-DignoreSnapshots`, and `-DallowTimestampedSnapshots` are unnecessary. `release:prepare` builds and tests the release version, sets it, commits, tags, sets the next development version, commits, and pushes everything to `master`.
 
-1. The tag push triggers CI's deploy gate ([wala/ML#421](https://github.com/wala/ML/issues/421)) — which requires the tag to be plain semver *and* an ancestor of `master` — publishing the artifacts and creating the prerelease, exactly as in the one-click flow. Confirm with the `gh api` command above.
+1. The tag push triggers CI's deploy gate ([wala/ML#421](https://github.com/wala/ML/issues/421)), which requires a semver-shaped tag (optionally `v`-prefixed, optionally with a `-` pre-release suffix) that is an ancestor of `master`, publishing the artifacts and creating the release, exactly as in the one-click flow. Confirm with the `gh api` command above.
 
 ## Troubleshooting
 
