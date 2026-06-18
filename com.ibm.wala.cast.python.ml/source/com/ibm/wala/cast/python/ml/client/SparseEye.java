@@ -8,7 +8,7 @@ import java.util.Locale;
  * A generator for the sparse identity matrix produced by {@code tf.sparse.eye}. The {@code
  * num_rows} &times; {@code num_columns} shape construction lives in {@link EyeBase}; this subclass
  * supplies the sparse signature's {@code dtype} parameter position (no {@code batch_shape}, unlike
- * {@link Eye}).
+ * {@link Eye}) and marks its output as sparse.
  *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/sparse/eye">tf.sparse.eye API</a>.
  */
@@ -35,6 +35,11 @@ public class SparseEye extends EyeBase {
 
   public SparseEye(CGNode node) {
     super(node);
+  }
+
+  @Override
+  protected boolean producesSparseTensor() {
+    return true;
   }
 
   @Override

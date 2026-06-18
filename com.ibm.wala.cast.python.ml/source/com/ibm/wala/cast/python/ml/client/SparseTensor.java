@@ -14,6 +14,11 @@ import java.util.Set;
  */
 public class SparseTensor extends TensorTypeAllocator {
 
+  @Override
+  protected boolean producesSparseTensor() {
+    return true;
+  }
+
   protected enum Parameters {
     INDICES,
     VALUES,

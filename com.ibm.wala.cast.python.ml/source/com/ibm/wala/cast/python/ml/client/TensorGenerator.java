@@ -28,6 +28,7 @@ import static java.util.Collections.emptyList;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
+import com.ibm.wala.cast.python.ml.types.SparseTensorType;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
@@ -71,7 +72,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -226,21 +226,39 @@ public abstract class TensorGenerator {
 
     Set<TensorType> ret = HashSetFactory.make();
 
+    final boolean sparse = this.producesSparseTensor();
+
     if (shapes == null) {
       // Shape is unknown (⊤), but dtype info may still be available. Emit TensorTypes with null
       // dims so the dtype information is preserved.
       for (DType dtype : dTypes)
-        ret.add(new TensorType(dtype.name().toLowerCase(Locale.ROOT), null));
+        ret.add(sparse ? new SparseTensorType(dtype, null) : new TensorType(dtype, null));
     } else {
       // Create a tensor type for each possible shape and dtype combination.
       for (List<Dimension<?>> dimensionList : shapes)
         for (DType dtype : dTypes)
-          ret.add(new TensorType(dtype.name().toLowerCase(Locale.ROOT), dimensionList));
+          ret.add(
+              sparse
+                  ? new SparseTensorType(dtype, dimensionList)
+                  : new TensorType(dtype, dimensionList));
     }
 
     LOGGER.fine("Generator " + this.getClass().getSimpleName() + " produced types: " + ret);
 
     return ret;
+  }
+
+  /**
+   * Whether this generator produces a sparse tensor (a {@code tf.sparse.SparseTensor} / {@code
+   * tf.SparseTensor}), as opposed to a dense one. Sparse generators override this to {@code true};
+   * {@link #getTensorTypes} then emits a {@link SparseTensorType} for every result so a consumer
+   * can distinguish a sparse result from a dense one (<a
+   * href="https://github.com/wala/ML/issues/588">wala/ML#588</a>).
+   *
+   * @return {@code true} if the produced tensor is sparse; {@code false} (the default) for dense.
+   */
+  protected boolean producesSparseTensor() {
+    return false;
   }
 
   /**

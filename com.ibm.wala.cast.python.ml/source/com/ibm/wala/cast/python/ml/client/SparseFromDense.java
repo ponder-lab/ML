@@ -13,6 +13,11 @@ import java.util.Locale;
  */
 public class SparseFromDense extends ConvertToTensor {
 
+  @Override
+  protected boolean producesSparseTensor() {
+    return true;
+  }
+
   protected enum Parameters {
     TENSOR,
     NAME;

@@ -4059,7 +4059,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_3_4_INT32), 3, Set.of(TENSOR_3_4_INT32)));
+        Map.of(2, Set.of(TENSOR_3_4_INT32.asSparse()), 3, Set.of(TENSOR_3_4_INT32.asSparse())));
   }
 
   @Test
@@ -4070,7 +4070,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_3_4_INT32), 3, Set.of(TENSOR_3_4_INT32)));
+        Map.of(2, Set.of(TENSOR_3_4_INT32.asSparse()), 3, Set.of(TENSOR_3_4_INT32.asSparse())));
   }
 
   @Test
@@ -4259,7 +4259,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         2,
-        Map.of(2, Set.of(TENSOR_3_4_INT32), 3, Set.of(TENSOR_3_4_INT32)));
+        Map.of(2, Set.of(TENSOR_3_4_INT32.asSparse()), 3, Set.of(TENSOR_3_4_INT32.asSparse())));
   }
 
   @Test
@@ -4545,7 +4545,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_3_4_INT32), 3, Set.of(TENSOR_3_4_INT32)));
+        Map.of(2, Set.of(TENSOR_3_4_INT32.asSparse()), 3, Set.of(TENSOR_3_4_INT32.asSparse())));
   }
 
   @Test
@@ -4556,7 +4556,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_3_4_INT32), 3, Set.of(TENSOR_3_4_INT32)));
+        Map.of(2, Set.of(TENSOR_3_4_INT32.asSparse()), 3, Set.of(TENSOR_3_4_INT32.asSparse())));
   }
 
   @Test
@@ -4567,7 +4567,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_3_4_INT32), 3, Set.of(TENSOR_3_4_INT32)));
+        Map.of(2, Set.of(TENSOR_3_4_INT32.asSparse()), 3, Set.of(TENSOR_3_4_INT32.asSparse())));
   }
 
   @Test
@@ -5335,7 +5335,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_2_3_FLOAT32), 3, Set.of(TENSOR_2_3_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32.asSparse()), 3, Set.of(TENSOR_2_3_FLOAT32.asSparse())));
   }
 
   @Test
@@ -5346,7 +5346,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_2_3_FLOAT32), 3, Set.of(TENSOR_2_3_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32.asSparse()), 3, Set.of(TENSOR_2_3_FLOAT32.asSparse())));
   }
 
   @Test
@@ -5357,7 +5357,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "add",
         2,
         3,
-        Map.of(2, Set.of(TENSOR_2_3_FLOAT32), 3, Set.of(TENSOR_2_3_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32.asSparse()), 3, Set.of(TENSOR_2_3_FLOAT32.asSparse())));
   }
 
   @Test
@@ -5535,37 +5535,37 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testSparseAdd()
       throws ClassHierarchyException, IllegalArgumentException, IOException, CancelException {
-    test("tf2_test_sparse_add.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
+    test("tf2_test_sparse_add.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32.asSparse())));
   }
 
   @Test
   public void testSparseAdd2()
       throws ClassHierarchyException, IllegalArgumentException, IOException, CancelException {
-    test("tf2_test_sparse_add2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
+    test("tf2_test_sparse_add2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32.asSparse())));
   }
 
   @Test
   public void testSparseAdd3()
       throws ClassHierarchyException, IllegalArgumentException, IOException, CancelException {
-    test("tf2_test_sparse_add3.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_INT32)));
+    test("tf2_test_sparse_add3.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_INT32.asSparse())));
   }
 
   @Test
   public void testSparseAdd4()
       throws ClassHierarchyException, IllegalArgumentException, IOException, CancelException {
-    test("tf2_test_sparse_add4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_INT32)));
+    test("tf2_test_sparse_add4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_INT32.asSparse())));
   }
 
   @Test
   public void testSparseAdd5()
       throws ClassHierarchyException, IllegalArgumentException, IOException, CancelException {
-    test("tf2_test_sparse_add5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
+    test("tf2_test_sparse_add5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32.asSparse())));
   }
 
   @Test
   public void testSparseAdd6()
       throws ClassHierarchyException, IllegalArgumentException, IOException, CancelException {
-    test("tf2_test_sparse_add6.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
+    test("tf2_test_sparse_add6.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32.asSparse())));
   }
 
   /**
@@ -10229,37 +10229,42 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testSparseFromDense()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_sparse_from_dense.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+    test(
+        "tf2_test_sparse_from_dense.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32.asSparse())));
   }
 
   @Test
   public void testSparseEye() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_sparse_eye.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_5_FLOAT32)));
+    test("tf2_test_sparse_eye.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_5_FLOAT32.asSparse())));
   }
 
   @Test
   public void testSparseEye2() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_sparse_eye2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_5_FLOAT32)));
+    test("tf2_test_sparse_eye2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_5_FLOAT32.asSparse())));
   }
 
   @Test
   public void testSparseEye3() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_sparse_eye3.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_5_INT32)));
+    test("tf2_test_sparse_eye3.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_5_INT32.asSparse())));
   }
 
   @Test
   public void testSparseEye4() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_sparse_eye4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_2_FLOAT32)));
+    test("tf2_test_sparse_eye4.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_2_FLOAT32.asSparse())));
   }
 
   @Test
   public void testSparseEye5() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_sparse_eye5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_2_FLOAT32)));
+    test("tf2_test_sparse_eye5.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_2_FLOAT32.asSparse())));
   }
 
   @Test
   public void testSparseEye6() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_sparse_eye6.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_2_INT32)));
+    test("tf2_test_sparse_eye6.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_2_INT32.asSparse())));
   }
 
   @Test
@@ -10471,7 +10476,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   @Test
   public void testSparseTensor() throws ClassHierarchyException, CancelException, IOException {
-    test("tf2_test_sparse_tensor.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_4_INT32)));
+    test("tf2_test_sparse_tensor.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_4_INT32.asSparse())));
   }
 
   @Test
@@ -10889,8 +10894,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         2,
         Map.of(
-            2, Set.of(TENSOR_2_2_INT32),
-            3, Set.of(TENSOR_2_2_INT32)));
+            2, Set.of(TENSOR_2_2_INT32.asSparse()),
+            3, Set.of(TENSOR_2_2_INT32.asSparse())));
   }
 
   @Test
@@ -10902,8 +10907,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         2,
         Map.of(
-            2, Set.of(TENSOR_2_3_INT32),
-            3, Set.of(TENSOR_3_3_FLOAT32)));
+            2, Set.of(TENSOR_2_3_INT32.asSparse()),
+            3, Set.of(TENSOR_3_3_FLOAT32.asSparse())));
   }
 
   @Test
