@@ -66,7 +66,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           IS_DRAFT: ${{ github.event.pull_request.draft }}
         run: |
           set -euo pipefail
@@ -77,44 +76,36 @@ jobs:
 
           # Whether Copilot is currently a requested reviewer: a review is in progress or about to
           # start. This re-populates on every push and on every (re-)request and clears once Copilot
-          # submits, so it stays true while Copilot reviews the head — the first review AND every
-          # subsequent one. We never go green while it is true.
+          # submits, so it stays true for the whole of a review — the first AND every subsequent one.
+          # The gate is the timing guard the requirement asks for: never merge *while* Copilot is
+          # reviewing. We deliberately do NOT require a review of the exact head SHA — that would
+          # deadlock when the head changes (e.g. a sync merge) and Copilot declines to re-review.
           copilot_pending () {
             gh api "repos/$REPO/pulls/$PR" \
               --jq '[.requested_reviewers[]? | select(.login | ascii_downcase | contains("copilot"))] | length'
           }
-          # Whether Copilot has submitted a review for the *current* head commit.
-          reviewed_head () {
+          # Whether Copilot has ever submitted a review on this PR (any commit).
+          copilot_reviewed () {
             gh api --paginate "repos/$REPO/pulls/$PR/reviews" \
-              --jq '.[] | select((.user.login | ascii_downcase | contains("copilot")) and .commit_id == $ENV.HEAD_SHA) | .id' \
-              | grep -c . || true
-          }
-          # Whether Copilot was ever requested on this PR (the persistent timeline event): tells
-          # "engaged but not delivered yet" apart from "Copilot never reviews here".
-          ever_requested () {
-            gh api --paginate "repos/$REPO/issues/$PR/timeline" \
-              --jq '.[] | select(.event == "review_requested" and (((.requested_reviewer.login // "") | ascii_downcase) | contains("copilot"))) | .event' \
+              --jq '.[] | select(.user.login | ascii_downcase | contains("copilot")) | .id' \
               | grep -c . || true
           }
 
-          # Green only when Copilot's review of the current head is complete AND Copilot is not
-          # currently reviewing. If Copilot was never requested (disabled/outage), the antecedent is
-          # false and we must not block — pass after a brief poll for the request to propagate.
+          # RED while Copilot is reviewing (pending); GREEN once it is idle. If Copilot has reviewed
+          # and is not currently reviewing, the merge is allowed. On a fresh PR the request can take a
+          # moment to appear, so poll briefly before concluding Copilot is not engaged (which must
+          # also pass, so a disabled/outage Copilot never deadlocks every PR).
           for attempt in $(seq 1 6); do
             if [ "$(copilot_pending)" -gt 0 ]; then
               echo "::error::Copilot is currently reviewing PR #$PR (it is a requested reviewer). The PR cannot merge until that review completes; this check re-runs and turns green when Copilot submits."
               exit 1
             fi
-            if [ "$(reviewed_head)" -gt 0 ]; then
-              echo "Copilot has reviewed head commit $HEAD_SHA and is not currently reviewing. Gate satisfied."
+            if [ "$(copilot_reviewed)" -gt 0 ]; then
+              echo "Copilot has reviewed PR #$PR and is not currently reviewing. Gate satisfied."
               exit 0
             fi
-            if [ "$(ever_requested)" -gt 0 ]; then
-              echo "::error::Copilot was requested but has not yet reviewed head commit $HEAD_SHA. The PR cannot merge until Copilot finishes; this check re-runs when it submits."
-              exit 1
-            fi
-            echo "Attempt $attempt/6: Copilot is not requested, has not reviewed, and was never requested here; waiting for the request to propagate ..."
+            echo "Attempt $attempt/6: Copilot is neither reviewing nor has reviewed yet; waiting for a review request to appear ..."
             sleep 10
           done
-          echo "Copilot was never requested on this PR (antecedent false); the gate does not apply. Passing."
+          echo "Copilot is not reviewing and never reviewed this PR (not engaged); the gate does not apply. Passing."
           exit 0
