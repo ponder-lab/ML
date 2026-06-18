@@ -47,7 +47,8 @@ jobs:
     steps:
       - name: Pass through the merge queue
         if: github.event_name == 'merge_group'
-        run: echo "merge_group event: the Copilot gate is enforced at the PR level; passing."
+        run: |
+          echo "merge_group event; the Copilot gate is enforced at the PR level. Passing."
 
       - name: Require a Copilot review of the head commit
         if: github.event_name != 'merge_group'
