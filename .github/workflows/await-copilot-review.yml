@@ -1,25 +1,33 @@
 name: Await Copilot review
 
-# Blocks a PR from merging until GitHub Copilot's automatic code review has completed for the
-# current head commit.
+# Blocks a PR from merging while GitHub Copilot is reviewing it.
 #
-# Copilot reviews are advisory by design: Copilot always submits a "Comment" review, which never
-# satisfies required-approval or required-reviewer rules and never blocks merging. So without this
-# gate a PR can merge — via auto-merge or the merge queue — the instant the other required checks
-# go green, *before* Copilot's asynchronous review posts; the review comments then land on an
-# already-merged PR. GitHub acknowledges this gap and offers no native "require Copilot review"
-# setting (community discussion github.com/orgs/community/discussions/185265).
+# Copilot reviews are advisory: Copilot submits a "Comment" review, which never satisfies
+# required-approval/required-reviewer rules and never blocks merging. Without this gate a PR can
+# merge — via auto-merge or the merge queue — the instant the other required checks go green,
+# *before* Copilot's asynchronous review posts; the comments then land on an already-merged PR.
+# GitHub offers no native "require Copilot review" setting (community discussion
+# github.com/orgs/community/discussions/185265).
 #
-# This job is RED until a Copilot review exists for the head SHA, and flips GREEN the moment
-# Copilot submits its review (the `pull_request_review` trigger re-runs the gate on the same SHA).
-# Because `review_on_push` re-reviews every push, each new push re-arms the gate. `merge_group`
-# short-circuits to green so the required check still reports on the queue's temporary branch and
-# does not deadlock the merge queue (cf. the CodeQL-on-merge_group reporting requirement).
+# This job is RED while Copilot is a requested reviewer (a review is in progress — the first one or
+# any subsequent one) and GREEN once Copilot is idle (it has reviewed, or was never engaged). It
+# deliberately does NOT require a review of the exact head SHA, which would deadlock when the head
+# changes (e.g. a sync merge) and Copilot declines to re-review. `merge_group` short-circuits to
+# green so the required check still reports on the queue's temporary branch and does not deadlock the
+# merge queue (cf. the CodeQL-on-merge_group reporting requirement).
 
 on:
   pull_request:
     branches: [master]
-    types: [opened, synchronize, reopened, ready_for_review]
+    # `review_requested`/`review_request_removed` re-fire the gate when Copilot is (re-)requested or
+    # finishes, so a subsequent review flips it red again and back to green.
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+      - review_requested
+      - review_request_removed
   pull_request_review:
     types: [submitted, dismissed]
   merge_group:
@@ -50,13 +58,12 @@ jobs:
         run: |
           echo "merge_group event; the Copilot gate is enforced at the PR level. Passing."
 
-      - name: Require a Copilot review of the head commit
+      - name: Block while Copilot is reviewing
         if: github.event_name != 'merge_group'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           IS_DRAFT: ${{ github.event.pull_request.draft }}
         run: |
           set -euo pipefail
@@ -64,15 +71,40 @@ jobs:
             echo "Draft PR: Copilot does not review drafts; passing."
             exit 0
           fi
-          echo "Looking for a Copilot review of $HEAD_SHA on PR #$PR ..."
-          # `--paginate` streams every page; the `--jq` filter runs per page and emits one line per
-          # matching review, so `wc -l` aggregates the count across all pages (no 100-review cap).
-          count=$(gh api --paginate "repos/$REPO/pulls/$PR/reviews" \
-            --jq '.[] | select((.user.login | ascii_downcase | contains("copilot")) and .commit_id == $ENV.HEAD_SHA) | .id' \
-            | wc -l | tr -d '[:space:]')
-          if [ "${count:-0}" -gt 0 ]; then
-            echo "Found $count Copilot review(s) for the head commit. Gate satisfied."
-            exit 0
-          fi
-          echo "::error::No Copilot review found for head commit $HEAD_SHA yet. The PR cannot merge until Copilot finishes reviewing; this check re-runs and turns green when Copilot submits its review."
-          exit 1
+
+          # Count Copilot reviewers currently *requested* on the PR (a review is in progress or about
+          # to start). This re-populates on every push and every (re-)request and clears once Copilot
+          # submits, so it is true for the whole of a review — the first one and every subsequent one.
+          # API errors fail the gate (red); never silently treat them as "not pending".
+          copilot_pending () {
+            gh api "repos/$REPO/pulls/$PR" \
+              --jq '[.requested_reviewers[]? | select(.login | ascii_downcase | contains("copilot"))] | length' \
+              || { echo "::error::Could not query requested reviewers for PR #$PR." >&2; exit 1; }
+          }
+          # Count non-dismissed Copilot reviews on the PR (any commit). A dismissed review does not
+          # count. `--paginate` + `jq -s add` aggregates across pages; API errors fail the gate.
+          copilot_reviewed () {
+            gh api --paginate "repos/$REPO/pulls/$PR/reviews" \
+              --jq '.' \
+              | jq -s 'add | [.[] | select((.user.login | ascii_downcase | contains("copilot")) and .state != "DISMISSED")] | length' \
+              || { echo "::error::Could not query reviews for PR #$PR." >&2; exit 1; }
+          }
+
+          # RED while Copilot is reviewing (pending); GREEN once it is idle (has reviewed, or is not
+          # engaged). On a fresh PR the request can take a moment to appear, so poll briefly before
+          # concluding Copilot is not engaged — which must also pass, so a disabled/outage Copilot
+          # never deadlocks every PR.
+          for attempt in $(seq 1 6); do
+            if [ "$(copilot_pending)" -gt 0 ]; then
+              echo "::error::Copilot is currently reviewing PR #$PR (it is a requested reviewer). The PR cannot merge until that review completes; this check re-runs and turns green when Copilot finishes."
+              exit 1
+            fi
+            if [ "$(copilot_reviewed)" -gt 0 ]; then
+              echo "Copilot has reviewed PR #$PR and is not currently reviewing. Gate satisfied."
+              exit 0
+            fi
+            echo "Attempt $attempt/6: Copilot is neither reviewing nor has it reviewed yet; waiting for a review request to appear ..."
+            sleep 10
+          done
+          echo "Copilot is not reviewing and never reviewed this PR (not engaged); the gate does not apply. Passing."
+          exit 0
