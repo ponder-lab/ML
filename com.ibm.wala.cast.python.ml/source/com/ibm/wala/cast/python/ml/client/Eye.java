@@ -14,6 +14,13 @@ import java.util.Set;
 
 public class Eye extends SparseEye {
 
+  // `Eye` (dense `tf.eye`) subclasses `SparseEye` to reuse its shape logic, so it inherits the
+  // sparse marker unless it opts back out. `tf.eye` produces a dense tensor (wala/ML#588).
+  @Override
+  protected boolean producesSparseTensor() {
+    return false;
+  }
+
   protected enum Parameters {
     NUM_ROWS,
     NUM_COLUMNS,

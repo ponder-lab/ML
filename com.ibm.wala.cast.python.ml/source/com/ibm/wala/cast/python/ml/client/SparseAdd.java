@@ -22,6 +22,11 @@ import java.util.Set;
 
 public class SparseAdd extends ElementWiseOperation {
 
+  @Override
+  protected boolean producesSparseTensor() {
+    return true;
+  }
+
   protected enum Parameters {
     A,
     B,

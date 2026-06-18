@@ -18,6 +18,11 @@ import java.util.stream.StreamSupport;
 
 public class SparseEye extends Ones {
 
+  @Override
+  protected boolean producesSparseTensor() {
+    return true;
+  }
+
   private static final int SHAPE_PARAMETER_POSITION = UNDEFINED_PARAMETER_POSITION;
 
   protected enum Parameters {
