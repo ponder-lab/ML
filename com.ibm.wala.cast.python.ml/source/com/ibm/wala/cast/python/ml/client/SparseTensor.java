@@ -12,7 +12,7 @@ import java.util.Set;
  * @see <a
  *     href="https://www.tensorflow.org/api_docs/python/tf/sparse/SparseTensor">tf.sparse.SparseTensor</a>.
  */
-public class SparseTensor extends Ones {
+public class SparseTensor extends ShapeAndDTypeAllocator {
 
   protected enum Parameters {
     INDICES,

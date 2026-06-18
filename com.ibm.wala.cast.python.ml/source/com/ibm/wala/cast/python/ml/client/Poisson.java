@@ -19,7 +19,7 @@ import java.util.Set;
  *     href="https://www.tensorflow.org/api_docs/python/tf/random/poisson">tf.random.poisson</a>.
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class Poisson extends Ones {
+public class Poisson extends ShapeAndDTypeAllocator {
 
   protected enum Parameters {
     SHAPE,

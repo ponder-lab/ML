@@ -25,7 +25,7 @@ import java.util.logging.Logger;
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/keras/Input">TensorFlow Input()
  *     API</a>.
  */
-public class Input extends Ones {
+public class Input extends ShapeAndDTypeAllocator {
 
   private static final Logger LOGGER = getLogger(Input.class.getName());
 
