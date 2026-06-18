@@ -13,14 +13,16 @@ import java.util.Set;
  * A representation of the `tf.convert_to_tensor()` API in TensorFlow.
  *
  * <p>This function converts Python objects of various types to Tensor objects. It accepts Tensor
- * objects, numpy arrays, Python lists, and Python scalars.
+ * objects, numpy arrays, Python lists, and Python scalars. The value-argument shape/dtype inference
+ * lives in {@link ValueExtractingTensorGenerator}; this op adds a {@code dtype_hint} fallback and
+ * has no explicit shape argument.
  *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  * @see <a
  *     href="https://www.tensorflow.org/api_docs/python/tf/convert_to_tensor">tf.convert_to_tensor
  *     API</a>.
  */
-public class ConvertToTensor extends Constant {
+public class ConvertToTensor extends ValueExtractingTensorGenerator {
 
   protected enum Parameters {
     VALUE,
@@ -53,32 +55,9 @@ public class ConvertToTensor extends Constant {
   }
 
   @Override
-  protected int getValueParameterPosition() {
-    return Parameters.VALUE.getIndex();
-  }
-
-  @Override
-  protected String getValueParameterName() {
-    return Parameters.VALUE.getName();
-  }
-
-  @Override
-  protected int getDTypeParameterPosition() {
-    return Parameters.DTYPE.getIndex();
-  }
-
-  @Override
-  protected String getDTypeParameterName() {
-    return Parameters.DTYPE.getName();
-  }
-
-  @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-
     // If the dtype argument is not specified, then the type is inferred from the type of value,
-
     // unless dtype_hint is provided.
-
     int valNum =
         this.getArgumentValueNumber(
             builder, Parameters.DTYPE_HINT.getIndex(), Parameters.DTYPE_HINT.getName(), true);
@@ -94,18 +73,14 @@ public class ConvertToTensor extends Constant {
       // If the argument dtype hint is not specified.
       return defaultDTypes;
     } else {
-
-      // The dtype points-to set is non-empty, meaning that the dtype hint was explicitly set.
-
-      // If the conversion to dtype_hint is not possible, this argument has no effect.
-
-      // Get the dtypes from the points-to set.
-
+      // The dtype points-to set is non-empty, meaning that the dtype hint was explicitly set. If
+      // the
+      // conversion to dtype_hint is not possible, this argument has no effect. Get the dtypes from
+      // the points-to set.
       Set<DType> dTypesFromDTypeHintArgument =
           this.getDTypesFromDTypeArgument(builder, pointsToSet);
 
-      // for each possible dtype from dtype hint, check if it is compatible with default dtypes.
-
+      // For each possible dtype from dtype hint, check if it is compatible with default dtypes.
       Set<DType> compatibleDTypes = EnumSet.noneOf(DType.class);
 
       for (DType dTypeFromDTypeHint : dTypesFromDTypeHintArgument)
@@ -113,24 +88,9 @@ public class ConvertToTensor extends Constant {
           if (defaultDType.canConvertTo(dTypeFromDTypeHint))
             compatibleDTypes.add(dTypeFromDTypeHint);
 
+      // No compatible dtypes found, return the default dtypes.
       if (!compatibleDTypes.isEmpty()) return compatibleDTypes;
-      else
-
-        // No compatible dtypes found, return the default dtypes.
-
-        return defaultDTypes;
+      else return defaultDTypes;
     }
-  }
-
-  @Override
-  protected int getShapeParameterPosition() {
-
-    return UNDEFINED_PARAMETER_POSITION;
-  }
-
-  @Override
-  protected String getShapeParameterName() {
-
-    return null;
   }
 }
