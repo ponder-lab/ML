@@ -17,7 +17,7 @@ import java.util.Locale;
 import java.util.Set;
 
 /** A representation of the `read_data_sets()` function in TensorFlow. */
-public class ReadDataSets extends Ones {
+public class ReadDataSets extends TensorTypeAllocator {
 
   private static final TensorType MNIST_INPUT = mnistInput();
 

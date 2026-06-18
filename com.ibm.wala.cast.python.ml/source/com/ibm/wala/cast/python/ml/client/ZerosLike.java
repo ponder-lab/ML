@@ -4,13 +4,15 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import java.util.Locale;
 
 /**
- * A generator for tensors created by the `zeros_like()` function in TensorFlow.
+ * A generator for tensors created by the `zeros_like()` function in TensorFlow. The value-argument
+ * shape/dtype inference lives in {@link ValueExtractingTensorGenerator}; {@code tf.zeros_like}
+ * names its value argument {@code input} and has no explicit shape argument.
  *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/zeros_like">TensorFlow zeros_like()
  *     API</a>.
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class ZerosLike extends Constant {
+public class ZerosLike extends ValueExtractingTensorGenerator {
 
   protected enum Parameters {
     INPUT,
@@ -48,15 +50,5 @@ public class ZerosLike extends Constant {
   @Override
   protected String getValueParameterName() {
     return this.getInputParameterName();
-  }
-
-  @Override
-  protected int getShapeParameterPosition() {
-    return UNDEFINED_PARAMETER_POSITION;
-  }
-
-  @Override
-  protected String getShapeParameterName() {
-    return null;
   }
 }

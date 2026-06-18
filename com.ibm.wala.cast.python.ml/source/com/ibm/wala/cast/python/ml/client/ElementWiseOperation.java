@@ -28,7 +28,7 @@ import java.util.logging.Logger;
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/multiply">tf.multiply</a>.
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class ElementWiseOperation extends ZerosLike {
+public class ElementWiseOperation extends TensorGenerator {
 
   private static final Logger LOGGER = getLogger(ElementWiseOperation.class.getName());
 
@@ -276,6 +276,17 @@ public class ElementWiseOperation extends ZerosLike {
 
   @Override
   protected String getDTypeParameterName() {
+    return null;
+  }
+
+  /** No explicit shape argument; the result shape is the broadcast of the operands' shapes. */
+  @Override
+  protected int getShapeParameterPosition() {
+    return UNDEFINED_PARAMETER_POSITION;
+  }
+
+  @Override
+  protected String getShapeParameterName() {
     return null;
   }
 }

@@ -12,17 +12,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-public class Eye extends SparseEye {
-
-  // `Eye` (dense `tf.eye`) subclasses `SparseEye` to reuse its shape logic, so it inherits the
-  // sparse marker unless it opts back out. `tf.eye` produces a dense tensor (wala/ML#588). This
-  // override is a workaround for the inverted `Eye extends SparseEye` hierarchy; fixing that
-  // topology (dense as the base case, sparse as the specialization) per wala/ML#514 removes the
-  // need for it.
-  @Override
-  protected boolean producesSparseTensor() {
-    return false;
-  }
+public class Eye extends EyeBase {
 
   protected enum Parameters {
     NUM_ROWS,

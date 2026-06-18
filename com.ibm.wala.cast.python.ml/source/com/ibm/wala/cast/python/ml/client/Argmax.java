@@ -16,12 +16,12 @@ import java.util.Set;
  * default); when the call passes an explicit {@code output_type} argument (e.g. {@code
  * output_type=tf.int32}), the canonical dtype-arg dispatch from {@link TensorGenerator#getDTypes}
  * is inlined here (in this class's {@link #getDTypes} override; see its Javadoc) to bypass {@link
- * ReduceMean#getDTypes}, which would otherwise inherit the input tensor's dtype &mdash; the wrong
+ * Reduction#getDTypes}, which would otherwise inherit the input tensor's dtype &mdash; the wrong
  * answer for argmax, which always returns an integer index. The override resolves the {@code
  * output_type} argument via {@link #getDTypeParameterPosition} / {@link #getDTypeParameterName} and
  * uses it instead of the default &mdash; fix for <a
  * href="https://github.com/wala/ML/issues/463">wala/ML#463</a>. Output shape is the input shape
- * with the {@code axis} dimension removed (delegated to {@link ReduceMean}'s keepdims=false
+ * with the {@code axis} dimension removed (delegated to {@link Reduction}'s keepdims=false
  * reduction). Earlier this was left at ⊤ because the precise shape regressed {@code
  * testNeuralNetwork*}: the per-context shape union (e.g. {@code [256]} train vs. {@code [10000]}
  * test) cross-products through {@code ElementWiseOperation}'s strict broadcast check. That
@@ -33,7 +33,7 @@ import java.util.Set;
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/math/argmax">tf.math.argmax</a>
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class Argmax extends ReduceMean {
+public class Argmax extends Reduction {
 
   /**
    * Parameter positions and keyword names for {@code tf.math.argmax(input, axis=None,
@@ -111,11 +111,11 @@ public class Argmax extends ReduceMean {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    // argmax removes the `axis` dimension (no keepdims), which is exactly ReduceMean's
+    // argmax removes the `axis` dimension (no keepdims), which is exactly Reduction's
     // keepdims=False reduction. With per-context layer-output allocations (wala/ML#530), the input
     // shape is resolved per caller, so the result no longer collapses across contexts.
     //
-    // ReduceMean resolves the reduction axis from the `axis` parameter only, so argmax's deprecated
+    // Reduction resolves the reduction axis from the `axis` parameter only, so argmax's deprecated
     // TF 1.x `dimension` alias is not honored for shape (a `tf.argmax(x, dimension=0)` call would
     // reduce as `axis=None`). Honoring the alias precisely is tracked by wala/ML#572.
     return super.getDefaultShapes(builder);
@@ -123,9 +123,9 @@ public class Argmax extends ReduceMean {
 
   /**
    * Forces {@code keepdims=false}: {@code argmax} (and {@code argmin}) have no {@code keepdims}
-   * parameter and always remove the scanned axis. This also prevents {@link ReduceMean} from
+   * parameter and always remove the scanned axis. This also prevents {@link Reduction} from
    * misreading {@code argmax}'s {@code output_type} argument &mdash; which sits at the same
-   * positional index as {@code ReduceMean}'s {@code keepdims} &mdash; as a {@code keepdims} flag,
+   * positional index as {@code Reduction}'s {@code keepdims} &mdash; as a {@code keepdims} flag,
    * which would otherwise union a spurious {@code keepdims=true} shape for a positional call like
    * {@code tf.argmax(x, 0, tf.int32)}.
    *
@@ -161,10 +161,10 @@ public class Argmax extends ReduceMean {
   }
 
   /**
-   * Bypasses {@link ReduceMean#getDTypes} (which inherits from the input tensor's dtype) by
-   * inlining the canonical {@link TensorGenerator#getDTypes} dispatch: read the {@code output_type}
-   * argument if present, otherwise fall back to {@link #getDefaultDTypes}. {@code argmax} produces
-   * an integer index regardless of input dtype, so the input-dtype path is never the right answer
+   * Bypasses {@link Reduction#getDTypes} (which inherits from the input tensor's dtype) by inlining
+   * the canonical {@link TensorGenerator#getDTypes} dispatch: read the {@code output_type} argument
+   * if present, otherwise fall back to {@link #getDefaultDTypes}. {@code argmax} produces an
+   * integer index regardless of input dtype, so the input-dtype path is never the right answer
    * here.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.

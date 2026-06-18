@@ -19,7 +19,7 @@ import java.util.Set;
  *     API.
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class Gamma extends Ones {
+public class Gamma extends TensorTypeAllocator {
 
   protected enum Parameters {
     SHAPE,
