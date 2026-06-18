@@ -481,6 +481,23 @@ public class TensorType implements Iterable<Dimension<?>> {
   }
 
   /**
+   * Creates a {@link TensorType} of the given storage layout: a dense {@link TensorType} for {@link
+   * Layout#DENSE} and a {@link SparseTensorType} for {@link Layout#SPARSE}. Centralizes the
+   * layout-to-concrete-class mapping so call sites need not branch on the concrete type.
+   *
+   * @param dtype The tensor element type. Must not be null.
+   * @param dims The dimensions; may be null to indicate unknown rank (⊤ shape).
+   * @param layout The storage layout. Must not be null.
+   * @return A dense {@link TensorType} or a {@link SparseTensorType}, per {@code layout}.
+   */
+  public static TensorType of(DType dtype, List<Dimension<?>> dims, Layout layout) {
+    return switch (layout) {
+      case DENSE -> new TensorType(dtype, dims);
+      case SPARSE -> new SparseTensorType(dtype, dims);
+    };
+  }
+
+  /**
    * The storage layout of this tensor: the polymorphic source of truth for sparseness. Overridden
    * by {@link SparseTensorType}; the base {@code TensorType} is always {@link Layout#DENSE}.
    *
@@ -508,7 +525,7 @@ public class TensorType implements Iterable<Dimension<?>> {
    *     sparse.
    */
   public TensorType asSparse() {
-    return this.isSparse() ? this : new SparseTensorType(this.dtype, this.dims);
+    return this.isSparse() ? this : of(this.dtype, this.dims, Layout.SPARSE);
   }
 
   String toFormattedString(Format fmt) {

@@ -28,13 +28,13 @@ import static java.util.Collections.emptyList;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
-import com.ibm.wala.cast.python.ml.types.SparseTensorType;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.CompoundDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.Layout;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
@@ -226,21 +226,16 @@ public abstract class TensorGenerator {
 
     Set<TensorType> ret = HashSetFactory.make();
 
-    final boolean sparse = this.producesSparseTensor();
+    final Layout layout = this.producesSparseTensor() ? Layout.SPARSE : Layout.DENSE;
 
     if (shapes == null) {
       // Shape is unknown (⊤), but dtype info may still be available. Emit TensorTypes with null
       // dims so the dtype information is preserved.
-      for (DType dtype : dTypes)
-        ret.add(sparse ? new SparseTensorType(dtype, null) : new TensorType(dtype, null));
+      for (DType dtype : dTypes) ret.add(TensorType.of(dtype, null, layout));
     } else {
       // Create a tensor type for each possible shape and dtype combination.
       for (List<Dimension<?>> dimensionList : shapes)
-        for (DType dtype : dTypes)
-          ret.add(
-              sparse
-                  ? new SparseTensorType(dtype, dimensionList)
-                  : new TensorType(dtype, dimensionList));
+        for (DType dtype : dTypes) ret.add(TensorType.of(dtype, dimensionList, layout));
     }
 
     LOGGER.fine("Generator " + this.getClass().getSimpleName() + " produced types: " + ret);
@@ -251,7 +246,7 @@ public abstract class TensorGenerator {
   /**
    * Whether this generator produces a sparse tensor (a {@code tf.sparse.SparseTensor} / {@code
    * tf.SparseTensor}), as opposed to a dense one. Sparse generators override this to {@code true};
-   * {@link #getTensorTypes} then emits a {@link SparseTensorType} for every result so a consumer
+   * {@link #getTensorTypes} then emits a sparse {@link TensorType} for every result so a consumer
    * can distinguish a sparse result from a dense one (<a
    * href="https://github.com/wala/ML/issues/588">wala/ML#588</a>).
    *
