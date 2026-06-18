@@ -2529,6 +2529,57 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Pins {@code GATLayer.call(node_embeddings, adjacency_lists)}'s tensor-parameter type. The
+   * attention counterpart of {@link #testGcnCall()}: the {@code GATLayer} model and the {@code
+   * GraphAttentionConvolution}/{@code MessagePassing} layers it builds on are vendored verbatim
+   * from {@code kyzhouhzau/NLPGNN} ({@code nlpgnn/models/GAT.py}, {@code nlpgnn/gnn/GATConv.py},
+   * {@code nlpgnn/gnn/messagepassing.py}); only the driver and a reachable-slice {@code
+   * nlpgnn/gnn/utils.py} (the {@code GNNInput} named tuple plus {@code masksoftmax}/{@code
+   * maybe_num_nodes}) are bespoke.
+   *
+   * <p>The tensor parameter {@code node_embeddings} is recovered concretely on both axes &mdash;
+   * {@code (4, 8) float32} &mdash; flowing from the driver's {@code model(node_embeddings,
+   * adjacency_lists, training=False)} call site through {@code tf.keras.Model.__call__} dispatch,
+   * across the {@code driver→GAT→GATConv→MessagePassing} module boundaries. ({@code
+   * adjacency_lists} is a Python list of edge tensors, not a tensor itself, so it is not a tensor
+   * parameter.) As with {@link #testGcnCall()}, the decorated function's input signature &mdash;
+   * the analysis goal &mdash; is exact, while the internal layer-output locals stay ⊤. The four
+   * tracked tensor variables are {@code node_embeddings} (vn=3) and the {@code dropout1} output
+   * (vn=11), both concrete {@code (4, 8) float32} (dropout preserves shape and dtype), plus the
+   * {@code gc1}/{@code gc2} attention-convolution outputs (vn=18, vn=38), both ⊤ on each axis. The
+   * layer outputs are ⊤ for the same reason as GCN: {@code GraphAttentionConvolution.call} unwraps
+   * its input from a {@code GNNInput} {@code NamedTuple} field, which is not tracked as a tensor
+   * (wala/ML#579), so the input arrives ⊤ and the attention aggregation through {@code
+   * tf.math.unsorted_segment_*} (wala/ML#570, wala/ML#582) inherits it.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGatCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "gat_proj/nlpgnn/__init__.py",
+          "gat_proj/nlpgnn/gnn/__init__.py",
+          "gat_proj/nlpgnn/gnn/utils.py",
+          "gat_proj/nlpgnn/gnn/messagepassing.py",
+          "gat_proj/nlpgnn/gnn/GATConv.py",
+          "gat_proj/nlpgnn/models/__init__.py",
+          "gat_proj/nlpgnn/models/GAT.py",
+          "gat_proj/tf2_test_gat_call.py"
+        },
+        "nlpgnn/models/GAT.py",
+        "GATLayer.call",
+        "gat_proj",
+        1,
+        4,
+        Map.of(3, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
+  /**
    * Pins the output type of {@code tf.math.unsorted_segment_sum} (wala/ML#570). The output dtype
    * inherits from the {@code data} input ({@code float32}); the shape is ⊤ because the leading axis
    * is the runtime {@code num_segments} value. Verified via a {@code consume_sum} sink on the
