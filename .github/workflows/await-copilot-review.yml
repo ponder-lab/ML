@@ -1,0 +1,69 @@
+name: Await Copilot review
+
+# Blocks a PR from merging until GitHub Copilot's automatic code review has completed for the
+# current head commit.
+#
+# Copilot reviews are advisory by design: Copilot always submits a "Comment" review, which never
+# satisfies required-approval or required-reviewer rules and never blocks merging. So without this
+# gate a PR can merge — via auto-merge or the merge queue — the instant the other required checks
+# go green, *before* Copilot's asynchronous review posts; the review comments then land on an
+# already-merged PR. GitHub acknowledges this gap and offers no native "require Copilot review"
+# setting (community discussion github.com/orgs/community/discussions/185265).
+#
+# This job is RED until a Copilot review exists for the head SHA, and flips GREEN the moment
+# Copilot submits its review (the `pull_request_review` trigger re-runs the gate on the same SHA).
+# Because `review_on_push` re-reviews every push, each new push re-arms the gate. `merge_group`
+# short-circuits to green so the required check still reports on the queue's temporary branch and
+# does not deadlock the merge queue (cf. the CodeQL-on-merge_group reporting requirement).
+
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted, dismissed]
+  merge_group:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: await-copilot-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  await-copilot-review:
+    name: await-copilot-review
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Pass through the merge queue
+        if: github.event_name == 'merge_group'
+        run: echo "merge_group event: the Copilot gate is enforced at the PR level; passing."
+
+      - name: Require a Copilot review of the head commit
+        if: github.event_name != 'merge_group'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          IS_DRAFT: ${{ github.event.pull_request.draft }}
+        run: |
+          set -euo pipefail
+          if [ "$IS_DRAFT" = "true" ]; then
+            echo "Draft PR: Copilot does not review drafts; passing."
+            exit 0
+          fi
+          echo "Looking for a Copilot review of $HEAD_SHA on PR #$PR ..."
+          reviews=$(gh api "repos/$REPO/pulls/$PR/reviews?per_page=100")
+          count=$(printf '%s' "$reviews" | jq "[.[]
+            | select((.user.login | ascii_downcase | contains(\"copilot\")) and .commit_id == \"$HEAD_SHA\")]
+            | length")
+          if [ "${count:-0}" -gt 0 ]; then
+            echo "Found $count Copilot review(s) for the head commit. Gate satisfied."
+            exit 0
+          fi
+          echo "::error::No Copilot review found for head commit $HEAD_SHA yet. The PR cannot merge until Copilot finishes reviewing; this check re-runs and turns green when Copilot submits its review."
+          exit 1
