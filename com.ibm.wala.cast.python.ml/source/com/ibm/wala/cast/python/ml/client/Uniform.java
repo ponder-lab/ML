@@ -11,7 +11,7 @@ import java.util.Locale;
  *     API</a>.
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class Uniform extends ShapeAndDTypeAllocator {
+public class Uniform extends TensorTypeAllocator {
 
   protected enum Parameters {
     SHAPE,

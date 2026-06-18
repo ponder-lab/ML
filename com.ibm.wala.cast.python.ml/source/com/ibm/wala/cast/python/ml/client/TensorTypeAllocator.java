@@ -27,9 +27,9 @@ import java.util.logging.Logger;
  * extends Ones} code-reuse-not-is-a inheritance (<a
  * href="https://github.com/wala/ML/issues/514">wala/ML#514</a>).
  */
-public abstract class ShapeAndDTypeAllocator extends TensorGenerator {
+public abstract class TensorTypeAllocator extends TensorGenerator {
 
-  private static final Logger LOGGER = getLogger(ShapeAndDTypeAllocator.class.getName());
+  private static final Logger LOGGER = getLogger(TensorTypeAllocator.class.getName());
 
   protected enum Parameters {
     SHAPE,
@@ -45,11 +45,11 @@ public abstract class ShapeAndDTypeAllocator extends TensorGenerator {
     }
   }
 
-  public ShapeAndDTypeAllocator(PointsToSetVariable source) {
+  public TensorTypeAllocator(PointsToSetVariable source) {
     super(source);
   }
 
-  public ShapeAndDTypeAllocator(CGNode node) {
+  public TensorTypeAllocator(CGNode node) {
     super(node);
   }
 

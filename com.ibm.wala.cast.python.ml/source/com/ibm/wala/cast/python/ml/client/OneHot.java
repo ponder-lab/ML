@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-public class OneHot extends ShapeAndDTypeAllocator {
+public class OneHot extends TensorTypeAllocator {
 
   private static final int AXIS_END = -1;
 

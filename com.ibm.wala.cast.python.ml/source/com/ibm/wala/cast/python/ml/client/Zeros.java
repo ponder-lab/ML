@@ -9,7 +9,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/zeros">TensorFlow zeros() API</a>.
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class Zeros extends ShapeAndDTypeAllocator {
+public class Zeros extends TensorTypeAllocator {
 
   public Zeros(PointsToSetVariable source) {
     super(source);
