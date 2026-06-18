@@ -2637,7 +2637,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_crf.py",
         "crf_unary_score",
         3,
-        28,
+        14,
         Map.of(
             2, Set.of(TENSOR_2_3_INT32),
             3, Set.of(TENSOR_2_INT32),
@@ -2661,7 +2661,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_crf.py",
         "crf_binary_score",
         3,
-        26,
+        13,
         Map.of(
             2, Set.of(TENSOR_2_3_INT32),
             3, Set.of(TENSOR_2_INT32),
@@ -3068,9 +3068,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    *
    * <p>The rule-based count is 5 (1 parameter + 4 intermediate layer-call ops {@code conv1}, {@code
    * flatten}, {@code d1}, {@code d2}); after the fix for wala/ML#358 (chained {@code Dense} shape
-   * propagation), {@code d1} and {@code d2} are now tracked through the SSA-chain fallback and the
-   * analysis registers 8 (per-context multiplicity). Count held at 8 to preserve regression
-   * detection; see wala/ML#389 for the original investigation of which intermediate was missing.
+   * propagation), {@code d1} and {@code d2} are now tracked through the SSA-chain fallback. Counts
+   * are source-level &mdash; one per distinct value number, deduplicated across the two calling
+   * contexts ({@code train_step}/{@code test_step}; wala/ML#371, Option 2) &mdash; so the count is
+   * 4 (parameter plus three registered intermediates) rather than the context-multiplied 8. The
+   * residual gap from 4 to the rule-based 5 is one intermediate that still doesn't register; see
+   * wala/ML#389.
    *
    * <p>With the count check passing, the test now fails on value 3's type: actual {@code {(32, 28)
    * float32, (16, 28) float32, (28, 28) float32, ? unknown}} &mdash; a union that contains an
@@ -3090,7 +3093,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tensorflow_eager_execution.py",
         "MyModel.call",
         1,
-        8,
+        4,
         Map.of(3, Set.of(TENSOR_32_28_28_1_FLOAT32, TENSOR_16_28_28_1_FLOAT32)));
   }
 
@@ -3132,12 +3135,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * <p>Rule-based tensor variable count is 5 (1 parameter {@code x} + 4 intermediate ops {@code
    * fc1}, {@code fc2}, {@code out}, {@code softmax}). With the fix for wala/ML#358, the full {@code
    * fc1 → fc2 → out → softmax} chain narrows along the {@code units} axis ({@code 128 → 256 → 10 →
-   * 10}) and every intermediate is registered as a tensor variable; combined with the per-context
-   * multiplicity (wala/ML#371) the actual registered count rises. This test runs at k-CFA depth 4
-   * (wala/ML#379) so {@code NeuralNet.call} is analyzed per caller (train vs. test vs.
-   * visualization) rather than collapsed (wala/ML#530); the extra caller contexts double the
-   * per-context multiplicity to 24. Count held at 24 to preserve regression detection; when
-   * wala/ML#371 Option 2 lands this count will drop to the source-level total.
+   * 10}) and every intermediate is registered as a tensor variable. Counts are source-level &mdash;
+   * one per distinct value number, deduplicated across calling contexts (wala/ML#371, Option 2)
+   * &mdash; so the depth-4 per-caller analysis (train vs. test vs. visualization, wala/ML#379,
+   * wala/ML#530) no longer multiplies the count by the number of contexts. The source-level total
+   * is 6: parameter {@code x} plus the five registered intermediates of the narrowed chain (one
+   * more than the rule-based 4, an extra SSA temporary in the {@code Dense} chain).
    */
   @Test
   public void testNeuralNetwork()
@@ -3147,7 +3150,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "neural_network.py",
         "NeuralNet.call",
         1,
-        24,
+        6,
         Map.of(3, Set.of(TENSOR_256_784_FLOAT32, TENSOR_10000_784_FLOAT32, TENSOR_5_784_FLOAT32)));
   }
 
@@ -3165,10 +3168,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    *
    * <p>The rule-based tensor variable count is 5 (2 parameters {@code x}, {@code y} + 3
    * intermediate ops {@code cast-to-int64}, {@code sparse_softmax_cross_entropy_with_logits},
-   * {@code reduce_mean}). The analysis registers 10 entries (5 distinct source-level vns, each
-   * recorded once per calling context &mdash; value 3 ({@code y}) even appears three times because
-   * its dtype varies across contexts). Held at 10 to preserve regression detection; the unaccounted
-   * duplication is tracked by wala/ML#388.
+   * {@code reduce_mean}). Counts are source-level &mdash; one per distinct value number,
+   * deduplicated across calling contexts (wala/ML#371, Option 2) &mdash; so the count is 5, the
+   * exact rule-based total, rather than the context-multiplied 10 (value 3 ({@code y}) reached
+   * three contexts with a dtype that varies per context; that variation is now captured on the type
+   * axis, which unions per vn across contexts, not on the count). The former count-axis duplication
+   * tracked by wala/ML#388 is subsumed by this source-level counting.
    */
   @Test
   public void testNeuralNetwork2()
@@ -3178,7 +3183,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "neural_network.py",
         "cross_entropy_loss",
         2,
-        10,
+        5,
         Map.of(2, Set.of(TENSOR_256_10_FLOAT32), 3, Set.of(TENSOR_256_UINT8)));
   }
 
@@ -3228,12 +3233,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    *
    * <p>Rule-based tensor variable count is 7 (2 parameters {@code y_pred}, {@code y_true} + 5
    * intermediate ops {@code argmax}, {@code cast-to-int64}, {@code equal}, {@code cast-to-float32},
-   * {@code reduce_mean}). The analysis registers 6 entries (2 parameters × 2 contexts + rounded
-   * intermediate SSA contribution). The missing intermediates are tracked by wala/ML#386 ({@code
-   * tf.argmax} and {@code tf.equal} resolve to empty points-to sets) and wala/ML#387 ({@code
-   * tf.cast} fails dispatch under {@code pass_through}). Count set to 6 (branch actual) so the
-   * count check passes and remaining failures expose type bugs; when #386 and #387 are fixed, the
-   * count should rise.
+   * {@code reduce_mean}). Counts are source-level &mdash; one per distinct value number,
+   * deduplicated across calling contexts (wala/ML#371, Option 2) &mdash; so the count is 7, the
+   * exact rule-based total: all five intermediates now register ({@code argmax} via the {@code
+   * ReadDataFallback} of wala/ML#437; {@code tf.equal}/{@code tf.cast} no longer drop out under
+   * wala/ML#386/wala/ML#387), with the depth-4 per-caller contexts (wala/ML#379, wala/ML#530)
+   * deduplicated rather than multiplying the count.
    *
    * <p>Value 2 ({@code y_pred}) is tracked as a tensor parameter after the fix for wala/ML#358
    * (chained {@code Dense} shape propagation): the final {@code Dense(num_classes=10)} in {@code
@@ -3249,17 +3254,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testNeuralNetwork4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    // Count bumped 6 → 14 by `ReadDataFallback` (#437): `accuracy()` uses
-    // `tf.argmax(...)` which is a legitimate tensor source per #380 but
-    // wasn't being classified pre-fix. The 8 additional tensor variables
-    // are the argmax call sites and their downstream uses across the call
-    // graph. Parameter-type expectations (`y_pred`, `y_true`) unchanged.
+    // Source-level count is 7 (wala/ML#371, Option 2): the 2 parameters plus the 5
+    // intermediate ops, deduplicated across the depth-4 calling contexts. `accuracy()`'s
+    // `tf.argmax(...)` is a legitimate tensor source per #380 and now registers via
+    // `ReadDataFallback` (#437); under (CGNode, vn) counting its per-context call sites
+    // inflated this to 14. Parameter-type expectations (`y_pred`, `y_true`) unchanged.
     test(
         PythonTensorAnalysisEngine.MODEL_FORWARD_CFA_DEPTH,
         "neural_network.py",
         "accuracy",
         2,
-        14,
+        7,
         Map.of(
             2,
             // Per-context union: training call site `accuracy(pred, batch_y)` gives `(256, 10)`;
@@ -3289,18 +3294,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * test loop. Both call sites pass batches of shape {@code (256, 784)} dtype {@code float32}
    * (verified by Python assert statements in {@code autoencoder.py}).
    *
-   * <p>Expected tensor variable count: 22. 11 distinct SSA vns in {@code encoder}'s body get tensor
-   * types &mdash; the parameter {@code x} (vn=2) plus the full layer-1 and layer-2 computation:
-   * {@code weights['encoder_h1']} (vn=19), {@code biases['encoder_b1']} (vn=24), layer-1 matmul
-   * (vn=15), layer-1 add (vn=11), {@code layer_1} sigmoid (vn=4), and the corresponding layer-2
-   * values {@code weights['encoder_h2']} (vn=41), {@code biases['encoder_b2']} (vn=45), layer-2
-   * matmul (vn=38), layer-2 add (vn=35), {@code layer_2} sigmoid (vn=31, returned). Each vn
-   * duplicated across the 2 source-level call sites for 22 total.
+   * <p>Expected tensor variable count: 11 &mdash; the distinct SSA vns in {@code encoder}'s body
+   * that get tensor types: the parameter {@code x} (vn=2) plus the full layer-1 and layer-2
+   * computation: {@code weights['encoder_h1']} (vn=19), {@code biases['encoder_b1']} (vn=24),
+   * layer-1 matmul (vn=15), layer-1 add (vn=11), {@code layer_1} sigmoid (vn=4), and the
+   * corresponding layer-2 values {@code weights['encoder_h2']} (vn=41), {@code
+   * biases['encoder_b2']} (vn=45), layer-2 matmul (vn=38), layer-2 add (vn=35), {@code layer_2}
+   * sigmoid (vn=31, returned). Counts are source-level &mdash; one per distinct vn, deduplicated
+   * across the 2 call-site contexts (wala/ML#371, Option 2) &mdash; so the two contexts no longer
+   * double the total to 22.
    */
   @Test
   public void testAutoencoder()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("autoencoder.py", "encoder", 1, 22, Map.of(2, Set.of(TENSOR_256_784_FLOAT32)));
+    test("autoencoder.py", "encoder", 1, 11, Map.of(2, Set.of(TENSOR_256_784_FLOAT32)));
   }
 
   /**
@@ -3362,10 +3369,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * encoder}'s layer 2 has dim {@code num_hidden_2 = 64}, {@code decoder} receives {@code (256, 64)
    * float32} (verified by a Python assert in the test loop).
    *
-   * <p>Expected tensor variable count: 22 (parallel to {@link #testAutoencoder()}). Same body
+   * <p>Expected tensor variable count: 11 (parallel to {@link #testAutoencoder()}). Same body
    * structure: 11 distinct SSA vns covering the parameter plus the two-layer {@code
-   * weights[...]}/{@code biases[...]} / matmul / add / sigmoid chain, each duplicated across the 2
-   * source-level call sites.
+   * weights[...]}/{@code biases[...]} / matmul / add / sigmoid chain, counted source-level (one per
+   * distinct vn, deduplicated across the 2 call-site contexts; wala/ML#371, Option 2).
    *
    * <p>Value 2 ({@code decoder}'s {@code x} parameter) resolves to concrete {@code (256, 64)
    * float32} after the {@code tensorflow/python/ops/variables/Variable} allocatable-class fix
@@ -3375,7 +3382,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testAutoencoder4()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("autoencoder.py", "decoder", 1, 22, Map.of(2, Set.of(TENSOR_256_64_FLOAT32)));
+    test("autoencoder.py", "decoder", 1, 11, Map.of(2, Set.of(TENSOR_256_64_FLOAT32)));
   }
 
   @Test
@@ -3607,8 +3614,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    *
    * <p>Tensor-variable count breakdown: {@code vn=2} (parameter) is seen across two analysis
    * contexts (the top-level call and the recursive self-call), and {@code vn=10} ({@code n - 1}) is
-   * the binop result in the top-level context. The Set-based counting in the test helper preserves
-   * these as three distinct entries.
+   * the binop result in the top-level context. Counts are source-level &mdash; one per distinct
+   * value number, deduplicated across calling contexts (wala/ML#371, Option 2) &mdash; so the
+   * parameter's two contexts collapse and the count is 2 ({@code vn=2} and {@code vn=10}), not the
+   * three {@code (CGNode, vn)} entries the analysis registers.
    */
   @Test
   public void testRecursionTensorOnly()
@@ -3617,7 +3626,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_recursion_tensor_only.py",
         "recursive_fn",
         1,
-        3,
+        2,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
@@ -5882,7 +5891,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_argmax_output_type_double_sink.py",
         "f",
         1,
-        2,
+        1,
         Map.of(2, Set.of(TENSOR_2_3_FLOAT32, TENSOR_3_INT32)));
   }
 
@@ -5902,7 +5911,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_argmin_output_type_double_sink.py",
         "f",
         1,
-        2,
+        1,
         Map.of(2, Set.of(TENSOR_2_3_FLOAT32, TENSOR_3_INT32)));
   }
 
@@ -6642,7 +6651,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_gradient_list.py",
         "f",
         1,
-        2,
+        1,
         Map.of(2, Set.of(TENSOR_2_FLOAT32, TENSOR_1_1_FLOAT32)));
   }
 
@@ -9715,7 +9724,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_meshgrid.py",
         "f",
         1,
-        2,
+        1,
         Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
 
@@ -11171,6 +11180,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * into a deeper depth so a user model invoked from multiple sites does not collapse its
    * layer-output allocations (wala/ML#379, wala/ML#530).
    *
+   * <p>Both checked quantities are <em>source-level</em>, deduplicated across calling contexts
+   * (wala/ML#371, Option 2): the tensor-variable count is the number of distinct value numbers in
+   * the function under test, and the per-parameter type assertion is the union of each value
+   * number's types across all contexts. Under k-CFA the same IR variable appears once per calling
+   * context, so neither quantity is coupled to the context-sensitivity depth &mdash; context
+   * multiplicity is analysis bookkeeping, not a source-level property, and matches the downstream
+   * consumer ({@code @tf.function(input_signature=...)}), which is indexed by source-level
+   * parameter position.
+   *
    * @param targetedCfaDepth The k-CFA depth for the targeted context selector.
    * @param projectFilenames The script module file names making up the project.
    * @param filename The file declaring the function under test.
@@ -11178,7 +11196,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * @param pythonPath The Python path root for module resolution.
    * @param expectedNumberOfTensorParameters The expected number of tensor parameters.
    * @param expectedNumberOfFunctionTensorVariables The expected number of function-local tensor
-   *     variables.
+   *     variables, counted source-level (distinct value numbers, deduplicated across contexts).
    * @param expectedTensorParameterValueNumberToTypes The expected per-parameter tensor types.
    */
   protected void test(
@@ -11286,8 +11304,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     LOGGER.fine(
         "Available signatures in functionSignatureToTensorVariables: "
             + functionSignatureToTensorVariables.keySet());
-    Set<TensorVariable> functionTensorVariables =
-        functionSignatureToTensorVariables.getOrDefault(functionSignature, emptySet());
 
     // Dump `(vn, TensorVariable)` pairs for the FUT so cross-branch comparison can identify
     // which specific SSA value explains a count discrepancy.
@@ -11308,7 +11324,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
                                 + pointerKeyToTensorVariable.get(pk))
                     .collect(Collectors.joining("\n\t")));
 
-    assertEquals(expectedNumberOfFunctionTensorVariables, functionTensorVariables.size());
+    // Count tensor variables at the source level: one per distinct value number, deduplicated
+    // across calling contexts (wala/ML#371). Under k-CFA the same IR variable (same `vn` in the
+    // same method) appears once per calling context,
+    // so counting `(CGNode, vn)` pairs would couple the expected count to the context-sensitivity
+    // depth. The downstream consumer (`@tf.function(input_signature=...)`) is indexed by
+    // source-level parameter position, and the helper's type assertion already unions per `vn`
+    // across contexts; counting distinct `vn`s keeps the count axis consistent with that framing
+    // and stable as the depth changes (context multiplicity is analysis bookkeeping, not a
+    // source-level property).
+    Set<Integer> functionTensorValueNumbers =
+        functionSignatureToPointerKeys.getOrDefault(functionSignature, emptySet()).stream()
+            .map(LocalPointerKey::getValueNumber)
+            .collect(toSet());
+
+    assertEquals(expectedNumberOfFunctionTensorVariables, functionTensorValueNumbers.size());
 
     // check value number cardinality.
     assertEquals(
