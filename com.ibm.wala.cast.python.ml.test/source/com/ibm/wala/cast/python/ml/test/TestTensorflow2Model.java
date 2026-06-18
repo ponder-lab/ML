@@ -134,6 +134,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_32_UINT8 =
       new TensorType(UINT_8, asList(new NumericDim(32)));
 
+  private static final TensorType TENSOR_16_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(16)));
+
   private static final TensorType TENSOR_256_784_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(256), new NumericDim(784)));
 
@@ -862,6 +865,27 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         2,
         3,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32), 3, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  /**
+   * Regression guard for wala/ML#548: a {@code tf.reshape} on the path to a {@code @tf.function}
+   * parameter must not degrade the inferred parameter. Mirrors the cifar10 path in main.py ({@code
+   * tf.reshape(labels)} feeding a {@code tf.data.Dataset} whose iteration binds {@code labels});
+   * {@code consume(labels)} pins the type. The parameter stays concrete and dtype-exact: {@code
+   * uint8} (matching cifar10's label dtype) with a concrete batch dim, confirming the reshape's
+   * imprecision lands on local results, not parameters. The union carries two batch dims ({@code
+   * 32} and {@code 16}) from distinct analysis contexts; both are concrete {@code uint8}, so the
+   * "not degraded" conclusion holds. See ponder-lab/Input-Signature-Inference-Paper#49.
+   */
+  @Test
+  public void testReshapeToParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_to_param.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_32_UINT8, TENSOR_16_UINT8)));
   }
 
   /** This is not a legal case. */
