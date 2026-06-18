@@ -37,6 +37,13 @@ jobs:
     name: await-copilot-review
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # The gate is only required on PRs targeting master (the ruleset's target). `pull_request` is
+    # already scoped to `master`, but `pull_request_review` fires for any base branch, so guard it
+    # to avoid noisy red checks on non-master PRs. `merge_group` always passes through.
+    if: >-
+      github.event_name == 'merge_group'
+      || github.event_name == 'pull_request'
+      || (github.event_name == 'pull_request_review' && github.event.pull_request.base.ref == 'master')
     steps:
       - name: Pass through the merge queue
         if: github.event_name == 'merge_group'
@@ -57,10 +64,11 @@ jobs:
             exit 0
           fi
           echo "Looking for a Copilot review of $HEAD_SHA on PR #$PR ..."
-          reviews=$(gh api "repos/$REPO/pulls/$PR/reviews?per_page=100")
-          count=$(printf '%s' "$reviews" | jq "[.[]
-            | select((.user.login | ascii_downcase | contains(\"copilot\")) and .commit_id == \"$HEAD_SHA\")]
-            | length")
+          # `--paginate` streams every page; the `--jq` filter runs per page and emits one line per
+          # matching review, so `wc -l` aggregates the count across all pages (no 100-review cap).
+          count=$(gh api --paginate "repos/$REPO/pulls/$PR/reviews" \
+            --jq '.[] | select((.user.login | ascii_downcase | contains("copilot")) and .commit_id == $ENV.HEAD_SHA) | .id' \
+            | wc -l | tr -d '[:space:]')
           if [ "${count:-0}" -gt 0 ]; then
             echo "Found $count Copilot review(s) for the head commit. Gate satisfied."
             exit 0
