@@ -555,7 +555,12 @@ public class TensorType implements Iterable<Dimension<?>> {
       dimString = getDims().stream().map(Dimension::toMDString).collect(Collectors.joining(" ; "));
     }
 
-    return "[ " + dimString + " **of** _" + getCellType() + "_ ]";
+    return "[ "
+        + dimString
+        + " **of** _"
+        + getCellType()
+        + "_ ]"
+        + (this.isSparse() ? " (sparse)" : "");
   }
 
   public String toCString(boolean useMarkdown) {
@@ -577,7 +582,7 @@ public class TensorType implements Iterable<Dimension<?>> {
       ctypeString = getCellType();
     }
 
-    return ctypeString + dimString;
+    return ctypeString + dimString + (this.isSparse() ? " (sparse)" : "");
   }
 
   @Override
@@ -606,9 +611,8 @@ public class TensorType implements Iterable<Dimension<?>> {
     if (obj == null) return false;
     if (getClass() != obj.getClass()) return false;
     TensorType other = (TensorType) obj;
-    // Dense vs. sparse is already distinguished by the getClass() check above (SparseTensorType is
-    // a
-    // distinct class), so layout need not be re-compared here.
+    // The getClass() check above already separates a dense TensorType from a SparseTensorType, so
+    // their layouts need not be compared again here.
     if (getCellType() == null) {
       if (other.getCellType() != null) return false;
     } else if (!getCellType().equals(other.getCellType())) return false;
