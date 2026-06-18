@@ -15,7 +15,7 @@ import java.util.Set;
  *     href="https://www.tensorflow.org/api_docs/python/tf/math/reduce_all">tf.math.reduce_all</a>
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class ReduceAll extends ReduceMean {
+public class ReduceAll extends Reduction {
 
   public ReduceAll(PointsToSetVariable source) {
     super(source);

@@ -5703,6 +5703,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_reduce_sum.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 
+  /**
+   * Guards that {@code tf.reduce_sum} preserves an integer input's dtype rather than promoting it
+   * to {@code float32}. Unlike {@code tf.reduce_mean}, summing integers yields an integer;
+   * previously the {@code Reduce*} ops inherited {@code ReduceMean}'s mean-specific promotion via
+   * {@code extends ReduceMean}, so {@code reduce_sum} of an {@code int32} was mistyped {@code
+   * float32}. Fixed by the {@code Reduction}-base hierarchy (wala/ML#514).
+   */
+  @Test
+  public void testReduceSumInt()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_reduce_sum_int.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
   // wala/ML#449 Tier 4: intrinsic-API ops with fixed output shape and dtype. Both `tf.rank` and
   // `tf.size` return scalar int32 regardless of input. Same hardcoded-output shape as
   // `DatasetRangeGenerator`'s `[] of int64`.

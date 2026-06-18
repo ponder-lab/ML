@@ -33,7 +33,7 @@ import java.util.Set;
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/math/argmax">tf.math.argmax</a>
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class Argmax extends ReduceMean {
+public class Argmax extends Reduction {
 
   /**
    * Parameter positions and keyword names for {@code tf.math.argmax(input, axis=None,

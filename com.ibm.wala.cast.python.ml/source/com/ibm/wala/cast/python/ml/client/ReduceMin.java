@@ -11,7 +11,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
  *     href="https://www.tensorflow.org/api_docs/python/tf/math/reduce_min">tf.math.reduce_min</a>
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class ReduceMin extends ReduceMax {
+public class ReduceMin extends Reduction {
 
   public ReduceMin(PointsToSetVariable source) {
     super(source);
