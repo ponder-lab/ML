@@ -7,7 +7,7 @@ import java.util.EnumSet;
 import java.util.Set;
 
 /**
- * Generator for {@code tf.math.reduce_all}. Reuses {@link ReduceMean}'s axis-collapse / keepdims
+ * Generator for {@code tf.math.reduce_all}. Reuses {@link Reduction}'s axis-collapse / keepdims
  * shape inference; output dtype is always {@link DType#BOOL} (the runtime API requires a bool input
  * and returns bool). See wala/ML#449 (Tier 3).
  *

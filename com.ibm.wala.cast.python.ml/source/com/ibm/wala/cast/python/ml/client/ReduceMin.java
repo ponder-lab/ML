@@ -4,7 +4,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 
 /**
  * Generator for {@code tf.math.reduce_min}. Mirrors {@link ReduceMax} — same axis-collapse /
- * keepdims shape semantics inherited from {@link ReduceMean}, with input dtype passthrough (no
+ * keepdims shape semantics inherited from {@link Reduction}, with input dtype passthrough (no
  * {@code int → float32} promotion).
  *
  * @see <a
