@@ -871,11 +871,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Regression guard for wala/ML#548: a {@code tf.reshape} on the path to a {@code @tf.function}
    * parameter must not degrade the inferred parameter. Mirrors the cifar10 path in main.py ({@code
    * tf.reshape(labels)} feeding a {@code tf.data.Dataset} whose iteration binds {@code labels});
-   * {@code consume(labels)} pins the type. The parameter stays concrete and dtype-exact: {@code
-   * uint8} (matching cifar10's label dtype) with a concrete batch dim, confirming the reshape's
-   * imprecision lands on local results, not parameters. The union carries two batch dims ({@code
-   * 32} and {@code 16}) from distinct analysis contexts; both are concrete {@code uint8}, so the
-   * "not degraded" conclusion holds. See ponder-lab/Input-Signature-Inference-Paper#49.
+   * {@code consume(labels)} pins the type. The parameter is concrete and dtype-exact: {@code uint8}
+   * (matching cifar10's label dtype), and the union carries both correct batch shapes &mdash;
+   * {@code (32,)} for the full batches and {@code (16,)} for the final partial batch (cifar10's
+   * 50000 train labels batched by 32 leave {@code 50000 % 32 == 16}, since {@code drop_remainder}
+   * defaults to false). So the reshape not only fails to degrade the parameter, the parameter is
+   * inferred precisely. See ponder-lab/Input-Signature-Inference-Paper#49.
    */
   @Test
   public void testReshapeToParam()
