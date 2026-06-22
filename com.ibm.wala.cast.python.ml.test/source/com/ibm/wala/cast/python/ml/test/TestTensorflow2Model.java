@@ -2655,6 +2655,52 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Documents the chained-layer coverage gap (<a href="https://github.com/wala/ML/issues/595">
+   * wala/ML#595</a>): a value bound to a user-defined Keras {@code Layer}'s call is not
+   * tensor-typed at the call site, so it does not flow as a tensor into a downstream function. The
+   * fixture chains two {@code GCN} layers (vendored from {@code deep_recommenders}), mirroring
+   * {@code train_gcn_on_cora_keras.py}'s {@code x = GCN(32)(feats, g); GCN(num_classes)(x, g)}, and
+   * sinks the first layer's output through {@code consume(hidden)}.
+   *
+   * <p>Observed: {@code consume} has <em>zero</em> tensor parameters &mdash; {@code hidden} (the
+   * {@code GCN.call} return, a {@code Dense} output) is not tensor-classified. The consequence is
+   * that the second layer's {@code features} parameter, fed {@code hidden}, is dropped: per calling
+   * context the first call has {@code features}+{@code adj} (2 tensor params) while the second has
+   * only {@code adj}. Under the input-signature consumer's abandon-on-non-tensor rule, that second
+   * decorated layer would yield ⊥. This is a coverage loss in the {@code __call__}-body codepath,
+   * distinct from the chained-shape gaps (<a href="https://github.com/wala/ML/issues/358">
+   * wala/ML#358</a>/<a href="https://github.com/wala/ML/issues/570">wala/ML#570</a>).
+   *
+   * <p>TODO: When <a href="https://github.com/wala/ML/issues/595">wala/ML#595</a> lands (the
+   * layer-call result becomes tensor-typed), {@code consume}'s parameter will recover the concrete
+   * {@code hidden} type; update this fixture to a positive assertion then.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGcnChainConsume()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "gcn_chain_proj/deep_recommenders/__init__.py",
+          "gcn_chain_proj/deep_recommenders/keras/__init__.py",
+          "gcn_chain_proj/deep_recommenders/keras/models/__init__.py",
+          "gcn_chain_proj/deep_recommenders/keras/models/retrieval/__init__.py",
+          "gcn_chain_proj/deep_recommenders/keras/models/retrieval/gcn.py",
+          "gcn_chain_proj/tf2_test_gcn_chain_call.py"
+        },
+        "tf2_test_gcn_chain_call.py",
+        "consume",
+        "gcn_chain_proj",
+        0,
+        0,
+        emptyMap());
+  }
+
+  /**
    * Pins {@code TextCNN.call(inputs, training)}'s tensor-parameter type. The {@code TextCNN} model
    * is vendored verbatim from {@code kyzhouhzau/NLPGNN} ({@code nlpgnn/models/TextCNN.py}); only
    * the driver is bespoke. This is a real-world text-classification utility (a convolutional
