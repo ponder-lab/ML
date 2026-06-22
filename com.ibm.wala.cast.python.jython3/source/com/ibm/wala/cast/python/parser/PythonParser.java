@@ -1169,6 +1169,13 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
         args = new LinkedList<>(args);
         args.add(aa.getInternalVararg());
       }
+      // Keyword-only parameters (declared after a bare `*` or `*args`) are formal parameters too;
+      // include them so downstream analyses can bind call-site keyword arguments to them
+      // (wala/ML#596). Without this they have no value number and cannot be tensor-typed.
+      if (aa.getInternalKwonlyargs() != null && !aa.getInternalKwonlyargs().isEmpty()) {
+        args = new LinkedList<>(args);
+        args.addAll(aa.getInternalKwonlyargs());
+      }
       java.util.Set<CAstNode> x = HashSetFactory.make();
       if (arg0.getDecorator_list() != null) {
         for (expr f : arg0.getInternalDecorator_list()) {

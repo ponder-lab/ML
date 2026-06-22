@@ -2114,6 +2114,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Keyword-only parameters are modeled as formal parameters (<a
+   * href="https://github.com/wala/ML/issues/596">wala/ML#596</a>). {@code f(x, *, y)} is called
+   * {@code f(tf.constant(1), y=tf.ones([2, 3]))}; the keyword-only {@code y} must be a formal so
+   * the call-site keyword argument binds to it. {@code consume(y)} pins {@code y}'s type, which is
+   * therefore {@code (2, 3) float32}. Before the fix, {@code y} had no value number and {@code
+   * consume} saw no tensor parameter.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testKwonlyParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_kwonly_param.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
    * Isolated repro for wala/ML#398 (binop drops PA allocation, bites through dataset). Python
    * {@code c = a + b; from_tensor_slices((c, y)); for x, _ in ds: consume(x)} — the binop result
    * {@code c} has no PA allocation and the tuple's field-0 PTS is empty. Passes without allocation
