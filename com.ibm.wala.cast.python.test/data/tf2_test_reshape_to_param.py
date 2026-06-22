@@ -22,4 +22,9 @@ def train_step(images, labels):
 
 
 for images, labels in train_ds:
+    # Runtime truth mirrored by `testReshapeToParam`: the `tf.reshape`-fed `labels`
+    # parameter stays an exact `uint8` vector — `(32,)` for the full batches and
+    # `(16,)` for the final partial batch (50000 % 32 == 16).
+    assert labels.dtype == tf.uint8
+    assert labels.shape == (32,) or labels.shape == (16,)
     train_step(images, labels)
