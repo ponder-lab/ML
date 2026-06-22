@@ -30,6 +30,7 @@ import com.ibm.wala.cast.python.ml.client.NpOnes;
 import com.ibm.wala.cast.python.ml.client.NpZeros;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.client.SliceBuiltinOperation;
+import com.ibm.wala.cast.python.ml.types.SparseTensorType;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
@@ -240,6 +241,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_4_8_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(8)));
+
+  private static final TensorType SPARSE_TENSOR_4_4_FLOAT32 =
+      new SparseTensorType(FLOAT32, asList(new NumericDim(4), new NumericDim(4)));
 
   private static final TensorType TENSOR_UNKNOWN_DYNAMIC_FLOAT32 =
       new TensorType(FLOAT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE));
@@ -2602,6 +2606,52 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         4,
         Map.of(3, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code GCN.call(self, features, adj)}'s tensor-parameter types. The {@code GCN} layer is
+   * vendored verbatim from {@code LongmaoTeamTf/deep_recommenders} ({@code
+   * deep_recommenders/keras/models/retrieval/gcn.py}); only the driver is bespoke. This is a
+   * real-world graph-convolution layer, exercised for tensor-type inference coverage of a
+   * <em>sparse tensor parameter</em>: unlike the other vendored layer methods, {@code adj} is a
+   * {@code tf.SparseTensor}, on which the layer branches ({@code isinstance(adj, tf.SparseTensor)})
+   * to use {@code tf.sparse.sparse_dense_matmul}. The driver feeds a sparse {@code adj}, mirroring
+   * {@code train_gcn_on_cora_keras.py}'s {@code GCN(32)(feats, g)} call site where {@code g} is a
+   * {@code scipy.sparse} adjacency.
+   *
+   * <p>Both parameters are recovered concretely: {@code features} (vn=3) as {@code (4, 8) float32}
+   * and the sparse {@code adj} (vn=4) as {@code (4, 4) float32} with {@link
+   * com.ibm.wala.cast.python.ml.types.TensorType.Layout#SPARSE} layout (a {@link
+   * SparseTensorType}). So the sparse parameter is typed precisely, including its sparse layout,
+   * rather than collapsing to dense or ⊤ &mdash; the sparse {@code TensorType} representation of <a
+   * href="https://github.com/wala/ML/issues/588">wala/ML#588</a>. (The {@code **kwargs} parameter
+   * is not a tensor and is not extracted.) Emitting {@code tf.SparseTensorSpec} for such a
+   * parameter in an inferred signature is the downstream consumer's job; this confirms the typed
+   * input it needs is available.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGcnSparseCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "gcn_sparse_proj/deep_recommenders/__init__.py",
+          "gcn_sparse_proj/deep_recommenders/keras/__init__.py",
+          "gcn_sparse_proj/deep_recommenders/keras/models/__init__.py",
+          "gcn_sparse_proj/deep_recommenders/keras/models/retrieval/__init__.py",
+          "gcn_sparse_proj/deep_recommenders/keras/models/retrieval/gcn.py",
+          "gcn_sparse_proj/tf2_test_gcn_sparse_call.py"
+        },
+        "deep_recommenders/keras/models/retrieval/gcn.py",
+        "GCN.call",
+        "gcn_sparse_proj",
+        2,
+        4,
+        Map.of(3, Set.of(TENSOR_4_8_FLOAT32), 4, Set.of(SPARSE_TENSOR_4_4_FLOAT32)));
   }
 
   /**
