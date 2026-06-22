@@ -2668,11 +2668,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * context the first call has {@code features}+{@code adj} (2 tensor params) while the second has
    * only {@code adj}. Under the input-signature consumer's abandon-on-non-tensor rule, that second
    * decorated layer would yield ⊥. This is a coverage loss in the {@code __call__}-body codepath,
-   * distinct from the chained-shape gaps (wala/ML#358/#570).
+   * distinct from the chained-shape gaps (<a href="https://github.com/wala/ML/issues/358">
+   * wala/ML#358</a>/<a href="https://github.com/wala/ML/issues/570">wala/ML#570</a>).
    *
-   * <p>TODO: When wala/ML#595 lands (the layer-call result becomes tensor-typed), {@code consume}'s
-   * parameter will recover the concrete {@code hidden} type; update this fixture to a positive
-   * assertion then.
+   * <p>TODO: When <a href="https://github.com/wala/ML/issues/595">wala/ML#595</a> lands (the
+   * layer-call result becomes tensor-typed), {@code consume}'s parameter will recover the concrete
+   * {@code hidden} type; update this fixture to a positive assertion then.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
