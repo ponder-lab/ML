@@ -2580,6 +2580,55 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Pins {@code TextCNN.call(inputs, training)}'s tensor-parameter type. The {@code TextCNN} model
+   * is vendored verbatim from {@code kyzhouhzau/NLPGNN} ({@code nlpgnn/models/TextCNN.py}); only
+   * the driver is bespoke. This is a real-world text-classification utility (a convolutional
+   * sentence encoder: embedding lookup, parallel {@code Conv1D} kernels, global average pooling,
+   * concatenation, batch normalization, and a softmax dense head), exercised for tensor-type
+   * inference coverage. Unlike the GNN cohort ({@link #testGcnCall()}, {@link #testGatCall()}) and
+   * the float-feature method archetypes, the decorated parameter {@code inputs} is an integer
+   * token-ID tensor (an embedding-lookup index), so this measures int-dtype parameter recovery.
+   *
+   * <p>The tensor parameter {@code inputs} is recovered concretely on both axes &mdash; {@code (2,
+   * 5) int32} &mdash; flowing from the driver's {@code model(inputs, training=False)} call site
+   * through {@code tf.keras.Model.__call__} dispatch into {@code TextCNN.call}. As with the GNN
+   * cohort, the decorated function's input signature &mdash; the analysis goal &mdash; is exact;
+   * here it confirms that recovery holds for an integer-dtype parameter and a convolutional
+   * (non-message-passing) body, not only the float-feature archetypes.
+   *
+   * <p>The three tracked tensor variables are {@code inputs} (vn=3, concrete {@code (2, 5) int32}),
+   * the embedding/convolution intermediate (vn=36, ⊤ on both axes &mdash; {@code
+   * tf.keras.layers.Embedding}/{@code Conv1D}/{@code GlobalAvgPool1D} are unmodeled), and the
+   * softmax {@code Dense} head's output (vn=72, {@code float32} dtype but ⊤ shape &mdash; {@code
+   * DenseCall} hard-codes {@code float32} but loses the shape through the chained-layer body, <a
+   * href="https://github.com/wala/ML/issues/358">wala/ML#358</a>/<a
+   * href="https://github.com/wala/ML/issues/530">wala/ML#530</a>). These residual-⊤ body locals are
+   * pre-existing shape gaps, not new findings, and are downstream of the (exact) input signature.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTextcnnCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "textcnn_proj/nlpgnn/__init__.py",
+          "textcnn_proj/nlpgnn/models/__init__.py",
+          "textcnn_proj/nlpgnn/models/TextCNN.py",
+          "textcnn_proj/tf2_test_textcnn_call.py"
+        },
+        "nlpgnn/models/TextCNN.py",
+        "TextCNN.call",
+        "textcnn_proj",
+        1,
+        3,
+        Map.of(3, Set.of(TENSOR_2_5_INT32)));
+  }
+
+  /**
    * Pins the output type of {@code tf.math.unsorted_segment_sum} (wala/ML#570). The output dtype
    * inherits from the {@code data} input ({@code float32}); the shape is ⊤ because the leading axis
    * is the runtime {@code num_segments} value. Verified via a {@code consume_sum} sink on the
