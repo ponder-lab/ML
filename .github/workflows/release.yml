@@ -65,7 +65,7 @@ jobs:
         fi
       shell: bash
     - name: Check out wala/ML sources
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         submodules: 'recursive'
         # Full history so the SNAPSHOT-bump commit's parent chain is intact and the
