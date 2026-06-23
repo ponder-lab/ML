@@ -2534,20 +2534,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * driver→GCN→GCNConv→MessagePassing} module boundaries. ({@code adjacency_lists} is a Python list
    * of edge tensors, not a tensor itself, so it is not a tensor parameter.)
    *
-   * <p>The message-passing <em>output</em> locals (the {@code gc1}/{@code gc2} results) are
-   * inferred as ⊤ on <em>both</em> axes (unknown shape, unknown dtype). {@code
-   * tf.math.unsorted_segment_sum} is now modeled (dtype inherits from {@code data}, shape ⊤; <a
-   * href="https://github.com/wala/ML/issues/570">wala/ML#570</a>), so the aggregation results are
-   * recognized as tensor allocations — hence six tracked tensor variables rather than four. Their
-   * dtype is still ⊤, though, and the root cause is upstream of the aggregation: {@code
-   * GraphConvolution.call} receives its input as a {@code GNNInput} {@code NamedTuple} and unwraps
-   * it with {@code node_embeddings = inputs.node_embeddings}, but a tensor read back from a
-   * user-defined {@code NamedTuple} field is not tracked as a tensor (<a
-   * href="https://github.com/wala/ML/issues/579">wala/ML#579</a>). So {@code node_embeddings}
-   * arrives ⊤, the immediately-following {@code tf.linalg.matmul} produces ⊤, and every downstream
-   * op (including the modeled aggregation) inherits it. Resolving wala/ML#579 is the prerequisite
-   * for typing these layer outputs. The decorated function's input signature—the analysis goal—is
-   * nonetheless exact.
+   * <p>The message-passing <em>output</em> locals (the {@code gc1}/{@code gc2} results) are still
+   * inferred as ⊤, but the cause is now downstream of the matmul rather than the {@code NamedTuple}
+   * field read. The aggregation ops are modeled, and the {@code GNNInput} {@code NamedTuple} field
+   * read {@code node_embeddings = inputs.node_embeddings} recovers {@code (4, 8) float32} (read off
+   * the instance field in the heap; <a
+   * href="https://github.com/wala/ML/issues/570">wala/ML#570</a>), so {@code tf.linalg.matmul} and
+   * {@code propagate} inside {@code GraphConvolution.call} now type to {@code float32}. What
+   * remains is the forward-result hop: {@code GraphConvolution.call} returns a typed tensor, but
+   * that result does not propagate to the caller's {@code self.gc1(...)} local &mdash; the
+   * user-subclass forward-result-typing gap (wala/ML#570, akin to <a
+   * href="https://github.com/wala/ML/issues/595">wala/ML#595</a>). The decorated function's input
+   * signature, the analysis goal, is nonetheless exact.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -8903,6 +8901,38 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testNamedTupleFieldRead()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_namedtuple_field.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
+  /**
+   * Verifies dtype recovery for {@code tf.linalg.matmul} on a {@code NamedTuple} field threaded in
+   * as a parameter (<a href="https://github.com/wala/ML/issues/570">wala/ML#570</a>). {@code Inp}
+   * is constructed in the caller and passed into {@code layer}, which reads {@code inp.x} (a {@code
+   * NamedTuple} field) and feeds it to {@code matmul}; {@code consume(h)} pins the result. The
+   * field read has no points-to set at the read site (the {@code NamedTuple} was built in the
+   * caller), so the matmul input's dtype is recovered by reading the field off the object's
+   * instance in the heap &mdash; the minimal form of the {@code gcn_proj} {@code
+   * GraphConvolution.call} inner chain.
+   *
+   * <p>Before the fix, the field read's empty points-to set left the matmul input ⊤ on both axes;
+   * now the dtype is recovered from the instance field and, for this single-call shape, the
+   * existing shape machinery resolves the rest, so {@code consume}'s parameter is the concrete
+   * {@code (4, 4) float32}. (The harder multi-call/chained case &mdash; {@code gcn_proj}'s layer
+   * outputs &mdash; still needs forward-result propagation; see wala/ML#570.)
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNamedTupleFieldMatmul()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_namedtuple_field_matmul.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
   }
 
   /**
