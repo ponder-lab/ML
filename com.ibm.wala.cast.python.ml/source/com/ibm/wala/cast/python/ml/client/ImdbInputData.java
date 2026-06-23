@@ -17,9 +17,9 @@ import java.util.Set;
  * <p>The four ndarrays have the following shapes and dtypes:
  *
  * <ul>
- *   <li>{@code x_train} / {@code x_test}: shape {@code (25000,)}, dtype unknown — each element is a
- *       Python list of variable-length integer-encoded reviews (numpy {@code object} dtype at
- *       runtime, not directly representable as a regular tensor until padded).
+ *   <li>{@code x_train} / {@code x_test}: shape {@code (25000,)}, dtype {@code object} — each
+ *       element is a Python list of variable-length integer-encoded reviews (numpy {@code object}
+ *       dtype, not directly representable as a regular tensor until padded).
  *   <li>{@code y_train} / {@code y_test}: shape {@code (25000,)}, dtype {@link DType#INT64} —
  *       binary labels (0 or 1).
  * </ul>
@@ -40,7 +40,7 @@ public class ImdbInputData extends TensorGenerator {
    * @param source The {@link PointsToSetVariable} representing the tensor.
    * @param shape The IMDB shape to report — one of {@link #X_TRAIN_SHAPE}, {@link #Y_TRAIN_SHAPE},
    *     {@link #X_TEST_SHAPE}, {@link #Y_TEST_SHAPE}.
-   * @param dtypes The dtype set: {@code int64} for the {@code y_*} arrays, {@code unknown} for the
+   * @param dtypes The dtype set: {@code int64} for the {@code y_*} arrays, {@code object} for the
    *     {@code x_*} arrays (which are not regular tensors).
    */
   public ImdbInputData(PointsToSetVariable source, List<Dimension<?>> shape, Set<DType> dtypes) {
@@ -108,20 +108,23 @@ public class ImdbInputData extends TensorGenerator {
     return List.of(new NumericDim(n));
   }
 
-  /** Shape of {@code imdb.load_data()[0][0]}: {@code (25000,)} of unknown dtype. */
+  /** Shape of {@code imdb.load_data()[0][0]}: {@code (25000,)} of {@code object} dtype. */
   public static final List<Dimension<?>> X_TRAIN_SHAPE = reviewsShape(NUM_TRAIN_EXAMPLES);
 
   /** Shape of {@code imdb.load_data()[0][1]}: {@code (25000,)} of {@code int64}. */
   public static final List<Dimension<?>> Y_TRAIN_SHAPE = labelsShape(NUM_TRAIN_EXAMPLES);
 
-  /** Shape of {@code imdb.load_data()[1][0]}: {@code (25000,)} of unknown dtype. */
+  /** Shape of {@code imdb.load_data()[1][0]}: {@code (25000,)} of {@code object} dtype. */
   public static final List<Dimension<?>> X_TEST_SHAPE = reviewsShape(NUM_TEST_EXAMPLES);
 
   /** Shape of {@code imdb.load_data()[1][1]}: {@code (25000,)} of {@code int64}. */
   public static final List<Dimension<?>> Y_TEST_SHAPE = labelsShape(NUM_TEST_EXAMPLES);
 
-  /** Dtype set for the variable-length-sequence {@code x_*} arrays. */
-  public static final Set<DType> X_DTYPES = EnumSet.of(DType.UNKNOWN);
+  /**
+   * Dtype set for the variable-length-sequence {@code x_*} arrays: numpy {@code object}
+   * (wala/ML#488).
+   */
+  public static final Set<DType> X_DTYPES = EnumSet.of(DType.OBJECT);
 
   /** Dtype set for the binary-label {@code y_*} arrays. */
   public static final Set<DType> Y_DTYPES = EnumSet.of(DType.INT64);

@@ -17,10 +17,10 @@ import java.util.Set;
  * <p>The four ndarrays have the following shapes and dtypes:
  *
  * <ul>
- *   <li>{@code x_train}: shape {@code (8982,)}, dtype unknown — each element is a Python list of
- *       variable-length integer-encoded newswires (numpy {@code object} dtype at runtime).
+ *   <li>{@code x_train}: shape {@code (8982,)}, dtype {@code object} — each element is a Python
+ *       list of variable-length integer-encoded newswires (numpy {@code object} dtype).
  *   <li>{@code y_train}: shape {@code (8982,)}, dtype {@link DType#INT64} — topic labels.
- *   <li>{@code x_test}: shape {@code (2246,)}, dtype unknown.
+ *   <li>{@code x_test}: shape {@code (2246,)}, dtype {@code object}.
  *   <li>{@code y_test}: shape {@code (2246,)}, dtype {@link DType#INT64}.
  * </ul>
  *
@@ -40,7 +40,7 @@ public class ReutersInputData extends TensorGenerator {
    * @param source The {@link PointsToSetVariable} representing the tensor.
    * @param shape The Reuters shape — one of {@link #X_TRAIN_SHAPE}, {@link #Y_TRAIN_SHAPE}, {@link
    *     #X_TEST_SHAPE}, {@link #Y_TEST_SHAPE}.
-   * @param dtypes The dtype set: {@code int64} for labels, {@code unknown} for the
+   * @param dtypes The dtype set: {@code int64} for labels, {@code object} for the
    *     variable-length-sequence arrays.
    */
   public ReutersInputData(PointsToSetVariable source, List<Dimension<?>> shape, Set<DType> dtypes) {
@@ -108,20 +108,23 @@ public class ReutersInputData extends TensorGenerator {
     return List.of(new NumericDim(n));
   }
 
-  /** Shape of {@code reuters.load_data()[0][0]}: {@code (8982,)} of unknown dtype. */
+  /** Shape of {@code reuters.load_data()[0][0]}: {@code (8982,)} of {@code object} dtype. */
   public static final List<Dimension<?>> X_TRAIN_SHAPE = newswiresShape(NUM_TRAIN_EXAMPLES);
 
   /** Shape of {@code reuters.load_data()[0][1]}: {@code (8982,)} of {@code int64}. */
   public static final List<Dimension<?>> Y_TRAIN_SHAPE = labelsShape(NUM_TRAIN_EXAMPLES);
 
-  /** Shape of {@code reuters.load_data()[1][0]}: {@code (2246,)} of unknown dtype. */
+  /** Shape of {@code reuters.load_data()[1][0]}: {@code (2246,)} of {@code object} dtype. */
   public static final List<Dimension<?>> X_TEST_SHAPE = newswiresShape(NUM_TEST_EXAMPLES);
 
   /** Shape of {@code reuters.load_data()[1][1]}: {@code (2246,)} of {@code int64}. */
   public static final List<Dimension<?>> Y_TEST_SHAPE = labelsShape(NUM_TEST_EXAMPLES);
 
-  /** Dtype set for the variable-length-sequence {@code x_*} arrays. */
-  public static final Set<DType> X_DTYPES = EnumSet.of(DType.UNKNOWN);
+  /**
+   * Dtype set for the variable-length-sequence {@code x_*} arrays: numpy {@code object}
+   * (wala/ML#488).
+   */
+  public static final Set<DType> X_DTYPES = EnumSet.of(DType.OBJECT);
 
   /** Dtype set for the topic-label {@code y_*} arrays. */
   public static final Set<DType> Y_DTYPES = EnumSet.of(DType.INT64);
