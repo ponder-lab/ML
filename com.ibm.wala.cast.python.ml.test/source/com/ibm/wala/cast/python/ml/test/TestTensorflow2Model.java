@@ -8906,6 +8906,33 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Same as {@link #testNamedTupleFieldRead} but the {@code NamedTuple} base is written as the
+   * dotted attribute chain {@code typing.NamedTuple} rather than a bare {@code NamedTuple}. This
+   * guards the dotted-base path of {@code PythonConstructorTargetSelector.isPositionalFieldClass}:
+   * the front-end must record the full {@code typing.NamedTuple} supertype name (not just the root
+   * {@code typing}) for the positional-field synthesis to fire, so the tensor stored in the field
+   * and read back ({@code b = w.tensor}) keeps its {@code (4, 8) float32} type. Without the full
+   * dotted-name capture the supertype collapses to {@code typing}, {@code isPositionalFieldClass}
+   * returns {@code false}, and {@code consume} sees zero tensor parameters (<a
+   * href="https://github.com/wala/ML/issues/571">wala/ML#571</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNamedTupleFieldReadDotted()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_namedtuple_field_dotted.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
+  /**
    * Verifies tensor types propagate through a {@code typing.Tuple}-annotated tuple-of-tensors
    * parameter: a 2-tuple of tensors passed to {@code f} and unpacked ({@code x, y = inputs}) keeps
    * each element's type, so {@code consume(x)} sees {@code (4, 8) float32}. This mirrors the

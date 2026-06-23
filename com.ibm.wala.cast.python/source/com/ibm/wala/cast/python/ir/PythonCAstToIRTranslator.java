@@ -886,11 +886,17 @@ public class PythonCAstToIRTranslator extends AstTranslator {
           .getMissingTypeNames()
           .forEach(
               tn -> {
-                int val = doLocalRead(code, tn, PythonTypes.Root);
+                // `tn` may now be a dotted base path (e.g. `tf.keras.layers.Layer`, wala/ML#571).
+                // The dummy field keys on the root identifier (`tf`), which is the actual in-scope
+                // variable, so its name and bound value are byte-for-byte unchanged from when only
+                // the root was captured; the full path is preserved in getMissingTypeNames() for
+                // base-class resolution.
+                String rootName = tn.contains(".") ? tn.substring(0, tn.indexOf('.')) : tn;
+                int val = doLocalRead(code, rootName, PythonTypes.Root);
                 FieldReference fr =
                     FieldReference.findOrCreate(
                         cls.getReference(),
-                        Atom.findOrCreateUnicodeAtom("missing_" + tn),
+                        Atom.findOrCreateUnicodeAtom("missing_" + rootName),
                         PythonTypes.Root);
                 code.cfg()
                     .addInstruction(
