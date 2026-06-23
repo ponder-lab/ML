@@ -1491,8 +1491,7 @@
         </method>
       </class>
       <class name="unsorted_segment_sum" allocatable="true">
-        <!-- https://www.tensorflow.org/api_docs/python/tf/math/unsorted_segment_sum. Direct `<new>+<return>` paired with the dedicated `UnsortedSegmentReduction` generator (wala/ML#570): dtype inherits from `data`; shape is `[num_segments] ++ data.shape[segment_ids.ndim:]` when `num_segments` is a static
-          constant (wala/ML#582), else left at ⊤ since the leading axis is then a runtime value (forwarding `data`'s shape would be unsound). -->
+        <!-- https://www.tensorflow.org/api_docs/python/tf/math/unsorted_segment_sum. `<new>+<return>` + `UnsortedSegmentReduction` generator: dtype from `data`; shape `[num_segments] ++ data.shape[segment_ids.ndim:]` when `num_segments` is static, else ⊤ (wala/ML#570, wala/ML#582). -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self data segment_ids num_segments name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
