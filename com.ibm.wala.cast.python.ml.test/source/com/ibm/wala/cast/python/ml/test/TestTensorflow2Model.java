@@ -2535,19 +2535,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * of edge tensors, not a tensor itself, so it is not a tensor parameter.)
    *
    * <p>The message-passing <em>output</em> locals (the {@code gc1}/{@code gc2} results) are
-   * inferred as ⊤ on <em>both</em> axes (unknown shape, unknown dtype). {@code
-   * tf.math.unsorted_segment_sum} is now modeled (dtype inherits from {@code data}, shape ⊤; <a
-   * href="https://github.com/wala/ML/issues/570">wala/ML#570</a>), so the aggregation results are
-   * recognized as tensor allocations — hence six tracked tensor variables rather than four. Their
-   * dtype is still ⊤, though, and the root cause is upstream of the aggregation: {@code
-   * GraphConvolution.call} receives its input as a {@code GNNInput} {@code NamedTuple} and unwraps
-   * it with {@code node_embeddings = inputs.node_embeddings}, but a tensor read back from a
-   * user-defined {@code NamedTuple} field is not tracked as a tensor (<a
-   * href="https://github.com/wala/ML/issues/579">wala/ML#579</a>). So {@code node_embeddings}
-   * arrives ⊤, the immediately-following {@code tf.linalg.matmul} produces ⊤, and every downstream
-   * op (including the modeled aggregation) inherits it. Resolving wala/ML#579 is the prerequisite
-   * for typing these layer outputs. The decorated function's input signature—the analysis goal—is
-   * nonetheless exact.
+   * inferred as ⊤ on <em>both</em> axes (unknown shape, unknown dtype). The aggregation ops are
+   * modeled ({@code tf.math.unsorted_segment_sum} etc.), so the results are recognized as tensor
+   * allocations (hence six tracked tensor variables rather than four), and the {@code GNNInput}
+   * {@code NamedTuple} field read {@code node_embeddings = inputs.node_embeddings} <em>does</em>
+   * recover {@code (4, 8) float32} inside {@code GraphConvolution.call} (so this is not the <a
+   * href="https://github.com/wala/ML/issues/579">wala/ML#579</a> path, which is resolved). The drop
+   * is at {@code tf.linalg.matmul(node_embeddings, self.weight)}: {@code MatMul} is dispatched but
+   * returns ⊤ because it cannot recover {@code node_embeddings}' dtype. That dtype lives in {@code
+   * TensorTypeAnalysis} (seeded by the field read), while the generator's argument resolution
+   * consults the points-to/generator path, so the two never meet (the PTS-vs-{@code
+   * TensorTypeAnalysis} split). The ⊤ then cascades through {@code propagate} and the aggregation.
+   * Bridging {@code TensorTypeAnalysis}-seeded input types into generator argument resolution (<a
+   * href="https://github.com/wala/ML/issues/570">wala/ML#570</a>) is what types these outputs. The
+   * decorated function's input signature, the analysis goal, is nonetheless exact.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
