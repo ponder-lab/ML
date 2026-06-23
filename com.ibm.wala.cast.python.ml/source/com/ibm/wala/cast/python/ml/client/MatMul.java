@@ -90,7 +90,12 @@ public class MatMul extends TensorGenerator {
     OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPos, paramName);
     if (pts != null && !pts.isEmpty()) {
       Set<DType> dtypes = this.getDTypesOfValue(builder, pts);
-      if (dtypes != null && !dtypes.isEmpty()) return dtypes;
+      // A non-empty result that is only ⊤ does not short-circuit: the synthetic `matmul.do` param
+      // PTS is often context-collapsed to a union of unrelated bare tensors (all `UNKNOWN`), so
+      // fall through to the per-context caller-walk, which resolves the actual argument at each
+      // call site. See wala/ML#570.
+      if (dtypes != null && !dtypes.isEmpty() && !dtypes.equals(EnumSet.of(DType.UNKNOWN)))
+        return dtypes;
     }
     return this.getArgumentDTypesViaCallers(builder, paramPos, paramName);
   }

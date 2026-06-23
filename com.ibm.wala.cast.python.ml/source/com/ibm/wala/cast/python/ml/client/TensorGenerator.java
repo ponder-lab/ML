@@ -1656,6 +1656,20 @@ public abstract class TensorGenerator {
 
   private Set<DType> computeDTypes(
       PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
+    // wala/ML#570: a property read of a NamedTuple/object field (e.g. `inputs.node_embeddings`)
+    // often has no usable points-to set at the read site when the object was constructed in a
+    // caller and threaded in as a parameter. Resolve its dtype by reading the named field off the
+    // object's instance in the heap, where the positional-field write (wala/ML#579) is
+    // materialized. Only a concrete result is returned, so this strictly adds precision over the
+    // existing paths below.
+    SSAInstruction propDef = node.getDU().getDef(valueNumber);
+    if (propDef instanceof PythonPropertyRead) {
+      Set<DType> viaField =
+          this.dtypesFromInstanceField(builder, node, (PythonPropertyRead) propDef);
+      if (viaField != null && !viaField.isEmpty() && !viaField.equals(EnumSet.of(DType.UNKNOWN)))
+        return viaField;
+    }
+
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
     PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
     OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
@@ -1739,6 +1753,55 @@ public abstract class TensorGenerator {
             + " in: "
             + node
             + ".");
+  }
+
+  /**
+   * Resolves the dtypes of a property read ({@code obj.field}) by reading the named field off
+   * {@code obj}'s instance(s) in the heap, rather than from the read result's (often empty)
+   * points-to set. This recovers the type of a field whose value was written in a different frame
+   * &mdash; e.g. a {@code NamedTuple} constructed in a caller and threaded in as a parameter, whose
+   * positional fields are materialized by the synthesized constructor (wala/ML#579). Generalizes
+   * the receiver-field read that generators like {@link DenseCall} already use. See <a
+   * href="https://github.com/wala/ML/issues/570">wala/ML#570</a>.
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The CG node whose IR contains the property read.
+   * @param propRead The property-read instruction.
+   * @return The dtypes read from the field, or {@code null} if the field name, field, or any
+   *     instance field could not be resolved.
+   */
+  protected Set<DType> dtypesFromInstanceField(
+      PropagationCallGraphBuilder builder, CGNode node, PythonPropertyRead propRead) {
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    String fieldName = null;
+    for (InstanceKey ik :
+        pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, propRead.getMemberRef()))) {
+      if (ik instanceof ConstantKey && ((ConstantKey<?>) ik).getValue() instanceof String) {
+        fieldName = (String) ((ConstantKey<?>) ik).getValue();
+        break;
+      }
+    }
+    if (fieldName == null) return null;
+    IField f =
+        builder
+            .getClassHierarchy()
+            .resolveField(
+                FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldName), Root));
+    if (f == null) return null;
+    Set<DType> ret = null;
+    for (InstanceKey objIK :
+        pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, propRead.getObjectRef()))) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(objIK);
+      if (asin == null) continue;
+      OrdinalSet<InstanceKey> fieldPTS =
+          pa.getPointsToSet(builder.getPointerKeyForInstanceField(asin, f));
+      Set<DType> d = this.getDTypesOfValue(builder, fieldPTS);
+      if (d != null && !d.isEmpty()) {
+        if (ret == null) ret = EnumSet.noneOf(DType.class);
+        ret.addAll(d);
+      }
+    }
+    return ret;
   }
 
   /**
