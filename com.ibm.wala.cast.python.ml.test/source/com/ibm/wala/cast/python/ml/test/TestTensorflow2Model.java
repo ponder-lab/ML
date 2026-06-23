@@ -94,6 +94,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final String STRING = DType.STRING.name().toLowerCase();
 
+  private static final String OBJECT = DType.OBJECT.name().toLowerCase();
+
   private static final String UNKNOWN = DType.UNKNOWN.name().toLowerCase();
 
   private static final TensorType MNIST_INPUT = mnistInput();
@@ -455,8 +457,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_50000_1_INT64 =
       new TensorType(INT_64, asList(new NumericDim(50000), new NumericDim(1)));
 
-  private static final TensorType TENSOR_8982_UNKNOWN =
-      new TensorType(UNKNOWN, asList(new NumericDim(8982)));
+  private static final TensorType TENSOR_8982_OBJECT =
+      new TensorType(OBJECT, asList(new NumericDim(8982)));
 
   private static final TensorType TENSOR_102_13_FLOAT64 =
       new TensorType(FLOAT_64, asList(new NumericDim(102), new NumericDim(13)));
@@ -481,8 +483,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_2246_INT64 =
       new TensorType(INT_64, asList(new NumericDim(2246)));
 
-  private static final TensorType TENSOR_2246_UNKNOWN =
-      new TensorType(UNKNOWN, asList(new NumericDim(2246)));
+  private static final TensorType TENSOR_2246_OBJECT =
+      new TensorType(OBJECT, asList(new NumericDim(2246)));
 
   /** A {@code float32} tensor whose shape cannot be statically inferred. */
   private static final TensorType TENSOR_UNKNOWN_SHAPE_FLOAT32 = new TensorType(FLOAT_32, null);
@@ -626,8 +628,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_25000_INT64 =
       new TensorType(INT_64, asList(new NumericDim(25000)));
 
-  private static final TensorType TENSOR_25000_UNKNOWN =
-      new TensorType(UNKNOWN, asList(new NumericDim(25000)));
+  private static final TensorType TENSOR_25000_OBJECT =
+      new TensorType(OBJECT, asList(new NumericDim(25000)));
 
   @Test
   public void testValueIndex()
@@ -6686,15 +6688,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Generator test for {@code tf.keras.datasets.reuters.load_data()}. Asserts on all four unpacked
-   * arrays at {@code vn=2..5}: {@code x_train} ({@code (8982,)} unknown dtype &mdash; newswires are
-   * variable-length integer-encoded sequences, modeled as ⊤-dtype), {@code y_train} ({@code
-   * (8982,)} {@code int64}), {@code x_test} ({@code (2246,)} unknown dtype), {@code y_test} ({@code
-   * (2246,)} {@code int64}).
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/488">wala/ML#488</a>): the inferred unknown
-   * dtype for {@code x_train} / {@code x_test} is imprecise &mdash; the runtime dtype is numpy
-   * {@code object} (the Python fixture asserts that). Tighten to a dedicated {@code OBJECT} dtype
-   * if/when the lattice gains one.
+   * arrays at {@code vn=2..5}: {@code x_train} ({@code (8982,)} {@code object} &mdash; newswires
+   * are variable-length integer-encoded sequences, so numpy stores them in an {@code object}
+   * array), {@code y_train} ({@code (8982,)} {@code int64}), {@code x_test} ({@code (2246,)} {@code
+   * object}), {@code y_test} ({@code (2246,)} {@code int64}). The {@code object} dtype matches the
+   * runtime truth the Python fixture asserts (wala/ML#488).
    */
   @Test
   public void testReutersLoadData()
@@ -6705,9 +6703,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         4,
         4,
         Map.of(
-            2, Set.of(TENSOR_8982_UNKNOWN),
+            2, Set.of(TENSOR_8982_OBJECT),
             3, Set.of(TENSOR_8982_INT64),
-            4, Set.of(TENSOR_2246_UNKNOWN),
+            4, Set.of(TENSOR_2246_OBJECT),
             5, Set.of(TENSOR_2246_INT64)));
   }
 
@@ -6735,14 +6733,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Generator test for {@code tf.keras.datasets.imdb.load_data()}. The four returned arrays each
    * have shape {@code (25000,)}: the {@code x_train} / {@code x_test} arrays carry numpy {@code
-   * object} dtype at runtime (variable-length integer-encoded sequences, modeled as ⊤-dtype); the
-   * {@code y_train} / {@code y_test} arrays have dtype {@code int64} (binary labels). Asserts on
-   * all four unpacked arrays at {@code vn=2..5}.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/488">wala/ML#488</a>): the inferred unknown
-   * dtype for {@code x_train} / {@code x_test} is imprecise &mdash; the runtime dtype is numpy
-   * {@code object} (the Python fixture asserts that). Tighten to a dedicated {@code OBJECT} dtype
-   * if/when the lattice gains one.
+   * object} dtype (variable-length integer-encoded sequences, so numpy stores them in an {@code
+   * object} array); the {@code y_train} / {@code y_test} arrays have dtype {@code int64} (binary
+   * labels). Asserts on all four unpacked arrays at {@code vn=2..5}. The {@code object} dtype
+   * matches the runtime truth the Python fixture asserts (wala/ML#488).
    */
   @Test
   public void testImdbLoadData()
@@ -6753,9 +6747,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         4,
         4,
         Map.of(
-            2, Set.of(TENSOR_25000_UNKNOWN),
+            2, Set.of(TENSOR_25000_OBJECT),
             3, Set.of(TENSOR_25000_INT64),
-            4, Set.of(TENSOR_25000_UNKNOWN),
+            4, Set.of(TENSOR_25000_OBJECT),
             5, Set.of(TENSOR_25000_INT64)));
   }
 

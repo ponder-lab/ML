@@ -37,6 +37,10 @@ public class TensorFlowTypes extends PythonTypes {
     UINT8(true, false, 8),
     BOOL(false, false, 1),
     STRING(false, false, 0),
+    // numpy `object` dtype: an ndarray of variable-length Python sequences (e.g. `reuters`/`imdb`
+    // `x_train`). Non-numeric, so `canConvertTo` only matches itself — it does not auto-convert to
+    // numeric dtypes, matching numpy's strict semantics. See wala/ML#488.
+    OBJECT(false, false, 0),
     UNKNOWN(false, false, 0);
 
     private boolean numeric;

@@ -16,7 +16,7 @@ assert x_test.shape == (25000,)
 assert y_test.shape == (25000,)
 # `x_train` and `x_test` are numpy `object` arrays at runtime (each element is a
 # variable-length list of integer-encoded tokens, like reuters). The analyzer's `DType`
-# lattice has no `object` representation and reports `UNKNOWN` — see wala/ML#488.
+# lattice represents this as `OBJECT` (wala/ML#488), so the asserts and the JUnit agree.
 assert x_train.dtype == np.dtype("object")
 assert x_test.dtype == np.dtype("object")
 assert y_train.dtype == np.int64
