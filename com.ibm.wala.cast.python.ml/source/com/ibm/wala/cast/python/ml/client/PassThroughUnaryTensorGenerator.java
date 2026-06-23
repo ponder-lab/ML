@@ -101,12 +101,16 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
   /**
    * PTS-first arg-shape resolver with caller-walk fallback. Mirrors {@link Sigmoid#shapesOfArg}.
    *
+   * <p>Visible to subclasses that compute their output shape from more than one input argument
+   * (e.g. {@link UnsortedSegmentReduction}, which reads both its {@code data} and {@code
+   * segment_ids} arguments) and so cannot rely on the single-input {@link #getDefaultShapes}.
+   *
    * @param builder The propagation call graph builder.
    * @param paramPos The positional index of the arg.
    * @param paramName The keyword parameter name.
    * @return The resolved shapes, or {@code null} if neither path recovers.
    */
-  private Set<List<Dimension<?>>> shapesOfArg(
+  protected Set<List<Dimension<?>>> shapesOfArg(
       PropagationCallGraphBuilder builder, int paramPos, String paramName) {
     if (paramPos == UNDEFINED_PARAMETER_POSITION)
       throw new IllegalStateException(

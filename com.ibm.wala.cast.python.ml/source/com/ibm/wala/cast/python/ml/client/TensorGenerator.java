@@ -2104,6 +2104,42 @@ public abstract class TensorGenerator {
     return this.getNode().getIR().getParameter(index);
   }
 
+  /**
+   * Resolves a scalar integer argument to its static constant value, when one exists. Reads the
+   * argument's points-to set (via {@link #getArgumentPointsToSet(PropagationCallGraphBuilder, int,
+   * String)}, which handles the invoke-side, binary-op-side, and context-sensitive-caller cases)
+   * and returns the integer carried by a {@link ConstantKey} if every key in the set agrees on the
+   * same numeric value.
+   *
+   * <p>Returns {@code null} (signalling "not statically known") when the points-to set is empty,
+   * contains a non-{@link ConstantKey} key (a runtime value — e.g. a {@code tf.shape(...)} result),
+   * carries a non-numeric constant, or carries two differing numeric values. Used by generators
+   * whose output shape depends on a statically-supplied integer (e.g. {@code num_segments} for the
+   * unsorted-segment reductions), so the shape is recovered only when the value is genuinely a
+   * compile-time constant and left at ⊤ otherwise.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param paramPos The 0-based positional index of the argument (excluding {@code self}).
+   * @param paramName The keyword name of the argument, or {@code null}.
+   * @return The argument's static integer value, or {@code null} if it is not a single statically
+   *     resolvable integer.
+   */
+  protected Integer resolveStaticIntArgument(
+      PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPos, paramName);
+    if (pts == null || pts.isEmpty()) return null;
+    Integer resolved = null;
+    for (InstanceKey instanceKey : pts) {
+      if (!(instanceKey instanceof ConstantKey)) return null;
+      Object value = ((ConstantKey<?>) instanceKey).getValue();
+      if (!(value instanceof Number)) return null;
+      int candidate = ((Number) value).intValue();
+      if (resolved != null && resolved != candidate) return null;
+      resolved = candidate;
+    }
+    return resolved;
+  }
+
   protected PythonInvokeInstruction getInvokeInstruction() {
     if (this.source == null) {
       return null;
