@@ -769,6 +769,26 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       return missingTypes.get(name);
     }
 
+    /**
+     * Reconstructs the dotted source name of a base-class expression (e.g. {@code
+     * tf.keras.layers.Layer} for an {@code Attribute} chain) so that a non-local base carries its
+     * full path rather than collapsing to the root identifier that {@link expr#getText()} yields
+     * for an attribute access (e.g. just {@code tf}). The full path is what a later pass needs to
+     * resolve the base against an imported / summary-modeled class. Falls back to {@code getText()}
+     * for forms that aren't a {@code Name}/{@code Attribute} chain (e.g. a subscripted generic
+     * base). See <a href="https://github.com/wala/ML/issues/571">wala/ML#571</a>.
+     *
+     * @param e The base-class expression.
+     * @return The dotted name of {@code e}.
+     */
+    private String dottedName(expr e) {
+      if (e instanceof Attribute) {
+        Attribute attr = (Attribute) e;
+        return dottedName(attr.getInternalValue()) + "." + attr.getInternalAttr();
+      }
+      return e.getText();
+    }
+
     @Override
     public CAstNode visitClassDef(ClassDef arg0) throws Exception {
       WalkContext parent = this.context;
@@ -780,11 +800,12 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
               Collection<CAstType> supertypes = HashSetFactory.make();
               for (expr e : arg0.getInternalBases()) {
                 try {
-                  CAstType type = types.getCAstTypeFor(e.getText());
+                  String baseName = dottedName(e);
+                  CAstType type = types.getCAstTypeFor(baseName);
                   if (type != null) {
                     supertypes.add(type);
                   } else {
-                    supertypes.add(getMissingType(e.getText()));
+                    supertypes.add(getMissingType(baseName));
                   }
                 } catch (Exception e1) {
                   assert false : e1;
