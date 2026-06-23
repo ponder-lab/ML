@@ -1,7 +1,7 @@
 eclipse.preferences.version=1
 indentationChar=space
 indentationSize=2
-lineWidth=300
+lineWidth=9999
 clearAllBlankLines=true
 splitMultiAttrs=false
 alignEndBracket=false

@@ -145,8 +145,7 @@
         <putfield class="LRoot" field="EstimatorSpec" fieldType="LRoot" ref="estimator" value="EstimatorSpec"/>
         <new def="GradientTape" class="Ltensorflow/GradientTape"/>
         <putfield class="LRoot" field="GradientTape" fieldType="LRoot" ref="x" value="GradientTape"/>
-        <!-- https://www.tensorflow.org/api_docs/python/tf#newaxis — at runtime this is `None` (used in subscripts like `x[..., tf.newaxis]` to insert a size-1 dimension). Modeled as an allocation of the sentinel class `Ltensorflow/newaxis` so `NdarraySubscriptOperation.classifyField` can recognize it
-          as NEWAXIS, parallel to how the literal `None` produces a `ConstantKey<null>`. -->
+        <!-- https://www.tensorflow.org/api_docs/python/tf#newaxis — at runtime this is `None` (used in subscripts like `x[..., tf.newaxis]` to insert a size-1 dimension). Modeled as an allocation of the sentinel class `Ltensorflow/newaxis` so `NdarraySubscriptOperation.classifyField` can recognize it as NEWAXIS, parallel to how the literal `None` produces a `ConstantKey<null>`. -->
         <new def="newaxis" class="Ltensorflow/newaxis"/>
         <putfield class="LRoot" field="newaxis" fieldType="LRoot" ref="x" value="newaxis"/>
         <new def="initializers" class="Lobject"/>
@@ -323,8 +322,7 @@
         <putfield class="LRoot" field="not_equal" fieldType="LRoot" ref="x" value="not_equal"/>
         <putfield class="LRoot" field="not_equal" fieldType="LRoot" ref="math" value="not_equal"/>
         <putfield class="LRoot" field="not_equal" fieldType="LRoot" ref="math_ops" value="not_equal"/>
-        <!-- The four ordering comparison ops (`tf.less`, `tf.less_equal`, `tf.greater`, `tf.greater_equal`) round out the comparison family started by `equal`/`not_equal`; same alias structure (top-level `tf.X`, `tf.math.X`, `tf.math_ops.X`). Each routes to `ComparisonOperation` and emits `bool` per
-          wala/ML#427. -->
+        <!-- The four ordering comparison ops (`tf.less`, `tf.less_equal`, `tf.greater`, `tf.greater_equal`) round out the comparison family started by `equal`/`not_equal`; same alias structure (top-level `tf.X`, `tf.math.X`, `tf.math_ops.X`). Each routes to `ComparisonOperation` and emits `bool` per wala/ML#427. -->
         <new def="less" class="Ltensorflow/math/less"/>
         <putfield class="LRoot" field="less" fieldType="LRoot" ref="x" value="less"/>
         <putfield class="LRoot" field="less" fieldType="LRoot" ref="math" value="less"/>
@@ -345,8 +343,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/lgamma -->
         <putfield class="LRoot" field="lgamma" fieldType="LRoot" ref="math" value="pass_through"/>
         <putfield class="LRoot" field="lgamma" fieldType="LRoot" ref="gen_math_ops" value="pass_through"/>
-        <!-- `tf.{math,gen_math_ops}.{reciprocal,erf}` and `tf.square` (plus its `tf.{math,gen_math_ops}.square` aliases) now route through dedicated `<class>` blocks defined later in this file (search for `class name="reciprocal"`, etc.). `tf.reciprocal` and `tf.erf` are not real TF 2 top-level names,
-          so no `ref="x"` putfield is needed for those. -->
+        <!-- `tf.{math,gen_math_ops}.{reciprocal,erf}` and `tf.square` (plus its `tf.{math,gen_math_ops}.square` aliases) now route through dedicated `<class>` blocks defined later in this file (search for `class name="reciprocal"`, etc.). `tf.reciprocal` and `tf.erf` are not real TF 2 top-level names, so no `ref="x"` putfield is needed for those. -->
         <!-- `tf.{maximum,minimum}` and `tf.{math,gen_math_ops}.{maximum,minimum}` now route through dedicated `<class>` blocks dispatched to `ElementWiseOperation` (broadcast shape, unified dtype). -->
         <!-- `tf.less`'s legacy `pass_through` aliasing was removed: the modern `<class name="less">` block + `ComparisonOperation` dispatch (wala/ML#427) now handle bool dtype directly. -->
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/tanh -->
@@ -452,9 +449,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/ones_like -->
         <putfield class="LRoot" field="ones_like" fieldType="LRoot" ref="x" value="pass_through"/>
         <putfield class="LRoot" field="ones_like" fieldType="LRoot" ref="array_ops" value="pass_through"/>
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/shape — at runtime allocates a fresh 1-D int32 tensor whose values are `input`'s shape. The model here is partial: `<new>+<return>` allocates a `Ltensorflow/python/framework/ops/Tensor` of unknown dtype and unknown rank/shape (no
-          dedicated generator yet wired to encode int32 dtype or the statically-1 rank). That's enough to fix wala/ML#489's specific symptom &mdash; the dedicated allocation breaks the prior `pass_through` aliasing that caused `getShapesFromShapeArgument` to mis-parse `tf.shape(y)` as if `y`'s data were a shape
-          spec. Tightening the result to int32 dtype / rank-1 shape is tracked at wala/ML#473. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/shape — at runtime allocates a fresh 1-D int32 tensor whose values are `input`'s shape. The model here is partial: `<new>+<return>` allocates a `Ltensorflow/python/framework/ops/Tensor` of unknown dtype and unknown rank/shape (no dedicated generator yet wired to encode int32 dtype or the statically-1 rank). That's enough to fix wala/ML#489's specific symptom &mdash; the dedicated allocation breaks the prior `pass_through` aliasing that caused `getShapesFromShapeArgument` to mis-parse `tf.shape(y)` as if `y`'s data were a shape spec. Tightening the result to int32 dtype / rank-1 shape is tracked at wala/ML#473. -->
         <new def="shape" class="Ltensorflow/math/shape"/>
         <putfield class="LRoot" field="shape" fieldType="LRoot" ref="x" value="shape"/>
         <putfield class="LRoot" field="shape" fieldType="LRoot" ref="array_ops" value="shape"/>
@@ -546,8 +541,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/solve -->
         <putfield class="LRoot" field="solve" fieldType="LRoot" ref="linalg" value="pass_through"/>
         <putfield class="LRoot" field="solve" fieldType="LRoot" ref="gen_linalg_ops" value="pass_through"/>
-        <!-- https://www.tensorflow.org/api_docs/python/tf/broadcast_to — fresh allocation routed to the dedicated `BroadcastTo` generator (wala/ML#449 Tier 7). Pre-fix used `value="pass_through"` aliasing, which routed the result through `PassThrough`'s identity semantics rather than computing the actual
-          broadcast shape from the `shape` argument. -->
+        <!-- https://www.tensorflow.org/api_docs/python/tf/broadcast_to — fresh allocation routed to the dedicated `BroadcastTo` generator (wala/ML#449 Tier 7). Pre-fix used `value="pass_through"` aliasing, which routed the result through `PassThrough`'s identity semantics rather than computing the actual broadcast shape from the `shape` argument. -->
         <new def="broadcast_to" class="Ltensorflow/functions/broadcast_to"/>
         <putfield class="LRoot" field="broadcast_to" fieldType="LRoot" ref="x" value="broadcast_to"/>
         <putfield class="LRoot" field="broadcast_to" fieldType="LRoot" ref="gen_array_ops" value="broadcast_to"/>
@@ -562,8 +556,7 @@
         <new def="gather_nd" class="Ltensorflow/functions/gather_nd"/>
         <putfield class="LRoot" field="gather_nd" fieldType="LRoot" ref="x" value="gather_nd"/>
         <putfield class="LRoot" field="gather_nd" fieldType="LRoot" ref="array_ops" value="gather_nd"/>
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/squeeze. Direct `<new>+<return>` paired with the dedicated `Squeeze` generator (wala/ML#513, Bucket 2a): dtype inherits from `input`; shape drops the singleton axes named by `axis` (or all statically size-1 axes when `axis` is absent).
-          Was `pass_through`, which leaked the input shape unchanged. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/squeeze. Direct `<new>+<return>` paired with the dedicated `Squeeze` generator (wala/ML#513, Bucket 2a): dtype inherits from `input`; shape drops the singleton axes named by `axis` (or all statically size-1 axes when `axis` is absent). Was `pass_through`, which leaked the input shape unchanged. -->
         <new def="squeeze" class="Ltensorflow/functions/squeeze"/>
         <putfield class="LRoot" field="squeeze" fieldType="LRoot" ref="x" value="squeeze"/>
         <putfield class="LRoot" field="squeeze" fieldType="LRoot" ref="array_ops" value="squeeze"/>
@@ -827,9 +820,7 @@
         <putfield class="LRoot" field="pow" fieldType="LRoot" ref="x" value="pow"/>
         <putfield class="LRoot" field="pow" fieldType="LRoot" ref="math" value="pow"/>
         <putfield class="LRoot" field="pow" fieldType="LRoot" ref="math_ops" value="pow"/>
-        <!-- Tier-A pure-passthrough math ops (wala/ML#422). Each modeled with direct `<new>+<return>` and a per-op Java generator extending `PassThroughUnaryTensorGenerator`; output shape and dtype both inherit from `x`. Pre-this-PR, several of these ops (sqrt, log, sin, cos) were earlier-bound to a
-          generic `pass_through` field-write that aliases the result to the input rather than allocating a fresh tensor &mdash; the result was reachable via the receiver's modeling but had no per-op precision. The per-op `<new>+<return>` here replaces that for `tf` / `tf.math` callers, and the `gen_math_ops` /
-          `math_ops` aliases below restore the precision under those internal modules too (`sqrt` had `math_ops`; `log`/`sin`/`cos` had `gen_math_ops` in the prior model). -->
+        <!-- Tier-A pure-passthrough math ops (wala/ML#422). Each modeled with direct `<new>+<return>` and a per-op Java generator extending `PassThroughUnaryTensorGenerator`; output shape and dtype both inherit from `x`. Pre-this-PR, several of these ops (sqrt, log, sin, cos) were earlier-bound to a generic `pass_through` field-write that aliases the result to the input rather than allocating a fresh tensor &mdash; the result was reachable via the receiver's modeling but had no per-op precision. The per-op `<new>+<return>` here replaces that for `tf` / `tf.math` callers, and the `gen_math_ops` / `math_ops` aliases below restore the precision under those internal modules too (`sqrt` had `math_ops`; `log`/`sin`/`cos` had `gen_math_ops` in the prior model). -->
         <new def="sqrt" class="Ltensorflow/math/sqrt"/>
         <putfield class="LRoot" field="sqrt" fieldType="LRoot" ref="x" value="sqrt"/>
         <putfield class="LRoot" field="sqrt" fieldType="LRoot" ref="math" value="sqrt"/>
@@ -869,8 +860,7 @@
         <new def="sign" class="Ltensorflow/math/sign"/>
         <putfield class="LRoot" field="sign" fieldType="LRoot" ref="x" value="sign"/>
         <putfield class="LRoot" field="sign" fieldType="LRoot" ref="math" value="sign"/>
-        <!-- Tier-A math ops (continued, wala/ML#422). Most are shape and dtype passthrough on their primary tensor argument (named `x` for the unary ops; `features` for `softplus` / `softsign`). The binary ops `atan2` / `maximum` / `minimum` later in this block are the exception &mdash; they're routed
-          through `ElementWiseOperation`, which derives dtype from the `x` parameter at position 0 and computes broadcast shape from both operands. -->
+        <!-- Tier-A math ops (continued, wala/ML#422). Most are shape and dtype passthrough on their primary tensor argument (named `x` for the unary ops; `features` for `softplus` / `softsign`). The binary ops `atan2` / `maximum` / `minimum` later in this block are the exception &mdash; they're routed through `ElementWiseOperation`, which derives dtype from the `x` parameter at position 0 and computes broadcast shape from both operands. -->
         <new def="tan" class="Ltensorflow/math/tan"/>
         <putfield class="LRoot" field="tan" fieldType="LRoot" ref="x" value="tan"/>
         <putfield class="LRoot" field="tan" fieldType="LRoot" ref="math" value="tan"/>
@@ -1081,16 +1071,14 @@
     </package>
     <package name="tensorflow/math">
       <class name="shape" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/shape — returns a 1-D int32 tensor whose values are `input`'s runtime shape. Modeled as `<new>+<return>` (fresh allocation, not pass-through) so `getShapesFromShapeArgument` doesn't conflate the shape-tensor with `input`'s data
-          structure (wala/ML#489). The result is a tensor whose rank is statically 1 but whose dim depends on `input`'s rank, which static analysis can't compute in general — left at ⊤ (no per-op generator wired up here). -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/shape — returns a 1-D int32 tensor whose values are `input`'s runtime shape. Modeled as `<new>+<return>` (fresh allocation, not pass-through) so `getShapesFromShapeArgument` doesn't conflate the shape-tensor with `input`'s data structure (wala/ML#489). The result is a tensor whose rank is statically 1 but whose dim depends on `input`'s rank, which static analysis can't compute in general — left at ⊤ (no per-op generator wired up here). -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self input out_type name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
         </method>
       </class>
       <class name="sigmoid" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/sigmoid. Modeled as `<new>+<return>` (fresh allocation, not pass-through) to match add/matmul and reflect actual TF semantics: sigmoid returns a new tensor with the same shape/dtype as its input, not the input object itself.
-          Shape/dtype inference lives in the `Sigmoid` generator. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/sigmoid. Modeled as `<new>+<return>` (fresh allocation, not pass-through) to match add/matmul and reflect actual TF semantics: sigmoid returns a new tensor with the same shape/dtype as its input, not the input object itself. Shape/dtype inference lives in the `Sigmoid` generator. -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
@@ -1127,8 +1115,7 @@
         </method>
       </class>
       <class name="argmax" allocatable="true">
-        <!-- https://www.tensorflow.org/api_docs/python/tf/math/argmax — index of the maximum value across an axis. The dedicated `Argmax` generator reads the `output_type` argument when explicitly passed (e.g. `output_type=tf.int32`) and falls back to the TF default of `int64` otherwise; output shape
-          is currently ⊤ pending wala/ML#462. The legacy `dimension` parameter (a TF 1.x alias for `axis`) is retained in `paramNames` for back-compat. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
+        <!-- https://www.tensorflow.org/api_docs/python/tf/math/argmax — index of the maximum value across an axis. The dedicated `Argmax` generator reads the `output_type` argument when explicitly passed (e.g. `output_type=tf.int32`) and falls back to the TF default of `int64` otherwise; output shape is currently ⊤ pending wala/ML#462. The legacy `dimension` parameter (a TF 1.x alias for `axis`) is retained in `paramNames` for back-compat. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self input axis output_type name dimension">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
@@ -1150,8 +1137,7 @@
         </method>
       </class>
       <class name="rsqrt" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/rsqrt. Modeled as `<new>+<return>` (fresh allocation, not `read_data` pass-through) so the factory can dispatch to the dedicated `Rsqrt` generator (wala/ML#449 Tier 2). Shape/dtype inference reads the `x` argument's PTS via
-          `PassThroughUnaryTensorGenerator`. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/rsqrt. Modeled as `<new>+<return>` (fresh allocation, not `read_data` pass-through) so the factory can dispatch to the dedicated `Rsqrt` generator (wala/ML#449 Tier 2). Shape/dtype inference reads the `x` argument's PTS via `PassThroughUnaryTensorGenerator`. -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self x name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
@@ -1237,9 +1223,7 @@
         </method>
       </class>
       <class name="top_k" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/top_k. Direct `<new>+<putfield>` per wala/ML#380 (was a `read_data` materialization chain). Returns a `(values, indices)` NamedTuple — both fields point at fresh `Tensor` allocations. The `values`/`indices` named-field aliases
-          (in addition to the numeric `0`/`1` fields) handle the NamedTuple attribute-access pattern: `result.values` reads field `"values"` (a string property name) and the alias makes that resolve to the same `xx` alloc as field `0`. Without the alias, `result.values` reads an empty field-PTS and falls through
-          to ⊤, even though `values, indices = result` (numeric destructuring) worked fine. See wala/ML#480 for the full diagnosis. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/top_k. Direct `<new>+<putfield>` per wala/ML#380 (was a `read_data` materialization chain). Returns a `(values, indices)` NamedTuple — both fields point at fresh `Tensor` allocations. The `values`/`indices` named-field aliases (in addition to the numeric `0`/`1` fields) handle the NamedTuple attribute-access pattern: `result.values` reads field `"values"` (a string property name) and the alias makes that resolve to the same `xx` alloc as field `0`. Without the alias, `result.values` reads an empty field-PTS and falls through to ⊤, even though `values, indices = result` (numeric destructuring) worked fine. See wala/ML#480 for the full diagnosis. -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input k sorted name">
           <new def="x" class="Ltuple"/>
           <new def="xx" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -1260,8 +1244,7 @@
         </method>
       </class>
       <class name="reduce_all" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_all. Modeled as `<new>+<return>` so the factory dispatches to the dedicated `ReduceAll` generator (wala/ML#449 Tier 3); the `convert_to_tensor` chain preserved input's shape, but reductions collapse dims along `axis`.
-          Shape logic lives in `ReduceMean`'s axis/keepdims handling, which `ReduceAll` reuses by inheritance; dtype is always `BOOL`. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_all. Modeled as `<new>+<return>` so the factory dispatches to the dedicated `ReduceAll` generator (wala/ML#449 Tier 3); the `convert_to_tensor` chain preserved input's shape, but reductions collapse dims along `axis`. Shape logic lives in `ReduceMean`'s axis/keepdims handling, which `ReduceAll` reuses by inheritance; dtype is always `BOOL`. -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
@@ -1483,8 +1466,7 @@
         </method>
       </class>
       <class name="reduce_logsumexp" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_logsumexp. Modeled as `<new>+<return>` for the same reason — wala/ML#449 Tier 3. Output dtype inherits from input (`reduce_logsumexp` requires float input at runtime; static analysis just preserves whatever the input
-          dtype was). -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/math/reduce_logsumexp. Modeled as `<new>+<return>` for the same reason — wala/ML#449 Tier 3. Output dtype inherits from input (`reduce_logsumexp` requires float input at runtime; static analysis just preserves whatever the input dtype was). -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_tensor axis keepdims name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
@@ -1622,20 +1604,15 @@
       </class>
     </package>
     <package name="tensorflow/python/ops/variables">
-      <!-- Must be declared `allocatable="true"` so that `<new class="Ltensorflow/python/ops/variables/Variable"/>` in `tensorflow/functions/Variable.do()` resolves to a concrete `InstanceKey` in the heap model. Without this declaration, `HeapModel.getInstanceKeyForAllocation` returns `null` for the
-        allocation, and `getInvariantContents` returns an empty array, so `visitReturn` never adds the iKey to the summary's return-value `PointerKey`. See wala/WALA#1889. The class has no body because it is only referenced as a `<new>` target, not invoked directly; avoiding `read_data` here prevents the class
-        from being picked up by `TensorTypeAnalysis`'s syntactic seeding. -->
+      <!-- Must be declared `allocatable="true"` so that `<new class="Ltensorflow/python/ops/variables/Variable"/>` in `tensorflow/functions/Variable.do()` resolves to a concrete `InstanceKey` in the heap model. Without this declaration, `HeapModel.getInstanceKeyForAllocation` returns `null` for the allocation, and `getInvariantContents` returns an empty array, so `visitReturn` never adds the iKey to the summary's return-value `PointerKey`. See wala/WALA#1889. The class has no body because it is only referenced as a `<new>` target, not invoked directly; avoiding `read_data` here prevents the class from being picked up by `TensorTypeAnalysis`'s syntactic seeding. -->
       <class name="Variable" allocatable="true"></class>
     </package>
     <package name="tensorflow/python/ops/ragged/ragged_math_ops">
-      <!-- Must be declared `allocatable="true"` so that `<new class="Ltensorflow/python/ops/ragged/ragged_math_ops/range"/>` in `tensorflow/functions/ragged_range.do()` resolves to a concrete `InstanceKey` in the heap model. Without this declaration, `HeapModel.getInstanceKeyForAllocation` returns `null`,
-        `getInvariantContents` returns empty, and `visitReturn` never adds the iKey to the caller-side `PointerKey`. Same pattern as the wala/WALA#1889 fix for `tensorflow/python/ops/variables/Variable`. The class has no body because it is only referenced as a `<new>` target, not invoked directly; avoiding `read_data`
-        here prevents the class from being picked up by `TensorTypeAnalysis`'s syntactic seeding. -->
+      <!-- Must be declared `allocatable="true"` so that `<new class="Ltensorflow/python/ops/ragged/ragged_math_ops/range"/>` in `tensorflow/functions/ragged_range.do()` resolves to a concrete `InstanceKey` in the heap model. Without this declaration, `HeapModel.getInstanceKeyForAllocation` returns `null`, `getInvariantContents` returns empty, and `visitReturn` never adds the iKey to the caller-side `PointerKey`. Same pattern as the wala/WALA#1889 fix for `tensorflow/python/ops/variables/Variable`. The class has no body because it is only referenced as a `<new>` target, not invoked directly; avoiding `read_data` here prevents the class from being picked up by `TensorTypeAnalysis`'s syntactic seeding. -->
       <class name="range" allocatable="true"></class>
     </package>
     <package name="tensorflow/python/ops/ragged/ragged_factory_ops">
-      <!-- Must be declared `allocatable="true"` so that `<new class="Ltensorflow/python/ops/ragged/ragged_factory_ops/constant"/>` in `tensorflow/functions/ragged_constant.do()` resolves to a concrete `InstanceKey` in the heap model. Same pattern as the wala/WALA#1889 fix for `tensorflow/python/ops/variables/Variable`.
-        The class has no body because it is only referenced as a `<new>` target, not invoked directly; avoiding `read_data` here prevents the class from being picked up by `TensorTypeAnalysis`'s syntactic seeding. -->
+      <!-- Must be declared `allocatable="true"` so that `<new class="Ltensorflow/python/ops/ragged/ragged_factory_ops/constant"/>` in `tensorflow/functions/ragged_constant.do()` resolves to a concrete `InstanceKey` in the heap model. Same pattern as the wala/WALA#1889 fix for `tensorflow/python/ops/variables/Variable`. The class has no body because it is only referenced as a `<new>` target, not invoked directly; avoiding `read_data` here prevents the class from being picked up by `TensorTypeAnalysis`'s syntactic seeding. -->
       <class name="constant" allocatable="true"></class>
     </package>
     <package name="tensorflow/functions">
@@ -1707,8 +1684,7 @@
         </method>
       </class>
       <class name="concat" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/concat. Direct `<new>+<return>` paired with the dedicated `Concat` generator (wala/ML#449 Tier 5): the generator computes the precise output shape by walking every entry in the `values` list, summing each input's dim along the resolved
-          `axis`, and inheriting the rest of the shape from the first input. Pre-fix the XML routed through `convert_to_tensor` which inherited the first input's shape verbatim — sound on dtype but unsound on shape (missed the per-input axis-dim sum). -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/concat. Direct `<new>+<return>` paired with the dedicated `Concat` generator (wala/ML#449 Tier 5): the generator computes the precise output shape by walking every entry in the `values` list, summing each input's dim along the resolved `axis`, and inheriting the rest of the shape from the first input. Pre-fix the XML routed through `convert_to_tensor` which inherited the first input's shape verbatim — sound on dtype but unsound on shape (missed the per-input axis-dim sum). -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self values axis name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
@@ -1723,9 +1699,7 @@
       <class name="constant" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self value dtype shape name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
-          <!-- The `value` putfield was removed (wala/ML#451 reopen): binding the user-supplied value to the alloc's `value` field caused Hybridize's `Function.containsPrimitive` to traverse fields of the alloc and find a `ConstantKey<Integer>`/`ConstantKey<Float>` for `tf.constant(N)`-style calls, classifying
-            parameters that receive the result (e.g. `recursive_fn(tf.constant(5))`'s `n`) as having primitive parameters. The Ariadne-side `Constant` generator reads dtype/shape directly from the call's `value` argument PTS via `getArgumentPointsToSet`, so dtype/shape inference is unaffected. The Java-side `TensorGenerator.getShapesFromShapeArgument`'s
-            `CONSTANT_OP_CONSTANT` branch falls back to walking back to the allocating call's value arg when the field is empty. -->
+          <!-- The `value` putfield was removed (wala/ML#451 reopen): binding the user-supplied value to the alloc's `value` field caused Hybridize's `Function.containsPrimitive` to traverse fields of the alloc and find a `ConstantKey<Integer>`/`ConstantKey<Float>` for `tf.constant(N)`-style calls, classifying parameters that receive the result (e.g. `recursive_fn(tf.constant(5))`'s `n`) as having primitive parameters. The Ariadne-side `Constant` generator reads dtype/shape directly from the call's `value` argument PTS via `getArgumentPointsToSet`, so dtype/shape inference is unaffected. The Java-side `TensorGenerator.getShapesFromShapeArgument`'s `CONSTANT_OP_CONSTANT` branch falls back to walking back to the allocating call's value arg when the field is empty. -->
           <putfield class="Ltensorflow/python/framework/constant_op/constant" field="dtype" fieldType="LRoot" ref="res" value="dtype"/>
           <return value="res"/>
         </method>
@@ -1799,9 +1773,7 @@
         </method>
       </class>
       <class name="stop_gradient" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/stop_gradient. Modeled as `<new>+<return>` (fresh allocation, not `read_data` pass-through) to match `identity` and `sigmoid` and enable factory dispatch to the dedicated `StopGradient` generator (wala/ML#449 Tier 1). Shape/dtype
-          inference reads the `input` argument's PTS via `StopGradient.shapesOfArg` / `dtypesOfArg`. The alloc class matches this `<class>`'s declared type (`Ltensorflow/functions/stop_gradient`) so the heap model can resolve the `<new>` to a concrete InstanceKey — a separate undeclared `Ltensorflow/python/ops/array_ops/stop_gradient`
-          would silently fail PA propagation (see `project_synthetic_method_implicit_pts` note). -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/stop_gradient. Modeled as `<new>+<return>` (fresh allocation, not `read_data` pass-through) to match `identity` and `sigmoid` and enable factory dispatch to the dedicated `StopGradient` generator (wala/ML#449 Tier 1). Shape/dtype inference reads the `input` argument's PTS via `StopGradient.shapesOfArg` / `dtypesOfArg`. The alloc class matches this `<class>`'s declared type (`Ltensorflow/functions/stop_gradient`) so the heap model can resolve the `<new>` to a concrete InstanceKey — a separate undeclared `Ltensorflow/python/ops/array_ops/stop_gradient` would silently fail PA propagation (see `project_synthetic_method_implicit_pts` note). -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self input name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
@@ -1835,8 +1807,7 @@
         </method>
       </class>
       <class name="identity" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/identity. Modeled as `<new>+<return>` (fresh allocation, not pass-through) to match `sigmoid`/`softmax` and enable factory dispatch to the dedicated `Identity` generator (wala/ML#449 Tier 1). Shape/dtype inference reads the `input`
-          argument's PTS via `Identity.shapesOfArg` / `dtypesOfArg`. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/identity. Modeled as `<new>+<return>` (fresh allocation, not pass-through) to match `sigmoid`/`softmax` and enable factory dispatch to the dedicated `Identity` generator (wala/ML#449 Tier 1). Shape/dtype inference reads the `input` argument's PTS via `Identity.shapesOfArg` / `dtypesOfArg`. -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self input name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
@@ -1870,16 +1841,14 @@
         </method>
       </class>
       <class name="rank" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/rank. Modeled as `<new>+<return>` so the factory dispatches to the dedicated `Rank` generator (wala/ML#449 Tier 4); pre-fix routed through the `read_data → constant.do(z, 1)` materialization chain which gave ⊤ via `ReadDataFallback`.
-          Output is intrinsic to the API (scalar int32 = number of dims of `input`); shape/dtype are hardcoded in the generator rather than read from any arg. Param shape `self input name` matches `sigmoid`. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/rank. Modeled as `<new>+<return>` so the factory dispatches to the dedicated `Rank` generator (wala/ML#449 Tier 4); pre-fix routed through the `read_data → constant.do(z, 1)` materialization chain which gave ⊤ via `ReadDataFallback`. Output is intrinsic to the API (scalar int32 = number of dims of `input`); shape/dtype are hardcoded in the generator rather than read from any arg. Param shape `self input name` matches `sigmoid`. -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self input name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
         </method>
       </class>
       <class name="size" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/size. Modeled as `<new>+<return>` for the same reason as `rank` — wala/ML#449 Tier 4. Output is intrinsic (scalar = total number of elements). Default dtype is int32; the `out_type` arg can override to int64 (the analysis' DType
-          lattice models int32, int64, and a handful of others — uint32/uint64 from the runtime API aren't in the lattice). The generator currently hardcodes int32 — extending to honor `out_type` is a clean follow-up if a fixture surfaces the need. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/size. Modeled as `<new>+<return>` for the same reason as `rank` — wala/ML#449 Tier 4. Output is intrinsic (scalar = total number of elements). Default dtype is int32; the `out_type` arg can override to int64 (the analysis' DType lattice models int32, int64, and a handful of others — uint32/uint64 from the runtime API aren't in the lattice). The generator currently hardcodes int32 — extending to honor `out_type` is a clean follow-up if a fixture surfaces the need. -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self input out_type name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
@@ -2089,16 +2058,14 @@
         </method>
       </class>
       <class name="slice" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/slice. Direct `<new>+<return>` paired with the dedicated `Slice` generator (wala/ML#568): dtype inherits from `input_`; shape is left at ⊤ since `tf.slice` reshapes its input by the runtime `begin`/`size` extents (computing it from
-          constant `begin`/`size` is wala/ML#569). -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/slice. Direct `<new>+<return>` paired with the dedicated `Slice` generator (wala/ML#568): dtype inherits from `input_`; shape is left at ⊤ since `tf.slice` reshapes its input by the runtime `begin`/`size` extents (computing it from constant `begin`/`size` is wala/ML#569). -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self input_ begin size name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
         </method>
       </class>
       <class name="squeeze" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/squeeze. Direct `<new>+<return>` paired with the dedicated `Squeeze` generator (wala/ML#513, Bucket 2a): dtype inherits from `input`; the generator drops the singleton axes named by `axis` (or all statically size-1 axes when `axis`
-          is absent). -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/squeeze. Direct `<new>+<return>` paired with the dedicated `Squeeze` generator (wala/ML#513, Bucket 2a): dtype inherits from `input`; the generator drops the singleton axes named by `axis` (or all statically size-1 axes when `axis` is absent). -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self input axis name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
@@ -2112,8 +2079,7 @@
         </method>
       </class>
       <class name="stack" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/stack. Direct `<new>+<return>` paired with the dedicated `Stack` generator (wala/ML#449 Tier 5): the generator computes the precise output shape `t.shape[:axis] + (len(values),) + t.shape[axis:]` from the `values` list's PTS-derived
-          length and the first element's shape, and inherits the dtype from the first element. Pre-fix the XML routed through `convert_to_tensor` which inherited the first element's shape verbatim — sound on dtype but unsound on shape (missed the new axis). -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/stack. Direct `<new>+<return>` paired with the dedicated `Stack` generator (wala/ML#449 Tier 5): the generator computes the precise output shape `t.shape[:axis] + (len(values),) + t.shape[axis:]` from the `values` list's PTS-derived length and the first element's shape, and inherits the dtype from the first element. Pre-fix the XML routed through `convert_to_tensor` which inherited the first element's shape verbatim — sound on dtype but unsound on shape (missed the new axis). -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self values axis name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
@@ -2221,24 +2187,21 @@
         </method>
       </class>
       <class name="relu" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/relu. Direct `<new>+<return>` intended to be paired with the dedicated `Relu` generator (full-passthrough on shape and dtype). CURRENT LIMITATION: the dispatch is bypassed by the retained `tf.nn.relu` `pass_through` alias (kept
-          because removing it risks breaking chained consumers; same integration shape as `cast`, see wala/ML#509). Tracked together with wala/ML#481. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/relu. Direct `<new>+<return>` intended to be paired with the dedicated `Relu` generator (full-passthrough on shape and dtype). CURRENT LIMITATION: the dispatch is bypassed by the retained `tf.nn.relu` `pass_through` alias (kept because removing it risks breaking chained consumers; same integration shape as `cast`, see wala/ML#509). Tracked together with wala/ML#481. -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self features name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
         </method>
       </class>
       <class name="cast" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/cast. Direct `<new>+<return>` paired with the dedicated `Cast` generator: shape inherits from `x`; dtype intended to be the explicit `dtype` argument. CURRENT LIMITATION: the dispatch is bypassed by the retained `tf.cast` `pass_through`
-          alias (kept because removing it breaks chained consumers; see wala/ML#509), so the analyzer reports the input dtype today. Tracked by wala/ML#481. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/cast. Direct `<new>+<return>` paired with the dedicated `Cast` generator: shape inherits from `x`; dtype intended to be the explicit `dtype` argument. CURRENT LIMITATION: the dispatch is bypassed by the retained `tf.cast` `pass_through` alias (kept because removing it breaks chained consumers; see wala/ML#509), so the analyzer reports the input dtype today. Tracked by wala/ML#481. -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x dtype name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
         </method>
       </class>
       <class name="expand_dims" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/expand_dims. Direct `<new>+<return>` paired with the dedicated `ExpandDims` generator: dtype inherits from `input`; shape is `input.shape` with a length-1 dim inserted at `axis` (currently emitted as ⊤ pending the axis-aware shape
-          composer). -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/expand_dims. Direct `<new>+<return>` paired with the dedicated `ExpandDims` generator: dtype inherits from `input`; shape is `input.shape` with a length-1 dim inserted at `axis` (currently emitted as ⊤ pending the axis-aware shape composer). -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self input axis name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
@@ -2279,8 +2242,7 @@
         </method>
       </class>
       <class name="EstimatorSpec" allocatable="true">
-        <!-- https://www.tensorflow.org/api_docs/python/tf/estimator/EstimatorSpec — fresh allocation (not pass-through) so the resulting spec is a distinct object from any input. Each named parameter is stored as a field on the result, mirroring the namedtuple shape of the real API. Allocated as `Ltensorflow/estimator/EstimatorSpec`
-          (the proper class type that's already registered for the estimator-namespace binding), not as a `Tensor` — `EstimatorSpec` is a namedtuple-like spec object, not a tensor. See wala/ML#429 (binding + body) and wala/ML#523 (allocation-class fix). -->
+        <!-- https://www.tensorflow.org/api_docs/python/tf/estimator/EstimatorSpec — fresh allocation (not pass-through) so the resulting spec is a distinct object from any input. Each named parameter is stored as a field on the result, mirroring the namedtuple shape of the real API. Allocated as `Ltensorflow/estimator/EstimatorSpec` (the proper class type that's already registered for the estimator-namespace binding), not as a `Tensor` — `EstimatorSpec` is a namedtuple-like spec object, not a tensor. See wala/ML#429 (binding + body) and wala/ML#523 (allocation-class fix). -->
         <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self mode predictions loss train_op eval_metric_ops export_outputs">
           <new def="res" class="Ltensorflow/estimator/EstimatorSpec"/>
           <putfield class="LRoot" field="mode" fieldType="LRoot" ref="res" value="mode"/>
@@ -2304,8 +2266,7 @@
     <package name="tensorflow/keras/preprocessing/image">
       <class name="ImageDataGenerator" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/preprocessing/image/ImageDataGenerator -->
-        <method name="do" descriptor="()LRoot;" numArgs="24"
-          paramNames="self featurewise_center samplewise_center featurewise_std_normalization samplewise_std_normalization zca_whitening zca_epsilon rotation_range width_shift_range height_shift_range brightness_range shear_range zoom_range channel_shift_range fill_mode cval horizontal_flip vertical_flip rescale preprocessing_function data_format validation_split interpolation_order dtype">
+        <method name="do" descriptor="()LRoot;" numArgs="24" paramNames="self featurewise_center samplewise_center featurewise_std_normalization samplewise_std_normalization zca_whitening zca_epsilon rotation_range width_shift_range height_shift_range brightness_range shear_range zoom_range channel_shift_range fill_mode cval horizontal_flip vertical_flip rescale preprocessing_function data_format validation_split interpolation_order dtype">
           <new def="flow_from_directory" class="Ltensorflow/keras/preprocessing/image/flow_from_directory"/>
           <putfield class="LRoot" field="flow_from_directory" fieldType="LRoot" ref="arg0" value="flow_from_directory"/>
           <return value="arg0"/>
@@ -2342,9 +2303,7 @@
       </class>
     </package>
     <package name="tensorflow/keras/Model">
-      <!-- Must be declared `allocatable="true"` so that `<new class="Ltensorflow/keras/Model/attribute"/>` in `tensorflow/keras/models/class/Model.read_data()` resolves to a concrete `InstanceKey` in the heap model. Without this declaration, `HeapModel.getInstanceKeyForAllocation` returns `null`, `getInvariantContents`
-        returns empty, and `visitReturn` never adds the iKey to the caller-side `PointerKey`. Same pattern as the wala/WALA#1889 fix for `tensorflow/python/ops/variables/Variable`. The class has no body because it is only referenced as a `<new>` target, not invoked directly; avoiding `read_data` here prevents
-        the class from being picked up by `TensorTypeAnalysis`'s syntactic seeding. -->
+      <!-- Must be declared `allocatable="true"` so that `<new class="Ltensorflow/keras/Model/attribute"/>` in `tensorflow/keras/models/class/Model.read_data()` resolves to a concrete `InstanceKey` in the heap model. Without this declaration, `HeapModel.getInstanceKeyForAllocation` returns `null`, `getInvariantContents` returns empty, and `visitReturn` never adds the iKey to the caller-side `PointerKey`. Same pattern as the wala/WALA#1889 fix for `tensorflow/python/ops/variables/Variable`. The class has no body because it is only referenced as a `<new>` target, not invoked directly; avoiding `read_data` here prevents the class from being picked up by `TensorTypeAnalysis`'s syntactic seeding. -->
       <class name="attribute" allocatable="true"></class>
     </package>
     <package name="tensorflow/keras/models">
@@ -2437,8 +2396,7 @@
     </package>
     <package name="tensorflow/initializers">
       <class name="RandomNormal" allocatable="true">
-        <!-- Instance `__call__` for `tf.initializers.RandomNormal`: `instance(shape, dtype=None)` returns a tensor of the requested shape drawn from the normal distribution. Allocates a `random_ops/normal` result so the factory dispatches to the existing `Normal`-family generator (via `RandomNormalCall`,
-          which handles the extra `self` offset). https://www.tensorflow.org/api_docs/python/tf/keras/initializers/RandomNormal#__call__ -->
+        <!-- Instance `__call__` for `tf.initializers.RandomNormal`: `instance(shape, dtype=None)` returns a tensor of the requested shape drawn from the normal distribution. Allocates a `random_ops/normal` result so the factory dispatches to the existing `Normal`-family generator (via `RandomNormalCall`, which handles the extra `self` offset). https://www.tensorflow.org/api_docs/python/tf/keras/initializers/RandomNormal#__call__ -->
         <method name="__call__" descriptor="()LRoot;" numArgs="4" paramNames="func self shape dtype">
           <new def="out" class="Ltensorflow/python/ops/random_ops/normal"/>
           <return value="out"/>
@@ -2446,8 +2404,7 @@
       </class>
     </package>
     <package name="tensorflow">
-      <!-- Sentinel class for `tf.newaxis` (aliased as `None` at runtime) so the allocation emitted during the tensorflow import (see the `new Ltensorflow/newaxis` above) registers as an allocatable type. `NdarraySubscriptOperation.classifyField` pattern-matches on `TensorFlowTypes.NEWAXIS` (= `Ltensorflow/newaxis`)
-        to distinguish it from other non-constant subscript elements. -->
+      <!-- Sentinel class for `tf.newaxis` (aliased as `None` at runtime) so the allocation emitted during the tensorflow import (see the `new Ltensorflow/newaxis` above) registers as an allocatable type. `NdarraySubscriptOperation.classifyField` pattern-matches on `TensorFlowTypes.NEWAXIS` (= `Ltensorflow/newaxis`) to distinguish it from other non-constant subscript elements. -->
       <class name="newaxis" allocatable="true"/>
       <class name="GradientTape" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/GradientTape -->
@@ -2491,9 +2448,7 @@
           <return value="ds"/>
         </method>
       </class>
-      <!-- Distinct type for `tf.data.TextLineDataset` so the factory dispatches to `TextLineDatasetGenerator` (intrinsic 0-D string element type). `do` allocates a fresh `TextLineDataset` per call site (parallel to the per-endpoint allocation pattern in `shuffle`/`batch`/etc.) so 1-CFA context preserves
-        call-site distinctness rather than aliasing every `tf.data.TextLineDataset(...)` to the same singleton from the import-time field allocation. The chain-method fields are bound on the new instance just like the other dataset endpoints, so `tf.data.TextLineDataset(...).shuffle(...).batch(...)` chains resolve.
-        See wala/ML#452. -->
+      <!-- Distinct type for `tf.data.TextLineDataset` so the factory dispatches to `TextLineDatasetGenerator` (intrinsic 0-D string element type). `do` allocates a fresh `TextLineDataset` per call site (parallel to the per-endpoint allocation pattern in `shuffle`/`batch`/etc.) so 1-CFA context preserves call-site distinctness rather than aliasing every `tf.data.TextLineDataset(...)` to the same singleton from the import-time field allocation. The chain-method fields are bound on the new instance just like the other dataset endpoints, so `tf.data.TextLineDataset(...).shuffle(...).batch(...)` chains resolve. See wala/ML#452. -->
       <class name="TextLineDataset" allocatable="true">
         <method name="read_dataset" descriptor="()LRoot;" numArgs="1" paramNames="self">
           <return value="self"/>
@@ -2535,10 +2490,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#shuffle -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self buffer_size seed reshuffle_each_iteration name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
-          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance*
-            via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>`
-            allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF
-            setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -2568,10 +2520,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#batch -->
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self batch_size drop_remainder num_parallel_calls deterministic name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
-          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance*
-            via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>`
-            allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF
-            setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -2631,10 +2580,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#prefetch -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self buffer_size name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
-          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance*
-            via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>`
-            allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF
-            setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -2664,10 +2610,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#with_options -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self options name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
-          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance*
-            via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>`
-            allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF
-            setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -2697,10 +2640,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#take -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self count name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
-          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance*
-            via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>`
-            allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF
-            setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -2730,10 +2670,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#map -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self map_func num_parallel_calls deterministic name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
-          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance*
-            via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>`
-            allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF
-            setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -2763,10 +2700,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#filter -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self predicate name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
-          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance*
-            via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>`
-            allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF
-            setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -2796,10 +2730,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#concatenate -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self predicate name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
-          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance*
-            via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>`
-            allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF
-            setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -2826,8 +2757,7 @@
         </method>
       </class>
       <class name="reduce" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#reduce. `Dataset.reduce(initial_state, reduce_func, name)` returns the *final state* — a tensor (or structure of tensors) with the same shape/dtype as `initial_state`, not a Dataset. Pre-fix this was modeled as `read_data(arg0)`
-          virtually on the receiver, but the `reduce` class doesn't define `read_data` — the call couldn't resolve and the result was ⊤. Pass `initial_state` through directly so its tensor type flows to the caller. See wala/ML#456. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#reduce. `Dataset.reduce(initial_state, reduce_func, name)` returns the *final state* — a tensor (or structure of tensors) with the same shape/dtype as `initial_state`, not a Dataset. Pre-fix this was modeled as `read_data(arg0)` virtually on the receiver, but the `reduce` class doesn't define `read_data` — the call couldn't resolve and the result was ⊤. Pass `initial_state` through directly so its tensor type flows to the caller. See wala/ML#456. -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self initial_state reduce_func name">
           <return value="initial_state"/>
         </method>
@@ -2836,10 +2766,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#enumerate -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self predicate name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
-          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance*
-            via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>`
-            allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF
-            setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -2872,10 +2799,7 @@
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self tensors name">
           <!-- FIXME: We should encode the tensors argument here. See https://github.com/wala/ML/issues/164. -->
           <new def="x" class="Ltensorflow/data/Dataset"/>
-          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance*
-            via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>`
-            allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF
-            setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -2905,10 +2829,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#from_tensor_slices -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self tensors name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
-          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance*
-            via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>`
-            allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF
-            setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -2938,10 +2859,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#sample_from_datasets -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self datasets weights seed stop_on_empty_dataset">
           <new def="x" class="Ltensorflow/data/Dataset"/>
-          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance*
-            via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>`
-            allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF
-            setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -2971,10 +2889,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#list_files -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self file_pattern shuffle seed name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
-          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance*
-            via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>`
-            allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF
-            setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -3004,10 +2919,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#choose_from_datasets -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self datasets choice_dataset stop_on_empty_dataset">
           <new def="x" class="Ltensorflow/data/Dataset"/>
-          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance*
-            via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>`
-            allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF
-            setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -3037,10 +2949,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#from_generator -->
         <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self generator output_types output_shapes args output_signature name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
-          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance*
-            via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>`
-            allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF
-            setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -3070,10 +2979,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#zip -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self datasets name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
-          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance*
-            via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>`
-            allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF
-            setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -3104,10 +3010,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#range -->
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self start stop step output_type name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
-          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance*
-            via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>`
-            allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF
-            setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -3137,10 +3040,7 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#random -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self seed name">
           <new def="x" class="Ltensorflow/data/Dataset"/>
-          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance*
-            via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>`
-            allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF
-            setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
@@ -3228,10 +3128,7 @@
           <return value="v"/>
         </method>
       </class>
-      <!-- https://www.tensorflow.org/api_docs/python/tf/distribute/Strategy#distribute_datasets_from_function — at runtime `strategy.distribute_datasets_from_function(dataset_fn)` invokes `dataset_fn(input_context)` once per replica and wraps the results in a distributed-dataset object. This synthetic-method
-        body approximates: it allocates a stub `InputContext`, synchronously calls `dataset_fn` with it (single time, single context), and returns the callback's result directly &mdash; no distributed-dataset wrapper. The result is that the callback's body becomes analyzable, which is what wala/ML#113 requires
-        for typing the Datasets that flow out of `dataset_fn`. Modeling a distinct distributed-dataset wrapper type would be additional typing precision on the *return* value (the wrapper's element type tracks the inner dataset's element type); not modeled here because the issue's reported scenario only consumes
-        the wrapper as an opaque object, not as a typed dataset. The deprecated alias `experimental_distribute_datasets_from_function` is wired to the same class on each strategy. -->
+      <!-- https://www.tensorflow.org/api_docs/python/tf/distribute/Strategy#distribute_datasets_from_function — at runtime `strategy.distribute_datasets_from_function(dataset_fn)` invokes `dataset_fn(input_context)` once per replica and wraps the results in a distributed-dataset object. This synthetic-method body approximates: it allocates a stub `InputContext`, synchronously calls `dataset_fn` with it (single time, single context), and returns the callback's result directly &mdash; no distributed-dataset wrapper. The result is that the callback's body becomes analyzable, which is what wala/ML#113 requires for typing the Datasets that flow out of `dataset_fn`. Modeling a distinct distributed-dataset wrapper type would be additional typing precision on the *return* value (the wrapper's element type tracks the inner dataset's element type); not modeled here because the issue's reported scenario only consumes the wrapper as an opaque object, not as a typed dataset. The deprecated alias `experimental_distribute_datasets_from_function` is wired to the same class on each strategy. -->
       <class name="distribute_datasets_from_function" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self dataset_fn">
           <new def="ctx" class="Ltensorflow/distribute/InputContext"/>
@@ -3248,16 +3145,12 @@
     </package>
     <package name="tensorflow/distribute">
       <class name="InputContext" allocatable="true">
-        <!-- Modeled stub for the `tf.distribute.InputContext` instance passed to the user's `dataset_fn` callback by `distribute_datasets_from_function`. The real class exposes the integer attributes `num_input_pipelines` and `input_pipeline_id` plus the method `get_per_replica_batch_size(global_batch_size)`,
-          which divides the global batch size by the number of replicas. The fields are populated at allocation time in `distribute_datasets_from_function`'s synthetic body: integer constants for the two attributes (placeholders &mdash; the analyzer doesn't track per-replica shard counts statically) and a `get_per_replica_batch_size`
-          callable that returns its `global_batch_size` argument unchanged (an upper-bound approximation; precise per-replica division would require static replica-count modeling). None of these flow into tensor shape or dtype, so the placeholder values don't affect the typing of the Datasets `dataset_fn` produces
-          &mdash; the modeling exists so that reads of `input_context.num_input_pipelines` etc. don't surface as ⊤ at use sites in user code. -->
+        <!-- Modeled stub for the `tf.distribute.InputContext` instance passed to the user's `dataset_fn` callback by `distribute_datasets_from_function`. The real class exposes the integer attributes `num_input_pipelines` and `input_pipeline_id` plus the method `get_per_replica_batch_size(global_batch_size)`, which divides the global batch size by the number of replicas. The fields are populated at allocation time in `distribute_datasets_from_function`'s synthetic body: integer constants for the two attributes (placeholders &mdash; the analyzer doesn't track per-replica shard counts statically) and a `get_per_replica_batch_size` callable that returns its `global_batch_size` argument unchanged (an upper-bound approximation; precise per-replica division would require static replica-count modeling). None of these flow into tensor shape or dtype, so the placeholder values don't affect the typing of the Datasets `dataset_fn` produces &mdash; the modeling exists so that reads of `input_context.num_input_pipelines` etc. don't surface as ⊤ at use sites in user code. -->
       </class>
     </package>
     <package name="tensorflow/distribute/InputContext">
       <class name="get_per_replica_batch_size" allocatable="true">
-        <!-- `input_context.get_per_replica_batch_size(global_batch_size)` returns `global_batch_size / num_replicas` at runtime. This synthetic body returns `global_batch_size` unchanged &mdash; an upper bound, used because we don't track replica counts statically and the caller's typing on the returned
-          int doesn't depend on the precise division (only that it's an int). -->
+        <!-- `input_context.get_per_replica_batch_size(global_batch_size)` returns `global_batch_size / num_replicas` at runtime. This synthetic body returns `global_batch_size` unchanged &mdash; an upper bound, used because we don't track replica counts statically and the caller's typing on the returned int doesn't depend on the precise division (only that it's an int). -->
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self global_batch_size">
           <return value="arg1"/>
         </method>
@@ -3616,8 +3509,7 @@
       </class>
     </package>
     <package name="tensorflow/keras/datasets/cifar100">
-      <!-- https://www.tensorflow.org/api_docs/python/tf/keras/datasets/cifar100/load_data — shapes match `cifar10.load_data()` (so the dispatch reuses `Cifar10InputData`); image arrays carry `uint8`. Note: cifar100's label arrays are `int64` at runtime (vs `uint8` for cifar10) — a runtime-dtype divergence
-        the analyzer doesn't yet capture, see wala/ML#487. -->
+      <!-- https://www.tensorflow.org/api_docs/python/tf/keras/datasets/cifar100/load_data — shapes match `cifar10.load_data()` (so the dispatch reuses `Cifar10InputData`); image arrays carry `uint8`. Note: cifar100's label arrays are `int64` at runtime (vs `uint8` for cifar10) — a runtime-dtype divergence the analyzer doesn't yet capture, see wala/ML#487. -->
       <class name="x_train" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
           <new def="ret" class="Ltensorflow/keras/datasets/cifar100/x_train"/>
