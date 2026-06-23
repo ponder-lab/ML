@@ -781,7 +781,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
      * @param e The base-class expression.
      * @return The dotted name of {@code e}.
      */
-    private String dottedName(expr e) {
+    private static String dottedName(expr e) {
       if (e instanceof Attribute) {
         Attribute attr = (Attribute) e;
         return dottedName(attr.getInternalValue()) + "." + attr.getInternalAttr();
