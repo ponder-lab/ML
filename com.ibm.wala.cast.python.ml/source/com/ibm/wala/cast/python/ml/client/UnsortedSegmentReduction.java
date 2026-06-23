@@ -8,6 +8,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -32,17 +33,40 @@ import java.util.Set;
  */
 public class UnsortedSegmentReduction extends PassThroughUnaryTensorGenerator {
 
-  /** Positional index (excluding {@code self}) of the {@code segment_ids} argument. */
-  private static final int SEGMENT_IDS_PARAMETER_POSITION = 1;
+  /**
+   * Positional parameters (after {@code self}) of {@code tf.math.unsorted_segment_*}: {@code data
+   * segment_ids num_segments name}. Only the three that participate in shape inference are modeled;
+   * the trailing {@code name} is omitted.
+   */
+  private enum Parameters {
+    /** The values tensor being aggregated; supplies the output's trailing axes and its dtype. */
+    DATA,
 
-  /** Keyword name of the {@code segment_ids} argument. */
-  private static final String SEGMENT_IDS_PARAMETER_NAME = "segment_ids";
+    /**
+     * The per-row segment assignments; its rank is the number of leading {@code data} axes the
+     * reduction consumes.
+     */
+    SEGMENT_IDS,
 
-  /** Positional index (excluding {@code self}) of the {@code num_segments} argument. */
-  private static final int NUM_SEGMENTS_PARAMETER_POSITION = 2;
+    /** The number of output segments; its static value becomes the output's leading axis. */
+    NUM_SEGMENTS;
 
-  /** Keyword name of the {@code num_segments} argument. */
-  private static final String NUM_SEGMENTS_PARAMETER_NAME = "num_segments";
+    /**
+     * @return The lowercase keyword-parameter name (e.g., {@code "segment_ids"}), suitable for
+     *     {@link TensorGenerator#getArgumentPointsToSet}.
+     */
+    public String getName() {
+      return name().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * @return The zero-based positional index (after {@code self}), suitable for {@link
+     *     TensorGenerator#getArgumentPointsToSet}.
+     */
+    public int getIndex() {
+      return ordinal();
+    }
+  }
 
   public UnsortedSegmentReduction(PointsToSetVariable source) {
     super(source);
@@ -54,12 +78,12 @@ public class UnsortedSegmentReduction extends PassThroughUnaryTensorGenerator {
 
   @Override
   protected int getInputParameterPosition() {
-    return 0;
+    return Parameters.DATA.getIndex();
   }
 
   @Override
   protected String getInputParameterName() {
-    return "data";
+    return Parameters.DATA.getName();
   }
 
   /**
@@ -80,13 +104,14 @@ public class UnsortedSegmentReduction extends PassThroughUnaryTensorGenerator {
     // runtime num_segments (e.g. a node count via tf.shape) leaves the shape at ⊤.
     Integer numSegments =
         this.resolveStaticIntArgument(
-            builder, NUM_SEGMENTS_PARAMETER_POSITION, NUM_SEGMENTS_PARAMETER_NAME);
+            builder, Parameters.NUM_SEGMENTS.getIndex(), Parameters.NUM_SEGMENTS.getName());
     if (numSegments == null) return null;
 
     // The number of leading data axes consumed by segment_ids is segment_ids's rank.
     Integer segmentIdsRank =
         rankOf(
-            this.shapesOfArg(builder, SEGMENT_IDS_PARAMETER_POSITION, SEGMENT_IDS_PARAMETER_NAME));
+            this.shapesOfArg(
+                builder, Parameters.SEGMENT_IDS.getIndex(), Parameters.SEGMENT_IDS.getName()));
     if (segmentIdsRank == null) return null;
 
     Set<List<Dimension<?>>> dataShapes =
