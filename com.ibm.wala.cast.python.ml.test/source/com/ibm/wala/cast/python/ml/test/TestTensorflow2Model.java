@@ -2770,42 +2770,34 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Pins the output type of {@code tf.math.unsorted_segment_sum} (wala/ML#570). The output dtype
-   * inherits from the {@code data} input ({@code float32}); the shape is ⊤ because the leading axis
-   * is the runtime {@code num_segments} value. Verified via a {@code consume_sum} sink on the
-   * aggregation result.
-   *
-   * <p>TODO: Recover the concrete shape when {@code num_segments} is static, per <a
-   * href="https://github.com/wala/ML/issues/582">wala/ML#582</a>.
+   * inherits from the {@code data} input ({@code float32}); the shape is the concrete {@code (2,
+   * 3)} — {@code [num_segments] ++ data.shape[segment_ids.ndim:]} with the static {@code
+   * num_segments = 2}, rank-1 {@code segment_ids}, and {@code (3, 3)} {@code data} (wala/ML#582).
+   * Verified via a {@code consume_sum} sink on the aggregation result.
    */
   @Test
   public void testUnsortedSegmentSum()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_unsorted_segment.py",
-        "consume_sum",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        "tf2_test_unsorted_segment.py", "consume_sum", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
   }
 
   /**
    * Pins the output type of {@code tf.math.unsorted_segment_max} (wala/ML#570). Same dtype-from-
-   * {@code data}, ⊤-shape modeling as {@link #testUnsortedSegmentSum}.
+   * {@code data} and static-{@code num_segments} {@code (2, 3)} shape recovery as {@link
+   * #testUnsortedSegmentSum} (wala/ML#582).
    */
   @Test
   public void testUnsortedSegmentMax()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_unsorted_segment.py",
-        "consume_max",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        "tf2_test_unsorted_segment.py", "consume_max", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
   }
 
   /**
    * Pins the output type of {@code tf.math.unsorted_segment_mean} (wala/ML#570). Same dtype-from-
-   * {@code data}, ⊤-shape modeling as {@link #testUnsortedSegmentSum}.
+   * {@code data} and static-{@code num_segments} {@code (2, 3)} shape recovery as {@link
+   * #testUnsortedSegmentSum} (wala/ML#582).
    */
   @Test
   public void testUnsortedSegmentMean()
@@ -2815,7 +2807,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "consume_mean",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
   }
 
   /**
