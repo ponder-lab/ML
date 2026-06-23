@@ -509,6 +509,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_INT32_UNKNOWN_SHAPE = new TensorType(INT_32, null);
 
+  private static final TensorType TENSOR_1_0_0_9_INT32 =
+      new TensorType(
+          INT_32,
+          asList(new NumericDim(1), new NumericDim(0), new NumericDim(0), new NumericDim(9)));
+
   private static final TensorType TENSOR_UNKNOWN_SHAPE_BOOL = new TensorType(BOOL, null);
 
   private static final TensorType TENSOR_3_INT32 =
@@ -6438,18 +6443,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Regression guard for {@code tf.image.extract_patches} called with a Python <em>list
    * literal</em> {@code images} argument (rather than a {@code tf.Tensor}), per <a
-   * href="https://github.com/wala/ML/issues/584">wala/ML#584</a>. The result must still be
-   * recognized as a tensor; the {@code int32} dtype is inherited from the literal and the shape is
-   * ⊤ (the list-literal shape is not statically propagated through the op).
-   *
-   * <p>TODO: Tighten the shape from ⊤ to the concrete value once <a
-   * href="https://github.com/wala/ML/issues/585">wala/ML#585</a> infers a tensor's shape from a
-   * list literal.
+   * href="https://github.com/wala/ML/issues/584">wala/ML#584</a>. The list-literal shape {@code (1,
+   * 1, 1, 1)} is recovered from the nesting structure, and the result is the concrete {@code (1, 0,
+   * 0, 9) int32}: a {@code 3x3} patch does not fit the {@code 1x1} image, so {@code VALID} padding
+   * yields a 0-extent spatial output (depth {@code 3*3*1 = 9}), matching the runtime shape the
+   * Python fixture asserts (<a href="https://github.com/wala/ML/issues/585">wala/ML#585</a>).
    */
   @Test
   public void testExtractPatches2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_extract_patches2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+    test("tf2_test_extract_patches2.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_1_0_0_9_INT32)));
   }
 
   /**

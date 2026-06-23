@@ -117,14 +117,18 @@ public class ExtractPatches extends PassThroughUnaryTensorGenerator {
    * @param stride The stride along this axis.
    * @param rate The dilation rate along this axis.
    * @param padding The padding mode ({@code "VALID"} or {@code "SAME"}).
-   * @return The output extent, or {@code null} when {@code padding} is unrecognized or no window
-   *     fits.
+   * @return The output extent, or {@code null} when {@code padding} is unrecognized or {@code
+   *     stride} is non-positive.
    */
   private static Integer windowedExtent(int in, int size, int stride, int rate, String padding) {
     if (stride <= 0) return null;
     if (padding.equalsIgnoreCase("VALID")) {
       int effectiveSize = (size - 1) * rate + 1;
-      if (in < effectiveSize) return null;
+      // No window fits when the image is smaller than the (dilated) patch: the output extent is 0,
+      // not ⊤. (Java integer division truncates toward zero, so the formula below would
+      // incorrectly yield 1 here; hence the explicit 0.) Matches TF, which produces a 0-extent
+      // output rather than erroring. See wala/ML#585.
+      if (in < effectiveSize) return 0;
       return (in - effectiveSize) / stride + 1;
     }
     if (padding.equalsIgnoreCase("SAME")) {
