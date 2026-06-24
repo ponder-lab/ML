@@ -1745,8 +1745,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Dropout output retains {@code (20, 784)}; the final {@code Dense(10)} output is tracked at
    * concrete {@code (20, 10)} via the SSA-chain fallback in {@link
    * com.ibm.wala.cast.python.ml.client.DenseCall#getDefaultShapes}. The phi'd loop-local still
-   * shows {@code (20, 784)} because the 100-element {@code my_layers} list collapses under 1-CFA so
-   * the inner {@code Dense(64)} narrowing isn't reached here. See wala/ML#358.
+   * shows {@code (20, 784)} because the loop receiver {@code self.my_layers[idx]} resolves to ⊥
+   * under 1-CFA — the subscript read doesn't recover the list's {@code Dense(64)} element instances
+   * — so the inner {@code Dense(64)} call is never typed. That residual is a container/list-element
+   * resolution gap tracked by <a href="https://github.com/wala/ML/issues/599">wala/ML#599</a>,
+   * distinct from the chained-method-call recursion of <a
+   * href="https://github.com/wala/ML/issues/358">wala/ML#358</a> that narrows the direct {@code
+   * Dense(10)} call here.
    */
   @Test
   public void testModelCall()
