@@ -244,14 +244,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_4_8_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(8)));
 
+  private static final TensorType TENSOR_4_512_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(512)));
+
   private static final TensorType SPARSE_TENSOR_4_4_FLOAT32 =
       new SparseTensorType(FLOAT32, asList(new NumericDim(4), new NumericDim(4)));
-
-  private static final TensorType TENSOR_UNKNOWN_DYNAMIC_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE));
-
-  private static final TensorType TENSOR_UNKNOWN_UNKNOWN_FLOAT32 =
-      new TensorType(FLOAT_32, asList(new SymbolicDim("?"), new SymbolicDim("?")));
 
   private static final TensorType TENSOR_4_10_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(10)));
@@ -8984,20 +8981,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Documents the current imprecision for <a
-   * href="https://github.com/wala/ML/issues/581">wala/ML#581</a>: a {@code tf.reshape} whose dim is
-   * arithmetic over instance attributes ({@code self.heads * self.out_features}) infers the
-   * per-context union {@code {(?, ?), (?, Dynamic)}} rather than the precise {@code (4, 512)}.
-   * Neither shape-argument extraction path folds it: the interpreter-based {@code
-   * TensorType.shapeArg} cannot evaluate {@code self.X} as source text, and the generator-side
-   * {@code getShapesFromShapeArgument} emits a {@code DynamicDim} for the unresolved binary op.
-   * Resolving it needs the generator-side path to fold a binary op over constant-valued field reads
-   * via the analysis (not the interpreter). This guard pins the current result so it flips when
-   * #581 lands.
-   *
-   * <p>TODO: tighten to {@code (4, 512)} once <a
-   * href="https://github.com/wala/ML/issues/581">wala/ML#581</a> reconciles the two shape-argument
-   * extraction paths.
+   * Regression guard for <a href="https://github.com/wala/ML/issues/581">wala/ML#581</a>: a {@code
+   * tf.reshape} whose dim is arithmetic over instance attributes ({@code self.heads *
+   * self.out_features}) infers the precise {@code (4, 512)}. Both shape-argument extraction paths
+   * now fold the binary op over constant-valued field reads through the points-to analysis (the
+   * shared {@link com.ibm.wala.cast.python.ml.types.TensorType#foldArithmeticDim}): the
+   * generator-side {@code getShapesFromShapeArgument} and the interpreter-based {@code
+   * TensorType.shapeArg}, which previously degraded to {@code DynamicDim} / {@code SymbolicDim}
+   * respectively since {@code interpretAsInt} cannot evaluate {@code self.X} as source text.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -9008,11 +8999,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testReshapeSelfArith()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_reshape_self_arith.py",
-        "consume",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_UNKNOWN_FLOAT32, TENSOR_UNKNOWN_DYNAMIC_FLOAT32)));
+        "tf2_test_reshape_self_arith.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_512_FLOAT32)));
   }
 
   /**
