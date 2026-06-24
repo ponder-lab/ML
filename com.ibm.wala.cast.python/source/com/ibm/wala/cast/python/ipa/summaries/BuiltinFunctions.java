@@ -56,7 +56,7 @@ public class BuiltinFunctions {
 
   private static IMethod iterableSummary(
       IClass cls, String name, TypeReference containerType, TypeReference elementType) {
-    PythonSummary S = iterableSummary(cls, builtinFunction(name), containerType, elementType);
+    PythonSummary S = iterableSummary(builtinFunction(name), containerType, elementType);
     return new PythonSummarizedFunction(S.getMethod(), S, cls);
   }
 
@@ -71,14 +71,14 @@ public class BuiltinFunctions {
    * container starves that read, which in turn starves any downstream element write (e.g., a list
    * comprehension building {@code self.my_layers}). See wala/ML#599.
    *
-   * @param cls The {@link IClass} the summarized function belongs to.
+   * @param type The {@link TypeReference} of the builtin function whose summary this is.
    * @param containerType The type of the returned container (e.g., {@link PythonTypes#list}).
    * @param elementType The type allocated for the container's single element (e.g., {@link
    *     TypeReference#Int}).
    * @return A {@link PythonSummary} returning a one-element container.
    */
   private static PythonSummary iterableSummary(
-      IClass cls, TypeReference type, TypeReference containerType, TypeReference elementType) {
+      TypeReference type, TypeReference containerType, TypeReference elementType) {
     MethodReference ref = MethodReference.findOrCreate(type, AstMethodReference.fnSelector);
     PythonSummary x = new PythonSummary(ref, 10);
 
