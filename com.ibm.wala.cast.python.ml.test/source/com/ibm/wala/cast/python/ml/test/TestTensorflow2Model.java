@@ -427,6 +427,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_20_10_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(20), new NumericDim(10)));
 
+  private static final TensorType TENSOR_20_64_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(20), new NumericDim(64)));
+
   private static final TensorType TENSOR_60000_28_28_FLOAT32 =
       new TensorType(
           FLOAT_32, asList(new NumericDim(60000), new NumericDim(28), new NumericDim(28)));
@@ -1738,20 +1741,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Five tensor variables in {@code SequentialModel.__call__}: the {@code x} parameter (vn=3, shape
-   * {@code (20, 28, 28) f32}) plus four intermediate SSA values produced by the {@code
-   * self.flatten(x) → 100× Dense(64) → self.dropout(x) → self.dense_2(x)} chain. The Flatten result
-   * is concrete {@code (20, 784)} via {@link com.ibm.wala.cast.python.ml.client.FlattenCall}; the
-   * Dropout output retains {@code (20, 784)}; the final {@code Dense(10)} output is tracked at
-   * concrete {@code (20, 10)} via the SSA-chain fallback in {@link
-   * com.ibm.wala.cast.python.ml.client.DenseCall#getDefaultShapes}. The phi'd loop-local still
-   * shows {@code (20, 784)} because the loop receiver {@code self.my_layers[idx]} resolves to ⊥
-   * under 1-CFA — the subscript read doesn't recover the list's {@code Dense(64)} element instances
-   * — so the inner {@code Dense(64)} call is never typed. That residual is a container/list-element
-   * resolution gap tracked by <a href="https://github.com/wala/ML/issues/599">wala/ML#599</a>,
-   * distinct from the chained-method-call recursion of <a
-   * href="https://github.com/wala/ML/issues/358">wala/ML#358</a> that narrows the direct {@code
-   * Dense(10)} call here.
+   * Six tensor variables in {@code SequentialModel.__call__}: the {@code x} parameter (vn=3, shape
+   * {@code (20, 28, 28) f32}) plus five intermediate SSA values produced by the {@code
+   * self.flatten(x) → 100× Dense(64) → self.dropout(x) → self.dense_2(x)} chain. The {@code
+   * Flatten} result is concrete {@code (20, 784)} via {@link
+   * com.ibm.wala.cast.python.ml.client.FlattenCall} (vn=9); the loop's {@code Dense(64)} output is
+   * concrete {@code (20, 64)} (vn=22); the loop-head phi (vn=17) and the {@code Dropout} output
+   * (vn=26) union both reachable shapes {@code {(20, 784), (20, 64)}} (the pre-loop entry shape
+   * survives because an empty {@code my_layers} would leave {@code x} at the {@code Flatten}
+   * shape); the final {@code Dense(10)} output is concrete {@code (20, 10)} (vn=30).
+   *
+   * <p>The loop's {@code Dense(64)} narrows because {@code range(n)} now returns an iterable
+   * (non-empty) list, so the {@code self.my_layers} comprehension populates the list and the {@code
+   * self.my_layers[idx]} subscript read resolves to its {@code Dense(64)} elements (<a
+   * href="https://github.com/wala/ML/issues/599">wala/ML#599</a>). The direct {@code Dense(10)}
+   * narrows via the SSA-chain fallback in {@link
+   * com.ibm.wala.cast.python.ml.client.DenseCall#getDefaultShapes} (<a
+   * href="https://github.com/wala/ML/issues/358">wala/ML#358</a>).
    */
   @Test
   public void testModelCall()
@@ -1760,7 +1766,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_model_call.py",
         "SequentialModel.__call__",
         1,
-        5,
+        6,
         Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
@@ -1771,7 +1777,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_model_call2.py",
         "SequentialModel.call",
         1,
-        5,
+        6,
         Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
@@ -1782,7 +1788,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_model_call3.py",
         "SequentialModel.call",
         1,
-        5,
+        6,
         Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
@@ -1793,7 +1799,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_model_call4.py",
         "SequentialModel.__call__",
         1,
-        5,
+        6,
         Map.of(3, Set.of(TENSOR_20_28_28_FLOAT32)));
   }
 
@@ -1846,7 +1852,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_model_call6.py",
         "SequentialModel.__call__",
         1,
-        5,
+        6,
         Map.of(3, Set.of(TENSOR_20_28_28_INT32)));
   }
 
@@ -11366,6 +11372,33 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_model_call_consume.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_20_10_FLOAT32)));
+  }
+
+  /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/599">wala/ML#599</a>.
+   *
+   * <p>Derived from {@link #testModelCall()} (see {@code tf2_test_model_call.py}) by adding a
+   * {@code consume(x)} call <em>inside</em> the {@code for layer in self.my_layers} loop,
+   * immediately after {@code x = layer(x)}. At that point {@code x} is the loop's {@code Dense(64)}
+   * output, shape {@code (20, 64)} and dtype {@code float32}.
+   *
+   * <p>This pins the loop-iterated layer call's output, which is the gap wala/ML#599 closes:
+   * because {@code range(n)} now returns an iterable (non-empty) list, the {@code self.my_layers}
+   * comprehension populates the list, the {@code self.my_layers[idx]} subscript read resolves to
+   * its {@code Dense(64)} elements, and the loop call's output narrows to {@code (20, 64)} rather
+   * than carrying the upstream {@code Flatten} shape {@code (20, 784)} unchanged. {@link
+   * com.ibm.wala.cast.python.ml.client.DenseCall} breaks the resulting input-shape self-recursion
+   * (the loop's collapsed 1-CFA node feeds its own output back in) via a per-thread cycle guard.
+   */
+  @Test
+  public void testModelCallLoopConsume()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_call_loop_consume.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_20_64_FLOAT32)));
   }
 
   /**
