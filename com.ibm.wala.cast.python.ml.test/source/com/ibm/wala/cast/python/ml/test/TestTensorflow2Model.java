@@ -247,6 +247,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_4_512_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(512)));
 
+  private static final TensorType TENSOR_2_64_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(64)));
+
   private static final TensorType SPARSE_TENSOR_4_4_FLOAT32 =
       new SparseTensorType(FLOAT32, asList(new NumericDim(4), new NumericDim(4)));
 
@@ -9000,6 +9003,31 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_reshape_self_arith.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_512_FLOAT32)));
+  }
+
+  /**
+   * Coverage companion to {@link #testReshapeSelfArith()} for <a
+   * href="https://github.com/wala/ML/issues/581">wala/ML#581</a>: a {@code tf.reshape} dim of
+   * {@code self.base + 4} infers the precise {@code (2, 64)}. Exercises the {@code ADD} operator
+   * and a literal operand of the arithmetic fold (the sibling fixture covers {@code MUL} over two
+   * field reads), so {@link com.ibm.wala.cast.python.ml.types.TensorType#resolveConstantInt}
+   * resolves one operand via the symbol table ({@code 4}) and the other via the points-to analysis
+   * ({@code self.base}).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testReshapeSelfArithAdd()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_self_arith_add.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_64_FLOAT32)));
   }
 
   /**
