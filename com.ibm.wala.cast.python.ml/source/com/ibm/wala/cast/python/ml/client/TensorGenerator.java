@@ -57,9 +57,13 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
+import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSANewInstruction;
+import com.ibm.wala.ssa.SSAPutInstruction;
+import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
@@ -441,13 +445,19 @@ public abstract class TensorGenerator {
         // position's set but only retained the last iterated element, producing a
         // non-deterministic single shape per `i` rather than the full product.
         List<Set<Dimension<?>>> resolved = new ArrayList<>(possibleDimensions.length);
-        for (Set<Dimension<?>> s : possibleDimensions) {
-          // TODO(https://github.com/wala/ML/issues/581): an empty position holding a binary op over
-          // constant-valued operands (e.g. `self.heads * self.out_features`) could be folded to a
-          // `NumericDim` via the analysis instead of degrading to `DynamicDim`. This is the
-          // generator-side half of the shape-argument-extraction reconciliation.
-          if (s == null || s.isEmpty()) resolved.add(Collections.singleton(DynamicDim.INSTANCE));
-          else resolved.add(s);
+        for (int k = 0; k < possibleDimensions.length; k++) {
+          Set<Dimension<?>> s = possibleDimensions[k];
+          if (s != null && !s.isEmpty()) {
+            resolved.add(s);
+            continue;
+          }
+          // An empty position holds no resolved constant. Before degrading to `DynamicDim`, try to
+          // fold a binary op over constant-valued operands (e.g. `self.heads * self.out_features`)
+          // via the analysis. `interpretAsInt` in `TensorType.shapeArg` only handles pure-literal
+          // source text; this generator-side path resolves field reads and globals through the PTS,
+          // reconciling the two shape-argument-extraction paths (wala/ML#581).
+          Dimension<?> folded = foldArithmeticShapeDim(builder, asin, k);
+          resolved.add(Collections.singleton(folded != null ? folded : DynamicDim.INSTANCE));
         }
 
         List<List<Dimension<?>>> shapes = new ArrayList<>();
@@ -554,6 +564,74 @@ public abstract class TensorGenerator {
       }
     }
 
+    return null;
+  }
+
+  /**
+   * Attempts to fold the shape dimension at {@code fieldIndex} of the shape list/tuple allocated at
+   * {@code listAsin} when that element is a binary op over constant-valued operands (e.g. {@code
+   * self.heads * self.out_features}).
+   *
+   * <p>The element write is located in the list's allocating node IR, and the binary op's operands
+   * are resolved to constants through the points-to analysis (so field reads and globals resolve,
+   * not just source-text literals). This is the generator-side half of the shape-argument
+   * reconciliation in wala/ML#581: {@link TensorType#shapeArg(CGNode, int,
+   * PropagationCallGraphBuilder)} can fold literal source text via the embedded interpreter but has
+   * no points-to analysis to resolve {@code self.X}.
+   *
+   * @param builder The propagation call graph builder, used to resolve operand points-to sets.
+   * @param listAsin The allocation site of the shape list/tuple.
+   * @param fieldIndex The position whose dimension is being folded.
+   * @return A {@link NumericDim} holding the folded value, or {@code null} if the element is not a
+   *     constant-foldable binary op.
+   */
+  private Dimension<?> foldArithmeticShapeDim(
+      PropagationCallGraphBuilder builder, AllocationSiteInNode listAsin, int fieldIndex) {
+    CGNode node = listAsin.getNode();
+    if (node.getIR() == null) return null;
+    DefUse du = node.getDU();
+    SymbolTable st = node.getIR().getSymbolTable();
+    SSANewInstruction allocInstr = node.getIR().getNew(listAsin.getSite());
+    if (allocInstr == null) return null;
+    int listVn = allocInstr.getDef();
+
+    for (Iterator<SSAInstruction> uses = du.getUses(listVn); uses.hasNext(); ) {
+      SSAInstruction use = uses.next();
+      int objRef;
+      int writtenVal;
+      Integer index = null;
+
+      if (use instanceof PythonPropertyWrite) {
+        PythonPropertyWrite w = (PythonPropertyWrite) use;
+        objRef = w.getObjectRef();
+        writtenVal = w.getValue();
+        int memberVn = w.getMemberRef();
+        if (st.isNumberConstant(memberVn))
+          index = ((Number) st.getConstantValue(memberVn)).intValue();
+        else if (st.isStringConstant(memberVn)) {
+          try {
+            index = Integer.parseInt(st.getStringValue(memberVn));
+          } catch (NumberFormatException e) {
+            // not an index write.
+          }
+        }
+      } else if (use instanceof SSAPutInstruction) {
+        SSAPutInstruction p = (SSAPutInstruction) use;
+        if (p.isStatic()) continue;
+        objRef = p.getRef();
+        writtenVal = p.getVal();
+        try {
+          index = Integer.parseInt(p.getDeclaredField().getName().toString());
+        } catch (NumberFormatException e) {
+          // not an index write.
+        }
+      } else continue;
+
+      if (objRef != listVn || index == null || index.intValue() != fieldIndex) continue;
+
+      // Shared with `TensorType.shapeArg` so the two shape-argument paths agree (wala/ML#581).
+      return TensorType.foldArithmeticDim(builder, node, st, du, writtenVal);
+    }
     return null;
   }
 

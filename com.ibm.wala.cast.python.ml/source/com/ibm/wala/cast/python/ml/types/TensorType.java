@@ -23,7 +23,13 @@ import com.ibm.wala.cast.python.util.PythonInterpreter;
 import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
 import com.ibm.wala.cast.util.SourceBuffer;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.ssa.DefUse;
+import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSAPutInstruction;
 import com.ibm.wala.ssa.SymbolTable;
@@ -648,7 +654,8 @@ public class TensorType implements Iterable<Dimension<?>> {
     return new TensorType(FLOAT32.name().toLowerCase(Locale.ROOT), Arrays.asList(batch, vec));
   }
 
-  public static TensorType shapeArg(CGNode node, int literalVn) {
+  public static TensorType shapeArg(
+      CGNode node, int literalVn, PropagationCallGraphBuilder builder) {
     logger.fine(() -> node.getIR().toString());
     Map<Integer, Dimension<?>> dims = new TreeMap<>();
     DefUse du = node.getDU();
@@ -733,14 +740,101 @@ public class TensorType implements Iterable<Dimension<?>> {
             }
           }
         }
-        // TODO(https://github.com/wala/ML/issues/581): when the dim is a binary op over
-        // constant-valued operands (field reads such as `self.heads * self.out_features`, globals),
-        // fold it via the analysis instead of degrading to a symbolic dim. `interpretAsInt` above
-        // only handles pure-literal source text, so the generator-side path should own this.
-        dims.put(index, new SymbolicDim("?"));
+        // When the dim is a binary op over constant-valued operands (field reads such as
+        // `self.heads * self.out_features`, globals), fold it via the points-to analysis instead of
+        // degrading to a symbolic dim. `interpretAsInt` above only handles pure-literal source
+        // text; this PTS-based fold reconciles `shapeArg` with the generator-side shape-argument
+        // extraction (wala/ML#581).
+        Dimension<?> folded = foldArithmeticDim(builder, node, S, du, val);
+        dims.put(index, folded != null ? folded : new SymbolicDim("?"));
       }
     }
     return new TensorType(FLOAT32.name().toLowerCase(Locale.ROOT), new ArrayList<>(dims.values()));
+  }
+
+  /**
+   * Folds a shape dimension that is a binary op over constant-valued operands (e.g. {@code
+   * self.heads * self.out_features}) to a {@link NumericDim}, resolving each operand to a constant
+   * through the points-to analysis (so instance-field reads and globals resolve, not just
+   * literals).
+   *
+   * <p>Shared by {@link #shapeArg(CGNode, int, PropagationCallGraphBuilder)} and the generator-side
+   * shape-argument extraction so the two paths agree (wala/ML#581).
+   *
+   * @param builder The propagation call graph builder, or {@code null} if unavailable (no fold).
+   * @param node The node whose IR defines {@code val}.
+   * @param symbolTable The symbol table of {@code node}'s IR.
+   * @param du The def-use of {@code node}.
+   * @param val The value number of the dimension expression.
+   * @return A {@link NumericDim} holding the folded value, or {@code null} if {@code val} is not a
+   *     constant-foldable binary op.
+   */
+  public static Dimension<?> foldArithmeticDim(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      SymbolTable symbolTable,
+      DefUse du,
+      int val) {
+    if (builder == null) return null;
+    SSAInstruction def = du.getDef(val);
+    if (!(def instanceof SSABinaryOpInstruction)) return null;
+    SSABinaryOpInstruction binOp = (SSABinaryOpInstruction) def;
+    Integer left = resolveConstantInt(builder, node, symbolTable, binOp.getUse(0));
+    Integer right = resolveConstantInt(builder, node, symbolTable, binOp.getUse(1));
+    if (left == null || right == null) return null;
+    Integer value = applyIntBinOp(binOp.getOperator(), left, right);
+    return value == null ? null : new NumericDim(value);
+  }
+
+  /**
+   * Resolves {@code vn} (in {@code node}) to a constant integer: a literal in the symbol table or a
+   * {@link ConstantKey} in its points-to set (e.g. an instance-field read of a numeric attribute
+   * set in {@code __init__}).
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The node whose IR contains {@code vn}.
+   * @param symbolTable The symbol table of {@code node}'s IR.
+   * @param vn The value number to resolve.
+   * @return The constant integer value, or {@code null} if {@code vn} is not unambiguously
+   *     constant.
+   */
+  public static Integer resolveConstantInt(
+      PropagationCallGraphBuilder builder, CGNode node, SymbolTable symbolTable, int vn) {
+    if (vn <= 0) return null;
+    if (symbolTable.isNumberConstant(vn))
+      return ((Number) symbolTable.getConstantValue(vn)).intValue();
+
+    PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+    if (pk == null) return null;
+
+    Integer found = null;
+    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(pk)) {
+      if (!(ik instanceof ConstantKey)) return null;
+      Object value = ((ConstantKey<?>) ik).getValue();
+      if (!(value instanceof Number)) return null;
+      int iv = ((Number) value).intValue();
+      if (found != null && found.intValue() != iv) return null; // ambiguous
+      found = iv;
+    }
+    return found;
+  }
+
+  /**
+   * Applies an integer binary operator, mirroring the {@code SSABinaryOpInstruction} dispatch in
+   * the tensor-generator factory.
+   *
+   * @param operator The binary operator.
+   * @param left The left operand.
+   * @param right The right operand.
+   * @return The result, or {@code null} for an unsupported operator or division by zero.
+   */
+  public static Integer applyIntBinOp(
+      IBinaryOpInstruction.IOperator operator, int left, int right) {
+    if (operator == IBinaryOpInstruction.Operator.ADD) return left + right;
+    if (operator == IBinaryOpInstruction.Operator.SUB) return left - right;
+    if (operator == IBinaryOpInstruction.Operator.MUL) return left * right;
+    if (operator == IBinaryOpInstruction.Operator.DIV) return right != 0 ? left / right : null;
+    return null;
   }
 
   @Override

@@ -897,7 +897,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             if (!builder.getPropagationSystem().isImplicit(defKey))
               targets.put(
                   builder.getPropagationSystem().findOrCreatePointsToSet(defKey),
-                  TensorType.shapeArg(src, call.getUse(param)));
+                  TensorType.shapeArg(src, call.getUse(param), builder));
           }
         });
     return targets;
@@ -996,7 +996,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         if (builder.getPropagationSystem().isImplicit(receiverKey)) continue;
         targets.put(
             builder.getPropagationSystem().findOrCreatePointsToSet(receiverKey),
-            TensorType.shapeArg(caller, call.getUse(1)));
+            TensorType.shapeArg(caller, call.getUse(1), builder));
       }
     }
     return targets;
