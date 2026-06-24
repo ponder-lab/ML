@@ -2222,11 +2222,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * a fresh tensor per {@code tape.gradient(...)} call instead of aliasing {@code sources}, each of
    * the two gradient calls in {@code train_step} (one for the generator, one for the discriminator)
    * registers an additional local tensor variable, lifting the count from the prior master baseline
-   * of 5 to 7. The test still fails only on types: value 2 ({@code images}) registers as {@code {?
-   * float32}} because the mnist data pipeline loses shape information through {@code
-   * mnist.load_data()} and the subsequent ndarray operations (wala/ML#361). Types are aspirational;
-   * hardcoding {@code mnist.load_data()} as an intrinsic (per the plan discussed on branch 267)
-   * would unblock this test without needing the general annotation framework (wala/ML#370).
+   * of 5 to 7. Value 2 ({@code images}) is inferred concretely as {@code {(256, 28, 28, 1), (96,
+   * 28, 28, 1)} float32}: the mnist pipeline resolves end to end. {@code mnist.load_data()}
+   * supplies {@code (60000, 28, 28)} (<a
+   * href="https://github.com/wala/ML/issues/361">wala/ML#361</a>), {@code [..., None]} and the
+   * {@code (x - 127.5) / 127.5} binop chain carry it to {@code (60000, 28, 28, 1)}, {@code
+   * from_tensor_slices} takes the element shape {@code (28, 28, 1)}, and {@code .batch(256)}
+   * produces the two batch shapes (<a
+   * href="https://github.com/wala/ML/issues/356">wala/ML#356</a>).
    */
   @Test
   public void testGanTutorial()
@@ -2245,9 +2248,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Python assert statements in {@code tensorflow_gan_tutorial.py} (not duplicated in {@code
    * tensorflow_gan_tutorial2.py} since the two files are structurally identical apart from the
    * decorator): shape in {@code {(256, 28, 28, 1), (96, 28, 28, 1)}}, dtype {@code float32}.
-   * Expected count 7 — same accounting as {@link #testGanTutorial()}: the two `tape.gradient(...)`
-   * calls each contribute one fresh tensor variable post-wala/ML#430 (5 → 7). Same mnist modeling
-   * gap (wala/ML#361) blocks type inference on value 2.
+   * Expected count 7, same accounting as {@link #testGanTutorial()}: the two `tape.gradient(...)`
+   * calls each contribute one fresh tensor variable post-wala/ML#430 (5 to 7). Value 2 is inferred
+   * concretely as in {@link #testGanTutorial()}; the mnist binop-chain pipeline resolves (<a
+   * href="https://github.com/wala/ML/issues/356">wala/ML#356</a>, <a
+   * href="https://github.com/wala/ML/issues/361">wala/ML#361</a>).
    */
   @Test
   public void testGanTutorial2()
