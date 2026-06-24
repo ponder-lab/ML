@@ -14,6 +14,7 @@ import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.ClassTargetSelector;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.ssa.ConstantValue;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.Selector;
 import com.ibm.wala.types.TypeName;
@@ -49,6 +50,48 @@ public class BuiltinFunctions {
     AstInstructionFactory factory = PythonLanguage.Python.instructionFactory();
     x.addStatement(factory.NewInstruction(0, 11, NewSiteReference.make(0, returnedType)));
     x.addStatement(factory.ReturnInstruction(1, 11, false));
+
+    return x;
+  }
+
+  private static IMethod iterableSummary(
+      IClass cls, String name, TypeReference containerType, TypeReference elementType) {
+    PythonSummary S = iterableSummary(builtinFunction(name), containerType, elementType);
+    return new PythonSummarizedFunction(S.getMethod(), S, cls);
+  }
+
+  /**
+   * Builds a summary for a builtin that returns a freshly-allocated container holding one element
+   * of the given element type, written under a constant key.
+   *
+   * <p>Unlike {@link #typeSummary(IClass, TypeReference, TypeReference)}, which returns an
+   * <em>empty</em> container, this populates the container so that iterating it (via {@code
+   * EachElementGetInstruction}) yields the element. {@code range} needs this: a comprehension or
+   * {@code for} loop over {@code range(n)} reads each element's key off the result, and an empty
+   * container starves that read, which in turn starves any downstream element write (e.g., a list
+   * comprehension building {@code self.my_layers}). See wala/ML#599.
+   *
+   * @param type The {@link TypeReference} of the builtin function whose summary this is.
+   * @param containerType The type of the returned container (e.g., {@link PythonTypes#list}).
+   * @param elementType The type allocated for the container's single element (e.g., {@link
+   *     TypeReference#Int}).
+   * @return A {@link PythonSummary} returning a one-element container.
+   */
+  private static PythonSummary iterableSummary(
+      TypeReference type, TypeReference containerType, TypeReference elementType) {
+    MethodReference ref = MethodReference.findOrCreate(type, AstMethodReference.fnSelector);
+    PythonSummary x = new PythonSummary(ref, 10);
+
+    AstInstructionFactory factory = PythonLanguage.Python.instructionFactory();
+    int container = 11;
+    int element = 12;
+    int key = 13;
+
+    x.addStatement(factory.NewInstruction(0, container, NewSiteReference.make(0, containerType)));
+    x.addStatement(factory.NewInstruction(1, element, NewSiteReference.make(1, elementType)));
+    x.addConstant(key, new ConstantValue(0));
+    x.addStatement(factory.PropertyWrite(2, container, key, element));
+    x.addStatement(factory.ReturnInstruction(3, container, false));
 
     return x;
   }
@@ -92,7 +135,13 @@ public class BuiltinFunctions {
       this.cha = cha;
       this.ref = builtinFunction(name);
       this.builtinCode =
-          returnedType == null ? noopSummary(this, name) : typeSummary(this, name, returnedType);
+          returnedType == null
+              ? noopSummary(this, name)
+              // `range` must return an iterable (non-empty) container so that loops and
+              // comprehensions over it can recover element keys. See wala/ML#599.
+              : name.equals("range")
+                  ? iterableSummary(this, name, returnedType, TypeReference.Int)
+                  : typeSummary(this, name, returnedType);
     }
 
     private BuiltinFunction(IClassHierarchy cha, String name, int arg) {

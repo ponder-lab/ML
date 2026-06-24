@@ -38,6 +38,20 @@ public class DenseCall extends TensorGenerator {
   private static final String DENSE_UNITS_FIELD_NAME = "units";
 
   /**
+   * Per-thread set of {@code Dense.__call__} nodes whose input shape is currently being computed.
+   *
+   * <p>Breaks unbounded recursion when a layer call's input flows back to itself. The motivating
+   * case is a loop over a list of layers ({@code for layer in self.my_layers: x = layer(x)}): under
+   * 1-CFA the list elements collapse to a single {@code Dense.__call__} node, so that node's input
+   * points-to set includes its own output, and {@link #getInputShapes} would otherwise recurse on
+   * the same node forever. On re-entry for an in-progress node we return {@code null}, letting the
+   * other phi operand (e.g., the upstream {@code Flatten} output) supply the base shape. See
+   * wala/ML#599.
+   */
+  private static final ThreadLocal<Set<CGNode>> INPUT_SHAPE_NODES_IN_PROGRESS =
+      ThreadLocal.withInitial(HashSet::new);
+
+  /**
    * Parameter positions and names for calls to {@code tf.keras.layers.Dense}.
    *
    * @see <a
@@ -153,7 +167,40 @@ public class DenseCall extends TensorGenerator {
   }
 
   /**
-   * Resolves the input tensor shapes for this {@code Dense.__call__} invocation.
+   * Resolves the input tensor shapes for this {@code Dense.__call__} invocation, guarding against
+   * cyclic self-recursion before delegating to {@link
+   * #computeInputShapes(PropagationCallGraphBuilder)}.
+   *
+   * <p>The guard ({@link #INPUT_SHAPE_NODES_IN_PROGRESS}) breaks the recursion that arises when a
+   * layer call's input flows back to itself — e.g., a loop over a list of layers whose collapsed
+   * 1-CFA node feeds its own output back in as input. See wala/ML#599.
+   *
+   * @param builder The propagation call graph builder used for points-to analysis and factory
+   *     dispatch.
+   * @return The set of possible input shapes, or {@code null} if neither path resolves a shape or
+   *     the node is already being resolved on this thread (cycle).
+   */
+  private Set<List<Dimension<?>>> getInputShapes(PropagationCallGraphBuilder builder) {
+    CGNode self = this.getNode();
+    Set<CGNode> inProgress = INPUT_SHAPE_NODES_IN_PROGRESS.get();
+    if (!inProgress.add(self)) {
+      // Cyclic chain: this `Dense.__call__` node's input flows back to itself (e.g., a layer-list
+      // loop whose output feeds in as its own input under 1-CFA node collapse). Break the cycle;
+      // the other phi operand supplies the base shape. See wala/ML#599.
+      LOGGER.fine(() -> "getInputShapes: cycle detected at node " + self + "; breaking recursion.");
+      return null;
+    }
+    try {
+      return this.computeInputShapes(builder);
+    } finally {
+      inProgress.remove(self);
+    }
+  }
+
+  /**
+   * Computes the input tensor shapes for this {@code Dense.__call__} invocation. Always invoked
+   * under the {@link #INPUT_SHAPE_NODES_IN_PROGRESS} cycle guard established by {@link
+   * #getInputShapes(PropagationCallGraphBuilder)}.
    *
    * <p>Primary path: walks the {@code inputs} argument's points-to set and dispatches the
    * allocating node through {@link #createManualGenerator(CGNode, PropagationCallGraphBuilder)}.
@@ -171,9 +218,10 @@ public class DenseCall extends TensorGenerator {
    *
    * @param builder The propagation call graph builder used for points-to analysis and factory
    *     dispatch.
-   * @return The set of possible input shapes, or {@code null} if neither path resolves a shape.
+   * @return The set of possible input shapes, or {@code null} if neither the PTS walk nor the
+   *     SSA-chain fallback resolves a shape.
    */
-  private Set<List<Dimension<?>>> getInputShapes(PropagationCallGraphBuilder builder) {
+  private Set<List<Dimension<?>>> computeInputShapes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> inputPts =
         this.getArgumentPointsToSet(
             builder, Parameters.INPUTS.getIndex(), Parameters.INPUTS.getName());
