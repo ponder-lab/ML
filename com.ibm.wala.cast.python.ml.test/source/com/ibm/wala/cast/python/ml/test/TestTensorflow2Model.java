@@ -543,6 +543,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_3_5_INT32 =
       new TensorType(INT_32, asList(new NumericDim(3), new NumericDim(5)));
 
+  private static final TensorType TENSOR_3_5_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(5)));
+
   private static final TensorType TENSOR_4_FLOAT64 =
       new TensorType(FLOAT_64, asList(new NumericDim(4)));
 
@@ -6388,6 +6391,63 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TENSOR_2_4_3_FLOAT32)));
+  }
+
+  /**
+   * Verifies that {@code tf.linalg.solve(matrix, rhs)} reports the shape and dtype of the
+   * right-hand side {@code rhs} (arg 1), not the coefficient {@code matrix} (arg 0). A {@code (3,
+   * 3)} matrix and a {@code (3, 5)} rhs yield a {@code (3, 5)} result. Previously the op was
+   * modeled as a first-argument {@code pass_through}, which reported the {@code (3, 3)} matrix
+   * shape — an actively wrong answer. See <a
+   * href="https://github.com/wala/ML/issues/513">wala/ML#513</a> bucket 2b.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testSolve()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_solve.py", "consume_solve", 1, 1, Map.of(2, Set.of(TENSOR_3_5_FLOAT32)));
+  }
+
+  /**
+   * Verifies that {@code tf.linalg.cholesky_solve(chol, rhs)} reports the shape and dtype of the
+   * right-hand side {@code rhs} (arg 1), not the Cholesky factor {@code chol} (arg 0). See <a
+   * href="https://github.com/wala/ML/issues/513">wala/ML#513</a> bucket 2b.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCholeskySolve()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_solve.py", "consume_cholesky_solve", 1, 1, Map.of(2, Set.of(TENSOR_3_5_FLOAT32)));
+  }
+
+  /**
+   * Verifies that {@code tf.linalg.triangular_solve(matrix, rhs)} reports the shape and dtype of
+   * the right-hand side {@code rhs} (arg 1), not the coefficient {@code matrix} (arg 0). See <a
+   * href="https://github.com/wala/ML/issues/513">wala/ML#513</a> bucket 2b.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testTriangularSolve()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_solve.py",
+        "consume_triangular_solve",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_5_FLOAT32)));
   }
 
   /**
