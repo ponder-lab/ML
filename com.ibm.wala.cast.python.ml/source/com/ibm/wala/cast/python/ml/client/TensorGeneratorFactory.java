@@ -5,6 +5,7 @@ import static com.ibm.wala.cast.python.ml.types.NumpyTypes.ASTYPE_METHOD_NAME;
 import static com.ibm.wala.cast.python.ml.types.NumpyTypes.RESHAPE_METHOD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ACOSH;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADJOINT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARGMAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARGMIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARRAY_OPS_RESHAPE;
@@ -57,6 +58,8 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_TAKE_TYP
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_WITH_OPTIONS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_ZIP_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DENSE_CALL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIAG;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIAG_PART;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIVIDE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.UNKNOWN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EINSUM;
@@ -106,6 +109,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG1P;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG_SOFTMAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MATMUL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MATRIX_TRANSPOSE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MAXIMUM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MAX_POOL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MESHGRID;
@@ -1250,6 +1254,11 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, ARGMIN.getDeclaringClass())) return new Argmin(source);
     else if (isType(calledFunction, TENSORDOT.getDeclaringClass())) return new Tensordot(source);
     else if (isType(calledFunction, TRACE.getDeclaringClass())) return new Trace(source);
+    else if (isType(calledFunction, DIAG.getDeclaringClass())) return new Diag(source);
+    else if (isType(calledFunction, DIAG_PART.getDeclaringClass())) return new DiagPart(source);
+    else if (isType(calledFunction, MATRIX_TRANSPOSE.getDeclaringClass()))
+      return new MatrixTranspose(source);
+    else if (isType(calledFunction, ADJOINT.getDeclaringClass())) return new Adjoint(source);
     else if (isType(calledFunction, TILE.getDeclaringClass())) return new Tile(source);
     else if (isType(calledFunction, TENSOR_SCATTER_ND_UPDATE.getDeclaringClass()))
       return new TensorScatterNdUpdate(source);
