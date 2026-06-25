@@ -70,6 +70,7 @@
         <putfield class="LRoot" field="FixedLenFeature" fieldType="LRoot" ref="x" value="FixedLenFeature"/>
         <new def="pass_through" class="Ltensorflow/functions/pass_through"/>
         <putfield class="LRoot" field="decode_raw" fieldType="LRoot" ref="x" value="pass_through"/>
+        <new def="pass_through_rhs" class="Ltensorflow/functions/pass_through_rhs"/>
         <new def="estimator" class="Lobject"/>
         <putfield class="LRoot" field="estimator" fieldType="LRoot" ref="x" value="estimator"/>
         <new def="data" class="Lobject"/>
@@ -539,8 +540,8 @@
         <putfield class="LRoot" field="inv" fieldType="LRoot" ref="linalg" value="pass_through"/>
         <putfield class="LRoot" field="inv" fieldType="LRoot" ref="gen_linalg_ops" value="pass_through"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/solve -->
-        <putfield class="LRoot" field="solve" fieldType="LRoot" ref="linalg" value="pass_through"/>
-        <putfield class="LRoot" field="solve" fieldType="LRoot" ref="gen_linalg_ops" value="pass_through"/>
+        <putfield class="LRoot" field="solve" fieldType="LRoot" ref="linalg" value="pass_through_rhs"/>
+        <putfield class="LRoot" field="solve" fieldType="LRoot" ref="gen_linalg_ops" value="pass_through_rhs"/>
         <!-- https://www.tensorflow.org/api_docs/python/tf/broadcast_to — fresh allocation routed to the dedicated `BroadcastTo` generator (wala/ML#449 Tier 7). Pre-fix used `value="pass_through"` aliasing, which routed the result through `PassThrough`'s identity semantics rather than computing the actual broadcast shape from the `shape` argument. -->
         <new def="broadcast_to" class="Ltensorflow/functions/broadcast_to"/>
         <putfield class="LRoot" field="broadcast_to" fieldType="LRoot" ref="x" value="broadcast_to"/>
@@ -647,8 +648,8 @@
         <putfield class="LRoot" field="eye" fieldType="LRoot" ref="linalg" value="eye"/>
         <putfield class="LRoot" field="eye" fieldType="LRoot" ref="linalg_ops" value="eye"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/cholesky_solve -->
-        <putfield class="LRoot" field="cholesky_solve" fieldType="LRoot" ref="linalg" value="pass_through"/>
-        <putfield class="LRoot" field="cholesky_solve" fieldType="LRoot" ref="linalg_ops" value="pass_through"/>
+        <putfield class="LRoot" field="cholesky_solve" fieldType="LRoot" ref="linalg" value="pass_through_rhs"/>
+        <putfield class="LRoot" field="cholesky_solve" fieldType="LRoot" ref="linalg_ops" value="pass_through_rhs"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/eigh -->
         <new def="eigh" class="Ltensorflow/functions/eigh"/>
         <putfield class="LRoot" field="eigh" fieldType="LRoot" ref="linalg" value="eigh"/>
@@ -671,8 +672,8 @@
         <putfield class="LRoot" field="eigvalsh" fieldType="LRoot" ref="linalg" value="pass_through"/>
         <putfield class="LRoot" field="eigvalsh" fieldType="LRoot" ref="linalg_ops" value="pass_through"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/triangular_solve -->
-        <putfield class="LRoot" field="triangular_solve" fieldType="LRoot" ref="linalg" value="pass_through"/>
-        <putfield class="LRoot" field="triangular_solve" fieldType="LRoot" ref="linalg_ops" value="pass_through"/>
+        <putfield class="LRoot" field="triangular_solve" fieldType="LRoot" ref="linalg" value="pass_through_rhs"/>
+        <putfield class="LRoot" field="triangular_solve" fieldType="LRoot" ref="linalg_ops" value="pass_through_rhs"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/adjoint -->
         <putfield class="LRoot" field="adjoint" fieldType="LRoot" ref="linalg" value="pass_through"/>
         <putfield class="LRoot" field="adjoint" fieldType="LRoot" ref="linalg_impl" value="pass_through"/>
@@ -2136,6 +2137,12 @@
       <class name="pass_through" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self data features">
           <return value="data"/>
+        </method>
+      </class>
+      <!-- Pass-through of the *second* argument rather than the first. Used by the `tf.linalg.solve` family (`solve`, `cholesky_solve`, `triangular_solve`), whose result shares the shape and dtype of the right-hand-side `rhs` (arg 1), not the coefficient matrix (arg 0). Modeling these as plain `pass_through` returned `matrix.shape`, which is actively wrong: `solve(matrix (M,M), rhs (M,K))` yields `(M,K)`. See wala/ML#513 bucket 2b. -->
+      <class name="pass_through_rhs" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self matrix rhs">
+          <return value="rhs"/>
         </method>
       </class>
       <class name="parse_single_example" allocatable="true">
