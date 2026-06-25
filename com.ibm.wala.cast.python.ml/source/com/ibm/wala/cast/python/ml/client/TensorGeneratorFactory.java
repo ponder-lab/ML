@@ -184,6 +184,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TF_RESHAPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TILE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TOP_K;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRACE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRANSPOSE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL_METHOD_NAME;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL_OP;
@@ -1254,6 +1255,7 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, ARGMIN.getDeclaringClass())) return new Argmin(source);
     else if (isType(calledFunction, TENSORDOT.getDeclaringClass())) return new Tensordot(source);
     else if (isType(calledFunction, TRACE.getDeclaringClass())) return new Trace(source);
+    else if (isType(calledFunction, TRANSPOSE.getDeclaringClass())) return new Transpose(source);
     else if (isType(calledFunction, DIAG.getDeclaringClass())) return new Diag(source);
     else if (isType(calledFunction, DIAG_PART.getDeclaringClass())) return new DiagPart(source);
     else if (isType(calledFunction, MATRIX_TRANSPOSE.getDeclaringClass()))

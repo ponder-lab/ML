@@ -226,6 +226,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_3_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(2)));
 
+  private static final TensorType TENSOR_2_4_3_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(4), new NumericDim(3)));
+
+  private static final TensorType TENSOR_4_3_2_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(3), new NumericDim(2)));
+
   private static final TensorType TENSOR_4_3_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(3)));
 
@@ -3022,6 +3028,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * (wala/ML#513) drops the singleton. Both were previously {@code ⊤}-shaped (dtype only,
    * wala/ML#568).
    *
+   * <p>The local tensor-variable count is {@code 15}: the two {@code tf.transpose} calls now
+   * allocate distinct tensors rather than aliasing their inputs as first-argument {@code
+   * pass_through} did (wala/ML#513 bucket 2a), so one additional reassignment is counted as a
+   * tensor local.
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
@@ -3034,7 +3045,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_crf.py",
         "crf_forward",
         4,
-        14,
+        15,
         Map.of(
             2, Set.of(TENSOR_2_2_4_FLOAT32),
             3, Set.of(TENSOR_2_4_FLOAT32),
@@ -6346,6 +6357,75 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(
             2, Set.of(TENSOR_3_2_2_FLOAT32),
             3, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Verifies that {@code tf.transpose(a)} with no {@code perm} reverses the axes, so a {@code (2,
+   * 3)} input yields {@code (3, 2)}. Previously modeled as a first-argument {@code pass_through},
+   * which reported the input shape unchanged. See <a
+   * href="https://github.com/wala/ML/issues/513">wala/ML#513</a> bucket 2a.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testTransposeDefault()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_transpose.py",
+        "consume_transpose_default",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_2_FLOAT32)));
+  }
+
+  /**
+   * Verifies that {@code tf.transpose(a, perm)} with a constant {@code perm} permutes the axes so
+   * output axis {@code i} is input axis {@code perm[i]}: a {@code (2, 3, 4)} input with {@code perm
+   * = [0, 2, 1]} yields {@code (2, 4, 3)}. Previously modeled as a first-argument {@code
+   * pass_through}, which reported the input shape unchanged. See <a
+   * href="https://github.com/wala/ML/issues/513">wala/ML#513</a> bucket 2a.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testTransposePerm()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_transpose.py",
+        "consume_transpose_perm",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_4_3_FLOAT32)));
+  }
+
+  /**
+   * Verifies that {@code tf.transpose} resolves a {@code perm} passed as a tensor constant (rather
+   * than a Python list literal): a {@code (2, 3, 4)} input with {@code perm = tf.constant([2, 1,
+   * 0])} permutes precisely to {@code (4, 3, 2)}. Exercises the tensor-constant {@code perm}
+   * resolution path of {@link com.ibm.wala.cast.python.ml.client.Transpose}, distinct from the
+   * list-literal path. See <a href="https://github.com/wala/ML/issues/513">wala/ML#513</a> bucket
+   * 2a.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testTransposeTensorPerm()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_transpose.py",
+        "consume_transpose_tensor_perm",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_3_2_FLOAT32)));
   }
 
   /**

@@ -1070,6 +1070,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String TRACE_SIGNATURE = "tf.linalg.trace()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/transpose. */
+  public static final MethodReference TRANSPOSE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/transpose")),
+          AstMethodReference.fnSelector);
+
+  private static final String TRANSPOSE_SIGNATURE = "tf.transpose()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/linalg/diag. */
   public static final MethodReference DIAG =
       MethodReference.findOrCreate(
@@ -1967,6 +1976,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(ARGMIN.getDeclaringClass(), ARGMIN_SIGNATURE),
           Map.entry(TENSORDOT.getDeclaringClass(), TENSORDOT_SIGNATURE),
           Map.entry(TRACE.getDeclaringClass(), TRACE_SIGNATURE),
+          Map.entry(TRANSPOSE.getDeclaringClass(), TRANSPOSE_SIGNATURE),
           Map.entry(DIAG.getDeclaringClass(), DIAG_SIGNATURE),
           Map.entry(DIAG_PART.getDeclaringClass(), DIAG_PART_SIGNATURE),
           Map.entry(MATRIX_TRANSPOSE.getDeclaringClass(), MATRIX_TRANSPOSE_SIGNATURE),
