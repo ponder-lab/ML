@@ -226,6 +226,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_3_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(2)));
 
+  private static final TensorType TENSOR_4_3_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(3)));
+
   private static final TensorType TENSOR_2_3_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(3)));
 
@@ -3215,6 +3218,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * runtime-dimensioned final {@code tf.reshape} leaves the local <em>result</em> symbolic, but the
    * parameters themselves are exact.)
    *
+   * <p>The local tensor-variable count is {@code 9}: the {@code tf.tile} call now allocates a
+   * distinct tensor rather than aliasing its input as first-argument {@code pass_through} did
+   * (wala/ML#513 bucket 2a), so {@code row_indices} and a downstream use are additionally counted
+   * as tensor locals.
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
@@ -3227,7 +3235,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_gather_elements_along_row.py",
         "_gather_elements_along_row",
         2,
-        7,
+        9,
         Map.of(
             2, Set.of(TENSOR_2_4_FLOAT32),
             3, Set.of(TENSOR_2_3_INT32)));
@@ -6335,6 +6343,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(
             2, Set.of(TENSOR_3_2_2_FLOAT32),
             3, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Verifies that {@code tf.tile(input, multiples)} multiplies each axis by the corresponding entry
+   * of {@code multiples}, so a {@code (2, 3)} input tiled by {@code [2, 1]} yields {@code (4, 3)}.
+   * Previously modeled as a first-argument {@code pass_through}, which reported the input shape
+   * unchanged. See <a href="https://github.com/wala/ML/issues/513">wala/ML#513</a> bucket 2a.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testTile()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_tile.py", "consume_tile", 1, 1, Map.of(2, Set.of(TENSOR_4_3_FLOAT32)));
   }
 
   /**

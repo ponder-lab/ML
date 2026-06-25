@@ -177,6 +177,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORDOT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_SCATTER_ND_UPDATE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TEXT_LINE_DATASET_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TF_RESHAPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TILE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TOP_K;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRACE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TRUNCATED_NORMAL;
@@ -1249,6 +1250,7 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, ARGMIN.getDeclaringClass())) return new Argmin(source);
     else if (isType(calledFunction, TENSORDOT.getDeclaringClass())) return new Tensordot(source);
     else if (isType(calledFunction, TRACE.getDeclaringClass())) return new Trace(source);
+    else if (isType(calledFunction, TILE.getDeclaringClass())) return new Tile(source);
     else if (isType(calledFunction, TENSOR_SCATTER_ND_UPDATE.getDeclaringClass()))
       return new TensorScatterNdUpdate(source);
     else if (isType(calledFunction, SEQUENCE_MASK.getDeclaringClass()))

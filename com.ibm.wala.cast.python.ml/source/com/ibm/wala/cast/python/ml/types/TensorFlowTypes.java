@@ -1070,6 +1070,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String TRACE_SIGNATURE = "tf.linalg.trace()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/tile. */
+  public static final MethodReference TILE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/tile")),
+          AstMethodReference.fnSelector);
+
+  private static final String TILE_SIGNATURE = "tf.tile()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/tensor_scatter_nd_update. */
   public static final MethodReference TENSOR_SCATTER_ND_UPDATE =
       MethodReference.findOrCreate(
@@ -1921,6 +1930,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(ARGMIN.getDeclaringClass(), ARGMIN_SIGNATURE),
           Map.entry(TENSORDOT.getDeclaringClass(), TENSORDOT_SIGNATURE),
           Map.entry(TRACE.getDeclaringClass(), TRACE_SIGNATURE),
+          Map.entry(TILE.getDeclaringClass(), TILE_SIGNATURE),
           Map.entry(
               TENSOR_SCATTER_ND_UPDATE.getDeclaringClass(), TENSOR_SCATTER_ND_UPDATE_SIGNATURE),
           Map.entry(SEQUENCE_MASK.getDeclaringClass(), SEQUENCE_MASK_SIGNATURE),
