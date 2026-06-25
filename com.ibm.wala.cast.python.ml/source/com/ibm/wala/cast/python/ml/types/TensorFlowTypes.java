@@ -1070,6 +1070,43 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String TRACE_SIGNATURE = "tf.linalg.trace()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/linalg/diag. */
+  public static final MethodReference DIAG =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/diag")),
+          AstMethodReference.fnSelector);
+
+  private static final String DIAG_SIGNATURE = "tf.linalg.diag()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/linalg/diag_part. */
+  public static final MethodReference DIAG_PART =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/diag_part")),
+          AstMethodReference.fnSelector);
+
+  private static final String DIAG_PART_SIGNATURE = "tf.linalg.diag_part()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/linalg/matrix_transpose. */
+  public static final MethodReference MATRIX_TRANSPOSE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/math/matrix_transpose")),
+          AstMethodReference.fnSelector);
+
+  private static final String MATRIX_TRANSPOSE_SIGNATURE = "tf.linalg.matrix_transpose()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/linalg/adjoint. */
+  public static final MethodReference ADJOINT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/adjoint")),
+          AstMethodReference.fnSelector);
+
+  private static final String ADJOINT_SIGNATURE = "tf.linalg.adjoint()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/tensor_scatter_nd_update. */
   public static final MethodReference TENSOR_SCATTER_ND_UPDATE =
       MethodReference.findOrCreate(
@@ -1921,6 +1958,10 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(ARGMIN.getDeclaringClass(), ARGMIN_SIGNATURE),
           Map.entry(TENSORDOT.getDeclaringClass(), TENSORDOT_SIGNATURE),
           Map.entry(TRACE.getDeclaringClass(), TRACE_SIGNATURE),
+          Map.entry(DIAG.getDeclaringClass(), DIAG_SIGNATURE),
+          Map.entry(DIAG_PART.getDeclaringClass(), DIAG_PART_SIGNATURE),
+          Map.entry(MATRIX_TRANSPOSE.getDeclaringClass(), MATRIX_TRANSPOSE_SIGNATURE),
+          Map.entry(ADJOINT.getDeclaringClass(), ADJOINT_SIGNATURE),
           Map.entry(
               TENSOR_SCATTER_ND_UPDATE.getDeclaringClass(), TENSOR_SCATTER_ND_UPDATE_SIGNATURE),
           Map.entry(SEQUENCE_MASK.getDeclaringClass(), SEQUENCE_MASK_SIGNATURE),

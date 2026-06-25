@@ -6338,6 +6338,94 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Verifies that {@code tf.linalg.diag(diagonal)} increases rank by one: it places the input's
+   * last axis on the diagonal of a new trailing square, so a {@code (4,)} input yields {@code (4,
+   * 4)}. Previously modeled as a first-argument {@code pass_through}, which reported the input
+   * shape unchanged. See <a href="https://github.com/wala/ML/issues/513">wala/ML#513</a> bucket 2a.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDiag()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_linalg_rank_delta.py",
+        "consume_diag",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
+  /**
+   * Verifies that {@code tf.linalg.diag_part(input)} decreases rank by one: it extracts the
+   * diagonal of each trailing square, so a {@code (3, 3)} input yields {@code (3,)}. Previously
+   * modeled as a first-argument {@code pass_through}, which reported the input shape unchanged. See
+   * <a href="https://github.com/wala/ML/issues/513">wala/ML#513</a> bucket 2a.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDiagPart()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_linalg_rank_delta.py",
+        "consume_diag_part",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Verifies that {@code tf.linalg.matrix_transpose(a)} swaps the last two axes, preserving leading
+   * batch dimensions, so a {@code (2, 3)} input yields {@code (3, 2)}. Previously modeled as a
+   * first-argument {@code pass_through}, which reported the input shape unchanged. See <a
+   * href="https://github.com/wala/ML/issues/513">wala/ML#513</a> bucket 2a.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testMatrixTranspose()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_linalg_rank_delta.py",
+        "consume_matrix_transpose",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_2_FLOAT32)));
+  }
+
+  /**
+   * Verifies that {@code tf.linalg.adjoint(matrix)} (conjugate transpose) swaps the last two axes
+   * exactly like {@code matrix_transpose}, so a {@code (2, 3)} input yields {@code (3, 2)}.
+   * Previously modeled as a first-argument {@code pass_through}, which reported the input shape
+   * unchanged. See <a href="https://github.com/wala/ML/issues/513">wala/ML#513</a> bucket 2a.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testAdjoint()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_linalg_rank_delta.py",
+        "consume_adjoint",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_2_FLOAT32)));
+  }
+
+  /**
    * Tier-6 op (wala/ML#449): {@code tf.sort(values, ...)}. The XML routes the call through {@code
    * convert_to_tensor} of {@code values}, so shape and dtype pass through unchanged — no dedicated
    * generator needed.
