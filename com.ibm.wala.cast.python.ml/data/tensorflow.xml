@@ -550,8 +550,9 @@
         <putfield class="LRoot" field="broadcast_to" fieldType="LRoot" ref="x" value="broadcast_to"/>
         <putfield class="LRoot" field="broadcast_to" fieldType="LRoot" ref="gen_array_ops" value="broadcast_to"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/tile -->
-        <putfield class="LRoot" field="tile" fieldType="LRoot" ref="x" value="pass_through"/>
-        <putfield class="LRoot" field="tile" fieldType="LRoot" ref="gen_array_ops" value="pass_through"/>
+        <new def="tile" class="Ltensorflow/math/tile"/>
+        <putfield class="LRoot" field="tile" fieldType="LRoot" ref="x" value="tile"/>
+        <putfield class="LRoot" field="tile" fieldType="LRoot" ref="gen_array_ops" value="tile"/>
         <!-- `tf.expand_dims` and `array_ops.expand_dims` now route through the dedicated `<class name="expand_dims">` block defined later in this file. -->
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/gather -->
         <putfield class="LRoot" field="gather" fieldType="LRoot" ref="x" value="pass_through"/>
@@ -1200,6 +1201,13 @@
       <class name="adjoint" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/adjoint. `<new>+<return>` routed to the dedicated `Adjoint` generator (wala/ML#513 bucket 2a); was `pass_through`, which reported the input shape unchanged instead of swapping the last two axes. -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self matrix name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="tile" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/tile. `<new>+<return>` routed to the dedicated `Tile` generator (wala/ML#513 bucket 2a); was `pass_through`, which reported the input shape unchanged instead of multiplying each axis by the corresponding entry of `multiples`. -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self input multiples name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
         </method>
