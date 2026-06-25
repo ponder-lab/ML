@@ -520,17 +520,20 @@
         <putfield class="LRoot" field="range" fieldType="LRoot" ref="x" value="range"/>
         <putfield class="LRoot" field="range" fieldType="LRoot" ref="math_ops" value="range"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/diag -->
-        <putfield class="LRoot" field="diag" fieldType="LRoot" ref="linalg" value="pass_through"/>
-        <putfield class="LRoot" field="diag" fieldType="LRoot" ref="array_ops" value="pass_through"/>
+        <new def="diag" class="Ltensorflow/math/diag"/>
+        <putfield class="LRoot" field="diag" fieldType="LRoot" ref="linalg" value="diag"/>
+        <putfield class="LRoot" field="diag" fieldType="LRoot" ref="array_ops" value="diag"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/diag_part -->
-        <putfield class="LRoot" field="diag_part" fieldType="LRoot" ref="linalg" value="pass_through"/>
-        <putfield class="LRoot" field="diag_part" fieldType="LRoot" ref="array_ops" value="pass_through"/>
+        <new def="diag_part" class="Ltensorflow/math/diag_part"/>
+        <putfield class="LRoot" field="diag_part" fieldType="LRoot" ref="linalg" value="diag_part"/>
+        <putfield class="LRoot" field="diag_part" fieldType="LRoot" ref="array_ops" value="diag_part"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/set_diag -->
         <putfield class="LRoot" field="set_diag" fieldType="LRoot" ref="linalg" value="pass_through"/>
         <putfield class="LRoot" field="set_diag" fieldType="LRoot" ref="array_ops" value="pass_through"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/matrix_transpose -->
-        <putfield class="LRoot" field="matrix_transpose" fieldType="LRoot" ref="linalg" value="pass_through"/>
-        <putfield class="LRoot" field="matrix_transpose" fieldType="LRoot" ref="array_ops" value="pass_through"/>
+        <new def="matrix_transpose" class="Ltensorflow/math/matrix_transpose"/>
+        <putfield class="LRoot" field="matrix_transpose" fieldType="LRoot" ref="linalg" value="matrix_transpose"/>
+        <putfield class="LRoot" field="matrix_transpose" fieldType="LRoot" ref="array_ops" value="matrix_transpose"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/band_part -->
         <putfield class="LRoot" field="band_part" fieldType="LRoot" ref="linalg" value="pass_through"/>
         <putfield class="LRoot" field="band_part" fieldType="LRoot" ref="gen_array_ops" value="pass_through"/>
@@ -548,8 +551,9 @@
         <putfield class="LRoot" field="broadcast_to" fieldType="LRoot" ref="x" value="broadcast_to"/>
         <putfield class="LRoot" field="broadcast_to" fieldType="LRoot" ref="gen_array_ops" value="broadcast_to"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/tile -->
-        <putfield class="LRoot" field="tile" fieldType="LRoot" ref="x" value="pass_through"/>
-        <putfield class="LRoot" field="tile" fieldType="LRoot" ref="gen_array_ops" value="pass_through"/>
+        <new def="tile" class="Ltensorflow/math/tile"/>
+        <putfield class="LRoot" field="tile" fieldType="LRoot" ref="x" value="tile"/>
+        <putfield class="LRoot" field="tile" fieldType="LRoot" ref="gen_array_ops" value="tile"/>
         <!-- `tf.expand_dims` and `array_ops.expand_dims` now route through the dedicated `<class name="expand_dims">` block defined later in this file. -->
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/gather -->
         <putfield class="LRoot" field="gather" fieldType="LRoot" ref="x" value="pass_through"/>
@@ -676,8 +680,9 @@
         <putfield class="LRoot" field="triangular_solve" fieldType="LRoot" ref="linalg" value="pass_through_rhs"/>
         <putfield class="LRoot" field="triangular_solve" fieldType="LRoot" ref="linalg_ops" value="pass_through_rhs"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/adjoint -->
-        <putfield class="LRoot" field="adjoint" fieldType="LRoot" ref="linalg" value="pass_through"/>
-        <putfield class="LRoot" field="adjoint" fieldType="LRoot" ref="linalg_impl" value="pass_through"/>
+        <new def="adjoint" class="Ltensorflow/math/adjoint"/>
+        <putfield class="LRoot" field="adjoint" fieldType="LRoot" ref="linalg" value="adjoint"/>
+        <putfield class="LRoot" field="adjoint" fieldType="LRoot" ref="linalg_impl" value="adjoint"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/logdet -->
         <putfield class="LRoot" field="logdet" fieldType="LRoot" ref="linalg" value="pass_through"/>
         <putfield class="LRoot" field="logdet" fieldType="LRoot" ref="linalg_impl" value="pass_through"/>
@@ -1176,6 +1181,41 @@
       <class name="transpose" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/transpose. `<new>+<return>` routed to the dedicated `Transpose` generator (wala/ML#513 bucket 2a); was `pass_through`, which reported the input shape unchanged instead of permuting (or, by default, reversing) the axes. -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self a perm name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="diag" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/diag. `<new>+<return>` routed to the dedicated `Diag` generator (wala/ML#513 bucket 2a); was `pass_through`, which reported the input shape unchanged instead of the rank-increased `(..., M, M)`. -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self diagonal name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="diag_part" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/diag_part. `<new>+<return>` routed to the dedicated `DiagPart` generator (wala/ML#513 bucket 2a); was `pass_through`, which reported the input shape unchanged instead of the rank-decreased `(..., M)`. -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self input name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="matrix_transpose" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/matrix_transpose. `<new>+<return>` routed to the dedicated `MatrixTranspose` generator (wala/ML#513 bucket 2a); was `pass_through`, which reported the input shape unchanged instead of swapping the last two axes. -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self a name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="adjoint" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/linalg/adjoint. `<new>+<return>` routed to the dedicated `Adjoint` generator (wala/ML#513 bucket 2a); was `pass_through`, which reported the input shape unchanged instead of swapping the last two axes. -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self matrix name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="tile" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/tile. `<new>+<return>` routed to the dedicated `Tile` generator (wala/ML#513 bucket 2a); was `pass_through`, which reported the input shape unchanged instead of multiplying each axis by the corresponding entry of `multiples`. -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self input multiples name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
         </method>
