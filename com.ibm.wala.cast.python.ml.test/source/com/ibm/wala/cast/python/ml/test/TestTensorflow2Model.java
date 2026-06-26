@@ -11723,6 +11723,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Guards the unknown-input-shape path of the top_k composer (<a
+   * href="https://github.com/wala/ML/issues/609">wala/ML#609</a>): when the input tensor's shape is
+   * ⊤ (here {@code tf.ones(json.loads(...))}), {@code input.shape[:-1] + (k,)} can't be composed
+   * and the result degrades to ⊤. The dtype stays precise (float32).
+   */
+  @Test
+  public void testTopkUnknownInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_topk_unknown_input.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
    * Guards the top_k output-shape composer (<a href="https://github.com/wala/ML/issues/609">
    * wala/ML#609</a>): {@code values, indices = tf.math.top_k(x, k=2)} on a {@code (5,)} input
    * yields {@code values} of shape {@code (2,)} float32, composed as {@code input.shape[:-1] +

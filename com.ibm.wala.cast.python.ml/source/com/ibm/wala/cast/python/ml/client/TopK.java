@@ -128,7 +128,9 @@ public class TopK extends TensorGenerator implements TupleElementProvider {
       out.set(out.size() - 1, new NumericDim(k));
       ret.add(out);
     }
-    return ret.isEmpty() ? null : ret;
+    // inputShapes is non-empty and the loop returns ⊤ for any null/empty shape, so ret is
+    // populated.
+    return ret;
   }
 
   /**
