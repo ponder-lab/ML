@@ -513,6 +513,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE =
       new TensorType(UNKNOWN, null);
 
+  private static final TensorType TENSOR_1_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(1)));
+
   private static final TensorType TENSOR_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2)));
 
@@ -868,6 +871,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_decorator11.py", "C.returned", 1, 1, Map.of(3, Set.of(TENSOR_5_INT32)));
   }
 
+  /**
+   * The {@code returned(a)} parameter is {@code a = tf.constant([1, 1.0])}, i.e. {@code (2,)
+   * float32}. The asserted set is a union across contexts (per the test helper's union-per-vn
+   * semantics): the {@code (2,) float32} is the parameter's real type, now precise after the top_k
+   * output-shape composer (<a href="https://github.com/wala/ML/issues/609">wala/ML#609</a>)
+   * sharpened the previous ⊤. The {@code (2,) int32} is a top_k {@code indices} output leaking in
+   * through a collapsed 1-CFA context (it was already present in the old union as ⊤ int32); the
+   * composer only made it concrete. The leak itself is a context-sensitivity artifact.
+   */
   @Test
   public void testDecorator12()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -11683,6 +11695,64 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Guards the {@code k}-default path of the top_k composer (<a
+   * href="https://github.com/wala/ML/issues/609">wala/ML#609</a>): with {@code k} omitted it
+   * defaults to {@code 1}, so {@code values} of a {@code (4,)} input is {@code (1,)} float32.
+   */
+  @Test
+  public void testTopkDefaultK()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_topk_default_k.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_1_FLOAT32)));
+  }
+
+  /**
+   * Guards the non-constant-{@code k} path of the top_k composer (<a
+   * href="https://github.com/wala/ML/issues/609">wala/ML#609</a>): when {@code k} is not a
+   * resolvable integer constant (here from {@code json.loads}), the shape can't be composed and
+   * degrades to ⊤ rather than guessing. The dtype stays precise (float32).
+   */
+  @Test
+  public void testTopkNonConstantK()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_topk_nonconstant_k.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Guards the unknown-input-shape path of the top_k composer (<a
+   * href="https://github.com/wala/ML/issues/609">wala/ML#609</a>): when the input tensor's shape is
+   * ⊤ (here {@code tf.ones(json.loads(...))}), {@code input.shape[:-1] + (k,)} can't be composed
+   * and the result degrades to ⊤. The dtype stays precise (float32).
+   */
+  @Test
+  public void testTopkUnknownInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_topk_unknown_input.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Guards the top_k output-shape composer (<a href="https://github.com/wala/ML/issues/609">
+   * wala/ML#609</a>): {@code values, indices = tf.math.top_k(x, k=2)} on a {@code (5,)} input
+   * yields {@code values} of shape {@code (2,)} float32, composed as {@code input.shape[:-1] +
+   * (k,)} by {@link com.ibm.wala.cast.python.ml.client.TopK} rather than left at ⊤. Destructuring
+   * (not the wala/ML#480 attribute-access path) gives the precise per-element type.
+   */
+  @Test
+  public void testTopkShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_topk_shape.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+  }
+
+  /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/603">wala/ML#603</a>: slicing a
    * NamedTuple result ({@code tf.math.top_k}) walks an object catalog whose keys include the string
    * field aliases {@code values}/{@code indices} alongside the integer element indices. Those
@@ -11690,11 +11760,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * recovers the element dtypes ({@code float32} values, {@code int32} indices). No {@code
    * read_data} is involved, so this is a case wala/ML#380 would not fix.
    *
-   * <p>TODO: the shape stays ⊤ because {@code tf.math.top_k} models its output dtype but not its
-   * shape ({@link com.ibm.wala.cast.python.ml.client.TopK#getDefaultShapes} returns ⊤, pending the
-   * input-shape + k composer); the {@code (k, ...)} shape is recoverable. Tracked by <a
-   * href="https://github.com/wala/ML/issues/609">wala/ML#609</a>. This test pins the dtype
-   * recovery.
+   * <p>The composed {@code (k,) = (2,)} shape now appears for both elements (the wala/ML#609
+   * composer), so the asserted set is a union of the precise {@code (2,)} shapes and the residual ⊤
+   * ones. The ⊤ components come from the wala/ML#480 attribute/slice path, which doesn't carry the
+   * composed per-element shape through; once wala/ML#480 lands they drop, narrowing this to {@code
+   * Set.of(TENSOR_2_FLOAT32, TENSOR_2_INT32)}.
    */
   @Test
   public void testTopkSliceCatalog()
@@ -11704,7 +11774,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
+        Map.of(
+            2,
+            Set.of(
+                TENSOR_UNKNOWN_SHAPE_FLOAT32,
+                TENSOR_2_FLOAT32,
+                TENSOR_INT32_UNKNOWN_SHAPE,
+                TENSOR_2_INT32)));
   }
 
   /**
