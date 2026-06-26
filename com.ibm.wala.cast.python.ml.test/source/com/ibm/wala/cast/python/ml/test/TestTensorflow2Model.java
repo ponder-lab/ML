@@ -11683,6 +11683,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/606">wala/ML#606</a>: when
+   * {@code tf.fill}'s {@code dims} argument is unresolvable (here from {@code json.loads}), {@link
+   * com.ibm.wala.cast.python.ml.client.Fill#getDefaultShapes} must return ⊤ rather than throwing
+   * {@code UnsupportedOperationException}, which previously aborted the whole analysis. {@code
+   * Fill} extends {@code Constant}, so the base allocator floor (wala/ML#604) doesn't cover it. The
+   * result is ⊤-shape {@code int32} (the fill value's dtype).
+   */
+  @Test
+  public void testFillUnresolvableDims()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_fill_unresolvable_dims.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
    * Guards constant-step subscript-slice shape propagation on ndarrays (wala/ML#405): {@code
    * x_train[:5]} on a {@code (60000, 28, 28) uint8} ndarray yields a {@code (5, 28, 28) uint8}
    * tensor. Implemented via {@link SliceBuiltinOperation}; the receiver-shape leak that previously

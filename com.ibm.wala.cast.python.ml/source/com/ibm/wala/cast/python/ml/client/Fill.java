@@ -77,8 +77,22 @@ public class Fill extends Constant {
     return null;
   }
 
+  /**
+   * Returns ⊤ (unknown shape) when {@code tf.fill}'s {@code dims} argument can't be resolved (e.g.
+   * it flows from an unmodeled, content-dependent source). {@code tf.fill} always produces a
+   * tensor, so the correct lattice signal is ⊤ ({@code null}), not a crash. This previously threw
+   * {@link UnsupportedOperationException}, aborting the whole analysis (<a
+   * href="https://github.com/wala/ML/issues/606">wala/ML#606</a>); the same fix {@code
+   * TensorTypeAllocator} took for the standard allocators (<a
+   * href="https://github.com/wala/ML/issues/604">wala/ML#604</a>). {@code Fill} extends {@code
+   * Constant} rather than {@code TensorTypeAllocator}, so it carries the floor here. Recovering a
+   * genuinely content-dependent {@code dims} is the user-annotation problem tracked by wala/ML#370.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return {@code null} (⊤, unknown shape); never an empty set, since the allocation is a tensor.
+   */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    throw new UnsupportedOperationException("Shape is mandatory and must be provided explicitly.");
+    return null;
   }
 }
