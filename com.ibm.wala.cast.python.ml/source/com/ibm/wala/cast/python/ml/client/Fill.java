@@ -1,11 +1,16 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
+import static java.util.logging.Logger.getLogger;
+
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.logging.Logger;
 
 /**
  * A representation of the TensorFlow <code>fill()</code> function.
@@ -17,6 +22,11 @@ import java.util.Set;
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
 public class Fill extends Constant {
+
+  private static final Logger LOGGER = getLogger(Fill.class.getName());
+
+  /** Canonical {@code tf.fill()} signature, reused in diagnostics. */
+  private static final String SIGNATURE = TYPE_REFERENCE_TO_SIGNATURE.get(FILL.getDeclaringClass());
 
   protected enum Parameters {
     DIMS,
@@ -77,8 +87,47 @@ public class Fill extends Constant {
     return null;
   }
 
+  /**
+   * Returns ⊤ (unknown shape) as the non-aborting floor when {@code tf.fill}'s shape can't be
+   * produced from its {@code dims} argument. Unlike the standard allocators, {@code tf.fill} has no
+   * default shape: {@code dims} is mandatory. Reaching this method therefore means one of two
+   * things, both ⊤ because a static analysis must not abort over a single call site:
+   *
+   * <ul>
+   *   <li>{@code dims} was supplied but is unresolvable (e.g. it flows from an unmodeled,
+   *       content-dependent source such as {@code json.loads(...)}). This is the wala/ML#370
+   *       recovery case, and is what actually triggered <a
+   *       href="https://github.com/wala/ML/issues/606">wala/ML#606</a>.
+   *   <li>{@code dims} was genuinely omitted: a malformed call ({@code tf.fill} raises {@code
+   *       TypeError} at runtime). The original code threw {@link UnsupportedOperationException}
+   *       here to document that {@code dims} is mandatory; that aborted the whole analysis
+   *       (wala/ML#606), so it is now a {@code FINE} marker instead.
+   * </ul>
+   *
+   * <p>Mirrors the ⊤ floor {@code TensorTypeAllocator} took for the standard allocators (<a
+   * href="https://github.com/wala/ML/issues/604">wala/ML#604</a>); {@code Fill} extends {@code
+   * Constant} rather than {@code TensorTypeAllocator}, so it carries the floor here.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return {@code null} (⊤, unknown shape); never an empty set, since the allocation is a tensor.
+   */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    throw new UnsupportedOperationException("Shape is mandatory and must be provided explicitly.");
+    boolean dimsSupplied =
+        this.isKeywordArgumentPresent(builder, Parameters.DIMS.getName())
+            || this.getNumberOfPossiblePositionalArguments(builder).stream()
+                .anyMatch(n -> n >= Parameters.DIMS.getIndex() + 1);
+    LOGGER.fine(
+        dimsSupplied
+            ? "Could not resolve the dims argument of "
+                + SIGNATURE
+                + " for source: "
+                + source
+                + "; returning ⊤. Candidate for a wala/ML#370 shape annotation."
+            : SIGNATURE
+                + " reached without its mandatory dims argument for source: "
+                + source
+                + " (malformed call?); returning ⊤.");
+    return null;
   }
 }
