@@ -82,6 +82,22 @@ public abstract class TensorTypeAllocator extends TensorGenerator {
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    // Recovery: an allocator whose shape argument is another tensor's `.shape` (e.g.
+    // `tf.ones(x.shape)`) takes its shape from that tensor. Resolve it rather than dropping to ⊤.
+    // wala/ML#604.
+    Set<List<Dimension<?>>> fromShapeAttribute =
+        this.getShapeFromShapeAttributeArgument(
+            builder, this.getShapeParameterPosition(), this.getShapeParameterName());
+    if (fromShapeAttribute != null && !fromShapeAttribute.isEmpty()) {
+      LOGGER.fine(
+          "Recovered allocator shape from a `.shape` argument for source: "
+              + source
+              + " -> "
+              + fromShapeAttribute
+              + ".");
+      return fromShapeAttribute;
+    }
+
     // Emit a discoverable marker so the ⊤ here is distinguishable from a "true" ⊤ elsewhere: this
     // is exactly the set of sites where a user-supplied shape annotation would help. The set is
     // grep-able as the wala/ML#370 annotation worklist without aborting the rest of the analysis
