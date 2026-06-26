@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -22,6 +24,9 @@ import java.util.logging.Logger;
 public class Fill extends Constant {
 
   private static final Logger LOGGER = getLogger(Fill.class.getName());
+
+  /** Canonical {@code tf.fill()} signature, reused in diagnostics. */
+  private static final String SIGNATURE = TYPE_REFERENCE_TO_SIGNATURE.get(FILL.getDeclaringClass());
 
   protected enum Parameters {
     DIMS,
@@ -114,10 +119,13 @@ public class Fill extends Constant {
                 .anyMatch(n -> n >= Parameters.DIMS.getIndex() + 1);
     LOGGER.fine(
         dimsSupplied
-            ? "tf.fill's `dims` could not be resolved for source: "
+            ? "Could not resolve the `dims` argument of "
+                + SIGNATURE
+                + " for source: "
                 + source
                 + "; returning ⊤. Candidate for a wala/ML#370 shape annotation."
-            : "tf.fill reached without its mandatory `dims` argument for source: "
+            : SIGNATURE
+                + " reached without its mandatory `dims` argument for source: "
                 + source
                 + " (malformed call?); returning ⊤.");
     return null;
