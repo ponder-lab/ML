@@ -21,10 +21,10 @@ import java.util.logging.Logger;
  * Base for generators of TensorFlow/NumPy APIs that allocate a tensor from an explicit {@code
  * shape} argument plus an optional {@code dtype} argument (e.g. {@code tf.ones}, {@code tf.zeros},
  * {@code tf.keras.Input}, {@code tf.random.uniform}, {@code tf.one_hot}). It owns the {@code
- * SHAPE}/{@code DTYPE} parameter-slot machinery, the float32 default dtype, the "shape is
- * mandatory" contract, and the constant-extraction helper. It carries no value semantics, so it is
- * not itself dispatched: concrete subclasses (one per API) extend it. Introduced to replace {@code
- * extends Ones} code-reuse-not-is-a inheritance (<a
+ * SHAPE}/{@code DTYPE} parameter-slot machinery, the float32 default dtype, the ⊤-shape fallback
+ * for an unresolvable shape argument, and the constant-extraction helper. It carries no value
+ * semantics, so it is not itself dispatched: concrete subclasses (one per API) extend it.
+ * Introduced to replace {@code extends Ones} code-reuse-not-is-a inheritance (<a
  * href="https://github.com/wala/ML/issues/514">wala/ML#514</a>).
  */
 public abstract class TensorTypeAllocator extends TensorGenerator {
@@ -62,9 +62,35 @@ public abstract class TensorTypeAllocator extends TensorGenerator {
     return EnumSet.of(FLOAT32);
   }
 
+  /**
+   * Returns ⊤ (unknown shape) when no shape argument resolves. An allocator like {@code tf.zeros}
+   * always produces a tensor, so when the {@code shape} argument can't be resolved statically (e.g.
+   * it flows from an unmodeled, content-dependent source such as {@code json.loads(...)}), the
+   * correct lattice signal is ⊤ ({@code null}), not ⊥ and not a crash. Recovering such a
+   * content-dependent shape is the user-annotation problem tracked by <a
+   * href="https://github.com/wala/ML/issues/370">wala/ML#370</a>; this method is only the
+   * non-crashing floor beneath it. This previously threw {@link UnsupportedOperationException},
+   * which aborted the whole analysis (<a
+   * href="https://github.com/wala/ML/issues/604">wala/ML#604</a>). Mirrors the ⊤ signal {@code
+   * Input} already used (<a href="https://github.com/wala/ML/issues/355">wala/ML#355</a>) and the
+   * lattice conventions in {@code CONTRIBUTING.md}. Logs a {@code FINE} marker at each such site so
+   * the ⊤ here stays distinguishable from a genuine ⊤ and the wala/ML#370 annotation worklist is
+   * discoverable.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return {@code null} (⊤, unknown shape); never an empty set, since the allocation is a tensor.
+   */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    throw new UnsupportedOperationException("Shape is mandatory and must be provided explicitly.");
+    // Emit a discoverable marker so the ⊤ here is distinguishable from a "true" ⊤ elsewhere: this
+    // is exactly the set of sites where a user-supplied shape annotation would help. The set is
+    // grep-able as the wala/ML#370 annotation worklist without aborting the rest of the analysis
+    // (which is what throwing here did, wala/ML#604).
+    LOGGER.fine(
+        "Unresolved allocator shape for source: "
+            + source
+            + "; returning ⊤ (unknown shape). Candidate for a wala/ML#370 shape annotation.");
+    return null;
   }
 
   @Override

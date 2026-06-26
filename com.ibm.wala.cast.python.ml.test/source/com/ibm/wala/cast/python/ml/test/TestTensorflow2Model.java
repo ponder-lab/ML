@@ -11030,6 +11030,26 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
+  /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/604">wala/ML#604</a>: when an
+   * allocator's {@code shape} argument is unresolvable (here {@code tf.zeros(json.loads(...))},
+   * whose source Ariadne does not model), {@code TensorTypeAllocator.getDefaultShapes} must return
+   * {@code null} (⊤, tensor with unknown shape) rather than throwing {@code
+   * UnsupportedOperationException}, which previously aborted the whole analysis. Recovering the
+   * content-dependent shape itself is the user-annotation problem tracked by wala/ML#370; this
+   * guard only pins the non-crashing ⊤ floor.
+   */
+  @Test
+  public void testZerosUnresolvableShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_zeros_unresolvable_shape.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
   @Test
   public void testRaggedFromNestedRowLengths()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
