@@ -11708,6 +11708,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/606">wala/ML#606</a>: when
+   * {@code tf.fill}'s {@code dims} argument is unresolvable (here from {@code json.loads}), {@link
+   * com.ibm.wala.cast.python.ml.client.Fill#getDefaultShapes} must return ⊤ rather than throwing
+   * {@code UnsupportedOperationException}, which previously aborted the whole analysis. {@code
+   * Fill} extends {@code Constant}, so the base allocator floor (wala/ML#604) doesn't cover it. The
+   * result is ⊤-shape {@code int32} (the fill value's dtype).
+   */
+  @Test
+  public void testFillUnresolvableDims()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_fill_unresolvable_dims.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
    * Guards allocator-shape recovery from a {@code .shape} argument (<a
    * href="https://github.com/wala/ML/issues/604">wala/ML#604</a>): {@code tf.ones(x.shape)} where
    * {@code x} is {@code (2, 2)} yields {@code (2, 2) float32}. The shape argument is a {@code
