@@ -1104,7 +1104,15 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, CGNode node, int vn) {
     try {
       Set<DType> dtypes = getDTypes(builder, node, vn);
-      if (dtypes != null && !dtypes.isEmpty()) return dtypes;
+      // A ⊤-only result (just `UNKNOWN`) is no better than "nothing concrete": the SSA chain may
+      // recover a real dtype through dtype-preserving ops (e.g. `reshape(pad(x))`), so prefer it
+      // over ⊤. wala/ML#602. (A ⊤-only result previously short-circuited the chain; that was masked
+      // until the wala/ML#603 catalog filter stopped a non-integer key from throwing here, which
+      // had
+      // incidentally produced an empty result that fell through to the chain.)
+      boolean concrete =
+          dtypes != null && !dtypes.isEmpty() && !(dtypes.size() == 1 && dtypes.contains(UNKNOWN));
+      if (concrete) return dtypes;
       Set<DType> chain = dtypesFromSSAChain(builder, node, vn);
       if (chain != null && !chain.isEmpty()) return chain;
       return dtypes;
