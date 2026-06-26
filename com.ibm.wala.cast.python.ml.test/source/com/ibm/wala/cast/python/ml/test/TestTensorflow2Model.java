@@ -11683,6 +11683,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/603">wala/ML#603</a>: slicing a
+   * NamedTuple result ({@code tf.math.top_k}) walks an object catalog whose keys include the string
+   * field aliases {@code values}/{@code indices} alongside the integer element indices. Those
+   * non-integer keys must be filtered rather than crashing {@code getFieldIndex}; the slice then
+   * recovers the element dtypes ({@code float32} values, {@code int32} indices) with ⊤ shape. No
+   * {@code read_data} is involved, so this is a case wala/ML#380 would not fix.
+   */
+  @Test
+  public void testTopkSliceCatalog()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_topk_slice_catalog.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
    * Guards constant-step subscript-slice shape propagation on ndarrays (wala/ML#405): {@code
    * x_train[:5]} on a {@code (60000, 28, 28) uint8} ndarray yields a {@code (5, 28, 28) uint8}
    * tensor. Implemented via {@link SliceBuiltinOperation}; the receiver-shape leak that previously
