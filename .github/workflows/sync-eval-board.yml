@@ -1,0 +1,107 @@
+name: Sync eval-tracking board
+
+# Keeps the private ponder-lab evaluation-tracking Projects in sync from the
+# `workstream:*` labels on wala/ML issues. GitHub's built-in project workflows are
+# single-project and can't mirror open items of one project into another, nor set a
+# field from a label, so this does both: each open labeled issue is added to its
+# source project and to the burn-down mirror (project 9) with its Workstream field
+# set. Additive only: it never removes or overwrites, so a stale run can't mangle
+# the board (closed-item cleanup is left to each project's auto-archive workflow).
+#
+# Requires a `PROJECT_PAT` secret: a classic PAT with `project` and `repo` scope (so
+# it can read the public wala/ML issues and write the org Projects). The default
+# `GITHUB_TOKEN` lacks Projects v2 write and won't work.
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROJECT_PAT }}
+          script: |
+            const ORG = "ponder-lab";
+            const ISSUE_REPO = "wala/ML";
+            const MIRROR = 9; // burn-down project mirroring all open eval blockers.
+            // Public label -> { source project number, mirror Workstream option name }.
+            // Names are neutral on the public repo (algorithm stands in for the
+            // input-signature workstream, whose private project carries the real title).
+            const WORKSTREAMS = [
+              { label: "workstream:precision", source: 7, option: "Precision" },
+              { label: "workstream:interpreter", source: 8, option: "Interpreter" },
+              { label: "workstream:algorithm", source: 6, option: "Input signature" },
+            ];
+
+            async function projectMeta(number) {
+              const q = `query($org:String!,$n:Int!){
+                organization(login:$org){ projectV2(number:$n){
+                  id
+                  field(name:"Workstream"){ ... on ProjectV2SingleSelectField { id options { id name } } }
+                } } }`;
+              const r = await github.graphql(q, { org: ORG, n: number });
+              const p = r.organization.projectV2;
+              if (!p) throw new Error(`Project ${number} not found (token missing org/project access?)`);
+              return p;
+            }
+            async function labeledOpenIssues(label) {
+              const out = [];
+              let cursor = null;
+              do {
+                const q = `query($s:String!,$c:String){
+                  search(query:$s, type:ISSUE, first:100, after:$c){
+                    pageInfo{ hasNextPage endCursor }
+                    nodes{ ... on Issue { id number } }
+                  } }`;
+                const s = `repo:${ISSUE_REPO} is:issue is:open label:"${label}"`;
+                const r = await github.graphql(q, { s, c: cursor });
+                for (const n of r.search.nodes) if (n && n.id) out.push(n);
+                cursor = r.search.pageInfo.hasNextPage ? r.search.pageInfo.endCursor : null;
+              } while (cursor);
+              return out;
+            }
+            async function addItem(projectId, contentId) {
+              // Idempotent: returns the existing item if the issue is already in the project.
+              const m = `mutation($p:ID!,$c:ID!){
+                addProjectV2ItemById(input:{projectId:$p, contentId:$c}){ item{ id } } }`;
+              const r = await github.graphql(m, { p: projectId, c: contentId });
+              return r.addProjectV2ItemById.item.id;
+            }
+            async function setWorkstream(projectId, itemId, fieldId, optionId) {
+              const m = `mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){
+                updateProjectV2ItemFieldValue(input:{
+                  projectId:$p, itemId:$i, fieldId:$f, value:{ singleSelectOptionId:$o }
+                }){ projectV2Item{ id } } }`;
+              await github.graphql(m, { p: projectId, i: itemId, f: fieldId, o: optionId });
+            }
+
+            const mirror = await projectMeta(MIRROR);
+            if (!mirror.field) throw new Error("Project 9 has no 'Workstream' single-select field.");
+            const optionId = (name) => {
+              const o = mirror.field.options.find((o) => o.name === name);
+              if (!o) throw new Error(`No Workstream option named '${name}' in project ${MIRROR}.`);
+              return o.id;
+            };
+
+            let membership = 0;
+            let fields = 0;
+            for (const ws of WORKSTREAMS) {
+              const src = await projectMeta(ws.source);
+              const issues = await labeledOpenIssues(ws.label);
+              core.info(`${ws.label}: ${issues.length} open issue(s).`);
+              for (const iss of issues) {
+                await addItem(src.id, iss.id); // source-project membership.
+                const mirrorItemId = await addItem(mirror.id, iss.id); // burn-down membership.
+                await setWorkstream(mirror.id, mirrorItemId, mirror.field.id, optionId(ws.option));
+                membership++;
+                fields++;
+              }
+            }
+            core.info(`Synced ${membership} issue(s); set Workstream on ${fields} mirror item(s).`);
