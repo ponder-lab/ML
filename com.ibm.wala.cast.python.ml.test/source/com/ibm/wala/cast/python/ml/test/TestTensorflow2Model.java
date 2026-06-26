@@ -522,6 +522,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_2_FLOAT64 =
       new TensorType(FLOAT_64, asList(new NumericDim(2)));
 
+  private static final TensorType TENSOR_DYNAMIC_DYNAMIC_FLOAT32 =
+      new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE));
+
   private static final TensorType TENSOR_2_INT32 =
       new TensorType(INT_32, asList(new NumericDim(2)));
 
@@ -11828,6 +11831,59 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testOnesTensorShape()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_ones_tensor_shape.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  /**
+   * Guards the {@code tf.eye} unresolvable-{@code num_rows} floor (<a
+   * href="https://github.com/wala/ML/issues/611">wala/ML#611</a>): when {@code num_rows} is
+   * unresolvable (here from {@code json.loads}), the result is still a rank-2 square matrix, so it
+   * floors to {@code (Dynamic, Dynamic)} float32 rather than throwing "num_rows parameter is
+   * required" (which previously aborted the whole analysis).
+   */
+  @Test
+  public void testEyeUnresolvable()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_eye_unresolvable.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_DYNAMIC_DYNAMIC_FLOAT32)));
+  }
+
+  /**
+   * Guards the {@code tf.random.gamma} unresolvable-{@code shape} floor (<a
+   * href="https://github.com/wala/ML/issues/611">wala/ML#611</a>): when the {@code shape} argument
+   * is unresolvable (here from {@code json.loads}) the output rank can't be known, so the result
+   * floors to ⊤ rather than throwing (which previously aborted the whole analysis). The dtype stays
+   * float32.
+   */
+  @Test
+  public void testGammaUnresolvable()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gamma_unresolvable.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Guards the {@code tf.random.poisson} unresolvable-{@code shape} floor (<a
+   * href="https://github.com/wala/ML/issues/611">wala/ML#611</a>): same as {@link
+   * #testGammaUnresolvable()}, the output rank rides on the unresolvable {@code shape}, so the
+   * result floors to ⊤ rather than throwing.
+   */
+  @Test
+  public void testPoissonUnresolvable()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_poisson_unresolvable.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
