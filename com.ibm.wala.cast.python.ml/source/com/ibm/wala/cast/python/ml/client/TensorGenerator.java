@@ -1083,6 +1083,14 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Names of dtype-preserving TensorFlow ops: each returns a tensor with the same dtype as its
+   * first tensor operand. Recognized syntactically by {@link #dtypesFromSSAChain} so chains through
+   * them recover the underlying dtype, even when an op is unmodeled. See wala/ML#602.
+   */
+  private static final Set<String> DTYPE_PRESERVING_OP_NAMES =
+      Set.of("reshape", "pad", "expand_dims", "squeeze", "transpose", "identity");
+
+  /**
    * Dtype counterpart to {@link #shapesFromSSAChain(PropagationCallGraphBuilder, CGNode, int)}.
    * Handles: mnist invokes (all uint8); astype invokes (use astype's dtype arg — FLOAT32 default if
    * we can't resolve); tuple-unpack reads (peel via {@link #findTupleFieldStore}); binops involving
@@ -1159,6 +1167,50 @@ public abstract class TensorGenerator {
         // resolve the arg via `FIELD_REFERENCE_TO_DTYPE` — not yet implemented here.
         return EnumSet.of(DType.FLOAT32);
       }
+    }
+
+    // Dtype-preserving ops (`tf.reshape`, `tf.pad`, `tf.expand_dims`, ...) return a tensor with the
+    // same dtype as their first tensor operand. Recognize them syntactically by the called
+    // attribute
+    // name so this covers unmodeled ops too (e.g. `tf.pad`, which resolves to no call-graph
+    // target),
+    // and recurse on that operand. This lets chains like `reshape(pad(x))` recover `x`'s dtype
+    // rather
+    // than landing at ⊤ when no single op in the chain is itself dtype-modeled. See wala/ML#602.
+    String calledName = calledFunctionName(node, call);
+    if (calledName != null
+        && DTYPE_PRESERVING_OP_NAMES.contains(calledName)
+        && call.getNumberOfUses() >= 2) {
+      int inputVn = call.getUse(1);
+      try {
+        Set<DType> viaPts = getDTypes(builder, node, inputVn);
+        if (viaPts != null && !viaPts.isEmpty()) return viaPts;
+      } catch (IllegalArgumentException e) {
+        // Fall through to the SSA-DU recursion.
+      }
+      return dtypesFromSSAChain(builder, node, inputVn, visited);
+    }
+    return null;
+  }
+
+  /**
+   * Returns the called attribute's name for a function/method-style invoke {@code obj.name(...)} by
+   * reading the member of the {@link PythonPropertyRead} that def'd the invoke's function object.
+   * Used to recognize dtype-preserving ops (e.g. {@code tf.reshape}, {@code tf.pad}) by name,
+   * including unmodeled ones that resolve to no call-graph target.
+   *
+   * @param node The {@link CGNode} whose IR contains {@code call}.
+   * @param call The invoke whose called-attribute name is wanted.
+   * @return The called attribute's name, or {@code null} if it can't be resolved to a string
+   *     constant.
+   */
+  protected static String calledFunctionName(CGNode node, SSAAbstractInvokeInstruction call) {
+    if (call.getNumberOfUses() < 1) return null;
+    SSAInstruction funcDef = node.getDU().getDef(call.getUse(0));
+    if (funcDef instanceof PythonPropertyRead) {
+      int memberVn = ((PythonPropertyRead) funcDef).getMemberRef();
+      SymbolTable st = node.getIR().getSymbolTable();
+      if (st.isStringConstant(memberVn)) return st.getStringValue(memberVn);
     }
     return null;
   }
