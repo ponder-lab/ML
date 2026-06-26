@@ -11708,6 +11708,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Guards allocator-shape recovery from a {@code .shape} argument (<a
+   * href="https://github.com/wala/ML/issues/604">wala/ML#604</a>): {@code tf.ones(x.shape)} where
+   * {@code x} is {@code (2, 2)} yields {@code (2, 2) float32}. The shape argument is a {@code
+   * .shape} property read with an empty points-to set, so resolution falls to {@link
+   * com.ibm.wala.cast.python.ml.client.TensorTypeAllocator#getDefaultShapes}, which recovers the
+   * source tensor's shape via {@code getShapeFromShapeAttributeArgument} rather than dropping to ⊤.
+   */
+  @Test
+  public void testOnesTensorShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_ones_tensor_shape.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  /**
    * Guards constant-step subscript-slice shape propagation on ndarrays (wala/ML#405): {@code
    * x_train[:5]} on a {@code (60000, 28, 28) uint8} ndarray yields a {@code (5, 28, 28) uint8}
    * tensor. Implemented via {@link SliceBuiltinOperation}; the receiver-shape leak that previously

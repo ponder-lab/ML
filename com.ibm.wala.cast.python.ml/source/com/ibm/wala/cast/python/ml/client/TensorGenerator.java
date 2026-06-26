@@ -2512,6 +2512,73 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Recovers an allocator's shape when its shape argument is another tensor's {@code .shape} (e.g.
+   * {@code tf.ones(x.shape)}). Such an argument is a {@link PythonPropertyRead} of member {@code
+   * "shape"} whose points-to set is empty, so ordinary shape resolution falls through to {@link
+   * #getDefaultShapes}; this resolves the shape of the underlying tensor instead of dropping to ⊤.
+   * Walks the {@link CallString} callers (the allocation's synthetic node has no argument IR of its
+   * own) to find the call site and the shape argument's value number, mirroring {@link
+   * #getArgumentShapesViaCallers}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param paramPos The 0-based positional index of the shape parameter (excluding {@code self}).
+   * @param paramName The shape parameter's keyword name, or {@code null}.
+   * @return The union of the source tensors' shapes, or {@code null} if no {@code .shape} argument
+   *     is found or none resolves.
+   */
+  protected Set<List<Dimension<?>>> getShapeFromShapeAttributeArgument(
+      PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
+    if (cs == null) return null;
+    Set<List<Dimension<?>>> combined = null;
+    for (int i = 0; i < cs.getCallSiteRefs().length; i++) {
+      CallSiteReference siteRef = cs.getCallSiteRefs()[i];
+      IMethod callerMethod = cs.getMethods()[i];
+      for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode());
+          it.hasNext(); ) {
+        CGNode caller = it.next();
+        if (!caller.getMethod().equals(callerMethod)) continue;
+        for (SSAAbstractInvokeInstruction callInstr : caller.getIR().getCalls(siteRef)) {
+          if (!(callInstr instanceof PythonInvokeInstruction)) continue;
+          PythonInvokeInstruction pyCall = (PythonInvokeInstruction) callInstr;
+          int argVn = -1;
+          if (paramName != null) argVn = pyCall.getUse(paramName);
+          if (argVn == -1 && paramPos >= 0) {
+            int numPosParams = pyCall.getNumberOfPositionalParameters() - 1;
+            if (paramPos < numPosParams) argVn = pyCall.getUse(paramPos + 1);
+          }
+          if (argVn <= 0) continue;
+          SSAInstruction def = caller.getDU().getDef(argVn);
+          if (!(def instanceof PythonPropertyRead)) continue;
+          PythonPropertyRead propRead = (PythonPropertyRead) def;
+          SymbolTable st = caller.getIR().getSymbolTable();
+          int memberVn = propRead.getMemberRef();
+          if (!st.isStringConstant(memberVn) || !"shape".equals(st.getStringValue(memberVn)))
+            continue;
+          int tensorVn = propRead.getObjectRef();
+          try {
+            Set<List<Dimension<?>>> tensorShapes = this.getShapes(builder, caller, tensorVn);
+            if (tensorShapes != null && !tensorShapes.isEmpty()) {
+              if (combined == null) combined = HashSetFactory.make();
+              combined.addAll(tensorShapes);
+            }
+          } catch (IllegalArgumentException e) {
+            // The source tensor's shape couldn't be resolved; fall through to ⊤.
+            LOGGER.log(
+                Level.FINE,
+                "getShapeFromShapeAttributeArgument: could not resolve `.shape` source tensorVn="
+                    + tensorVn
+                    + " in caller="
+                    + caller,
+                e);
+          }
+        }
+      }
+    }
+    return combined;
+  }
+
+  /**
    * Dtype counterpart of {@link #getArgumentShapesViaCallers(PropagationCallGraphBuilder, int,
    * String)}. See that method for the rationale; the behaviour is the same but returns a set of
    * {@link DType}s resolved via {@link #getDTypes(PropagationCallGraphBuilder, CGNode, int)}.
