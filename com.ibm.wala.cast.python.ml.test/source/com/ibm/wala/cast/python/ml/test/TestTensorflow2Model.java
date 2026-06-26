@@ -11687,8 +11687,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * NamedTuple result ({@code tf.math.top_k}) walks an object catalog whose keys include the string
    * field aliases {@code values}/{@code indices} alongside the integer element indices. Those
    * non-integer keys must be filtered rather than crashing {@code getFieldIndex}; the slice then
-   * recovers the element dtypes ({@code float32} values, {@code int32} indices) with ⊤ shape. No
-   * {@code read_data} is involved, so this is a case wala/ML#380 would not fix.
+   * recovers the element dtypes ({@code float32} values, {@code int32} indices). No {@code
+   * read_data} is involved, so this is a case wala/ML#380 would not fix.
+   *
+   * <p>TODO: the shape stays ⊤ because {@code tf.math.top_k} models its output dtype but not its
+   * shape ({@link com.ibm.wala.cast.python.ml.client.TopK#getDefaultShapes} returns ⊤, pending the
+   * input-shape + k composer); the {@code (k, ...)} shape is recoverable. Tracked by <a
+   * href="https://github.com/wala/ML/issues/609">wala/ML#609</a>. This test pins the dtype
+   * recovery.
    */
   @Test
   public void testTopkSliceCatalog()
