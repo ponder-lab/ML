@@ -57,14 +57,6 @@ public class Input extends TensorTypeAllocator {
   }
 
   @Override
-  protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    // `tf.keras.Input(...)` is always a tensor; if the `shape` argument is unresolvable, the right
-    // signal is ⊤ (unknown shape), not ⊥ (not a tensor). See wala/ML#355 and the lattice
-    // conventions in `CONTRIBUTING.md`.
-    return null;
-  }
-
-  @Override
   protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
     int valNum =
         this.getArgumentValueNumber(
