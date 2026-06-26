@@ -119,13 +119,13 @@ public class Fill extends Constant {
                 .anyMatch(n -> n >= Parameters.DIMS.getIndex() + 1);
     LOGGER.fine(
         dimsSupplied
-            ? "Could not resolve the `dims` argument of "
+            ? "Could not resolve the dims argument of "
                 + SIGNATURE
                 + " for source: "
                 + source
                 + "; returning ⊤. Candidate for a wala/ML#370 shape annotation."
             : SIGNATURE
-                + " reached without its mandatory `dims` argument for source: "
+                + " reached without its mandatory dims argument for source: "
                 + source
                 + " (malformed call?); returning ⊤.");
     return null;
