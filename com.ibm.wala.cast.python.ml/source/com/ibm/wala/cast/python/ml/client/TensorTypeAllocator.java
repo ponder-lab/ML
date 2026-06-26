@@ -73,13 +73,23 @@ public abstract class TensorTypeAllocator extends TensorGenerator {
    * which aborted the whole analysis (<a
    * href="https://github.com/wala/ML/issues/604">wala/ML#604</a>). Mirrors the ⊤ signal {@code
    * Input} already used (<a href="https://github.com/wala/ML/issues/355">wala/ML#355</a>) and the
-   * lattice conventions in {@code CONTRIBUTING.md}.
+   * lattice conventions in {@code CONTRIBUTING.md}. Logs a {@code FINE} marker at each such site so
+   * the ⊤ here stays distinguishable from a genuine ⊤ and the wala/ML#370 annotation worklist is
+   * discoverable.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @return {@code null} (⊤, unknown shape); never an empty set, since the allocation is a tensor.
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    // Emit a discoverable marker so the ⊤ here is distinguishable from a "true" ⊤ elsewhere: this
+    // is exactly the set of sites where a user-supplied shape annotation would help. The set is
+    // grep-able as the wala/ML#370 annotation worklist without aborting the rest of the analysis
+    // (which is what throwing here did, wala/ML#604).
+    LOGGER.fine(
+        "Unresolved allocator shape for source: "
+            + source
+            + "; returning ⊤ (unknown shape). Candidate for a wala/ML#370 shape annotation.");
     return null;
   }
 
