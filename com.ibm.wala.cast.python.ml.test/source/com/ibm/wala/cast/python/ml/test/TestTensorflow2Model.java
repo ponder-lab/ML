@@ -173,6 +173,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_5_28_28_UINT8 =
       new TensorType(UINT_8, asList(new NumericDim(5), new NumericDim(28), new NumericDim(28)));
 
+  private static final TensorType TENSOR_3_28_28_UINT8 =
+      new TensorType(UINT_8, asList(new NumericDim(3), new NumericDim(28), new NumericDim(28)));
+
   private static final TensorType TENSOR_1_2_INT32 =
       new TensorType(INT_32, asList(new NumericDim(1), new NumericDim(2)));
 
@@ -11608,6 +11611,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TENSOR_2_3_FLOAT64)));
+  }
+
+  /**
+   * Guards slice-receiver dtype recovery through a chained slice (<a
+   * href="https://github.com/wala/ML/issues/602">wala/ML#602</a>): {@code x_train[:5][:3]} on a
+   * {@code (60000, 28, 28) uint8} ndarray yields a {@code (3, 28, 28) uint8} tensor. The outer
+   * slice's receiver is the inner slice's result, whose dtype the PTS walk can't see; {@link
+   * com.ibm.wala.cast.python.ml.client.TensorGenerator#dtypesFromSSAChain} recovers it by recursing
+   * through the dtype-preserving slice op rather than falling back to {@code DType.UNKNOWN}.
+   */
+  @Test
+  public void testSliceChainedDtype()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_slice_chained_dtype.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_28_28_UINT8)));
   }
 
   /**
