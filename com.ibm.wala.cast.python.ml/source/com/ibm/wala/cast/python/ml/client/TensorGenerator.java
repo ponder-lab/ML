@@ -2512,6 +2512,13 @@ public abstract class TensorGenerator {
             }
           } catch (IllegalArgumentException e) {
             // The source tensor's shape couldn't be resolved; fall through to ⊤.
+            LOGGER.log(
+                Level.FINE,
+                "getShapeFromShapeAttributeArgument: could not resolve `.shape` source tensorVn="
+                    + tensorVn
+                    + " in caller="
+                    + caller,
+                e);
           }
         }
       }
