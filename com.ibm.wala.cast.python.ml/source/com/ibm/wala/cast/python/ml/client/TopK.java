@@ -132,19 +132,32 @@ public class TopK extends TensorGenerator implements TupleElementProvider {
   }
 
   /**
-   * Resolves the {@code k} argument as an integer constant, defaulting to {@code 1} when omitted.
+   * Resolves the {@code k} argument as an integer constant. Defaults to {@code 1} only when {@code
+   * k} is genuinely omitted; when {@code k} is supplied but its value can't be resolved (empty
+   * points-to set, or a non-constant such as an opaque or tensor {@code k}), returns {@code null}
+   * (⊤) rather than assuming the default, since composing {@code (1, ...)} for an unknown {@code k}
+   * would be unsound.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @return The value of {@code k}, or {@code null} if {@code k} is present but not a resolvable
-   *     integer constant.
+   * @return The value of {@code k}, {@code 1} if {@code k} is omitted, or {@code null} if {@code k}
+   *     is supplied but not a resolvable integer constant.
    */
   private Integer resolveK(PropagationCallGraphBuilder builder) {
+    // Distinguish a genuinely omitted k (→ default 1) from one that is supplied but unresolvable
+    // (→ ⊤). The synthetic method always has a k slot, so an empty points-to set alone can't tell
+    // the two apart; check whether the call site actually passes k, positionally or by keyword
+    // (the same idiom Input uses for its optional parameters).
+    boolean kPassed =
+        this.isKeywordArgumentPresent(builder, Parameters.K.getName())
+            || this.getNumberOfPossiblePositionalArguments(builder).stream()
+                .anyMatch(n -> n >= Parameters.K.getIndex() + 1);
+    if (!kPassed) return 1; // k omitted; defaults to 1.
     OrdinalSet<InstanceKey> kPts =
         this.getArgumentPointsToSet(builder, Parameters.K.getIndex(), Parameters.K.getName());
-    if (kPts == null || kPts.isEmpty()) return 1;
+    if (kPts == null || kPts.isEmpty()) return null; // k supplied but unresolvable → ⊤.
     for (Object value : getConstantValues(kPts, false))
       if (value instanceof Number) return ((Number) value).intValue();
-    return null;
+    return null; // k supplied but not a constant int → ⊤.
   }
 
   @Override

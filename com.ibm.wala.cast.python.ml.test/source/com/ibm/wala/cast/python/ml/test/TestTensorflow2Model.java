@@ -513,6 +513,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE =
       new TensorType(UNKNOWN, null);
 
+  private static final TensorType TENSOR_1_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(1)));
+
   private static final TensorType TENSOR_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2)));
 
@@ -11689,6 +11692,34 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TENSOR_1_1_3_2_FLOAT32)));
+  }
+
+  /**
+   * Guards the {@code k}-default path of the top_k composer (<a
+   * href="https://github.com/wala/ML/issues/609">wala/ML#609</a>): with {@code k} omitted it
+   * defaults to {@code 1}, so {@code values} of a {@code (4,)} input is {@code (1,)} float32.
+   */
+  @Test
+  public void testTopkDefaultK()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_topk_default_k.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_1_FLOAT32)));
+  }
+
+  /**
+   * Guards the non-constant-{@code k} path of the top_k composer (<a
+   * href="https://github.com/wala/ML/issues/609">wala/ML#609</a>): when {@code k} is not a
+   * resolvable integer constant (here from {@code json.loads}), the shape can't be composed and
+   * degrades to ⊤ rather than guessing. The dtype stays precise (float32).
+   */
+  @Test
+  public void testTopkNonConstantK()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_topk_nonconstant_k.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
