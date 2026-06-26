@@ -11708,6 +11708,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Guards {@code tf.fill}'s {@code .shape}-argument recovery (<a
+   * href="https://github.com/wala/ML/issues/610">wala/ML#610</a>): {@code tf.fill(x.shape, 5.0)}
+   * where {@code x} is {@code (2, 2)} yields {@code (2, 2) float32}. The {@code dims} argument is a
+   * {@code .shape} property read with an empty points-to set, so resolution falls to {@link
+   * com.ibm.wala.cast.python.ml.client.Fill#getDefaultShapes}, which recovers the source tensor's
+   * shape rather than dropping to ⊤.
+   */
+  @Test
+  public void testFillShapeArg()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_fill_shape_arg.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/606">wala/ML#606</a>: when
    * {@code tf.fill}'s {@code dims} argument is unresolvable (here from {@code json.loads}), {@link
    * com.ibm.wala.cast.python.ml.client.Fill#getDefaultShapes} must return ⊤ rather than throwing
