@@ -11,7 +11,7 @@ def f_indices(a):
 
 # `tf.math.top_k(input, k)` returns a `(values, indices)` named tuple.
 # `values` shares the input dtype (float32 here); `indices` is int32.
-# Shape is `input.shape[:-1] + (k,)` for both — currently emitted as ⊤.
+# Shape is `input.shape[:-1] + (k,)` for both, i.e. (2,) here (wala/ML#609).
 x = tf.constant([1.0, 3.0, 2.0, 5.0, 4.0])
 result = tf.math.top_k(x, k=2)
 values, indices = result.values, result.indices

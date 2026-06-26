@@ -88,10 +88,16 @@ public class Fill extends Constant {
   }
 
   /**
-   * Returns ⊤ (unknown shape) as the non-aborting floor when {@code tf.fill}'s shape can't be
-   * produced from its {@code dims} argument. Unlike the standard allocators, {@code tf.fill} has no
-   * default shape: {@code dims} is mandatory. Reaching this method therefore means one of two
-   * things, both ⊤ because a static analysis must not abort over a single call site:
+   * Recovers the shape from a {@code .shape} {@code dims} argument when possible, else returns ⊤ as
+   * the non-aborting floor. {@code tf.fill(x.shape, v)} takes its shape from {@code x}, the same
+   * case the standard allocators recover (<a href="https://github.com/wala/ML/issues/610">
+   * wala/ML#610</a>, <a href="https://github.com/wala/ML/issues/604">wala/ML#604</a>); a
+   * list-literal {@code dims} (e.g. {@code tf.fill([2, 3], v)}) already resolves via the inherited
+   * shape-argument machinery before this method is reached.
+   *
+   * <p>Unlike the standard allocators, {@code tf.fill} has no default shape: {@code dims} is
+   * mandatory. Falling through to the ⊤ floor therefore means one of two things, both ⊤ because a
+   * static analysis must not abort over a single call site:
    *
    * <ul>
    *   <li>{@code dims} was supplied but is unresolvable (e.g. it flows from an unmodeled,
@@ -113,6 +119,22 @@ public class Fill extends Constant {
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    // Recovery: tf.fill(x.shape, v) takes its shape from x, the same case the standard allocators
+    // recover (wala/ML#604). Resolve it rather than dropping to ⊤. wala/ML#610.
+    Set<List<Dimension<?>>> fromShapeAttribute =
+        this.getShapeFromShapeAttributeArgument(
+            builder, this.getShapeParameterPosition(), this.getShapeParameterName());
+    if (fromShapeAttribute != null && !fromShapeAttribute.isEmpty()) {
+      LOGGER.fine(
+          "Recovered "
+              + SIGNATURE
+              + " shape from a .shape argument for source: "
+              + source
+              + " -> "
+              + fromShapeAttribute
+              + ".");
+      return fromShapeAttribute;
+    }
     boolean dimsSupplied =
         this.isKeywordArgumentPresent(builder, Parameters.DIMS.getName())
             || this.getNumberOfPossiblePositionalArguments(builder).stream()
