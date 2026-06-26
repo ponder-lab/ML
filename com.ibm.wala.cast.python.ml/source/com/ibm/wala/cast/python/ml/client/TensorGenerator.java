@@ -1172,16 +1172,25 @@ public abstract class TensorGenerator {
     // Dtype-preserving ops (`tf.reshape`, `tf.pad`, `tf.expand_dims`, ...) return a tensor with the
     // same dtype as their first tensor operand. Recognize them syntactically by the called
     // attribute
-    // name so this covers unmodeled ops too (e.g. `tf.pad`, which resolves to no call-graph
-    // target),
+    // name (so this covers unmodeled ops too, e.g. `tf.pad`, which resolves to no call-graph
+    // target)
     // and recurse on that operand. This lets chains like `reshape(pad(x))` recover `x`'s dtype
-    // rather
-    // than landing at ⊤ when no single op in the chain is itself dtype-modeled. See wala/ML#602.
+    // rather than landing at ⊤ when no single op in the chain is itself dtype-modeled. See
+    // wala/ML#602.
     String calledName = calledFunctionName(node, call);
     if (calledName != null
         && DTYPE_PRESERVING_OP_NAMES.contains(calledName)
         && call.getNumberOfUses() >= 2) {
       int inputVn = call.getUse(1);
+      LOGGER.fine(
+          () ->
+              "Recovering dtype through dtype-preserving op `"
+                  + calledName
+                  + "`: recursing from vn="
+                  + vn
+                  + " onto operand vn="
+                  + inputVn
+                  + ".");
       try {
         Set<DType> viaPts = getDTypes(builder, node, inputVn);
         if (viaPts != null && !viaPts.isEmpty()) return viaPts;
