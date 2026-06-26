@@ -1184,9 +1184,9 @@ public abstract class TensorGenerator {
       int inputVn = call.getUse(1);
       LOGGER.fine(
           () ->
-              "Recovering dtype through dtype-preserving op `"
+              "Recovering dtype through dtype-preserving op "
                   + calledName
-                  + "`: recursing from vn="
+                  + ": recursing from vn="
                   + vn
                   + " onto operand vn="
                   + inputVn
@@ -2514,7 +2514,7 @@ public abstract class TensorGenerator {
             // The source tensor's shape couldn't be resolved; fall through to ⊤.
             LOGGER.log(
                 Level.FINE,
-                "getShapeFromShapeAttributeArgument: could not resolve `.shape` source tensorVn="
+                "getShapeFromShapeAttributeArgument: could not resolve .shape source tensorVn="
                     + tensorVn
                     + " in caller="
                     + caller,
