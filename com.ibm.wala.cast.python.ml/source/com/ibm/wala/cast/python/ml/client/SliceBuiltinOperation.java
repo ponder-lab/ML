@@ -200,7 +200,7 @@ public class SliceBuiltinOperation extends TensorGenerator {
       dtypes = Set.of();
     }
     // getDTypesOrSSAChain can return null (no dtype recovered via the SSA-DU fallback); treat it
-    // like an empty set rather than NPEing on isEmpty(). See wala/ML#602.
+    // like an empty set rather than NPEing on isEmpty(). See https://github.com/wala/ML/issues/602.
     return (dtypes == null || dtypes.isEmpty()) ? Set.of(DType.UNKNOWN) : dtypes;
   }
 
