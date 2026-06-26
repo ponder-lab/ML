@@ -868,6 +868,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_decorator11.py", "C.returned", 1, 1, Map.of(3, Set.of(TENSOR_5_INT32)));
   }
 
+  /**
+   * The {@code returned(a)} parameter is {@code a = tf.constant([1, 1.0])}, i.e. {@code (2,)
+   * float32}. The asserted set is a union across contexts (per the test helper's union-per-vn
+   * semantics): the {@code (2,) float32} is the parameter's real type, now precise after the top_k
+   * output-shape composer (<a href="https://github.com/wala/ML/issues/609">wala/ML#609</a>)
+   * sharpened the previous ⊤. The {@code (2,) int32} is a top_k {@code indices} output leaking in
+   * through a collapsed 1-CFA context (it was already present in the old union as ⊤ int32); the
+   * composer only made it concrete. The leak itself is a context-sensitivity artifact.
+   */
   @Test
   public void testDecorator12()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -11680,6 +11689,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TENSOR_1_1_3_2_FLOAT32)));
+  }
+
+  /**
+   * Guards the top_k output-shape composer (<a href="https://github.com/wala/ML/issues/609">
+   * wala/ML#609</a>): {@code values, indices = tf.math.top_k(x, k=2)} on a {@code (5,)} input
+   * yields {@code values} of shape {@code (2,)} float32, composed as {@code input.shape[:-1] +
+   * (k,)} by {@link com.ibm.wala.cast.python.ml.client.TopK} rather than left at ⊤. Destructuring
+   * (not the wala/ML#480 attribute-access path) gives the precise per-element type.
+   */
+  @Test
+  public void testTopkShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_topk_shape.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
   }
 
   /**

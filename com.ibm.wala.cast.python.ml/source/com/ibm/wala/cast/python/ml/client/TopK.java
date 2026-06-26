@@ -3,12 +3,14 @@ package com.ibm.wala.cast.python.ml.client;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -25,11 +27,11 @@ import java.util.Set;
  * non-Dataset use of the {@link TupleElementProvider} pattern; the established Dataset-side
  * precedent is {@link DatasetFromTensorsGenerator}.
  *
- * <p>Output shape precision is currently ⊤ — computing the precise {@code input.shape[:-1] + (k,)}
- * requires reading the input's shape (PA-resolvable for many cases) and the {@code k} argument
- * (PA-constant in the common case). A follow-up can wire that in. For now the per-element dtype
- * precision (FLOAT32 for values, INT32 for indices) is the load-bearing fix vs. the previous {@code
- * ReadDataFallback} routing, which produced {@code ⊤}/{@code unknown} for both.
+ * <p>The output shape {@code input.shape[:-1] + (k,)} is composed from the input tensor's shape and
+ * the {@code k} argument (default {@code 1}); see {@code composedShapes} and <a
+ * href="https://github.com/wala/ML/issues/609">wala/ML#609</a>. It degrades to ⊤ when {@code k} is
+ * not a resolvable constant or the input shape is unknown rank or rank-0. The per-element dtype
+ * (FLOAT32 for values, INT32 for indices) is resolved independently.
  *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/math/top_k">tf.math.top_k</a>
  * @see <a href="https://github.com/wala/ML/issues/449">wala/ML#449</a> (Tier 5).
@@ -96,8 +98,52 @@ public class TopK extends TensorGenerator implements TupleElementProvider {
 
   @Override
   public Set<List<Dimension<?>>> getShapesForIndex(PropagationCallGraphBuilder builder, int index) {
-    // Both values and indices share shape input.shape[:-1] + (k,). Currently emit ⊤ until an
-    // input-shape + k composer is added.
+    // Both values and indices share shape input.shape[:-1] + (k,). wala/ML#609.
+    return this.composedShapes(builder);
+  }
+
+  /**
+   * Composes the top_k output shape: {@code input.shape[:-1] + (k,)}. Resolves the input tensor's
+   * shape and the {@code k} argument (default {@code 1}) and replaces the last axis with {@code k}.
+   * Returns ⊤ ({@code null}) if {@code k} is not a resolvable constant or any input shape is
+   * unknown rank or rank-0. See <a href="https://github.com/wala/ML/issues/609">wala/ML#609</a>.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The set of composed output shapes, or {@code null} (⊤) if it can't be composed.
+   */
+  private Set<List<Dimension<?>>> composedShapes(PropagationCallGraphBuilder builder) {
+    Integer k = this.resolveK(builder);
+    if (k == null) return null;
+    OrdinalSet<InstanceKey> inputPts =
+        this.getArgumentPointsToSet(
+            builder, Parameters.INPUT.getIndex(), Parameters.INPUT.getName());
+    if (inputPts == null || inputPts.isEmpty()) return null;
+    Set<List<Dimension<?>>> inputShapes = this.getShapesOfValue(builder, inputPts);
+    if (inputShapes == null || inputShapes.isEmpty()) return null;
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    for (List<Dimension<?>> in : inputShapes) {
+      // Unknown rank (null) or a rank-0 scalar can't have its last axis replaced; degrade to ⊤.
+      if (in == null || in.isEmpty()) return null;
+      List<Dimension<?>> out = new ArrayList<>(in);
+      out.set(out.size() - 1, new NumericDim(k));
+      ret.add(out);
+    }
+    return ret.isEmpty() ? null : ret;
+  }
+
+  /**
+   * Resolves the {@code k} argument as an integer constant, defaulting to {@code 1} when omitted.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The value of {@code k}, or {@code null} if {@code k} is present but not a resolvable
+   *     integer constant.
+   */
+  private Integer resolveK(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> kPts =
+        this.getArgumentPointsToSet(builder, Parameters.K.getIndex(), Parameters.K.getName());
+    if (kPts == null || kPts.isEmpty()) return 1;
+    for (Object value : getConstantValues(kPts, false))
+      if (value instanceof Number) return ((Number) value).intValue();
     return null;
   }
 
@@ -117,11 +163,16 @@ public class TopK extends TensorGenerator implements TupleElementProvider {
 
   @Override
   public Set<TensorType> getTensorTypesForIndex(PropagationCallGraphBuilder builder, int index) {
-    // Shapes are uniformly ⊤ until the input-shape + k composer lands; emit one TensorType per
-    // dtype with null dims. When shapes become precise, this method needs to fan out per shape.
+    // Fan out per (dtype, composed shape). The shape is input.shape[:-1] + (k,) (wala/ML#609); when
+    // it can't be composed it's ⊤ (null dims).
     Set<DType> dtypes = this.getDTypesForIndex(builder, index);
+    Set<List<Dimension<?>>> shapes = this.composedShapes(builder);
     Set<TensorType> ret = HashSetFactory.make();
-    for (DType dt : dtypes) ret.add(new TensorType(dt.name().toLowerCase(Locale.ROOT), null));
+    for (DType dt : dtypes) {
+      String cellType = dt.name().toLowerCase(Locale.ROOT);
+      if (shapes == null || shapes.isEmpty()) ret.add(new TensorType(cellType, null));
+      else for (List<Dimension<?>> shape : shapes) ret.add(new TensorType(cellType, shape));
+    }
     return ret;
   }
 
@@ -144,8 +195,10 @@ public class TopK extends TensorGenerator implements TupleElementProvider {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    // ⊤ at the aggregate level — per-index access returns the precise shape (also currently ⊤
-    // pending the input-shape + k composer; both axes line up for now).
+    // A NamedTuple result has no single tensor shape, so the aggregate is ⊤; the per-element shape
+    // (input.shape[:-1] + (k,)) is composed in getShapesForIndex (wala/ML#609). Composing here
+    // instead would feed the wala/ML#480 attribute-access path, which reduces it to a wrong rank-0
+    // shape.
     return null;
   }
 
