@@ -287,13 +287,12 @@ public abstract class TensorGenerator {
    *     (e.g. a {@code ConstantKey} for a scalar Python int passed as the shape) are silently
    *     skipped; if every key in the PTS is non-allocation, the method returns the empty set rather
    *     than {@code null}.
+   *     <p>Non-integer object-catalog keys (attribute-name fields like {@code "read_data"} that a
+   *     virtual-dispatch read can leave on a list/tuple allocation) are skipped, and the leading
+   *     dimension counts only the integer-indexed entries; see wala/ML#603.
    * @throws IllegalArgumentException when the {@code pointsToSet} parameter is itself empty or
    *     {@code null}. That's a caller-contract violation (callers should check for empty PTS before
    *     invoking this helper); distinct from "shape was a runtime tensor."
-   * @throws IllegalStateException when a list/tuple's object-catalog field index is a non-integer
-   *     string (via {@link #getFieldIndex}) — an internal invariant violation (the catalog keys
-   *     should always be integer indices), distinct from an unrecognized shape form (which returns
-   *     ⊤).
    */
   protected Set<List<Dimension<?>>> getShapesFromShapeArgument(
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
@@ -318,16 +317,20 @@ public abstract class TensorGenerator {
 
         // We expect the object catalog to contain a list of integers. Each element in the array
         // correspondences to the set of possible dimensions for that index.
-        if (objectCatalogPointsToSet.isEmpty()) {
+        int elementCount = integerCatalogSize(objectCatalogPointsToSet);
+        if (elementCount == 0) {
           ret.add(Collections.emptyList());
           continue;
         }
         @SuppressWarnings({"unchecked", "rawtypes"})
-        Set<Dimension<?>>[] possibleDimensions = new Set[objectCatalogPointsToSet.size()];
+        Set<Dimension<?>>[] possibleDimensions = new Set[elementCount];
 
         for (InstanceKey catalogIK : objectCatalogPointsToSet) {
           ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
           Integer fieldIndex = getFieldIndex(constantKey);
+          // Skip non-integer attribute keys (e.g. method-name fields); they aren't elements.
+          // See wala/ML#603.
+          if (fieldIndex == null) continue;
 
           FieldReference subscript =
               FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
@@ -551,6 +554,19 @@ public abstract class TensorGenerator {
     return ret;
   }
 
+  /**
+   * Returns the integer element index for an object-catalog key, or {@code null} when the key is
+   * not an integer index. A Python list/tuple's object catalog accumulates <em>every</em> attribute
+   * name accessed on the allocation, not just its integer element indices &mdash; e.g. a
+   * method-name field like {@code "read_data"} left by a virtual-dispatch read on an aliased
+   * receiver (<a href="https://github.com/wala/ML/issues/603">wala/ML#603</a>, root cause <a
+   * href="https://github.com/wala/ML/issues/608">wala/ML#608</a>). Such non-integer keys are not
+   * element indices, so this returns {@code null} and callers skip them. (Previously threw {@link
+   * IllegalStateException}, treating a non-integer key as an invariant violation; it isn't one.)
+   *
+   * @param constantKey The object-catalog key.
+   * @return The integer element index, or {@code null} if the key is not an integer index.
+   */
   protected static Integer getFieldIndex(ConstantKey<?> constantKey) {
     Object constantKeyValue = constantKey.getValue();
 
@@ -559,12 +575,29 @@ public abstract class TensorGenerator {
       try {
         return Integer.parseInt((String) constantKeyValue);
       } catch (NumberFormatException e) {
-        throw new IllegalStateException(
-            "Catalog field index \"" + constantKeyValue + "\" is not an integer.", e);
+        // A non-integer attribute key (e.g. a method-name field), not an element index. See
+        // wala/ML#603.
+        return null;
       }
     }
 
     return null;
+  }
+
+  /**
+   * Counts the integer-indexed entries of an object catalog, ignoring non-integer attribute keys
+   * (see {@link #getFieldIndex}). This is the element count of the underlying list/tuple, used as
+   * the leading dimension; the raw catalog size would be inflated by attribute-name pollution (<a
+   * href="https://github.com/wala/ML/issues/603">wala/ML#603</a>).
+   *
+   * @param objectCatalog The object-catalog points-to set.
+   * @return The number of integer-indexed (element) entries.
+   */
+  protected static int integerCatalogSize(OrdinalSet<InstanceKey> objectCatalog) {
+    int count = 0;
+    for (InstanceKey ik : objectCatalog)
+      if (ik instanceof ConstantKey && getFieldIndex((ConstantKey<?>) ik) != null) count++;
+    return count;
   }
 
   /**
@@ -1071,7 +1104,15 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, CGNode node, int vn) {
     try {
       Set<DType> dtypes = getDTypes(builder, node, vn);
-      if (dtypes != null && !dtypes.isEmpty()) return dtypes;
+      // A ⊤-only result (just `UNKNOWN`) is no better than "nothing concrete": the SSA chain may
+      // recover a real dtype through dtype-preserving ops (e.g. `reshape(pad(x))`), so prefer it
+      // over ⊤. wala/ML#602. (A ⊤-only result previously short-circuited the chain; that was masked
+      // until the wala/ML#603 catalog filter stopped a non-integer key from throwing here, which
+      // had
+      // incidentally produced an empty result that fell through to the chain.)
+      boolean concrete =
+          dtypes != null && !dtypes.isEmpty() && !(dtypes.size() == 1 && dtypes.contains(UNKNOWN));
+      if (concrete) return dtypes;
       Set<DType> chain = dtypesFromSSAChain(builder, node, vn);
       if (chain != null && !chain.isEmpty()) return chain;
       return dtypes;
@@ -1322,6 +1363,9 @@ public abstract class TensorGenerator {
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
             ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
             Integer fieldIndex = getFieldIndex(constantKey);
+            // Skip non-integer attribute keys (e.g. method-name fields); they aren't elements.
+            // See wala/ML#603.
+            if (fieldIndex == null) continue;
 
             FieldReference subscript =
                 FieldReference.findOrCreate(
@@ -1346,7 +1390,9 @@ public abstract class TensorGenerator {
             for (List<Dimension<?>> shapeList : shapesOfField) {
               List<Dimension<?>> shape = new ArrayList<>();
 
-              shape.add(new NumericDim(objectCatalogPointsToSet.size()));
+              // Leading dim is the element count, i.e. the integer-indexed catalog entries only;
+              // the raw catalog size is inflated by non-integer attribute keys. See wala/ML#603.
+              shape.add(new NumericDim(integerCatalogSize(objectCatalogPointsToSet)));
               shape.addAll(shapeList);
 
               ret.add(shape);
@@ -1667,6 +1713,9 @@ public abstract class TensorGenerator {
         for (InstanceKey catalogIK : objectCatalogPointsToSet) {
           ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
           Integer fieldIndex = getFieldIndex(constantKey);
+          // Skip non-integer attribute keys (e.g. method-name fields); they aren't elements.
+          // See wala/ML#603.
+          if (fieldIndex == null) continue;
 
           FieldReference subscript =
               FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
@@ -2042,6 +2091,9 @@ public abstract class TensorGenerator {
           for (InstanceKey catalogIK : objectCatalogPointsToSet) {
             ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
             Integer fieldIndex = getFieldIndex(constantKey);
+            // Skip non-integer attribute keys (e.g. method-name fields); they aren't elements.
+            // See wala/ML#603.
+            if (fieldIndex == null) continue;
 
             FieldReference subscript =
                 FieldReference.findOrCreate(

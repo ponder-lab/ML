@@ -11683,6 +11683,31 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/603">wala/ML#603</a>: slicing a
+   * NamedTuple result ({@code tf.math.top_k}) walks an object catalog whose keys include the string
+   * field aliases {@code values}/{@code indices} alongside the integer element indices. Those
+   * non-integer keys must be filtered rather than crashing {@code getFieldIndex}; the slice then
+   * recovers the element dtypes ({@code float32} values, {@code int32} indices). No {@code
+   * read_data} is involved, so this is a case wala/ML#380 would not fix.
+   *
+   * <p>TODO: the shape stays ⊤ because {@code tf.math.top_k} models its output dtype but not its
+   * shape ({@link com.ibm.wala.cast.python.ml.client.TopK#getDefaultShapes} returns ⊤, pending the
+   * input-shape + k composer); the {@code (k, ...)} shape is recoverable. Tracked by <a
+   * href="https://github.com/wala/ML/issues/609">wala/ML#609</a>. This test pins the dtype
+   * recovery.
+   */
+  @Test
+  public void testTopkSliceCatalog()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_topk_slice_catalog.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/606">wala/ML#606</a>: when
    * {@code tf.fill}'s {@code dims} argument is unresolvable (here from {@code json.loads}), {@link
    * com.ibm.wala.cast.python.ml.client.Fill#getDefaultShapes} must return ⊤ rather than throwing
