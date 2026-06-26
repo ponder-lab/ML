@@ -78,18 +78,20 @@ public class Poisson extends TensorTypeAllocator {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     Set<List<Dimension<?>>> shapes = super.getShapes(builder);
 
-    if (shapes.isEmpty())
-      throw new IllegalStateException(
-          "Cannot determine shape for " + this.getSignature() + " call.");
+    // The shape argument is unresolvable (content-dependent) and the output rank rides on it, so
+    // floor to ⊤ rather than aborting the whole analysis. super.getShapes already computes the
+    // precise shape (and recovers a `.shape` argument, wala/ML#604) when it is resolvable.
+    // wala/ML#611.
+    if (shapes == null || shapes.isEmpty()) return null;
 
     // Get the shape of the lam parameter.
     OrdinalSet<InstanceKey> lamPTS =
         this.getArgumentPointsToSet(
             builder, this.getLamParameterPosition(), this.getLamParameterName());
 
-    if (lamPTS == null || lamPTS.isEmpty())
-      throw new IllegalStateException(
-          "Mandatory 'lam' argument missing for Poisson: " + this.getNode());
+    // lam's shape is part of the output rank; ⊤ if the mandatory argument is unresolvable.
+    // wala/ML#611.
+    if (lamPTS == null || lamPTS.isEmpty()) return null;
 
     Set<List<Dimension<?>>> lamShapes = this.getShapesOfValue(builder, lamPTS);
 

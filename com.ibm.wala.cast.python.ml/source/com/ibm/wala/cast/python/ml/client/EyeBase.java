@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -113,22 +114,16 @@ public abstract class EyeBase extends TensorTypeAllocator {
             // Build the shape using nRow and nCol.
             List<Dimension<?>> shape = new ArrayList<>();
 
-            NumericDim rowDim = new NumericDim(nRow.get());
-            NumericDim colDim = new NumericDim(nCol2.get());
-
-            shape.add(rowDim);
-            shape.add(colDim);
+            shape.add(axisDim(nRow));
+            shape.add(axisDim(nCol2));
 
             ret.add(shape);
           }
         } else {
           List<Dimension<?>> shape = new ArrayList<>();
 
-          NumericDim rowDim = new NumericDim(nRow.get());
-          NumericDim colDim = new NumericDim(nCol.get());
-
-          shape.add(rowDim);
-          shape.add(colDim);
+          shape.add(axisDim(nRow));
+          shape.add(axisDim(nCol));
 
           ret.add(shape);
         }
@@ -142,10 +137,24 @@ public abstract class EyeBase extends TensorTypeAllocator {
         this.getPossibleArgumentValues(
             builder, this.getNumRowsParameterPosition(), this.getNumRowsParameterName());
 
-    if (values == null || values.isEmpty())
-      throw new IllegalStateException("The num_rows parameter is required for tf.eye().");
+    // num_rows is mandatory, but when it's unresolvable (content-dependent) don't abort the whole
+    // analysis: treat it as a single unknown value so the shape floors to a dynamic rank-2 tensor
+    // rather than throwing. wala/ML#611.
+    if (values == null || values.isEmpty()) return Set.of(Optional.empty());
 
     return values;
+  }
+
+  /**
+   * Maps a possibly-unknown axis size to a dimension: a {@link NumericDim} when the value is known,
+   * a {@link DynamicDim} when it isn't (so an unresolvable {@code num_rows}/{@code num_columns}
+   * floors to a dynamic axis rather than crashing on {@link Optional#get()}). wala/ML#611.
+   *
+   * @param value The possibly-unknown axis size.
+   * @return A {@link NumericDim} if present, else {@link DynamicDim#INSTANCE}.
+   */
+  private static Dimension<?> axisDim(Optional<Integer> value) {
+    return value.isPresent() ? new NumericDim(value.get()) : DynamicDim.INSTANCE;
   }
 
   private Set<Optional<Integer>> getNumberOfColumns(PropagationCallGraphBuilder builder) {

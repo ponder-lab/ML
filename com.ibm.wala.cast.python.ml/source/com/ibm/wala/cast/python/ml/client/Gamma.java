@@ -87,8 +87,11 @@ public class Gamma extends TensorTypeAllocator {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     Set<List<Dimension<?>>> shapes = super.getShapes(builder);
 
-    if (shapes.isEmpty())
-      throw new IllegalStateException("Cannot determine shape for mandatory shape parameter.");
+    // The shape argument is unresolvable (content-dependent) and the output rank rides on it, so
+    // floor to ⊤ rather than aborting the whole analysis. super.getShapes already computes the
+    // precise shape (and recovers a `.shape` argument, wala/ML#604) when it is resolvable.
+    // wala/ML#611.
+    if (shapes == null || shapes.isEmpty()) return null;
 
     // Get the shape of the alpha parameter.
     OrdinalSet<InstanceKey> alphaPointsToSet =
@@ -96,8 +99,8 @@ public class Gamma extends TensorTypeAllocator {
             builder, this.getAlphaParameterPosition(), this.getAlphaParameterName());
     Set<List<Dimension<?>>> alphaShapes = this.getShapesOfValue(builder, alphaPointsToSet);
 
-    if (alphaShapes.isEmpty())
-      throw new IllegalArgumentException("Cannot determine shape for mandatory alpha parameter.");
+    // alpha's shape is part of the output rank; ⊤ if unresolvable. wala/ML#611.
+    if (alphaShapes == null || alphaShapes.isEmpty()) return null;
 
     OrdinalSet<InstanceKey> betaPointsToSet =
         this.getArgumentPointsToSet(

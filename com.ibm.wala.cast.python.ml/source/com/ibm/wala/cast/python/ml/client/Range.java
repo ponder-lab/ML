@@ -5,6 +5,7 @@ import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.classLoader.CallSiteReference;
@@ -19,6 +20,7 @@ import com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContext;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
@@ -288,10 +290,26 @@ public class Range extends TensorGenerator {
     return derived;
   }
 
+  /**
+   * Floors an unresolvable {@code tf.range} to a rank-1 tensor with a dynamic length. The precise
+   * length is computed in {@link #getShapes} from the numeric arguments; this fallback is reached
+   * only when those arguments are unresolvable (content-dependent). {@code tf.range} always
+   * produces a rank-1 tensor, so the rank is still known: floor to a single {@link DynamicDim} axis
+   * rather than throwing (which aborted the whole analysis) or dropping to ⊤. See <a
+   * href="https://github.com/wala/ML/issues/611">wala/ML#611</a>, mirroring the floors in <a
+   * href="https://github.com/wala/ML/issues/604">wala/ML#604</a>/<a
+   * href="https://github.com/wala/ML/issues/606">wala/ML#606</a>.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return A single rank-1 shape with a {@link DynamicDim} length.
+   */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    throw new UnsupportedOperationException(
-        "Shapes for range() are derived from mandatory numeric arguments.");
+    List<Dimension<?>> rank1 = new ArrayList<>();
+    rank1.add(DynamicDim.INSTANCE);
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    ret.add(rank1);
+    return ret;
   }
 
   @Override
