@@ -199,7 +199,9 @@ public class SliceBuiltinOperation extends TensorGenerator {
           Level.FINE, "Receiver dtype lookup threw IAE for receiverVn=" + view.receiverVn(), e);
       dtypes = Set.of();
     }
-    return dtypes.isEmpty() ? Set.of(DType.UNKNOWN) : dtypes;
+    // getDTypesOrSSAChain can return null (no dtype recovered via the SSA-DU fallback); treat it
+    // like an empty set rather than NPEing on isEmpty(). See wala/ML#602.
+    return (dtypes == null || dtypes.isEmpty()) ? Set.of(DType.UNKNOWN) : dtypes;
   }
 
   @Override
