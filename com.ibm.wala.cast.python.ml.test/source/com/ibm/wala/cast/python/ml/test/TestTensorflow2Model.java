@@ -241,6 +241,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_2_3_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(3)));
 
+  private static final TensorType TENSOR_1_1_3_2_FLOAT32 =
+      new TensorType(
+          FLOAT_32,
+          asList(new NumericDim(1), new NumericDim(1), new NumericDim(3), new NumericDim(2)));
+
   private static final TensorType TENSOR_2_3_1_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(3), new NumericDim(1)));
 
@@ -11650,6 +11655,31 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TENSOR_3_28_28_UINT8)));
+  }
+
+  /**
+   * Guards slice-receiver dtype recovery through a {@code reshape(pad(x))} chain (<a
+   * href="https://github.com/wala/ML/issues/602">wala/ML#602</a>), the MRE distilled from
+   * MusicTransformer's {@code RelativeGlobalAttention._skewing}. The slice receiver is {@code
+   * tf.reshape} of {@code tf.pad}; neither op is itself dtype-modeled ({@code tf.pad} is unmodeled
+   * entirely), so the receiver dtype lands at ⊤ unless {@link
+   * com.ibm.wala.cast.python.ml.client.TensorGenerator#dtypesFromSSAChain} recurses through the
+   * dtype-preserving chain to the concrete {@code float32} input.
+   *
+   * <p>TODO: the shape stays {@code (1, 1, 3, 2)} (the reshape result) rather than {@code (1, 1, 2,
+   * 2)} &mdash; the {@code [:, :, 1:, :]} subscript isn't reducing axis 2, a shape-precision gap
+   * tracked by <a href="https://github.com/wala/ML/issues/607">wala/ML#607</a>. This test pins the
+   * dtype recovery and the currently-observed shape.
+   */
+  @Test
+  public void testSliceReshapePadDtype()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_slice_reshape_pad_dtype.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_1_3_2_FLOAT32)));
   }
 
   /**
