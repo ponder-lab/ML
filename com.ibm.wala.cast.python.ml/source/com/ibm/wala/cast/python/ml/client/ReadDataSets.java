@@ -49,6 +49,13 @@ public class ReadDataSets extends TensorTypeAllocator {
     return RESHAPE.ordinal();
   }
 
+  // Align the shape-parameter name with the overridden position above; the inherited name otherwise
+  // refers to a different parameter than `RESHAPE`. wala/ML#593.
+  @Override
+  protected String getShapeParameterName() {
+    return RESHAPE.getName();
+  }
+
   @Override
   protected int getDTypeParameterPosition() {
     return DTYPE.ordinal();
