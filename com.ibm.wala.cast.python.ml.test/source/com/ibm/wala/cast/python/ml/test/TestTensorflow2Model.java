@@ -115,6 +115,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_1_1_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(1)));
 
+  private static final TensorType TENSOR_0_0_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(0), new NumericDim(0)));
+
   private static final TensorType TENSOR_1_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(2)));
 
@@ -11897,6 +11900,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testEyeBoolDim()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_eye_bool_dim.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_1_1_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testEyeBoolDim} covering the {@code int(False) == 0} branch of {@code
+   * getIntValueFromInstanceKey} (<a href="https://github.com/wala/ML/issues/590">wala/ML#590</a>):
+   * {@code tf.eye(False)} degrades the {@code Boolean} to {@code 0}, yielding a {@code (0, 0)}
+   * identity.
+   */
+  @Test
+  public void testEyeBoolDimFalse()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_eye_bool_dim_false.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_0_0_FLOAT32)));
   }
 
   /**
