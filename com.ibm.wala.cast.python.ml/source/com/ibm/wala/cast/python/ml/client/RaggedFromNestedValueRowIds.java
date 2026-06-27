@@ -293,12 +293,12 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
       }
     }
 
+    // The shape rides on mandatory arguments (the nested value-row-ids and values); when they're
+    // unresolvable the points-to sets are empty and no shape can be built. Floor to ⊤ (unknown
+    // shape) rather than aborting the whole analysis. wala/ML#612.
     if (ret.isEmpty()) {
-      throw new IllegalStateException("Could not calculate shapes for RaggedFromNestedValueRowIds");
-    }
-
-    if (ret.isEmpty()) {
-      throw new IllegalStateException("Could not calculate shapes for RaggedFromNestedValueRowIds");
+      LOGGER.fine("Could not calculate shapes for RaggedFromNestedValueRowIds; flooring to ⊤.");
+      return null;
     }
 
     return ret;
@@ -354,7 +354,10 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
     if (valuesPts != null && !valuesPts.isEmpty()) {
       return getDTypesOfValue(builder, valuesPts);
     }
-    throw new IllegalStateException("Could not determine dtypes for RaggedFromNestedValueRowIds");
+    // The dtype comes from the mandatory `values` argument; when it's unresolvable, floor to ⊤
+    // (unknown dtype) rather than aborting the whole analysis. wala/ML#612.
+    LOGGER.fine("Could not determine dtypes for RaggedFromNestedValueRowIds; flooring to ⊤.");
+    return Set.of(DType.UNKNOWN);
   }
 
   @Override

@@ -205,10 +205,16 @@ public abstract class RaggedFromNested extends RaggedTensorFromValues {
       }
     }
 
-    // Handle case where we didn't find any shapes (e.g. points to sets empty)
+    // The shape rides on mandatory arguments (e.g. the nested row lengths and values); when they're
+    // unresolvable the points-to sets are empty and no shape can be built. Floor to ⊤ (unknown
+    // shape) rather than aborting the whole analysis. wala/ML#612.
     if (ret.isEmpty()) {
-      throw new IllegalStateException(
-          "Could not calculate shapes for " + this.getClass().getSimpleName());
+      LOGGER.fine(
+          () ->
+              "Could not calculate shapes for "
+                  + this.getClass().getSimpleName()
+                  + "; flooring to unknown (⊤).");
+      return null;
     }
 
     LOGGER.fine("Final calculated shapes: " + ret);
