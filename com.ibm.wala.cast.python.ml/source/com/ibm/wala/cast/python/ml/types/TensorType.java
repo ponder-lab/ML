@@ -505,6 +505,37 @@ public class TensorType implements Iterable<Dimension<?>> {
   }
 
   /**
+   * Concise factory for the common all-numeric, dense case: maps each {@code int} to a {@link
+   * NumericDim}. Chain {@link #asSparse()} for a sparse layout; use {@link #of(DType, List,
+   * Layout)} for shapes with non-numeric dimensions ({@link DynamicDim}, {@link SymbolicDim},
+   * {@link RaggedDim}, {@link CompoundDim}). wala/ML#594.
+   *
+   * @param dtype The tensor element type.
+   * @param dims The numeric dimension sizes, in order.
+   * @return A dense {@link TensorType} with the given dtype and numeric dimensions.
+   */
+  public static TensorType of(DType dtype, int... dims) {
+    List<Dimension<?>> dimensions = new ArrayList<>(dims.length);
+    for (int dim : dims) dimensions.add(new NumericDim(dim));
+    return new TensorType(dtype, dimensions);
+  }
+
+  /**
+   * String-cell-type counterpart to {@link #of(DType, int...)} (mirrors the {@link
+   * #TensorType(String, List)} constructor): maps each {@code int} to a {@link NumericDim} for the
+   * all-numeric, dense case. wala/ML#594.
+   *
+   * @param cellType The tensor cell type.
+   * @param dims The numeric dimension sizes, in order.
+   * @return A dense {@link TensorType} with the given cell type and numeric dimensions.
+   */
+  public static TensorType of(String cellType, int... dims) {
+    List<Dimension<?>> dimensions = new ArrayList<>(dims.length);
+    for (int dim : dims) dimensions.add(new NumericDim(dim));
+    return new TensorType(cellType, dimensions);
+  }
+
+  /**
    * The storage layout of this tensor: the polymorphic source of truth for sparseness. Overridden
    * by {@link SparseTensorType}; the base {@code TensorType} is always {@link Layout#DENSE}.
    *
