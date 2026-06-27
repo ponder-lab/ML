@@ -115,6 +115,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_1_1_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(1), new NumericDim(1)));
 
+  private static final TensorType TENSOR_2_3_3_FLOAT32 =
+      new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(3), new NumericDim(3)));
+
   private static final TensorType TENSOR_0_0_FLOAT32 =
       new TensorType(FLOAT_32, asList(new NumericDim(0), new NumericDim(0)));
 
@@ -11949,6 +11952,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * Covers {@code tf.eye} with a {@code batch_shape}, which prepends the batch dimensions to the
+   * identity shape (<a href="https://github.com/wala/ML/issues/591">wala/ML#591</a>): a {@code (3,
+   * 3)} identity with {@code batch_shape=[2]} is {@code (2, 3, 3)}. Exercises the fresh-list
+   * construction that replaced the shared-list mutation.
+   */
+  @Test
+  public void testEyeBatchShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_eye_batch_shape.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_3_3_FLOAT32)));
   }
 
   /**

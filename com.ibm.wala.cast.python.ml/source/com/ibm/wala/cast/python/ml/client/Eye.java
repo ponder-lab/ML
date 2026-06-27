@@ -7,7 +7,9 @@ import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -56,11 +58,21 @@ public class Eye extends EyeBase {
     Set<List<Dimension<?>>> ret = super.getShapes(builder);
     Set<List<Dimension<?>>> batchShapes = this.getBatchShapes(builder);
 
-    // prepend batch dimensions to each shape.
-    for (List<Dimension<?>> batchDim : batchShapes)
-      for (List<Dimension<?>> retDim : ret) retDim.addAll(0, batchDim);
+    if (batchShapes.isEmpty()) return ret;
 
-    return ret;
+    // Prepend each batch shape to each base shape, building a fresh list per combination. Mutating
+    // the lists returned by super.getShapes would alias shared shape lists, and re-prepending per
+    // batch shape would stack multiple batch shapes onto the same list (double-prepend).
+    // wala/ML#591.
+    Set<List<Dimension<?>>> withBatchShapes = HashSetFactory.make();
+    for (List<Dimension<?>> batchDim : batchShapes)
+      for (List<Dimension<?>> retDim : ret) {
+        List<Dimension<?>> combined = new ArrayList<>(batchDim);
+        combined.addAll(retDim);
+        withBatchShapes.add(combined);
+      }
+
+    return withBatchShapes;
   }
 
   private Set<List<Dimension<?>>> getBatchShapes(PropagationCallGraphBuilder builder) {
