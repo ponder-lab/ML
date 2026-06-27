@@ -1,10 +1,12 @@
 package com.ibm.wala.cast.python.ml.test;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
+import static org.junit.Assert.assertNull;
 
 import com.ibm.wala.cast.ipa.callgraph.CAstCallGraphUtil;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
+import com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
@@ -50,6 +52,25 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph CG = process(Ex1URL);
     verifyGraphAssertions(CG, assertionsEx1);
+  }
+
+  /**
+   * Direct regression guard for the null-source guards on the slice-dtype recovery path: {@code
+   * findCreator} (<a href="https://github.com/wala/ML/issues/613">wala/ML#613</a>) and {@code
+   * getGenerator}/{@code getGeneratorBody} (<a href="https://github.com/wala/ML/issues/614">
+   * wala/ML#614</a>) must yield null for a null {@link PointsToSetVariable} rather than throwing a
+   * {@link NullPointerException}. The full-corpus implicit points-to-key state that triggers this
+   * in the wild (an allocation whose local pointer key is implicit, so {@code getDTypesOfValue}
+   * passes a null source to the factory) isn't distillable to a single fixture, so this exercises
+   * the guard's contract directly against a real builder.
+   */
+  @Test
+  public void testGetGeneratorNullSource()
+      throws IllegalArgumentException, CancelException, IOException, URISyntaxException {
+    checkTensorOps(
+        Ex1URL,
+        (PropagationCallGraphBuilder cgBuilder, CallGraph CG, TensorTypeAnalysis result) ->
+            assertNull(TensorGeneratorFactory.getGenerator(null, cgBuilder)));
   }
 
   @Test
