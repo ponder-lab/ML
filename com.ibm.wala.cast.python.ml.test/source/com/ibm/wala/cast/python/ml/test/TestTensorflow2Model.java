@@ -54,7 +54,6 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.SSAPropagationCallGraphBuilder;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
-import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.io.File;
 import java.io.IOException;
@@ -4461,47 +4460,41 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(t1), 3, Set.of(t2), 4, Set.of(t3)));
   }
 
+  /**
+   * The `tensor` parameter wraps an existing tensor, so the result takes that tensor's shape and
+   * dtype verbatim, with no batch dimension prepended (wala/ML#617).
+   */
   @Test
-  public void testInputUnimplemented() {
-    assertThrows(
-        UnimplementedError.class,
-        () ->
-            test(
-                "tf2_test_input_unimplemented_tensor_kw.py",
-                "tf2_test_input_unimplemented_tensor_kw.py",
-                0,
-                0,
-                emptyMap()));
+  public void testInputTensor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType t = TensorType.of(FLOAT_32, 2, 3);
 
-    assertThrows(
-        UnimplementedError.class,
-        () ->
-            test(
-                "tf2_test_input_unimplemented_ragged_kw.py",
-                "tf2_test_input_unimplemented_ragged_kw.py",
-                0,
-                0,
-                emptyMap()));
+    test("tf2_test_input_tensor_kw.py", "check_input", 1, 1, Map.of(2, Set.of(t)));
+    test("tf2_test_input_tensor_pos.py", "check_input", 1, 1, Map.of(2, Set.of(t)));
+  }
 
-    assertThrows(
-        UnimplementedError.class,
-        () ->
-            test(
-                "tf2_test_input_unimplemented_type_spec_kw.py",
-                "tf2_test_input_unimplemented_type_spec_kw.py",
-                0,
-                0,
-                emptyMap()));
+  /**
+   * A ragged `Input` has the same tracked shape and dtype as a dense one, so the `ragged` parameter
+   * is modeled by treating it as transparent to shape and dtype inference (wala/ML#617).
+   */
+  @Test
+  public void testInputRagged()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType t = new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(10)));
 
-    assertThrows(
-        UnimplementedError.class,
-        () ->
-            test(
-                "tf2_test_input_unimplemented_tensor_pos.py",
-                "tf2_test_input_unimplemented_tensor_pos.py",
-                0,
-                0,
-                emptyMap()));
+    test("tf2_test_input_ragged_kw.py", "check_input", 1, 1, Map.of(2, Set.of(t)));
+  }
+
+  /**
+   * The `type_spec` parameter supplies the full type, so the result takes the spec's shape and
+   * dtype verbatim, with no batch dimension prepended (wala/ML#617).
+   */
+  @Test
+  public void testInputTypeSpec()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType t = new TensorType(INT_32, asList(DynamicDim.INSTANCE, new NumericDim(4)));
+
+    test("tf2_test_input_type_spec_kw.py", "check_input", 1, 1, Map.of(2, Set.of(t)));
   }
 
   /**
