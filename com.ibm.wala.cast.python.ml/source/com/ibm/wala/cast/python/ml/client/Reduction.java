@@ -238,8 +238,15 @@ public abstract class Reduction extends TensorGenerator {
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    // Inherit dtype from input
-    return this.getDTypes(builder, Parameters.INPUT_TENSOR.getIndex());
+    // Inherit dtype from the input tensor. Resolve its IR value number first; `getDTypes(builder,
+    // int)` expects a value number, not the parameter index. wala/ML#592.
+    int inputValNum =
+        this.getArgumentValueNumber(
+            builder,
+            this.getInputTensorParameterPosition(),
+            this.getInputTensorParameterName(),
+            false);
+    return this.getDTypes(builder, inputValNum);
   }
 
   @Override
@@ -271,7 +278,10 @@ public abstract class Reduction extends TensorGenerator {
     // ops with different semantics override this (e.g. ReduceMean promotes integers to float32).
     int inputValNum =
         this.getArgumentValueNumber(
-            builder, Parameters.INPUT_TENSOR.getIndex(), Parameters.INPUT_TENSOR.getName(), false);
+            builder,
+            this.getInputTensorParameterPosition(),
+            this.getInputTensorParameterName(),
+            false);
     return this.getDTypes(builder, inputValNum);
   }
 }
