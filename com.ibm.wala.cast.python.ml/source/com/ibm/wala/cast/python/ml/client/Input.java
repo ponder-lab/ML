@@ -11,7 +11,6 @@ import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
-import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.List;
@@ -58,6 +57,32 @@ public class Input extends TensorTypeAllocator {
 
   @Override
   protected Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
+    // `tensor`: the layer wraps an existing tensor, so its dtype passes through verbatim
+    // (wala/ML#617). A non-empty points-to set is what signals the argument was actually supplied:
+    // in the synthetic `do`-method context every formal parameter has a value number, so the value
+    // number alone is not a presence test.
+    int tensorValNum =
+        this.getArgumentValueNumber(
+            builder, this.getTensorParameterPosition(), this.getTensorParameterName(), true);
+    if (tensorValNum > 0) {
+      OrdinalSet<InstanceKey> tensorPts =
+          this.getArgumentPointsToSet(
+              builder, this.getTensorParameterPosition(), this.getTensorParameterName());
+      if (tensorPts != null && !tensorPts.isEmpty()) return this.getDTypes(builder, tensorValNum);
+    }
+
+    // `type_spec`: the dtype comes from the supplied `TypeSpec` object (wala/ML#617).
+    int typeSpecValNum =
+        this.getArgumentValueNumber(
+            builder, this.getTypeSpecParameterPosition(), this.getTypeSpecParameterName(), true);
+    if (typeSpecValNum > 0) {
+      OrdinalSet<InstanceKey> typeSpecPts =
+          this.getArgumentPointsToSet(
+              builder, this.getTypeSpecParameterPosition(), this.getTypeSpecParameterName());
+      if (typeSpecPts != null && !typeSpecPts.isEmpty())
+        return this.getDTypesFromDTypeArgument(builder, typeSpecPts);
+    }
+
     int valNum =
         this.getArgumentValueNumber(
             builder, this.getDTypeParameterPosition(), this.getDTypeParameterName(), true);
@@ -77,7 +102,35 @@ public class Input extends TensorTypeAllocator {
 
   @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
-    this.checkUnimplementedParameters(builder);
+    // `tensor`: the layer wraps an existing tensor, so its shape passes through verbatim with no
+    // batch dimension prepended (wala/ML#617). A non-empty points-to set is what signals the
+    // argument was actually supplied: in the synthetic `do`-method context every formal parameter
+    // has a value number, so the value number alone is not a presence test.
+    int tensorValNum =
+        this.getArgumentValueNumber(
+            builder, this.getTensorParameterPosition(), this.getTensorParameterName(), true);
+    if (tensorValNum > 0) {
+      OrdinalSet<InstanceKey> tensorPts =
+          this.getArgumentPointsToSet(
+              builder, this.getTensorParameterPosition(), this.getTensorParameterName());
+      if (tensorPts != null && !tensorPts.isEmpty()) {
+        LOGGER.fine("Reading shape from `tensor` argument for source: " + this.getSource() + ".");
+        return this.getShapes(builder, tensorValNum);
+      }
+    }
+
+    // `type_spec`: the shape comes from the supplied `TypeSpec` object, again with no batch
+    // dimension prepended (wala/ML#617).
+    int typeSpecValNum =
+        this.getArgumentValueNumber(
+            builder, this.getTypeSpecParameterPosition(), this.getTypeSpecParameterName(), true);
+    if (typeSpecValNum > 0) {
+      OrdinalSet<InstanceKey> typeSpecPts =
+          this.getArgumentPointsToSet(
+              builder, this.getTypeSpecParameterPosition(), this.getTypeSpecParameterName());
+      if (typeSpecPts != null && !typeSpecPts.isEmpty())
+        return this.getShapesFromShapeArgument(builder, typeSpecPts);
+    }
 
     int shapeValNum =
         this.getArgumentValueNumber(
@@ -166,20 +219,6 @@ public class Input extends TensorTypeAllocator {
     return newShapes;
   }
 
-  private void checkUnimplementedParameters(PropagationCallGraphBuilder builder) {
-    Parameters[] unimplementedParameters = {
-      Parameters.SPARSE, Parameters.TENSOR, Parameters.RAGGED, Parameters.TYPE_SPEC
-    };
-
-    for (Parameters p : unimplementedParameters) {
-      if (this.getNumberOfPossiblePositionalArguments(builder).stream()
-              .anyMatch(n -> n >= p.getIndex() + 1)
-          || this.isKeywordArgumentPresent(builder, p.getName()))
-        throw new UnimplementedError(
-            "Unimplemented parameter " + p.getName() + " at position " + p.getIndex());
-    }
-  }
-
   @Override
   protected int getShapeParameterPosition() {
     return Parameters.SHAPE.getIndex();
@@ -204,5 +243,21 @@ public class Input extends TensorTypeAllocator {
 
   protected String getDTypeParameterName() {
     return Parameters.DTYPE.getName();
+  }
+
+  protected int getTensorParameterPosition() {
+    return Parameters.TENSOR.getIndex();
+  }
+
+  protected String getTensorParameterName() {
+    return Parameters.TENSOR.getName();
+  }
+
+  protected int getTypeSpecParameterPosition() {
+    return Parameters.TYPE_SPEC.getIndex();
+  }
+
+  protected String getTypeSpecParameterName() {
+    return Parameters.TYPE_SPEC.getName();
   }
 }
