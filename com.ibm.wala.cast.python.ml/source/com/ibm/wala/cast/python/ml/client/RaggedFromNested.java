@@ -141,7 +141,11 @@ public abstract class RaggedFromNested extends RaggedTensorFromValues {
                     if (!shape.isEmpty()) {
                       Dimension<?> dim = shape.get(0);
                       LOGGER.fine("Found row dimension from first element: " + dim);
-                      possibleRowDims.add(computeRowDim(dim));
+                      // `computeRowDim` returns null for a non-`NumericDim` (e.g.
+                      // `RaggedFromNestedRowSplits` on a dynamic dimension); fall back to a dynamic
+                      // dimension rather than adding a raw null to the shape. wala/ML#590.
+                      Dimension<?> rowDim = computeRowDim(dim);
+                      possibleRowDims.add(rowDim != null ? rowDim : DynamicDim.INSTANCE);
                       foundRowDim = true;
                     }
                   }

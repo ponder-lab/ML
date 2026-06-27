@@ -135,7 +135,12 @@ public abstract class TensorTypeAllocator extends TensorGenerator {
       Object value = constantKey.getValue();
 
       if (value == null) return Optional.empty();
-      return Optional.of(((Number) value).intValue());
+      if (value instanceof Number) return Optional.of(((Number) value).intValue());
+      // WALA may model a Python `bool` as a `Boolean` rather than a `Number`; `int(True) == 1` and
+      // `int(False) == 0`. Any other non-numeric constant (e.g. a string) has no integer value, so
+      // degrade to ⊤ (empty) rather than throwing a `ClassCastException`. wala/ML#590.
+      if (value instanceof Boolean) return Optional.of(Boolean.TRUE.equals(value) ? 1 : 0);
+      return Optional.empty();
     }
 
     throw new IllegalArgumentException(

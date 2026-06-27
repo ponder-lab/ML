@@ -11887,6 +11887,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression for the {@code getIntValueFromInstanceKey} non-numeric-constant degradation (<a
+   * href="https://github.com/wala/ML/issues/590">wala/ML#590</a>): {@code tf.eye(True)} models the
+   * Python {@code bool} as a {@code Boolean} constant, which degrades to {@code int(True) == 1} (a
+   * {@code (1, 1)} identity) rather than throwing a {@code ClassCastException} on the {@code
+   * Number} cast.
+   */
+  @Test
+  public void testEyeBoolDim()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_eye_bool_dim.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_1_1_FLOAT32)));
+  }
+
+  /**
    * Guards constant-step subscript-slice shape propagation on ndarrays (wala/ML#405): {@code
    * x_train[:5]} on a {@code (60000, 28, 28) uint8} ndarray yields a {@code (5, 28, 28) uint8}
    * tensor. Implemented via {@link SliceBuiltinOperation}; the receiver-shape leak that previously
