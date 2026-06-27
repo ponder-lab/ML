@@ -1539,6 +1539,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Test a dataset created with {@code tf.data.Dataset.from_generator} using a <em>dict</em>
+   * -structured legacy {@code output_types} argument (https://github.com/wala/ML/issues/615). The
+   * dtype specification is a mapping, not a scalar {@code tf.DType} or a tuple/list of them, so the
+   * dtype helper must recurse into the dict's values rather than asserting a single {@code DType}.
+   */
+  @Test
+  public void testDataset72()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset72.py", "consume", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  /**
    * Test enumerating a dataset (https://github.com/wala/ML/issues/140). The first element of the
    * tuple returned isn't a tensor.
    *

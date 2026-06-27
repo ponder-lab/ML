@@ -15,6 +15,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
 import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
+import static com.ibm.wala.cast.python.types.PythonTypes.dict;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.findDefinition;
@@ -1719,6 +1720,33 @@ public abstract class TensorGenerator {
 
           FieldReference subscript =
               FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+
+          IField f = builder.getClassHierarchy().resolveField(subscript);
+          if (f != null) {
+            PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+            OrdinalSet<InstanceKey> fieldPts = pointerAnalysis.getPointsToSet(pk);
+            ret.addAll(this.getDTypesFromDTypeArgument(builder, fieldPts));
+          }
+        }
+      } else if (typeReference.equals(dict)) {
+        // A dict-structured dtype specification, e.g. `output_types={"feature": tf.int32, ...}`.
+        // `tf.data.Dataset.from_generator` accepts a nested structure of dtypes; the values (keyed
+        // by arbitrary string names) are the per-leaf dtype specs. Recurse into each value and
+        // union the results, mirroring the tuple/list handling above. See
+        // https://github.com/wala/ML/issues/615.
+        OrdinalSet<InstanceKey> objectCatalogPointsToSet =
+            pointerAnalysis.getPointsToSet(
+                ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                    .getPointerKeyForObjectCatalog(asin));
+
+        for (InstanceKey catalogIK : objectCatalogPointsToSet) {
+          ConstantKey<?> constantKey = (ConstantKey<?>) catalogIK;
+          Object keyValue = constantKey.getValue();
+          // Dict keys are strings; the value is stored as an instance field named by the key.
+          if (!(keyValue instanceof String)) continue;
+
+          FieldReference subscript =
+              FieldReference.findOrCreate(Root, findOrCreateAsciiAtom((String) keyValue), Root);
 
           IField f = builder.getClassHierarchy().resolveField(subscript);
           if (f != null) {
