@@ -4467,16 +4467,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         UnimplementedError.class,
         () ->
             test(
-                "tf2_test_input_unimplemented_sparse_kw.py",
-                "tf2_test_input_unimplemented_sparse_kw.py",
-                0,
-                0,
-                emptyMap()));
-
-    assertThrows(
-        UnimplementedError.class,
-        () ->
-            test(
                 "tf2_test_input_unimplemented_tensor_kw.py",
                 "tf2_test_input_unimplemented_tensor_kw.py",
                 0,
@@ -4507,21 +4497,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         UnimplementedError.class,
         () ->
             test(
-                "tf2_test_input_unimplemented_sparse_pos.py",
-                "tf2_test_input_unimplemented_sparse_pos.py",
+                "tf2_test_input_unimplemented_tensor_pos.py",
+                "tf2_test_input_unimplemented_tensor_pos.py",
                 0,
                 0,
                 emptyMap()));
+  }
 
-    assertThrows(
-        UnimplementedError.class,
-        () ->
-            test(
-                "tf2_test_input_unimplemented_tensor_pos.py",
-                "tf2_test_input_unimplemented_tensor_pos.py",
-                0,
-                0,
-                emptyMap()));
+  /**
+   * A sparse `Input` has the same logical shape and dtype as a dense one, so the `sparse` parameter
+   * is modeled by treating it as transparent to shape and dtype inference (wala/ML#616).
+   */
+  @Test
+  public void testInputSparse()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType t = new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(10)));
+
+    test("tf2_test_input_sparse_kw.py", "check_input", 1, 1, Map.of(2, Set.of(t)));
+    test("tf2_test_input_sparse_pos.py", "check_input", 1, 1, Map.of(2, Set.of(t)));
   }
 
   @Test

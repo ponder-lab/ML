@@ -166,9 +166,17 @@ public class Input extends TensorTypeAllocator {
     return newShapes;
   }
 
+  /**
+   * Throws if the modeled `Input()` call uses a parameter whose semantics this generator does not
+   * model. `sparse` is intentionally absent: a sparse `Input()` has the same logical shape and
+   * dtype as a dense one (sparseness only affects storage), so it is transparent to this shape and
+   * dtype analysis. See <a href="https://github.com/wala/ML/issues/616">wala/ML#616</a>.
+   *
+   * @param builder The call graph builder supplying the modeled call's arguments.
+   */
   private void checkUnimplementedParameters(PropagationCallGraphBuilder builder) {
     Parameters[] unimplementedParameters = {
-      Parameters.SPARSE, Parameters.TENSOR, Parameters.RAGGED, Parameters.TYPE_SPEC
+      Parameters.TENSOR, Parameters.RAGGED, Parameters.TYPE_SPEC
     };
 
     for (Parameters p : unimplementedParameters) {
