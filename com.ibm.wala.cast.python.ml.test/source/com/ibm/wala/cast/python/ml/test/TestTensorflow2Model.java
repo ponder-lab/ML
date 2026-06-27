@@ -11677,6 +11677,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Guards the {@code tf.eye} unresolvable-{@code batch_shape} floor (<a
+   * href="https://github.com/wala/ML/issues/611">wala/ML#611</a>): when {@code batch_shape} is
+   * present but unresolvable (here from {@code json.loads}), the number of leading batch dimensions
+   * is unknown, so the overall rank can't be known and the result floors to ⊤ rather than throwing
+   * "Batch shape argument for tf.eye() should be a list of dimensions." (which previously aborted
+   * the whole analysis). The dtype stays float32.
+   */
+  @Test
+  public void testEyeUnresolvableBatchShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_eye_unresolvable_batch_shape.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
    * Guards the {@code tf.random.gamma} unresolvable-{@code shape} floor (<a
    * href="https://github.com/wala/ML/issues/611">wala/ML#611</a>): when the {@code shape} argument
    * is unresolvable (here from {@code json.loads}) the output rank can't be known, so the result
