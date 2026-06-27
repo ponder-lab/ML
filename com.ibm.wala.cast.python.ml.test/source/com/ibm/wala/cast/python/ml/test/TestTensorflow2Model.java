@@ -11887,6 +11887,43 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Captured-gap regression for the {@code RaggedFromNested} shape floor (<a
+   * href="https://github.com/wala/ML/issues/612">wala/ML#612</a>): {@code
+   * tf.RaggedTensor.from_nested_row_lengths} with an opaque (unresolvable) {@code
+   * nested_row_lengths} floors the shape to ⊤ (unknown) rather than aborting the whole analysis
+   * with "Could not calculate shapes". The dtype still resolves to {@code int32} from the {@code
+   * flat_values}.
+   */
+  @Test
+  public void testRaggedFromNestedRowLengthsUnresolvable()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_from_nested_row_lengths_unresolvable.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Captured-gap regression for the {@code RaggedFromNestedValueRowIds} shape and dtype floors (<a
+   * href="https://github.com/wala/ML/issues/612">wala/ML#612</a>): {@code
+   * tf.RaggedTensor.from_nested_value_rowids} with opaque (unresolvable) {@code flat_values} and
+   * {@code nested_value_rowids} floors both the shape and the dtype to ⊤ rather than aborting with
+   * "Could not calculate shapes" / "Could not determine dtypes".
+   */
+  @Test
+  public void testRaggedFromNestedValueRowIdsUnresolvable()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_from_nested_value_rowids_unresolvable.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
    * Guards constant-step subscript-slice shape propagation on ndarrays (wala/ML#405): {@code
    * x_train[:5]} on a {@code (60000, 28, 28) uint8} ndarray yields a {@code (5, 28, 28) uint8}
    * tensor. Implemented via {@link SliceBuiltinOperation}; the receiver-shape leak that previously
