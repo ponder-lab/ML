@@ -399,6 +399,9 @@ public class TensorGeneratorFactory {
 
     while (!queue.isEmpty()) {
       PointsToSetVariable current = queue.poll();
+      // The assignment graph can yield a null predecessor (an unresolved points-to variable), which
+      // is enqueued below; skip it rather than dereferencing null. wala/ML#613.
+      if (current == null) continue;
       PointerKey pk = current.getPointerKey();
       LOGGER.fine("findCreator visiting: " + current);
 
@@ -421,7 +424,7 @@ public class TensorGeneratorFactory {
       for (Iterator<PointsToSetVariable> it = assignmentGraph.getPredNodes(current);
           it.hasNext(); ) {
         PointsToSetVariable pred = it.next();
-        if (visited.add(pred)) {
+        if (pred != null && visited.add(pred)) {
           LOGGER.fine("findCreator adding pred: " + pred);
           queue.add(pred);
         }
