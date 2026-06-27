@@ -11887,6 +11887,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Captured-gap fixture vendored from MusicTransformer-tensorflow2.0's `__dist_train_step` (the
+   * function the refactoring decorates; its `inp` is fed `np.array(...)` via `Data.seq2seq_batch`).
+   * The parameter lands at ⊥ (not tensor-classified): {@code np.array}'s tensor type isn't
+   * propagated to a callee parameter (<a href="https://github.com/wala/ML/issues/598">
+   * wala/ML#598</a>), whereas a {@code tf.constant} feed recovers concretely. So {@code consume}
+   * has 0 tensor parameters here.
+   *
+   * <p>TODO: once <a href="https://github.com/wala/ML/issues/598">wala/ML#598</a> lands, {@code
+   * inp} should type and this flips to {@code consume} receiving a tensor parameter.
+   */
+  @Test
+  public void testMtDistTrainStep()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_mt_dist_train_step.py", "consume", 0, 0, Map.of());
+  }
+
+  /**
    * Guards constant-step subscript-slice shape propagation on ndarrays (wala/ML#405): {@code
    * x_train[:5]} on a {@code (60000, 28, 28) uint8} ndarray yields a {@code (5, 28, 28) uint8}
    * tensor. Implemented via {@link SliceBuiltinOperation}; the receiver-shape leak that previously
