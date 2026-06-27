@@ -157,6 +157,17 @@ Per `CONTRIBUTING.md`:
 
 The repo uses a pre-commit hook that runs `spotless` (Java) and `black` (Python). It will sometimes reformat files after you stage them, in which case the commit is rejected with the reformatted diff sitting in the working tree — re-stage and commit again.
 
+## Releasing
+
+`RELEASING.md` is the authority on cutting a release — read it before you do. The **preferred** path is the one-click **Cut release** workflow (`.github/workflows/release.yml`), which runs `maven-release-plugin` on a runner with no local toolchain, flags, or credentials:
+
+```bash
+gh workflow run release.yml --repo ponder-lab/ML --ref master \
+	-f releaseVersion=X.Y.Z -f developmentVersion=X.Y.W-SNAPSHOT
+```
+
+Local `mvn release:prepare` is the documented **fallback** only (e.g., the runner is unavailable); it shares the same outcome but risks the pre-commit hook and needs push access. Either way, the tag push drives CI's deploy gate and `release-upload` job — there is no manual `mvn deploy` or `gh release create` step. See `RELEASING.md` for prerequisites, the `RELEASE_PAT` secret, and troubleshooting.
+
 ## Issue tracking
 
 Issues live on `wala/ML` (the upstream repo), not on the `ponder-lab/ML` fork where development branches are pushed. When referencing issues in commit messages or Javadoc, use `wala/ML#N`. Cross-repo issue dependency features (`blocked_by`, sub-issues) are used — prefer `gh api` for linking them, since the CLI's built-in commands don't cover these.
