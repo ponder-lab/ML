@@ -1732,7 +1732,8 @@ public abstract class TensorGenerator {
         // A dict-structured dtype specification, e.g. `output_types={"feature": tf.int32, ...}`.
         // `tf.data.Dataset.from_generator` accepts a nested structure of dtypes; the values (keyed
         // by arbitrary string names) are the per-leaf dtype specs. Recurse into each value and
-        // union the results, mirroring the tuple/list handling above. See wala/ML#615.
+        // union the results, mirroring the tuple/list handling above. See
+        // https://github.com/wala/ML/issues/615.
         OrdinalSet<InstanceKey> objectCatalogPointsToSet =
             pointerAnalysis.getPointsToSet(
                 ((AstPointerKeyFactory) builder.getPointerKeyFactory())
