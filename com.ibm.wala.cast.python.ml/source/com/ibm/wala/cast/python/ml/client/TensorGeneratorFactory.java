@@ -682,6 +682,10 @@ public class TensorGeneratorFactory {
       PropagationCallGraphBuilder builder,
       Set<PointsToSetVariable> visited) {
     source = findCreator(source, builder);
+    // `findCreator` can return null (an unresolvable points-to variable, e.g. a null source or a
+    // null assignment-graph predecessor it skipped, wala/ML#613). There is no generator for a null
+    // source, so return null here rather than dereferencing it in `getGeneratorBody`. wala/ML#614.
+    if (source == null) return null;
     if (!visited.add(source)) {
       final PointsToSetVariable cycleSource = source;
       LOGGER.log(
