@@ -11699,6 +11699,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * is unknown, so the overall rank can't be known and the result floors to ⊤ rather than throwing
    * "Batch shape argument for tf.eye() should be a list of dimensions." (which previously aborted
    * the whole analysis). The dtype stays float32.
+   *
+   * <p>TODO: the {@code batch_shape} value here is content-dependent (it comes from {@code
+   * json.loads}), so recovering it is the user-annotation problem tracked by <a
+   * href="https://github.com/wala/ML/issues/370">wala/ML#370</a>, the same recovery path the
+   * allocator shape floor points at. Orthogonally, a structurally-inferable tensor {@code
+   * batch_shape} (e.g. {@code tf.shape(x)}, whose rank, and often values, are statically known) can
+   * be recovered without an annotation; that is tracked by <a
+   * href="https://github.com/wala/ML/issues/619">wala/ML#619</a>. The already-recoverable
+   * known-rank case is guarded by {@link #testEyeDynamicBatch()}.
    */
   @Test
   public void testEyeUnresolvableBatchShape()
