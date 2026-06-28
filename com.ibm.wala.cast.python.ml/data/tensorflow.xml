@@ -3142,6 +3142,8 @@
           <new def="ddff" class="Ltensorflow/distribute/run/distribute_datasets_from_function"/>
           <putfield class="LRoot" field="distribute_datasets_from_function" fieldType="LRoot" ref="self" value="ddff"/>
           <putfield class="LRoot" field="experimental_distribute_datasets_from_function" fieldType="LRoot" ref="self" value="ddff"/>
+          <new def="edd" class="Ltensorflow/distribute/run/experimental_distribute_dataset"/>
+          <putfield class="LRoot" field="experimental_distribute_dataset" fieldType="LRoot" ref="self" value="edd"/>
           <return value="arg0"/>
         </method>
       </class>
@@ -3153,6 +3155,8 @@
           <new def="ddff" class="Ltensorflow/distribute/run/distribute_datasets_from_function"/>
           <putfield class="LRoot" field="distribute_datasets_from_function" fieldType="LRoot" ref="self" value="ddff"/>
           <putfield class="LRoot" field="experimental_distribute_datasets_from_function" fieldType="LRoot" ref="self" value="ddff"/>
+          <new def="edd" class="Ltensorflow/distribute/run/experimental_distribute_dataset"/>
+          <putfield class="LRoot" field="experimental_distribute_dataset" fieldType="LRoot" ref="self" value="edd"/>
           <return value="arg0"/>
         </method>
       </class>
@@ -3164,6 +3168,8 @@
           <new def="ddff" class="Ltensorflow/distribute/run/distribute_datasets_from_function"/>
           <putfield class="LRoot" field="distribute_datasets_from_function" fieldType="LRoot" ref="self" value="ddff"/>
           <putfield class="LRoot" field="experimental_distribute_datasets_from_function" fieldType="LRoot" ref="self" value="ddff"/>
+          <new def="edd" class="Ltensorflow/distribute/run/experimental_distribute_dataset"/>
+          <putfield class="LRoot" field="experimental_distribute_dataset" fieldType="LRoot" ref="self" value="edd"/>
           <return value="arg0"/>
         </method>
       </class>
@@ -3195,6 +3201,12 @@
           <putfield class="LRoot" field="get_per_replica_batch_size" fieldType="LRoot" ref="ctx" value="batch_fn"/>
           <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="arg1" arg1="ctx" numArgs="2" def="v"/>
           <return value="v"/>
+        </method>
+      </class>
+      <class name="experimental_distribute_dataset" allocatable="true">
+        <!-- `strategy.experimental_distribute_dataset(ds)` returns a distributed view of `ds` with the same element structure. For tensor-type purposes it is a pass-through: return the dataset argument unchanged so it stays a recognized tensor iterable and its element types reach the iteration. wala/ML#618. -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self dataset">
+          <return value="arg1"/>
         </method>
       </class>
     </package>

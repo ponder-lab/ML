@@ -4511,6 +4511,26 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>: a custom
+   * {@code fit} iterates an {@code experimental_distribute_dataset}-wrapped {@code tf.data} dataset
+   * and threads the yielded {@code (inputs, targets)} tuple into {@code train_step}. The strategy's
+   * {@code experimental_distribute_dataset} is a pass-through of its dataset argument, so the
+   * distributed dataset stays a recognized tensor iterable and {@code train_step}'s {@code inputs}
+   * and {@code targets} parameters type to {@code (2,)} float32 rather than being dropped (which
+   * cascaded to every downstream consumer).
+   */
+  @Test
+  public void testDistributeFitTupleParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_distribute_fit_tuple_param.py",
+        "Model.train_step",
+        2,
+        3,
+        Map.of(3, Set.of(TensorType.of(FLOAT_32, 2)), 4, Set.of(TensorType.of(FLOAT_32, 2))));
+  }
+
+  /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>: a tensor
    * passed interprocedurally to a callee types the callee's parameter. {@code Model.get_loss}'s
    * {@code real} and {@code pred} receive {@code tf.constant} tensors via {@code train_step}, so
