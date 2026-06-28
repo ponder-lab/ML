@@ -58,6 +58,12 @@ public class Eye extends EyeBase {
     Set<List<Dimension<?>>> ret = super.getShapes(builder);
     Set<List<Dimension<?>>> batchShapes = this.getBatchShapes(builder);
 
+    if (batchShapes == null)
+      // `batch_shape` is present but unresolvable (content-dependent), so the number of leading
+      // batch dimensions is unknown and the overall rank can't be known: floor to ⊤ rather than
+      // throwing (which aborted the whole analysis). wala/ML#611.
+      return null;
+
     if (batchShapes.isEmpty()) return ret;
 
     // Prepend each batch shape to each base shape, building a fresh list per combination. Mutating
@@ -75,6 +81,14 @@ public class Eye extends EyeBase {
     return withBatchShapes;
   }
 
+  /**
+   * Returns the possible leading {@code batch_shape} dimensions to prepend to the identity matrix.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return An empty set when {@code batch_shape} is absent (no leading dimensions); the resolved
+   *     batch shapes when it is present and resolvable; or {@code null} (⊤) when it is present but
+   *     unresolvable (content-dependent), since the leading rank is then unknown. wala/ML#611.
+   */
   private Set<List<Dimension<?>>> getBatchShapes(PropagationCallGraphBuilder builder) {
     int valNum = this.getBatchShapesArgumentValueNumber(builder);
     if (valNum <= 0) return emptySet();
@@ -88,8 +102,10 @@ public class Eye extends EyeBase {
     Set<List<Dimension<?>>> shapesFromShapeArgument = this.getShapesFromShapeArgument(builder, pts);
 
     if (shapesFromShapeArgument == null || shapesFromShapeArgument.isEmpty())
-      throw new IllegalStateException(
-          "Batch shape argument for tf.eye() should be a list of dimensions.");
+      // `batch_shape` is present but its contents are unresolvable (content-dependent). Signal ⊤ to
+      // the caller with `null` rather than throwing; an empty set would instead mean "no batch
+      // shape" and wrongly drop the (definitely-present) leading dimensions. wala/ML#611.
+      return null;
 
     return shapesFromShapeArgument;
   }

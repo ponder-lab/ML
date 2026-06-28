@@ -11677,6 +11677,41 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Complements {@link #testEyeUnresolvableBatchShape()}: when {@code batch_shape} is a list
+   * literal whose length (and hence the output rank) is statically known but whose element is
+   * unresolvable (here from {@code json.loads}), precision is preserved rather than floored to ⊤.
+   * The single leading batch dimension is dynamic and the {@code (num_rows, num_columns)} suffix
+   * stays exact, so {@code tf.eye(3, batch_shape=[<unknown>])} types to {@code (Dynamic, 3, 3)}
+   * float32. See <a href="https://github.com/wala/ML/issues/611">wala/ML#611</a>.
+   */
+  @Test
+  public void testEyeDynamicBatch()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType t =
+        new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(3), new NumericDim(3)));
+    test("tf2_test_eye_dynamic_batch.py", "consume", 1, 1, Map.of(2, Set.of(t)));
+  }
+
+  /**
+   * Guards the {@code tf.eye} unresolvable-{@code batch_shape} floor (<a
+   * href="https://github.com/wala/ML/issues/611">wala/ML#611</a>): when {@code batch_shape} is
+   * present but unresolvable (here from {@code json.loads}), the number of leading batch dimensions
+   * is unknown, so the overall rank can't be known and the result floors to ⊤ rather than throwing
+   * "Batch shape argument for tf.eye() should be a list of dimensions." (which previously aborted
+   * the whole analysis). The dtype stays float32.
+   */
+  @Test
+  public void testEyeUnresolvableBatchShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_eye_unresolvable_batch_shape.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
    * Guards the {@code tf.random.gamma} unresolvable-{@code shape} floor (<a
    * href="https://github.com/wala/ML/issues/611">wala/ML#611</a>): when the {@code shape} argument
    * is unresolvable (here from {@code json.loads}) the output rank can't be known, so the result
