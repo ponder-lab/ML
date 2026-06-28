@@ -4555,6 +4555,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * {@code numpy.array} value propagates its {@code TensorType} to a callee parameter. The issue's
    * reproducer; {@code f}'s parameter types to {@code (3,)} unknown ({@code NpArray} infers the
    * list-literal shape; the dtype is unknown with no {@code dtype=} argument).
+   *
+   * <p>TODO: the unknown dtype is a recoverable-precision floor. The runtime dtype is {@code
+   * float64} (numpy promotes the Python float literals), but {@code NpArray} does not model numpy's
+   * dtype promotion, so it floors to unknown rather than infer a possibly-wrong dtype. Tracked by
+   * <a href="https://github.com/wala/ML/issues/626">wala/ML#626</a>.
    */
   @Test
   public void testNpArrayBareParam()
