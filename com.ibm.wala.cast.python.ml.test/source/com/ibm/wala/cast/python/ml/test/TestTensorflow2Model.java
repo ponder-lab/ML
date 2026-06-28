@@ -4510,6 +4510,59 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_input_sparse_pos.py", "check_input", 1, 1, Map.of(2, Set.of(t)));
   }
 
+  /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>: a tensor
+   * passed interprocedurally to a callee types the callee's parameter. {@code Model.get_loss}'s
+   * {@code real} and {@code pred} receive {@code tf.constant} tensors via {@code train_step}, so
+   * both type to {@code (3,)} float32 rather than being missed.
+   */
+  @Test
+  public void testInterprocTensorParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType t = TensorType.of(FLOAT_32, 3);
+
+    test(
+        "tf2_test_interproc_tensor_param.py",
+        "Model.get_loss",
+        2,
+        4,
+        Map.of(3, Set.of(t), 4, Set.of(t)));
+  }
+
+  /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>: a tensor
+   * passed to a Keras {@code call} method types its parameter. {@code BiLSTM.call}'s {@code inputs}
+   * receives a token-id tensor (which then feeds an {@code Embedding}), so it types to {@code (1,
+   * 3)} int32 rather than being missed.
+   */
+  @Test
+  public void testKerasCallEmbeddingParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_keras_call_embedding_param.py",
+        "BiLSTM.call",
+        1,
+        1,
+        Map.of(3, Set.of(TensorType.of(INT_32, 1, 3))));
+  }
+
+  /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>: a {@code
+   * tf.data} dataset element passed to a function types its parameter. {@code target_convert}'s
+   * {@code targets} receives a dataset element, so it types to {@code (2,)} int32 rather than being
+   * missed.
+   */
+  @Test
+  public void testDatasetElementParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_element_param.py",
+        "target_convert",
+        1,
+        2,
+        Map.of(2, Set.of(TensorType.of(INT_32, 2))));
+  }
+
   @Test
   public void testAdd54()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
