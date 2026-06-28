@@ -4551,6 +4551,44 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>'s gpt-2
+   * case: a callee parameter that receives a tensor argument at a direct method-call site is typed
+   * by Ariadne. The {@code Gpt2} model, dataset pipeline, and {@code _train_step}/{@code
+   * train_step}/{@code get_loss} dispatch are vendored verbatim from {@code
+   * akanyaani/gpt-2-tensorflow2.0} ({@code gpt2_model.py}, {@code data_pipeline.py}); only the
+   * transformer {@code layers} (and the {@code utils}/{@code scripts} helpers) are stubbed to
+   * pass-throughs, since {@code get_loss}'s parameter typing does not depend on the model body.
+   *
+   * <p>A {@code padded_batch} dataset element flows through {@code fit} to the {@code
+   * @tf.function(input_signature=...)}-decorated {@code train_step}, then {@code _train_step}, then
+   * {@code get_loss(targets, predictions)}. The {@code real} parameter (vn=3), bound to the
+   * dataset-sourced {@code targets}, types to {@code (2, 2)} int32, so Ariadne emits the parameter
+   * type for this exact shape. (The {@code pred} parameter stays untyped here only because the
+   * stubbed model body leaves {@code predictions} at the top type; the real subject's {@code call}
+   * returns typed logits.) This pins that wala/ML#618's residual gpt-2 failure is downstream of
+   * Ariadne, not an emission gap.
+   */
+  @Test
+  public void testGpt2InterprocGetLoss()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "gpt2_proj/layers/__init__.py", "gpt2_proj/layers/embedding_layer.py",
+          "gpt2_proj/layers/feed_forward.py", "gpt2_proj/layers/layer_norm.py",
+          "gpt2_proj/layers/attention_layer.py", "gpt2_proj/utils/__init__.py",
+          "gpt2_proj/utils/tf_utils.py", "gpt2_proj/scripts/__init__.py",
+          "gpt2_proj/scripts/utils.py", "gpt2_proj/data_pipeline.py",
+          "gpt2_proj/gpt2_model.py", "gpt2_proj/tf2_test_gpt2_probe.py"
+        },
+        "gpt2_model.py",
+        "Gpt2.get_loss",
+        "gpt2_proj",
+        1,
+        1,
+        Map.of(3, Set.of(TensorType.of(INT_32, 2, 2))));
+  }
+
+  /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>: a tensor
    * passed interprocedurally to a callee types the callee's parameter. {@code Model.get_loss}'s
    * {@code real} and {@code pred} receive {@code tf.constant} tensors via {@code train_step}, so
