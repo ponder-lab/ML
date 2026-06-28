@@ -181,6 +181,12 @@ public class TensorFlowTypes extends PythonTypes {
 
   public static final String DATASET_BATCH_SIGNATURE = "tf.data.Dataset.batch()";
 
+  public static final TypeReference DATASET_PADDED_BATCH_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/data/padded_batch"));
+
+  public static final String DATASET_PADDED_BATCH_SIGNATURE = "tf.data.Dataset.padded_batch()";
+
   public static final TypeReference DATASET_MAP_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/map"));
 
@@ -1870,6 +1876,7 @@ public class TensorFlowTypes extends PythonTypes {
       Map.ofEntries(
           Map.entry(DATASET, DATASET_SIGNATURE),
           Map.entry(DATASET_BATCH_TYPE, DATASET_BATCH_SIGNATURE),
+          Map.entry(DATASET_PADDED_BATCH_TYPE, DATASET_PADDED_BATCH_SIGNATURE),
           Map.entry(DATASET_SHUFFLE_TYPE, DATASET_SHUFFLE_SIGNATURE),
           Map.entry(DATASET_MAP_TYPE, DATASET_MAP_SIGNATURE),
           Map.entry(DATASET_REPEAT_TYPE, DATASET_REPEAT_SIGNATURE),
