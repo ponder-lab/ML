@@ -2382,7 +2382,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_masked_sparse_ce.py",
         "MaskSparseCategoricalCrossentropy.__call__",
         3,
-        5,
+        6,
         Map.of(
             3, Set.of(TENSOR_4_INT32),
             4, Set.of(TENSOR_4_10_FLOAT32),
@@ -2766,7 +2766,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_crf.py",
         "crf_unary_score",
         3,
-        14,
+        18,
         Map.of(
             2, Set.of(TENSOR_2_3_INT32),
             3, Set.of(TENSOR_2_INT32),
@@ -2790,7 +2790,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_crf.py",
         "crf_binary_score",
         3,
-        13,
+        14,
         Map.of(
             2, Set.of(TENSOR_2_3_INT32),
             3, Set.of(TENSOR_2_INT32),
@@ -2814,7 +2814,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_crf.py",
         "crf_sequence_score",
         4,
-        6,
+        9,
         Map.of(
             2, Set.of(TENSOR_2_3_4_FLOAT32),
             3, Set.of(TENSOR_2_3_INT32),
@@ -3478,7 +3478,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "autoencoder.py",
         "mean_square",
         2,
-        4,
+        5,
         Map.of(2, Set.of(TENSOR_256_784_FLOAT32), 3, Set.of(TENSOR_256_784_FLOAT32)));
   }
 
@@ -3499,7 +3499,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testAutoencoder3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("autoencoder.py", "run_optimization", 1, 4, Map.of(2, Set.of(TENSOR_256_784_FLOAT32)));
+    test("autoencoder.py", "run_optimization", 1, 5, Map.of(2, Set.of(TENSOR_256_784_FLOAT32)));
   }
 
   /**
