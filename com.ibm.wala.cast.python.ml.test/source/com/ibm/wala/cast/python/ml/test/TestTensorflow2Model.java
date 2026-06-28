@@ -4613,9 +4613,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/598">wala/ML#598</a>: the
    * {@code tf.constant}-wrapped {@code numpy.array} form also propagates to the callee parameter.
-   * It types to {@code ⊤} unknown, coarser than the bare form's {@code (3,)} because {@code
-   * tf.constant} drops the array shape (tracked by <a
-   * href="https://github.com/wala/ML/issues/625">wala/ML#625</a>).
+   * It currently types to {@code ⊤} unknown, coarser than the bare form's {@code (3,)} because
+   * {@code tf.constant} drops the array shape.
+   *
+   * <p>TODO: This pins the current imprecise shape. Once <a
+   * href="https://github.com/wala/ML/issues/625">wala/ML#625</a> lands, the parameter should type
+   * to {@code (3,)} unknown (the bare form's shape; the dtype stays unknown pending <a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>), and this assertion should be
+   * updated accordingly.
    */
   @Test
   public void testNpArrayWrappedParam()
