@@ -927,12 +927,19 @@ public abstract class TensorGenerator {
       }
     }
 
-    throw new IllegalArgumentException(
-        "Empty points-to set and could not trace properties for value number: "
-            + valueNumber
-            + " in: "
-            + node
-            + ".");
+    // The value is untraceable (empty points-to set and no recoverable def/parameter chain). Floor
+    // to ⊥ (not a tensor) rather than throwing: this preserves the behavior from when the throw was
+    // caught upstream and treated as not-a-tensor, but removes the abort risk for any caller that
+    // doesn't catch it. wala/ML#620, mirroring the non-aborting floors in wala/ML#604 and
+    // wala/ML#611.
+    LOGGER.fine(
+        () ->
+            "Could not trace shape for value number "
+                + valueNumber
+                + " in "
+                + node
+                + "; flooring to ⊥ (not a tensor). wala/ML#620.");
+    return Collections.emptySet();
   }
 
   /**
@@ -1963,12 +1970,18 @@ public abstract class TensorGenerator {
       }
     }
 
-    throw new IllegalArgumentException(
-        "Empty points-to set and could not trace properties for value number: "
-            + valueNumber
-            + " in: "
-            + node
-            + ".");
+    // The value is untraceable (empty points-to set and no recoverable def/parameter chain). Floor
+    // to ⊥ (not a tensor), paired with the shape floor above, rather than throwing: this preserves
+    // the behavior from when the throw was caught upstream and treated as not-a-tensor, but removes
+    // the abort risk for any caller that doesn't catch it. wala/ML#620.
+    LOGGER.fine(
+        () ->
+            "Could not trace dtype for value number "
+                + valueNumber
+                + " in "
+                + node
+                + "; flooring to ⊥ (not a tensor). wala/ML#620.");
+    return Collections.emptySet();
   }
 
   /**
