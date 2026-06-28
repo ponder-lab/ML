@@ -11699,6 +11699,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * is unknown, so the overall rank can't be known and the result floors to ⊤ rather than throwing
    * "Batch shape argument for tf.eye() should be a list of dimensions." (which previously aborted
    * the whole analysis). The dtype stays float32.
+   *
+   * <p>TODO: ⊤ is the floor only because the batch rank is unrecoverable here (an opaque constant).
+   * When {@code batch_shape} is a tensor whose static rank is recoverable (e.g. {@code
+   * tf.shape(x)}), the result can be floored to known-rank-with-dynamic-batch, or to an exact
+   * shape, rather than ⊤. Tracked by <a
+   * href="https://github.com/wala/ML/issues/619">wala/ML#619</a>; the already-recoverable
+   * known-rank case is guarded by {@link #testEyeDynamicBatch()}.
    */
   @Test
   public void testEyeUnresolvableBatchShape()
