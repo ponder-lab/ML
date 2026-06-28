@@ -4551,6 +4551,46 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/598">wala/ML#598</a>: a bare
+   * {@code numpy.array} value propagates its {@code TensorType} to a callee parameter. The issue's
+   * reproducer; {@code f}'s parameter types to {@code (3,)} unknown ({@code NpArray} infers the
+   * list-literal shape; the dtype is unknown with no {@code dtype=} argument).
+   *
+   * <p>TODO: the unknown dtype is a recoverable-precision floor. The runtime dtype is {@code
+   * float64} (numpy promotes the Python float literals), but {@code NpArray} does not model numpy's
+   * dtype promotion, so it floors to unknown rather than infer a possibly-wrong dtype. Tracked by
+   * <a href="https://github.com/wala/ML/issues/626">wala/ML#626</a>.
+   */
+  @Test
+  public void testNpArrayBareParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_nparray_param.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(UNKNOWN, asList(new NumericDim(3))))));
+  }
+
+  /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/598">wala/ML#598</a>: the
+   * {@code tf.constant}-wrapped {@code numpy.array} form also propagates to the callee parameter.
+   * It types to {@code ⊤} unknown, coarser than the bare form's {@code (3,)} because {@code
+   * tf.constant} drops the array shape (tracked by <a
+   * href="https://github.com/wala/ML/issues/625">wala/ML#625</a>).
+   */
+  @Test
+  public void testNpArrayWrappedParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_nparray_wrapped_param.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>: a tensor
    * passed interprocedurally to a callee types the callee's parameter. {@code Model.get_loss}'s
    * {@code real} and {@code pred} receive {@code tf.constant} tensors via {@code train_step}, so
