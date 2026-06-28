@@ -2515,6 +2515,8 @@
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
           <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
           <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
           <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
@@ -2550,6 +2552,8 @@
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
           <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
           <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
           <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
@@ -2580,6 +2584,39 @@
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
+          <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch"/>
+          <new def="rd_with_options" class="Ltensorflow/data/with_options"/>
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options"/>
+          <new def="rd_take" class="Ltensorflow/data/take"/>
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take"/>
+          <new def="rd_map" class="Ltensorflow/data/map"/>
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map"/>
+          <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
+          <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <return value="x"/>
+        </method>
+      </class>
+      <class name="padded_batch" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#padded_batch — modeled like `batch` (a fresh Dataset carrying the chainable transform fields); shape inference reuses `DatasetBatchGenerator`. The field-init block is duplicated per the structural reason documented on `batch.do`. wala/ML#623. -->
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self batch_size padded_shapes padding_values drop_remainder name">
+          <new def="x" class="Ltensorflow/data/Dataset"/>
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
+          <new def="rd_batch" class="Ltensorflow/data/batch"/>
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
           <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
           <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
           <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
@@ -2610,6 +2647,8 @@
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
           <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
           <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
           <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
@@ -2640,6 +2679,8 @@
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
           <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
           <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
           <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
@@ -2670,6 +2711,8 @@
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
           <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
           <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
           <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
@@ -2700,6 +2743,8 @@
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
           <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
           <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
           <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
@@ -2730,6 +2775,8 @@
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
           <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
           <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
           <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
@@ -2760,6 +2807,8 @@
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
           <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
           <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
           <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
@@ -2790,6 +2839,8 @@
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
           <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
           <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
           <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
@@ -2826,6 +2877,8 @@
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
           <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
           <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
           <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
@@ -2859,6 +2912,8 @@
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
           <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
           <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
           <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
@@ -2889,6 +2944,8 @@
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
           <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
           <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
           <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
@@ -2919,6 +2976,8 @@
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
           <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
           <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
           <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
@@ -2949,6 +3008,8 @@
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
           <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
           <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
           <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
@@ -2979,6 +3040,8 @@
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
           <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
           <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
           <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
@@ -3009,6 +3072,8 @@
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
           <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
           <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
           <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
@@ -3039,6 +3104,8 @@
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
           <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
           <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
           <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
@@ -3070,6 +3137,8 @@
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
           <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
           <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
           <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
@@ -3100,6 +3169,8 @@
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
           <new def="rd_batch" class="Ltensorflow/data/batch"/>
           <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
           <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
           <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
           <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>

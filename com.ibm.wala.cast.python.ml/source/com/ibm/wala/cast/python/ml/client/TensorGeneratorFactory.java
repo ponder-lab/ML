@@ -47,6 +47,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FROM_GEN
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FROM_TENSORS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FROM_TENSOR_SLICES_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_MAP_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_PADDED_BATCH_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_PREFETCH_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_RANDOM_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_RANGE_TYPE;
@@ -1133,6 +1134,10 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, DATASET_FROM_TENSORS_TYPE))
       return new DatasetFromTensorsGenerator(source);
     else if (isType(calledFunction, DATASET_BATCH_TYPE)) return new DatasetBatchGenerator(source);
+    else if (isType(calledFunction, DATASET_PADDED_BATCH_TYPE))
+      // `padded_batch` prepends a batch dimension like `batch`; reuse the batch generator. The
+      // padded inner dimensions are an upper-bound approximation. wala/ML#623.
+      return new DatasetBatchGenerator(source);
     else if (isType(calledFunction, DATASET_RANGE_TYPE)) return new DatasetRangeGenerator(source);
     else if (isType(calledFunction, TEXT_LINE_DATASET_TYPE))
       return new TextLineDatasetGenerator(source);

@@ -4531,6 +4531,26 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/623">wala/ML#623</a>: a {@code
+   * padded_batch} element threaded through a custom {@code fit} into {@code train_step} types the
+   * parameters. {@code padded_batch} was unmodeled, so the per-element tensor type was dropped
+   * before reaching the callee; modeling it like {@code batch} recovers it. The two parameters type
+   * to {@code (2, 2)} int32 (the batch dimension prepended to the {@code (2,)} element).
+   */
+  @Test
+  public void testPaddedBatchParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType t = TensorType.of(INT_32, 2, 2);
+
+    test(
+        "tf2_test_padded_batch_param.py",
+        "Model.train_step",
+        2,
+        3,
+        Map.of(3, Set.of(t), 4, Set.of(t)));
+  }
+
+  /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>: a tensor
    * passed interprocedurally to a callee types the callee's parameter. {@code Model.get_loss}'s
    * {@code real} and {@code pred} receive {@code tf.constant} tensors via {@code train_step}, so
