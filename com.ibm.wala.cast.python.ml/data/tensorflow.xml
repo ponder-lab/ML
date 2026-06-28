@@ -3204,7 +3204,7 @@
         </method>
       </class>
       <class name="experimental_distribute_dataset" allocatable="true">
-        <!-- `strategy.experimental_distribute_dataset(ds)` returns a distributed view of `ds` with the same element structure. For tensor-type purposes it is a pass-through: return the dataset argument unchanged so it stays a recognized tensor iterable and its element types reach the iteration. wala/ML#618. -->
+        <!-- `strategy.experimental_distribute_dataset(ds)` returns a distributed view of `ds` with the same element structure. For tensor-type purposes it is a pass-through: return the dataset argument unchanged so it stays a recognized tensor iterable and its element types reach the iteration. wala/ML#618. Caveat: under multi-replica sharding the per-replica element's leading (batch) dimension is `global / N` for `N` replicas; the pass-through yields the global element, an upper bound on that dimension, consistent with the replica-count-agnostic modeling elsewhere (e.g. `get_per_replica_batch_size`). Tracked by wala/ML#622. -->
         <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self dataset">
           <return value="arg1"/>
         </method>
