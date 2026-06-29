@@ -4776,6 +4776,28 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * A faithful copy of <a href="https://github.com/wala/ML/issues/637">wala/ML#637</a>'s example,
+   * {@code tf.constant([1 + 2j, 3 + 4j], dtype=tf.complex64)}. The complex literal ({@code 2j})
+   * currently breaks call-graph entrypoint creation, so building it aborts with an empty entrypoint
+   * set rather than typing {@code consume}'s parameter.
+   *
+   * <p>TODO: remove {@code expected = IllegalStateException.class} once the front-end translates
+   * complex literals (<a href="https://github.com/wala/ML/issues/642">wala/ML#642</a>). The dtype
+   * is already modeled, so {@code consume}'s parameter should then type to {@code (2,)} complex64
+   * (as in {@link #testConstantComplex64()}).
+   */
+  @Test(expected = IllegalStateException.class)
+  public void testComplexLiteralEntrypoint()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_complex_literal.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(COMPLEX_64, 2))));
+  }
+
+  /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/640">wala/ML#640</a>: the
    * constant folder evaluates a foldable expression (in an uncalled function) that raises at
    * evaluation time -- here {@code 1 / 0} ({@code ZeroDivisionError}); the original NLPGNN case was
