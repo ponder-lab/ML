@@ -4599,15 +4599,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * — the dehybridization — even though the stubbed body and the in-memory minimal reaches type
    * them.
    *
-   * <p>The localization: {@code real} (the dataset-sourced {@code targets}) is dropped by {@code
-   * input_fn}'s {@code tf.data.TFRecordDataset} + {@code .map(parse_example)} element type, which
-   * flows through the unmodeled {@code tf.sparse.to_dense} / {@code VarLenFeature} (the modeled
-   * {@code from_tensor_slices} the negative ladder used types it; see {@link
-   * #testSparseToDense()}). {@code pred}'s absence is the model body. Analyzed statically here,
-   * like the consumer's vendoring; it runs in the perf-eval with its tfrecord/data setup.
+   * <p>The localization: {@code real} (the dataset-sourced {@code targets}) is dropped in {@code
+   * input_fn}'s {@code tf.data.TFRecordDataset} + {@code .map(parse_example)} element type. {@code
+   * tf.sparse.to_dense} is now modeled (see {@link #testSparseToDense()}), but the chain still dies
+   * one step earlier, at {@code tf.io.parse_single_example} / {@code VarLenFeature}, which Ariadne
+   * does not type as a SparseTensor — so {@code to_dense} reads ⊤ there (wala/ML#645). {@code
+   * pred}'s absence is the model body. Analyzed statically here, like the consumer's vendoring; it
+   * runs in the perf-eval with its tfrecord/data setup.
    *
-   * <p>TODO: pins the current absent state (0/0); flips when wala/ML#618's residual is fixed.
-   * Tracked by <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>.
+   * <p>TODO: pins the current absent state (0/0); {@code real} flips once wala/ML#645 types the
+   * parsed SparseTensor, {@code pred} once the model body does. Tracked by <a
+   * href="https://github.com/wala/ML/issues/618">wala/ML#618</a>.
    */
   @Test
   public void testGpt2GetLossVendored()
@@ -4630,20 +4632,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Confirms wala/ML#618's data-pipeline localization: a {@code tf.sparse.to_dense} of a {@code
-   * SparseTensor} (the construct {@code parse_example} feeds the dataset element through) is
-   * untyped, so {@code consume}'s parameter is absent (0 tensor parameters). The unmodeled sparse
-   * densification path is therefore the type-dropper that strands {@code get_loss}'s {@code real}
-   * (the dataset-sourced {@code targets}) in {@link #testGpt2GetLossVendored()}.
-   *
-   * <p>TODO: pins the current absent state (0/0); flips when {@code tf.sparse.to_dense} (and/or
-   * {@code VarLenFeature}) is modeled. Tracked by <a
-   * href="https://github.com/wala/ML/issues/618">wala/ML#618</a>.
+   * Regression guard for wala/ML#618's data-pipeline fix: {@code tf.sparse.to_dense} of a {@code
+   * SparseTensor} types its dense result from the operand's {@code dense_shape} field (shape) and
+   * {@code values} field (dtype), so {@code consume}'s parameter types to {@code (2,2)} int32.
+   * Modeling this is what un-strands {@code get_loss}'s {@code real} (the dataset-sourced {@code
+   * targets}) in {@link #testGpt2GetLossVendored()}.
    */
   @Test
   public void testSparseToDense()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_sparse_to_dense.py", "consume", 0, 0, Map.of());
+    test(
+        "tf2_test_sparse_to_dense.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 2, 2))));
   }
 
   /**

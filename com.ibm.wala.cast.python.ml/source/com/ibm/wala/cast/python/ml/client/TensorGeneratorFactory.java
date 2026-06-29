@@ -170,6 +170,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_EYE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_FROM_DENSE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TO_DENSE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SQRT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SQUARE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SQUEEZE;
@@ -1119,6 +1120,8 @@ public class TensorGeneratorFactory {
     } else if (isType(calledFunction, SPARSE_ADD.getDeclaringClass())) return new SparseAdd(source);
     else if (isType(calledFunction, SPARSE_FROM_DENSE.getDeclaringClass()))
       return new SparseFromDense(source);
+    else if (isType(calledFunction, SPARSE_TO_DENSE.getDeclaringClass()))
+      return new SparseToDense(source);
     else if (isType(calledFunction, MODEL.getDeclaringClass())) return new Model(source);
     else if (isType(calledFunction, TENSOR.getDeclaringClass())
         || isType(calledFunction, NDARRAY.getDeclaringClass())) return new TensorCall(source);
