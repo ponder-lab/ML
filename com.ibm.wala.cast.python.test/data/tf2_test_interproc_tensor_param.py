@@ -6,15 +6,15 @@ class Model:
         return x * 2.0
 
     def get_loss(self, real, pred):
-        # Both parameters receive tensors at the call site in `train_step`.
-        assert real.shape == (3,)
-        assert real.dtype == tf.float32
-        assert pred.shape == (3,)
-        assert pred.dtype == tf.float32
         return tf.reduce_mean(tf.square(pred - real))
 
     def train_step(self, inputs, targets):
         predictions = self.call(inputs)
+        # `targets` and `predictions` are the arguments to `get_loss`.
+        assert targets.shape == (3,)
+        assert targets.dtype == tf.float32
+        assert predictions.shape == (3,)
+        assert predictions.dtype == tf.float32
         return self.get_loss(targets, predictions)
 
 
