@@ -1667,7 +1667,13 @@ public abstract class TensorGenerator {
       TypeReference typeReference = concreteType.getReference();
 
       if (typeReference.equals(TensorFlowTypes.D_TYPE)) {
-        throw new IllegalStateException("Unknown dtype: " + instanceKey + ".");
+        // An unmodeled dtype: a `tf.DType` instance with no entry in `FIELD_REFERENCE_TO_DTYPE`
+        // (e.g. a half-precision or quantized dtype not yet enumerated). Degrade to UNKNOWN (the ⊤
+        // dtype) rather than throwing. When this resolves a parameter dtype during entrypoint
+        // creation from an `input_signature`, throwing empties the entrypoint set and aborts the
+        // whole call graph (wala/ML#637). Lose dtype precision for this one value rather than
+        // killing the analysis.
+        ret.add(DType.UNKNOWN);
       } else if (asin != null
           && asin.getNode()
               .getMethod()
