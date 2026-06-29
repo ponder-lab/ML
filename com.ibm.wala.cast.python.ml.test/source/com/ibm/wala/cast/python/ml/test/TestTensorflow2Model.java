@@ -4574,7 +4574,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "f",
         1,
         1,
-        Map.of(2, Set.of(new TensorType(UNKNOWN, asList(new NumericDim(3))))));
+        Map.of(2, Set.of(TensorType.of(UNKNOWN, 3))));
   }
 
   /**
