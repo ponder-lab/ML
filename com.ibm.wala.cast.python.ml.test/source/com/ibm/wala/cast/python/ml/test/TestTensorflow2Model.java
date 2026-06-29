@@ -4757,6 +4757,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/640">wala/ML#640</a>: the
+   * constant folder evaluates a foldable expression (in an uncalled function) that raises at
+   * evaluation time -- here {@code 1 / 0} ({@code ZeroDivisionError}); the original NLPGNN case was
+   * a {@code NameError} on a free name. Folding must skip such an eval-time error rather than abort
+   * the class hierarchy. If the hierarchy builds, {@code consume}'s parameter types normally to
+   * {@code (3,)} int32.
+   */
+  @Test
+  public void testFoldingEvalError()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_folding_eval_error.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
+
+  /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>: a tensor
    * passed to a Keras {@code call} method types its parameter. {@code BiLSTM.call}'s {@code inputs}
    * receives a token-id tensor (which then feeds an {@code Embedding}), so it types to {@code (1,
