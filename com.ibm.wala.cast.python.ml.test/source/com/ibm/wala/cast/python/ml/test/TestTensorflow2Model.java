@@ -4631,19 +4631,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * _distributed_train_step} &rarr; {@code mirrored_strategy.run(step_fn, args=(inputs, targets))}
    * &rarr; {@code step_fn} &rarr; {@code get_loss(tar, logits)}, the path the real subject takes.
    *
-   * <p>TODO: this pins the current under-approximation. In the direct reach {@link
-   * #testGpt2InterprocGetLoss()} types {@code get_loss}'s {@code real} parameter (vn=3) to {@code
-   * (2, 2)} int32, but in the distributed reach {@code get_loss} carries no tensor parameter. The
-   * {@code tensorflow/distribute/run/run} model now forwards both tuple elements (see {@link
-   * #testStrategyRunTwoArgsInp()}), so the residual is solely that the keyword {@code args=} cannot
-   * bind to the {@code run} summary's tuple parameter: WALA's {@code XMLMethodSummaryReader}
-   * discards summary parameter names beginning with {@code arg} (it strips the synthetic {@code
-   * arg0}/{@code arg1} symbols), so a parameter literally named {@code args} has no value name. The
-   * positional form {@code strategy.run(step_fn, (inputs, targets))} is unaffected and types
-   * correctly. When the WALA name-stripping is narrowed to only the synthetic {@code arg<n>}
-   * symbols, this parameter should type and the {@code Map} below should match {@link
-   * #testGpt2InterprocGetLoss()}. Tracked by <a
-   * href="https://github.com/wala/ML/issues/618">wala/ML#618</a>.
+   * <p>{@code get_loss}'s {@code real} parameter (vn=3), bound to the dataset-sourced {@code
+   * targets} that flows through {@code strategy.run}'s {@code args} tuple into {@code step_fn}'s
+   * {@code tar}, types to {@code (2, 2)} int32 exactly as in the direct reach. This exercises both
+   * halves of the wala/ML#618 distributed-reach fix: the {@code tensorflow/distribute/run/run}
+   * model forwarding both tuple elements (see {@link #testStrategyRunTwoArgsInp()}), and {@code
+   * PythonTensorAnalysisEngine.repairSummaryParameterNames} restoring the {@code args} parameter
+   * name that WALA's {@code XMLMethodSummaryReader} strips, without which the keyword {@code args=}
+   * could not bind.
    */
   @Test
   public void testGpt2DistributedGetLoss()
@@ -4660,9 +4655,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "gpt2_model.py",
         "Gpt2.get_loss",
         "gpt2_proj",
-        0,
-        0,
-        Map.of());
+        1,
+        1,
+        Map.of(3, Set.of(TensorType.of(INT_32, 2, 2))));
   }
 
   /**
