@@ -4831,17 +4831,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * A faithful copy of <a href="https://github.com/wala/ML/issues/637">wala/ML#637</a>'s example,
+   * Regression guard for <a href="https://github.com/wala/ML/issues/642">wala/ML#642</a>: a
+   * faithful copy of <a href="https://github.com/wala/ML/issues/637">wala/ML#637</a>'s example,
    * {@code tf.constant([1 + 2j, 3 + 4j], dtype=tf.complex64)}. The complex literal ({@code 2j})
-   * currently breaks call-graph entrypoint creation, so building it aborts with an empty entrypoint
-   * set rather than typing {@code consume}'s parameter.
-   *
-   * <p>TODO: remove {@code expected = IllegalStateException.class} once the front-end translates
-   * complex literals (<a href="https://github.com/wala/ML/issues/642">wala/ML#642</a>). The dtype
-   * is already modeled, so {@code consume}'s parameter should then type to {@code (2,)} complex64
-   * (as in {@link #testConstantComplex64()}).
+   * folds to a {@code PyComplex} whose {@code asInt()} raises a TypeError; before wala/ML#642 that
+   * uncaught exception aborted the module's front-end translation and emptied its entrypoint set.
+   * The front end now skips folding it, so the constant builds and types {@code consume}'s
+   * parameter to complex64. The shape is unknown (⊤) rather than {@code (2,)}: skipping the fold
+   * leaves the list elements non-constant, so the size isn't recovered (the integer-valued {@link
+   * #testConstantComplex64()} still gets {@code (2,)}). TODO: recover the shape, tracked by <a
+   * href="https://github.com/wala/ML/issues/644">wala/ML#644</a>.
    */
-  @Test(expected = IllegalStateException.class)
+  @Test
   public void testComplexLiteralEntrypoint()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -4849,7 +4850,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TensorType.of(COMPLEX_64, 2))));
+        Map.of(2, Set.of(new TensorType(COMPLEX64, null))));
   }
 
   /**

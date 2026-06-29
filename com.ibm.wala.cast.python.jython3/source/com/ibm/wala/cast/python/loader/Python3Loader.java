@@ -132,9 +132,18 @@ public class Python3Loader extends PythonLoader {
                 }
 
                 if (x.isNumberType()) {
-                  // If the result is a number, return its integer value.
-                  logger.info(() -> s + " -> " + x.asInt());
-                  return x.asInt();
+                  // A complex result is a number but not integer-foldable: PyComplex.asInt() raises
+                  // a TypeError (a PyException). Catch it and skip folding rather than letting it
+                  // abort the module's front-end translation, which would empty its entrypoint set
+                  // and crash the call graph. See wala/ML#642.
+                  try {
+                    int value = x.asInt();
+                    logger.info(() -> s + " -> " + value);
+                    return value;
+                  } catch (PyException e) {
+                    logger.log(WARNING, e, () -> "Could not fold to an integer: " + s);
+                    return null;
+                  }
                 }
                 return null;
               }
