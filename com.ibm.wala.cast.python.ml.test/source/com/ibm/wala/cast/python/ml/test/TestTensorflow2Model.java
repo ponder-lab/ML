@@ -4550,6 +4550,95 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(3, Set.of(t), 4, Set.of(t)));
   }
 
+  // The five tests below are the wala/ML#629 input_signature runtime matrix. Each fixture asserts
+  // the actual TensorFlow runtime parameter type; the JUnit assertion pins what Ariadne computes
+  // today. The runtime ground truth was measured directly (see the issue). The matrix shows that a
+  // decorated parameter's runtime type depends on execution mode, which a static analysis cannot
+  // know -- motivating the provenance-tagged, execution-mode-complete type set proposed in #629.
+
+  /**
+   * #629 matrix, sound baseline: an undecorated function's parameter is exactly the argument. The
+   * runtime type is {@code (3,)} int32 and Ariadne agrees.
+   */
+  @Test
+  public void testInputSigNoDecorator()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_inputsig_no_decorator.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
+
+  /**
+   * #629 matrix, sound baseline: a {@code @tf.function} without {@code input_signature} traces on
+   * the concrete argument, so the parameter takes the argument's {@code (3,)} int32 at runtime;
+   * Ariadne agrees.
+   */
+  @Test
+  public void testInputSigNoSignature()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_inputsig_no_signature.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
+
+  /**
+   * #629 matrix, the headline case: a {@code @tf.function(input_signature=[TensorSpec((None,),
+   * int32)])} traced (the default) gives the parameter a <em>dynamic</em> shape {@code (None,)} at
+   * runtime -- the signature governs, not the {@code (3,)} argument.
+   *
+   * <p>TODO: Ariadne reports {@code (3,)} int32 (typing from the argument, ignoring the signature),
+   * which is <em>unsound</em> here -- the same trace serves other lengths, so the parameter is not
+   * fixed at dim 3. Under the provenance-tagged set proposed in <a
+   * href="https://github.com/wala/ML/issues/629">wala/ML#629</a>, the parameter should carry a
+   * signature-derived {@code (None,)} int32 element alongside the argument-derived one.
+   */
+  @Test
+  public void testInputSigTraced()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_inputsig_traced.py", "f", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
+
+  /**
+   * #629 matrix: the same decorated-with-signature function as {@link #testInputSigTraced()}, but
+   * the module calls {@code tf.config.run_functions_eagerly(True)}, under which the signature is
+   * ignored and the parameter takes the argument's concrete {@code (3,)} int32. Ariadne reports
+   * {@code (3,)} int32 -- sound for this eager mode, but it is the <em>same</em> static result it
+   * gives the traced case (where it is unsound). Ariadne cannot know the execution mode, which is
+   * why #629's design is a set covering both.
+   */
+  @Test
+  public void testInputSigForcedEager()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_inputsig_forced_eager.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
+
+  /**
+   * #629 matrix (dtype): a {@code @tf.function(input_signature=[TensorSpec((3,), int32)])} called
+   * with an int64 {@code numpy.array} coerces the parameter to int32 at runtime.
+   *
+   * <p>TODO: Ariadne reports {@code (3,)} unknown -- it neither models {@code numpy.array}'s dtype
+   * (the argument-derived element; <a href="https://github.com/wala/ML/issues/626">wala/ML#626</a>)
+   * nor consumes the signature (the int32 graph element). Under the provenance-tagged set proposed
+   * in <a href="https://github.com/wala/ML/issues/629">wala/ML#629</a>, the signature-derived
+   * element should be int32.
+   */
+  @Test
+  public void testInputSigCoerce()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_inputsig_coerce.py", "f", 1, 1, Map.of(2, Set.of(TensorType.of(UNKNOWN, 3))));
+  }
+
   /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>'s gpt-2
    * case: a callee parameter that receives a tensor argument at a direct method-call site is typed
