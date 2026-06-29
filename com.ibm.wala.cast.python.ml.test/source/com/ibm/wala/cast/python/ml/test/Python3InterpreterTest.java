@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assume.assumeNotNull;
 
@@ -10,6 +11,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.python.core.Options;
 
 /** Unit tests for {@link Python3Interpreter}. */
 public class Python3InterpreterTest {
@@ -61,5 +63,25 @@ public class Python3InterpreterTest {
 
     // Cannot be evaluated at all (an undefined name, as a runtime-shaped dimension would be): null.
     assertNull(interpreter.evalAsInteger("undefined_name_xyz[0]"));
+  }
+
+  /**
+   * Verifies that initializing the analysis interpreter disables the {@code site.py} import. The
+   * {@code PythonInterpreter} constructor imports {@code site.py} when {@link Options#importSite}
+   * is set, and {@code site.py}'s interactive-console setup references {@code jline}. Under a
+   * minimal runtime classpath (e.g. the published fat-jar, which ships no {@code jline} classes)
+   * that import throws {@code NoClassDefFoundError} — an {@code Error}, so it bypasses the
+   * recoverable-failure handling in {@link Python3Interpreter#getInterp()} and aborts the module's
+   * analysis. Pins the fix for wala/ML#628: the interpreter must not pull in {@code site.py}.
+   */
+  @Test
+  public void testSiteImportDisabled() {
+    Python3Interpreter interpreter = new Python3Interpreter();
+
+    // Skip where the embedded Jython interpreter is unavailable despite the setup above (e.g.,
+    // under Tycho-OSGi): getInterp() never reaches the flag in that case.
+    assumeNotNull(interpreter.evalAsInteger("3"));
+
+    assertFalse(Options.importSite);
   }
 }
