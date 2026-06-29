@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.test;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.COMPLEX128;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.COMPLEX64;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT64;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
@@ -41,6 +43,18 @@ public class TensorFlowTypesTest {
     assertTrue(FLOAT32.canConvertTo(DType.FLOAT32));
     assertFalse(FLOAT64.canConvertTo(DType.INT64));
     assertFalse(FLOAT64.canConvertTo(DType.INT32));
+
+    // Complex (wala/ML#637): a real value widens into complex, a complex never narrows back to a
+    // real, and a complex only widens to a wider complex.
+    assertTrue(COMPLEX64.canConvertTo(COMPLEX64));
+    assertTrue(COMPLEX64.canConvertTo(COMPLEX128));
+    assertFalse(COMPLEX128.canConvertTo(COMPLEX64));
+    assertTrue(FLOAT32.canConvertTo(COMPLEX64));
+    assertTrue(INT32.canConvertTo(COMPLEX64));
+    assertFalse(COMPLEX64.canConvertTo(FLOAT32));
+    assertFalse(COMPLEX64.canConvertTo(FLOAT64));
+    assertFalse(COMPLEX64.canConvertTo(INT32));
+    assertFalse(COMPLEX64.canConvertTo(STRING));
   }
 
   @Test
