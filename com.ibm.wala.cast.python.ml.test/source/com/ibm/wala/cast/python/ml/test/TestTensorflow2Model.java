@@ -4551,6 +4551,33 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Reproduces <a href="https://github.com/wala/ML/issues/629">wala/ML#629</a>: a parameter typed
+   * from a {@code @tf.function(input_signature=[TensorSpec(..., dtype=...)])} decorated def keeps
+   * its dtype at ⊤ when the call-site argument's dtype is unresolved, because Ariadne stores {@code
+   * input_signature} but never consumes the {@code TensorSpec} dtype to type the parameter.
+   *
+   * <p>The argument {@code np.array([1, 2, 3])} has a known shape {@code (3,)} but an unresolved
+   * dtype (no {@code dtype=}), so it reaches {@code f}'s parameter as {@code (3,)} unknown. The
+   * {@code int32} {@code input_signature} pins the dtype, but it is not consulted, so the parameter
+   * lands at {@code (3,)} unknown rather than {@code (3,)} int32 &mdash; shape reaches the
+   * parameter while the knowable int32 dtype does not, the signature of #629.
+   *
+   * <p>TODO: this pins the current under-approximation. When {@code input_signature} is consumed to
+   * type parameters, the expected type below should become {@code (3,)} int32. Tracked by <a
+   * href="https://github.com/wala/ML/issues/629">wala/ML#629</a>.
+   */
+  @Test
+  public void testInputSignatureParamDtype()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_input_signature_dtype.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(UNKNOWN, asList(new NumericDim(3))))));
+  }
+
+  /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>'s gpt-2
    * case: a callee parameter that receives a tensor argument at a direct method-call site is typed
    * by Ariadne. The {@code Gpt2} model, dataset pipeline, and {@code _train_step}/{@code
