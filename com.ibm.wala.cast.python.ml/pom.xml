@@ -86,6 +86,20 @@
       <groupId>jline</groupId>
       <artifactId>jline</artifactId>
     </dependency>
+    <!-- `jython3` also references `jnr/posix/POSIXHandler` (from its
+      `org.python.modules.posix.PosixModule`) and `jnr/posix/util/Platform` (from
+      `org.python.core.PySystemState`'s file/path resolution). Same gap as
+      `jnr-constants` and `jline` above: the `jython-dev.jar`'s synthesized
+      zero-dependency POM means Maven won't pull `jnr-posix` transitively, so the
+      `fat` classifier omits it and consumers (and the standalone driver) fail with
+      `NoClassDefFoundError: jnr/posix/POSIXHandler` (or `jnr/posix/util/Platform`).
+      Declare it explicitly so the `fat` classifier bundles it and library
+      consumers receive it via the plain jar's POM (the managed `jnr-constants`
+      version takes precedence over `jnr-posix`'s own). See wala/ML#632. -->
+    <dependency>
+      <groupId>com.github.jnr</groupId>
+      <artifactId>jnr-posix</artifactId>
+    </dependency>
   </dependencies>
   <build>
     <resources>
