@@ -10,7 +10,6 @@
  */
 package com.ibm.wala.cast.python.loader;
 
-import static java.util.logging.Level.FINE;
 import static java.util.logging.Level.WARNING;
 
 import com.ibm.wala.cast.ir.translator.ConstantFoldingRewriter;
@@ -35,7 +34,6 @@ import com.ibm.wala.ipa.cha.IClassHierarchy;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 import org.python.core.PyObject;
 import org.python.core.PySyntaxError;
@@ -45,19 +43,6 @@ import org.python.util.PythonInterpreter;
 public class Python3Loader extends PythonLoader {
 
   private static final Logger logger = Logger.getLogger(Python3Loader.class.getName());
-
-  /**
-   * Memoizes whether the "parser unavailable" warning has already been emitted from constant
-   * folding. When the embedded interpreter compiles a non-constant expression it hits a parse
-   * error, and Jython's {@link org.python.core.ParserFacade#fixParseError} references {@code jline}
-   * to format it. Under a minimal runtime classpath (the published {@code
-   * com.ibm.wala.cast.python.ml} fat-jar, which ships no {@code jline} classes) that reference
-   * throws {@link NoClassDefFoundError} instead of producing a {@link PySyntaxError}. Folding
-   * catches it and degrades (skips that expression), but every non-constant subexpression would
-   * otherwise re-log; this flag keeps it to one WARNING, FINE thereafter. See <a
-   * href="https://github.com/wala/ML/issues/631">wala/ML#631</a>.
-   */
-  private static final AtomicBoolean parserUnavailableWarned = new AtomicBoolean(false);
 
   public Python3Loader(IClassHierarchy cha, IClassLoader parent, List<File> pythonPath) {
     super(cha, parent, pythonPath);
@@ -138,29 +123,6 @@ public class Python3Loader extends PythonLoader {
                 } catch (PySyntaxError e) {
                   // Handle syntax errors gracefully.
                   logger.log(WARNING, e, () -> "Syntax error in expression: " + unicode);
-                  return null;
-                } catch (LinkageError e) {
-                  // A non-constant expression hits a parse error during eval, and Jython's
-                  // ParserFacade.fixParseError references jline to format it. Under a minimal
-                  // runtime classpath (the published fat-jar, which ships no jline classes) that
-                  // reference throws NoClassDefFoundError (a LinkageError) before a PySyntaxError
-                  // is
-                  // produced, so the catch above never sees it. Treat it like the syntax error it
-                  // stands in for: skip folding this expression. Catching LinkageError (not Error)
-                  // keeps serious failures (OOM, stack overflow) propagating. The first occurrence
-                  // is logged at WARNING so operators see folding is degraded; the rest at FINE to
-                  // avoid one entry per non-constant subexpression. See wala/ML#631.
-                  if (parserUnavailableWarned.compareAndSet(false, true))
-                    logger.log(
-                        WARNING,
-                        e,
-                        () ->
-                            "Cannot format a parse error during constant folding (jline missing"
-                                + " from the runtime classpath); skipping folding for this and any"
-                                + " subsequent non-constant expression. First skipped: "
-                                + unicode);
-                  else
-                    logger.log(FINE, e, () -> "Skipping folding (parser unavailable): " + unicode);
                   return null;
                 }
 
