@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.types;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.COMPLEX128;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.COMPLEX64;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT64;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
@@ -30,28 +32,37 @@ public class TensorFlowTypes extends PythonTypes {
    *     dtypes</a>.
    */
   public enum DType {
-    FLOAT32(true, true, 32),
-    FLOAT64(true, true, 64),
-    INT32(true, false, 32),
-    INT64(true, false, 64),
-    UINT8(true, false, 8),
-    BOOL(false, false, 1),
-    STRING(false, false, 0),
+    FLOAT32(true, true, false, 32),
+    FLOAT64(true, true, false, 64),
+    INT32(true, false, false, 32),
+    INT64(true, false, false, 64),
+    UINT8(true, false, false, 8),
+    // `complex64` is 2x float32 and `complex128` is 2x float64. Modeled with a dedicated `complex`
+    // flag (rather than reusing `floatingPoint`) so that a real value can widen into a complex one
+    // but a complex value never narrows back to a real, and a complex only widens to a wider
+    // complex. See wala/ML#637.
+    COMPLEX64(true, false, true, 64),
+    COMPLEX128(true, false, true, 128),
+    BOOL(false, false, false, 1),
+    STRING(false, false, false, 0),
     // numpy `object` dtype: an ndarray of variable-length Python sequences (e.g. `reuters`/`imdb`
     // `x_train`). Non-numeric, so `canConvertTo` only matches itself — it does not auto-convert to
     // numeric dtypes, matching numpy's strict semantics. See wala/ML#488.
-    OBJECT(false, false, 0),
-    UNKNOWN(false, false, 0);
+    OBJECT(false, false, false, 0),
+    UNKNOWN(false, false, false, 0);
 
     private boolean numeric;
 
     private boolean floatingPoint;
 
+    private boolean complex;
+
     private int precision;
 
-    DType(boolean numeric, boolean floatingPoint, int precision) {
+    DType(boolean numeric, boolean floatingPoint, boolean complex, int precision) {
       this.numeric = numeric;
       this.floatingPoint = floatingPoint;
+      this.complex = complex;
       this.precision = precision;
     }
 
@@ -59,6 +70,15 @@ public class TensorFlowTypes extends PythonTypes {
       if (other == null) return false;
 
       if (!this.numeric || !other.numeric) return this == other;
+
+      // Complex is a distinct kind: a complex value never narrows to a real (int/float) one, a real
+      // value widens into any complex, and a complex only widens to a complex of at least its
+      // precision.
+      if (this.complex || other.complex) {
+        if (this.complex && !other.complex) return false;
+        if (!this.complex && other.complex) return true;
+        return this.precision <= other.precision;
+      }
 
       if (this.floatingPoint && !other.floatingPoint) return false;
 
@@ -2140,6 +2160,32 @@ public class TensorFlowTypes extends PythonTypes {
           findOrCreateAsciiAtom(DType.STRING.name().toLowerCase(Locale.ROOT)),
           D_TYPE);
 
+  /**
+   * Represents the TensorFlow complex64 data type.
+   *
+   * @see <a
+   *     href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes#complex64">TensorFlow
+   *     complex64 DType</a>.
+   */
+  public static final FieldReference COMPLEX_64 =
+      FieldReference.findOrCreate(
+          PythonTypes.Root,
+          findOrCreateAsciiAtom(COMPLEX64.name().toLowerCase(Locale.ROOT)),
+          D_TYPE);
+
+  /**
+   * Represents the TensorFlow complex128 data type.
+   *
+   * @see <a
+   *     href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes#complex128">TensorFlow
+   *     complex128 DType</a>.
+   */
+  public static final FieldReference COMPLEX_128 =
+      FieldReference.findOrCreate(
+          PythonTypes.Root,
+          findOrCreateAsciiAtom(COMPLEX128.name().toLowerCase(Locale.ROOT)),
+          D_TYPE);
+
   /** A mapping from a field reference to its associated {@link DType}, if any. */
   public static final Map<FieldReference, DType> FIELD_REFERENCE_TO_DTYPE =
       Map.ofEntries(
@@ -2148,6 +2194,8 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(INT_32, INT32),
           Map.entry(INT_64, INT64),
           Map.entry(UINT_8, UINT8),
+          Map.entry(COMPLEX_64, COMPLEX64),
+          Map.entry(COMPLEX_128, COMPLEX128),
           Map.entry(STRING, DType.STRING));
 
   private TensorFlowTypes() {}

@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.test;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.COMPLEX64;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT64;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
@@ -80,6 +81,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final Logger LOGGER = Logger.getLogger(TestTensorflow2Model.class.getName());
 
   private static final String FLOAT_32 = FLOAT32.name().toLowerCase();
+
+  private static final String COMPLEX_64 = COMPLEX64.name().toLowerCase();
 
   private static final String FLOAT_64 = FLOAT64.name().toLowerCase();
 
@@ -4738,11 +4741,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * A {@code @tf.function(input_signature=[(None,) int32])} passes its parameter to {@code g} (the
-   * FUT). At runtime {@code g} receives the signature's {@code (None,)} int32, since the signature
-   * governs the parameter and propagates to the callee.
+   * FUT). What {@code g} receives depends on the execution mode, which a static analysis cannot
+   * determine: traced (the default) the signature governs and {@code g} receives {@code (None,)}
+   * int32; under {@code run_functions_eagerly} the signature is ignored and {@code g} receives the
+   * call-site argument's {@code (3,)} int32. So the sound type of {@code g}'s parameter is the set
+   * {@code {(None,), (3,)}} int32.
    *
-   * <p>TODO: Ariadne ignores {@code input_signature} and types {@code g}'s parameter from the
-   * call-site argument {@code (3,)} int32, which is <em>unsound</em> here. Tracked by <a
+   * <p>TODO: this pins the current behavior. Ariadne does not consume {@code input_signature}, so
+   * it produces only the argument-derived {@code (3,)} element and misses the signature-derived
+   * {@code (None,)} one; the sound result is the set {@code {(None,), (3,)}} int32. Tracked by <a
    * href="https://github.com/wala/ML/issues/638">wala/ML#638</a>.
    */
   @Test
@@ -4751,6 +4758,59 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test(
         "tf2_test_decorated_call_depth_input_sig.py",
         "g",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
+
+  /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/637">wala/ML#637</a>: a {@code
+   * tf.constant} with an explicit {@code dtype=tf.complex64} types to {@code complex64} (now
+   * modeled by the {@code DType} enum) rather than ⊤, so {@code consume}'s parameter is {@code
+   * (2,)} complex64.
+   */
+  @Test
+  public void testConstantComplex64()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_complex64.py", "consume", 1, 1, Map.of(2, Set.of(TensorType.of(COMPLEX_64, 2))));
+  }
+
+  /**
+   * A faithful copy of <a href="https://github.com/wala/ML/issues/637">wala/ML#637</a>'s example,
+   * {@code tf.constant([1 + 2j, 3 + 4j], dtype=tf.complex64)}. The complex literal ({@code 2j})
+   * currently breaks call-graph entrypoint creation, so building it aborts with an empty entrypoint
+   * set rather than typing {@code consume}'s parameter.
+   *
+   * <p>TODO: remove {@code expected = IllegalStateException.class} once the front-end translates
+   * complex literals (<a href="https://github.com/wala/ML/issues/642">wala/ML#642</a>). The dtype
+   * is already modeled, so {@code consume}'s parameter should then type to {@code (2,)} complex64
+   * (as in {@link #testConstantComplex64()}).
+   */
+  @Test(expected = IllegalStateException.class)
+  public void testComplexLiteralEntrypoint()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_complex_literal.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(COMPLEX_64, 2))));
+  }
+
+  /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/640">wala/ML#640</a>: the
+   * constant folder evaluates a foldable expression (in an uncalled function) that raises at
+   * evaluation time -- here {@code 1 / 0} ({@code ZeroDivisionError}); the original NLPGNN case was
+   * a {@code NameError} on a free name. Folding must skip such an eval-time error rather than abort
+   * the class hierarchy. If the hierarchy builds, {@code consume}'s parameter types normally to
+   * {@code (3,)} int32.
+   */
+  @Test
+  public void testFoldingEvalError()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_folding_eval_error.py",
+        "consume",
         1,
         1,
         Map.of(2, Set.of(TensorType.of(INT_32, 3))));

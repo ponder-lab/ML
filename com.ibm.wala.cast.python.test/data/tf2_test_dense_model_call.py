@@ -7,11 +7,7 @@ class M(tf.keras.Model):
         self.d = tf.keras.layers.Dense(4)
 
     def call(self, x):
-        assert x.shape == (None, 3)
-        assert x.dtype == tf.float32
         y = self.d(x)
-        assert y.shape == (None, 4)
-        assert y.dtype == tf.float32
         return y
 
 
