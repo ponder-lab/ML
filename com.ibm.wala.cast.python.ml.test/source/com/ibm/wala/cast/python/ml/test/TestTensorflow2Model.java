@@ -4725,6 +4725,38 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * A {@code @tf.function} without {@code input_signature} creates {@code tf.constant(5)} and
+   * passes it to {@code g} (the FUT), so {@code g}'s parameter is that scalar. At runtime {@code g}
+   * receives {@code ()} int32 and Ariadne agrees: a positive guard that a value flowing through a
+   * decorated body to a callee types the callee's parameter correctly.
+   */
+  @Test
+  public void testDecoratedCallDepth()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_decorated_call_depth.py", "g", 1, 1, Map.of(2, Set.of(TensorType.of(INT_32))));
+  }
+
+  /**
+   * A {@code @tf.function(input_signature=[(None,) int32])} passes its parameter to {@code g} (the
+   * FUT). At runtime {@code g} receives the signature's {@code (None,)} int32, since the signature
+   * governs the parameter and propagates to the callee.
+   *
+   * <p>TODO: Ariadne ignores {@code input_signature} and types {@code g}'s parameter from the
+   * call-site argument {@code (3,)} int32, which is <em>unsound</em> here. Tracked by <a
+   * href="https://github.com/wala/ML/issues/638">wala/ML#638</a>.
+   */
+  @Test
+  public void testDecoratedCallDepthInputSig()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_decorated_call_depth_input_sig.py",
+        "g",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
+
+  /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>: a tensor
    * passed to a Keras {@code call} method types its parameter. {@code BiLSTM.call}'s {@code inputs}
    * receives a token-id tensor (which then feeds an {@code Embedding}), so it types to {@code (1,
