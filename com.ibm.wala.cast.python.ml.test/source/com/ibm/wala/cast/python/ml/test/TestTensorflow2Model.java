@@ -4738,11 +4738,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * A {@code @tf.function(input_signature=[(None,) int32])} passes its parameter to {@code g} (the
-   * FUT). At runtime {@code g} receives the signature's {@code (None,)} int32, since the signature
-   * governs the parameter and propagates to the callee.
+   * FUT). What {@code g} receives depends on the execution mode, which a static analysis cannot
+   * determine: traced (the default) the signature governs and {@code g} receives {@code (None,)}
+   * int32; under {@code run_functions_eagerly} the signature is ignored and {@code g} receives the
+   * call-site argument's {@code (3,)} int32. So the sound type of {@code g}'s parameter is the set
+   * {@code {(None,), (3,)}} int32.
    *
-   * <p>TODO: Ariadne ignores {@code input_signature} and types {@code g}'s parameter from the
-   * call-site argument {@code (3,)} int32, which is <em>unsound</em> here. Tracked by <a
+   * <p>TODO: this pins the current behavior. Ariadne does not consume {@code input_signature}, so
+   * it produces only the argument-derived {@code (3,)} element and misses the signature-derived
+   * {@code (None,)} one; the sound result is the set {@code {(None,), (3,)}} int32. Tracked by <a
    * href="https://github.com/wala/ML/issues/638">wala/ML#638</a>.
    */
   @Test
