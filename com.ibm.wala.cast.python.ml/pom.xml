@@ -71,6 +71,21 @@
       <groupId>com.github.jnr</groupId>
       <artifactId>jnr-constants</artifactId>
     </dependency>
+    <!-- `jython3` references `jline/console/UserInterruptException` from its
+      parser error formatter (`org.python.core.ParserFacade.fixParseError`) and
+      its site import (`importSiteIfSelected`). As with `jnr-constants` above,
+      the `jython-dev.jar`'s synthesized zero-dependency POM means Maven won't
+      pull `jline` transitively, so the `fat` classifier omits it and reaches
+      under a minimal runtime classpath fail with `NoClassDefFoundError:
+      jline/console/UserInterruptException`. Declare it explicitly so consumers
+      receive it via the plain jar's POM and the `fat` classifier bundles it.
+      Without this, constant folding aborts the module's analysis when it
+      evaluates a non-constant (parse-erroring) expression. See wala/ML#631 (and
+      wala/ML#628, the site-import surface of the same missing dependency). -->
+    <dependency>
+      <groupId>jline</groupId>
+      <artifactId>jline</artifactId>
+    </dependency>
   </dependencies>
   <build>
     <resources>
