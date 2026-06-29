@@ -4592,6 +4592,61 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Reproduces wala/ML#618's residual: the full subject from {@code akanyaani/gpt-2-tensorflow2.0}
+   * (a perf-eval corpus subject) vendored verbatim with the REAL transformer layers and {@code
+   * input_fn}, unlike the stubbed {@link #testGpt2InterprocGetLoss()}. Both {@code get_loss}'s
+   * {@code real} and {@code pred} are absent from the analysis (0 tensor parameters and variables)
+   * — the dehybridization — even though the stubbed body and the in-memory minimal reaches type
+   * them.
+   *
+   * <p>The localization: {@code real} (the dataset-sourced {@code targets}) is dropped by {@code
+   * input_fn}'s {@code tf.data.TFRecordDataset} + {@code .map(parse_example)} element type, which
+   * flows through the unmodeled {@code tf.sparse.to_dense} / {@code VarLenFeature} (the modeled
+   * {@code from_tensor_slices} the negative ladder used types it; see {@link
+   * #testSparseToDense()}). {@code pred}'s absence is the model body. Analyzed statically here,
+   * like the consumer's vendoring; it runs in the perf-eval with its tfrecord/data setup.
+   *
+   * <p>TODO: pins the current absent state (0/0); flips when wala/ML#618's residual is fixed.
+   * Tracked by <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>.
+   */
+  @Test
+  public void testGpt2GetLossVendored()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "gpt2_vendored/layers/__init__.py", "gpt2_vendored/layers/embedding_layer.py",
+          "gpt2_vendored/layers/feed_forward.py", "gpt2_vendored/layers/layer_norm.py",
+          "gpt2_vendored/layers/attention_layer.py", "gpt2_vendored/utils/__init__.py",
+          "gpt2_vendored/utils/tf_utils.py", "gpt2_vendored/scripts/__init__.py",
+          "gpt2_vendored/scripts/utils.py", "gpt2_vendored/data_pipeline.py",
+          "gpt2_vendored/A.py"
+        },
+        "A.py",
+        "Gpt2.get_loss",
+        "gpt2_vendored",
+        0,
+        0,
+        Map.of());
+  }
+
+  /**
+   * Confirms wala/ML#618's data-pipeline localization: a {@code tf.sparse.to_dense} of a {@code
+   * SparseTensor} (the construct {@code parse_example} feeds the dataset element through) is
+   * untyped, so {@code consume}'s parameter is absent (0 tensor parameters). The unmodeled sparse
+   * densification path is therefore the type-dropper that strands {@code get_loss}'s {@code real}
+   * (the dataset-sourced {@code targets}) in {@link #testGpt2GetLossVendored()}.
+   *
+   * <p>TODO: pins the current absent state (0/0); flips when {@code tf.sparse.to_dense} (and/or
+   * {@code VarLenFeature}) is modeled. Tracked by <a
+   * href="https://github.com/wala/ML/issues/618">wala/ML#618</a>.
+   */
+  @Test
+  public void testSparseToDense()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_sparse_to_dense.py", "consume", 0, 0, Map.of());
+  }
+
+  /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>: {@code
    * strategy.run(fn, (a, b))} forwards both elements of the positional {@code args} tuple into the
    * two-parameter callback {@code step_fn(inp, tar)}, not just the first. Both {@code
