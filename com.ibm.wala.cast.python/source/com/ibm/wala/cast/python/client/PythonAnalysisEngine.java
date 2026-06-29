@@ -232,9 +232,10 @@ public abstract class PythonAnalysisEngine<T>
    *
    * @param summaries the loaded summaries, keyed by method reference, whose value-name tables may
    *     be mutated in place
-   * @implNote TODO: Remove this temporary hook once the upstream fix that narrows the reader's
-   *     filter to the exact {@code arg<n>} synthetic symbols ships in an adopted WALA release.
-   *     Tracked by <a href="https://github.com/wala/ML/issues/630">wala/ML#630</a>.
+   * @implNote TODO: Remove this temporary hook once the <a
+   *     href="https://github.com/wala/WALA/pull/1972">upstream WALA fix</a> that narrows the
+   *     reader's filter to the exact {@code arg<n>} synthetic symbols ships in an adopted WALA
+   *     release. Tracked by <a href="https://github.com/wala/ML/issues/630">wala/ML#630</a>.
    */
   protected void repairSummaryParameterNames(Map<MethodReference, MethodSummary> summaries) {}
 

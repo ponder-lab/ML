@@ -1320,7 +1320,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * The positional form {@code strategy.run(fn, (inputs, targets))} is unaffected, since it does
    * not rely on parameter names.
    *
-   * @implNote TODO: Remove this temporary workaround once the upstream WALA fix that narrows the
+   * @implNote TODO: Remove this temporary workaround once the <a
+   *     href="https://github.com/wala/WALA/pull/1972">upstream WALA fix</a> that narrows the
    *     reader's name filter to the exact {@code arg<n>} synthetic symbols ships in an adopted WALA
    *     release. Tracked by <a href="https://github.com/wala/ML/issues/630">wala/ML#630</a>.
    */
