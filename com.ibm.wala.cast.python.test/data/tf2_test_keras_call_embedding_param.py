@@ -7,10 +7,11 @@ class BiLSTM(tf.keras.Model):
         self.embedding = tf.keras.layers.Embedding(1000, 64)
 
     def call(self, inputs):
-        # `inputs` receives a token-id tensor at the call site, then feeds an `Embedding`.
-        assert inputs.shape == (1, 3)
-        assert inputs.dtype == tf.int32
         return self.embedding(inputs)
 
 
-BiLSTM()(tf.constant([[1, 2, 3]]))
+# `arg` is the token-id tensor passed to `BiLSTM.call` via `__call__`, then fed to an `Embedding`.
+arg = tf.constant([[1, 2, 3]])
+assert arg.shape == (1, 3)
+assert arg.dtype == tf.int32
+BiLSTM()(arg)
