@@ -178,6 +178,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final TensorType TENSOR_NONE_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(2)));
 
+  private static final TensorType TENSOR_NONE_INT32 =
+      new TensorType(INT_32, asList(DynamicDim.INSTANCE));
+
   private static final TensorType TENSOR_NONE_NONE_STRING =
       new TensorType(STRING, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE));
 
@@ -4738,14 +4741,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * A {@code @tf.function(input_signature=[(None,) int32])} passes its parameter to {@code g} (the
-   * FUT). At runtime {@code g} receives the signature's {@code (None,)} int32, since the signature
-   * governs the parameter and propagates to the callee.
+   * FUT). What {@code g} receives depends on the execution mode, which a static analysis cannot
+   * determine: traced (the default) the signature governs and {@code g} receives {@code (None,)}
+   * int32; under {@code run_functions_eagerly} the signature is ignored and {@code g} receives the
+   * call-site argument's {@code (3,)} int32. So the sound type of {@code g}'s parameter is the set
+   * {@code {(None,), (3,)}} int32.
    *
-   * <p>TODO: Ariadne ignores {@code input_signature} and types {@code g}'s parameter from the
-   * call-site argument {@code (3,)} int32, which is <em>unsound</em> here. Tracked by <a
-   * href="https://github.com/wala/ML/issues/638">wala/ML#638</a>.
+   * <p>TODO: Ariadne does not consume {@code input_signature}, so it produces only the
+   * argument-derived {@code (3,)} element and misses the signature-derived {@code (None,)} one.
+   * Remove the {@code expected = AssertionError.class} once <a
+   * href="https://github.com/wala/ML/issues/638">wala/ML#638</a> is fixed.
    */
-  @Test
+  @Test(expected = AssertionError.class)
   public void testDecoratedCallDepthInputSig()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -4753,7 +4760,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "g",
         1,
         1,
-        Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+        Map.of(2, Set.of(TENSOR_NONE_INT32, TensorType.of(INT_32, 3))));
   }
 
   /**
