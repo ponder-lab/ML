@@ -1672,7 +1672,8 @@ public abstract class TensorGenerator {
         // dtype) rather than throwing. When this resolves a parameter dtype during entrypoint
         // creation from an `input_signature`, throwing empties the entrypoint set and aborts the
         // whole call graph (wala/ML#637). Lose dtype precision for this one value rather than
-        // killing the analysis.
+        // killing the analysis, but log it so the modeling gap is still visible.
+        LOGGER.warning(() -> "Unmodeled dtype: " + instanceKey + "; degrading to UNKNOWN.");
         ret.add(DType.UNKNOWN);
       } else if (asin != null
           && asin.getNode()
