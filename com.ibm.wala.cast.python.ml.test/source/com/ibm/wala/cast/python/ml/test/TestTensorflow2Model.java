@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.test;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.COMPLEX64;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT64;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.INT32;
@@ -80,6 +81,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   private static final Logger LOGGER = Logger.getLogger(TestTensorflow2Model.class.getName());
 
   private static final String FLOAT_32 = FLOAT32.name().toLowerCase();
+
+  private static final String COMPLEX_64 = COMPLEX64.name().toLowerCase();
 
   private static final String FLOAT_64 = FLOAT64.name().toLowerCase();
 
@@ -4754,6 +4757,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
+
+  /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/637">wala/ML#637</a>: a {@code
+   * tf.constant} with an explicit {@code dtype=tf.complex64} types to {@code complex64} (now
+   * modeled by the {@code DType} enum) rather than ⊤, so {@code consume}'s parameter is {@code
+   * (2,)} complex64.
+   */
+  @Test
+  public void testConstantComplex64()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_complex64.py", "consume", 1, 1, Map.of(2, Set.of(TensorType.of(COMPLEX_64, 2))));
   }
 
   /**
