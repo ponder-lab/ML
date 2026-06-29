@@ -4589,6 +4589,83 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>: {@code
+   * strategy.run(fn, (a, b))} forwards both elements of the positional {@code args} tuple into the
+   * two-parameter callback {@code step_fn(inp, tar)}, not just the first. Both {@code
+   * consume_inp}'s and {@code consume_tar}'s parameters type to {@code (2,)} int32; previously the
+   * {@code tensorflow/distribute/run/run} model forwarded only {@code args[0]}, so {@code tar} (and
+   * {@code consume_tar}'s parameter) stayed untyped.
+   */
+  @Test
+  public void testStrategyRunTwoArgsInp()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_strategy_run_two_args.py",
+        "consume_inp",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 2))));
+  }
+
+  /**
+   * Companion to {@link #testStrategyRunTwoArgsInp()} pinning the <em>second</em> forwarded
+   * element: {@code consume_tar}'s parameter types to {@code (2,)} int32, confirming {@code
+   * strategy.run} forwards {@code args[1]}. See <a
+   * href="https://github.com/wala/ML/issues/618">wala/ML#618</a>.
+   */
+  @Test
+  public void testStrategyRunTwoArgsTar()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_strategy_run_two_args.py",
+        "consume_tar",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 2))));
+  }
+
+  /**
+   * Companion to {@link #testGpt2InterprocGetLoss()} that drives the <em>distributed</em> reach of
+   * <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>'s gpt-2 case: the same vendored
+   * {@code Gpt2} model, but reached via {@code distributed_train_step} &rarr; {@code
+   * _distributed_train_step} &rarr; {@code mirrored_strategy.run(step_fn, args=(inputs, targets))}
+   * &rarr; {@code step_fn} &rarr; {@code get_loss(tar, logits)}, the path the real subject takes.
+   *
+   * <p>TODO: this pins the current under-approximation. In the direct reach {@link
+   * #testGpt2InterprocGetLoss()} types {@code get_loss}'s {@code real} parameter (vn=3) to {@code
+   * (2, 2)} int32, but in the distributed reach {@code get_loss} carries no tensor parameter. The
+   * {@code tensorflow/distribute/run/run} model now forwards both tuple elements (see {@link
+   * #testStrategyRunTwoArgsInp()}), so the residual is solely that the keyword {@code args=} cannot
+   * bind to the {@code run} summary's tuple parameter: WALA's {@code XMLMethodSummaryReader}
+   * discards summary parameter names beginning with {@code arg} (it strips the synthetic {@code
+   * arg0}/{@code arg1} symbols), so a parameter literally named {@code args} has no value name. The
+   * positional form {@code strategy.run(step_fn, (inputs, targets))} is unaffected and types
+   * correctly. When the WALA name-stripping is narrowed to only the synthetic {@code arg<n>}
+   * symbols, this parameter should type and the {@code Map} below should match {@link
+   * #testGpt2InterprocGetLoss()}. Tracked by <a
+   * href="https://github.com/wala/ML/issues/618">wala/ML#618</a>.
+   */
+  @Test
+  public void testGpt2DistributedGetLoss()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "gpt2_proj/layers/__init__.py", "gpt2_proj/layers/embedding_layer.py",
+          "gpt2_proj/layers/feed_forward.py", "gpt2_proj/layers/layer_norm.py",
+          "gpt2_proj/layers/attention_layer.py", "gpt2_proj/utils/__init__.py",
+          "gpt2_proj/utils/tf_utils.py", "gpt2_proj/scripts/__init__.py",
+          "gpt2_proj/scripts/utils.py", "gpt2_proj/data_pipeline.py",
+          "gpt2_proj/gpt2_model.py", "gpt2_proj/tf2_test_gpt2_distributed_probe.py"
+        },
+        "gpt2_model.py",
+        "Gpt2.get_loss",
+        "gpt2_proj",
+        0,
+        0,
+        Map.of());
+  }
+
+  /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/598">wala/ML#598</a>: a bare
    * {@code numpy.array} value propagates its {@code TensorType} to a callee parameter. The issue's
    * reproducer; {@code f}'s parameter types to {@code (3,)} unknown ({@code NpArray} infers the
