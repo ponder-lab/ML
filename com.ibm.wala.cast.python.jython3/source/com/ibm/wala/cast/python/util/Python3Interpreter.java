@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.util;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.python.core.Options;
 import org.python.core.PyException;
 import org.python.core.PyInteger;
 import org.python.core.PyLong;
@@ -44,6 +45,18 @@ public class Python3Interpreter extends com.ibm.wala.cast.python.util.PythonInte
     if (interp == null) {
       try {
         PySystemState.initialize();
+        // Skip importing site.py when constructing the interpreter. The PythonInterpreter
+        // constructor calls Py.importSiteIfSelected(), which (when Options.importSite is true)
+        // loads site.py, whose interactive-console setup references jline
+        // (jline/console/UserInterruptException). Under a minimal runtime classpath — e.g. the
+        // published com.ibm.wala.cast.python.ml fat-jar, which ships no jline classes — that load
+        // throws NoClassDefFoundError. Being an Error rather than an Exception, it bypasses the
+        // catch below and aborts the module's analysis. site.py is unnecessary for static
+        // analysis, so we disable its import (the equivalent of the -S flag or
+        // python.import.site=false). The flag is set after PySystemState.initialize() — which runs
+        // Options.setOptions() and could otherwise reset it from the registry — and before
+        // new PythonInterpreter(), which reads it. See wala/ML#628.
+        Options.importSite = false;
         interp = new PythonInterpreter();
       } catch (Exception t) {
         // Jython init can fail when bootstrap resources (e.g., the embedded
