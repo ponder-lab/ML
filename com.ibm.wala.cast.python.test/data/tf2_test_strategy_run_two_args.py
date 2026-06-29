@@ -4,17 +4,20 @@ strategy = tf.distribute.MirroredStrategy()
 
 
 def consume_inp(x):
-    assert x.shape == (2,)
-    assert x.dtype == tf.int32
+    pass
 
 
 def consume_tar(x):
-    assert x.shape == (2,)
-    assert x.dtype == tf.int32
+    pass
 
 
 def step_fn(inp, tar):
+    # `inp`/`tar` are the arguments to `consume_inp`/`consume_tar`.
+    assert inp.shape == (2,)
+    assert inp.dtype == tf.int32
     consume_inp(inp)
+    assert tar.shape == (2,)
+    assert tar.dtype == tf.int32
     consume_tar(tar)
     return tar
 

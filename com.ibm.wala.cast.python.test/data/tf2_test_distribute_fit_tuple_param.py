@@ -6,18 +6,19 @@ class Model(tf.keras.Model):
         return tf.reduce_mean(tf.square(pred - real))
 
     def train_step(self, inputs, targets):
-        # `inputs` and `targets` are dataset elements threaded through a custom `fit` that iterates
-        # an `experimental_distribute_dataset`-wrapped `tf.data` dataset. See wala/ML#618.
-        assert inputs.shape == (2,)
-        assert inputs.dtype == tf.float32
-        assert targets.shape == (2,)
-        assert targets.dtype == tf.float32
         return self.get_loss(targets, inputs)
 
     def fit(self, dataset):
         strategy = tf.distribute.MirroredStrategy()
         dist = strategy.experimental_distribute_dataset(dataset)
         for inputs, targets in dist:
+            # `inputs`/`targets` are dataset elements (the arguments to `train_step`), threaded
+            # through this custom `fit` over an `experimental_distribute_dataset`-wrapped `tf.data`
+            # dataset. See wala/ML#618.
+            assert inputs.shape == (2,)
+            assert inputs.dtype == tf.float32
+            assert targets.shape == (2,)
+            assert targets.dtype == tf.float32
             self.train_step(inputs, targets)
 
 
