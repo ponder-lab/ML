@@ -221,6 +221,24 @@ public abstract class PythonAnalysisEngine<T>
     }
   }
 
+  /**
+   * Repairs summary parameter names that WALA's {@link XMLMethodSummaryReader} discards. The reader
+   * drops the synthetic positional symbols ({@code arg0}, {@code arg1}, ...) from a summary's
+   * value-name table, but its filter is the over-broad {@code startsWith("arg")}, so it also drops
+   * legitimate parameter names beginning with {@code arg} (e.g. {@code args}, {@code argv}). A
+   * parameter so stripped has no value name, so a keyword argument of that name cannot bind to it.
+   * Subclasses override this to restore such names on the summaries they ship. The default is a
+   * no-op.
+   *
+   * @param summaries the loaded summaries, keyed by method reference, whose value-name tables may
+   *     be mutated in place
+   * @implNote TODO: Remove this temporary hook once the <a
+   *     href="https://github.com/wala/WALA/pull/1972">upstream WALA fix</a> that narrows the
+   *     reader's filter to the exact {@code arg<n>} synthetic symbols ships in an adopted WALA
+   *     release. Tracked by <a href="https://github.com/wala/ML/issues/630">wala/ML#630</a>.
+   */
+  protected void repairSummaryParameterNames(Map<MethodReference, MethodSummary> summaries) {}
+
   protected void addSummaryBypassLogic(AnalysisOptions options, String summary) {
     IClassHierarchy cha = getClassHierarchy();
     // Two distinct loader sources need to find summary XMLs, and they pull from opposite
@@ -275,6 +293,7 @@ public abstract class PythonAnalysisEngine<T>
     XMLMethodSummaryReader xml = new XMLMethodSummaryReader(xmlStream, scope);
 
     Map<MethodReference, MethodSummary> summaries = new HashMap<>(xml.getSummaries());
+    repairSummaryParameterNames(summaries);
     BypassSyntheticClassLoader ldr =
         (BypassSyntheticClassLoader) cha.getLoader(scope.getSyntheticLoader());
 

@@ -3246,17 +3246,20 @@
       </class>
     </package>
     <package name="tensorflow/distribute/run">
+      <!-- `strategy.run(fn, args=(a, b, ...))` invokes `fn(a, b, ...)` per replica, unpacking the `args` tuple positionally into the callback. This synthetic body forwards the tuple's first two elements (fields `0` and `1`) so a two-parameter callback such as gpt-2's `step_fn(inp, tar)` receives both, not just the first; forwarding only `args[0]` left the second parameter (and everything reached from it) untyped (wala/ML#618). Reading a missing field (e.g. `args[1]` of a one-element tuple) yields an empty points-to set, and passing an argument the callback has no parameter for is dropped, so a one-argument callback is unaffected. Tuples longer than two are still truncated; widen if a longer `args` arises. The keyword form `run(fn, args=(...))` binds the tuple to the `args` parameter only because `PythonTensorAnalysisEngine.repairSummaryParameterNames` restores that parameter name (WALA's summary reader strips names beginning with `arg`); see wala/ML#618. -->
       <class name="run" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="3">
-          <getfield class="LRoot" field="0" fieldType="LRoot" ref="arg2" def="x"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="arg1" arg1="x" numArgs="2" def="v"/>
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self fn args">
+          <getfield class="LRoot" field="0" fieldType="LRoot" ref="arg2" def="x0"/>
+          <getfield class="LRoot" field="1" fieldType="LRoot" ref="arg2" def="x1"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="arg1" arg1="x0" arg2="x1" numArgs="3" def="v"/>
           <return value="v"/>
         </method>
       </class>
       <class name="experimental_run_v2" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="3">
-          <getfield class="LRoot" field="0" fieldType="LRoot" ref="arg2" def="x"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="arg1" arg1="x" numArgs="2" def="v"/>
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self fn args">
+          <getfield class="LRoot" field="0" fieldType="LRoot" ref="arg2" def="x0"/>
+          <getfield class="LRoot" field="1" fieldType="LRoot" ref="arg2" def="x1"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="arg1" arg1="x0" arg2="x1" numArgs="3" def="v"/>
           <return value="v"/>
         </method>
       </class>
