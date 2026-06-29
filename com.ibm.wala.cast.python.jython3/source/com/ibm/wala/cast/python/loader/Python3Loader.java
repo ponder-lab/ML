@@ -35,8 +35,8 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.logging.Logger;
+import org.python.core.PyException;
 import org.python.core.PyObject;
-import org.python.core.PySyntaxError;
 import org.python.core.PyUnicode;
 import org.python.util.PythonInterpreter;
 
@@ -120,9 +120,14 @@ public class Python3Loader extends PythonLoader {
 
                 try {
                   x = ip.eval(unicode);
-                } catch (PySyntaxError e) {
-                  // Handle syntax errors gracefully.
-                  logger.log(WARNING, e, () -> "Syntax error in expression: " + unicode);
+                } catch (PyException e) {
+                  // The candidate expression may not be a compile-time constant: a free runtime
+                  // name (`NameError`), an attribute access, etc. raises during interpreter
+                  // evaluation, and a malformed fragment raises `PySyntaxError` (a `PyException`).
+                  // Skip folding this expression and leave it symbolic rather than aborting the
+                  // module's class hierarchy. See wala/ML#640 (and wala/ML#631 for the parse-error
+                  // surface).
+                  logger.log(WARNING, e, () -> "Could not evaluate expression: " + unicode);
                   return null;
                 }
 

@@ -6,15 +6,16 @@ class Model(tf.keras.Model):
         return tf.reduce_mean(tf.square(pred - real))
 
     def train_step(self, inputs, targets):
-        # `inputs`/`targets` are `padded_batch` elements threaded through `fit`. See wala/ML#623.
-        assert inputs.shape == (2, 2)
-        assert inputs.dtype == tf.int32
-        assert targets.shape == (2, 2)
-        assert targets.dtype == tf.int32
         return self.get_loss(targets, inputs)
 
     def fit(self, dataset):
         for inputs, targets in dataset:
+            # `inputs`/`targets` are `padded_batch` elements (the arguments to `train_step`).
+            # See wala/ML#623.
+            assert inputs.shape == (2, 2)
+            assert inputs.dtype == tf.int32
+            assert targets.shape == (2, 2)
+            assert targets.dtype == tf.int32
             self.train_step(inputs, targets)
 
 
