@@ -1322,7 +1322,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    *
    * @implNote Temporary workaround pending the upstream WALA fix that narrows the reader's name
    *     filter to the exact {@code arg<n>} synthetic symbols; remove once a WALA release carrying
-   *     it is adopted.
+   *     it is adopted, tracked by <a href="https://github.com/wala/ML/issues/630">wala/ML#630</a>.
    */
   @Override
   protected void repairSummaryParameterNames(Map<MethodReference, MethodSummary> summaries) {
