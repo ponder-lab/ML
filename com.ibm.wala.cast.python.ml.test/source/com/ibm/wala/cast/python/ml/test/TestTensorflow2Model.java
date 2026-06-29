@@ -4550,15 +4550,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(3, Set.of(t), 4, Set.of(t)));
   }
 
-  // The five tests below are the wala/ML#629 input_signature runtime matrix. Each fixture asserts
-  // the actual TensorFlow runtime parameter type; the JUnit assertion pins what Ariadne computes
-  // today. The runtime ground truth was measured directly (see the issue). The matrix shows that a
-  // decorated parameter's runtime type depends on execution mode, which a static analysis cannot
-  // know -- motivating the provenance-tagged, execution-mode-complete type set proposed in #629.
+  // The five tests below are the input_signature runtime matrix for
+  // https://github.com/wala/ML/issues/634. Each fixture asserts the actual TensorFlow runtime
+  // parameter type; the JUnit assertion pins what Ariadne computes today. The runtime ground truth
+  // was measured directly. The matrix shows that a decorated parameter's runtime type depends on
+  // execution mode, which a static analysis cannot know, motivating the provenance-tagged,
+  // execution-mode-complete type set proposed there.
 
   /**
-   * #629 matrix, sound baseline: an undecorated function's parameter is exactly the argument. The
-   * runtime type is {@code (3,)} int32 and Ariadne agrees.
+   * Matrix sound baseline: an undecorated function's parameter is exactly the argument. The runtime
+   * type is {@code (3,)} int32 and Ariadne agrees.
    */
   @Test
   public void testInputSigNoDecorator()
@@ -4572,9 +4573,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * #629 matrix, sound baseline: a {@code @tf.function} without {@code input_signature} traces on
-   * the concrete argument, so the parameter takes the argument's {@code (3,)} int32 at runtime;
-   * Ariadne agrees.
+   * Matrix sound baseline: a {@code @tf.function} without {@code input_signature} traces on the
+   * concrete argument, so the parameter takes the argument's {@code (3,)} int32 at runtime; Ariadne
+   * agrees.
    */
   @Test
   public void testInputSigNoSignature()
@@ -4588,14 +4589,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * #629 matrix, the headline case: a {@code @tf.function(input_signature=[TensorSpec((None,),
-   * int32)])} traced (the default) gives the parameter a <em>dynamic</em> shape {@code (None,)} at
-   * runtime -- the signature governs, not the {@code (3,)} argument.
+   * Matrix headline case: a {@code @tf.function(input_signature=[TensorSpec((None,), int32)])}
+   * traced (the default) gives the parameter a <em>dynamic</em> shape {@code (None,)} at runtime;
+   * the signature governs, not the {@code (3,)} argument.
    *
    * <p>TODO: Ariadne reports {@code (3,)} int32 (typing from the argument, ignoring the signature),
-   * which is <em>unsound</em> here -- the same trace serves other lengths, so the parameter is not
+   * which is <em>unsound</em> here—the same trace serves other lengths, so the parameter is not
    * fixed at dim 3. Under the provenance-tagged set proposed in <a
-   * href="https://github.com/wala/ML/issues/629">wala/ML#629</a>, the parameter should carry a
+   * href="https://github.com/wala/ML/issues/634">wala/ML#634</a>, the parameter should carry a
    * signature-derived {@code (None,)} int32 element alongside the argument-derived one.
    */
   @Test
@@ -4605,12 +4606,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * #629 matrix: the same decorated-with-signature function as {@link #testInputSigTraced()}, but
-   * the module calls {@code tf.config.run_functions_eagerly(True)}, under which the signature is
+   * Matrix: the same decorated-with-signature function as {@link #testInputSigTraced()}, but the
+   * module calls {@code tf.config.run_functions_eagerly(True)}, under which the signature is
    * ignored and the parameter takes the argument's concrete {@code (3,)} int32. Ariadne reports
-   * {@code (3,)} int32 -- sound for this eager mode, but it is the <em>same</em> static result it
-   * gives the traced case (where it is unsound). Ariadne cannot know the execution mode, which is
-   * why #629's design is a set covering both.
+   * {@code (3,)} int32, sound for this eager mode but the <em>same</em> static result it gives the
+   * traced case (where it is unsound). Ariadne cannot know the execution mode, which is why the <a
+   * href="https://github.com/wala/ML/issues/634">wala/ML#634</a> design is a set covering both.
    */
   @Test
   public void testInputSigForcedEager()
@@ -4624,13 +4625,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * #629 matrix (dtype): a {@code @tf.function(input_signature=[TensorSpec((3,), int32)])} called
-   * with an int64 {@code numpy.array} coerces the parameter to int32 at runtime.
+   * Matrix (dtype): a {@code @tf.function(input_signature=[TensorSpec((3,), int32)])} called with
+   * an int64 {@code numpy.array} coerces the parameter to int32 at runtime.
    *
-   * <p>TODO: Ariadne reports {@code (3,)} unknown -- it neither models {@code numpy.array}'s dtype
-   * (the argument-derived element; <a href="https://github.com/wala/ML/issues/626">wala/ML#626</a>)
+   * <p>TODO: Ariadne reports {@code (3,)} unknown; it neither models {@code numpy.array}'s dtype
+   * (the argument-derived element, <a href="https://github.com/wala/ML/issues/626">wala/ML#626</a>)
    * nor consumes the signature (the int32 graph element). Under the provenance-tagged set proposed
-   * in <a href="https://github.com/wala/ML/issues/629">wala/ML#629</a>, the signature-derived
+   * in <a href="https://github.com/wala/ML/issues/634">wala/ML#634</a>, the signature-derived
    * element should be int32.
    */
   @Test
