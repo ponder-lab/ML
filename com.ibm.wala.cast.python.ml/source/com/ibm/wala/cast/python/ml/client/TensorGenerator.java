@@ -3406,6 +3406,14 @@ public abstract class TensorGenerator {
       // the
       // generator that reads the feature's `dtype` and emits the contract shape. wala/ML#646.
       return new VarLenFeature(node);
+    } else if (type.equals(TensorFlowTypes.FIXED_LEN_FEATURE.getDeclaringClass())) {
+      // The dense tensor a `tf.io.FixedLenFeature` parses to is allocated in
+      // `FixedLenFeature.do()`.
+      // When it reaches a consumer through a feature dict (e.g. a `parse_single_example` result
+      // subscripted by feature name), the points-to walk lands here on the allocation site rather
+      // than the `tf.io.FixedLenFeature` call, so dispatch the generator that reads the feature's
+      // `dims` (shape) and `type` (dtype). wala/ML#655.
+      return new FixedLenFeature(node);
     }
     // Unregistered type: the manual-walker dispatch table doesn't know about this op, so the
     // caller will treat the null return as "no contribution" and silently lose precision on
