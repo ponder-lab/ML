@@ -10,4 +10,5 @@ def consume(x):
 features = {"t": tf.io.VarLenFeature(tf.int64)}
 parsed = tf.io.parse_single_example(b"", features)
 d = tf.sparse.to_dense(parsed["t"])
+assert d.dtype == tf.int64
 consume(d)

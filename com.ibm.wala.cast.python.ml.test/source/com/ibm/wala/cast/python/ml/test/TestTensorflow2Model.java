@@ -4654,8 +4654,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Regression guard for wala/ML#645: {@code tf.io.VarLenFeature(dtype)} models the SparseTensor a
    * variable-length feature parses to, so {@code tf.sparse.to_dense} of it types from the feature's
-   * dtype (dynamic shape, {@code int64}). The {@code io}-registration fix makes {@code tf.io.*}
-   * resolve at all (they were registered under {@code tf}, not the {@code io} object).
+   * dtype ({@code int64}). The {@code io}-registration fix makes {@code tf.io.*} resolve at all
+   * (they were registered under {@code tf}, not the {@code io} object).
+   *
+   * <p>TODO: the shape is unknown (⊤) rather than a dynamic rank-1 shape; only the dtype is
+   * recovered. Tracked by <a href="https://github.com/wala/ML/issues/647">wala/ML#647</a>.
    */
   @Test
   public void testVarLenFeature()
