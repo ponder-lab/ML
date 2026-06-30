@@ -151,6 +151,20 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
       for (InstanceKey valueIK : receiverPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
         if (asin != null) {
+          // A mapped-dataset receiver is allocated in `map.do()` as a generic `Dataset`, so the
+          // default dispatch below would resolve it to a plain `DatasetGenerator` that inherits
+          // from
+          // `map.do()`'s own receiver (the upstream base), dropping `map_func`'s return. Resolve it
+          // to a `DatasetMapGenerator` reading the `element` field off this receiver instance so
+          // the
+          // mapped type survives a downstream pass-through transform. wala/ML#649.
+          if (asin.getNode()
+              .getMethod()
+              .getDeclaringClass()
+              .getReference()
+              .equals(TensorFlowTypes.DATASET_MAP_TYPE)) {
+            return new DatasetMapGenerator(asin.getNode(), asin);
+          }
           int vn = findDefinition(asin.getNode(), asin);
           if (vn > 0) {
             PointerKey pk =

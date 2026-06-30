@@ -4803,6 +4803,26 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression guard for wala/ML#649: a pass-through transform after {@code map} keeps the mapped
+   * element type. {@code map(split).repeat(2)} yields the same {@code (int32, int64)} tuple
+   * elements as {@code map(split)}, so {@code y} types to {@code (4,)} int64. Before the fix,
+   * {@code repeat}'s receiver-inheritance resolved the {@code map} receiver to a plain {@code
+   * DatasetGenerator} (inheriting the upstream base), dropping {@code map_func}'s return; it now
+   * resolves to a {@code DatasetMapGenerator} reading the {@code element} field off the receiver
+   * instance.
+   */
+  @Test
+  public void testDatasetMapRepeat()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_map_repeat.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 4))));
+  }
+
+  /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>: {@code
    * strategy.run(fn, (a, b))} forwards both elements of the positional {@code args} tuple into the
    * two-parameter callback {@code step_fn(inp, tar)}, not just the first. Both {@code

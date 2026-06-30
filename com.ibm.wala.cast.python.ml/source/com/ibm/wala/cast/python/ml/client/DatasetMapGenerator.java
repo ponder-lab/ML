@@ -18,6 +18,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -35,12 +36,56 @@ public class DatasetMapGenerator extends DatasetGenerator {
   /** The field {@code map.do()} stores {@code map_func}'s return (the mapped element) into. */
   private static final String ELEMENT_FIELD = "element";
 
+  /**
+   * The specific mapped-dataset instance whose {@code element} field carries the mapped type, when
+   * this generator is resolved from a receiver instance rather than a source variable (e.g. a
+   * downstream {@code repeat}/{@code prefetch} inheriting from a {@code map} receiver). {@code
+   * null} for the source- and node-based constructions.
+   */
+  private final AllocationSiteInNode mapResultInstance;
+
   public DatasetMapGenerator(PointsToSetVariable source) {
     super(source);
+    this.mapResultInstance = null;
   }
 
   public DatasetMapGenerator(CGNode node) {
     super(node);
+    this.mapResultInstance = null;
+  }
+
+  /**
+   * Constructs a generator for a specific mapped-dataset instance, used when a downstream
+   * pass-through transform inherits its element type from a {@code map} receiver. The {@code
+   * element} field is read off {@code mapResultInstance} directly, so the mapped type survives the
+   * pass-through. wala/ML#649.
+   *
+   * @param node The {@code map.do()} node that allocated the instance.
+   * @param mapResultInstance The mapped-dataset instance carrying the {@code element} field.
+   */
+  public DatasetMapGenerator(CGNode node, AllocationSiteInNode mapResultInstance) {
+    super(node);
+    this.mapResultInstance = mapResultInstance;
+  }
+
+  /**
+   * Returns the instances whose {@code element} field holds the mapped type: the source variable's
+   * points-to set, or the single {@code mapResultInstance} when this generator was resolved from a
+   * receiver instance.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The mapped-dataset instances, or {@code null} if neither is available.
+   */
+  private OrdinalSet<InstanceKey> selfInstances(PropagationCallGraphBuilder builder) {
+    if (this.getSource() != null) {
+      return builder.getPointerAnalysis().getPointsToSet(this.getSource().getPointerKey());
+    }
+    if (this.mapResultInstance != null) {
+      return OrdinalSet.toOrdinalSet(
+          Collections.singleton((InstanceKey) this.mapResultInstance),
+          builder.getPointerAnalysis().getInstanceKeyMapping());
+    }
+    return null;
   }
 
   /**
@@ -51,9 +96,8 @@ public class DatasetMapGenerator extends DatasetGenerator {
    * @return The points-to set of the mapped element, or {@code null} if it cannot be resolved.
    */
   private OrdinalSet<InstanceKey> getMappedElementPointsToSet(PropagationCallGraphBuilder builder) {
-    if (this.getSource() == null) return null;
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
-    OrdinalSet<InstanceKey> selfPTS = pa.getPointsToSet(this.getSource().getPointerKey());
+    OrdinalSet<InstanceKey> selfPTS = selfInstances(builder);
     if (selfPTS == null || selfPTS.isEmpty()) return null;
 
     IField field =
