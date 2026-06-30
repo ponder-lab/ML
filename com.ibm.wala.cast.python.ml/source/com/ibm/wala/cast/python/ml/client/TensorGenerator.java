@@ -3397,6 +3397,15 @@ public abstract class TensorGenerator {
       return new Model(node);
     } else if (type.equals(TensorFlowTypes.INPUT.getDeclaringClass())) {
       return new Input(node);
+    } else if (type.equals(TensorFlowTypes.VAR_LEN_FEATURE.getDeclaringClass())) {
+      // The SparseTensor a `tf.io.VarLenFeature` parses to is allocated in `VarLenFeature.do()`.
+      // When
+      // it reaches a consumer (e.g. `tf.sparse.to_dense`) through a feature dict, the points-to
+      // walk
+      // lands here on the allocation site rather than the `tf.io.VarLenFeature` call, so dispatch
+      // the
+      // generator that reads the feature's `dtype` and emits the contract shape. wala/ML#646.
+      return new VarLenFeature(node);
     }
     // Unregistered type: the manual-walker dispatch table doesn't know about this op, so the
     // caller will treat the null return as "no contribution" and silently lose precision on
