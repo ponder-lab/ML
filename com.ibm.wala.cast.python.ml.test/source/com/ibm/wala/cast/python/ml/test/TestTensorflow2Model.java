@@ -431,6 +431,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_INT64_UNKNOWN_SHAPE = new TensorType(INT_64, null);
 
+  private static final TensorType TENSOR_DYNAMIC_INT64 =
+      new TensorType(INT_64, asList(DynamicDim.INSTANCE));
+
   private static final TensorType TENSOR_INT32_UNKNOWN_SHAPE = new TensorType(INT_32, null);
 
   private static final TensorType TENSOR_1_0_0_9_INT32 = TensorType.of(INT_32, 1, 0, 0, 9);
@@ -4599,19 +4602,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * — the dehybridization — even though the stubbed body and the in-memory minimal reaches type
    * them.
    *
-   * <p>The localization: {@code real} (the dataset-sourced {@code targets}) is dropped in {@code
-   * input_fn}'s {@code tf.data.TFRecordDataset} + {@code .map(parse_example)} element type. {@code
-   * tf.sparse.to_dense} and {@code tf.io.VarLenFeature} are now modeled (see {@link
-   * #testSparseToDense()}, {@link #testVarLenFeature()}), but the chain dies at the dict subscript:
-   * {@code parse_single_example} returns its feature dict and {@code parsed["targets"]} reads back
-   * nothing, because the SparseTensor result carries an empty points-to set that does not survive a
-   * dict {@code putfield}/{@code getfield} (wala/ML#646, pinned by {@link
-   * #testParseSingleExample()}). {@code pred}'s absence is the model body. Analyzed statically
-   * here, like the consumer's vendoring; it runs in the perf-eval with its tfrecord/data setup.
+   * <p>The localization: {@code real} (the dataset-sourced {@code targets}) is built in {@code
+   * input_fn} as {@code tf.data.TFRecordDataset(...).map(parse_example)}, where {@code
+   * parse_example} returns {@code (inputs, targets)} with each densified from a {@code
+   * tf.io.VarLenFeature} in a feature dict. That parse-and-densify sub-chain now types end to end:
+   * the VarLenFeature SparseTensor survives the dict (wala/ML#646), {@code tf.sparse.to_dense}
+   * resolves the dict-routed operand to {@code (?,)} int64 (pinned by {@link
+   * #testParseSingleExample()}), and the int32 cast plus tuple return carry it to {@code (?,)}
+   * int32 (pinned by {@link #testParseExampleTuple()}). What remains is the {@code
+   * dataset.map(parse_example)} layer itself: the {@code map} model allocates a fresh {@code
+   * Dataset} but never invokes {@code map_func} nor propagates its return as the mapped dataset's
+   * element type, so the iterated {@code targets} (and {@code get_loss}'s {@code real}) stay
+   * untyped. {@code pred}'s absence is the model body. Analyzed statically here, like the
+   * consumer's vendoring; it runs in the perf-eval with its tfrecord/data setup.
    *
-   * <p>TODO: pins the current absent state (0/0); {@code real} flips once wala/ML#646 lets the
-   * SparseTensor survive the dict, {@code pred} once the model body types. Tracked by <a
-   * href="https://github.com/wala/ML/issues/618">wala/ML#618</a>.
+   * <p>TODO: pins the current absent state (0/0); {@code real} flips once the {@code dataset.map}
+   * element type is propagated from {@code map_func}'s return, {@code pred} once the model body
+   * types. Tracked by <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>.
    */
   @Test
   public void testGpt2GetLossVendored()
@@ -4654,38 +4661,59 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Regression guard for wala/ML#645: {@code tf.io.VarLenFeature(dtype)} models the SparseTensor a
    * variable-length feature parses to, so {@code tf.sparse.to_dense} of it types from the feature's
-   * dtype ({@code int64}). The {@code io}-registration fix makes {@code tf.io.*} resolve at all
-   * (they were registered under {@code tf}, not the {@code io} object).
-   *
-   * <p>TODO: the shape is unknown (⊤) rather than a dynamic rank-1 shape; only the dtype is
-   * recovered. Tracked by <a href="https://github.com/wala/ML/issues/647">wala/ML#647</a>.
+   * dtype ({@code int64}) and the API-contract shape (rank-1 with a dynamic length, {@code (?,)}).
+   * The {@code io}-registration fix makes {@code tf.io.*} resolve at all (they were registered
+   * under {@code tf}, not the {@code io} object). The rank-1 dynamic shape is the contract-model
+   * refinement of wala/ML#647 (formerly ⊤).
    */
   @Test
   public void testVarLenFeature()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_var_len_feature.py",
-        "consume",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_INT64_UNKNOWN_SHAPE)));
+    test("tf2_test_var_len_feature.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_DYNAMIC_INT64)));
   }
 
   /**
    * The realistic gpt-2 shape for wala/ML#645: a {@code VarLenFeature} in a feature dict, parsed by
-   * {@code tf.io.parse_single_example}, subscripted, and densified. {@code consume}'s parameter is
-   * currently untyped (0/0): the SparseTensor's empty points-to set does not survive the dict
-   * subscript, so {@code parsed["t"]} reads nothing (see {@link #testVarLenFeature()} for the
-   * direct case that does type).
-   *
-   * <p>TODO: pins the current untyped state; {@code consume} types once a SparseTensor result keeps
-   * a live PTS through a dict, tracked by <a
-   * href="https://github.com/wala/ML/issues/646">wala/ML#646</a>.
+   * {@code tf.io.parse_single_example}, subscripted, and densified. {@code consume}'s parameter
+   * types to {@code (?,)} int64: the VarLenFeature SparseTensor now keeps a live points-to set
+   * through the dict {@code putfield}/{@code getfield} (wala/ML#646), and {@code
+   * tf.sparse.to_dense} resolves the dict-routed operand by dispatching the {@code VarLenFeature}
+   * generator at the SparseTensor's allocation site, recovering the feature's dtype and the rank-1
+   * dynamic (contract) shape. The static shape is {@code (?,)}, not the concrete {@code (2,)} the
+   * Python runtime produces, because the example's length is lost across the serialize/parse
+   * round-trip. This is the dict-routed companion to the direct {@link #testVarLenFeature()};
+   * together they un-strand {@code get_loss}'s {@code real} in {@link #testGpt2GetLossVendored()}.
    */
   @Test
   public void testParseSingleExample()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_parse_single_example.py", "consume", 0, 0, Map.of());
+    test(
+        "tf2_test_parse_single_example.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_DYNAMIC_INT64)));
+  }
+
+  /**
+   * Mirrors gpt-2's {@code parse_example} for wala/ML#618: a tuple return over two {@code
+   * tf.cast(tf.sparse.to_dense(parsed[k]), tf.int32)} values, each parsed from a {@code
+   * VarLenFeature} in a feature dict, but called directly (no {@code dataset.map}). The recovered
+   * {@code (?,)} int64 propagates through {@code to_dense}, the int32 cast, the tuple return, and
+   * the destructuring, so {@code consume}'s parameter ({@code targets}) types to {@code (?,)}
+   * int32. Together with {@link #testParseSingleExample()} this isolates the {@code dataset.map}
+   * element-type layer as the sole remaining gap for the full {@link #testGpt2GetLossVendored()}
+   * subject.
+   */
+  @Test
+  public void testParseExampleTuple()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_parse_example_tuple.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_32, asList(DynamicDim.INSTANCE)))));
   }
 
   /**
