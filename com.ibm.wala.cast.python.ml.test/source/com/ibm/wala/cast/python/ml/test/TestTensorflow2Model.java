@@ -1778,6 +1778,30 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TensorType.of(INT_64, 128))));
   }
 
+  /**
+   * Regression guard for wala/ML#655, the full symptom-A chain in one fixture: the NLPGNN {@code
+   * BilstmAttention} model (whose {@code predict} forwards to {@code self(inputs, training)} and
+   * whose {@code call} delegates to a user-defined child {@code BiLSTM} layer built from unmodeled
+   * sublayers) fed from the {@code TFLoader} {@code FixedLenFeature}/{@code TFRecordDataset}
+   * source. The child {@code BiLSTM.call}'s {@code inputs} parameter types to {@code (128,)} int64,
+   * flowing the parsed {@code input_ids} field through {@code model.predict(X)} → {@code __call__}
+   * → {@code call} → {@code self.bilstm(inputs, training)}. This demonstrates that the symptom-A
+   * cases are unit-reproducible via the source pipeline (not the affected file, which carries no
+   * call site or source) and that the cause was the source typing, not the {@code __call__}
+   * forwarding the issue title hypothesized. Before the {@code FixedLenFeature} fix, {@code inputs}
+   * came back non-tensor.
+   */
+  @Test
+  public void testBilstmLoaderE2e()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_bilstm_loader_e2e.py",
+        "BiLSTM.call",
+        1,
+        1,
+        Map.of(3, Set.of(TensorType.of(INT_64, 128))));
+  }
+
   @Test
   public void testModelAttributes()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
