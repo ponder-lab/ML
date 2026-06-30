@@ -84,6 +84,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final String COMPLEX_64 = COMPLEX64.name().toLowerCase();
 
+  private static final String COMPLEX_128 = DType.COMPLEX128.name().toLowerCase();
+
   private static final String FLOAT_64 = FLOAT64.name().toLowerCase();
 
   private static final String INT_32 = INT32.name().toLowerCase();
@@ -4908,23 +4910,103 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/598">wala/ML#598</a>: a bare
    * {@code numpy.array} value propagates its {@code TensorType} to a callee parameter. The issue's
-   * reproducer; {@code f}'s parameter types to {@code (3,)} unknown ({@code NpArray} infers the
-   * list-literal shape; the dtype is unknown with no {@code dtype=} argument).
-   *
-   * <p>TODO: the unknown dtype is a recoverable-precision floor. The runtime dtype is {@code
-   * float64} (numpy promotes the Python float literals), but {@code NpArray} does not model numpy's
-   * dtype promotion, so it floors to unknown rather than infer a possibly-wrong dtype. Tracked by
-   * <a href="https://github.com/wala/ML/issues/626">wala/ML#626</a>.
+   * reproducer; {@code f}'s parameter types to {@code (3,)} {@code float64}: {@code NpArray} infers
+   * the list-literal shape, and the dtype from numpy's promotion of the Python float literals (<a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>). The runtime dtype is {@code
+   * float64} (numpy promotes Python {@code float} to {@code float64}, not the {@code float32}
+   * TF-literal convention).
    */
   @Test
   public void testNpArrayBareParam()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_nparray_param.py", "f", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_64, 3))));
+  }
+
+  /**
+   * Companion to {@link #testNpArrayBareParam()} for the integer-promotion path of <a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>: a bare {@code numpy.array} of
+   * Python ints types to {@code (3,)} {@code int64}, because numpy promotes Python {@code int} to
+   * {@code int64} (not the {@code int32} TF-literal convention).
+   */
+  @Test
+  public void testNpArrayIntParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_nparray_int_param.py", "f", 1, 1, Map.of(2, Set.of(TensorType.of(INT_64, 3))));
+  }
+
+  /**
+   * Companion to {@link #testNpArrayBareParam()} for the boolean path of <a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>: an all-boolean literal array
+   * types to {@code (2,)} {@code bool}.
+   */
+  @Test
+  public void testNpArrayBoolParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_nparray_bool_param.py", "f", 1, 1, Map.of(2, Set.of(TensorType.of(BOOL, 2))));
+  }
+
+  /**
+   * Companion to {@link #testNpArrayBareParam()} for the string path of <a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>: an all-string literal array types
+   * to {@code (2,)} {@code string} (a string leaf subsumes the array in numpy's promotion).
+   */
+  @Test
+  public void testNpArrayStringParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_nparray_param.py",
+        "tf2_test_nparray_string_param.py", "f", 1, 1, Map.of(2, Set.of(TensorType.of(STRING, 2))));
+  }
+
+  /**
+   * Companion to {@link #testNpArrayBareParam()} for the nested-literal promotion path of <a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>: a nested literal mixing ints and
+   * a float promotes to {@code (2, 2)} {@code float64}, exercising the walk's descent through
+   * nested lists and the float-over-int promotion.
+   */
+  @Test
+  public void testNpArrayNestedParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_nparray_nested_param.py",
         "f",
         1,
         1,
-        Map.of(2, Set.of(new TensorType(UNKNOWN, asList(new NumericDim(3))))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 2, 2))));
+  }
+
+  /**
+   * Companion to {@link #testNpArrayBareParam()} for the complex path of <a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>: an all-complex literal array
+   * types to {@code (2,)} {@code complex128} (numpy promotes Python {@code complex} to {@code
+   * complex128}).
+   */
+  @Test
+  public void testNpArrayComplexParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_nparray_complex_param.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(COMPLEX_128, 2))));
+  }
+
+  /**
+   * Companion to {@link #testNpArrayBareParam()} for the non-literal-source floor of <a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>: when {@code x} is itself an
+   * {@code np.ndarray} rather than a Python literal, numpy preserves the source's dtype, which the
+   * walk does not model, so it floors to ⊤. The nested-array shape does not propagate through the
+   * outer {@code np.array} either, so both axes are ⊤.
+   */
+  @Test
+  public void testNpArrayArraySource()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_nparray_array_source.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
 
   /**
@@ -4935,9 +5017,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    *
    * <p>TODO: This pins the current imprecise shape. Once <a
    * href="https://github.com/wala/ML/issues/625">wala/ML#625</a> lands, the parameter should type
-   * to {@code (3,)} unknown (the bare form's shape; the dtype stays unknown pending <a
-   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>), and this assertion should be
-   * updated accordingly.
+   * to {@code (3,)} {@code float64} (the bare form's result now that <a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a> models numpy dtype promotion), and
+   * this assertion should be updated accordingly.
    */
   @Test
   public void testNpArrayWrappedParam()
