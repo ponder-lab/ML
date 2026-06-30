@@ -400,8 +400,23 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               || def instanceof PythonPropertyRead
               || def instanceof PythonInvokeInstruction) {
             boolean added = false;
+
+            // When the iterated object itself came from a container read (its def is a property
+            // read, e.g. `d = [ds, other][0]`), it may point directly to a dataset. Check its
+            // points-to set before the def-chain walk below, which would otherwise climb to the
+            // container and miss the dataset. Gated to dataset instances inside, and only on this
+            // container-read shape, so attribute reads on a direct dataset are unaffected.
+            // wala/ML#648.
+            if (def instanceof PythonPropertyRead) {
+              added =
+                  processInstructionInterprocedurally(
+                      propertyRead, objectRef, localPointerKeyNode, src, sources, pointerAnalysis);
+            }
+
             // we may be invoking `next()` on a dataset.
-            if (def instanceof SSAAbstractInvokeInstruction && def.getNumberOfUses() > 1) {
+            if (!added
+                && def instanceof SSAAbstractInvokeInstruction
+                && def.getNumberOfUses() > 1) {
               SSAAbstractInvokeInstruction invokeInstruction = (SSAAbstractInvokeInstruction) def;
               added =
                   processInstruction(
