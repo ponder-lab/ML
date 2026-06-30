@@ -12405,6 +12405,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * href="https://github.com/wala/ML/issues/612">wala/ML#612</a>): {@code tf.ragged.constant} with
    * an opaque (unresolvable) {@code pylist} floors both the shape and the dtype to ⊤ rather than
    * aborting with "Expected a list or tuple" / "Empty points-to set".
+   *
+   * <p>TODO: The runtime tensor is {@code (2, None)} {@code int32} (asserted in the fixture); the
+   * static result floors both axes to ⊤ because the {@code pylist} is opaque. User-provided
+   * shape/dtype assertions (<a href="https://github.com/wala/ML/issues/370">wala/ML#370</a>) are
+   * the mechanism that would let an opaque value type precisely.
    */
   @Test
   public void testRaggedConstantUnresolvable()
@@ -12424,6 +12429,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * (neither a {@code list} nor a {@code tuple}) floors both the shape and the dtype to ⊤ rather
    * than aborting the whole analysis with "Expected a list or tuple". Complements {@link
    * #testRaggedConstantUnresolvable()}, which exercises the empty-points-to-set floor.
+   *
+   * <p>TODO: The runtime tensor is {@code (2, None)} {@code int32} (asserted in the fixture). The
+   * dtype floor is inherent until numpy dtype-promotion is modeled (<a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>): an {@code np.ndarray} element's
+   * dtype is soundly ⊤ (numpy promotes {@code int} to {@code int64}, not {@code int32}), so the
+   * union floors to ⊤. The shape floor reflects the unmodeled ragged rank over a tensor row;
+   * delegating the element to its producer generator would recover the shape.
    */
   @Test
   public void testRaggedConstantUnresolvableElement()
@@ -12447,6 +12459,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * {@code getDefaultDTypes} confirm scalars before the opaque element &mdash; so the floor is not
    * the all-⊤ result of {@link #testRaggedConstantUnresolvableElement()}, where the opaque element
    * precedes any confirmable scalar.
+   *
+   * <p>TODO: The runtime shape is {@code (2, None)} (asserted in the fixture); the static shape
+   * floors to ⊤ over the {@code np.ndarray} row (the unmodeled ragged rank over a tensor element).
+   * Delegating the element to its producer generator would recover the shape.
    */
   @Test
   public void testRaggedConstantUnresolvableDepth()
