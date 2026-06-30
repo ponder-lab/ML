@@ -3775,6 +3775,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
+  @Test
+  public void testSliceOpaque()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_slice_opaque.py", "consume", 0, 0);
+  }
+
+  @Test
+  public void testSliceOpaqueIter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_slice_opaque_iter.py", "consume", 0, 0);
+  }
+
   /**
    * Regression test for wala/ML#451 (reopen): asserts the underlying PA state that Hybridize's
    * {@code Function.inferPrimitiveParameters} consumes &mdash; specifically, that no primitive

@@ -1179,7 +1179,13 @@ public class TensorGeneratorFactory {
         // the element at this index, preserving its transformation chain. wala/ML#648.
         // Similar to `EachElementGet`, we check if the container generator represents elements
         // (`Dataset`) or the tensor itself (peeling needed).
-        if (propertyName == null || !isNonTensorAttribute(propertyName)) {
+        // Only treat a subscript/slice as a tensor-element extraction when the container is a
+        // recognized tensor/dataset producer. A `null` container generator means the base is not a
+        // tensor (e.g. a subscript-slice `x[1::2]` of an opaque `argparse` attribute), so the
+        // result is not a tensor either; dispatching `TensorElementGenerator` here would over-type
+        // it. wala/ML#656.
+        if (containerGenerator != null
+            && (propertyName == null || !isNonTensorAttribute(propertyName))) {
           return (containerGenerator instanceof DatasetGenerator)
               ? new DatasetElementGenerator(objSrc, containerGenerator)
               : new TensorElementGenerator(source, containerGenerator);
