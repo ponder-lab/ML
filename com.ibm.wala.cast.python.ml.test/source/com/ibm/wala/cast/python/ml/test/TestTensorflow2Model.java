@@ -12745,4 +12745,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             })
         .collect(toList());
   }
+
+  /**
+   * Regression guard for wala/ML#646: a SparseTensor flows through a dict subscript ({@code
+   * features["t"]}) and keeps its type. {@code tf.sparse.SparseTensor} allocates directly in {@code
+   * do()} (the former {@code read_data} call was inlined), so the result carries a live points-to
+   * set that survives the dict {@code putfield}/{@code getfield}; the earlier empty PTS dropped it.
+   */
+  @Test
+  public void testSparseTensorThroughDict()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dict_subscript.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 2, 2).asSparse())));
+  }
 }
