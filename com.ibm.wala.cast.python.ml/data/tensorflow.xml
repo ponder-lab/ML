@@ -166,7 +166,8 @@
         <new def="TextLineDataset" class="Ltensorflow/data/TextLineDataset"/>
         <putfield class="LRoot" field="TextLineDataset" fieldType="LRoot" ref="data" value="TextLineDataset"/>
         <!--https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/TFRecordDataset -->
-        <new def="TFRecordDataset" class="Ltensorflow/data/Dataset"/> <!-- FIXME: Should *extend* `Dataset` -->
+        <!-- Distinct class with a `do()` that allocates a fresh chainable dataset, so `tf.data.TFRecordDataset(...).map(...)` resolves the chain (it was a bare `Dataset` field with no `do()`). Mirrors `TextLineDataset`. wala/ML#618. -->
+        <new def="TFRecordDataset" class="Ltensorflow/data/TFRecordDataset"/>
         <putfield class="LRoot" field="TFRecordDataset" fieldType="LRoot" ref="data" value="TFRecordDataset"/>
         <new def="MirroredStrategy" class="Ltensorflow/distribute/MirroredStrategy"/>
         <putfield class="LRoot" field="MirroredStrategy" fieldType="LRoot" ref="distribute" value="MirroredStrategy"/>
@@ -2538,6 +2539,43 @@
         </method>
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self filenames compression_type">
           <new def="x" class="Ltensorflow/data/TextLineDataset"/>
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. See shuffle/do() for rationale. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
+          <new def="rd_batch" class="Ltensorflow/data/batch"/>
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
+          <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch"/>
+          <new def="rd_with_options" class="Ltensorflow/data/with_options"/>
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options"/>
+          <new def="rd_take" class="Ltensorflow/data/take"/>
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take"/>
+          <new def="rd_map" class="Ltensorflow/data/map"/>
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map"/>
+          <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
+          <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <return value="x"/>
+        </method>
+        <method name="__iter__" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="it" class="Ltensorflow/data/iterator"/>
+          <putfield class="LRoot" field="dataset" fieldType="LRoot" ref="it" value="self"/>
+          <return value="it"/>
+        </method>
+      </class>
+      <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/TFRecordDataset. A fresh chainable dataset per call site (parallel to TextLineDataset); its elements are serialized records, typically consumed by a `map(parse_*)` that derives its own types. The chain-method fields are bound on the new instance so `tf.data.TFRecordDataset(...).map(...).padded_batch(...)` chains resolve. wala/ML#618. -->
+      <class name="TFRecordDataset" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self filenames compression_type buffer_size num_parallel_reads name">
+          <new def="x" class="Ltensorflow/data/TFRecordDataset"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. See shuffle/do() for rationale. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>

@@ -4595,35 +4595,29 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Reproduces wala/ML#618's residual: the full subject from {@code akanyaani/gpt-2-tensorflow2.0}
-   * (a perf-eval corpus subject) vendored verbatim with the REAL transformer layers and {@code
-   * input_fn}, unlike the stubbed {@link #testGpt2InterprocGetLoss()}. Both {@code get_loss}'s
-   * {@code real} and {@code pred} are absent from the analysis (0 tensor parameters and variables)
-   * — the dehybridization — even though the stubbed body and the in-memory minimal reaches type
-   * them.
+   * The full subject from {@code akanyaani/gpt-2-tensorflow2.0} (a perf-eval corpus subject)
+   * vendored verbatim with the REAL transformer layers and {@code input_fn}, unlike the stubbed
+   * {@link #testGpt2InterprocGetLoss()}. {@code get_loss}'s {@code real} now types end to end
+   * (wala/ML#618), resolving the whole dataset-sourced chain that previously dehybridized it.
    *
-   * <p>The localization: {@code real} (the dataset-sourced {@code targets}) is built in {@code
-   * input_fn} as {@code tf.data.TFRecordDataset(...).map(parse_example)}, where {@code
-   * parse_example} returns {@code (inputs, targets)} with each densified from a {@code
-   * tf.io.VarLenFeature} in a feature dict. That parse-and-densify sub-chain now types end to end:
-   * the VarLenFeature SparseTensor survives the dict (wala/ML#646), {@code tf.sparse.to_dense}
-   * resolves the dict-routed operand to {@code (?,)} int64 (pinned by {@link
-   * #testParseSingleExample()}), and the int32 cast plus tuple return carry it to {@code (?,)}
-   * int32 (pinned by {@link #testParseExampleTuple()}). The {@code dataset.map(parse_example)}
-   * layer now types too (wala/ML#506): the mapped element is {@code map_func}'s {@code (inputs,
-   * targets)} return, and {@code enumerate} with nested unpacking resolves {@code targets} (pinned
-   * by {@link #testDatasetMap()}, {@link #testDatasetMapTuple()}, {@link
-   * #testDatasetMapEnumerate()}). What remains is the {@code fit}-side chain past the dataset:
-   * {@code input_fn}'s result is passed as a list {@code _model.fit([_train, _test], ...)} and
-   * list-unpacked, then forwarded through an indirected {@code train_fuc} into {@code train_step} →
-   * {@code _train_step} → {@code get_loss}; one of those hops still drops {@code targets} before it
-   * reaches {@code real}. {@code pred}'s absence is the model body. Analyzed statically here, like
+   * <p>The chain: {@code real} (the dataset-sourced {@code targets}) is built in {@code input_fn}
+   * as {@code
+   * tf.data.TFRecordDataset(...).map(parse_example).padded_batch(...).repeat(...).prefetch(...)},
+   * passed as a list {@code _model.fit([_train, _test], ...)}, list-unpacked, iterated with {@code
+   * enumerate} and nested unpacking, and forwarded through an indirected {@code train_fuc} into
+   * {@code train_step} → {@code _train_step} → {@code get_loss}. Each layer is modeled: {@code
+   * parse_example} densifies a {@code tf.io.VarLenFeature} through a dict to {@code (?,)} int32
+   * (wala/ML#646, pinned by {@link #testParseExampleTuple()}); {@code map} types the element from
+   * {@code map_func}'s return (wala/ML#506, {@link #testDatasetMapTuple()}); a pass-through
+   * transform after {@code map} keeps the mapped type (wala/ML#649, {@link
+   * #testDatasetMapRepeat()}); {@code TFRecordDataset} is chainable ({@link #testTfrecordMap()});
+   * the dataset survives the list (wala/ML#648, {@link #testFitLoop()}). So {@code real} resolves
+   * to {@code (?,)} int32.
+   *
+   * <p>{@code pred}'s absence (it stays a function-local, hence locals 1 not 2) is the model {@code
+   * __call__} body, tracked separately under <a
+   * href="https://github.com/wala/ML/issues/618">wala/ML#618</a>. Analyzed statically here, like
    * the consumer's vendoring; it runs in the perf-eval with its tfrecord/data setup.
-   *
-   * <p>TODO: pins the current absent state (0/0); {@code real} flips once the {@code fit}-side
-   * list-unpack and {@code train_fuc} forwarding carry the now-typed dataset element to {@code
-   * get_loss} (wala/ML#506 modeled the {@code map} layer), {@code pred} once the model body types.
-   * Tracked by <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>.
    */
   @Test
   public void testGpt2GetLossVendored()
@@ -4640,9 +4634,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "A.py",
         "Gpt2.get_loss",
         "gpt2_vendored",
-        0,
-        0,
-        Map.of());
+        1,
+        1,
+        Map.of(3, Set.of(new TensorType(INT_32, asList(DynamicDim.INSTANCE)))));
   }
 
   /**
@@ -4820,6 +4814,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(INT_64, 4))));
+  }
+
+  /**
+   * Regression guard for wala/ML#618: {@code tf.data.TFRecordDataset(...)} is a chainable dataset,
+   * so {@code .map(parse_example)} resolves and the VarLenFeature-parsed {@code targets} types to
+   * {@code (?,)} int32. Previously {@code TFRecordDataset} was a bare {@code Dataset} field with no
+   * {@code do()}, so the chain did not resolve.
+   */
+  @Test
+  public void testTfrecordMap()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tfrecord_map.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_32, asList(DynamicDim.INSTANCE)))));
   }
 
   /**
