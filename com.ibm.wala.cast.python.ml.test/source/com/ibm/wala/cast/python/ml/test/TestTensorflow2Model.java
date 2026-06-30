@@ -12402,14 +12402,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Captured-gap regression for the {@code RaggedConstant} shape and dtype floors (<a
-   * href="https://github.com/wala/ML/issues/612">wala/ML#612</a>): {@code tf.ragged.constant} with
-   * an opaque (unresolvable) {@code pylist} floors both the shape and the dtype to ⊤ rather than
-   * aborting with "Expected a list or tuple" / "Empty points-to set".
+   * href="https://github.com/wala/ML/issues/612">wala/ML#612</a>): {@code tf.ragged.constant} whose
+   * {@code pylist} comes from an unmodeled {@code json.loads} (so its points-to set is empty)
+   * floors both the shape and the dtype to ⊤ rather than aborting with "Expected a list or tuple" /
+   * "Empty points-to set".
    *
    * <p>TODO: The runtime tensor is {@code (2, None)} {@code int32} (asserted in the fixture); the
-   * static result floors both axes to ⊤ because the {@code pylist} is opaque. User-provided
-   * shape/dtype assertions (<a href="https://github.com/wala/ML/issues/370">wala/ML#370</a>) are
-   * the mechanism that would let an opaque value type precisely.
+   * static result floors both axes to ⊤ because the {@code json.loads} result is opaque to the
+   * analysis. User-provided shape/dtype assertions (<a
+   * href="https://github.com/wala/ML/issues/370">wala/ML#370</a>) are the mechanism that would let
+   * such an opaque value type precisely.
    */
   @Test
   public void testRaggedConstantUnresolvable()
@@ -12435,7 +12437,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>): an {@code np.ndarray} element's
    * dtype is soundly ⊤ (numpy promotes {@code int} to {@code int64}, not {@code int32}), so the
    * union floors to ⊤. The shape floor reflects the unmodeled ragged rank over a tensor row;
-   * delegating the element to its producer generator would recover the shape.
+   * delegating the element to its producer generator would recover the shape (<a
+   * href="https://github.com/wala/ML/issues/652">wala/ML#652</a>).
    */
   @Test
   public void testRaggedConstantUnresolvableElement()
@@ -12462,7 +12465,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    *
    * <p>TODO: The runtime shape is {@code (2, None)} (asserted in the fixture); the static shape
    * floors to ⊤ over the {@code np.ndarray} row (the unmodeled ragged rank over a tensor element).
-   * Delegating the element to its producer generator would recover the shape.
+   * Delegating the element to its producer generator would recover the shape (<a
+   * href="https://github.com/wala/ML/issues/652">wala/ML#652</a>).
    */
   @Test
   public void testRaggedConstantUnresolvableDepth()
