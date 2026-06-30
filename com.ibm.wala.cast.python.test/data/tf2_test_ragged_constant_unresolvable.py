@@ -12,4 +12,10 @@ def consume(rt):
 # aborting with "Expected a list or tuple" / "Empty points-to set". wala/ML#612.
 pylist = json.loads("[[1, 2], [3]]")
 rt = tf.ragged.constant(pylist)
+
+# At runtime the ragged tensor is precise; the static analysis floors both axes to ⊤ because the
+# `pylist` is opaque (the captured gap this fixture guards).
+assert rt.shape.as_list() == [2, None]
+assert rt.dtype == tf.int32
+
 consume(rt)

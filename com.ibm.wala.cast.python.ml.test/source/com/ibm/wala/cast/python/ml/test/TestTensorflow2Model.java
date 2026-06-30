@@ -12437,6 +12437,29 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Captured-gap regression for the {@code RaggedConstant} shape floor (<a
+   * href="https://github.com/wala/ML/issues/612">wala/ML#612</a>) along the depth-walk path, and a
+   * precision guard for the dtype. A {@code pylist} whose first row is a resolvable scalar list but
+   * whose second row is an {@code np.ndarray} trips the structural floor in {@code
+   * getMaximumDepthOfScalars} (a different site than {@link
+   * #testRaggedConstantUnresolvableElement()}, which trips {@code containsScalars}), flooring the
+   * shape to ⊤. The dtype is still resolved to {@code int32}, because the leading scalar row lets
+   * {@code getDefaultDTypes} confirm scalars before the opaque element &mdash; so the floor is not
+   * the all-⊤ result of {@link #testRaggedConstantUnresolvableElement()}, where the opaque element
+   * precedes any confirmable scalar.
+   */
+  @Test
+  public void testRaggedConstantUnresolvableDepth()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_constant_unresolvable_depth.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
    * Covers {@code tf.eye} with a {@code batch_shape}, which prepends the batch dimensions to the
    * identity shape (<a href="https://github.com/wala/ML/issues/591">wala/ML#591</a>): a {@code (3,
    * 3)} identity with {@code batch_shape=[2]} is {@code (2, 3, 3)}. Exercises the fresh-list
