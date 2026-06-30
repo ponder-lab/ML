@@ -12401,6 +12401,86 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Captured-gap regression for the {@code RaggedConstant} shape and dtype floors (<a
+   * href="https://github.com/wala/ML/issues/612">wala/ML#612</a>): {@code tf.ragged.constant} whose
+   * {@code pylist} comes from an unmodeled {@code json.loads} &mdash; so its points-to set is empty
+   * even though the values are inline &mdash; floors both the shape and the dtype to ⊤ rather than
+   * aborting with "Empty points-to set".
+   *
+   * <p>TODO: The runtime tensor is {@code (2, None)} {@code int32} (asserted in the fixture); the
+   * static result floors both axes to ⊤ because {@code json.loads} is unmodeled. This is a modeling
+   * gap, not a content-dependent (opaque) value, tracked by <a
+   * href="https://github.com/wala/ML/issues/536">wala/ML#536</a> (model {@code json.loads} for
+   * compile-time-constant string inputs). ⊤ is the correct floor until then; it is not on the
+   * input-signature eval path.
+   */
+  @Test
+  public void testRaggedConstantUnresolvable()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_constant_unresolvable.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * Captured-gap regression for the {@code RaggedConstant} shape and dtype floors (<a
+   * href="https://github.com/wala/ML/issues/612">wala/ML#612</a>) along the structural-walk path: a
+   * {@code pylist} whose outer list is resolvable but whose first element is an {@code np.ndarray}
+   * (neither a {@code list} nor a {@code tuple}) floors both the shape and the dtype to ⊤ rather
+   * than aborting the whole analysis with "Expected a list or tuple". Complements {@link
+   * #testRaggedConstantUnresolvable()}, which exercises the empty-points-to-set floor.
+   *
+   * <p>TODO: The runtime tensor is {@code (2, None)} {@code int32} (asserted in the fixture). The
+   * dtype floor is inherent until numpy dtype-promotion is modeled (<a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>): an {@code np.ndarray} element's
+   * dtype is soundly ⊤ (numpy promotes {@code int} to {@code int64}, not {@code int32}), so the
+   * union floors to ⊤. The shape floor reflects the unmodeled ragged rank over a tensor row;
+   * delegating the element to its producer generator would recover the shape (<a
+   * href="https://github.com/wala/ML/issues/652">wala/ML#652</a>).
+   */
+  @Test
+  public void testRaggedConstantUnresolvableElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_constant_unresolvable_element.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * Captured-gap regression for the {@code RaggedConstant} shape floor (<a
+   * href="https://github.com/wala/ML/issues/612">wala/ML#612</a>) along the depth-walk path, and a
+   * precision guard for the dtype. A {@code pylist} whose first row is a resolvable scalar list but
+   * whose second row is an {@code np.ndarray} trips the structural floor in {@code
+   * getMaximumDepthOfScalars} (a different site than {@link
+   * #testRaggedConstantUnresolvableElement()}, which trips {@code containsScalars}), flooring the
+   * shape to ⊤. The dtype is still resolved to {@code int32}, because the leading scalar row lets
+   * {@code getDefaultDTypes} confirm scalars before the {@code np.ndarray} element &mdash; so the
+   * floor is not the all-⊤ result of {@link #testRaggedConstantUnresolvableElement()}, where the
+   * {@code np.ndarray} element precedes any confirmable scalar.
+   *
+   * <p>TODO: The runtime shape is {@code (2, None)} (asserted in the fixture); the static shape
+   * floors to ⊤ over the {@code np.ndarray} row (the unmodeled ragged rank over a tensor element).
+   * Delegating the element to its producer generator would recover the shape (<a
+   * href="https://github.com/wala/ML/issues/652">wala/ML#652</a>).
+   */
+  @Test
+  public void testRaggedConstantUnresolvableDepth()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_constant_unresolvable_depth.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
    * Covers {@code tf.eye} with a {@code batch_shape}, which prepends the batch dimensions to the
    * identity shape (<a href="https://github.com/wala/ML/issues/591">wala/ML#591</a>): a {@code (3,
    * 3)} identity with {@code batch_shape=[2]} is {@code (2, 3, 3)}. Exercises the fresh-list
