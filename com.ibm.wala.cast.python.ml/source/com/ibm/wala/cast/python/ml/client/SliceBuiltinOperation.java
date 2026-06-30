@@ -90,7 +90,12 @@ public class SliceBuiltinOperation extends TensorGenerator {
                 + view.receiverVn
                 + " receiverShapes="
                 + capturedReceiverShapes);
-    if (receiverShapes == null || receiverShapes.isEmpty()) return null;
+    // A `null` receiver shape means the receiver is a tensor of unknown shape (⊤), so the slice is
+    // ⊤. An empty set means the receiver is not a tensor (⊥): a subscript-slice of a non-tensor
+    // (e.g. `x[1::2]` of an opaque `argparse` attribute) is not a tensor either, so propagate ⊥
+    // rather than over-typing it to ⊤. wala/ML#656.
+    if (receiverShapes == null) return null;
+    if (receiverShapes.isEmpty()) return Set.of();
 
     // Multi-dim subscript: `slice(receiver, dim0, dim1, ...)` where each dimension is a
     // `slice(lower, upper, step)` object or an integer index (wala/ML#406). Distinguished from the

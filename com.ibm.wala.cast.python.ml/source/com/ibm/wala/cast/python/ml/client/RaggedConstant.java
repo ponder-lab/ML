@@ -69,6 +69,29 @@ public class RaggedConstant extends Constant {
     super(source);
   }
 
+  /**
+   * Signals that a {@code pylist} element (or a nested element) is neither a {@code list} nor a
+   * {@code tuple}, so the ragged shape cannot be computed structurally. Thrown deep in the
+   * recursive shape/dtype walk and caught at the {@link
+   * #getShapesOfValue(PropagationCallGraphBuilder, OrdinalSet)} and {@link
+   * #getDefaultDTypes(PropagationCallGraphBuilder)} entry points, where it floors the result to ⊤
+   * (unknown) rather than aborting the whole analysis. <a
+   * href="https://github.com/wala/ML/issues/612">wala/ML#612</a>.
+   */
+  private static final class UnresolvableRaggedElement extends RuntimeException {
+
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Constructs the exception for an element of the given type.
+     *
+     * @param reference The type of the unresolvable element.
+     */
+    UnresolvableRaggedElement(TypeReference reference) {
+      super("Expected a list or tuple, but found: " + reference + ".");
+    }
+  }
+
   protected int getPylistParameterPosition() {
     return Parameters.PYLIST.getIndex();
   }
@@ -185,8 +208,7 @@ public class RaggedConstant extends Constant {
 
         if (!containsAllListsOrTuples) ret.add(objectCatalogPointsToSet.size());
         else ret.addAll(getPossibleInnerListLengths(builder, instanceFieldPointsToSet));
-      } else
-        throw new IllegalStateException("Expected a list or tuple, but found: " + reference + ".");
+      } else throw new UnresolvableRaggedElement(reference);
     }
 
     return ret;
@@ -209,9 +231,7 @@ public class RaggedConstant extends Constant {
                     .getPointerKeyForObjectCatalog(asin));
 
         ret.add(objectCatalogPointsToSet.size());
-      } else
-        throw new IllegalArgumentException(
-            "Expected a list or tuple, but found: " + reference + ".");
+      } else throw new UnresolvableRaggedElement(reference);
     }
 
     return ret;
@@ -251,9 +271,7 @@ public class RaggedConstant extends Constant {
           for (InstanceKey fieldIK : instanceFieldPointsToSet)
             if (containsScalars(builder, fieldIK)) return true;
         }
-      } else
-        throw new IllegalArgumentException(
-            "Expected a list or tuple, but found: " + reference + ".");
+      } else throw new UnresolvableRaggedElement(reference);
     }
 
     return false;
@@ -299,8 +317,7 @@ public class RaggedConstant extends Constant {
           maxDepth = max(maxDepth, 1 + depthOfField);
         }
       }
-    } else
-      throw new IllegalArgumentException("Expected a list or tuple, but found: " + reference + ".");
+    } else throw new UnresolvableRaggedElement(reference);
 
     return maxDepth;
   }
@@ -343,9 +360,7 @@ public class RaggedConstant extends Constant {
             maxDepth = max(maxDepth, 1 + depthOfField);
           }
         }
-      } else
-        throw new IllegalArgumentException(
-            "Expected a list or tuple, but found: " + reference + ".");
+      } else throw new UnresolvableRaggedElement(reference);
     }
 
     return maxDepth;
@@ -362,10 +377,39 @@ public class RaggedConstant extends Constant {
     // than the maximum depth of empty lists in `pylist`.
 
     // Step 1: Calculate K, the maximum depth of scalar values in `pylist`.
-    if (valuePointsToSet == null || valuePointsToSet.isEmpty())
-      throw new IllegalArgumentException(
-          "Empty points-to set for value in source: " + this.getSource() + ".");
+    // The shape rides on the `pylist` argument; when it's unresolvable (empty points-to set) floor
+    // to ⊤ (unknown shape) rather than aborting the whole analysis. wala/ML#612.
+    if (valuePointsToSet == null || valuePointsToSet.isEmpty()) {
+      LOGGER.fine(
+          () ->
+              "Empty points-to set for value in source: "
+                  + this.getSource()
+                  + "; flooring shape to unknown.");
+      return null;
+    }
 
+    try {
+      return getShapesOfResolvedValue(builder, valuePointsToSet);
+    } catch (UnresolvableRaggedElement e) {
+      // A `pylist` element isn't a recognized list/tuple, so the structural shape walk can't
+      // proceed. Floor to ⊤ (unknown shape) rather than aborting the analysis. wala/ML#612.
+      LOGGER.fine(() -> e.getMessage() + " Flooring shape to unknown.");
+      return null;
+    }
+  }
+
+  /**
+   * Computes the ragged shapes for a non-empty, structurally resolvable {@code pylist} points-to
+   * set. Throws {@link UnresolvableRaggedElement} (caught by the caller and floored to ⊤) when an
+   * element isn't a recognized {@code list} or {@code tuple}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param valuePointsToSet The non-empty points-to set of the {@code pylist} argument.
+   * @return The possible ragged shapes, or {@code null} (⊤) when {@code inner_shape} is present but
+   *     unparseable.
+   */
+  private Set<List<Dimension<?>>> getShapesOfResolvedValue(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
     Set<InstanceKey> valuesWithScalars =
@@ -528,19 +572,33 @@ public class RaggedConstant extends Constant {
         this.getArgumentPointsToSet(
             builder, this.getValueParameterPosition(), this.getValueParameterName());
 
-    if (valuePointsToSet == null || valuePointsToSet.isEmpty())
-      throw new IllegalArgumentException(
-          "Empty points-to set for value in source: " + this.getSource() + ".");
-
-    if (StreamSupport.stream(valuePointsToSet.spliterator(), false)
-            .filter(ik -> containsScalars(builder, ik))
-            .count()
-        == 0) {
-      LOGGER.fine("No scalars found in `pylist`; defaulting to `tf.float32` dtype.");
-      return EnumSet.of(FLOAT32);
+    // The dtype rides on the `pylist` argument; when it's unresolvable (empty points-to set) floor
+    // to ⊤ (unknown dtype) rather than aborting the whole analysis. wala/ML#612.
+    if (valuePointsToSet == null || valuePointsToSet.isEmpty()) {
+      LOGGER.fine(
+          () ->
+              "Empty points-to set for value in source: "
+                  + this.getSource()
+                  + "; flooring dtype to unknown.");
+      return EnumSet.of(DType.UNKNOWN);
     }
 
-    // Otherwise, there are values available to infer the dtype from.
-    return super.getDefaultDTypes(builder);
+    try {
+      if (StreamSupport.stream(valuePointsToSet.spliterator(), false)
+              .filter(ik -> containsScalars(builder, ik))
+              .count()
+          == 0) {
+        LOGGER.fine("No scalars found in `pylist`; defaulting to `tf.float32` dtype.");
+        return EnumSet.of(FLOAT32);
+      }
+
+      // Otherwise, there are values available to infer the dtype from.
+      return super.getDefaultDTypes(builder);
+    } catch (UnresolvableRaggedElement e) {
+      // A `pylist` element isn't a recognized list/tuple, so the structural dtype walk can't
+      // proceed. Floor to ⊤ (unknown dtype) rather than aborting the analysis. wala/ML#612.
+      LOGGER.fine(() -> e.getMessage() + " Flooring dtype to unknown.");
+      return EnumSet.of(DType.UNKNOWN);
+    }
   }
 }

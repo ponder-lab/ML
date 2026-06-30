@@ -84,6 +84,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final String COMPLEX_64 = COMPLEX64.name().toLowerCase();
 
+  private static final String COMPLEX_128 = DType.COMPLEX128.name().toLowerCase();
+
   private static final String FLOAT_64 = FLOAT64.name().toLowerCase();
 
   private static final String INT_32 = INT32.name().toLowerCase();
@@ -3813,6 +3815,31 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
+  @Test
+  public void testSliceOpaque()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_slice_opaque.py", "consume", 0, 0);
+  }
+
+  @Test
+  public void testSliceOpaqueIter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_slice_opaque_iter.py", "consume", 0, 0);
+  }
+
+  /**
+   * Regression test for <a href="https://github.com/wala/ML/issues/653">wala/ML#653</a>: Python
+   * list repetition ({@code [0] * 3}) is not a tensor. The {@code *} binop has a {@code list}
+   * operand and an {@code int} operand, so it is list repetition (producing a list), not tensor
+   * scalar-multiplication. The binop operand-tensor gate must not treat the bare {@code list}
+   * operand as tensor evidence, so {@code consume}'s parameter is not classified as a tensor.
+   */
+  @Test
+  public void testListRepetition()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_list_repetition.py", "consume", 0, 0);
+  }
+
   /**
    * Regression test for wala/ML#451 (reopen): asserts the underlying PA state that Hybridize's
    * {@code Function.inferPrimitiveParameters} consumes &mdash; specifically, that no primitive
@@ -4946,23 +4973,103 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/598">wala/ML#598</a>: a bare
    * {@code numpy.array} value propagates its {@code TensorType} to a callee parameter. The issue's
-   * reproducer; {@code f}'s parameter types to {@code (3,)} unknown ({@code NpArray} infers the
-   * list-literal shape; the dtype is unknown with no {@code dtype=} argument).
-   *
-   * <p>TODO: the unknown dtype is a recoverable-precision floor. The runtime dtype is {@code
-   * float64} (numpy promotes the Python float literals), but {@code NpArray} does not model numpy's
-   * dtype promotion, so it floors to unknown rather than infer a possibly-wrong dtype. Tracked by
-   * <a href="https://github.com/wala/ML/issues/626">wala/ML#626</a>.
+   * reproducer; {@code f}'s parameter types to {@code (3,)} {@code float64}: {@code NpArray} infers
+   * the list-literal shape, and the dtype from numpy's promotion of the Python float literals (<a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>). The runtime dtype is {@code
+   * float64} (numpy promotes Python {@code float} to {@code float64}, not the {@code float32}
+   * TF-literal convention).
    */
   @Test
   public void testNpArrayBareParam()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_nparray_param.py", "f", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_64, 3))));
+  }
+
+  /**
+   * Companion to {@link #testNpArrayBareParam()} for the integer-promotion path of <a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>: a bare {@code numpy.array} of
+   * Python ints types to {@code (3,)} {@code int64}, because numpy promotes Python {@code int} to
+   * {@code int64} (not the {@code int32} TF-literal convention).
+   */
+  @Test
+  public void testNpArrayIntParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_nparray_int_param.py", "f", 1, 1, Map.of(2, Set.of(TensorType.of(INT_64, 3))));
+  }
+
+  /**
+   * Companion to {@link #testNpArrayBareParam()} for the boolean path of <a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>: an all-boolean literal array
+   * types to {@code (2,)} {@code bool}.
+   */
+  @Test
+  public void testNpArrayBoolParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_nparray_bool_param.py", "f", 1, 1, Map.of(2, Set.of(TensorType.of(BOOL, 2))));
+  }
+
+  /**
+   * Companion to {@link #testNpArrayBareParam()} for the string path of <a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>: an all-string literal array types
+   * to {@code (2,)} {@code string} (a string leaf subsumes the array in numpy's promotion).
+   */
+  @Test
+  public void testNpArrayStringParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_nparray_param.py",
+        "tf2_test_nparray_string_param.py", "f", 1, 1, Map.of(2, Set.of(TensorType.of(STRING, 2))));
+  }
+
+  /**
+   * Companion to {@link #testNpArrayBareParam()} for the nested-literal promotion path of <a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>: a nested literal mixing ints and
+   * a float promotes to {@code (2, 2)} {@code float64}, exercising the walk's descent through
+   * nested lists and the float-over-int promotion.
+   */
+  @Test
+  public void testNpArrayNestedParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_nparray_nested_param.py",
         "f",
         1,
         1,
-        Map.of(2, Set.of(new TensorType(UNKNOWN, asList(new NumericDim(3))))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 2, 2))));
+  }
+
+  /**
+   * Companion to {@link #testNpArrayBareParam()} for the complex path of <a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>: an all-complex literal array
+   * types to {@code (2,)} {@code complex128} (numpy promotes Python {@code complex} to {@code
+   * complex128}).
+   */
+  @Test
+  public void testNpArrayComplexParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_nparray_complex_param.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(COMPLEX_128, 2))));
+  }
+
+  /**
+   * Companion to {@link #testNpArrayBareParam()} for the non-literal-source floor of <a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>: when {@code x} is itself an
+   * {@code np.ndarray} rather than a Python literal, numpy preserves the source's dtype, which the
+   * walk does not model, so it floors to ⊤. The nested-array shape does not propagate through the
+   * outer {@code np.array} either, so both axes are ⊤.
+   */
+  @Test
+  public void testNpArrayArraySource()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_nparray_array_source.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
 
   /**
@@ -4973,9 +5080,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    *
    * <p>TODO: This pins the current imprecise shape. Once <a
    * href="https://github.com/wala/ML/issues/625">wala/ML#625</a> lands, the parameter should type
-   * to {@code (3,)} unknown (the bare form's shape; the dtype stays unknown pending <a
-   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>), and this assertion should be
-   * updated accordingly.
+   * to {@code (3,)} {@code float64} (the bare form's result now that <a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a> models numpy dtype promotion), and
+   * this assertion should be updated accordingly.
    */
   @Test
   public void testNpArrayWrappedParam()
@@ -12436,6 +12543,86 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * Captured-gap regression for the {@code RaggedConstant} shape and dtype floors (<a
+   * href="https://github.com/wala/ML/issues/612">wala/ML#612</a>): {@code tf.ragged.constant} whose
+   * {@code pylist} comes from an unmodeled {@code json.loads} &mdash; so its points-to set is empty
+   * even though the values are inline &mdash; floors both the shape and the dtype to ⊤ rather than
+   * aborting with "Empty points-to set".
+   *
+   * <p>TODO: The runtime tensor is {@code (2, None)} {@code int32} (asserted in the fixture); the
+   * static result floors both axes to ⊤ because {@code json.loads} is unmodeled. This is a modeling
+   * gap, not a content-dependent (opaque) value, tracked by <a
+   * href="https://github.com/wala/ML/issues/536">wala/ML#536</a> (model {@code json.loads} for
+   * compile-time-constant string inputs). ⊤ is the correct floor until then; it is not on the
+   * input-signature eval path.
+   */
+  @Test
+  public void testRaggedConstantUnresolvable()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_constant_unresolvable.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * Captured-gap regression for the {@code RaggedConstant} shape and dtype floors (<a
+   * href="https://github.com/wala/ML/issues/612">wala/ML#612</a>) along the structural-walk path: a
+   * {@code pylist} whose outer list is resolvable but whose first element is an {@code np.ndarray}
+   * (neither a {@code list} nor a {@code tuple}) floors both the shape and the dtype to ⊤ rather
+   * than aborting the whole analysis with "Expected a list or tuple". Complements {@link
+   * #testRaggedConstantUnresolvable()}, which exercises the empty-points-to-set floor.
+   *
+   * <p>TODO: The runtime tensor is {@code (2, None)} {@code int32} (asserted in the fixture). The
+   * dtype floor is inherent until numpy dtype-promotion is modeled (<a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>): an {@code np.ndarray} element's
+   * dtype is soundly ⊤ (numpy promotes {@code int} to {@code int64}, not {@code int32}), so the
+   * union floors to ⊤. The shape floor reflects the unmodeled ragged rank over a tensor row;
+   * delegating the element to its producer generator would recover the shape (<a
+   * href="https://github.com/wala/ML/issues/652">wala/ML#652</a>).
+   */
+  @Test
+  public void testRaggedConstantUnresolvableElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_constant_unresolvable_element.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * Captured-gap regression for the {@code RaggedConstant} shape floor (<a
+   * href="https://github.com/wala/ML/issues/612">wala/ML#612</a>) along the depth-walk path, and a
+   * precision guard for the dtype. A {@code pylist} whose first row is a resolvable scalar list but
+   * whose second row is an {@code np.ndarray} trips the structural floor in {@code
+   * getMaximumDepthOfScalars} (a different site than {@link
+   * #testRaggedConstantUnresolvableElement()}, which trips {@code containsScalars}), flooring the
+   * shape to ⊤. The dtype is still resolved to {@code int32}, because the leading scalar row lets
+   * {@code getDefaultDTypes} confirm scalars before the {@code np.ndarray} element &mdash; so the
+   * floor is not the all-⊤ result of {@link #testRaggedConstantUnresolvableElement()}, where the
+   * {@code np.ndarray} element precedes any confirmable scalar.
+   *
+   * <p>TODO: The runtime shape is {@code (2, None)} (asserted in the fixture); the static shape
+   * floors to ⊤ over the {@code np.ndarray} row (the unmodeled ragged rank over a tensor element).
+   * Delegating the element to its producer generator would recover the shape (<a
+   * href="https://github.com/wala/ML/issues/652">wala/ML#652</a>).
+   */
+  @Test
+  public void testRaggedConstantUnresolvableDepth()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_constant_unresolvable_depth.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
   }
 
   /**
