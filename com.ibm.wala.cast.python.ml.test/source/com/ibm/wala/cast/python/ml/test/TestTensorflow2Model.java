@@ -12407,10 +12407,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * even though the values are inline &mdash; floors both the shape and the dtype to ⊤ rather than
    * aborting with "Empty points-to set".
    *
-   * <p>The runtime tensor is {@code (2, None)} {@code int32} (asserted in the fixture); the static
-   * result floors both axes to ⊤ because {@code json.loads} is unmodeled. This is a modeling gap,
-   * not a content-dependent (opaque) value; ⊤ is the correct floor until {@code json.loads} is
-   * modeled, which is not on the input-signature eval path.
+   * <p>TODO: The runtime tensor is {@code (2, None)} {@code int32} (asserted in the fixture); the
+   * static result floors both axes to ⊤ because {@code json.loads} is unmodeled. This is a modeling
+   * gap, not a content-dependent (opaque) value, tracked by <a
+   * href="https://github.com/wala/ML/issues/536">wala/ML#536</a> (model {@code json.loads} for
+   * compile-time-constant string inputs). ⊤ is the correct floor until then; it is not on the
+   * input-signature eval path.
    */
   @Test
   public void testRaggedConstantUnresolvable()
