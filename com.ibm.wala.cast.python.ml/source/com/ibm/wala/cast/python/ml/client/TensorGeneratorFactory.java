@@ -469,7 +469,8 @@ public class TensorGeneratorFactory {
    * then the container instance's field (interprocedural, when populated in another node). Mirrors
    * {@code DatasetChooseFromDatasetsGenerator}'s list-element extraction. wala/ML#648.
    *
-   * @param containerSrc The list/tuple the dataset was read from.
+   * @param node The {@link CGNode} containing the container read.
+   * @param containerVn The value number of the list/tuple the dataset was read from.
    * @param index The element index read.
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param visited The recursion guard threaded through {@link #tryGetGenerator}.
