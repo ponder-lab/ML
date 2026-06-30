@@ -1140,6 +1140,7 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, DATASET_FROM_TENSORS_TYPE))
       return new DatasetFromTensorsGenerator(source);
     else if (isType(calledFunction, DATASET_BATCH_TYPE)) return new DatasetBatchGenerator(source);
+    else if (isType(calledFunction, DATASET_MAP_TYPE)) return new DatasetMapGenerator(source);
     else if (isType(calledFunction, DATASET_PADDED_BATCH_TYPE))
       // `padded_batch` prepends a batch dimension like `batch`; reuse the batch generator. The
       // padded inner dimensions are an upper-bound approximation. wala/ML#623.

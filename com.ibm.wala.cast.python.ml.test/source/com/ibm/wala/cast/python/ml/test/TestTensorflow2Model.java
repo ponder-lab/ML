@@ -4609,18 +4609,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * the VarLenFeature SparseTensor survives the dict (wala/ML#646), {@code tf.sparse.to_dense}
    * resolves the dict-routed operand to {@code (?,)} int64 (pinned by {@link
    * #testParseSingleExample()}), and the int32 cast plus tuple return carry it to {@code (?,)}
-   * int32 (pinned by {@link #testParseExampleTuple()}). What remains is the {@code
-   * dataset.map(parse_example)} layer itself: the {@code map} model allocates a fresh {@code
-   * Dataset} but never invokes {@code map_func} nor propagates its return as the mapped dataset's
-   * element type (the dataset-callback gap tracked by <a
-   * href="https://github.com/wala/ML/issues/506">wala/ML#506</a>), so the iterated {@code targets}
-   * (and {@code get_loss}'s {@code real}) stay untyped. {@code pred}'s absence is the model body.
-   * Analyzed statically here, like the consumer's vendoring; it runs in the perf-eval with its
-   * tfrecord/data setup.
+   * int32 (pinned by {@link #testParseExampleTuple()}). The {@code dataset.map(parse_example)}
+   * layer now types too (wala/ML#506): the mapped element is {@code map_func}'s {@code (inputs,
+   * targets)} return, and {@code enumerate} with nested unpacking resolves {@code targets} (pinned
+   * by {@link #testDatasetMap()}, {@link #testDatasetMapTuple()}, {@link
+   * #testDatasetMapEnumerate()}). What remains is the {@code fit}-side chain past the dataset:
+   * {@code input_fn}'s result is passed as a list {@code _model.fit([_train, _test], ...)} and
+   * list-unpacked, then forwarded through an indirected {@code train_fuc} into {@code train_step} →
+   * {@code _train_step} → {@code get_loss}; one of those hops still drops {@code targets} before it
+   * reaches {@code real}. {@code pred}'s absence is the model body. Analyzed statically here, like
+   * the consumer's vendoring; it runs in the perf-eval with its tfrecord/data setup.
    *
-   * <p>TODO: pins the current absent state (0/0); {@code real} flips once the {@code dataset.map}
-   * element type is propagated from {@code map_func}'s return (wala/ML#506), {@code pred} once the
-   * model body types. Tracked by <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>.
+   * <p>TODO: pins the current absent state (0/0); {@code real} flips once the {@code fit}-side
+   * list-unpack and {@code train_fuc} forwarding carry the now-typed dataset element to {@code
+   * get_loss} (wala/ML#506 modeled the {@code map} layer), {@code pred} once the model body types.
+   * Tracked by <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>.
    */
   @Test
   public void testGpt2GetLossVendored()
@@ -4716,6 +4719,53 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(new TensorType(INT_32, asList(DynamicDim.INSTANCE)))));
+  }
+
+  /**
+   * Regression guard for wala/ML#506: {@code tf.data.Dataset.map(map_func)} types its elements from
+   * {@code map_func}'s return, not the receiver's elements. {@code map_func} here ({@code double})
+   * consumes its argument ({@code tf.cast(x, tf.int64)}), exercising both halves: the callback's
+   * parameter resolves to the upstream element type ({@code (4,)} float32, so the cast's shape is
+   * {@code (4,)}) and its return ({@code (4,)} int64) becomes the mapped element type, recovered at
+   * {@code consume}.
+   */
+  @Test
+  public void testDatasetMap()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_dataset_map.py", "consume", 1, 1, Map.of(2, Set.of(TensorType.of(INT_64, 4))));
+  }
+
+  /**
+   * Companion to {@link #testDatasetMap()} for a tuple-returning {@code map_func}: {@code split}
+   * returns {@code (a, b)}, and iterating {@code for x, y in ds} resolves {@code y} (the second
+   * component) to {@code (4,)} int64 via the mapped dataset's per-index tuple typing. wala/ML#506.
+   */
+  @Test
+  public void testDatasetMapTuple()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_map_tuple.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 4))));
+  }
+
+  /**
+   * Like {@link #testDatasetMapTuple()} but iterated with {@code enumerate} and nested unpacking
+   * ({@code for i, (x, y) in enumerate(ds)}) — the gpt-2 {@code fit}-loop shape (wala/ML#618). The
+   * mapped tuple element's second component {@code y} still resolves to {@code (4,)} int64.
+   * wala/ML#506.
+   */
+  @Test
+  public void testDatasetMapEnumerate()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_map_enumerate.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 4))));
   }
 
   /**
