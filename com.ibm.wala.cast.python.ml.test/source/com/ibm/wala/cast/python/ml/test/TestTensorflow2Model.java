@@ -4908,13 +4908,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/598">wala/ML#598</a>: a bare
    * {@code numpy.array} value propagates its {@code TensorType} to a callee parameter. The issue's
-   * reproducer; {@code f}'s parameter types to {@code (3,)} unknown ({@code NpArray} infers the
-   * list-literal shape; the dtype is unknown with no {@code dtype=} argument).
-   *
-   * <p>TODO: the unknown dtype is a recoverable-precision floor. The runtime dtype is {@code
-   * float64} (numpy promotes the Python float literals), but {@code NpArray} does not model numpy's
-   * dtype promotion, so it floors to unknown rather than infer a possibly-wrong dtype. Tracked by
-   * <a href="https://github.com/wala/ML/issues/626">wala/ML#626</a>.
+   * reproducer; {@code f}'s parameter types to {@code (3,)} {@code float64}: {@code NpArray} infers
+   * the list-literal shape, and the dtype from numpy's promotion of the Python float literals (<a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>). The runtime dtype is {@code
+   * float64} (numpy promotes Python {@code float} to {@code float64}, not the {@code float32}
+   * TF-literal convention).
    */
   @Test
   public void testNpArrayBareParam()
@@ -4924,7 +4922,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "f",
         1,
         1,
-        Map.of(2, Set.of(new TensorType(UNKNOWN, asList(new NumericDim(3))))));
+        Map.of(2, Set.of(new TensorType(FLOAT_64, asList(new NumericDim(3))))));
+  }
+
+  /**
+   * Companion to {@link #testNpArrayBareParam()} for the integer-promotion path of <a
+   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>: a bare {@code numpy.array} of
+   * Python ints types to {@code (3,)} {@code int64}, because numpy promotes Python {@code int} to
+   * {@code int64} (not the {@code int32} TF-literal convention).
+   */
+  @Test
+  public void testNpArrayIntParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_nparray_int_param.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_64, asList(new NumericDim(3))))));
   }
 
   /**
