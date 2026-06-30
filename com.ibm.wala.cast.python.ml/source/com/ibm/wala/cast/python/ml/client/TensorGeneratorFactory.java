@@ -203,9 +203,11 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS_LIKE;
 import static com.ibm.wala.cast.python.types.PythonTypes.SLICE_BUILTIN;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.sanitize;
+import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.util.Map.entry;
 import static java.util.logging.Logger.getLogger;
 
+import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -214,21 +216,26 @@ import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.python.util.Util;
 import com.ibm.wala.classLoader.IClass;
+import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConcreteTypeKey;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
+import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSANewInstruction;
+import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.debug.UnimplementedError;
@@ -449,6 +456,136 @@ public class TensorGeneratorFactory {
       LOGGER.log(Level.FINE, "Could not get points-to set for " + key, e);
       return null;
     }
+  }
+
+  /**
+   * Resolves a {@link DatasetGenerator} for a dataset stored at index {@code index} of a {@code
+   * list}/{@code tuple} and read back (e.g. {@code [ds_a, ds_b][0]} or a tuple unpack of a dataset
+   * pair). The def-chain alone misses it because the retrieved variable's def is a container
+   * getfield, not a dataset op. Unlike a points-to-set collapse (which keeps only the final dataset
+   * instance and loses the transformation chain), this recurses on the stored <em>variable</em>, so
+   * a chained dataset (e.g. {@code from_tensor_slices(...).map(...)}) keeps its full generator. Two
+   * paths: a local-IR scan of the container's property writes (intraprocedural, the precise case),
+   * then the container instance's field (interprocedural, when populated in another node). Mirrors
+   * {@code DatasetChooseFromDatasetsGenerator}'s list-element extraction. wala/ML#648.
+   *
+   * @param node The {@link CGNode} containing the container read.
+   * @param containerVn The value number of the list/tuple the dataset was read from.
+   * @param index The element index read.
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param visited The recursion guard threaded through {@link #tryGetGenerator}.
+   * @return A {@link DatasetGenerator} for the stored dataset, or {@code null} if none is found.
+   */
+  private static TensorGenerator containerElementDatasetGenerator(
+      CGNode node,
+      int containerVn,
+      int index,
+      PropagationCallGraphBuilder builder,
+      Set<PointsToSetVariable> visited) {
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+
+    // Path 1: the container was built locally; scan its property writes for the one at `index` and
+    // recurse on the stored value's variable, preserving the dataset's full generator chain. Works
+    // even when the container's pointer key is implicit (no materialized points-to set).
+    DefUse du = node.getDU();
+    if (du.getDef(containerVn) instanceof SSANewInstruction) {
+      for (Iterator<SSAInstruction> uses = du.getUses(containerVn); uses.hasNext(); ) {
+        SSAInstruction use = uses.next();
+        if (use instanceof AstPropertyWrite) {
+          AstPropertyWrite write = (AstPropertyWrite) use;
+          if (write.getObjectRef() == containerVn
+              && constantMemberEquals(node, write.getMemberRef(), index, builder)) {
+            PointsToSetVariable valueSrc =
+                getPointsToSetVariable(
+                    pa.getHeapModel().getPointerKeyForLocal(node, write.getValue()), builder);
+            TensorGenerator generator = tryGetGenerator(valueSrc, builder, visited);
+            if (generator instanceof DatasetGenerator) return generator;
+          }
+        }
+      }
+    }
+
+    // Path 2: the container was populated in another node; read its field instance directly.
+    PointerKey containerKey = pa.getHeapModel().getPointerKeyForLocal(node, containerVn);
+    for (InstanceKey ik : pa.getPointsToSet(containerKey)) {
+      AllocationSiteInNode asin;
+      try {
+        asin = getAllocationSiteInNode(ik);
+      } catch (IllegalArgumentException e) {
+        continue;
+      }
+      if (asin == null) continue;
+      TypeReference reference = asin.getConcreteType().getReference();
+      if (!reference.equals(PythonTypes.list) && !reference.equals(PythonTypes.tuple)) continue;
+      IField field =
+          builder
+              .getClassHierarchy()
+              .resolveField(
+                  FieldReference.findOrCreate(
+                      reference, findOrCreateAsciiAtom(Integer.toString(index)), PythonTypes.Root));
+      if (field == null) continue;
+      PointsToSetVariable fieldSrc =
+          getPointsToSetVariable(builder.getPointerKeyForInstanceField(asin, field), builder);
+      TensorGenerator generator = tryGetGenerator(fieldSrc, builder, visited);
+      if (generator instanceof DatasetGenerator) return generator;
+    }
+    return null;
+  }
+
+  /**
+   * Returns the constant integer the member reference of a property access resolves to, or {@code
+   * null} if it is not a single constant index.
+   *
+   * @param node The {@link CGNode} of the property access.
+   * @param memberRef The value number of the member reference.
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The constant index, or {@code null}.
+   */
+  private static Integer constantMemberIndex(
+      CGNode node, int memberRef, PropagationCallGraphBuilder builder) {
+    PointerKey memberKey =
+        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, memberRef);
+    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(memberKey)) {
+      if (ik instanceof ConstantKey) {
+        Object value = ((ConstantKey<?>) ik).getValue();
+        if (value instanceof Integer) return (Integer) value;
+        if (value instanceof Long) return ((Long) value).intValue();
+        if (value instanceof String) {
+          try {
+            return Integer.parseInt((String) value);
+          } catch (NumberFormatException e) {
+            return null;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Returns whether the member reference of a property access resolves to the constant integer
+   * {@code index}.
+   *
+   * @param node The {@link CGNode} of the property access.
+   * @param memberRef The value number of the member reference.
+   * @param index The index to compare against.
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return {@code true} iff the member reference is exactly the constant {@code index}.
+   */
+  private static boolean constantMemberEquals(
+      CGNode node, int memberRef, int index, PropagationCallGraphBuilder builder) {
+    PointerKey memberKey =
+        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, memberRef);
+    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(memberKey)) {
+      if (ik instanceof ConstantKey) {
+        Object value = ((ConstantKey<?>) ik).getValue();
+        if (value instanceof Integer && (Integer) value == index) return true;
+        if (value instanceof Long && ((Long) value).intValue() == index) return true;
+        if (value instanceof String && ((String) value).equals(Integer.toString(index)))
+          return true;
+      }
+    }
+    return false;
   }
 
   private static boolean isNonTensorAttribute(String propertyName) {
@@ -893,6 +1030,21 @@ public class TensorGeneratorFactory {
         // from a dataset or tensor).
         PythonPropertyRead propRead = (PythonPropertyRead) def;
         int objRef = propRead.getObjectRef();
+
+        // The retrieved value may itself be a dataset stored in a list/tuple (e.g. `[ds_a,
+        // ds_b][0]`,
+        // or unpacking a `(train, test)` pair the `fit`-loop iterates). The def-chain resolves the
+        // container, not the dataset; recover the dataset's generator from the element at this
+        // constant index, preserving its transformation chain. Done before the `objSrc` guard below
+        // because a locally-built container often has an implicit (non-materialized) pointer key.
+        // wala/ML#648.
+        Integer listIndex = constantMemberIndex(node, propRead.getMemberRef(), builder);
+        if (listIndex != null) {
+          TensorGenerator elementDataset =
+              containerElementDatasetGenerator(node, objRef, listIndex, builder, visited);
+          if (elementDataset != null) return elementDataset;
+        }
+
         PointerKey objKey =
             builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, objRef);
         PointsToSetVariable objSrc = getPointsToSetVariable(objKey, builder);
@@ -1021,6 +1173,10 @@ public class TensorGeneratorFactory {
           return new NdarraySubscriptOperation(source);
         }
 
+        // The retrieved value may itself be a dataset stored in a list/tuple (e.g.
+        // `[ds_a, ds_b][0]`, or unpacking a `(train, test)` pair the `fit`-loop iterates). The
+        // def-chain resolves the container, not the dataset; recover the dataset's generator from
+        // the element at this index, preserving its transformation chain. wala/ML#648.
         // Similar to `EachElementGet`, we check if the container generator represents elements
         // (`Dataset`) or the tensor itself (peeling needed).
         if (propertyName == null || !isNonTensorAttribute(propertyName)) {

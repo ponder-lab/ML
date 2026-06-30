@@ -4769,6 +4769,40 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression guard for wala/ML#648: a {@code tf.data.Dataset} stored in a list and read back
+   * ({@code [ds, ds][0]}) keeps its element type when iterated. The element lowers to {@code
+   * d[iterator]}, a property read whose receiver came from a list getfield, so the def-chain alone
+   * resolves the list, not the dataset; the fix recovers the dataset from the element at the
+   * constant index and seeds the read off the receiver's points-to set. {@code consume}'s parameter
+   * types to the sliced element {@code (4,)} float32.
+   */
+  @Test
+  public void testDatasetInList()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_in_list.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4))));
+  }
+
+  /**
+   * The gpt-2 {@code fit}-side shape for wala/ML#618, end to end: a mapped dataset passed in a list
+   * ({@code fit([ds, ds])}), list-unpacked, iterated with {@code enumerate} and nested unpacking,
+   * then forwarded through an indirected callback into {@code get_loss}. {@code real} (the second
+   * mapped tuple component) types to {@code (4,)} int64, exercising wala/ML#648 (dataset through a
+   * list) together with wala/ML#506 (the {@code map} tuple element). The full vendored subject
+   * ({@link #testGpt2GetLossVendored()}) additionally chains {@code padded_batch}/{@code repeat}/
+   * {@code prefetch} behind an {@code input_fn} return, which still loses the transformation chain.
+   */
+  @Test
+  public void testFitLoop()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_fit_loop.py", "consume", 1, 1, Map.of(2, Set.of(TensorType.of(INT_64, 4))));
+  }
+
+  /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>: {@code
    * strategy.run(fn, (a, b))} forwards both elements of the positional {@code args} tuple into the
    * two-parameter callback {@code step_fn(inp, tar)}, not just the first. Both {@code
