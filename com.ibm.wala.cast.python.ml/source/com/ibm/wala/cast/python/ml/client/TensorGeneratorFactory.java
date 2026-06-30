@@ -196,6 +196,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNSORTED_SEGMENT
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNSORTED_SEGMENT_MEAN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.UNSORTED_SEGMENT_SUM;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VARIABLE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VAR_LEN_FEATURE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.WHERE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS_LIKE;
@@ -1122,6 +1123,8 @@ public class TensorGeneratorFactory {
       return new SparseFromDense(source);
     else if (isType(calledFunction, SPARSE_TO_DENSE.getDeclaringClass()))
       return new SparseToDense(source);
+    else if (isType(calledFunction, VAR_LEN_FEATURE.getDeclaringClass()))
+      return new VarLenFeature(source);
     else if (isType(calledFunction, MODEL.getDeclaringClass())) return new Model(source);
     else if (isType(calledFunction, TENSOR.getDeclaringClass())
         || isType(calledFunction, NDARRAY.getDeclaringClass())) return new TensorCall(source);
