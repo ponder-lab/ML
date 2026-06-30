@@ -12403,15 +12403,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Captured-gap regression for the {@code RaggedConstant} shape and dtype floors (<a
    * href="https://github.com/wala/ML/issues/612">wala/ML#612</a>): {@code tf.ragged.constant} whose
-   * {@code pylist} is read from a file at runtime &mdash; a genuinely content-dependent (opaque)
-   * source whose points-to set is empty &mdash; floors both the shape and the dtype to ⊤ rather
-   * than aborting with "Empty points-to set".
+   * {@code pylist} comes from an unmodeled {@code json.loads} &mdash; so its points-to set is empty
+   * even though the values are inline &mdash; floors both the shape and the dtype to ⊤ rather than
+   * aborting with "Empty points-to set".
    *
-   * <p>TODO: The runtime tensor is {@code (2, None)} {@code int32} (asserted in the fixture); the
-   * static result floors both axes to ⊤ because the file-sourced {@code pylist} is opaque to the
-   * analysis. User-provided shape/dtype assertions (<a
-   * href="https://github.com/wala/ML/issues/370">wala/ML#370</a>) are the mechanism that would let
-   * such a content-dependent value type precisely.
+   * <p>The runtime tensor is {@code (2, None)} {@code int32} (asserted in the fixture); the static
+   * result floors both axes to ⊤ because {@code json.loads} is unmodeled. This is a modeling gap,
+   * not a content-dependent (opaque) value; ⊤ is the correct floor until {@code json.loads} is
+   * modeled, which is not on the input-signature eval path.
    */
   @Test
   public void testRaggedConstantUnresolvable()
@@ -12459,9 +12458,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * getMaximumDepthOfScalars} (a different site than {@link
    * #testRaggedConstantUnresolvableElement()}, which trips {@code containsScalars}), flooring the
    * shape to ⊤. The dtype is still resolved to {@code int32}, because the leading scalar row lets
-   * {@code getDefaultDTypes} confirm scalars before the opaque element &mdash; so the floor is not
-   * the all-⊤ result of {@link #testRaggedConstantUnresolvableElement()}, where the opaque element
-   * precedes any confirmable scalar.
+   * {@code getDefaultDTypes} confirm scalars before the {@code np.ndarray} element &mdash; so the
+   * floor is not the all-⊤ result of {@link #testRaggedConstantUnresolvableElement()}, where the
+   * {@code np.ndarray} element precedes any confirmable scalar.
    *
    * <p>TODO: The runtime shape is {@code (2, None)} (asserted in the fixture); the static shape
    * floors to ⊤ over the {@code np.ndarray} row (the unmodeled ragged rank over a tensor element).

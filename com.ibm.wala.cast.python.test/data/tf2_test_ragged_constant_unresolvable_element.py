@@ -14,7 +14,7 @@ pylist = [np.array([1, 2]), [3]]
 rt = tf.ragged.constant(pylist)
 
 # At runtime the ragged tensor is precise; the static analysis floors both axes to ⊤ because the
-# opaque `np.ndarray` row precedes any confirmable scalar (the captured gap this fixture guards).
+# unhandled `np.ndarray` row precedes any confirmable scalar (the captured gap this fixture guards).
 assert rt.shape.as_list() == [2, None]
 assert rt.dtype == tf.int32
 
