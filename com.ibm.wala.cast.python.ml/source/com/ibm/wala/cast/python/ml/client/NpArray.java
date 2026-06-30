@@ -142,6 +142,10 @@ public class NpArray extends TensorGenerator {
         else if (value instanceof Boolean) leaves.add(DType.BOOL);
         else if (value instanceof Integer || value instanceof Long) leaves.add(DType.INT64);
         else if (value instanceof String) leaves.add(DType.STRING);
+        else if (value != null && "org.python.core.PyComplex".equals(value.getClass().getName()))
+          // A Python complex literal, which the Jython front-end represents as a `PyComplex`.
+          // Matched by class name to avoid a compile-time dependency on the Jython runtime.
+          leaves.add(DType.COMPLEX128);
         else return false; // Unrecognized scalar.
       } else {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
