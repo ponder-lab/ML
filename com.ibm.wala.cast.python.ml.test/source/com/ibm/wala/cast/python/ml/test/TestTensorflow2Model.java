@@ -4612,13 +4612,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * int32 (pinned by {@link #testParseExampleTuple()}). What remains is the {@code
    * dataset.map(parse_example)} layer itself: the {@code map} model allocates a fresh {@code
    * Dataset} but never invokes {@code map_func} nor propagates its return as the mapped dataset's
-   * element type, so the iterated {@code targets} (and {@code get_loss}'s {@code real}) stay
-   * untyped. {@code pred}'s absence is the model body. Analyzed statically here, like the
-   * consumer's vendoring; it runs in the perf-eval with its tfrecord/data setup.
+   * element type (the dataset-callback gap tracked by <a
+   * href="https://github.com/wala/ML/issues/506">wala/ML#506</a>), so the iterated {@code targets}
+   * (and {@code get_loss}'s {@code real}) stay untyped. {@code pred}'s absence is the model body.
+   * Analyzed statically here, like the consumer's vendoring; it runs in the perf-eval with its
+   * tfrecord/data setup.
    *
    * <p>TODO: pins the current absent state (0/0); {@code real} flips once the {@code dataset.map}
-   * element type is propagated from {@code map_func}'s return, {@code pred} once the model body
-   * types. Tracked by <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>.
+   * element type is propagated from {@code map_func}'s return (wala/ML#506), {@code pred} once the
+   * model body types. Tracked by <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>.
    */
   @Test
   public void testGpt2GetLossVendored()
