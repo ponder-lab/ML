@@ -2221,8 +2221,9 @@
         </method>
       </class>
       <class name="FixedLenFeature" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/io/FixedLenFeature. A fixed-length feature parses to a dense tensor; allocate a `Tensor` so the `FixedLenFeature` generator can type the parsed value (shape from the `dims` argument, dtype from the `type` argument). Previously this allocated an `Ltensorflow/objects/feature`, which the manual tensor walker explicitly ignores (`TensorFlowTypes.FEATURE`), so a `parse_single_example` result read back through a feature dict never typed. See wala/ML#655. The `set_shape` field is retained so a subsequent `x.set_shape(...)` still dispatches. -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self dims type">
-          <new def="x" class="Ltensorflow/objects/feature"/>
+          <new def="x" class="Ltensorflow/python/framework/ops/Tensor"/>
           <new def="y" class="Ltensorflow/functions/set_shape"/>
           <putfield class="LRoot" field="set_shape" fieldType="LRoot" ref="x" value="y"/>
           <return value="x"/>

@@ -78,6 +78,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FASHION_MNIST_X_
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FASHION_MNIST_Y_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FASHION_MNIST_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FIXED_LEN_FEATURE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLATTEN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLATTEN_LAYER_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FLOOR;
@@ -1303,6 +1304,8 @@ public class TensorGeneratorFactory {
       return new SparseToDense(source);
     else if (isType(calledFunction, VAR_LEN_FEATURE.getDeclaringClass()))
       return new VarLenFeature(source);
+    else if (isType(calledFunction, FIXED_LEN_FEATURE.getDeclaringClass()))
+      return new FixedLenFeature(source);
     else if (isType(calledFunction, MODEL.getDeclaringClass())) return new Model(source);
     else if (isType(calledFunction, TENSOR.getDeclaringClass())
         || isType(calledFunction, NDARRAY.getDeclaringClass())) return new TensorCall(source);

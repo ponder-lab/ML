@@ -590,6 +590,16 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String VAR_LEN_FEATURE_SIGNATURE = "tf.io.VarLenFeature()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/io/FixedLenFeature. */
+  public static final MethodReference FIXED_LEN_FEATURE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/FixedLenFeature")),
+          AstMethodReference.fnSelector);
+
+  private static final String FIXED_LEN_FEATURE_SIGNATURE = "tf.io.FixedLenFeature()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/gamma. */
   public static final MethodReference GAMMA =
       MethodReference.findOrCreate(
@@ -1956,6 +1966,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(SPARSE_FROM_DENSE.getDeclaringClass(), SPARSE_FROM_DENSE_SIGNATURE),
           Map.entry(SPARSE_TO_DENSE.getDeclaringClass(), SPARSE_TO_DENSE_SIGNATURE),
           Map.entry(VAR_LEN_FEATURE.getDeclaringClass(), VAR_LEN_FEATURE_SIGNATURE),
+          Map.entry(FIXED_LEN_FEATURE.getDeclaringClass(), FIXED_LEN_FEATURE_SIGNATURE),
           Map.entry(ONES.getDeclaringClass(), ONES_SIGNATURE),
           Map.entry(ZEROS.getDeclaringClass(), ZEROS_SIGNATURE),
           Map.entry(ONE_HOT.getDeclaringClass(), ONE_HOT_SIGNATURE),

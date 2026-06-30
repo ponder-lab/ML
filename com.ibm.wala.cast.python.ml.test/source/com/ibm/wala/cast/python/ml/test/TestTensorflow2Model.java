@@ -1740,6 +1740,44 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(3, Set.of(TENSOR_20_28_28_INT32)));
   }
 
+  /**
+   * Regression guard for wala/ML#655: a {@code tf.io.FixedLenFeature} value, parsed by {@code
+   * tf.io.parse_single_example} and read back through a dict subscript, types as a dense tensor
+   * whose shape comes from the feature's {@code dims} argument and whose dtype comes from its
+   * {@code type} argument. Previously {@code FixedLenFeature.do} allocated an {@code
+   * Ltensorflow/objects/ feature} that the manual tensor walker ignores, so the parsed value never
+   * typed.
+   */
+  @Test
+  public void testFixedLenFeature()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_fixed_len_feature.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 128))));
+  }
+
+  /**
+   * Regression guard for wala/ML#655, end to end: the NLPGNN {@code TFLoader.load_valid} input
+   * pipeline — a {@code TFRecordDataset} mapped by a {@code parse_single_example} decoder returning
+   * a 4-tuple of {@code FixedLenFeature} dict-subscripts, then {@code prefetch}ed, then iterated
+   * with a 4-way tuple unpack — types its first parsed field {@code X} ({@code input_ids}) to
+   * {@code (128,)} int64. Before the {@code FixedLenFeature} fix, the mapped element was
+   * non-tensor, so {@code X} (and any model parameter fed from it) came back non-tensor.
+   */
+  @Test
+  public void testTfrecordLoader()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tfrecord_loader.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 128))));
+  }
+
   @Test
   public void testModelAttributes()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
