@@ -4601,14 +4601,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    *
    * <p>The localization: {@code real} (the dataset-sourced {@code targets}) is dropped in {@code
    * input_fn}'s {@code tf.data.TFRecordDataset} + {@code .map(parse_example)} element type. {@code
-   * tf.sparse.to_dense} is now modeled (see {@link #testSparseToDense()}), but the chain still dies
-   * one step earlier, at {@code tf.io.parse_single_example} / {@code VarLenFeature}, which Ariadne
-   * does not type as a SparseTensor — so {@code to_dense} reads ⊤ there (wala/ML#645). {@code
-   * pred}'s absence is the model body. Analyzed statically here, like the consumer's vendoring; it
-   * runs in the perf-eval with its tfrecord/data setup.
+   * tf.sparse.to_dense} and {@code tf.io.VarLenFeature} are now modeled (see {@link
+   * #testSparseToDense()}, {@link #testVarLenFeature()}), but the chain dies at the dict subscript:
+   * {@code parse_single_example} returns its feature dict and {@code parsed["targets"]} reads back
+   * nothing, because the SparseTensor result carries an empty points-to set that does not survive a
+   * dict {@code putfield}/{@code getfield} (wala/ML#646, pinned by {@link
+   * #testParseSingleExample()}). {@code pred}'s absence is the model body. Analyzed statically
+   * here, like the consumer's vendoring; it runs in the perf-eval with its tfrecord/data setup.
    *
-   * <p>TODO: pins the current absent state (0/0); {@code real} flips once wala/ML#645 types the
-   * parsed SparseTensor, {@code pred} once the model body does. Tracked by <a
+   * <p>TODO: pins the current absent state (0/0); {@code real} flips once wala/ML#646 lets the
+   * SparseTensor survive the dict, {@code pred} once the model body types. Tracked by <a
    * href="https://github.com/wala/ML/issues/618">wala/ML#618</a>.
    */
   @Test
@@ -4647,6 +4649,40 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(INT_32, 2, 2))));
+  }
+
+  /**
+   * Regression guard for wala/ML#645: {@code tf.io.VarLenFeature(dtype)} models the SparseTensor a
+   * variable-length feature parses to, so {@code tf.sparse.to_dense} of it types from the feature's
+   * dtype (dynamic shape, {@code int64}). The {@code io}-registration fix makes {@code tf.io.*}
+   * resolve at all (they were registered under {@code tf}, not the {@code io} object).
+   */
+  @Test
+  public void testVarLenFeature()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_var_len_feature.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_INT64_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * The realistic gpt-2 shape for wala/ML#645: a {@code VarLenFeature} in a feature dict, parsed by
+   * {@code tf.io.parse_single_example}, subscripted, and densified. {@code consume}'s parameter is
+   * currently untyped (0/0): the SparseTensor's empty points-to set does not survive the dict
+   * subscript, so {@code parsed["t"]} reads nothing (see {@link #testVarLenFeature()} for the
+   * direct case that does type).
+   *
+   * <p>TODO: pins the current untyped state; {@code consume} types once a SparseTensor result keeps
+   * a live PTS through a dict, tracked by <a
+   * href="https://github.com/wala/ML/issues/646">wala/ML#646</a>.
+   */
+  @Test
+  public void testParseSingleExample()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_parse_single_example.py", "consume", 0, 0, Map.of());
   }
 
   /**

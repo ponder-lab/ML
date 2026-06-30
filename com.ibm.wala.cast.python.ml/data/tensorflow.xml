@@ -68,6 +68,8 @@
         <putfield class="LRoot" field="parse_single_example" fieldType="LRoot" ref="x" value="parse_single_example"/>
         <new def="FixedLenFeature" class="Ltensorflow/functions/FixedLenFeature"/>
         <putfield class="LRoot" field="FixedLenFeature" fieldType="LRoot" ref="x" value="FixedLenFeature"/>
+        <new def="VarLenFeature" class="Ltensorflow/functions/VarLenFeature"/>
+        <putfield class="LRoot" field="VarLenFeature" fieldType="LRoot" ref="x" value="VarLenFeature"/>
         <new def="pass_through" class="Ltensorflow/functions/pass_through"/>
         <putfield class="LRoot" field="decode_raw" fieldType="LRoot" ref="x" value="pass_through"/>
         <new def="pass_through_rhs" class="Ltensorflow/functions/pass_through_rhs"/>
@@ -104,6 +106,10 @@
         <putfield class="LRoot" field="image" fieldType="LRoot" ref="x" value="image"/>
         <new def="io" class="Lobject"/>
         <putfield class="LRoot" field="io" fieldType="LRoot" ref="x" value="io"/>
+        <!-- The parsing APIs are `tf.io.*` (wala/ML#645); also expose them under the `io` object, not just `tf`. -->
+        <putfield class="LRoot" field="parse_single_example" fieldType="LRoot" ref="io" value="parse_single_example"/>
+        <putfield class="LRoot" field="FixedLenFeature" fieldType="LRoot" ref="io" value="FixedLenFeature"/>
+        <putfield class="LRoot" field="VarLenFeature" fieldType="LRoot" ref="io" value="VarLenFeature"/>
         <new def="strings" class="Lobject"/>
         <putfield class="LRoot" field="strings" fieldType="LRoot" ref="x" value="strings"/>
         <new def="as_string" class="Ltensorflow/strings/as_string"/>
@@ -2222,6 +2228,13 @@
           <new def="y" class="Ltensorflow/functions/set_shape"/>
           <putfield class="LRoot" field="set_shape" fieldType="LRoot" ref="x" value="y"/>
           <return value="x"/>
+        </method>
+      </class>
+      <class name="VarLenFeature" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/io/VarLenFeature. A variable-length feature parses to a sparse tensor; allocate a SparseTensor so the `VarLenFeature` generator can type the parsed value (dynamic shape, dtype from the `dtype` argument). See wala/ML#645. -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self dtype">
+          <new def="res" class="Ltensorflow/python/framework/sparse_tensor/SparseTensor"/>
+          <return value="res"/>
         </method>
       </class>
       <class name="conv2d" allocatable="true">
