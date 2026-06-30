@@ -766,6 +766,22 @@ public class TensorGeneratorFactory {
     // the propagation system — most commonly summary-method returns. Treat
     // those as potential tensors so legitimate chained tensor binops (e.g.
     // `tf.constant(...) - some_summary_op_result`) aren't over-rejected.
+    // A bare Python `list`/`tuple` operand is not a tensor: a `*` binop over it is list repetition
+    // (`[0] * 3`) and a `+` is concatenation, neither of which is a tensor op. A list literal's
+    // local
+    // pointer key is often implicit (its PTS isn't materialised), which the check below would
+    // otherwise read as a summary-return tensor, so detect the container structurally from its
+    // allocating `new`. Only the companion operand (a tensor or `np.ndarray`) carries tensor
+    // evidence. wala/ML#653.
+    SSAInstruction operandDef = node.getDU().getDef(operandVn);
+    if (operandDef instanceof SSANewInstruction) {
+      TypeReference allocated = ((SSANewInstruction) operandDef).getConcreteType();
+      if (allocated.equals(PythonTypes.list) || allocated.equals(PythonTypes.tuple)) return false;
+    }
+    // Implicit pointer keys flag values whose PTS hasn't been materialised by
+    // the propagation system — most commonly summary-method returns. Treat
+    // those as potential tensors so legitimate chained tensor binops (e.g.
+    // `tf.constant(...) - some_summary_op_result`) aren't over-rejected.
     if (builder.getPropagationSystem().isImplicit(pk)) return true;
     PointsToSetVariable operandSrc = getPointsToSetVariable(pk, builder);
     if (operandSrc != null && tryGetGenerator(operandSrc, builder, visited) != null) return true;

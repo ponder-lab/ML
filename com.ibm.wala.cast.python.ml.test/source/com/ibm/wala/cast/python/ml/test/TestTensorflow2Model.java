@@ -3778,6 +3778,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression test for <a href="https://github.com/wala/ML/issues/653">wala/ML#653</a>: Python
+   * list repetition ({@code [0] * 3}) is not a tensor. The {@code *} binop has a {@code list}
+   * operand and an {@code int} operand, so it is list repetition (producing a list), not tensor
+   * scalar-multiplication. The binop operand-tensor gate must not treat the bare {@code list}
+   * operand as tensor evidence, so {@code consume}'s parameter is not classified as a tensor.
+   */
+  @Test
+  public void testListRepetition()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_list_repetition.py", "consume", 0, 0);
+  }
+
+  /**
    * Regression test for wala/ML#451 (reopen): asserts the underlying PA state that Hybridize's
    * {@code Function.inferPrimitiveParameters} consumes &mdash; specifically, that no primitive
    * {@link ConstantKey} is reachable through the parameter's points-to set when traversed
