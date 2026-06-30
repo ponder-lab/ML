@@ -1,15 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
-import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
-import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
-import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
-import com.ibm.wala.util.intset.OrdinalSet;
-import java.util.EnumSet;
-import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 
 /**
  * A generator for the SparseTensor a {@code tf.io.VarLenFeature(dtype)} represents: when a
@@ -17,6 +9,9 @@ import java.util.Set;
  * tf.sparse.SparseTensor} whose values carry the feature's dtype and whose dense shape is dynamic
  * (⊤). Modeling it as that SparseTensor lets {@code parse_single_example} (a pass-through of its
  * feature dict) and a downstream {@code tf.sparse.to_dense} type the parsed value (wala/ML#645).
+ *
+ * <p>{@code dtype} is the sole argument and there is no {@code shape} argument, so the base {@link
+ * TensorTypeAllocator} reads the dtype slot and falls to its ⊤-shape default.
  *
  * @see <a
  *     href="https://www.tensorflow.org/api_docs/python/tf/io/VarLenFeature">tf.io.VarLenFeature</a>.
@@ -44,24 +39,7 @@ public class VarLenFeature extends TensorTypeAllocator {
     super(source);
   }
 
-  /** Variable-length: the dense shape is dynamic (⊤). */
-  @Override
-  protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    return null;
-  }
-
-  /** The dtype comes from the {@code dtype} argument. */
-  @Override
-  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    OrdinalSet<InstanceKey> pointsToSet =
-        this.getArgumentPointsToSet(
-            builder, Parameters.DTYPE.getIndex(), Parameters.DTYPE.getName());
-
-    if (pointsToSet == null || pointsToSet.isEmpty()) return EnumSet.of(DType.UNKNOWN);
-
-    return this.getDTypesFromDTypeArgument(builder, pointsToSet);
-  }
-
+  /** No {@code shape} argument: a variable-length feature has a dynamic (⊤) dense shape. */
   @Override
   protected int getShapeParameterPosition() {
     return UNDEFINED_PARAMETER_POSITION;
@@ -72,6 +50,7 @@ public class VarLenFeature extends TensorTypeAllocator {
     return null;
   }
 
+  /** The dtype is the sole argument. */
   @Override
   protected int getDTypeParameterPosition() {
     return Parameters.DTYPE.getIndex();
