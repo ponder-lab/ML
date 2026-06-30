@@ -12403,15 +12403,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Captured-gap regression for the {@code RaggedConstant} shape and dtype floors (<a
    * href="https://github.com/wala/ML/issues/612">wala/ML#612</a>): {@code tf.ragged.constant} whose
-   * {@code pylist} comes from an unmodeled {@code json.loads} (so its points-to set is empty)
-   * floors both the shape and the dtype to ⊤ rather than aborting with "Expected a list or tuple" /
-   * "Empty points-to set".
+   * {@code pylist} is read from a file at runtime &mdash; a genuinely content-dependent (opaque)
+   * source whose points-to set is empty &mdash; floors both the shape and the dtype to ⊤ rather
+   * than aborting with "Empty points-to set".
    *
    * <p>TODO: The runtime tensor is {@code (2, None)} {@code int32} (asserted in the fixture); the
-   * static result floors both axes to ⊤ because the {@code json.loads} result is opaque to the
+   * static result floors both axes to ⊤ because the file-sourced {@code pylist} is opaque to the
    * analysis. User-provided shape/dtype assertions (<a
    * href="https://github.com/wala/ML/issues/370">wala/ML#370</a>) are the mechanism that would let
-   * such an opaque value type precisely.
+   * such a content-dependent value type precisely.
    */
   @Test
   public void testRaggedConstantUnresolvable()
