@@ -12401,6 +12401,42 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Captured-gap regression for the {@code RaggedConstant} shape and dtype floors (<a
+   * href="https://github.com/wala/ML/issues/612">wala/ML#612</a>): {@code tf.ragged.constant} with
+   * an opaque (unresolvable) {@code pylist} floors both the shape and the dtype to ⊤ rather than
+   * aborting with "Expected a list or tuple" / "Empty points-to set".
+   */
+  @Test
+  public void testRaggedConstantUnresolvable()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_constant_unresolvable.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
+   * Captured-gap regression for the {@code RaggedConstant} shape and dtype floors (<a
+   * href="https://github.com/wala/ML/issues/612">wala/ML#612</a>) along the structural-walk path: a
+   * {@code pylist} whose outer list is resolvable but whose first element is an {@code np.ndarray}
+   * (neither a {@code list} nor a {@code tuple}) floors both the shape and the dtype to ⊤ rather
+   * than aborting the whole analysis with "Expected a list or tuple". Complements {@link
+   * #testRaggedConstantUnresolvable()}, which exercises the empty-points-to-set floor.
+   */
+  @Test
+  public void testRaggedConstantUnresolvableElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_ragged_constant_unresolvable_element.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
    * Covers {@code tf.eye} with a {@code batch_shape}, which prepends the batch dimensions to the
    * identity shape (<a href="https://github.com/wala/ML/issues/591">wala/ML#591</a>): a {@code (3,
    * 3)} identity with {@code batch_shape=[2]} is {@code (2, 3, 3)}. Exercises the fresh-list
