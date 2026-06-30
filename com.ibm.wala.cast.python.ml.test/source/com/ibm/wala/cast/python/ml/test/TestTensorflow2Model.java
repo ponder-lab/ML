@@ -3777,6 +3777,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
+  @Test
+  public void testSliceOpaque()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_slice_opaque.py", "consume", 0, 0);
+  }
+
+  @Test
+  public void testSliceOpaqueIter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_slice_opaque_iter.py", "consume", 0, 0);
+  }
+
   /**
    * Regression test for <a href="https://github.com/wala/ML/issues/653">wala/ML#653</a>: Python
    * list repetition ({@code [0] * 3}) is not a tensor. The {@code *} binop has a {@code list}
