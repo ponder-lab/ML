@@ -2640,6 +2640,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     assertNotNull(CG);
     TensorTypeAnalysis analysis = engine.performAnalysis(builder);
 
+    // Guard against a vacuous pass: the captured-gap assertion below only checks that vn=2 is
+    // *absent* from the typed set, which is trivially satisfied if `maybe_num_nodes` is no longer
+    // reached at all (e.g. the entrypoint or file list changes). Require a reachable node so the
+    // test fails, rather than passing silently, when the reproduction stops exercising the target.
+    assertTrue(
+        "The reproduction must reach `maybe_num_nodes`; otherwise this captured-gap guard passes"
+            + " vacuously (wala/ML#659).",
+        CG.stream().anyMatch(n -> n.getMethod().getSignature().contains("maybe_num_nodes")));
+
     // Collect the parameter value numbers that `maybe_num_nodes` types as tensors. Its `index`
     // parameter is vn=2 (vn=1 is the function object).
     Set<Integer> typedParamVns = new HashSet<>();
