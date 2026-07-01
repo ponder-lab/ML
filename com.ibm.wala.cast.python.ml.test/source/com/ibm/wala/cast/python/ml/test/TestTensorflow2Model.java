@@ -2651,6 +2651,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
     // Collect the parameter value numbers that `maybe_num_nodes` types as tensors. Its `index`
     // parameter is vn=2 (vn=1 is the function object).
+    //
+    // Coverage note: while the wala/ML#659 gap holds, no `maybe_num_nodes` parameter types, so the
+    // `isParameter() && ...maybe_num_nodes` branch is never taken and `typedParamVns.add(...)` is
+    // never reached (Codecov reports them as an uncovered line and partial branch). That is the
+    // captured gap itself; both become covered when #659 is fixed and the assertion below is
+    // flipped
+    // to expect vn=2 typed.
     Set<Integer> typedParamVns = new HashSet<>();
     analysis.forEach(
         pt -> {
