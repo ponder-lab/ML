@@ -3950,7 +3950,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     assertTrue(
         "MyModel.call should have a call-graph node despite a colliding `class Model` in another"
             + " module (wala/ML#657).",
-        CG.stream().anyMatch(n -> n.getMethod().getSignature().contains("MyModel.call.do")));
+        CG.stream()
+            .anyMatch(
+                n ->
+                    n.getMethod()
+                        .getSignature()
+                        .contains("tf2_657_model_call.py.MyModel.call.do")));
   }
 
   /**

@@ -157,19 +157,26 @@ public class PythonCAstToIRTranslator extends AstTranslator {
             .filter(t -> !(t instanceof MissingType))
             .collect(Collectors.toSet());
 
-    // The superclass name is the registered WALA name of the first non-missing supertype. It can be
-    // null when the base-class name mis-resolves to a same-named class in another module (e.g. a
-    // user `class Model` colliding with `from tensorflow.keras import Model; class X(Model)`): the
-    // supertype is non-missing but has no entry in this unit's `walaTypeNames`. A null superclass
-    // leaves the class unlinked in the hierarchy and breaks callable dispatch on its instances
-    // (wala/ML#657). Fall back to `object` — the same lattice point the missing/no-base case uses,
-    // and the correct one for a modeled base such as `tf.keras.Model`.
-    TypeName superName = present.isEmpty() ? null : walaTypeNames.get(present.iterator().next());
+    // The superclass is the first non-missing supertype that resolves to a class in this unit. A
+    // supertype's `walaTypeNames` entry is null when its base-class name mis-resolves to a
+    // same-named class in another module (e.g. a user `class Model` colliding with `from
+    // tensorflow.keras import Model; class X(Model)`): it is non-missing but was never registered
+    // here. Skipping the unresolved supertypes rather than taking an arbitrary first (which drops
+    // the class to a null superclass, leaving it unlinked in the hierarchy and breaking callable
+    // dispatch on its instances, wala/ML#657) keeps a locally resolvable base under multiple
+    // inheritance. Fall back to `object` when none resolve, the same lattice point the missing or
+    // no-base case uses and the correct one for a modeled base such as `tf.keras.Model`.
+    TypeName superName =
+        present.stream()
+            .map(walaTypeNames::get)
+            .filter(name -> name != null)
+            .findFirst()
+            .orElse(PythonTypes.object.getName());
 
     ((PythonLoader) loader)
         .defineType(
             typeName,
-            superName == null ? PythonTypes.object.getName() : superName,
+            superName,
             type.getPosition(),
             cls.getSupertypes().stream()
                 .filter(t -> t instanceof MissingType)
