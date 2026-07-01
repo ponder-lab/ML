@@ -3927,6 +3927,33 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression guard for wala/ML#657: a {@code tf.keras.Model} subclass reached via {@code
+   * model(x)} callable dispatch keeps its call-graph node even when another module defines a
+   * same-named {@code class Model}. The subclass uses the ubiquitous bare-import idiom {@code from
+   * tensorflow.keras import Model; class MyModel(Model)}; when a second module ({@code
+   * tf2_657_collide.py}) also defines {@code class Model}, the bare base name previously
+   * mis-resolved across modules, so {@code MyModel}'s superclass came back {@code null} and {@code
+   * MyModel.call} was dropped from the call graph (which is the empty {@code getNodes(...)} that
+   * fails Hybridize's side-effect, recursion, and primitive-parameter preconditions). The fix falls
+   * back to {@code object} when the base name has no local resolution, matching the collision-free
+   * case.
+   */
+  @Test
+  public void testModelSubclassNameCollision()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonTensorAnalysisEngine engine =
+        makeEngine(emptyList(), new String[] {"tf2_657_model_call.py", "tf2_657_collide.py"});
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    addPytestEntrypoints(builder);
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+    assertNotNull(CG);
+    assertTrue(
+        "MyModel.call should have a call-graph node despite a colliding `class Model` in another"
+            + " module (wala/ML#657).",
+        CG.stream().anyMatch(n -> n.getMethod().getSignature().contains("MyModel.call.do")));
+  }
+
+  /**
    * Mirrors the recursion in Hybridize's {@code Function.containsPrimitive(InstanceKey, boolean,
    * PointerAnalysis, Set, IProgressMonitor)}: returns {@code true} iff a non-boolean primitive
    * {@link ConstantKey} value is reachable from {@code ik} through transitive instance field PTS
