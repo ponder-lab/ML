@@ -14,6 +14,7 @@ import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -2592,6 +2593,70 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         4,
         Map.of(3, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
+  /**
+   * Captured-gap reproduction for <a href="https://github.com/wala/ML/issues/659">wala/ML#659</a>:
+   * in the vendored GAT subject, {@code maybe_num_nodes}'s {@code index} parameter (vn=2) is
+   * currently <em>not</em> typed as a tensor, even though it receives a real tensor.
+   *
+   * <p>The chain: {@code MessagePassing._calculate_messages_all_type} computes {@code edge_targets
+   * = adjanceny_list_edge_type[:, 1]} (a subscript-slice of an {@code enumerate(adjacency_lists)}
+   * element), which flows through {@code GATConv.message_function}'s {@code edge_target} into
+   * {@code masksoftmax(alpha, edge_target)} and then {@code maybe_num_nodes(index, ...)}. In {@code
+   * propagate} the adjacency list types correctly to {@code (E, 2) int32}, but passed into {@code
+   * _calculate_messages_all_type} the {@code adjacency_lists} parameter is context-collapsed on the
+   * shared message-passing summary (merged with the {@code float32} {@code node_embeddings}),
+   * losing its {@code int32}/rank-2 type. The corrupted ⊤ makes the {@code enumerate} element
+   * empty-shaped, so the {@code [:, 1]} subscript returns ⊥ and {@code index} never types. This is
+   * a regression from 0.52.9 (bisected to the {@code SliceBuiltinOperation} empty-shape change in
+   * wala/ML#656, which unmasked the pre-existing collapse; ⊤ before, ⊥ after), and the root cause
+   * is the same context-collapse class as <a
+   * href="https://github.com/wala/ML/issues/570">wala/ML#570</a>.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/659">wala/ML#659</a>): {@code index} should
+   * type as a tensor once the shared-summary context collapse is resolved. Flip this to assert vn=2
+   * <em>is</em> typed when it is fixed.
+   */
+  @Test
+  public void testGatMaybeNumNodesIndexUntyped()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonTensorAnalysisEngine engine =
+        makeEngine(
+            getPathFiles("gat_proj"),
+            new String[] {
+              "gat_proj/nlpgnn/__init__.py",
+              "gat_proj/nlpgnn/gnn/__init__.py",
+              "gat_proj/nlpgnn/gnn/utils.py",
+              "gat_proj/nlpgnn/gnn/messagepassing.py",
+              "gat_proj/nlpgnn/gnn/GATConv.py",
+              "gat_proj/nlpgnn/models/__init__.py",
+              "gat_proj/nlpgnn/models/GAT.py",
+              "gat_proj/tf2_test_gat_call.py"
+            });
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    addPytestEntrypoints(builder);
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+    assertNotNull(CG);
+    TensorTypeAnalysis analysis = engine.performAnalysis(builder);
+
+    // Collect the parameter value numbers that `maybe_num_nodes` types as tensors. Its `index`
+    // parameter is vn=2 (vn=1 is the function object).
+    Set<Integer> typedParamVns = new HashSet<>();
+    analysis.forEach(
+        pt -> {
+          if (pt.fst instanceof LocalPointerKey) {
+            LocalPointerKey lpk = (LocalPointerKey) pt.fst;
+            if (lpk.isParameter()
+                && lpk.getNode().getMethod().getSignature().contains("maybe_num_nodes"))
+              typedParamVns.add(lpk.getValueNumber());
+          }
+        });
+    assertFalse(
+        "Captured gap for wala/ML#659: `maybe_num_nodes`'s `index` (vn=2) is currently untyped"
+            + " because `adjacency_lists` is context-collapsed on the shared message-passing"
+            + " summary. Flip this assertion when the collapse is resolved.",
+        typedParamVns.contains(2));
   }
 
   /**
