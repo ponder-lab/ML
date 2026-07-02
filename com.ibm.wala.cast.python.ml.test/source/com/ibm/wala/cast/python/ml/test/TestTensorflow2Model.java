@@ -2882,6 +2882,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * through {@code tf.keras.layers.Layer.__call__} dispatch, across the {@code
    * deep_recommenders→nlp→transformer} package boundaries.
    *
+   * <p>With {@code tf.keras.backend} modeled (<a
+   * href="https://github.com/wala/ML/issues/666">wala/ML#666</a>), the padding mask {@code masks =
+   * K.equal(inputs, 0)} is a third function-local tensor, typed {@code (2, 5)} bool.
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
@@ -2904,7 +2908,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "Transformer.call",
         "tr_proj",
         2,
-        2,
+        3,
         Map.of(3, Set.of(TENSOR_2_5_INT32), 4, Set.of(TENSOR_2_5_INT32)));
   }
 
