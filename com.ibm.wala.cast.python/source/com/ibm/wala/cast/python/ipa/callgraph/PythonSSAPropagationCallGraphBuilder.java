@@ -78,6 +78,14 @@ import java.util.logging.Logger;
 
 public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallGraphBuilder {
 
+  /**
+   * The synthetic property key under which {@code xs.append(v)} stores {@code v} on {@code xs}; see
+   * {@code PythonConstraintVisitor.processListAppend}. Value-iteration surfaces the property's
+   * values regardless of its name, so the name only needs to avoid colliding with real program
+   * properties.
+   */
+  public static final String LIST_APPEND_CONTENTS_FIELD = "__list_append_contents__";
+
   private static final Logger logger =
       Logger.getLogger(PythonSSAPropagationCallGraphBuilder.class.getName());
 
@@ -291,6 +299,40 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public void visitPythonInvoke(PythonInvokeInstruction inst) {
       visitInvokeInternal(inst, new DefaultInvariantComputer());
+      processListAppend(inst);
+    }
+
+    /**
+     * Models {@code xs.append(v)} as a property write of {@code v} onto {@code xs} under the
+     * synthetic {@value #LIST_APPEND_CONTENTS_FIELD} key, so values accumulated through {@code
+     * append} surface when the collection is iterated ({@code visitForElementGet} reads the
+     * cataloged properties of value-iterated collections). Nothing else models {@code list.append},
+     * so without this the appended values are unreachable from the collection and every value
+     * flowing through an append-accumulate-iterate chain unravels (wala/ML#570, wala/ML#618).
+     *
+     * <p>Detection is syntactic on the du-chain: an invoke whose callee value is a property read of
+     * the constant name {@code append}. The property write coexists with the invoke's normal
+     * dispatch, so a user-defined {@code append} method still dispatches; such a receiver merely
+     * gains a stray property under the synthetic key, which is only observable if that same object
+     * is also value-iterated.
+     *
+     * @param inst the invoke instruction to examine
+     */
+    private void processListAppend(PythonInvokeInstruction inst) {
+      if (inst.getNumberOfPositionalParameters() != 2) return;
+
+      SSAInstruction calleeDef = du.getDef(inst.getUse(0));
+      if (!(calleeDef instanceof AstPropertyRead)) return;
+
+      AstPropertyRead read = (AstPropertyRead) calleeDef;
+      SymbolTable symtab = ir.getSymbolTable();
+      if (!symtab.isConstant(read.getMemberRef())
+          || !"append".equals(symtab.getConstantValue(read.getMemberRef()))) return;
+
+      InstanceKey contentsKey =
+          getBuilder().getInstanceKeyForConstant(PythonTypes.string, LIST_APPEND_CONTENTS_FIELD);
+      PointerKey valueKey = getPointerKeyForLocal(inst.getUse(1));
+      newFieldWrite(node, read.getObjectRef(), new InstanceKey[] {contentsKey}, valueKey);
     }
 
     /**
