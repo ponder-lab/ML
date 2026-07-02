@@ -9886,6 +9886,104 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Pins the forward result of a nested layer call ({@code self.inner(...)} inside another layer's
+   * {@code call}): the inner layer's return is tensor-typed at the nested call site and flows into
+   * a sink (<a href="https://github.com/wala/ML/issues/570">wala/ML#570</a>; enabled by the
+   * wala/ML#595 forward-result machinery).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNestedLayerCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_nested_layer_call.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
+  /**
+   * Pins the forward result of a nested layer call whose argument is a {@code NamedTuple} and whose
+   * inner {@code call} computes through a field read, a matmul, and an {@code unsorted_segment_sum}
+   * (<a href="https://github.com/wala/ML/issues/570">wala/ML#570</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNestedLayerCallNamedTuple()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_nested_layer_call2.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
+  /**
+   * Pins the forward result of a nested layer call whose inner {@code call} returns through a
+   * second method hop ({@code self.propagate(...)} on the same class), the single-class form of
+   * {@code gcn_proj}'s return chain (<a href="https://github.com/wala/ML/issues/570">
+   * wala/ML#570</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNestedLayerCallPropagate()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_nested_layer_call3.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
+  /**
+   * Pins the forward result of a nested layer call whose inner {@code call} returns through an
+   * <em>inherited</em> method ({@code self.propagate(...)} defined on a same-module base class),
+   * mirroring {@code gcn_proj}'s {@code GraphConvolution(MessagePassing)} shape (<a
+   * href="https://github.com/wala/ML/issues/570">wala/ML#570</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNestedLayerCallInheritedPropagate()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_nested_layer_call4.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
+  /**
+   * Pins the forward result of a nested layer call whose inner {@code call} returns through a
+   * method inherited from a <em>cross-module</em> base ({@code Inner(MessagePassing)} with {@code
+   * MessagePassing} in another file), the deepest structural form of the {@code gcn_proj} chain (<a
+   * href="https://github.com/wala/ML/issues/570">wala/ML#570</a>). {@code consume(x)} inside {@code
+   * Outer.call} recovers the concrete {@code (4, 8) float32}, so the frame/inheritance mechanism is
+   * not the {@code gcn_proj} residual; the remaining gap is the list-mediated aggregation inside
+   * the vendored {@code propagate} (gathers/slices/appends over the adjacency-list collection).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNestedLayerCallCrossModule()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "nested_proj/messagepassing.py",
+          "nested_proj/inner.py",
+          "nested_proj/tf2_test_nested_cross_module.py"
+        },
+        "tf2_test_nested_cross_module.py",
+        "consume",
+        "nested_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
+  /**
    * Verifies dtype recovery for {@code tf.linalg.matmul} on a {@code NamedTuple} field threaded in
    * as a parameter (<a href="https://github.com/wala/ML/issues/570">wala/ML#570</a>). {@code Inp}
    * is constructed in the caller and passed into {@code layer}, which reads {@code inp.x} (a {@code
