@@ -2884,7 +2884,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    *
    * <p>With {@code tf.keras.backend} modeled (<a
    * href="https://github.com/wala/ML/issues/666">wala/ML#666</a>), the padding mask {@code masks =
-   * K.equal(inputs, 0)} is a third function-local tensor, typed {@code (2, 5)} bool.
+   * K.equal(inputs, 0)} is a third function-local tensor, typed {@code (2, 5)} bool. With {@code
+   * add_weight} consuming its arguments (wala/ML#667), {@code embeddings =
+   * K.gather(self.embeddings, inputs)} is a fourth: the embedding table types {@code (?, 8)}
+   * float32 and the {@code gather} pass-through carries it.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2908,7 +2911,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "Transformer.call",
         "tr_proj",
         2,
-        3,
+        4,
         Map.of(3, Set.of(TENSOR_2_5_INT32), 4, Set.of(TENSOR_2_5_INT32)));
   }
 
