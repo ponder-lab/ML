@@ -10065,6 +10065,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_list_append_iterate.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
   }
 
+  /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/668">wala/ML#668</a>: appending
+   * a constant (an invariant-contents value whose pointer key the invoke's own argument processing
+   * records as implicitly represented) must not crash call-graph construction with {@code
+   * UnimplementedError}. The tensor appended alongside still types through the iteration.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCollectionProbeListAppendConstant()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_append_constant.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
   @Test
   public void testCollectionProbeZipIterate()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
