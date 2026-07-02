@@ -4067,7 +4067,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     if (ik instanceof AllocationSiteInNode) {
       // Already a concrete alloc; use as-is.
     }
-    for (IField field : toProcess.getConcreteType().getAllInstanceFields()) {
+    for (IField field : toProcess.concreteType().getAllInstanceFields()) {
       InstanceFieldPointerKey fk =
           (InstanceFieldPointerKey)
               pa.getHeapModel().getPointerKeyForInstanceField(toProcess, field);

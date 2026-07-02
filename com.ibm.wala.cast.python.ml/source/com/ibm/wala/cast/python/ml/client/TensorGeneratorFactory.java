@@ -340,10 +340,10 @@ public class TensorGeneratorFactory {
               builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, funcVn);
           for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(funcKey)) {
             if (ik instanceof ConcreteTypeKey) {
-              return ((ConcreteTypeKey) ik).getType().getReference();
+              return ((ConcreteTypeKey) ik).type().getReference();
             }
             if (ik instanceof AllocationSiteInNode) {
-              return ((AllocationSiteInNode) ik).getConcreteType().getReference();
+              return ((AllocationSiteInNode) ik).concreteType().getReference();
             }
           }
         }
@@ -370,7 +370,7 @@ public class TensorGeneratorFactory {
     } else if (k instanceof ReturnValueKey) {
       return ((ReturnValueKey) k).getNode().getMethod().getDeclaringClass().getReference();
     } else if (k instanceof AllocationSiteInNode) {
-      return ((AllocationSiteInNode) k).getConcreteType().getReference();
+      return ((AllocationSiteInNode) k).concreteType().getReference();
     }
     return Util.getFunction(source);
   }
@@ -516,7 +516,7 @@ public class TensorGeneratorFactory {
         continue;
       }
       if (asin == null) continue;
-      TypeReference reference = asin.getConcreteType().getReference();
+      TypeReference reference = asin.concreteType().getReference();
       if (!reference.equals(PythonTypes.list) && !reference.equals(PythonTypes.tuple)) continue;
       IField field =
           builder

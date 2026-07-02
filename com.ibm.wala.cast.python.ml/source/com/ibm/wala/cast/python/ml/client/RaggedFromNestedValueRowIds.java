@@ -108,7 +108,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
       for (InstanceKey ik : getEffectiveInstances(builder, nestedNrowsPts)) {
         if (ik instanceof AllocationSiteInNode) {
           AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-          TypeReference reference = asin.getConcreteType().getReference();
+          TypeReference reference = asin.concreteType().getReference();
           if (reference.equals(list) || reference.equals(tuple)) {
             // Get index 0
             FieldReference subscript =
@@ -152,7 +152,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
       for (InstanceKey ik : getEffectiveInstances(builder, nestedValueRowIdsPts)) {
         if (ik instanceof AllocationSiteInNode) {
           AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-          TypeReference reference = asin.getConcreteType().getReference();
+          TypeReference reference = asin.concreteType().getReference();
 
           if (reference.equals(list) || reference.equals(tuple)) {
             OrdinalSet<InstanceKey> objectCatalogPointsToSet =
@@ -179,7 +179,7 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
                   for (InstanceKey innerIk : getEffectiveInstances(builder, firstElemPts)) {
                     if (innerIk instanceof AllocationSiteInNode) {
                       AllocationSiteInNode innerAsin = getAllocationSiteInNode(innerIk);
-                      TypeReference innerRef = innerAsin.getConcreteType().getReference();
+                      TypeReference innerRef = innerAsin.concreteType().getReference();
                       if (innerRef.equals(list) || innerRef.equals(tuple)) {
                         OrdinalSet<InstanceKey> innerObjectCatalog =
                             pointerAnalysis.getPointsToSet(

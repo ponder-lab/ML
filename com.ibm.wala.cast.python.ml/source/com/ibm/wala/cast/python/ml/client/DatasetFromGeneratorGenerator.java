@@ -88,8 +88,8 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
       for (InstanceKey ik : outputSignaturePts) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin != null
-            && (asin.getConcreteType().getReference().equals(tuple)
-                || asin.getConcreteType().getReference().equals(list))) {
+            && (asin.concreteType().getReference().equals(tuple)
+                || asin.concreteType().getReference().equals(list))) {
           return true;
         }
       }
@@ -103,8 +103,8 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
       for (InstanceKey ik : outputTypesPts) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin != null
-            && (asin.getConcreteType().getReference().equals(tuple)
-                || asin.getConcreteType().getReference().equals(list))) {
+            && (asin.concreteType().getReference().equals(tuple)
+                || asin.concreteType().getReference().equals(list))) {
           return true;
         }
       }
@@ -130,8 +130,8 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
       for (InstanceKey ik : outputSignaturePts) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin != null
-            && (asin.getConcreteType().getReference().equals(tuple)
-                || asin.getConcreteType().getReference().equals(list))) {
+            && (asin.concreteType().getReference().equals(tuple)
+                || asin.concreteType().getReference().equals(list))) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               builder
                   .getPointerAnalysis()
@@ -174,8 +174,8 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
       for (InstanceKey ik : outputShapesPts) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin != null
-            && (asin.getConcreteType().getReference().equals(tuple)
-                || asin.getConcreteType().getReference().equals(list))) {
+            && (asin.concreteType().getReference().equals(tuple)
+                || asin.concreteType().getReference().equals(list))) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               builder
                   .getPointerAnalysis()
@@ -231,8 +231,8 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         // Case 1.1: Structured signature (tuple or list of specs).
         if (asin != null
-            && (asin.getConcreteType().getReference().equals(tuple)
-                || asin.getConcreteType().getReference().equals(list))) {
+            && (asin.concreteType().getReference().equals(tuple)
+                || asin.concreteType().getReference().equals(list))) {
           // We extract shapes from each component of the structure and union them.
           // This results in the dataset elements being identified as having any of
           // the types/shapes present in the signature.
@@ -315,8 +315,8 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
       for (InstanceKey ik : outputSignaturePts) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin != null
-            && (asin.getConcreteType().getReference().equals(tuple)
-                || asin.getConcreteType().getReference().equals(list))) {
+            && (asin.concreteType().getReference().equals(tuple)
+                || asin.concreteType().getReference().equals(list))) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               builder
                   .getPointerAnalysis()
@@ -355,8 +355,8 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
       for (InstanceKey ik : outputTypesPts) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin != null
-            && (asin.getConcreteType().getReference().equals(tuple)
-                || asin.getConcreteType().getReference().equals(list))) {
+            && (asin.concreteType().getReference().equals(tuple)
+                || asin.concreteType().getReference().equals(list))) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               builder
                   .getPointerAnalysis()
@@ -431,8 +431,8 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         // Case 1.1: Structured signature (tuple or list of specs).
         if (asin != null
-            && (asin.getConcreteType().getReference().equals(tuple)
-                || asin.getConcreteType().getReference().equals(list))) {
+            && (asin.concreteType().getReference().equals(tuple)
+                || asin.concreteType().getReference().equals(list))) {
           // Extract dtypes from each component and union them.
           // This results in the dataset elements being identified as having any of
           // the dtypes present in the signature.

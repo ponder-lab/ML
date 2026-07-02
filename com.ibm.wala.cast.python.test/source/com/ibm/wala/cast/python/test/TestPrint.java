@@ -68,7 +68,7 @@ public class TestPrint extends TestJythonCallGraphShape {
           assertEquals(1, read.getAccessCount());
           Access access = read.getAccess(0);
 
-          if (access.variableName.equals(PRINT_FUNCTION_VARIABLE_NAME)) {
+          if (access.variableName().equals(PRINT_FUNCTION_VARIABLE_NAME)) {
             foundPrintCall = true;
 
             // Found the print call. Let's ensure that it "points" to the built-in function.
@@ -76,13 +76,13 @@ public class TestPrint extends TestJythonCallGraphShape {
                 builder
                     .getPointerAnalysis()
                     .getHeapModel()
-                    .getPointerKeyForLocal(fNode, access.valueNumber);
+                    .getPointerKeyForLocal(fNode, access.valueNumber());
             OrdinalSet<InstanceKey> pointsToSet = builder.getPointerAnalysis().getPointsToSet(pk);
 
             for (Iterator<InstanceKey> pit = pointsToSet.iterator(); pit.hasNext(); ) {
               InstanceKey ik = pit.next();
 
-              IClass concreteType = ik.getConcreteType();
+              IClass concreteType = ik.concreteType();
               TypeReference typeReference = concreteType.getReference();
 
               if (typeReference.equals(PRINT_FUNCTION_TYPE_REFERENCE)) {

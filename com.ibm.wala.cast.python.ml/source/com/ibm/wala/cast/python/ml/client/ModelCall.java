@@ -177,7 +177,7 @@ public class ModelCall extends TensorGenerator {
       if (selfASIN == null) continue;
 
       // Only functional-API models carry an `outputs` constructor argument.
-      if (!selfASIN.getConcreteType().getReference().equals(MODEL.getDeclaringClass())) continue;
+      if (!selfASIN.concreteType().getReference().equals(MODEL.getDeclaringClass())) continue;
 
       CGNode modelDoNode = selfASIN.getNode();
       IR ir = modelDoNode.getIR();

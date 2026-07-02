@@ -486,7 +486,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         for (InstanceKey ik : pointerAnalysis.getPointsToSet(targetKey)) {
           if (ik instanceof ConcreteTypeKey) {
             ConcreteTypeKey ctk = (ConcreteTypeKey) ik;
-            IClass type = ctk.getType();
+            IClass type = ctk.type();
             TypeReference reference = type.getReference();
 
             if (reference.equals(NEXT.getDeclaringClass())) {
@@ -679,7 +679,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     for (InstanceKey ik : pointerAnalysis.getPointsToSet(usePointerKey)) {
       if (ik instanceof AllocationSiteInNode) {
         AllocationSiteInNode asin = (AllocationSiteInNode) ik;
-        IClass concreteType = asin.getConcreteType();
+        IClass concreteType = asin.concreteType();
         TypeReference reference = concreteType.getReference();
 
         if ((reference.equals(DATASET)
@@ -727,7 +727,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             pointerAnalysis.getPointsToSet(invocationUsePointerKey)) {
           if (functionInstance instanceof ConcreteTypeKey) {
             ConcreteTypeKey typeKey = (ConcreteTypeKey) functionInstance;
-            IClass type = typeKey.getType();
+            IClass type = typeKey.type();
             TypeReference typeReference = type.getReference();
 
             if (typeReference.equals(ENUMERATE.getDeclaringClass())) {
@@ -853,7 +853,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           AllocationSiteInNode asin = getAllocationSiteInNode(ik);
 
           if (asin != null) {
-            TypeReference reference = asin.getConcreteType().getReference();
+            TypeReference reference = asin.concreteType().getReference();
 
             if (reference.getName().toString().startsWith(DATA_PACKAGE_PREFIX)) {
               LOGGER.fine(
@@ -1000,7 +1000,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             // file and avoids missing tensor receivers that flow through closures or constants.
             AllocationSiteInNode asin = getAllocationSiteInNode(ik);
             if (asin != null
-                && SET_SHAPE_RECEIVER_TYPES.contains(asin.getConcreteType().getReference())) {
+                && SET_SHAPE_RECEIVER_TYPES.contains(asin.concreteType().getReference())) {
               receiverEligible = true;
               break;
             }

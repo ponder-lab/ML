@@ -307,7 +307,7 @@ public abstract class TensorGenerator {
     for (InstanceKey instanceKey : pointsToSet) {
       AllocationSiteInNode asin = getAllocationSiteInNode(instanceKey);
       if (asin == null) continue;
-      TypeReference reference = asin.getConcreteType().getReference();
+      TypeReference reference = asin.concreteType().getReference();
 
       if (reference.equals(list) || reference.equals(tuple)) {
         // We have a list of integers that represent the shape.
@@ -379,7 +379,7 @@ public abstract class TensorGenerator {
               tensorDimensions.add(dimension);
             } else if (instanceFieldIK instanceof AllocationSiteInNode) {
               AllocationSiteInNode innerAsin = (AllocationSiteInNode) instanceFieldIK;
-              TypeReference innerReference = innerAsin.getConcreteType().getReference();
+              TypeReference innerReference = innerAsin.concreteType().getReference();
 
               if (innerReference.equals(tuple)
                   || innerReference.equals(list)
@@ -1357,7 +1357,7 @@ public abstract class TensorGenerator {
       if (valueIK instanceof ConstantKey) ret.add(emptyList()); // Scalar value.
       else if (valueIK instanceof AllocationSiteInNode) {
         AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
-        TypeReference reference = asin.getConcreteType().getReference();
+        TypeReference reference = asin.concreteType().getReference();
 
         if (reference.equals(list) || reference.equals(tuple)) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
@@ -1491,7 +1491,7 @@ public abstract class TensorGenerator {
         }
 
         TensorGenerator generator =
-            createManualGenerator(readDataNode, asin.getConcreteType().getReference(), builder);
+            createManualGenerator(readDataNode, asin.concreteType().getReference(), builder);
 
         if (generator != null) {
           // Avoid infinite recursion for manual generators
@@ -1663,7 +1663,7 @@ public abstract class TensorGenerator {
 
       if (found) continue;
 
-      IClass concreteType = instanceKey.getConcreteType();
+      IClass concreteType = instanceKey.concreteType();
       TypeReference typeReference = concreteType.getReference();
 
       if (typeReference.equals(TensorFlowTypes.D_TYPE)) {
@@ -2126,7 +2126,7 @@ public abstract class TensorGenerator {
         }
       } else if (valueIK instanceof AllocationSiteInNode) {
         AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
-        TypeReference reference = asin.getConcreteType().getReference();
+        TypeReference reference = asin.concreteType().getReference();
 
         if (reference.equals(list) || reference.equals(tuple)) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
@@ -2233,7 +2233,7 @@ public abstract class TensorGenerator {
         }
 
         TensorGenerator generator =
-            createManualGenerator(readDataNode, asin.getConcreteType().getReference(), builder);
+            createManualGenerator(readDataNode, asin.concreteType().getReference(), builder);
 
         if (generator != null) {
           if (this.manualNode != null && this.manualNode.equals(readDataNode)) {

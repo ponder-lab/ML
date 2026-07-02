@@ -101,7 +101,7 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
         }
       } else if (instanceKey instanceof AllocationSiteInNode) {
         AllocationSiteInNode asin = getAllocationSiteInNode(instanceKey);
-        TypeReference reference = asin.getConcreteType().getReference();
+        TypeReference reference = asin.concreteType().getReference();
 
         if (reference.equals(list) || reference.equals(tuple)) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =

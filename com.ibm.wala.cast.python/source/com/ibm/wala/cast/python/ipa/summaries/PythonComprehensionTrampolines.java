@@ -46,7 +46,7 @@ public class PythonComprehensionTrampolines implements MethodTargetSelector {
                 method.getDeclaringClass(),
                 new Selector(
                     Atom.findOrCreateUnicodeAtom("__" + receiver.getName()),
-                    method.getSelector().getDescriptor()));
+                    method.getSelector().descriptor()));
 
         SSAAbstractInvokeInstruction inst = caller.getIR().getCalls(site)[0];
         int v = inst.getNumberOfUses() + 3;

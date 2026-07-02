@@ -30,7 +30,7 @@ public class PythonScopeMappingInstanceKeys extends ScopeMappingInstanceKeys {
   }
 
   protected LexicalParent[] getParents(InstanceKey base) {
-    IClass cls = base.getConcreteType();
+    IClass cls = base.concreteType();
 
     if (cls instanceof PythonInstanceMethodTrampoline) {
       cls = ((PythonInstanceMethodTrampoline) cls).getRealClass();
@@ -45,7 +45,7 @@ public class PythonScopeMappingInstanceKeys extends ScopeMappingInstanceKeys {
 
   @Override
   protected boolean needsScopeMappingKey(InstanceKey base) {
-    return cha.isSubclassOf(base.getConcreteType(), codeBody) && getParents(base).length > 0;
+    return cha.isSubclassOf(base.concreteType(), codeBody) && getParents(base).length > 0;
   }
 
   @Override

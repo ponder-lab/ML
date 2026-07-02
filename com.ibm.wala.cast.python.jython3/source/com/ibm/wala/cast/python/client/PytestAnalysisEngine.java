@@ -42,7 +42,7 @@ public class PytestAnalysisEngine<T> extends PythonAnalysisEngine<T> {
           OrdinalSet<InstanceKey> testObjs = builder.getPointerAnalysis().getPointsToSet(test);
           testObjs.forEach(
               obj -> {
-                IField x = obj.getConcreteType().getField(Atom.findOrCreateUnicodeAtom("params"));
+                IField x = obj.concreteType().getField(Atom.findOrCreateUnicodeAtom("params"));
                 if (x != null) {
                   PointerKey ps = pkf.getPointerKeyForInstanceField(obj, x);
                   builder
@@ -51,16 +51,14 @@ public class PytestAnalysisEngine<T> extends PythonAnalysisEngine<T> {
                       .forEach(
                           p -> {
                             IField ns =
-                                p.getConcreteType()
-                                    .getField(Atom.findOrCreateUnicodeAtom("params"));
+                                p.concreteType().getField(Atom.findOrCreateUnicodeAtom("params"));
                             PointerKey names = pkf.getPointerKeyForInstanceField(p, ns);
                             OrdinalSet<InstanceKey> namesObjs =
                                 builder.getPointerAnalysis().getPointsToSet(names);
                             System.err.println("names: " + namesObjs);
 
                             IField vs =
-                                p.getConcreteType()
-                                    .getField(Atom.findOrCreateUnicodeAtom("values"));
+                                p.concreteType().getField(Atom.findOrCreateUnicodeAtom("values"));
                             PointerKey values = pkf.getPointerKeyForInstanceField(p, vs);
                             OrdinalSet<InstanceKey> valsObjs =
                                 builder.getPointerAnalysis().getPointsToSet(values);

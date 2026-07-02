@@ -63,7 +63,7 @@ public class PythonClassMethodTrampolineTargetSelector<T>
         caller
             .getMethod()
             .getSelector()
-            .getName()
+            .name()
             .startsWith(Atom.findOrCreateAsciiAtom(TRAMPOLINE_METHOD_NAME));
 
     return classMethodReceiver

@@ -163,7 +163,7 @@ public class RaggedConstant extends Constant {
 
     for (InstanceKey ik : pts) {
       AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-      TypeReference reference = asin.getConcreteType().getReference();
+      TypeReference reference = asin.concreteType().getReference();
 
       // A `list` or `tuple`.
       if (reference.equals(list) || reference.equals(tuple)) {
@@ -202,7 +202,7 @@ public class RaggedConstant extends Constant {
 
                       if (innerAsin == null) return false;
 
-                      TypeReference innerReference = innerAsin.getConcreteType().getReference();
+                      TypeReference innerReference = innerAsin.concreteType().getReference();
                       return innerReference.equals(list) || innerReference.equals(tuple);
                     });
 
@@ -221,7 +221,7 @@ public class RaggedConstant extends Constant {
 
     for (InstanceKey valueIK : valuePointsToSet) {
       AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
-      TypeReference reference = asin.getConcreteType().getReference();
+      TypeReference reference = asin.concreteType().getReference();
 
       // A `list` or `tuple`.
       if (reference.equals(list) || reference.equals(tuple)) {
@@ -243,7 +243,7 @@ public class RaggedConstant extends Constant {
     if (ik instanceof ConstantKey) return true; // Scalar value.
     else {
       AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-      TypeReference reference = asin.getConcreteType().getReference();
+      TypeReference reference = asin.concreteType().getReference();
 
       // A nested `list`, `tuple`, or `np.ndarray`.
       if (reference.equals(list) || reference.equals(tuple)) {
@@ -283,7 +283,7 @@ public class RaggedConstant extends Constant {
     int maxDepth = 0;
 
     AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
-    TypeReference reference = asin.getConcreteType().getReference();
+    TypeReference reference = asin.concreteType().getReference();
 
     // A nested `list` or `tuple`.
     if (reference.equals(list) || reference.equals(tuple)) {
@@ -330,7 +330,7 @@ public class RaggedConstant extends Constant {
     if (valueIK instanceof ConstantKey) maxDepth = max(maxDepth, 0); // Scalar value.
     else {
       AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
-      TypeReference reference = asin.getConcreteType().getReference();
+      TypeReference reference = asin.concreteType().getReference();
 
       // A nested `list`, `tuple`, or `np.ndarray`.
       if (reference.equals(list) || reference.equals(tuple)) {
