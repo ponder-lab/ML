@@ -22,6 +22,7 @@ import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.loader.IPythonClass;
 import com.ibm.wala.cast.python.loader.PythonLoader;
+import com.ibm.wala.cast.python.loader.PythonLoader.PythonSummaryShellClass;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
@@ -167,6 +168,11 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
           Collection<TypeReference> innerReferences = Collections.emptyList();
           Collection<MethodReference> methodReferences = new ArrayList<>();
 
+          // Methods inherited from a summary class shell (wala/ML#118) have no function object on
+          // the source class object to read; their function classes are bypass-registered and are
+          // allocated directly below, mirroring the engine's summary-constructor rewriting.
+          Set<MethodReference> summaryDeclaredMethods = new HashSet<>();
+
           if (receiver instanceof IPythonClass) {
             IPythonClass x = (IPythonClass) receiver;
             innerReferences = x.getInnerReferences();
@@ -188,10 +194,15 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
             for (IClass parent = receiver.getSuperclass();
                 parent instanceof IPythonClass;
                 parent = parent.getSuperclass()) {
+              boolean shell = parent instanceof PythonSummaryShellClass;
               ((IPythonClass) parent)
                   .getMethodReferences().stream()
                       .filter(m -> seenMethodNames.add(m.getName()))
-                      .forEach(methodReferences::add);
+                      .forEach(
+                          m -> {
+                            methodReferences.add(m);
+                            if (shell) summaryDeclaredMethods.add(m);
+                          });
             }
           } else {
             for (IMethod m : receiver.getDeclaredMethods()) {
@@ -240,12 +251,21 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
             pc++;
 
             int orig_f = v++;
-            ctor.addStatement(
-                insts.GetInstruction(
-                    pc,
-                    orig_f,
-                    1,
-                    FieldReference.findOrCreate(PythonTypes.Root, r.getName(), PythonTypes.Root)));
+            if (summaryDeclaredMethods.contains(r)) {
+              // The function object of a shell-inherited summary method is not a field of the
+              // source class object; allocate its bypass-registered function class directly.
+              ctor.addStatement(
+                  insts.NewInstruction(
+                      pc, orig_f, NewSiteReference.make(pc, r.getDeclaringClass())));
+            } else {
+              ctor.addStatement(
+                  insts.GetInstruction(
+                      pc,
+                      orig_f,
+                      1,
+                      FieldReference.findOrCreate(
+                          PythonTypes.Root, r.getName(), PythonTypes.Root)));
+            }
             pc++;
 
             ctor.addStatement(
