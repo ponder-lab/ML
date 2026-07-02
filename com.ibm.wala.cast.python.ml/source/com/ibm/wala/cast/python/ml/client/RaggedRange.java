@@ -158,7 +158,7 @@ public class RaggedRange extends Range {
           for (InstanceKey ik : pts) {
             if (ik instanceof AllocationSiteInNode) {
               AllocationSiteInNode asin = (AllocationSiteInNode) ik;
-              TypeReference ref = asin.getConcreteType().getReference();
+              TypeReference ref = asin.concreteType().getReference();
               if (ref.equals(PythonTypes.list) || ref.equals(PythonTypes.tuple)) {
                 hasVector = true;
                 OrdinalSet<InstanceKey> catalog =

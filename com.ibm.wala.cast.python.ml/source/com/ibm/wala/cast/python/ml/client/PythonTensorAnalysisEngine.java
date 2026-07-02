@@ -26,7 +26,6 @@ import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IMethod;
-import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
@@ -46,7 +45,6 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationSystem;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.nCFAContextSelector;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
-import com.ibm.wala.ipa.summaries.MethodSummary;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
@@ -486,7 +484,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         for (InstanceKey ik : pointerAnalysis.getPointsToSet(targetKey)) {
           if (ik instanceof ConcreteTypeKey) {
             ConcreteTypeKey ctk = (ConcreteTypeKey) ik;
-            IClass type = ctk.getType();
+            IClass type = ctk.type();
             TypeReference reference = type.getReference();
 
             if (reference.equals(NEXT.getDeclaringClass())) {
@@ -679,7 +677,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     for (InstanceKey ik : pointerAnalysis.getPointsToSet(usePointerKey)) {
       if (ik instanceof AllocationSiteInNode) {
         AllocationSiteInNode asin = (AllocationSiteInNode) ik;
-        IClass concreteType = asin.getConcreteType();
+        IClass concreteType = asin.concreteType();
         TypeReference reference = concreteType.getReference();
 
         if ((reference.equals(DATASET)
@@ -727,7 +725,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             pointerAnalysis.getPointsToSet(invocationUsePointerKey)) {
           if (functionInstance instanceof ConcreteTypeKey) {
             ConcreteTypeKey typeKey = (ConcreteTypeKey) functionInstance;
-            IClass type = typeKey.getType();
+            IClass type = typeKey.type();
             TypeReference typeReference = type.getReference();
 
             if (typeReference.equals(ENUMERATE.getDeclaringClass())) {
@@ -853,7 +851,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           AllocationSiteInNode asin = getAllocationSiteInNode(ik);
 
           if (asin != null) {
-            TypeReference reference = asin.getConcreteType().getReference();
+            TypeReference reference = asin.concreteType().getReference();
 
             if (reference.getName().toString().startsWith(DATA_PACKAGE_PREFIX)) {
               LOGGER.fine(
@@ -1000,7 +998,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             // file and avoids missing tensor receivers that flow through closures or constants.
             AllocationSiteInNode asin = getAllocationSiteInNode(ik);
             if (asin != null
-                && SET_SHAPE_RECEIVER_TYPES.contains(asin.getConcreteType().getReference())) {
+                && SET_SHAPE_RECEIVER_TYPES.contains(asin.concreteType().getReference())) {
               receiverEligible = true;
               break;
             }
@@ -1312,44 +1310,5 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // `NumpyTypes` constants without depending on load order side effects.
     addSummaryBypassLogic(options, "numpy.xml");
     addSummaryBypassLogic(options, "tensorflow.xml");
-  }
-
-  /** The value number of the {@code args} tuple parameter in the {@code strategy.run} summaries. */
-  private static final int STRATEGY_RUN_ARGS_VALUE_NUMBER = 3;
-
-  /**
-   * The {@code tf.distribute.Strategy.run} summary classes whose {@code args} tuple parameter name
-   * WALA strips. Both {@code run} and its legacy alias {@code experimental_run_v2} model {@code
-   * run(fn, args=(...))} and forward the {@code args} tuple's elements into {@code fn}.
-   */
-  private static final Set<String> STRATEGY_RUN_SUMMARY_CLASSES =
-      Set.of("Ltensorflow/distribute/run/run", "Ltensorflow/distribute/run/experimental_run_v2");
-
-  /**
-   * {@inheritDoc}
-   *
-   * <p>Restores the {@code args} parameter name on the {@code tf.distribute.Strategy.run} summaries
-   * (see {@link #STRATEGY_RUN_SUMMARY_CLASSES}). Without it, the keyword form {@code
-   * strategy.run(fn, args=(inputs, targets))} that real subjects use cannot bind its tuple to the
-   * callback, dropping the tensor types of everything reached through the callback (wala/ML#618).
-   * The positional form {@code strategy.run(fn, (inputs, targets))} is unaffected, since it does
-   * not rely on parameter names.
-   *
-   * @implNote TODO: Remove this temporary workaround once the <a
-   *     href="https://github.com/wala/WALA/pull/1972">upstream WALA fix</a> that narrows the
-   *     reader's name filter to the exact {@code arg<n>} synthetic symbols ships in an adopted WALA
-   *     release. Tracked by <a href="https://github.com/wala/ML/issues/630">wala/ML#630</a>.
-   */
-  @Override
-  protected void repairSummaryParameterNames(Map<MethodReference, MethodSummary> summaries) {
-    summaries.forEach(
-        (reference, summary) -> {
-          String declaringClass = reference.getDeclaringClass().getName().toString();
-          if (STRATEGY_RUN_SUMMARY_CLASSES.contains(declaringClass)) {
-            Map<Integer, Atom> valueNames = summary.getValueNames();
-            if (valueNames != null)
-              valueNames.put(STRATEGY_RUN_ARGS_VALUE_NUMBER, Atom.findOrCreateUnicodeAtom("args"));
-          }
-        });
   }
 }

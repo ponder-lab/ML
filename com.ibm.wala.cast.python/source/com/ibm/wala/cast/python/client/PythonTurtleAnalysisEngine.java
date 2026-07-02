@@ -40,8 +40,6 @@ import com.ibm.wala.util.collections.EmptyIterator;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Iterator2Collection;
-import com.ibm.wala.util.collections.Iterator2List;
-import com.ibm.wala.util.collections.Iterator2Set;
 import com.ibm.wala.util.collections.MapIterator;
 import com.ibm.wala.util.graph.AbstractGraph;
 import com.ibm.wala.util.graph.EdgeManager;
@@ -256,10 +254,10 @@ public class PythonTurtleAnalysisEngine
       }
       if ("**".equals(pat)) {
 
-        Iterator2List<MemberReference> pathList = Iterator2List.toList(path);
+        List<MemberReference> pathList = Iterator2Collection.toList(path);
         pathList.add(0, pe);
 
-        Iterator2List<String> patternList = Iterator2List.toList(pattern);
+        List<String> patternList = Iterator2Collection.toList(pattern);
 
         do {
           if (match(pathList.iterator(), patternList.iterator())) {
@@ -311,7 +309,7 @@ public class PythonTurtleAnalysisEngine
                 check:
                 {
                   for (InstanceKey ptr : ptrs) {
-                    if (ptr.getConcreteType().getReference().equals(TurtleSummary.turtleClassRef)) {
+                    if (ptr.concreteType().getReference().equals(TurtleSummary.turtleClassRef)) {
                       break check;
                     }
                   }
@@ -333,7 +331,7 @@ public class PythonTurtleAnalysisEngine
                           PointerKey ak = builder.getPointerKeyForLocal(node, vn);
                           PointsToSetVariable av =
                               builder.getPropagationSystem().findOrCreatePointsToSet(ak);
-                          Iterator2Set<PointerKey> back =
+                          Set<PointerKey> back =
                               Iterator2Collection.toSet(
                                   MapIterator.map(
                                       (x) -> {
@@ -582,7 +580,7 @@ public class PythonTurtleAnalysisEngine
                           OrdinalSet<? extends InstanceKey> ptrs =
                               builder.getPointerAnalysis().getPointsToSet(ak);
                           for (InstanceKey ptr : ptrs) {
-                            if (ptr.getConcreteType()
+                            if (ptr.concreteType()
                                 .getReference()
                                 .equals(TurtleSummary.turtleClassRef)) {
                               ptr.getCreationSites(CG)
@@ -683,7 +681,7 @@ public class PythonTurtleAnalysisEngine
                 OrdinalSet<? extends InstanceKey> ptrs =
                     builder.getPointerAnalysis().getPointsToSet(ak);
                 for (InstanceKey ptr : ptrs) {
-                  if (ptr.getConcreteType().getReference().equals(TurtleSummary.turtleClassRef)) {
+                  if (ptr.concreteType().getReference().equals(TurtleSummary.turtleClassRef)) {
                     ptr.getCreationSites(CG)
                         .forEachRemaining(
                             (site) -> {

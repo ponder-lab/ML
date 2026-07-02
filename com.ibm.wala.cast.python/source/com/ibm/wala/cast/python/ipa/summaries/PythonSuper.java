@@ -245,7 +245,7 @@ public class PythonSuper {
             for (IMethod m : x.getDeclaredMethods()) {
               if (!m.isInit()
                   && !m.isClinit()
-                  && !m.getName().equals(AstMethodReference.fnSelector.getName())) {
+                  && !m.getName().equals(AstMethodReference.fnSelector.name())) {
                 methodReferences.add(m.getReference());
               }
             }
@@ -361,9 +361,8 @@ public class PythonSuper {
         CGNode caller, CallSiteReference site, IMethod callee, InstanceKey[] actualParameters) {
       if (superStub.equals(callee)) {
         if (actualParameters.length >= 3
-            && actualParameters[1].getConcreteType().getSuperclass() instanceof PythonClass) {
-          return new ExplicitSuperContext(
-              actualParameters[1].getConcreteType(), actualParameters[2]);
+            && actualParameters[1].concreteType().getSuperclass() instanceof PythonClass) {
+          return new ExplicitSuperContext(actualParameters[1].concreteType(), actualParameters[2]);
         }
         if (actualParameters.length == 1) {
           return new DelegatingContext(

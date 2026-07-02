@@ -76,7 +76,7 @@ public class SparseAdd extends ElementWiseOperation {
 
     boolean hasSparseTensor = false;
     for (InstanceKey ik : valuePointsToSet) {
-      if (ik.getConcreteType().getReference().equals(SPARSE_TENSOR_TYPE)) {
+      if (ik.concreteType().getReference().equals(SPARSE_TENSOR_TYPE)) {
         hasSparseTensor = true;
         break;
       }
@@ -90,7 +90,7 @@ public class SparseAdd extends ElementWiseOperation {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey ik : valuePointsToSet) {
-      if (ik.getConcreteType().getReference().equals(SPARSE_TENSOR_TYPE)) {
+      if (ik.concreteType().getReference().equals(SPARSE_TENSOR_TYPE)) {
         FieldReference denseShapeFieldRef =
             FieldReference.findOrCreate(Root, findOrCreateAsciiAtom("dense_shape"), Root);
 
@@ -126,7 +126,7 @@ public class SparseAdd extends ElementWiseOperation {
 
     boolean hasSparseTensor = false;
     for (InstanceKey ik : pointsToSet) {
-      if (ik.getConcreteType().getReference().equals(SPARSE_TENSOR_TYPE)) {
+      if (ik.concreteType().getReference().equals(SPARSE_TENSOR_TYPE)) {
         hasSparseTensor = true;
         break;
       }
@@ -140,7 +140,7 @@ public class SparseAdd extends ElementWiseOperation {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey ik : pointsToSet) {
-      if (ik.getConcreteType().getReference().equals(SPARSE_TENSOR_TYPE)) {
+      if (ik.concreteType().getReference().equals(SPARSE_TENSOR_TYPE)) {
         FieldReference valuesFieldRef =
             FieldReference.findOrCreate(Root, findOrCreateAsciiAtom("values"), Root);
 

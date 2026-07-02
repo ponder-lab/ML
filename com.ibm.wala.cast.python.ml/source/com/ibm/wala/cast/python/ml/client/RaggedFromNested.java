@@ -113,7 +113,7 @@ public abstract class RaggedFromNested extends RaggedTensorFromValues {
       for (InstanceKey ik : nestedRowLengthsPts) {
         if (ik instanceof AllocationSiteInNode) {
           AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-          TypeReference reference = asin.getConcreteType().getReference();
+          TypeReference reference = asin.concreteType().getReference();
 
           if (reference.equals(list) || reference.equals(tuple)) {
             OrdinalSet<InstanceKey> objectCatalogPointsToSet =

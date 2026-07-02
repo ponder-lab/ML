@@ -220,7 +220,7 @@ public class NdarraySubscriptOperation extends TensorGenerator {
     AllocationSiteInNode tupleAsin = null;
     for (InstanceKey ik : memberPts) {
       AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-      if (asin != null && asin.getConcreteType().getReference().equals(tuple)) {
+      if (asin != null && asin.concreteType().getReference().equals(tuple)) {
         tupleAsin = asin;
         break;
       }
@@ -230,7 +230,7 @@ public class NdarraySubscriptOperation extends TensorGenerator {
       for (InstanceKey ik : memberPts) {
         ptsDesc.append(" ").append(ik.getClass().getSimpleName());
         AllocationSiteInNode a = getAllocationSiteInNode(ik);
-        if (a != null) ptsDesc.append("@").append(a.getConcreteType().getReference().getName());
+        if (a != null) ptsDesc.append("@").append(a.concreteType().getReference().getName());
       }
       LOGGER.fine(
           () ->
@@ -307,7 +307,7 @@ public class NdarraySubscriptOperation extends TensorGenerator {
       }
       // Non-constant InstanceKey: accept it only if it's the modeled `tf.newaxis` allocation.
       AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-      if (asin != null && asin.getConcreteType().getReference().equals(TensorFlowTypes.NEWAXIS)) {
+      if (asin != null && asin.concreteType().getReference().equals(TensorFlowTypes.NEWAXIS)) {
         sawNone = true;
         continue;
       }

@@ -181,7 +181,7 @@ public class SliceBuiltinOperation extends TensorGenerator {
       if (pts == null || pts.isEmpty()) continue;
       for (InstanceKey ik : pts) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-        if (asin != null && asin.getConcreteType().getReference().equals(TensorFlowTypes.NEWAXIS)) {
+        if (asin != null && asin.concreteType().getReference().equals(TensorFlowTypes.NEWAXIS)) {
           count++;
           break;
         }
@@ -486,7 +486,7 @@ public class SliceBuiltinOperation extends TensorGenerator {
         else return null; // integer/other — not special.
       } else {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-        if (asin != null && asin.getConcreteType().getReference().equals(TensorFlowTypes.NEWAXIS))
+        if (asin != null && asin.concreteType().getReference().equals(TensorFlowTypes.NEWAXIS))
           newaxis = true;
         else return null;
       }

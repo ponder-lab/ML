@@ -35,7 +35,6 @@ import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.classLoader.Language;
 import com.ibm.wala.core.util.strings.Atom;
-import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.Context;
 import com.ibm.wala.ipa.callgraph.IAnalysisCacheView;
@@ -321,18 +320,7 @@ public class PythonLanguage implements Language {
   }
 
   @Override
-  public AbstractRootMethod getFakeRootMethod(
-      IClassHierarchy cha,
-      @SuppressWarnings("unused") AnalysisOptions options,
-      IAnalysisCacheView cache) {
-    // `options` is retained in the signature to satisfy the `Language.getFakeRootMethod`
-    // interface contract (the parent's signature still takes it in WALA 1.7.2) but is
-    // unused at this call site. WALA's own 1.7.2 source marks the deprecated 3-arg
-    // `FakeRootMethod(IClass, AnalysisOptions, IAnalysisCacheView)` constructor's
-    // `options` parameter with the same `@SuppressWarnings("unused")` and the
-    // deprecation Javadoc explicitly says the rationale is "to remove unused options
-    // parameter" — i.e., `options` was always vestigial in this code path. Drop the
-    // parameter on our side only if the upstream `Language` interface drops it.
+  public AbstractRootMethod getFakeRootMethod(IClassHierarchy cha, IAnalysisCacheView cache) {
     return new FakeRootMethod(new FakeRootClass(PythonTypes.pythonLoader, cha), cache);
   }
 

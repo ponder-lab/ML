@@ -86,11 +86,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       AnalysisOptions options,
       IAnalysisCacheView cache,
       PointerKeyFactory pointerKeyFactory) {
-    super(
-        PythonLanguage.Python.getFakeRootMethod(cha, options, cache),
-        options,
-        cache,
-        pointerKeyFactory);
+    super(PythonLanguage.Python.getFakeRootMethod(cha, cache), options, cache, pointerKeyFactory);
   }
 
   protected boolean isConstantRef(SymbolTable symbolTable, int valueNumber) {
@@ -175,7 +171,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
       if (contentsAreInvariant(symtab, du, objVn)) {
         for (InstanceKey ik : getInvariantContents(objVn)) {
-          if (!isValueForKeyType(ik.getConcreteType())) {
+          if (!isValueForKeyType(ik.concreteType())) {
             system.newConstraint(resultKey, assignOperator, eltKey);
           } else {
             newFieldRead(node, objVn, eltVn, resultVn);
@@ -193,7 +189,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                     IntIterator is = rv.getValue().intIterator();
                     while (is.hasNext()) {
                       InstanceKey ik = system.getInstanceKey(is.next());
-                      if (!isValueForKeyType(ik.getConcreteType())) {
+                      if (!isValueForKeyType(ik.concreteType())) {
                         changed |= system.newConstraint(resultKey, assignOperator, eltKey);
                       } else {
                         newFieldRead(node, objVn, eltVn, resultVn);
@@ -242,9 +238,9 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       if (contentsAreInvariant(symtab, du, objVn)) {
         system.recordImplicitPointsToSet(objKey);
         for (InstanceKey ik : getInvariantContents(objVn)) {
-          if (types.contains(ik.getConcreteType().getReference())) {
+          if (types.contains(ik.concreteType().getReference())) {
             @SuppressWarnings("unused")
-            Pair<String, TypeReference> key = Pair.make(name, ik.getConcreteType().getReference());
+            Pair<String, TypeReference> key = Pair.make(name, ik.concreteType().getReference());
             // system.newConstraint(lvalKey, new ConcreteTypeKey(getBuilder().ensure(key)));
           }
         }
@@ -259,10 +255,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                       .foreach(
                           (i) -> {
                             InstanceKey ik = system.getInstanceKey(i);
-                            if (types.contains(ik.getConcreteType().getReference())) {
+                            if (types.contains(ik.concreteType().getReference())) {
                               @SuppressWarnings("unused")
                               Pair<String, TypeReference> key =
-                                  Pair.make(name, ik.getConcreteType().getReference());
+                                  Pair.make(name, ik.concreteType().getReference());
                               // system.newConstraint(lvalKey, new
                               // ConcreteTypeKey(getBuilder().ensure(key)));
                             }
@@ -818,7 +814,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     OrdinalSet<InstanceKey> pointsToSet = pointerAnalysis.getPointsToSet(pointerKey);
 
     for (InstanceKey instanceKey : pointsToSet) {
-      IClass concreteType = instanceKey.getConcreteType();
+      IClass concreteType = instanceKey.concreteType();
       TypeReference reference = concreteType.getReference();
 
       // If it's an "object" method.

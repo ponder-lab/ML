@@ -116,7 +116,7 @@ public class Concat extends TensorGenerator {
     for (InstanceKey valIk : valuesPts) {
       AllocationSiteInNode asin = getAllocationSiteInNode(valIk);
       if (asin == null) continue;
-      TypeReference ref = asin.getConcreteType().getReference();
+      TypeReference ref = asin.concreteType().getReference();
       if (!(ref.equals(list) || ref.equals(tuple))) continue;
 
       OrdinalSet<InstanceKey> catalog =
@@ -144,7 +144,7 @@ public class Concat extends TensorGenerator {
     for (InstanceKey valIk : valuesPts) {
       AllocationSiteInNode asin = getAllocationSiteInNode(valIk);
       if (asin == null) continue;
-      TypeReference ref = asin.getConcreteType().getReference();
+      TypeReference ref = asin.concreteType().getReference();
       if (!(ref.equals(list) || ref.equals(tuple))) continue;
 
       OrdinalSet<InstanceKey> catalog =

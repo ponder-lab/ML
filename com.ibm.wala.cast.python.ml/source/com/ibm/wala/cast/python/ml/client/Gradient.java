@@ -126,7 +126,7 @@ public class Gradient extends TensorGenerator implements TupleElementProvider {
       for (InstanceKey ik : sourcesPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin != null) {
-          TypeReference ref = asin.getConcreteType().getReference();
+          TypeReference ref = asin.concreteType().getReference();
           if (ref.equals(list) || ref.equals(tuple)) return true;
         }
       }
@@ -152,7 +152,7 @@ public class Gradient extends TensorGenerator implements TupleElementProvider {
       for (InstanceKey ik : sourcesPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin == null) continue;
-        TypeReference ref = asin.getConcreteType().getReference();
+        TypeReference ref = asin.concreteType().getReference();
         if (!ref.equals(list) && !ref.equals(tuple)) continue;
 
         OrdinalSet<InstanceKey> objectCatalogPointsToSet =
@@ -169,7 +169,7 @@ public class Gradient extends TensorGenerator implements TupleElementProvider {
 
           FieldReference subscript =
               FieldReference.findOrCreate(
-                  asin.getConcreteType().getReference(),
+                  asin.concreteType().getReference(),
                   findOrCreateAsciiAtom(fieldIndex.toString()),
                   Root);
           IField f = builder.getClassHierarchy().resolveField(subscript);
@@ -206,7 +206,7 @@ public class Gradient extends TensorGenerator implements TupleElementProvider {
       for (InstanceKey ik : sourcesPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin == null) continue;
-        TypeReference ref = asin.getConcreteType().getReference();
+        TypeReference ref = asin.concreteType().getReference();
         if (!ref.equals(list) && !ref.equals(tuple)) continue;
 
         OrdinalSet<InstanceKey> objectCatalogPointsToSet =
@@ -223,7 +223,7 @@ public class Gradient extends TensorGenerator implements TupleElementProvider {
 
           FieldReference subscript =
               FieldReference.findOrCreate(
-                  asin.getConcreteType().getReference(),
+                  asin.concreteType().getReference(),
                   findOrCreateAsciiAtom(fieldIndex.toString()),
                   Root);
           IField f = builder.getClassHierarchy().resolveField(subscript);

@@ -178,7 +178,7 @@ public class DatasetMapGenerator extends DatasetGenerator {
       for (InstanceKey ik : elementPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin == null) continue;
-        TypeReference reference = asin.getConcreteType().getReference();
+        TypeReference reference = asin.concreteType().getReference();
         if (reference.equals(tuple) || reference.equals(list)) return true;
       }
     }

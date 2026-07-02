@@ -151,7 +151,7 @@ public class NpArray extends TensorGenerator {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin == null) return false;
 
-        TypeReference reference = asin.getConcreteType().getReference();
+        TypeReference reference = asin.concreteType().getReference();
         if (!reference.equals(list) && !reference.equals(tuple))
           // An existing array/tensor (or other non-literal): numpy would preserve its dtype rather
           // than promote, which this walk does not model. Floor to ⊤.

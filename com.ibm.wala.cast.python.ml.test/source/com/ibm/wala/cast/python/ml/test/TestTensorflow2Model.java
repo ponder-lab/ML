@@ -4067,7 +4067,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     if (ik instanceof AllocationSiteInNode) {
       // Already a concrete alloc; use as-is.
     }
-    for (IField field : toProcess.getConcreteType().getAllInstanceFields()) {
+    for (IField field : toProcess.concreteType().getAllInstanceFields()) {
       InstanceFieldPointerKey fk =
           (InstanceFieldPointerKey)
               pa.getHeapModel().getPointerKeyForInstanceField(toProcess, field);
@@ -5082,10 +5082,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * targets} that flows through {@code strategy.run}'s {@code args} tuple into {@code step_fn}'s
    * {@code tar}, types to {@code (2, 2)} int32 exactly as in the direct reach. This exercises both
    * halves of the wala/ML#618 distributed-reach fix: the {@code tensorflow/distribute/run/run}
-   * model forwarding both tuple elements (see {@link #testStrategyRunTwoArgsInp()}), and {@code
-   * PythonTensorAnalysisEngine.repairSummaryParameterNames} restoring the {@code args} parameter
-   * name that WALA's {@code XMLMethodSummaryReader} strips, without which the keyword {@code args=}
-   * could not bind.
+   * model forwarding both tuple elements (see {@link #testStrategyRunTwoArgsInp()}), and the {@code
+   * args} parameter name surviving summary loading (the <a
+   * href="https://github.com/wala/WALA/pull/1972">wala/WALA#1972</a> fix to {@code
+   * XMLMethodSummaryReader}'s name filter), without which the keyword {@code args=} could not bind.
    */
   @Test
   public void testGpt2DistributedGetLoss()

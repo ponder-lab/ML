@@ -112,7 +112,7 @@ public class DenseCall extends TensorGenerator {
         // Create a field reference for the 'units' field of the Dense layer instance.
         FieldReference unitsFieldRef =
             FieldReference.findOrCreate(
-                selfASIN.getConcreteType().getReference(),
+                selfASIN.concreteType().getReference(),
                 findOrCreateAsciiAtom(DENSE_UNITS_FIELD_NAME),
                 Root);
 

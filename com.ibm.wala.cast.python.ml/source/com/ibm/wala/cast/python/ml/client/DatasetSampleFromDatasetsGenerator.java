@@ -134,8 +134,8 @@ public class DatasetSampleFromDatasetsGenerator extends DatasetGenerator {
       for (InstanceKey ik : datasetsPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin != null
-            && (asin.getConcreteType().getReference().equals(list)
-                || asin.getConcreteType().getReference().equals(tuple))) {
+            && (asin.concreteType().getReference().equals(list)
+                || asin.concreteType().getReference().equals(tuple))) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               builder
                   .getPointerAnalysis()
@@ -149,7 +149,7 @@ public class DatasetSampleFromDatasetsGenerator extends DatasetGenerator {
             if (fieldIndex != null) {
               FieldReference subscript =
                   FieldReference.findOrCreate(
-                      asin.getConcreteType().getReference(),
+                      asin.concreteType().getReference(),
                       findOrCreateAsciiAtom(fieldIndex.toString()),
                       Root);
               IField f = builder.getClassHierarchy().resolveField(subscript);
@@ -260,8 +260,8 @@ public class DatasetSampleFromDatasetsGenerator extends DatasetGenerator {
       for (InstanceKey ik : datasetsPTS) {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin != null
-            && (asin.getConcreteType().getReference().equals(list)
-                || asin.getConcreteType().getReference().equals(tuple))) {
+            && (asin.concreteType().getReference().equals(list)
+                || asin.concreteType().getReference().equals(tuple))) {
           OrdinalSet<InstanceKey> objectCatalogPointsToSet =
               builder
                   .getPointerAnalysis()
@@ -275,7 +275,7 @@ public class DatasetSampleFromDatasetsGenerator extends DatasetGenerator {
             if (fieldIndex != null) {
               FieldReference subscript =
                   FieldReference.findOrCreate(
-                      asin.getConcreteType().getReference(),
+                      asin.concreteType().getReference(),
                       findOrCreateAsciiAtom(fieldIndex.toString()),
                       Root);
               IField f = builder.getClassHierarchy().resolveField(subscript);

@@ -234,7 +234,7 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
             declaringClass.getClassLoader().getReference();
 
         // First, check the concrete type of the allocated object
-        IClass concreteType = o.getConcreteType();
+        IClass concreteType = o.concreteType();
         if (concreteType != null) {
           String concreteTypeName = "$" + concreteType.getName().toString().substring(1);
           IClass concreteCallable =
