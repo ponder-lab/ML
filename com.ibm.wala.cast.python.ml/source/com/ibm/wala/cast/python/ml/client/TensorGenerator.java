@@ -3110,7 +3110,8 @@ public abstract class TensorGenerator {
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param caller The {@link CGNode} calling the function.
    * @param vn The value number of the argument.
-   * @return A set of possible double values.
+   * @return A set of possible double values, or {@code null} if the argument's points-to set
+   *     contains a non-constant key (the value is not statically resolvable, wala/ML#669).
    */
   protected static Set<Double> getPossibleDoubleValues(
       PropagationCallGraphBuilder builder, CGNode caller, int vn) {
@@ -3127,7 +3128,11 @@ public abstract class TensorGenerator {
 
     // 2. Try points-to analysis
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, vn);
-    vals.addAll(getPossibleDoubleValues(builder.getPointerAnalysis().getPointsToSet(pk)));
+    Set<Double> fromPts = getPossibleDoubleValues(builder.getPointerAnalysis().getPointsToSet(pk));
+    // A non-constant key means the value is not statically resolvable (wala/ML#669); a partial
+    // result would falsely claim exhaustiveness.
+    if (fromPts == null) return null;
+    vals.addAll(fromPts);
 
     return vals;
   }
@@ -3136,12 +3141,16 @@ public abstract class TensorGenerator {
    * Returns the possible double values for the given points-to set.
    *
    * @param pts The points-to set of the argument.
-   * @return A set of possible double values.
+   * @return A set of possible double values, or {@code null} if the points-to set contains a
+   *     non-constant key (the value is not statically resolvable, wala/ML#669).
    */
   protected static Set<Double> getPossibleDoubleValues(OrdinalSet<InstanceKey> pts) {
+    Set<Object> constants = getConstantValues(pts, true);
+    if (constants == null) return null;
+
     Set<Double> ret = HashSetFactory.make();
 
-    for (Object val : getConstantValues(pts, true)) {
+    for (Object val : constants) {
       if (val instanceof Number) {
         ret.add(((Number) val).doubleValue());
       } else if (val == null) {
@@ -3159,13 +3168,17 @@ public abstract class TensorGenerator {
    * null value will be contained within the returned set.
    *
    * @param pointsToSet The points-to set of the value.
-   * @return A set of possible long values. If the value is `None`, then a null value will be
-   *     contained within the returned set.
+   * @return A set of possible long values, or {@code null} if the points-to set contains a
+   *     non-constant key (the value is not statically resolvable, wala/ML#669). If the value is
+   *     `None`, then a null value will be contained within the returned set.
    */
   protected static Set<Long> getPossibleLongValues(OrdinalSet<InstanceKey> pointsToSet) {
+    Set<Object> constants = getConstantValues(pointsToSet, true);
+    if (constants == null) return null;
+
     Set<Long> ret = HashSetFactory.make();
 
-    for (Object val : getConstantValues(pointsToSet, true)) {
+    for (Object val : constants) {
       if (val instanceof Number) {
         ret.add(((Number) val).longValue());
       } else if (val == null) {
@@ -3182,10 +3195,14 @@ public abstract class TensorGenerator {
    * Returns a set of constant values derived from the given points-to set.
    *
    * @param pts The points-to set to analyze.
-   * @param requireConstants If true, throws an exception if a non-constant key is encountered.
-   * @return A set of constant values (which may contain nulls).
-   * @throws IllegalStateException If {@code requireConstants} is true and a non-constant key is
-   *     found.
+   * @param requireConstants If true, a non-constant key makes the whole set non-static: {@code
+   *     null} is returned instead of the partial constants. If false, non-constant keys are
+   *     skipped.
+   * @return A set of constant values (which may contain nulls), or {@code null} if {@code
+   *     requireConstants} is true and a non-constant key is found (the value is not statically
+   *     resolvable). Previously this case threw {@link IllegalStateException}, which aborted the
+   *     whole analysis when WALA 1.8.0 supplied a {@code ScopeMappingInstanceKey} (<a
+   *     href="https://github.com/wala/ML/issues/669">wala/ML#669</a>).
    */
   protected static Set<Object> getConstantValues(
       OrdinalSet<InstanceKey> pts, boolean requireConstants) {
@@ -3196,8 +3213,12 @@ public abstract class TensorGenerator {
         if (ik instanceof ConstantKey) {
           ret.add(((ConstantKey<?>) ik).getValue());
         } else if (requireConstants) {
-          throw new IllegalStateException(
-              "Expected a constant key but found: " + ik.getClass() + ".");
+          LOGGER.fine(
+              () ->
+                  "Non-constant key: "
+                      + ik.getClass()
+                      + " in points-to set; the value is not statically resolvable (wala/ML#669).");
+          return null;
         }
       }
     }

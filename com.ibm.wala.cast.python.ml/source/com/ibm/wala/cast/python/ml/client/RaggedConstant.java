@@ -29,6 +29,7 @@ import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -536,7 +537,10 @@ public class RaggedConstant extends Constant {
     OrdinalSet<InstanceKey> pointsToSet =
         this.getArgumentPointsToSet(
             builder, this.getRaggedRankParameterPosition(), getRaggedRankParameterName());
-    return getPossibleLongValues(pointsToSet);
+    Set<Long> values = getPossibleLongValues(pointsToSet);
+    // A null result means `ragged_rank` is not statically resolvable (wala/ML#669); treat it like
+    // an unspecified argument (callers fall back to depth-based rank inference).
+    return values == null ? Collections.emptySet() : values;
   }
 
   protected Set<List<Dimension<?>>> getPossibleInnerShapeArguments(

@@ -17,6 +17,7 @@ import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
@@ -121,6 +122,9 @@ public class DatasetBatchGenerator extends DatasetGenerator {
         getPossibleLongValues(
             this.getArgumentPointsToSet(
                 builder, Parameters.BATCH_SIZE.getIndex(), Parameters.BATCH_SIZE.getName()));
+    // A null result means `batch_size` is not statically resolvable (wala/ML#669); treat it like
+    // an unspecified batch size (the symbolic-batching path below).
+    if (batchSizes == null) batchSizes = Collections.emptySet();
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 

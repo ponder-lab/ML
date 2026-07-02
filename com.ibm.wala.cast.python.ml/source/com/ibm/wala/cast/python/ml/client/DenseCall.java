@@ -130,7 +130,9 @@ public class DenseCall extends TensorGenerator {
           LOGGER.finer(
               "Possible `units` values: " + unitValues + " for points-to set: " + unitsPTS + ".");
 
-          ret.addAll(unitValues);
+          // A null result means `units` is not statically resolvable (wala/ML#669); skip it
+          // rather than crashing or claiming a partial value.
+          if (unitValues != null) ret.addAll(unitValues);
         }
       }
 
