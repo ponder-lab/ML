@@ -295,10 +295,15 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
           }
         }
 
-        // TODO: Remove this code once https://github.com/wala/ML/issues/118 is completed.
+        // The Keras `call` convention (https://github.com/wala/ML/issues/106) applies to ANY
+        // class with a `call` method, without checking its hierarchy. Although a subclass's
+        // summary-modeled base has been resolvable since wala/ML#118 (class shells), gating this
+        // on a shell ancestor drops sound dispatch for every subclass whose base does NOT resolve
+        // (cross-module imports, wala/ML#571; bare-name collisions, wala/ML#657; unmodeled
+        // spellings) and empirically loses 18 tests' worth of forward-pass coverage. Tighten only
+        // once unresolved-base metadata is complete enough that a hierarchy check has the same
+        // recall.
         if (callable == null) {
-          // try the workaround for https://github.com/wala/ML/issues/106. NOTE: We cannot verify
-          // that the super class is tf.keras.Model due to https://github.com/wala/ML/issues/118.
           LOGGER.finer("Attempting callable workaround for https://github.com/wala/ML/issues/118.");
 
           callable =
