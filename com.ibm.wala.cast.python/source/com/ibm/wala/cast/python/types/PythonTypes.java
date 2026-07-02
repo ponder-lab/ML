@@ -49,6 +49,17 @@ public class PythonTypes extends AstTypeReference {
    */
   public static final String CALLABLE_METHOD_NAME_FOR_KERAS_MODELS = "call";
 
+  /**
+   * The method name of the Keras lazy-build hook: {@code Layer.__call__} invokes {@code
+   * self.build(input_shape)} before the first {@link #CALLABLE_METHOD_NAME_FOR_KERAS_MODELS call},
+   * and user subclasses commonly create their sublayers there (wala/ML#595).
+   *
+   * @see <a
+   *     href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Layer#build">TensorFlow
+   *     documentation</a>.
+   */
+  public static final String KERAS_BUILD_METHOD_NAME = "build";
+
   /** The method name that is used for summarized methods . */
   public static final String DO_METHOD_NAME = "do";
 
