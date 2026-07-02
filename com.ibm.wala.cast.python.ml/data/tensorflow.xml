@@ -2439,7 +2439,13 @@
     </package>
     <package name="tensorflow/keras/layers">
       <!-- Declaring a `super` opts `Layer` in to being materialized as a class shell before the class hierarchy is built (wala/WALA#1957), so a source subclass such as `class MyLayer(tf.keras.layers.Layer)` resolves its base to this type instead of falling back to `object` (wala/ML#118). Shell-only: the class deliberately declares no methods, since a shell shadows same-named bypass method bodies (see the CAUTION on `tensorflow/keras/models/Model`), and no `<new>` targets it, so it is not `allocatable`. -->
-      <class name="Layer" super="Lobject"></class>
+      <class name="Layer" super="Lobject">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Layer#add_weight. The universal Keras weight-creation API: user layers call `self.add_weight(...)` (typically in `build`, wala/ML#595) to create their kernels. Modeled as a fresh dense tensor; the shape/dtype arguments are not yet consumed (a dedicated generator can refine this). The shell carries this method's reference (wala/ML#106), and source subclasses wire it through their synthesized constructors, so `self.add_weight` dispatches on any `Layer` subclass instance (wala/ML#618). -->
+        <method name="add_weight" descriptor="()LRoot;" numArgs="9" paramNames="self name shape dtype initializer regularizer trainable constraint synchronization">
+          <new def="w" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="w"/>
+        </method>
+      </class>
       <class name="Input" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self shape batch_size name dtype sparse tensor ragged type_spec">
           <new def="x" class="Ltensorflow/python/framework/ops/Tensor"/>

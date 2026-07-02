@@ -10058,6 +10058,274 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test("tf2_test_zip_diag.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
   }
 
+  /**
+   * Pins the gpt-2 decoder-stack shape in miniature (wala/ML#618): layers built by a list
+   * comprehension, iterated with {@code zip} against a {@code [None] * n} list, each call's tuple
+   * result destructured and the hidden state carried through the loop.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCollectionProbeLayerListComprehension()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_layer_list_comprehension.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
+  /**
+   * Pins {@code self.add_weight(...)} (wala/ML#618): the Keras weight-creation API, called from the
+   * lazily-invoked {@code build} (wala/ML#595), creates a tensor-classified value, and a matmul
+   * against it recovers the dtype from the other operand.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCollectionProbeAddWeight()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Pins the vendored gpt-2 {@code EmbeddingLayer} forward result (wala/ML#618): the {@code
+   * add_weight}-created weight dispatches and both {@code mode} branches contribute to the result
+   * union.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCollectionProbeVendoredEmbedding()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    // Count-only: the parameter's type is a union across the `mode` branches whose exact
+    // members shift with modeling precision.
+    test(
+        new String[] {
+          "gpt2_vendored/layers/__init__.py",
+          "gpt2_vendored/layers/embedding_layer.py",
+          "gpt2_vendored/probe_embedding.py"
+        },
+        "probe_embedding.py",
+        "consume",
+        "gpt2_vendored",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE,
+                new TensorType(
+                    INT_32, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(10))),
+                new TensorType(
+                    INT_32,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))))));
+  }
+
+  /**
+   * Pins the model self-call (wala/ML#618): a method calling {@code self(...)} and destructuring
+   * the tuple result, mirroring gpt-2's {@code predictions, _ = self(inputs, training=True)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCollectionProbeModelSelfCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_model_self_call.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
+  /**
+   * Documents the vendored gpt-2 forward output (the wala/ML#618 {@code pred} source) starving on
+   * wala/ML#665: the decoder stack builds on {@code Conv1d}, whose module takes {@code tf} from a
+   * non-forwarded wildcard import.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCollectionProbeVendoredForward()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "gpt2_vendored/layers/__init__.py", "gpt2_vendored/layers/embedding_layer.py",
+          "gpt2_vendored/layers/feed_forward.py", "gpt2_vendored/layers/layer_norm.py",
+          "gpt2_vendored/layers/attention_layer.py", "gpt2_vendored/utils/__init__.py",
+          "gpt2_vendored/utils/tf_utils.py", "gpt2_vendored/scripts/__init__.py",
+          "gpt2_vendored/scripts/utils.py", "gpt2_vendored/data_pipeline.py",
+          "gpt2_vendored/A.py", "gpt2_vendored/probe_forward.py"
+        },
+        "probe_forward.py",
+        "consume",
+        "gpt2_vendored",
+        0,
+        0,
+        // TODO: Expect 1 tensor parameter (the model forward output feeding wala/ML#618's `pred`)
+        // once wala/ML#665 lands (https://github.com/wala/ML/issues/665).
+        emptyMap());
+  }
+
+  /**
+   * Pins a tensor computed inside a {@code with tf.name_scope(...)} block (wala/ML#618): the
+   * unresolved context manager does not perturb the body's dataflow.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCollectionProbeWithNameScope()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_with_name_scope.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
+  /**
+   * Documents the vendored gpt-2 {@code Conv1d} starving on wala/ML#665: {@code feed_forward.py}
+   * takes {@code tf} from a wildcard import, which is not forwarded, so every {@code tf.*} call in
+   * it is unbound.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCollectionProbeVendoredConv1d()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "gpt2_vendored/layers/__init__.py", "gpt2_vendored/layers/embedding_layer.py",
+          "gpt2_vendored/layers/feed_forward.py", "gpt2_vendored/layers/layer_norm.py",
+          "gpt2_vendored/layers/attention_layer.py", "gpt2_vendored/utils/__init__.py",
+          "gpt2_vendored/utils/tf_utils.py", "gpt2_vendored/scripts/__init__.py",
+          "gpt2_vendored/scripts/utils.py", "gpt2_vendored/data_pipeline.py",
+          "gpt2_vendored/A.py", "gpt2_vendored/probe_conv1d.py"
+        },
+        "probe_conv1d.py",
+        "consume",
+        "gpt2_vendored",
+        0,
+        0,
+        // TODO: Expect 1 tensor parameter once wala/ML#665 forwards `tf` through the wildcard
+        // import (https://github.com/wala/ML/issues/665).
+        emptyMap());
+  }
+
+  /**
+   * Pins {@code tf.reshape} with a literal shape list (companion to {@link
+   * #testCollectionProbeReshapeComputedShape()}).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCollectionProbeReshapeLiteralShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_computed_shape.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT32, 6, 8))));
+  }
+
+  /**
+   * Pins {@code tf.reshape} with a shape list built at runtime by list concatenation ({@code
+   * [tf.shape(x)[0], tf.shape(x)[1]] + [n]}, the vendored {@code Conv1d} idiom, wala/ML#618): the
+   * interpreter evaluates the expression and the output shape is concrete.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCollectionProbeReshapeComputedShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_computed_shape.py",
+        "consume2",
+        1,
+        1,
+        // The interpreter evaluates the concatenated shape expression to the concrete
+        // (2, 3, 16); a scalar leak rides along in the union.
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 16), SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  /**
+   * Documents wala/ML#665: {@code tf} reached through {@code from helpers import *} stays unbound,
+   * so the computation starves. Python's wildcard semantics bind every public name of the source
+   * module, including modules it imported.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCollectionProbeWildcardTf()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"wildcard_proj/helpers.py", "wildcard_proj/tf2_test_wildcard_tf.py"},
+        "tf2_test_wildcard_tf.py",
+        "consume",
+        "wildcard_proj",
+        0,
+        0,
+        // TODO: Expect 1 tensor parameter typed (4, 4) float32 once wala/ML#665 forwards the
+        // source module's import bindings (https://github.com/wala/ML/issues/665).
+        emptyMap());
+  }
+
+  /**
+   * Pins the vendored {@code LayerNormalization} forward result: {@code add_weight}-created {@code
+   * gamma}/{@code beta} dispatch (wala/ML#595, wala/ML#618) and the normalization body types (a
+   * union including {@code ? of float32}). Count-only: the union's exact members shift with
+   * modeling precision.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testVendoredLayerNorm()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "gpt2_vendored/layers/__init__.py", "gpt2_vendored/layers/embedding_layer.py",
+          "gpt2_vendored/layers/feed_forward.py", "gpt2_vendored/layers/layer_norm.py",
+          "gpt2_vendored/layers/attention_layer.py", "gpt2_vendored/utils/__init__.py",
+          "gpt2_vendored/utils/tf_utils.py", "gpt2_vendored/scripts/__init__.py",
+          "gpt2_vendored/scripts/utils.py", "gpt2_vendored/data_pipeline.py",
+          "gpt2_vendored/A.py", "gpt2_vendored/probe_ln.py"
+        },
+        "probe_ln.py",
+        "consume",
+        "gpt2_vendored",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE, TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
   @Test
   public void testNamedTupleFieldMatmul()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
