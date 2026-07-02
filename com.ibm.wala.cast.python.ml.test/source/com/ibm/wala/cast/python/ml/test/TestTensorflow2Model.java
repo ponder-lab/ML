@@ -2696,6 +2696,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * parameter in an inferred signature is the downstream consumer's job; this confirms the typed
    * input it needs is available.
    *
+   * <p>The local-tensor count rose from 4 to 7 when the Keras lazy-{@code build} protocol was
+   * modeled (<a href="https://github.com/wala/ML/issues/595">wala/ML#595</a>): {@code self._kernel}
+   * now dispatches, so {@code outputs} (the {@code Dense} result), the residual {@code outputs +=
+   * features} value, and the return alias gained tensor types &mdash; a precision gain.
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
@@ -2717,30 +2722,28 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "GCN.call",
         "gcn_sparse_proj",
         2,
-        4,
+        7,
         Map.of(3, Set.of(TENSOR_4_8_FLOAT32), 4, Set.of(SPARSE_TENSOR_4_4_FLOAT32)));
   }
 
   /**
-   * Documents the chained-layer coverage gap (<a href="https://github.com/wala/ML/issues/595">
-   * wala/ML#595</a>): a value bound to a user-defined Keras {@code Layer}'s call is not
-   * tensor-typed at the call site, so it does not flow as a tensor into a downstream function. The
-   * fixture chains two {@code GCN} layers (vendored from {@code deep_recommenders}), mirroring
-   * {@code train_gcn_on_cora_keras.py}'s {@code x = GCN(32)(feats, g); GCN(num_classes)(x, g)}, and
-   * sinks the first layer's output through {@code consume(hidden)}.
+   * Pins the chained-layer forward result (<a href="https://github.com/wala/ML/issues/595">
+   * wala/ML#595</a>): a value bound to a user-defined Keras {@code Layer}'s call is tensor-typed at
+   * the call site, so it flows as a tensor into a downstream function. The fixture chains two
+   * {@code GCN} layers (vendored from {@code deep_recommenders}), mirroring {@code
+   * train_gcn_on_cora_keras.py}'s {@code x = GCN(32)(feats, g); GCN(num_classes)(x, g)}, and sinks
+   * the first layer's output through {@code consume(hidden)}.
    *
-   * <p>Observed: {@code consume} has <em>zero</em> tensor parameters &mdash; {@code hidden} (the
-   * {@code GCN.call} return, a {@code Dense} output) is not tensor-classified. The consequence is
-   * that the second layer's {@code features} parameter, fed {@code hidden}, is dropped: per calling
-   * context the first call has {@code features}+{@code adj} (2 tensor params) while the second has
-   * only {@code adj}. Under the input-signature consumer's abandon-on-non-tensor rule, that second
-   * decorated layer would yield ⊥. This is a coverage loss in the {@code __call__}-body codepath,
-   * distinct from the chained-shape gaps (<a href="https://github.com/wala/ML/issues/358">
-   * wala/ML#358</a>/<a href="https://github.com/wala/ML/issues/570">wala/ML#570</a>).
+   * <p>{@code hidden} (the {@code GCN.call} return, a {@code Dense} output) is tensor-classified
+   * because the modeled Keras lazy-{@code build} protocol invokes {@code GCN.build}, giving the
+   * {@code build()}-created {@code self._kernel} sublayer a points-to set. The inferred type is
+   * {@code (4, 8) float32}: the dtype and leading dimension are exact, but the trailing dimension
+   * carries the {@code matmul} input shape through the {@code Dense} instead of its {@code
+   * units=16} (the runtime shape is {@code (4, 16)}; the fixture asserts it).
    *
-   * <p>TODO: When <a href="https://github.com/wala/ML/issues/595">wala/ML#595</a> lands (the
-   * layer-call result becomes tensor-typed), {@code consume}'s parameter will recover the concrete
-   * {@code hidden} type; update this fixture to a positive assertion then.
+   * <p>TODO: Expect {@code (4, 16) float32} once <a
+   * href="https://github.com/wala/ML/issues/664">wala/ML#664</a> resolves the {@code units} value
+   * through the {@code self._units} instance-field read.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2762,9 +2765,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_gcn_chain_call.py",
         "consume",
         "gcn_chain_proj",
-        0,
-        0,
-        emptyMap());
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
   }
 
   /**

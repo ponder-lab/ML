@@ -13,6 +13,7 @@ package com.ibm.wala.cast.python.ipa.callgraph;
 import static com.ibm.wala.cast.python.types.PythonTypes.CALLABLE_METHOD_NAME;
 import static com.ibm.wala.cast.python.types.PythonTypes.CALLABLE_METHOD_NAME_FOR_KERAS_MODELS;
 import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
+import static com.ibm.wala.cast.python.types.PythonTypes.KERAS_BUILD_METHOD_NAME;
 import static com.ibm.wala.cast.python.types.PythonTypes.STATIC_METHOD;
 import static com.ibm.wala.cast.python.types.Util.getDeclaringClassTypeReference;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
@@ -147,6 +148,39 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
                   1,
                   FieldReference.findOrCreate(
                       PythonTypes.Root, Atom.findOrCreateUnicodeAtom("$self"), PythonTypes.Root)));
+
+      // The Keras layer-call protocol builds lazily: `Layer.__call__` invokes `self.build(...)`
+      // before the first `call`, and user subclasses commonly create their sublayers there (e.g.
+      // `self._kernel = tf.keras.layers.Dense(...)`). Nothing else in the analysis invokes
+      // `build`, so without this the sublayers those bodies create have empty points-to sets and
+      // every value flowing through them unravels (wala/ML#595). Emitting the invocation
+      // unconditionally is safe: a class without a `build` method yields an empty points-to set
+      // for the field read, and the invoke has no targets.
+      if (filter
+          .getReference()
+          .getName()
+          .toString()
+          .endsWith("/" + CALLABLE_METHOD_NAME_FOR_KERAS_MODELS)) {
+        int buildFunction = v1 + 3;
+        x.addStatement(
+            PythonLanguage.Python.instructionFactory()
+                .GetInstruction(
+                    2,
+                    buildFunction,
+                    v1,
+                    FieldReference.findOrCreate(
+                        PythonTypes.Root,
+                        Atom.findOrCreateUnicodeAtom(KERAS_BUILD_METHOD_NAME),
+                        PythonTypes.Root)));
+        x.addStatement(
+            new PythonInvokeInstruction(
+                3,
+                v1 + 4,
+                v1 + 5,
+                new DynamicCallSiteReference(call.getCallSite().getDeclaredTarget(), 3),
+                new int[] {buildFunction, v1},
+                new Pair[0]));
+      }
     } else if (classMethodReceiver) {
       // Add a class reference.
       v1 = v + 2;
