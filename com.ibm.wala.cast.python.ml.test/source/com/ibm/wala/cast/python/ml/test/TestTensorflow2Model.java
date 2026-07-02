@@ -10263,6 +10263,49 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/669">wala/ML#669</a>: {@code
+   * build_model} is vendored verbatim from {@code LongmaoTeamTf/deep_recommenders} ({@code
+   * examples/train_transformer_on_imdb_keras.py}), a functional {@code tf.keras.Model} whose
+   * weight-graph walk ({@code Model.getWeightShapes}) resolves {@code Dense}/{@code MatMul} weight
+   * shapes — the exact frames that crashed with {@code IllegalStateException} on 0.52.12 when a
+   * WALA 1.8.0 non-constant key reached {@code getConstantValues}. The crash's non-constant {@code
+   * units} key itself arises only under the consumer-side speculative call-graph configuration,
+   * which this harness does not enable, so this guard pins that the walk completes; the {@code
+   * getConstantValues} degrade contract is exercised structurally.
+   *
+   * <p>The walk currently yields no weight shapes for this topology (the head {@code Dense}'s input
+   * is an unmodeled {@code GlobalAveragePooling1D}, and the unresolvable input also stops the
+   * upstream trace-back), so the sink parameter has no tensor types despite the runtime weights
+   * asserted in the fixture. TODO: expect the concrete weight-shape union once <a
+   * href="https://github.com/wala/ML/issues/670">wala/ML#670</a> is fixed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTransformerWeights()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "tr_proj/deep_recommenders/__init__.py",
+          "tr_proj/deep_recommenders/keras/__init__.py",
+          "tr_proj/deep_recommenders/keras/models/__init__.py",
+          "tr_proj/deep_recommenders/keras/models/nlp/__init__.py",
+          "tr_proj/deep_recommenders/keras/models/nlp/multi_head_attention.py",
+          "tr_proj/deep_recommenders/keras/models/nlp/transformer.py",
+          "tr_proj/tf2_test_transformer_weights.py"
+        },
+        "tf2_test_transformer_weights.py",
+        "consume",
+        "tr_proj",
+        0,
+        0,
+        emptyMap());
+  }
+
+  /**
    * Pins a tensor computed inside a {@code with tf.name_scope(...)} block (wala/ML#618): the
    * unresolved context manager does not perturb the body's dataflow.
    *
