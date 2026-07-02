@@ -35,6 +35,9 @@ public class TestSummaryClassShells extends TestPythonMLCallGraphShape {
    */
   private static final String MODEL_ALIAS = "Ltensorflow/keras/Model";
 
+  /** The canonical {@code TypeName} string of the {@code tf.keras.Model} instance type. */
+  private static final String MODEL = "Ltensorflow/keras/models/Model";
+
   /** The {@code TypeName} string of Python's {@code object}. */
   private static final String OBJECT = PythonTypes.object.getName().toString();
 
@@ -78,18 +81,15 @@ public class TestSummaryClassShells extends TestPythonMLCallGraphShape {
   @Test
   public void testModelSubclassSuperclass()
       throws ClassHierarchyException, CancelException, IOException {
-    checkSuperclassChain("tf2_test_model_subclass.py", "MyModel", MODEL_ALIAS, OBJECT);
+    checkSuperclassChain("tf2_test_model_subclass.py", "MyModel", MODEL_ALIAS, MODEL, OBJECT);
   }
 
   /**
    * A subclass written against the bare name {@code Model} (under {@code from
-   * tensorflow.keras.models import Model}) still falls back to {@code object}: the canonical {@code
-   * tensorflow/keras/models/Model} instance type carries the {@code __call__}/{@code call} summary
-   * bodies, and a method-less shell under that name would shadow the bypass-registered class
-   * serving them (see the CAUTION in {@code tensorflow.xml}).
-   *
-   * <p>TODO: Expect the canonical type as the superclass once shells carry the summary's own
-   * methods per <a href="https://github.com/wala/ML/issues/106">wala/ML#106</a>.
+   * tensorflow.keras.models import Model}) has the canonical {@code tensorflow/keras/models/Model}
+   * instance type directly as its superclass. The shell carries the summary's method references (<a
+   * href="https://github.com/wala/ML/issues/106">wala/ML#106</a>), so it coexists with the
+   * bypass-served {@code __call__}/{@code call} bodies under the same name.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built
    * @throws CancelException if the analysis is canceled
@@ -98,7 +98,7 @@ public class TestSummaryClassShells extends TestPythonMLCallGraphShape {
   @Test
   public void testModelSubclassSuperclassFromImport()
       throws ClassHierarchyException, CancelException, IOException {
-    checkSuperclassChain("tf2_test_model_subclass2.py", "MyModel", OBJECT);
+    checkSuperclassChain("tf2_test_model_subclass2.py", "MyModel", MODEL, OBJECT);
   }
 
   /**

@@ -35,6 +35,7 @@ import com.ibm.wala.classLoader.ModuleEntry;
 import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.impl.Util;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.ipa.summaries.MethodSummary;
 import com.ibm.wala.ipa.summaries.XMLMethodSummaryReader;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSAInstructionFactory;
@@ -92,11 +93,32 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
   }
 
   /**
+   * A class shell materialized for a summary-modeled type (wala/WALA#1957, wala/ML#118).
+   * Distinguished from source {@link PythonClass}es by type so that machinery serving
+   * summary-modeled types (e.g. callable detection in {@code
+   * PythonInstanceMethodTrampolineTargetSelector}) can engage for shells without perturbing
+   * source-class dispatch, which flows through constructor-wired trampolines instead.
+   */
+  public static class PythonSummaryShellClass extends PythonClass {
+
+    /**
+     * Creates the shell.
+     *
+     * @param loader the loader to materialize the shell into
+     * @param name the shell's type name
+     * @param superName the shell's superclass name
+     */
+    public PythonSummaryShellClass(PythonLoader loader, TypeName name, TypeName superName) {
+      loader.super(name, superName, loader, null, Collections.emptySet());
+    }
+  }
+
+  /**
    * {@inheritDoc}
    *
-   * <p>The shell is a {@link PythonClass} rather than the base {@link CoreClass}, so machinery
-   * gated on {@link IPythonClass} engages for it, and its default superclass is Python's {@code
-   * object} rather than the language root.
+   * <p>The shell is a {@link PythonSummaryShellClass} rather than the base {@link CoreClass}, so
+   * machinery gated on {@link IPythonClass} (and on shell-ness specifically) engages for it, and
+   * its default superclass is Python's {@code object} rather than the language root.
    */
   @Override
   public IClass defineSummaryClassShell(TypeName name, TypeName superName) {
@@ -105,7 +127,43 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
       return existing;
     }
     TypeName actualSuperName = superName == null ? PythonTypes.object.getName() : superName;
-    return new PythonClass(name, actualSuperName, this, null, Collections.emptySet());
+    return new PythonSummaryShellClass(this, name, actualSuperName);
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * <p>The shell carries the summary's own methods as {@link PythonClass} method references, using
+   * the same function-class mapping that {@code PythonAnalysisEngine.addSummaryBypassLogic}'s
+   * method-to-function-class transformation applies (a method {@code m} of class {@code C} becomes
+   * the function class {@code C/m}, invoked through its {@code fn} selector; the {@code do}/{@code
+   * import}/{@code __init__} names are the same ones that transformation leaves in place). Without
+   * them, a shell sharing its {@link TypeName} with a bypass-served class starves {@code
+   * IPythonClass}-based callable detection (e.g. {@code
+   * PythonInstanceMethodTrampolineTargetSelector}'s {@code isCallable}), which shadows the
+   * engine-registered synthetic class and drops dispatch on the summary's instances (wala/ML#106,
+   * wala/ML#662).
+   */
+  @Override
+  public IClass defineSummaryClassShell(
+      TypeName name, TypeName superName, Collection<MethodSummary> methods) {
+    IClass existing = lookupClass(name);
+    if (existing != null) {
+      return existing;
+    }
+    PythonClass shell = (PythonClass) defineSummaryClassShell(name, superName);
+    for (MethodSummary method : methods) {
+      String methodName = method.getMethod().getName().toString();
+      if (methodName.equals(PythonTypes.DO_METHOD_NAME)
+          || methodName.equals("import")
+          || methodName.equals("__init__")) {
+        continue;
+      }
+      TypeReference funClsRef =
+          TypeReference.findOrCreate(getReference(), name.toString() + "/" + methodName);
+      shell.methodTypes.add(MethodReference.findOrCreate(funClsRef, AstMethodReference.fnSelector));
+    }
+    return shell;
   }
 
   public class DynamicMethodBody extends DynamicCodeBody {
