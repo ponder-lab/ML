@@ -226,10 +226,10 @@ public class RaggedRange extends Range {
       boolean deltaProvided) {
     if (!limitProvided) return null;
 
-    // `getPossibleDoubleValues` throws `IllegalStateException` on non-`ConstantKey<Number>` PTS
-    // contents (via `getConstantValues(..., requireConstants=true)`); catch and degrade to
-    // RaggedDim instead of crashing the analysis. Mirrors the established "modeling gap → soft
-    // fallback" pattern in e.g. `Reshape.getShapes`.
+    // `getPossibleDoubleValues` returns null on a non-constant PTS key (not statically
+    // resolvable, wala/ML#669) and throws `IllegalStateException` on a non-numeric constant;
+    // degrade both to RaggedDim instead of crashing the analysis. Mirrors the established
+    // "modeling gap → soft fallback" pattern in e.g. `Reshape.getShapes`.
     Set<Double> limits;
     Set<Double> starts;
     Set<Double> deltas;
@@ -240,6 +240,8 @@ public class RaggedRange extends Range {
     } catch (IllegalStateException e) {
       return null;
     }
+
+    if (limits == null || starts == null || deltas == null) return null;
 
     if (limits.isEmpty() || limits.contains(null)) return null;
     if (startProvided && (starts.isEmpty() || starts.contains(null))) return null;

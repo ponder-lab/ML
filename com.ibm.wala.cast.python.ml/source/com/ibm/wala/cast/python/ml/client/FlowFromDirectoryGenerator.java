@@ -36,7 +36,9 @@ public class FlowFromDirectoryGenerator extends DatasetGenerator {
     OrdinalSet<InstanceKey> batchSizePts = this.getArgumentPointsToSet(builder, 5, "batch_size");
     if (batchSizePts != null && !batchSizePts.isEmpty()) {
       Set<Long> batchSizes = getPossibleLongValues(batchSizePts);
-      if (!batchSizes.isEmpty() && !batchSizes.contains(null)) {
+      // A null set means `batch_size` is not statically resolvable (wala/ML#669); fall through to
+      // the default, as for an unspecified argument.
+      if (batchSizes != null && !batchSizes.isEmpty() && !batchSizes.contains(null)) {
         batchSize = batchSizes.iterator().next();
       }
     }
