@@ -8,7 +8,7 @@ def consume(t):
 
 
 tensors = []
-for i in range(3):
+for _ in range(3):
     tensors.append(tf.ones((4, 8)))
 
 for t in tensors:
