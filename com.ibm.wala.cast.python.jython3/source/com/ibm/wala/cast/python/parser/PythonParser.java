@@ -66,6 +66,7 @@ import java.util.Map;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 import org.python.antlr.PythonTree;
 import org.python.antlr.ast.AnnAssign;
 import org.python.antlr.ast.Assert;
@@ -294,6 +295,35 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
     public Map<CAstNode, Collection<CAstEntity>> getScopedEntities() {
       return fun.getAllScopedEntities();
     }
+  }
+
+  /**
+   * Maps an in-scope import binding to the fully qualified dotted module path it imports. Populated
+   * by {@link CAstVisitor#visitImport} ({@code import tensorflow as tf} maps {@code tf} to {@code
+   * tensorflow}) and {@link CAstVisitor#visitImportFrom} ({@code from tensorflow.keras.layers
+   * import Layer} maps {@code Layer} to {@code tensorflow.keras.layers.Layer}). Held on the parser
+   * rather than the visitor so that class definitions in nested scopes (visited by child {@link
+   * CAstVisitor}s) see the file's top-level imports.
+   */
+  private final Map<String, String> importedNames = HashMapFactory.make();
+
+  /**
+   * Expands the root identifier of a dotted name through {@link #importedNames} to the fully
+   * qualified module path it is bound to (e.g. {@code tf.keras.layers.Layer} to {@code
+   * tensorflow.keras.layers.Layer} under {@code import tensorflow as tf}).
+   *
+   * @param dotted a dotted source-level name whose root may be an import binding
+   * @return the expanded dotted name, or {@code dotted} unchanged if the root is not an import
+   *     binding
+   */
+  private String expandImportedName(String dotted) {
+    int dot = dotted.indexOf('.');
+    String root = dot < 0 ? dotted : dotted.substring(0, dot);
+    String qualifiedRoot = importedNames.get(root);
+    if (qualifiedRoot == null) {
+      return dotted;
+    }
+    return dot < 0 ? qualifiedRoot : qualifiedRoot + dotted.substring(dot);
   }
 
   public class CAstVisitor extends AbstractParser.CAstVisitor implements VisitorIF<CAstNode> {
@@ -757,6 +787,11 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
               @Override
               public String getName() {
                 return name;
+              }
+
+              @Override
+              public String qualifiedName() {
+                return expandImportedName(name);
               }
 
               @Override
@@ -1627,6 +1662,7 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       int i = 0;
       CAstNode[] elts = new CAstNode[arg0.getInternalNames().size()];
       for (alias n : arg0.getInternalNames()) {
+        importedNames.put(name(n), n.getInternalName());
         CAstNode obj = importAst(arg0, n.getInternalNameNodes());
         elts[i++] =
             notePosition(
@@ -1658,10 +1694,16 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
               arg0);
 
       int i = 1;
+      String moduleName =
+          arg0.getInternalModuleNames().stream()
+              .map(Name::getInternalId)
+              .collect(Collectors.joining("."));
       for (alias n : arg0.getInternalNames()) {
         java.util.List<Name> nn = n.getInternalNameNodes();
         if (nn == null) {
           assert n.getInternalName().equals("*");
+        } else {
+          importedNames.put(name(n), moduleName + "." + n.getInternalName());
         }
         elts[i++] =
             notePosition(
