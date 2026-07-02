@@ -2431,6 +2431,12 @@
       </class>
     </package>
     <package name="tensorflow/keras/layers">
+      <!-- Declaring a `super` opts `Layer` in to being materialized as a class shell before the class hierarchy is built (wala/WALA#1957), so a source subclass such as `class MyLayer(tf.keras.layers.Layer)` resolves its base to this type instead of falling back to `object` (wala/ML#118). -->
+      <class name="Layer" super="Lobject" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <return value="self"/>
+        </method>
+      </class>
       <class name="Input" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="9" paramNames="self shape batch_size name dtype sparse tensor ragged type_spec">
           <new def="x" class="Ltensorflow/python/framework/ops/Tensor"/>

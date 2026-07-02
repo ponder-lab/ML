@@ -13,7 +13,22 @@ import java.util.Collection;
 
 public abstract class AbstractParser {
 
-  public interface MissingType extends CAstType {}
+  public interface MissingType extends CAstType {
+
+    /**
+     * The fully qualified dotted name of this type, with any import alias at the root expanded to
+     * the module path it is bound to (e.g. {@code tensorflow.keras.layers.Layer} for a base written
+     * as {@code tf.keras.layers.Layer} under {@code import tensorflow as tf}). Falls back to {@link
+     * #getName()} when the root is not an import binding, so consumers keyed on the source-level
+     * name (e.g. {@link com.ibm.wala.cast.python.loader.PythonLoader.PythonClass} missing-type
+     * bookkeeping) are unaffected.
+     *
+     * @return the fully qualified dotted name, or {@link #getName()} if no import binding applies
+     */
+    default String qualifiedName() {
+      return getName();
+    }
+  }
 
   public interface PythonGlobalsEntity {
     java.util.Set<String> downwardGlobals();

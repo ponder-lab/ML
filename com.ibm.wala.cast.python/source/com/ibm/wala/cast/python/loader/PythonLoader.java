@@ -33,7 +33,9 @@ import com.ibm.wala.classLoader.Language;
 import com.ibm.wala.classLoader.Module;
 import com.ibm.wala.classLoader.ModuleEntry;
 import com.ibm.wala.core.util.strings.Atom;
+import com.ibm.wala.ipa.callgraph.impl.Util;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
+import com.ibm.wala.ipa.summaries.XMLMethodSummaryReader;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSAInstructionFactory;
 import com.ibm.wala.ssa.SymbolTable;
@@ -56,10 +58,54 @@ import java.util.stream.Collectors;
 @SuppressWarnings("this-escape")
 public abstract class PythonLoader extends CAstAbstractModuleLoader {
 
+  /**
+   * Summary readers whose {@code <class name="..." super="...">} declarations should be
+   * materialized as class shells in this loader before source translation. Set by {@link
+   * PythonLoaderFactory#makeTheLoader} from the readers the engine registers.
+   */
+  private List<XMLMethodSummaryReader> summaryClassShellReaders = Collections.emptyList();
+
+  /**
+   * Sets the summary readers whose class shells to materialize at {@link #init} time.
+   *
+   * @param summaryClassShellReaders the readers whose {@code <class super="...">} declarations
+   *     should become shells
+   */
+  public void setSummaryClassShellReaders(List<XMLMethodSummaryReader> summaryClassShellReaders) {
+    this.summaryClassShellReaders = summaryClassShellReaders;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * <p>Registers the summary-modeled class shells before translating source, so a source class
+   * subclassing a summary-modeled type (e.g. {@code class MyLayer(tf.keras.layers.Layer)}) resolves
+   * its base at definition time instead of falling back to {@code object} (wala/ML#118, via
+   * wala/WALA#1957).
+   */
   @Override
   public void init(List<Module> modules) {
-    // TODO Auto-generated method stub
+    for (XMLMethodSummaryReader summaries : summaryClassShellReaders) {
+      Util.addSummaryClassShells(this, summaries);
+    }
     super.init(modules);
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * <p>The shell is a {@link PythonClass} rather than the base {@link CoreClass}, so machinery
+   * gated on {@link IPythonClass} engages for it, and its default superclass is Python's {@code
+   * object} rather than the language root.
+   */
+  @Override
+  public IClass defineSummaryClassShell(TypeName name, TypeName superName) {
+    IClass existing = lookupClass(name);
+    if (existing != null) {
+      return existing;
+    }
+    TypeName actualSuperName = superName == null ? PythonTypes.object.getName() : superName;
+    return new PythonClass(name, actualSuperName, this, null, Collections.emptySet());
   }
 
   public class DynamicMethodBody extends DynamicCodeBody {

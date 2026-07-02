@@ -74,6 +74,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.Stack;
 import java.util.function.Consumer;
@@ -164,14 +165,15 @@ public class PythonCAstToIRTranslator extends AstTranslator {
     // here. Skipping the unresolved supertypes rather than taking an arbitrary first (which drops
     // the class to a null superclass, leaving it unlinked in the hierarchy and breaking callable
     // dispatch on its instances, wala/ML#657) keeps a locally resolvable base under multiple
-    // inheritance. Fall back to `object` when none resolve, the same lattice point the missing or
-    // no-base case uses and the correct one for a modeled base such as `tf.keras.Model`.
+    // inheritance. When none resolve, prefer a summary-modeled class shell matching a missing
+    // supertype (wala/ML#118) before falling back to `object`, the lattice point the missing and
+    // no-base cases share.
     TypeName superName =
         present.stream()
             .map(walaTypeNames::get)
             .filter(name -> name != null)
             .findFirst()
-            .orElse(PythonTypes.object.getName());
+            .orElseGet(() -> summaryShellSuperName(cls).orElse(PythonTypes.object.getName()));
 
     ((PythonLoader) loader)
         .defineType(
@@ -183,6 +185,27 @@ public class PythonCAstToIRTranslator extends AstTranslator {
                 .collect(Collectors.toSet()));
 
     return true;
+  }
+
+  /**
+   * Resolves a missing (imported) supertype of {@code cls} against the summary-modeled class shells
+   * registered in the loader (see {@code PythonLoader.defineSummaryClassShell}, wala/ML#118). A
+   * missing supertype's fully qualified dotted name (e.g. {@code tensorflow.keras.layers.Layer})
+   * canonicalizes to the shell's {@link TypeName} (e.g. {@code Ltensorflow/keras/layers/Layer}) by
+   * slashing the dots, so a shell registered under the summary's canonical name is found exactly,
+   * with no fuzzy matching.
+   *
+   * @param cls the class type whose missing supertypes to resolve
+   * @return the first missing supertype's shell {@link TypeName}, or empty if no missing supertype
+   *     matches a registered shell
+   */
+  private Optional<TypeName> summaryShellSuperName(CAstType cls) {
+    return cls.getSupertypes().stream()
+        .filter(t -> t instanceof MissingType)
+        .map(t -> ((MissingType) t).qualifiedName())
+        .map(name -> TypeName.findOrCreate("L" + name.replace('.', '/')))
+        .filter(name -> loader.lookupClass(name) != null)
+        .findFirst();
   }
 
   @Override

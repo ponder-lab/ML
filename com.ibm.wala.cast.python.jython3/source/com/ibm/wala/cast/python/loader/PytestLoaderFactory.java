@@ -1,6 +1,5 @@
 package com.ibm.wala.cast.python.loader;
 
-import com.ibm.wala.classLoader.IClassLoader;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import java.io.File;
 import java.util.List;
@@ -21,7 +20,7 @@ public class PytestLoaderFactory extends PythonLoaderFactory {
   }
 
   @Override
-  protected IClassLoader makeTheLoader(IClassHierarchy cha) {
+  protected PythonLoader makePythonLoader(IClassHierarchy cha) {
     return new PytestLoader(cha, this.getPythonPath());
   }
 

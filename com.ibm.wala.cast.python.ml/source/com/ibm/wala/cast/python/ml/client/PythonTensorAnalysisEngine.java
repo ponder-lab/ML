@@ -63,6 +63,7 @@ import com.ibm.wala.util.graph.impl.SlowSparseNumberedGraph;
 import com.ibm.wala.util.intset.IntSet;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.io.File;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -1310,5 +1311,17 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // `NumpyTypes` constants without depending on load order side effects.
     addSummaryBypassLogic(options, "numpy.xml");
     addSummaryBypassLogic(options, "tensorflow.xml");
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * <p>{@code tensorflow.xml} declares class shells (via {@code <class super="...">}) for the
+   * subclassable Keras framework bases (e.g. {@code tf.keras.layers.Layer}), so user subclasses
+   * resolve their base in the class hierarchy (wala/ML#118).
+   */
+  @Override
+  protected Collection<String> getSummaryClassShellSummaries() {
+    return List.of("tensorflow.xml");
   }
 }
