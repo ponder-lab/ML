@@ -826,6 +826,13 @@
         <new def="cast" class="Ltensorflow/functions/cast"/>
         <putfield class="LRoot" field="cast" fieldType="LRoot" ref="x" value="cast"/>
         <putfield class="LRoot" field="cast" fieldType="LRoot" ref="dtypes" value="cast"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/backend. The `tf.keras.backend` module object, reached through aliases such as `import tensorflow.keras.backend as K` (wala/ML#666). The functions real subjects hit are wired to existing models: `cast` shares `tf.cast`; `equal` shares `tf.not_equal` (same shape/dtype behavior: elementwise comparison to bool); `gather` and `dropout` are typing-wise pass-throughs, as at the `tf.nn` level. -->
+        <new def="backend" class="Lobject"/>
+        <putfield class="LRoot" field="backend" fieldType="LRoot" ref="keras" value="backend"/>
+        <putfield class="LRoot" field="cast" fieldType="LRoot" ref="backend" value="cast"/>
+        <putfield class="LRoot" field="equal" fieldType="LRoot" ref="backend" value="not_equal"/>
+        <putfield class="LRoot" field="gather" fieldType="LRoot" ref="backend" value="pass_through"/>
+        <putfield class="LRoot" field="dropout" fieldType="LRoot" ref="backend" value="pass_through"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/expand_dims -->
         <new def="expand_dims" class="Ltensorflow/functions/expand_dims"/>
         <putfield class="LRoot" field="expand_dims" fieldType="LRoot" ref="x" value="expand_dims"/>
