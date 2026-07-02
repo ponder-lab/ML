@@ -1967,24 +1967,92 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
         String tempName = "temp " + ++tmpIndex;
 
-        CAstNode test =
-            Ast.makeNode(
-                CAstNode.BINARY_EXPR,
-                CAstOperator.OP_NE,
-                Ast.makeConstant(null),
-                Ast.makeNode(
-                    CAstNode.BLOCK_EXPR,
-                    Ast.makeNode(
-                        CAstNode.ASSIGN,
-                        c.getInternalTarget().accept(this),
-                        Ast.makeNode(
-                            CAstNode.EACH_ELEMENT_GET,
-                            Ast.makeNode(CAstNode.VAR, Ast.makeConstant(tempName)),
-                            c.getInternalTarget().accept(this)))));
+        // The iteration key must survive to drive the element-value read (`temp[key]`) and the
+        // next-key step (`EACH_ELEMENT_GET(temp, key)`). A simple-name target serves as its own
+        // key variable, but a destructuring target (`for x, y in ...`) would tear the key apart
+        // before the value read, so the read's reconstructed composite key can never match and
+        // every destructured element starves (wala/ML#618, surfaced by `zip`). Route the key
+        // through a dedicated scalar temporary instead; the target is then assigned (and
+        // destructured) from the element VALUE.
+        boolean scalarTarget = c.getInternalTarget() instanceof Name;
+        String keyName = scalarTarget ? null : "temp key " + ++tmpIndex;
 
-        result =
-            notePosition(
+        CAstNode test;
+        CAstNode firstKeyAssign;
+        CAstNode bodyValueAssign;
+        {
+          if (scalarTarget) {
+            test =
                 Ast.makeNode(
+                    CAstNode.BINARY_EXPR,
+                    CAstOperator.OP_NE,
+                    Ast.makeConstant(null),
+                    Ast.makeNode(
+                        CAstNode.BLOCK_EXPR,
+                        Ast.makeNode(
+                            CAstNode.ASSIGN,
+                            c.getInternalTarget().accept(this),
+                            Ast.makeNode(
+                                CAstNode.EACH_ELEMENT_GET,
+                                Ast.makeNode(CAstNode.VAR, Ast.makeConstant(tempName)),
+                                c.getInternalTarget().accept(this)))));
+            firstKeyAssign =
+                Ast.makeNode(
+                    CAstNode.ASSIGN,
+                    c.getInternalTarget().accept(this),
+                    Ast.makeNode(
+                        CAstNode.EACH_ELEMENT_GET,
+                        Ast.makeNode(CAstNode.VAR, Ast.makeConstant(tempName)),
+                        Ast.makeConstant(null)));
+            bodyValueAssign =
+                Ast.makeNode(
+                    CAstNode.ASSIGN,
+                    c.getInternalTarget().accept(this),
+                    Ast.makeNode(
+                        CAstNode.OBJECT_REF,
+                        Ast.makeNode(CAstNode.VAR, Ast.makeConstant(tempName)),
+                        c.getInternalTarget().accept(this)));
+          } else {
+            test =
+                Ast.makeNode(
+                    CAstNode.BINARY_EXPR,
+                    CAstOperator.OP_NE,
+                    Ast.makeConstant(null),
+                    Ast.makeNode(
+                        CAstNode.BLOCK_EXPR,
+                        Ast.makeNode(
+                            CAstNode.ASSIGN,
+                            Ast.makeNode(CAstNode.VAR, Ast.makeConstant(keyName)),
+                            Ast.makeNode(
+                                CAstNode.EACH_ELEMENT_GET,
+                                Ast.makeNode(CAstNode.VAR, Ast.makeConstant(tempName)),
+                                Ast.makeNode(CAstNode.VAR, Ast.makeConstant(keyName))))));
+            firstKeyAssign =
+                Ast.makeNode(
+                    CAstNode.ASSIGN,
+                    Ast.makeNode(CAstNode.VAR, Ast.makeConstant(keyName)),
+                    Ast.makeNode(
+                        CAstNode.EACH_ELEMENT_GET,
+                        Ast.makeNode(CAstNode.VAR, Ast.makeConstant(tempName)),
+                        Ast.makeConstant(null)));
+            bodyValueAssign =
+                Ast.makeNode(
+                    CAstNode.ASSIGN,
+                    c.getInternalTarget().accept(this),
+                    Ast.makeNode(
+                        CAstNode.OBJECT_REF,
+                        Ast.makeNode(CAstNode.VAR, Ast.makeConstant(tempName)),
+                        Ast.makeNode(CAstNode.VAR, Ast.makeConstant(keyName))));
+          }
+        }
+
+        CAstNode decls =
+            scalarTarget
+                ? Ast.makeNode(
+                    CAstNode.DECL_STMT,
+                    Ast.makeConstant(new CAstSymbolImpl(tempName, PythonCAstToIRTranslator.Any)),
+                    c.getInternalIter().accept(this))
+                : Ast.makeNode(
                     CAstNode.BLOCK_EXPR,
                     Ast.makeNode(
                         CAstNode.DECL_STMT,
@@ -1992,25 +2060,20 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
                             new CAstSymbolImpl(tempName, PythonCAstToIRTranslator.Any)),
                         c.getInternalIter().accept(this)),
                     Ast.makeNode(
-                        CAstNode.ASSIGN,
-                        c.getInternalTarget().accept(this),
-                        Ast.makeNode(
-                            CAstNode.EACH_ELEMENT_GET,
-                            Ast.makeNode(CAstNode.VAR, Ast.makeConstant(tempName)),
-                            Ast.makeConstant(null))),
+                        CAstNode.DECL_STMT,
+                        Ast.makeConstant(new CAstSymbolImpl(keyName, PythonCAstToIRTranslator.Any)),
+                        Ast.makeConstant(null)));
+
+        result =
+            notePosition(
+                Ast.makeNode(
+                    CAstNode.BLOCK_EXPR,
+                    decls,
+                    firstKeyAssign,
                     Ast.makeNode(
                         CAstNode.LOOP,
                         test,
-                        Ast.makeNode(
-                            CAstNode.BLOCK_EXPR,
-                            Ast.makeNode(
-                                CAstNode.ASSIGN,
-                                c.getInternalTarget().accept(this),
-                                Ast.makeNode(
-                                    CAstNode.OBJECT_REF,
-                                    Ast.makeNode(CAstNode.VAR, Ast.makeConstant(tempName)),
-                                    c.getInternalTarget().accept(this))),
-                            result))),
+                        Ast.makeNode(CAstNode.BLOCK_EXPR, bodyValueAssign, result))),
                 c);
       }
 

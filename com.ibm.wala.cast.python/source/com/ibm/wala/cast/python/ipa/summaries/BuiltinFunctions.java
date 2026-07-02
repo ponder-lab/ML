@@ -96,6 +96,55 @@ public class BuiltinFunctions {
     return x;
   }
 
+  /**
+   * Builds the summary for {@code zip}: a freshly-allocated list holding one tuple whose field
+   * {@code j} is an element of {@code zip}'s argument {@code j}. Iterating the result and unpacking
+   * each element (the {@code for a, b in zip(xs, ys)} idiom) then recovers the input lists' element
+   * values. Up to four arguments are wired; an unbound argument's element read has an empty
+   * points-to set and contributes nothing. Without this, {@code zip} returned an <em>empty</em>
+   * list and every value flowing through it unraveled (wala/ML#618; the same starvation shape as
+   * {@code range}, wala/ML#599).
+   *
+   * @param cls The builtin function class whose summary this is.
+   * @param name The builtin's name ({@code zip}).
+   * @return The populated summary.
+   */
+  private static IMethod zipSummary(IClass cls, String name) {
+    TypeReference type = builtinFunction(name);
+    MethodReference ref = MethodReference.findOrCreate(type, AstMethodReference.fnSelector);
+    PythonSummary x = new PythonSummary(ref, 10);
+
+    AstInstructionFactory factory = PythonLanguage.Python.instructionFactory();
+    int container = 11;
+    int tuple = 12;
+    int nullKey = 13;
+    int containerKey = 14;
+    int v = 15;
+    int idx = 0;
+
+    x.addStatement(
+        factory.NewInstruction(idx++, container, NewSiteReference.make(0, PythonTypes.list)));
+    x.addStatement(
+        factory.NewInstruction(idx++, tuple, NewSiteReference.make(1, PythonTypes.tuple)));
+    x.addConstant(nullKey, new ConstantValue(null));
+
+    for (int arg = 2; arg <= 5; arg++) {
+      int elementKey = v++;
+      int element = v++;
+      int fieldKey = v++;
+      x.addStatement(factory.EachElementGetInstruction(idx++, elementKey, arg, nullKey));
+      x.addStatement(factory.PropertyRead(idx++, element, arg, elementKey));
+      x.addConstant(fieldKey, new ConstantValue(arg - 2));
+      x.addStatement(factory.PropertyWrite(idx++, tuple, fieldKey, element));
+    }
+
+    x.addConstant(containerKey, new ConstantValue(0));
+    x.addStatement(factory.PropertyWrite(idx++, container, containerKey, tuple));
+    x.addStatement(factory.ReturnInstruction(idx++, container, false));
+
+    return new PythonSummarizedFunction(ref, x, cls);
+  }
+
   private static IMethod argSummary(IClass cls, String name, int arg) {
     PythonSummary S = argSummary(cls, builtinFunction(name), arg);
     return new PythonSummarizedFunction(S.getMethod(), S, cls);
@@ -141,7 +190,11 @@ public class BuiltinFunctions {
               // comprehensions over it can recover element keys. See wala/ML#599.
               : name.equals("range")
                   ? iterableSummary(this, name, returnedType, TypeReference.Int)
-                  : typeSummary(this, name, returnedType);
+                  // `zip` must return a list of tuples wiring the inputs' elements through;
+                  // see `zipSummary` (wala/ML#618).
+                  : name.equals("zip")
+                      ? zipSummary(this, name)
+                      : typeSummary(this, name, returnedType);
     }
 
     private BuiltinFunction(IClassHierarchy cha, String name, int arg) {

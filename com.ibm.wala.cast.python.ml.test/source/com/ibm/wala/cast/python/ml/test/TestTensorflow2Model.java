@@ -1606,11 +1606,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testTensorList3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    // `list.append` is modeled (wala/ML#136): both appended tensors reach `add` through the
+    // iteration, so each parameter carries the union of the two shapes, as in testTensorList.
     test(
         "tf2_test_tensor_list3.py",
         "add",
-        0,
-        0); // NOTE: Change to 2, 2, 2, 3 once https://github.com/wala/ML/issues/136 is fixed.
+        2,
+        3,
+        Map.of(
+            2,
+            Set.of(TENSOR_1_2_FLOAT32, TENSOR_2_2_FLOAT32),
+            3,
+            Set.of(TENSOR_1_2_FLOAT32, TENSOR_2_2_FLOAT32)));
   }
 
   @Test
@@ -6562,18 +6569,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * href="https://github.com/wala/ML/issues/196">wala/ML#196</a>'s {@link
    * com.ibm.wala.cast.python.ml.client.ReadDataFallback}.
    *
-   * <p>The current assertion is {@code (0, 3)} &mdash; 0 tensor parameters because the parameter (a
-   * list of tensors) is dropped from classification per <a
-   * href="https://github.com/wala/ML/issues/136">wala/ML#136</a>.
-   *
-   * <p>TODO: Once wala/ML#136 (losing tensors in lists) lands, change the assertion to {@code (1,
-   * 3)} (one tensor parameter &mdash; the {@code tower_grads} list-of-tensors), with the parameter
-   * at {@code vn=2} typed as the appropriate list-of-tensors type.
+   * <p>With `list.append` modeled (<a
+   * href="https://github.com/wala/ML/issues/136">wala/ML#136</a>), the loop's element values reach
+   * classification and the local-tensor count is 8 (the loop variable {@code g}, the per-iteration
+   * {@code expand_dims} results, and the {@code concat} chain). The parameter count stays 0: {@code
+   * tower_grads} is the list <em>container</em>, which is not itself a tensor; its elements are
+   * classified where they are read.
    */
   @Test
   public void testMultiGPUTraining2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("multigpu_training.py", "average_gradients", 0, 3);
+    test("multigpu_training.py", "average_gradients", 0, 8);
   }
 
   @Test
@@ -10004,6 +10010,54 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
+  @Test
+  public void testCollectionProbeTupleReturnUnpack()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_tuple_return_unpack.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
+  @Test
+  public void testCollectionProbeLayerTupleReturn()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_layer_tuple_return.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
+  @Test
+  public void testCollectionProbeListAppendIterate()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_list_append_iterate.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
+  @Test
+  public void testCollectionProbeZipIterate()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_zip_iterate.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
+  @Test
+  public void testCollectionProbeListElemSlice()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_elem_slice.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 4))));
+  }
+
+  @Test
+  public void testCollectionProbeListLiteralIterate()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_literal_iterate.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
+  @Test
+  public void testCollectionProbeZipDiag()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_zip_diag.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
   @Test
   public void testNamedTupleFieldMatmul()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
