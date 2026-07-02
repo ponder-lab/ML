@@ -176,7 +176,10 @@ public class Input extends TensorTypeAllocator {
                 + this.getSource()
                 + "; assuming unknown.");
       } else {
-        batchSizes.addAll(getPossibleLongValues(batchSizePts));
+        Set<Long> values = getPossibleLongValues(batchSizePts);
+        // A null result means `batch_size` is not statically resolvable (wala/ML#669); leave
+        // `batchSizes` empty so the unknown-batch (dynamic-dim) path below applies.
+        if (values != null) batchSizes.addAll(values);
       }
     }
 

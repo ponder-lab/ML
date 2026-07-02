@@ -159,11 +159,16 @@ public class Range extends TensorGenerator {
         }
 
         Set<Double> starts = getPossibleDoubleValues(startPts);
-        if (starts.isEmpty()) starts.add(0.0);
-
         Set<Double> limits = getPossibleDoubleValues(limitPts);
-
         Set<Double> deltas = getPossibleDoubleValues(deltaPts);
+
+        // A null set means the argument is not statically resolvable (wala/ML#669); with no
+        // resolvable `limit`, no concrete shape is produced below.
+        if (starts == null) starts = HashSetFactory.make();
+        if (limits == null) limits = HashSetFactory.make();
+        if (deltas == null) deltas = HashSetFactory.make();
+
+        if (starts.isEmpty()) starts.add(0.0);
         if (deltas.isEmpty()) deltas.add(1.0);
 
         for (Double s : starts) {
@@ -232,11 +237,16 @@ public class Range extends TensorGenerator {
     }
 
     Set<Double> starts = getPossibleDoubleValues(builder, caller, startVN);
-    if (starts.isEmpty()) starts.add(0.0);
-
     Set<Double> limits = getPossibleDoubleValues(builder, caller, limitVN);
-
     Set<Double> deltas = getPossibleDoubleValues(builder, caller, deltaVN);
+
+    // A null set means the argument is not statically resolvable (wala/ML#669); with no
+    // resolvable `limit`, no concrete shape is produced below.
+    if (starts == null) starts = HashSetFactory.make();
+    if (limits == null) limits = HashSetFactory.make();
+    if (deltas == null) deltas = HashSetFactory.make();
+
+    if (starts.isEmpty()) starts.add(0.0);
     if (deltas.isEmpty()) deltas.add(1.0);
 
     for (Double s : starts) {

@@ -24,6 +24,7 @@ import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -163,7 +164,10 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
         this.getArgumentPointsToSet(
             builder, this.getNrowsParameterPosition(), this.getNrowsParameterName());
 
-    return getPossibleLongValues(pointsToSet);
+    Set<Long> values = getPossibleLongValues(pointsToSet);
+    // A null result means `nrows` is not statically resolvable (wala/ML#669); treat it like an
+    // unspecified argument (the caller infers `nrows` from `value_rowids`).
+    return values == null ? Collections.emptySet() : values;
   }
 
   @Override

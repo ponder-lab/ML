@@ -77,6 +77,12 @@ public class DatasetRangeGenerator extends DatasetGenerator {
             this.getArgumentPointsToSet(
                 builder, Parameters.STEP.getIndex(), Parameters.STEP.getName()));
 
+    // A null result means the argument is not statically resolvable (wala/ML#669); treat it like
+    // an unspecified argument (the size stays unknown below).
+    if (starts == null) starts = Collections.emptySet();
+    if (stops == null) stops = Collections.emptySet();
+    if (steps == null) steps = Collections.emptySet();
+
     if (stops.isEmpty() && starts.isEmpty()) {
       return Collections.emptySet();
     }

@@ -332,8 +332,24 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
 
       InstanceKey contentsKey =
           getBuilder().getInstanceKeyForConstant(PythonTypes.string, LIST_APPEND_CONTENTS_FIELD);
-      PointerKey valueKey = getPointerKeyForLocal(inst.getUse(1));
-      newFieldWrite(node, read.getObjectRef(), new InstanceKey[] {contentsKey}, valueKey);
+      int valueVn = inst.getUse(1);
+
+      if (contentsAreInvariant(symtab, du, valueVn)) {
+        // The invoke's own argument processing records an invariant value's pointer key as
+        // implicitly represented, so a raw constraint on that key crashes
+        // `findOrCreatePointsToSet` (wala/ML#668). Write the invariant instance keys directly.
+        system.recordImplicitPointsToSet(getPointerKeyForLocal(valueVn));
+        newFieldWrite(
+            node,
+            read.getObjectRef(),
+            new InstanceKey[] {contentsKey},
+            getInvariantContents(symtab, du, node, valueVn));
+      } else
+        newFieldWrite(
+            node,
+            read.getObjectRef(),
+            new InstanceKey[] {contentsKey},
+            getPointerKeyForLocal(valueVn));
     }
 
     /**

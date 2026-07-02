@@ -197,7 +197,10 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
               boolean shell = parent instanceof PythonSummaryShellClass;
               ((IPythonClass) parent)
                   .getMethodReferences().stream()
-                      .filter(m -> seenMethodNames.add(m.getName()))
+                      // Dedup by the Python-level method name. Shell references are all named by
+                      // the generic function selector, so using `m.getName()` here would let the
+                      // first shell method shadow every other one. See wala/ML#667.
+                      .filter(m -> seenMethodNames.add(instanceFieldName(m, shell)))
                       .forEach(
                           m -> {
                             methodReferences.add(m);
@@ -304,7 +307,10 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
                     pc,
                     inst,
                     f,
-                    FieldReference.findOrCreate(PythonTypes.Root, r.getName(), PythonTypes.Root)));
+                    FieldReference.findOrCreate(
+                        PythonTypes.Root,
+                        instanceFieldName(r, summaryDeclaredMethods.contains(r)),
+                        PythonTypes.Root)));
             pc++;
           }
 
@@ -373,5 +379,25 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
                     n.equals("NamedTuple")
                         || n.endsWith(".NamedTuple")
                         || n.endsWith("/NamedTuple"));
+  }
+
+  /**
+   * Returns the instance-field name under which the trampoline for the given method reference is
+   * stored on the constructed object. A source-class method reference is named by its Python
+   * method, so its own name is used directly. A summary-shell method reference is named by the
+   * generic function selector (wala/ML#106), so the Python method name is instead the last
+   * component of its declaring class's type name (e.g. {@code add_weight} from {@code
+   * Ltensorflow/keras/layers/Layer/add_weight}). Without this distinction every shell-inherited
+   * method wired under the selector-name field: the first shadowed the rest in the per-name dedup,
+   * and none was reachable under its Python name. See wala/ML#667.
+   *
+   * @param r The method reference being wired.
+   * @param shellDeclared Whether the reference was declared by a {@link PythonSummaryShellClass}.
+   * @return The atom to use as the instance-field name.
+   */
+  private static Atom instanceFieldName(MethodReference r, boolean shellDeclared) {
+    if (!shellDeclared) return r.getName();
+    String typeName = r.getDeclaringClass().getName().toString();
+    return Atom.findOrCreateUnicodeAtom(typeName.substring(typeName.lastIndexOf('/') + 1));
   }
 }

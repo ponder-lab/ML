@@ -1845,6 +1845,16 @@ public class TensorFlowTypes extends PythonTypes {
   private static final String DENSE_CALL_SIGNATURE =
       "tf.keras.layers.Dense." + CALLABLE_METHOD_NAME + "()";
 
+  /** https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Layer#add_weight. */
+  public static final MethodReference ADD_WEIGHT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/keras/layers/Layer/add_weight")),
+          AstMethodReference.fnSelector);
+
+  private static final String ADD_WEIGHT_SIGNATURE = "tf.keras.layers.Layer.add_weight()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/layers/flatten. */
   public static final MethodReference FLATTEN =
       MethodReference.findOrCreate(
@@ -2118,6 +2128,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(GRADIENT.getDeclaringClass(), GRADIENT_SIGNATURE),
           Map.entry(SOFTMAX.getDeclaringClass(), SOFTMAX_SIGNATURE),
           Map.entry(DENSE_CALL.getDeclaringClass(), DENSE_CALL_SIGNATURE),
+          Map.entry(ADD_WEIGHT.getDeclaringClass(), ADD_WEIGHT_SIGNATURE),
           Map.entry(FLATTEN.getDeclaringClass(), FLATTEN_SIGNATURE),
           Map.entry(MAX_POOL.getDeclaringClass(), MAX_POOL_SIGNATURE),
           Map.entry(ADAM_OPTIMIZER.getDeclaringClass(), ADAM_OPTIMIZER_SIGNATURE),
