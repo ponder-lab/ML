@@ -4781,8 +4781,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * @tf.function(input_signature=...)}-decorated {@code train_step}, then {@code _train_step}, then
    * {@code get_loss(targets, predictions)}. The {@code real} parameter (vn=3), bound to the
    * dataset-sourced {@code targets}, types to {@code (2, 2)} int32, so Ariadne emits the parameter
-   * type for this exact shape. With wala/ML#665 forwarding wildcard import bindings, {@code pred} types too: the
-   * stubbed model body's forward output is a rank-3 union with the vocab dimension recovered. This pins that wala/ML#618's residual gpt-2 failure is downstream of
+   * type for this exact shape. With wala/ML#665 forwarding wildcard import bindings, {@code
+   * pred} types too: the stubbed model body's forward output is a rank-3 union with the vocab
+   * dimension recovered. This pins that wala/ML#618's residual gpt-2 failure is downstream of
    * Ariadne, not an emission gap.
    */
   @Test
@@ -4838,10 +4839,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * the dataset survives the list (wala/ML#648, {@link #testFitLoop()}). So {@code real} resolves
    * to {@code (?,)} int32.
    *
-   * <p>{@code pred}'s absence (it stays a function-local, hence locals 1 not 2) is the model {@code
-   * __call__} body, tracked separately under <a
-   * href="https://github.com/wala/ML/issues/618">wala/ML#618</a>. Analyzed statically here, like
-   * the consumer's vendoring; it runs in the perf-eval with its tfrecord/data setup.
+   * <p>{@code pred} types too (wala/ML#665): the model forward output is a rank-3 tensor union
+   * whose dtype refines once {@code add_weight} consumes its {@code dtype} argument. Analyzed
+   * statically here, like the consumer's vendoring; it runs in the perf-eval with its tfrecord/data
+   * setup.
    */
   @Test
   public void testGpt2GetLossVendored()
@@ -10184,9 +10185,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Documents the vendored gpt-2 forward output (the wala/ML#618 {@code pred} source) starving on
-   * wala/ML#665: the decoder stack builds on {@code Conv1d}, whose module takes {@code tf} from a
-   * non-forwarded wildcard import.
+   * Pins the vendored gpt-2 forward output (the wala/ML#618 {@code pred} source): with wala/ML#665
+   * forwarding wildcard import bindings, the full decoder stack types and the model output is a
+   * rank-3 tensor union.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -10238,9 +10239,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Documents the vendored gpt-2 {@code Conv1d} starving on wala/ML#665: {@code feed_forward.py}
-   * takes {@code tf} from a wildcard import, which is not forwarded, so every {@code tf.*} call in
-   * it is unbound.
+   * Pins the vendored gpt-2 {@code Conv1d} forward result: {@code tf} arrives through the wildcard
+   * import (wala/ML#665) and the {@code add_weight}-built kernel dispatches, so the result is
+   * tensor-classified.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
