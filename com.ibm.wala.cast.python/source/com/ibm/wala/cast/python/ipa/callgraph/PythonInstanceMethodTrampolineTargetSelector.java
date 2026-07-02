@@ -25,6 +25,7 @@ import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.loader.IPythonClass;
+import com.ibm.wala.cast.python.loader.PythonLoader.PythonSummaryShellClass;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
@@ -360,31 +361,36 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
         || receiver instanceof BypassSyntheticClass) {
       return true;
     }
-    if (receiver instanceof SyntheticClass) {
-      if (receiver.getMethod(
-                  new Selector(
-                      Atom.findOrCreateUnicodeAtom(CALLABLE_METHOD_NAME),
-                      AstMethodReference.fnDesc))
-              != null
-          || receiver.getMethod(
-                  new Selector(
-                      Atom.findOrCreateUnicodeAtom(CALLABLE_METHOD_NAME_FOR_KERAS_MODELS),
-                      AstMethodReference.fnDesc))
-              != null
-          || receiver.getMethod(
-                  new Selector(
-                      Atom.findOrCreateUnicodeAtom(DO_METHOD_NAME), AstMethodReference.fnDesc))
-              != null) {
-        return true;
-      }
+    if (receiver instanceof SyntheticClass
+        && (receiver.getMethod(
+                    new Selector(
+                        Atom.findOrCreateUnicodeAtom(CALLABLE_METHOD_NAME),
+                        AstMethodReference.fnDesc))
+                != null
+            || receiver.getMethod(
+                    new Selector(
+                        Atom.findOrCreateUnicodeAtom(CALLABLE_METHOD_NAME_FOR_KERAS_MODELS),
+                        AstMethodReference.fnDesc))
+                != null
+            || receiver.getMethod(
+                    new Selector(
+                        Atom.findOrCreateUnicodeAtom(DO_METHOD_NAME), AstMethodReference.fnDesc))
+                != null)) {
+      return true;
+    }
 
-      if (receiver instanceof IPythonClass) {
-        for (MethodReference mr : ((IPythonClass) receiver).getMethodReferences()) {
-          String clsName = mr.getDeclaringClass().getName().toString();
-          if (clsName.endsWith("/" + CALLABLE_METHOD_NAME)
-              || clsName.endsWith("/" + CALLABLE_METHOD_NAME_FOR_KERAS_MODELS)) {
-            return true;
-          }
+    // A summary-modeled class whose method references include a `__call__`/`call` function class
+    // is callable, whether materialized as an engine-registered synthetic class (for allocatable
+    // summary types) or as a summary class shell (`PythonLoader.defineSummaryClassShell`,
+    // wala/ML#106). Source classes are deliberately excluded: their instances dispatch through
+    // constructor-wired trampolines, and substituting the receiver here instead drops those calls.
+    if ((receiver instanceof SyntheticClass || receiver instanceof PythonSummaryShellClass)
+        && receiver instanceof IPythonClass) {
+      for (MethodReference mr : ((IPythonClass) receiver).getMethodReferences()) {
+        String clsName = mr.getDeclaringClass().getName().toString();
+        if (clsName.endsWith("/" + CALLABLE_METHOD_NAME)
+            || clsName.endsWith("/" + CALLABLE_METHOD_NAME_FOR_KERAS_MODELS)) {
+          return true;
         }
       }
     }

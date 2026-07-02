@@ -1,9 +1,6 @@
-# Test for wala/ML#662: a user subclass of `Model` imported via `from tensorflow.keras.models
-# import Model` currently still falls back to `object` in the class hierarchy: the canonical
-# `tensorflow/keras/models/Model` instance type carries the `__call__`/`call` summary bodies, and a
-# method-less shell under that name would shadow them (see the CAUTION in `tensorflow.xml`).
-# TODO: The base should resolve to the canonical type once shells carry the summary's own methods
-# per wala/ML#106 (https://github.com/wala/ML/issues/106).
+# Test for wala/ML#662 and wala/ML#106: a user subclass of `Model` imported via `from
+# tensorflow.keras.models import Model` resolves its base class (the canonical instance type) in
+# the class hierarchy instead of falling back to `object`.
 from tensorflow.keras.models import Model
 
 

@@ -2392,8 +2392,8 @@
       <class name="attribute" allocatable="true"></class>
     </package>
     <package name="tensorflow/keras/models">
-      <!-- CAUTION: this class must NOT declare a `super` (i.e., must not opt in to class-shell materialization, wala/WALA#1957): the resulting method-less shell in the Python loader would shadow the bypass-registered class that serves the `__call__`/`call` bodies below, breaking dispatch on functional-API `tf.keras.Model(...)` instances. The shell can only move here once shells carry the summary's own methods (wala/ML#106). -->
-      <class name="Model" allocatable="true">
+      <!-- Declaring a `super` opts `Model` in to class-shell materialization (wala/WALA#1957), so a source subclass such as `class MyModel(tf.keras.models.Model)` resolves its base to this canonical instance type instead of falling back to `object` (wala/ML#118, wala/ML#662). The shell carries this class's method references (`PythonLoader.defineSummaryClassShell`, wala/ML#106), so it does not shadow the bypass-served `__call__`/`call` bodies below. -->
+      <class name="Model" allocatable="true" super="Lobject">
         <method name="__call__" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs training mask">
           <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Model#call -->
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
@@ -2408,8 +2408,8 @@
       </class>
     </package>
     <package name="tensorflow/keras">
-      <!-- At runtime `tf.keras.Model` and `tf.keras.models.Model` are the same class under two attribute paths. Shell lookup is exact-match on the canonicalized base name (wala/ML#118), and no summary methods live under this name, so this empty shell safely covers subclasses written against the `tf.keras.Model`/`from tensorflow.keras import Model` spelling (wala/ML#662). It cannot be positioned at the canonical `Ltensorflow/keras/models/Model` instance type, nor can that type declare its own shell, until shells carry the summary's own methods (wala/ML#106); see the CAUTION on that class above. -->
-      <class name="Model" super="Lobject"></class>
+      <!-- At runtime `tf.keras.Model` and `tf.keras.models.Model` are the same class under two attribute paths. Shell lookup is exact-match on the canonicalized base name (wala/ML#118), so this empty alias shell covers subclasses written against the `tf.keras.Model`/`from tensorflow.keras import Model` spelling; positioning it at the canonical `Ltensorflow/keras/models/Model` instance type keeps one hierarchy chain, so subtype queries against the canonical type also hold for subclasses reached through this alias (wala/ML#662). -->
+      <class name="Model" super="Ltensorflow/keras/models/Model"></class>
     </package>
     <package name="tensorflow/keras/layers/class">
       <class name="Dense" allocatable="true">
