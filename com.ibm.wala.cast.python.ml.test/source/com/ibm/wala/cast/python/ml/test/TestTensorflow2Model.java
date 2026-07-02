@@ -10392,6 +10392,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
   }
 
+  /**
+   * Probes wala/ML#661's indexed sub-layer call shape ({@code self.container[i](x)}).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIndexedLayerCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_indexed_layer_call.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
   @Test
   public void testNamedTupleFieldMatmul()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
