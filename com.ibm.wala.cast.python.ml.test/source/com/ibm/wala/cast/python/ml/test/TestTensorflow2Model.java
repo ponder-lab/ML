@@ -10117,8 +10117,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Pins {@code self.add_weight(...)} (wala/ML#618): the Keras weight-creation API, called from the
-   * lazily-invoked {@code build} (wala/ML#595), creates a tensor-classified value, and a matmul
-   * against it recovers the dtype from the other operand.
+   * lazily-invoked {@code build} (wala/ML#595), creates a tensor whose shape and dtype come from
+   * the call's {@code shape} list and {@code dtype} string arguments (wala/ML#667), so the matmul
+   * against it composes to {@code (4, 4)} float32.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -10128,8 +10129,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testCollectionProbeAddWeight()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_add_weight.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test("tf2_test_add_weight.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
+  /**
+   * Pins the {@code add_weight} result itself (wala/ML#667): the weight's shape comes from the
+   * {@code shape} list argument and its dtype from a {@code tf.float32} module-constant argument
+   * (the string form is covered by {@link #testCollectionProbeAddWeight()}).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightArguments()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_add_weight2.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
   }
 
   /**
