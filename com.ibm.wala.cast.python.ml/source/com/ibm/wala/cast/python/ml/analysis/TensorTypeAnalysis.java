@@ -251,7 +251,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               SSAInstruction inst = du.getDef(lpk.getValueNumber());
               if (lpk.getNode().getMethod() instanceof AstMethod) {
                 SSAInstruction def = du.getDef(inst.getUse(1));
-                if (def != null) {
+                // A synthesized definition (e.g. a constructor-injected trampoline wire or a phi)
+                // has a negative instruction index and no source position.
+                if (def != null && def.iIndex() >= 0) {
                   return ((AstMethod) lpk.getNode().getMethod())
                       .debugInfo()
                       .getInstructionPosition(def.iIndex());
