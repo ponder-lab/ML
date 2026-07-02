@@ -4839,10 +4839,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * the dataset survives the list (wala/ML#648, {@link #testFitLoop()}). So {@code real} resolves
    * to {@code (?,)} int32.
    *
-   * <p>{@code pred} types too (wala/ML#665): the model forward output is a rank-3 tensor union
-   * whose dtype refines once {@code add_weight} consumes its {@code dtype} argument. Analyzed
-   * statically here, like the consumer's vendoring; it runs in the perf-eval with its tfrecord/data
-   * setup.
+   * <p>{@code pred} types too (wala/ML#665): the model forward output is a tensor union. With
+   * {@code add_weight} consuming its {@code shape}/{@code dtype} arguments (wala/ML#667), the union
+   * gains a rank-2 float32 member (the flat logits matmul against the embedding weight before the
+   * output reshape). Analyzed statically here, like the consumer's vendoring; it runs in the
+   * perf-eval with its tfrecord/data setup.
    */
   @Test
   public void testGpt2GetLossVendored()
@@ -4868,7 +4869,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             Set.of(
                 new TensorType(
                     UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, DynamicDim.INSTANCE)),
-                TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE,
+                new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE)),
                 new TensorType(
                     UNKNOWN,
                     asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))))));
@@ -10151,7 +10152,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Pins the vendored gpt-2 {@code EmbeddingLayer} forward result (wala/ML#618): the {@code
    * add_weight}-created weight dispatches and both {@code mode} branches contribute to the result
-   * union.
+   * union. With {@code add_weight} consuming its {@code shape}/{@code dtype} arguments
+   * (wala/ML#667), the embedding-mode member is fully concrete: {@code (2, 3, 8)} float32.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -10177,7 +10179,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(
             2,
             Set.of(
-                TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE,
+                TensorType.of(FLOAT_32, 2, 3, 8),
                 new TensorType(
                     INT_32, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(10))),
                 new TensorType(
@@ -10203,7 +10205,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Pins the vendored gpt-2 forward output (the wala/ML#618 {@code pred} source): with wala/ML#665
    * forwarding wildcard import bindings, the full decoder stack types and the model output is a
-   * rank-3 tensor union.
+   * rank-3 tensor union. With {@code add_weight} consuming its {@code shape}/{@code dtype}
+   * arguments (wala/ML#667), one member carries the concrete batch/sequence dims and the float32
+   * dtype: {@code (2, 3, ?)} float32.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -10230,7 +10234,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(
             2,
             Set.of(
-                TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE,
+                new TensorType(
+                    FLOAT_32, asList(new NumericDim(2), new NumericDim(3), DynamicDim.INSTANCE)),
                 new TensorType(
                     UNKNOWN,
                     asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
