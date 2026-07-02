@@ -2882,6 +2882,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * through {@code tf.keras.layers.Layer.__call__} dispatch, across the {@code
    * deep_recommenders→nlp→transformer} package boundaries.
    *
+   * <p>With {@code tf.keras.backend} modeled (<a
+   * href="https://github.com/wala/ML/issues/666">wala/ML#666</a>), the padding mask {@code masks =
+   * K.equal(inputs, 0)} is a third function-local tensor, typed {@code (2, 5)} bool. With {@code
+   * add_weight} consuming its arguments (wala/ML#667), {@code embeddings =
+   * K.gather(self.embeddings, inputs)} is a fourth: the embedding table types {@code (?, 8)}
+   * float32 and the {@code gather} pass-through carries it.
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
@@ -2904,7 +2911,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "Transformer.call",
         "tr_proj",
         2,
-        2,
+        4,
         Map.of(3, Set.of(TENSOR_2_5_INT32), 4, Set.of(TENSOR_2_5_INT32)));
   }
 
@@ -10487,6 +10494,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testIndexedLayerCall()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_indexed_layer_call.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
+  /**
+   * Probes wala/ML#666's dotted-alias case ({@code import tensorflow.keras.backend as K} read
+   * inside a method).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testBackendAliasCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_backend_alias.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
   }
 
   @Test
