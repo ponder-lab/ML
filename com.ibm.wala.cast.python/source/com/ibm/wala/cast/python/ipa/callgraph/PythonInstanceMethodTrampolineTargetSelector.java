@@ -297,14 +297,17 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
 
         // The Keras `call` convention (https://github.com/wala/ML/issues/106) applies to ANY
         // class with a `call` method, without checking its hierarchy. Although a subclass's
-        // summary-modeled base has been resolvable since wala/ML#118 (class shells), gating this
-        // on a shell ancestor drops sound dispatch for every subclass whose base does NOT resolve
-        // (cross-module imports, wala/ML#571; bare-name collisions, wala/ML#657; unmodeled
-        // spellings) and empirically loses 18 tests' worth of forward-pass coverage. Tighten only
-        // once unresolved-base metadata is complete enough that a hierarchy check has the same
-        // recall.
+        // summary-modeled base has been resolvable since the class shells of
+        // https://github.com/wala/ML/issues/118, gating this on a shell ancestor drops sound
+        // dispatch for every subclass whose base does NOT resolve (cross-module imports,
+        // https://github.com/wala/ML/issues/571; bare-name collisions,
+        // https://github.com/wala/ML/issues/657; unmodeled spellings) and empirically loses 18
+        // tests' worth of forward-pass coverage. Tightening is tracked by
+        // https://github.com/wala/ML/issues/663.
         if (callable == null) {
-          LOGGER.finer("Attempting callable workaround for https://github.com/wala/ML/issues/118.");
+          LOGGER.finer(
+              "Attempting the Keras `call` convention for"
+                  + " https://github.com/wala/ML/issues/106.");
 
           callable =
               cha.lookupClass(
@@ -321,7 +324,9 @@ public class PythonInstanceMethodTrampolineTargetSelector<T>
           }
 
           if (callable != null)
-            LOGGER.info("Applying callable workaround for https://github.com/wala/ML/issues/118.");
+            LOGGER.info(
+                "Applying the Keras `call` convention for"
+                    + " https://github.com/wala/ML/issues/106.");
         }
 
         if (callable != null) {
