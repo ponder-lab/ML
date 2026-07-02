@@ -4781,9 +4781,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * @tf.function(input_signature=...)}-decorated {@code train_step}, then {@code _train_step}, then
    * {@code get_loss(targets, predictions)}. The {@code real} parameter (vn=3), bound to the
    * dataset-sourced {@code targets}, types to {@code (2, 2)} int32, so Ariadne emits the parameter
-   * type for this exact shape. (The {@code pred} parameter stays untyped here only because the
-   * stubbed model body leaves {@code predictions} at the top type; the real subject's {@code call}
-   * returns typed logits.) This pins that wala/ML#618's residual gpt-2 failure is downstream of
+   * type for this exact shape. With wala/ML#665 forwarding wildcard import bindings, {@code pred} types too: the
+   * stubbed model body's forward output is a rank-3 union with the vocab dimension recovered. This pins that wala/ML#618's residual gpt-2 failure is downstream of
    * Ariadne, not an emission gap.
    */
   @Test
@@ -4801,9 +4800,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "gpt2_model.py",
         "Gpt2.get_loss",
         "gpt2_proj",
-        1,
-        1,
-        Map.of(3, Set.of(TensorType.of(INT_32, 2, 2))));
+        2,
+        8,
+        Map.of(
+            3,
+            Set.of(TensorType.of(INT_32, 2, 2)),
+            4,
+            // The model forward output: rank 3 with the vocab dimension recovered as the
+            // constant 100; the dtype is refinable once `add_weight` consumes its `dtype`
+            // argument. The (2, 2) int32 member is the call-site union with the label tensor.
+            Set.of(
+                new TensorType(
+                    UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(100))),
+                new TensorType(
+                    UNKNOWN,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
+                TensorType.of(INT_32, 2, 2))));
   }
 
   /**
@@ -4846,9 +4858,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "A.py",
         "Gpt2.get_loss",
         "gpt2_vendored",
-        1,
-        1,
-        Map.of(3, Set.of(new TensorType(INT_32, asList(DynamicDim.INSTANCE)))));
+        2,
+        8,
+        Map.of(
+            3,
+            Set.of(new TensorType(INT_32, asList(DynamicDim.INSTANCE))),
+            4,
+            Set.of(
+                new TensorType(
+                    UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, DynamicDim.INSTANCE)),
+                TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE,
+                new TensorType(
+                    UNKNOWN,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))))));
   }
 
   /**
@@ -5112,9 +5134,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "gpt2_model.py",
         "Gpt2.get_loss",
         "gpt2_proj",
-        1,
-        1,
-        Map.of(3, Set.of(TensorType.of(INT_32, 2, 2))));
+        2,
+        8,
+        Map.of(
+            3,
+            Set.of(TensorType.of(INT_32, 2, 2)),
+            4,
+            // The model forward output: rank 3 with the vocab dimension recovered as the
+            // constant 100; the dtype is refinable once `add_weight` consumes its `dtype`
+            // argument. The (2, 2) int32 member is the call-site union with the label tensor.
+            Set.of(
+                new TensorType(
+                    UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(100))),
+                new TensorType(
+                    UNKNOWN,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
+                TensorType.of(INT_32, 2, 2))));
   }
 
   /**
@@ -10173,11 +10208,18 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "probe_forward.py",
         "consume",
         "gpt2_vendored",
-        0,
-        0,
-        // TODO: Expect 1 tensor parameter (the model forward output feeding wala/ML#618's `pred`)
-        // once wala/ML#665 lands (https://github.com/wala/ML/issues/665).
-        emptyMap());
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE,
+                new TensorType(
+                    UNKNOWN,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
+                new TensorType(
+                    UNKNOWN,
+                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, DynamicDim.INSTANCE)))));
   }
 
   /**
@@ -10220,11 +10262,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "probe_conv1d.py",
         "consume",
         "gpt2_vendored",
-        0,
-        0,
-        // TODO: Expect 1 tensor parameter once wala/ML#665 forwards `tf` through the wildcard
-        // import (https://github.com/wala/ML/issues/665).
-        emptyMap());
+        1,
+        1,
+        // The scalar-rank result comes from the interpreter folding the computed output shape;
+        // the dtype is refinable once `add_weight` consumes its `dtype` argument.
+        Map.of(2, Set.of(new TensorType(UNKNOWN, emptyList()))));
   }
 
   /**
@@ -10271,9 +10313,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Documents wala/ML#665: {@code tf} reached through {@code from helpers import *} stays unbound,
-   * so the computation starves. Python's wildcard semantics bind every public name of the source
-   * module, including modules it imported.
+   * Pins wala/ML#665: {@code tf} reached through {@code from helpers import *} binds, matching
+   * Python's wildcard semantics (every public module-level name is exported, including modules the
+   * source module imported).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -10288,11 +10330,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_wildcard_tf.py",
         "consume",
         "wildcard_proj",
-        0,
-        0,
-        // TODO: Expect 1 tensor parameter typed (4, 4) float32 once wala/ML#665 forwards the
-        // source module's import bindings (https://github.com/wala/ML/issues/665).
-        emptyMap());
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
   }
 
   /**
@@ -10324,6 +10364,32 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE, TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testCollectionProbeWildcardTf()} with a package-qualified wildcard source
+   * ({@code from pkg.helpers2 import *}), the vendored {@code feed_forward.py} form (wala/ML#665).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCollectionProbeWildcardPkgTf()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "wildcard_proj/pkg/__init__.py",
+          "wildcard_proj/pkg/helpers2.py",
+          "wildcard_proj/tf2_test_wildcard_pkg_tf.py"
+        },
+        "tf2_test_wildcard_pkg_tf.py",
+        "consume",
+        "wildcard_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
   }
 
   @Test

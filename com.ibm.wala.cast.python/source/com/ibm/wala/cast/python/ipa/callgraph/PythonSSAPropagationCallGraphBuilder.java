@@ -22,6 +22,7 @@ import com.ibm.wala.cast.ipa.callgraph.AstSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.ipa.callgraph.GlobalObjectKey;
 import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
+import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.ssa.ForElementGetInstruction;
 import com.ibm.wala.cast.python.ssa.PythonBinaryOpInstruction;
@@ -544,17 +545,27 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      * @implNote In Ariadne, scripts are also "methods" with the name "do."
      */
     private static String getScriptName(TypeName methodName) {
-      boolean script = methodName.toString().endsWith(PYTHON_FILE_EXTENSION);
+      String composed =
+          methodName.getPackage() == null
+              ? methodName.getClassName().toString()
+              : methodName.getPackage().toString() + "/" + methodName.getClassName().toString();
 
-      if (script)
-        return methodName.getPackage() == null
-            ? methodName.getClassName().toString()
-            : methodName.getPackage().toString() + "/" + methodName.getClassName().toString();
-      else
-        return (methodName.getPackage() == null
-                ? methodName.getClassName()
-                : methodName.getPackage())
-            .toString();
+      // A method nested in a class (e.g. `script layers/feed_forward.py/Conv1d/call`) composes to
+      // a name whose script segment is interior, not terminal. Truncate at the script's file
+      // extension so reads inside class methods key the same script as module-level reads;
+      // without this, the wildcard lookup is skipped for them (wala/ML#665).
+      String marker = "." + PYTHON_FILE_EXTENSION + "/";
+      int extension = composed.indexOf(marker);
+      if (extension >= 0) {
+        return composed.substring(0, extension + marker.length() - 1);
+      }
+
+      if (composed.endsWith("." + PYTHON_FILE_EXTENSION)) {
+        return composed;
+      }
+
+      return (methodName.getPackage() == null ? methodName.getClassName() : methodName.getPackage())
+          .toString();
     }
 
     /**
@@ -655,6 +666,38 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                         }
                       }
                     });
+
+            // Also check the module's named bindings (wala/ML#665). Python's wildcard exports
+            // every public module-level name, including modules the source module itself
+            // imported (`import tensorflow as tf` makes `tf` an exported binding), and such a
+            // binding is neither an allocation named after the field (the `def`/`class` case
+            // above) nor a `put` onto a module object: it is a named local of the script body
+            // holding the import's result. Match the script's local names and assign the
+            // binding's value to the reader.
+            if (n.getMethod() instanceof AstMethod) {
+              for (Iterator<SSAInstruction> it = n.getIR().iterateAllInstructions();
+                  it.hasNext(); ) {
+                SSAInstruction inst = it.next();
+                if (!inst.hasDef() || inst.iIndex() < 0) continue;
+
+                String[] localNames = n.getIR().getLocalNames(inst.iIndex(), inst.getDef());
+                if (localNames == null) continue;
+
+                for (String localName : localNames) {
+                  if (fieldName.equals(localName)) {
+                    PointerKey boundValuePK = getBuilder().getPointerKeyForLocal(n, inst.getDef());
+
+                    if (system.newConstraint(defPK, assignOperator, boundValuePK))
+                      logger.fine(
+                          "Added wildcard binding constraint that: "
+                              + defPK
+                              + " gets: "
+                              + boundValuePK
+                              + " (wala/ML#665).");
+                  }
+                }
+              }
+            }
           }
         }
       }
