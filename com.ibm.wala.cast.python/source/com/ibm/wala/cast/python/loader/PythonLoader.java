@@ -99,16 +99,17 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
    * PythonInstanceMethodTrampolineTargetSelector}) can engage for shells without perturbing
    * source-class dispatch, which flows through constructor-wired trampolines instead.
    */
-  public class PythonSummaryShellClass extends PythonClass {
+  public static class PythonSummaryShellClass extends PythonClass {
 
     /**
      * Creates the shell.
      *
+     * @param loader the loader to materialize the shell into
      * @param name the shell's type name
      * @param superName the shell's superclass name
      */
-    public PythonSummaryShellClass(TypeName name, TypeName superName) {
-      super(name, superName, PythonLoader.this, null, Collections.emptySet());
+    public PythonSummaryShellClass(PythonLoader loader, TypeName name, TypeName superName) {
+      loader.super(name, superName, loader, null, Collections.emptySet());
     }
   }
 
@@ -126,7 +127,7 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
       return existing;
     }
     TypeName actualSuperName = superName == null ? PythonTypes.object.getName() : superName;
-    return new PythonSummaryShellClass(name, actualSuperName);
+    return new PythonSummaryShellClass(this, name, actualSuperName);
   }
 
   /**
