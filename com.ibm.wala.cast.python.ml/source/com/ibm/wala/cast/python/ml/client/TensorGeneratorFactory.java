@@ -1203,6 +1203,17 @@ public class TensorGeneratorFactory {
         // tensor (e.g. a subscript-slice `x[1::2]` of an opaque `argparse` attribute), so the
         // result is not a tensor either; dispatching `TensorElementGenerator` here would over-type
         // it. wala/ML#656.
+        // A string-keyed subscript on a dataset element (e.g. `batch["t"]` over a
+        // dict-structured dataset) navigates the element's record structure rather than
+        // extracting a positional slice of a tensor, so no dimension is peeled: the field
+        // carries the element's (per-field-unioned) type. wala/ML#673.
+        if (propertyName != null
+            && propertyIndex == null
+            && !isNonTensorAttribute(propertyName)
+            && containerGenerator instanceof DatasetElementGenerator) {
+          return containerGenerator;
+        }
+
         if (containerGenerator != null
             && (propertyName == null || !isNonTensorAttribute(propertyName))) {
           return (containerGenerator instanceof DatasetGenerator)
@@ -1325,9 +1336,10 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, DATASET_BATCH_TYPE)) return new DatasetBatchGenerator(source);
     else if (isType(calledFunction, DATASET_MAP_TYPE)) return new DatasetMapGenerator(source);
     else if (isType(calledFunction, DATASET_PADDED_BATCH_TYPE))
-      // `padded_batch` prepends a batch dimension like `batch`; reuse the batch generator. The
-      // padded inner dimensions are an upper-bound approximation. wala/ML#623.
-      return new DatasetBatchGenerator(source);
+      // `padded_batch` prepends a batch dimension like `batch`; the padded generator additionally
+      // reads the declared `padded_shapes` element structure (wala/ML#673). The padded inner
+      // dimensions remain an upper-bound approximation. wala/ML#623.
+      return new DatasetPaddedBatchGenerator(source);
     else if (isType(calledFunction, DATASET_RANGE_TYPE)) return new DatasetRangeGenerator(source);
     else if (isType(calledFunction, TEXT_LINE_DATASET_TYPE))
       return new TextLineDatasetGenerator(source);
