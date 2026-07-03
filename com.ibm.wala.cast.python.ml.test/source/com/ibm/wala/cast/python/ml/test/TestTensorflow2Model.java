@@ -10218,12 +10218,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testAddWeightDefaultDtype()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_add_weight3.py",
-        "consume",
-        1,
-        1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
+    test("tf2_test_add_weight3.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_4_FLOAT32)));
   }
 
   /**
