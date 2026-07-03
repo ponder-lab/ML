@@ -191,6 +191,14 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      * @param revisit Re-invokes the superclass visit for {@code instruction}.
      */
     private void refreshLexicalOnClosureGrowth(SSAInstruction instruction, Runnable revisit) {
+      // When the function value's contents are invariant, the visit's snapshot is already
+      // complete (the single closure object is known statically) and its points-to set is
+      // implicitly represented, so registering a side effect is both unnecessary and disallowed:
+      // `newSideEffect` would crash `findOrCreatePointsToSet` (the wala/ML#668 trap; observed as
+      // `UnimplementedError` on script-toplevel nodes in WALA's JS test suite for the upstream
+      // form of this fix, wala/WALA#1991).
+      if (contentsAreInvariant(ir.getSymbolTable(), du, 1)) return;
+
       PointerKey function = getPointerKeyForLocal(1);
       system.newSideEffect(
           new LexicalRefreshOperator(node, instruction.iIndex(), revisit), function);
