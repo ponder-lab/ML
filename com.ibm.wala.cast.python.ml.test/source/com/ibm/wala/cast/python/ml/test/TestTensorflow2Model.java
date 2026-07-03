@@ -2847,12 +2847,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * {@code build()}-created {@code self._kernel} sublayer a points-to set. With constructor keyword
    * arguments forwarded to {@code __init__} (wala/ML#664), {@code units} resolves through the
    * {@code self._units} instance-field read, so the runtime-true {@code (4, 16) float32} is
-   * inferred. The union carries a spurious {@code (4, 8)} member because both {@code GCN(...)}
-   * constructions collapse into one {@code __init__} context, unioning the {@code units} values.
+   * inferred. With {@code __init__} dispatched in the constructor's calling context (wala/ML#671),
+   * the two instances' {@code self._units} fields hold {@code 16} and {@code 8} separately; the
+   * union's spurious {@code (4, 8)} member persists because both instances share one {@code build}
+   * context, so the {@code Dense} constructed inside it unions the values.
    *
    * <p>TODO: Expect exactly {@code (4, 16) float32} once <a
-   * href="https://github.com/wala/ML/issues/671">wala/ML#671</a> separates {@code __init__}
-   * argument values per construction site.
+   * href="https://github.com/wala/ML/issues/679">wala/ML#679</a> gives the layer-method trampolines
+   * receiver-object sensitivity.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
