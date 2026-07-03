@@ -1963,6 +1963,74 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Deep variant of {@link #testSamenameA()} mirroring the wala/ML#678 subject's dispatch shape:
+   * both sibling scripts pass their same-named model into one shared helper ({@code
+   * helpers/samples.py}'s {@code sample_sequence}), whose nested closures capture {@code model}
+   * lexically and dispatch {@code model.predict} from a frame reached by both scripts — the NLPGNN
+   * {@code nlpgnn/sample/samples.py} structure the two-file fixture lacks. Dispatch survives the
+   * whole chain (no wala/ML#678 node loss at this scale), but the closure bodies are
+   * call-string-keyed, so one {@code step} node serves both lexical parents and each sink receives
+   * the cross-sibling union rather than its own shape (runtime truth here: {@code (2, 2) float32}).
+   *
+   * <p>TODO: Expect exactly {@code (2, 2) float32} once <a
+   * href="https://github.com/wala/ML/issues/685">wala/ML#685</a> keys closure callees on the
+   * dispatched function object, the closure analogue of wala/ML#679.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSamenameDeepA()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "samename_deep_proj/helpers/__init__.py",
+          "samename_deep_proj/helpers/samples.py",
+          "samename_deep_proj/tf2_test_samename_deep_a.py",
+          "samename_deep_proj/tf2_test_samename_deep_b.py"
+        },
+        "tf2_test_samename_deep_a.py",
+        "consume",
+        "samename_deep_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_2_FLOAT32, TENSOR_3_3_FLOAT32)));
+  }
+
+  /**
+   * Sibling half of {@link #testSamenameDeepA()} (wala/ML#678): runtime truth is {@code (3, 3)
+   * float32}; the extra member is the wala/ML#685 cross-sibling closure union.
+   *
+   * <p>TODO: Expect exactly {@code (3, 3) float32} once <a
+   * href="https://github.com/wala/ML/issues/685">wala/ML#685</a> keys closure callees on the
+   * dispatched function object.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSamenameDeepB()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "samename_deep_proj/helpers/__init__.py",
+          "samename_deep_proj/helpers/samples.py",
+          "samename_deep_proj/tf2_test_samename_deep_a.py",
+          "samename_deep_proj/tf2_test_samename_deep_b.py"
+        },
+        "tf2_test_samename_deep_b.py",
+        "consume",
+        "samename_deep_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_2_FLOAT32, TENSOR_3_3_FLOAT32)));
+  }
+
+  /**
    * Pins the <a href="https://github.com/wala/ML/issues/676">wala/ML#676</a> subject: {@code
    * DynamicPositionEmbedding.call}'s {@code inputs} parameter on the vendored {@code
    * jason9693/MusicTransformer-tensorflow2.0} {@code custom/layers.py}. With {@code
