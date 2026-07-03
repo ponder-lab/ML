@@ -10095,6 +10095,30 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_list_append_constant.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
   }
 
+  /**
+   * Probes the wala/ML#570 residual: a list accumulated with {@code append} in a loop feeds {@code
+   * tf.concat} (mirroring {@code MessagePassing._calculate_messages_all_type} feeding {@code
+   * _aggregate_function}). The appended values' shapes and dtype survive the list: the result keeps
+   * the rank and non-axis dims with a dynamic axis dim (the element count is not statically known)
+   * and the float32 dtype.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCollectionProbeListAppendConcat()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_append_concat.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(8))))));
+  }
+
   @Test
   public void testCollectionProbeZipIterate()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
