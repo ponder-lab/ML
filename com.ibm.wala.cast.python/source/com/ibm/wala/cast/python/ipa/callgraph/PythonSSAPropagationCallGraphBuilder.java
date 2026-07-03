@@ -192,34 +192,48 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      */
     private void refreshLexicalOnClosureGrowth(SSAInstruction instruction, Runnable revisit) {
       PointerKey function = getPointerKeyForLocal(1);
-
       system.newSideEffect(
-          new UnaryOperator<PointsToSetVariable>() {
-            @Override
-            public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
-              revisit.run();
-              return NOT_CHANGED;
-            }
+          new LexicalRefreshOperator(node, instruction.iIndex(), revisit), function);
+    }
 
-            @Override
-            public int hashCode() {
-              return node.hashCode() * 31 + instruction.iIndex();
-            }
+    /**
+     * The side-effect operator registered by {@link #refreshLexicalOnClosureGrowth}; identity is
+     * the (node, instruction index) pair so the fixpoint system de-duplicates re-registrations of
+     * the same lexical access.
+     */
+    private static final class LexicalRefreshOperator extends UnaryOperator<PointsToSetVariable> {
+      private final CGNode node;
+      private final int instructionIndex;
+      private final Runnable revisit;
 
-            @Override
-            public boolean equals(Object o) {
-              return o != null && getClass() == o.getClass() && toString().equals(o.toString());
-            }
+      private LexicalRefreshOperator(CGNode node, int instructionIndex, Runnable revisit) {
+        this.node = node;
+        this.instructionIndex = instructionIndex;
+        this.revisit = revisit;
+      }
 
-            @Override
-            public String toString() {
-              return "lexical refresh of "
-                  + instruction.iIndex()
-                  + " in "
-                  + PythonConstraintVisitor.this.node;
-            }
-          },
-          function);
+      @Override
+      public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+        revisit.run();
+        return NOT_CHANGED;
+      }
+
+      @Override
+      public int hashCode() {
+        return node.hashCode() * 31 + instructionIndex;
+      }
+
+      @Override
+      public boolean equals(Object o) {
+        return o instanceof LexicalRefreshOperator other
+            && instructionIndex == other.instructionIndex
+            && node.equals(other.node);
+      }
+
+      @Override
+      public String toString() {
+        return "lexical refresh of " + instructionIndex + " in " + node;
+      }
     }
 
     @Override
