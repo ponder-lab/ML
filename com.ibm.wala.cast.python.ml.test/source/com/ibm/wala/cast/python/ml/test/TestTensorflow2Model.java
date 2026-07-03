@@ -10270,6 +10270,27 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Pins wala/ML#670's fixes directly: {@code GlobalAveragePooling1D} is modeled (rank-3 input,
+   * temporal axis dropped), so the functional model's weight walk resolves the downstream {@code
+   * Dense} kernel {@code (8, 5)} and bias {@code (5,)} concretely.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGap1dWeights()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gap1d_weights.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 5), TENSOR_5_FLOAT32)));
+  }
+
+  /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/669">wala/ML#669</a>: {@code
    * build_model} is vendored verbatim from {@code LongmaoTeamTf/deep_recommenders} ({@code
    * examples/train_transformer_on_imdb_keras.py}), a functional {@code tf.keras.Model} whose
@@ -10280,11 +10301,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * which this harness does not enable, so this guard pins that the walk completes; the {@code
    * getConstantValues} degrade contract is exercised structurally.
    *
-   * <p>The walk currently yields no weight shapes for this topology (the head {@code Dense}'s input
-   * is an unmodeled {@code GlobalAveragePooling1D}, and the unresolvable input also stops the
-   * upstream trace-back), so the sink parameter has no tensor types despite the runtime weights
-   * asserted in the fixture. TODO: expect the concrete weight-shape union once <a
-   * href="https://github.com/wala/ML/issues/670">wala/ML#670</a> is fixed.
+   * <p>With wala/ML#670 fixed, the walk traverses past the head {@code Dense} into the transformer
+   * (an unresolvable input no longer stops the trace-back, and {@code GlobalAveragePooling1D} is
+   * modeled — see {@link #testGap1dWeights()}), but it still yields no weight shapes here: the
+   * pooling input is the vendored transformer's forward output, whose shape is the wala/ML#570
+   * residual. TODO: expect the concrete weight-shape union once <a
+   * href="https://github.com/wala/ML/issues/570">wala/ML#570</a> is fixed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
