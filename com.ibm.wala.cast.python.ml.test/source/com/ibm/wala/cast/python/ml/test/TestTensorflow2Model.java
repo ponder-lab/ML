@@ -10736,6 +10736,71 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Control half of the <a href="https://github.com/wala/ML/issues/687">wala/ML#687</a> MRE: the
+   * sibling script's Keras layer reached through {@code from B import Padding2D} analyzes fully —
+   * the layer call's result types concretely.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testImportFrom()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"importmod_proj/B.py", "importmod_proj/tf2_test_import_from.py"},
+        "B.py",
+        "Padding2D.call",
+        "importmod_proj",
+        1,
+        1,
+        Map.of(
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        DynamicDim.INSTANCE,
+                        new NumericDim(32),
+                        new NumericDim(32),
+                        new NumericDim(3))))));
+  }
+
+  /**
+   * Reported-failing half of the <a href="https://github.com/wala/ML/issues/687">wala/ML#687</a>
+   * MRE: the byte-identical layer reached through a plain {@code import B} module object. On
+   * current master both import forms behave identically — {@code Padding2D.call} gets its node and
+   * {@code x} types concretely — so this pins the plain-import form as a positive guard.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testImportModule()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"importmod_proj/B.py", "importmod_proj/tf2_test_import_module.py"},
+        "B.py",
+        "Padding2D.call",
+        "importmod_proj",
+        1,
+        1,
+        Map.of(
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        DynamicDim.INSTANCE,
+                        new NumericDim(32),
+                        new NumericDim(32),
+                        new NumericDim(3))))));
+  }
+
+  /**
    * Pins wala/ML#665: {@code tf} reached through {@code from helpers import *} binds, matching
    * Python's wildcard semantics (every public module-level name is exported, including modules the
    * source module imported).
