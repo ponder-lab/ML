@@ -431,6 +431,8 @@
         <putfield class="LRoot" field="Dense" fieldType="LRoot" ref="layers" value="Dense"/>
         <new def="FlattenLayerCls" class="Ltensorflow/keras/layers/class/Flatten"/>
         <putfield class="LRoot" field="Flatten" fieldType="LRoot" ref="layers" value="FlattenLayerCls"/>
+        <new def="GlobalAveragePooling1DCls" class="Ltensorflow/keras/layers/class/GlobalAveragePooling1D"/>
+        <putfield class="LRoot" field="GlobalAveragePooling1D" fieldType="LRoot" ref="layers" value="GlobalAveragePooling1DCls"/>
         <new def="DropoutLayerCls" class="Ltensorflow/keras/layers/class/Dropout"/>
         <putfield class="LRoot" field="Dropout" fieldType="LRoot" ref="layers" value="DropoutLayerCls"/>
         <new def="Model" class="Ltensorflow/keras/models/class/Model"/>
@@ -2436,6 +2438,13 @@
           <return value="res"/>
         </method>
       </class>
+      <class name="GlobalAveragePooling1D" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GlobalAveragePooling1D. Rank-reducing pooling: the `GlobalAveragePooling1DCall` generator drops the temporal axis (wala/ML#670). -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self data_format keepdims">
+          <new def="res" class="Ltensorflow/keras/layers/GlobalAveragePooling1D"/>
+          <return value="res"/>
+        </method>
+      </class>
       <class name="Dropout" allocatable="true">
         <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/Dropout -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self rate noise_shape seed">
@@ -2474,6 +2483,17 @@
       </class>
       <class name="Flatten" allocatable="true">
         <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/Flatten#__call__ -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="GlobalAveragePooling1D" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GlobalAveragePooling1D. The output type is computed by `GlobalAveragePooling1DCall` (wala/ML#670). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
