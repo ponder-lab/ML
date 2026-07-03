@@ -1954,6 +1954,81 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Whole-project-layout probe for <a href="https://github.com/wala/ML/issues/678">wala/ML#678</a>:
+   * the subject's structure in miniature — nested entry scripts ({@code tests/TG/EN/}) each
+   * defining a same-named {@code GenGPT2} over a root-level {@code nlpgnn} package (inner {@code
+   * gpt2.GPT2} model, shared closure-dispatching {@code samples.sample_sequence}) — the layout the
+   * fixture-scale reproductions lacked. Both siblings keep their call-graph nodes and type — the
+   * layout is excluded as the wala/ML#678 trigger — with the wala/ML#685 cross-sibling closure
+   * union as the pinned imprecision.
+   *
+   * <p>TODO: Expect each sibling's own shape once <a
+   * href="https://github.com/wala/ML/issues/685">wala/ML#685</a> keys closure callees on the
+   * dispatched function object.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNlpgnnSliceGeneration()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "nlpgnn_slice_proj/nlpgnn/__init__.py",
+          "nlpgnn_slice_proj/nlpgnn/models/__init__.py",
+          "nlpgnn_slice_proj/nlpgnn/models/gpt2.py",
+          "nlpgnn_slice_proj/nlpgnn/sample/__init__.py",
+          "nlpgnn_slice_proj/nlpgnn/sample/samples.py",
+          "nlpgnn_slice_proj/tests/__init__.py",
+          "nlpgnn_slice_proj/tests/TG/__init__.py",
+          "nlpgnn_slice_proj/tests/TG/EN/__init__.py",
+          "nlpgnn_slice_proj/tests/TG/EN/generation.py",
+          "nlpgnn_slice_proj/tests/TG/EN/interactive.py"
+        },
+        "tests/TG/EN/generation.py",
+        "GenGPT2.predict",
+        "nlpgnn_slice_proj",
+        1,
+        2,
+        Map.of(3, Set.of(TENSOR_2_2_FLOAT32, TENSOR_3_3_FLOAT32)));
+  }
+
+  /**
+   * Sibling half of {@link #testNlpgnnSliceGeneration()} (wala/ML#678) — the {@code interactive}
+   * entry script, the one degraded in the whole-project consumer runs.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNlpgnnSliceInteractive()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "nlpgnn_slice_proj/nlpgnn/__init__.py",
+          "nlpgnn_slice_proj/nlpgnn/models/__init__.py",
+          "nlpgnn_slice_proj/nlpgnn/models/gpt2.py",
+          "nlpgnn_slice_proj/nlpgnn/sample/__init__.py",
+          "nlpgnn_slice_proj/nlpgnn/sample/samples.py",
+          "nlpgnn_slice_proj/tests/__init__.py",
+          "nlpgnn_slice_proj/tests/TG/__init__.py",
+          "nlpgnn_slice_proj/tests/TG/EN/__init__.py",
+          "nlpgnn_slice_proj/tests/TG/EN/generation.py",
+          "nlpgnn_slice_proj/tests/TG/EN/interactive.py"
+        },
+        "tests/TG/EN/interactive.py",
+        "GenGPT2.predict",
+        "nlpgnn_slice_proj",
+        1,
+        2,
+        Map.of(3, Set.of(TENSOR_2_2_FLOAT32, TENSOR_3_3_FLOAT32)));
+  }
+
+  /**
    * Same-name-class guard for <a href="https://github.com/wala/ML/issues/678">wala/ML#678</a>: two
    * sibling scripts each define a Keras subclass named {@code GenGPT2} (with a {@code
    * super(GenGPT2, self)} by-name reference in {@code __init__}, mirroring the NLPGNN subject);
