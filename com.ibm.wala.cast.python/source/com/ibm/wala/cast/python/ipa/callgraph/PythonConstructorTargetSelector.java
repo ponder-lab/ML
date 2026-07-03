@@ -11,6 +11,7 @@
 package com.ibm.wala.cast.python.ipa.callgraph;
 
 import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
+import static com.ibm.wala.cast.python.types.PythonTypes.INIT_METHOD_NAME;
 import static com.ibm.wala.cast.python.types.Util.getGlobalName;
 import static com.ibm.wala.cast.python.types.Util.makeGlobalRef;
 
@@ -81,7 +82,8 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
         if (!ctors.containsKey(receiver)) {
           TypeReference ctorRef =
               TypeReference.findOrCreate(
-                  receiver.getClassLoader().getReference(), receiver.getName() + "/__init__");
+                  receiver.getClassLoader().getReference(),
+                  receiver.getName() + "/" + INIT_METHOD_NAME);
           IClass ctorCls = cha.lookupClass(ctorRef);
           IMethod init = ctorCls == null ? null : ctorCls.getMethod(AstMethodReference.fnSelector);
           /*
@@ -206,7 +208,8 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
                 // (wala/ML#683).
                 if (shell
                     && inheritedSummaryInit == null
-                    && pythonLevelName.toString().equals("__init__")) inheritedSummaryInit = m;
+                    && pythonLevelName.toString().equals(INIT_METHOD_NAME))
+                  inheritedSummaryInit = m;
                 // Dedup by the Python-level method name. Shell references are all named by the
                 // generic function selector, so using `m.getName()` here would let the first
                 // shell method shadow every other one. See wala/ML#667.
@@ -355,7 +358,7 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
                     1,
                     FieldReference.findOrCreate(
                         PythonTypes.Root,
-                        Atom.findOrCreateUnicodeAtom("__init__"),
+                        Atom.findOrCreateUnicodeAtom(INIT_METHOD_NAME),
                         PythonTypes.Root)));
             pc++;
 

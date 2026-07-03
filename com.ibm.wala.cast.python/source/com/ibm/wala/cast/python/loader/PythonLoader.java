@@ -137,12 +137,11 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
    * the same function-class mapping that {@code PythonAnalysisEngine.addSummaryBypassLogic}'s
    * method-to-function-class transformation applies (a method {@code m} of class {@code C} becomes
    * the function class {@code C/m}, invoked through its {@code fn} selector; the {@code do}/{@code
-   * import}/{@code __init__} names are the same ones that transformation leaves in place). Without
-   * them, a shell sharing its {@link TypeName} with a bypass-served class starves {@code
-   * IPythonClass}-based callable detection (e.g. {@code
-   * PythonInstanceMethodTrampolineTargetSelector}'s {@code isCallable}), which shadows the
-   * engine-registered synthetic class and drops dispatch on the summary's instances (wala/ML#106,
-   * wala/ML#662).
+   * import} names are the same ones that transformation leaves in place). Without them, a shell
+   * sharing its {@link TypeName} with a bypass-served class starves {@code IPythonClass}-based
+   * callable detection (e.g. {@code PythonInstanceMethodTrampolineTargetSelector}'s {@code
+   * isCallable}), which shadows the engine-registered synthetic class and drops dispatch on the
+   * summary's instances (wala/ML#106, wala/ML#662).
    */
   @Override
   public IClass defineSummaryClassShell(

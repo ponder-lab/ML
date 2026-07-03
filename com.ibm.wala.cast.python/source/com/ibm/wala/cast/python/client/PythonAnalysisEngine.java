@@ -13,6 +13,7 @@ package com.ibm.wala.cast.python.client;
 import static com.ibm.wala.cast.python.types.PythonTypes.CALLABLE_METHOD_NAME;
 import static com.ibm.wala.cast.python.types.PythonTypes.CALLABLE_METHOD_NAME_FOR_KERAS_MODELS;
 import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
+import static com.ibm.wala.cast.python.types.PythonTypes.INIT_METHOD_NAME;
 import static java.util.Collections.emptyList;
 import static java.util.logging.Level.SEVERE;
 
@@ -321,7 +322,7 @@ public abstract class PythonAnalysisEngine<T>
       // `__init__` instance field and invokes it; wala/ML#683) — but its ORIGINAL summary is also
       // retained, because intra-XML `<call name="__init__" .../>` statements (e.g. the mnist
       // import) resolve the untransformed method reference.
-      boolean isInit = methodName.equals("__init__");
+      boolean isInit = methodName.equals(INIT_METHOD_NAME);
       if (!methodName.equals(DO_METHOD_NAME) && !methodName.equals("import")) {
         TypeReference t = mr.getDeclaringClass();
         TypeReference funClsRef =
