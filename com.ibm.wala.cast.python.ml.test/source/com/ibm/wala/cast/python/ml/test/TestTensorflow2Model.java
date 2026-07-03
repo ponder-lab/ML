@@ -10866,7 +10866,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testImportFrom()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        new String[] {"importmod_proj/B.py", "importmod_proj/tf2_test_import_from.py"},
+        new String[] {"importmod_proj/tf2_test_import_from.py", "importmod_proj/B.py"},
         "B.py",
         "Padding2D.call",
         "importmod_proj",
@@ -10886,9 +10886,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Reported-failing half of the <a href="https://github.com/wala/ML/issues/687">wala/ML#687</a>
-   * MRE: the byte-identical layer reached through a plain {@code import B} module object. On
-   * current master both import forms behave identically — {@code Padding2D.call} gets its node and
-   * {@code x} types concretely — so this pins the plain-import form as a positive guard.
+   * MRE: the byte-identical layer reached through a plain {@code import B} module object, with the
+   * importer passed <em>first</em> — the translation order that reproduced the loss before the
+   * scope-membership binding fix (<a href="https://github.com/wala/ML/issues/691">wala/ML#691</a>):
+   * the plain-import binding used to require the importee to be already translated.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -10897,6 +10898,37 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    */
   @Test
   public void testImportModule()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"importmod_proj/tf2_test_import_module.py", "importmod_proj/B.py"},
+        "B.py",
+        "Padding2D.call",
+        "importmod_proj",
+        1,
+        1,
+        Map.of(
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        DynamicDim.INSTANCE,
+                        new NumericDim(32),
+                        new NumericDim(32),
+                        new NumericDim(3))))));
+  }
+
+  /**
+   * Importee-first twin of {@link #testImportModule()} (wala/ML#691): the previously-working
+   * translation order, guarded so both orders stay equivalent.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testImportModuleImporteeFirst()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         new String[] {"importmod_proj/B.py", "importmod_proj/tf2_test_import_module.py"},
