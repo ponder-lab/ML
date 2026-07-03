@@ -1912,6 +1912,57 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Same-name-class guard for <a href="https://github.com/wala/ML/issues/678">wala/ML#678</a>: two
+   * sibling scripts each define a Keras subclass named {@code GenGPT2} (with a {@code
+   * super(GenGPT2, self)} by-name reference in {@code __init__}, mirroring the NLPGNN subject);
+   * this pins that the first script's class keeps its call-graph nodes and its {@code predict}
+   * parameter types.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSamenameA()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "samename_proj/tf2_test_samename_a.py", "samename_proj/tf2_test_samename_b.py"
+        },
+        "tf2_test_samename_a.py",
+        "GenGPT2.predict",
+        "samename_proj",
+        1,
+        2,
+        Map.of(3, Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  /**
+   * Sibling half of {@link #testSamenameA()}: the second script's same-named class keeps its
+   * call-graph nodes and typing too (wala/ML#678).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSamenameB()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "samename_proj/tf2_test_samename_a.py", "samename_proj/tf2_test_samename_b.py"
+        },
+        "tf2_test_samename_b.py",
+        "GenGPT2.predict",
+        "samename_proj",
+        1,
+        2,
+        Map.of(3, Set.of(TENSOR_3_3_FLOAT32)));
+  }
+
+  /**
    * Pins the <a href="https://github.com/wala/ML/issues/676">wala/ML#676</a> subject: {@code
    * DynamicPositionEmbedding.call}'s {@code inputs} parameter on the vendored {@code
    * jason9693/MusicTransformer-tensorflow2.0} {@code custom/layers.py}. With {@code
