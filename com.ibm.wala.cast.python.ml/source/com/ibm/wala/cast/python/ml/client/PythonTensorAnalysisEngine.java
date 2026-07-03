@@ -84,6 +84,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   public static final int DEFAULT_TARGETED_CFA_DEPTH = 2;
 
   /**
+   * Upper bound on source-type resolution rounds (wala/ML#674). Convergence normally takes two to
+   * three rounds (one to seed, one for cycle members to see each other's approximations, one to
+   * confirm stability); the bound only guards against oscillation.
+   */
+  private static final int MAX_TYPE_RESOLUTION_ROUNDS = 5;
+
+  /**
    * The recommended targeted k-CFA depth for consumers analyzing the <em>model-forward
    * archetype</em>: {@code tf.keras.Model} subclasses whose {@code call}/{@code predict} chain
    * layer invocations ({@code x = self.layer1(x); x = self.layer2(x)}). Such a model invoked from
@@ -1117,9 +1124,29 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
       Set<PointsToSetVariable> sources = getDataflowSources(builder, dataflow);
 
+      // Resolve the per-source types in rounds until they stabilize (wala/ML#674): a cycle in a
+      // value's producer graph (e.g. a loop-carried variable) makes single-pass resolution depend
+      // on which cycle member is computed first, since the re-entered member floors to ⊤. Each
+      // round recomputes against the previous round's approximations (read on cycle re-entry in
+      // `TensorGenerator.getShapes`/`getDTypes`), so the result converges to an entry-order-
+      // independent fixed point. The bound is a safety net against oscillation; convergence is
+      // logged at FINE.
       Map<PointsToSetVariable, Set<TensorType>> init = HashMapFactory.make();
+      Map<PointsToSetVariable, Set<TensorType>> previousRound = null;
 
-      for (PointsToSetVariable v : sources) init.put(v, getTensorTypes(v, builder));
+      for (int round = 0; round < MAX_TYPE_RESOLUTION_ROUNDS; round++) {
+        init = HashMapFactory.make();
+        for (PointsToSetVariable v : sources) init.put(v, getTensorTypes(v, builder));
+
+        if (init.equals(previousRound)) {
+          final int stableRound = round;
+          LOGGER.fine(() -> "Source-type resolution stabilized after round: " + stableRound + ".");
+          break;
+        }
+
+        previousRound = init;
+        TensorGenerator.advanceRound(builder);
+      }
 
       Map<PointsToSetVariable, TensorType> placeholders =
           handleShapeSourceOp(builder, dataflow, placeholder, 2);

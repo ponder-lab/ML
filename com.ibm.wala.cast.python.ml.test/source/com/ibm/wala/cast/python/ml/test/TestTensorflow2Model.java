@@ -1877,11 +1877,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * TuckERLoader.target_convert} row on the vendored subject: the loader is vendored verbatim from
    * {@code kyzhouhzau/NLPGNN} ({@code nlpgnn/datas/graphloader.py}); the driver, the tiny {@code
    * data/} triple files, and the {@code nlpgnn/gnn/utils.py} reachable slice are bespoke. The
-   * {@code targets} parameter (a {@code padded_batch} dict-element field) is tensor-classified with
-   * the correct int32 dtype — the issue's core claim — but its shape under-resolves to rank-0.
-   * TODO: expect {@code (2, ?)} int32 once <a
-   * href="https://github.com/wala/ML/issues/673">wala/ML#673</a> accounts for the {@code
-   * padded_batch} dimensions on the dict-element path.
+   * {@code targets} parameter (a {@code padded_batch} dict-element field) types {@code (2, ?)}
+   * int32 — the declared {@code padded_shapes} dims under the batch dimension (<a
+   * href="https://github.com/wala/ML/issues/673">wala/ML#673</a>) — unioned with the standard
+   * partial-batch sibling {@code (?, ?)}.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -1905,7 +1904,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tucker_proj",
         1,
         7,
-        Map.of(3, Set.of(TensorType.of(INT_32))));
+        Map.of(
+            3,
+            Set.of(
+                new TensorType(INT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)),
+                new TensorType(INT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE)))));
   }
 
   @Test
@@ -4942,16 +4945,19 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * {@code map_func}'s return (wala/ML#506, {@link #testDatasetMapTuple()}); a pass-through
    * transform after {@code map} keeps the mapped type (wala/ML#649, {@link
    * #testDatasetMapRepeat()}); {@code TFRecordDataset} is chainable ({@link #testTfrecordMap()});
-   * the dataset survives the list (wala/ML#648, {@link #testFitLoop()}). So {@code real} resolves
-   * to {@code (?,)} int32.
+   * the dataset survives the list (wala/ML#648, {@link #testFitLoop()}); and the {@code
+   * padded_batch} dims apply (wala/ML#673). So {@code real} resolves to the batched element {@code
+   * (32, ?)} int32 (the pipeline's {@code batch_size=32} with the pad-to-longest sequence dim),
+   * unioned with the standard partial-batch sibling {@code (?, ?)}.
    *
    * <p>{@code pred} types too (wala/ML#665): the model forward output is a tensor union. With
    * {@code add_weight} consuming its {@code shape}/{@code dtype} arguments (wala/ML#667) and
    * constructor keyword arguments forwarded to {@code __init__} (wala/ML#664), the runtime-true
    * vocab dimension is concrete ({@code (?, ?, 10)}) and the flat-logits matmul member carries the
    * embedding dimension ({@code (?, 8)} float32). The {@code (?, ?, 4)} member is spurious
-   * constructor-context collapse (wala/ML#671). Analyzed statically here, like the consumer's
-   * vendoring; it runs in the perf-eval with its tfrecord/data setup.
+   * constructor-context collapse (wala/ML#671). The union is the order-independent fixed point
+   * (wala/ML#674): identical across runs and across suite/single-test modes. Analyzed statically
+   * here, like the consumer's vendoring; it runs in the perf-eval with its tfrecord/data setup.
    */
   @Test
   public void testGpt2GetLossVendored()

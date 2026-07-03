@@ -116,7 +116,7 @@ public class DatasetBatchGenerator extends DatasetGenerator {
     return this.getShapes(builder);
   }
 
-  private Set<List<Dimension<?>>> applyBatching(
+  protected Set<List<Dimension<?>>> applyBatching(
       Set<List<Dimension<?>>> inputShapes, PropagationCallGraphBuilder builder) {
     Set<Long> batchSizes =
         getPossibleLongValues(
