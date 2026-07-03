@@ -54,10 +54,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 @SuppressWarnings("this-escape")
 public abstract class PythonLoader extends CAstAbstractModuleLoader {
+
+  private static final Logger LOGGER = Logger.getLogger(PythonLoader.class.getName());
 
   /**
    * Summary readers whose {@code <class name="..." super="...">} declarations should be
@@ -77,6 +80,13 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
   }
 
   /**
+   * The file names of the source modules in the analysis scope, collected before translation so
+   * cross-module references can be decided order-independently (<a
+   * href="https://github.com/wala/ML/issues/691">wala/ML#691</a>).
+   */
+  private final Set<String> scriptNamesInScope = HashSetFactory.make();
+
+  /**
    * {@inheritDoc}
    *
    * <p>Registers the summary-modeled class shells before translating source, so a source class
@@ -86,10 +96,48 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
    */
   @Override
   public void init(List<Module> modules) {
+    // Collect every source module's file name BEFORE any body is translated: the translator's
+    // plain-`import` binding decision must not depend on whether the imported script happens to
+    // have been translated already (wala/ML#691).
+    for (Module module : modules) module.getEntries().forEachRemaining(this::collectScriptNames);
+
     for (XMLMethodSummaryReader summaries : summaryClassShellReaders) {
       Util.addSummaryClassShells(this, summaries);
     }
     super.init(modules);
+  }
+
+  /**
+   * Collects the file names under the given module entry into {@link #scriptNamesInScope},
+   * recursing into nested modules (wala/ML#691).
+   *
+   * @param entry The module entry to collect from.
+   */
+  private void collectScriptNames(ModuleEntry entry) {
+    if (entry.isModuleFile())
+      entry.asModule().getEntries().forEachRemaining(this::collectScriptNames);
+    else {
+      String name = entry.getName();
+      LOGGER.fine("Collected script name in scope: " + name + " (wala/ML#691).");
+      scriptNamesInScope.add(name);
+      // Script class names are project-relative while module entry names may carry the project
+      // root as their first component; record the stripped form too so the translator's
+      // scope-membership check matches the naming the script classes will use.
+      int slash = name.indexOf('/');
+      if (slash >= 0) scriptNamesInScope.add(name.substring(slash + 1));
+    }
+  }
+
+  /**
+   * Returns whether a source module with the given file name is in the analysis scope, regardless
+   * of whether it has been translated yet (<a
+   * href="https://github.com/wala/ML/issues/691">wala/ML#691</a>).
+   *
+   * @param fileName The script file name as it appears in the scope (e.g. {@code B.py}).
+   * @return {@code true} iff a source module with that file name is in scope.
+   */
+  public boolean definesScriptInScope(String fileName) {
+    return scriptNamesInScope.contains(fileName);
   }
 
   /**
