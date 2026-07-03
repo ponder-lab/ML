@@ -1810,6 +1810,104 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(3, Set.of(TensorType.of(INT_64, 128))));
   }
 
+  /**
+   * Pins the <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a> {@code BiLSTM.call}
+   * row on the vendored subject: the {@code BiLSTM} layer is vendored verbatim from {@code
+   * kyzhouhzau/NLPGNN} ({@code nlpgnn/layers/bilstm.py}); only the driver is bespoke. The {@code
+   * inputs} parameter (an integer token-ID tensor feeding a Keras {@code Embedding}) recovers
+   * {@code (2, 5)} int32 exactly, flowing from the driver's {@code layer(tokens, training=False)}
+   * call site through {@code tf.keras.layers.Layer.__call__} dispatch.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testBilstmCallVendored()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "bilstm_proj/nlpgnn/__init__.py",
+          "bilstm_proj/nlpgnn/layers/__init__.py",
+          "bilstm_proj/nlpgnn/layers/bilstm.py",
+          "bilstm_proj/tf2_test_bilstm_call.py"
+        },
+        "nlpgnn/layers/bilstm.py",
+        "BiLSTM.call",
+        "bilstm_proj",
+        1,
+        1,
+        Map.of(3, Set.of(TENSOR_2_5_INT32)));
+  }
+
+  /**
+   * Pins the <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a> {@code
+   * TextCNN.predict} row on the vendored subject ({@code kyzhouhzau/NLPGNN}, {@code
+   * nlpgnn/models/TextCNN.py}, same vendoring as {@link #testTextcnnCall()}): {@code predict}
+   * forwards {@code inputs} to the model through {@code self(inputs, training)}. The {@code inputs}
+   * parameter recovers {@code (2, 5)} int32 exactly; the second tracked local is the forward
+   * result, float32 with ⊤ shape (the chained-layer body, wala/ML#358/wala/ML#530).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTextcnnPredict()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "textcnn_proj/nlpgnn/__init__.py",
+          "textcnn_proj/nlpgnn/models/__init__.py",
+          "textcnn_proj/nlpgnn/models/TextCNN.py",
+          "textcnn_proj/tf2_test_textcnn_predict.py"
+        },
+        "nlpgnn/models/TextCNN.py",
+        "TextCNN.predict",
+        "textcnn_proj",
+        1,
+        2,
+        Map.of(3, Set.of(TENSOR_2_5_INT32)));
+  }
+
+  /**
+   * Pins the <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a> {@code
+   * TuckERLoader.target_convert} row on the vendored subject: the loader is vendored verbatim from
+   * {@code kyzhouhzau/NLPGNN} ({@code nlpgnn/datas/graphloader.py}); the driver, the tiny {@code
+   * data/} triple files, and the {@code nlpgnn/gnn/utils.py} reachable slice are bespoke. The
+   * {@code targets} parameter (a {@code padded_batch} dict-element field) is tensor-classified with
+   * the correct int32 dtype — the issue's core claim — but its shape under-resolves to rank-0.
+   * TODO: expect {@code (2, ?)} int32 once <a
+   * href="https://github.com/wala/ML/issues/673">wala/ML#673</a> accounts for the {@code
+   * padded_batch} dimensions on the dict-element path.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTuckerTargetConvert()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "tucker_proj/nlpgnn/__init__.py",
+          "tucker_proj/nlpgnn/gnn/__init__.py",
+          "tucker_proj/nlpgnn/gnn/utils.py",
+          "tucker_proj/nlpgnn/datas/__init__.py",
+          "tucker_proj/nlpgnn/datas/graphloader.py",
+          "tucker_proj/tf2_test_tucker_target_convert.py"
+        },
+        "nlpgnn/datas/graphloader.py",
+        "TuckERLoader.target_convert",
+        "tucker_proj",
+        1,
+        7,
+        Map.of(3, Set.of(TensorType.of(INT_32))));
+  }
+
   @Test
   public void testModelAttributes()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
