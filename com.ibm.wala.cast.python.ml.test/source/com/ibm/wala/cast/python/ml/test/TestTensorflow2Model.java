@@ -1873,6 +1873,48 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Probe for <a href="https://github.com/wala/ML/issues/688">wala/ML#688</a>: a {@code map} stage
+   * returning a tuple, batched with a tuple {@code padded_shapes}, iterated with destructuring —
+   * the vendored gpt-2 {@code input_fn} element shape in miniature. Both halves type the
+   * runtime-true {@code (4, 3) int64} (batch 4, padded to the longest sequence): the computed
+   * second member resolves through the wala/ML#688 SSA fallback and the batch stage applies.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPaddedBatchPair()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_padded_batch_pair.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(DType.INT64, 4, 3))));
+  }
+
+  /**
+   * Sibling half of {@link #testPaddedBatchPair()} (wala/ML#688): the second tuple member.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPaddedBatchPair2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_padded_batch_pair.py",
+        "consume2",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(DType.INT64, 4, 3))));
+  }
+
+  /**
    * Pins the <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a> {@code
    * TuckERLoader.target_convert} row on the vendored subject: the loader is vendored verbatim from
    * {@code kyzhouhzau/NLPGNN} ({@code nlpgnn/datas/graphloader.py}); the driver, the tiny {@code
