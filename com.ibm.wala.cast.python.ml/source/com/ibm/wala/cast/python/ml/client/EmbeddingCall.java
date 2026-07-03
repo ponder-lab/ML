@@ -63,8 +63,8 @@ public class EmbeddingCall extends TensorGenerator {
 
   /**
    * Resolves the output shapes by appending the layer's {@code output_dim} to each input shape.
-   * When {@code output_dim} is not statically resolvable, the input shapes are extended with a
-   * dynamic dim would misstate the rank contract, so ⊤ is returned instead.
+   * When {@code output_dim} is not statically resolvable, extending the input shapes with a dynamic
+   * dimension would misstate the rank contract, so ⊤ is returned instead.
    *
    * @param builder The propagation call graph builder.
    * @return A set of output shapes, or {@code null} if the input shape or {@code output_dim} cannot
