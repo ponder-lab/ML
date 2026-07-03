@@ -1,6 +1,5 @@
 package com.ibm.wala.cast.python.ml.client;
 
-import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -8,21 +7,16 @@ import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
-import com.ibm.wala.classLoader.CallSiteReference;
-import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.ipa.callgraph.CGNode;
-import com.ibm.wala.ipa.callgraph.Context;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
-import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
-import com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContext;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -73,36 +67,13 @@ public class Range extends TensorGenerator {
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
-    // 1. Precise Context-Sensitive Resolution
-    Context cs = this.getNode().getContext();
-    if (cs instanceof CallStringContext) {
-      CallStringContext csc = (CallStringContext) cs;
-      CallString callString = (CallString) csc.get(CALL_STRING);
-      CallSiteReference[] sites = callString.getCallSiteRefs();
-      IMethod[] methods = callString.getMethods();
-
-      if (sites.length > 0 && methods.length > 0) {
-        CallSiteReference siteReference = sites[sites.length - 1];
-        IMethod callerMethod = methods[methods.length - 1];
-
-        Iterator<CGNode> preds = builder.getCallGraph().getPredNodes(this.getNode());
-        while (preds.hasNext()) {
-          CGNode caller = preds.next();
-          if (!caller.getMethod().equals(callerMethod)) continue;
-
-          SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(siteReference);
-
-          for (SSAAbstractInvokeInstruction callInstr : calls) {
-
-            if (callInstr.getCallSite().equals(siteReference)
-                && callInstr instanceof PythonInvokeInstruction) {
-
-              ret.addAll(processCall(builder, caller, (PythonInvokeInstruction) callInstr));
-            }
-          }
-        }
-      }
-    }
+    // 1. Precise Caller Resolution: walk the call-graph edges to the invocations dispatching to
+    // this node.
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode()))
+      if (callerInvoke.snd instanceof PythonInvokeInstruction)
+        ret.addAll(
+            processCall(builder, callerInvoke.fst, (PythonInvokeInstruction) callerInvoke.snd));
 
     // 2. Fallback for non-CS or if CS failed
 

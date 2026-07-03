@@ -24,7 +24,6 @@ import static com.ibm.wala.cast.python.util.Util.getFunction;
 import static com.ibm.wala.cast.python.util.Util.getReceiverValueNumber;
 import static com.ibm.wala.cast.python.util.Util.sanitize;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
-import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector.CALL_STRING;
 import static java.util.Collections.emptyList;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
@@ -45,7 +44,6 @@ import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
-import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.classLoader.NewSiteReference;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
@@ -58,7 +56,6 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey;
-import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
@@ -995,37 +992,28 @@ public abstract class TensorGenerator {
 
       if (paramPos >= -1) { // -1 is 'self'
         Set<List<Dimension<?>>> combinedRet = HashSetFactory.make();
-        CallString cs = (CallString) node.getContext().get(CALL_STRING);
-        if (cs != null) {
-          for (int i = 0; i < cs.getCallSiteRefs().length; i++) {
-            CallSiteReference site = cs.getCallSiteRefs()[i];
-            IMethod callerMethod = cs.getMethods()[i];
-            for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(node); it.hasNext(); ) {
-              CGNode caller = it.next();
-              if (caller.getMethod().equals(callerMethod)) {
-                for (SSAAbstractInvokeInstruction call : caller.getIR().getCalls(site)) {
-                  int argVn = -1;
-                  if (paramPos == -1) { // self
-                    argVn = call.getUse(0);
-                  } else if (call instanceof PythonInvokeInstruction) {
-                    // Try to find the argument index. This is simplified.
-                    if (paramPos + 1 < call.getNumberOfUses()) {
-                      argVn = call.getUse(paramPos + 1);
-                    }
-                  } else if (paramPos < call.getNumberOfUses()) {
-                    argVn = call.getUse(paramPos);
-                  }
-
-                  if (argVn != -1) {
-                    Set<List<Dimension<?>>> argShapes = this.getShapes(builder, caller, argVn);
-                    if (argShapes != null) combinedRet.addAll(argShapes);
-                  }
-                }
-              }
+        for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+            getCallerInvokes(builder, node)) {
+          CGNode caller = callerInvoke.fst;
+          SSAAbstractInvokeInstruction call = callerInvoke.snd;
+          int argVn = -1;
+          if (paramPos == -1) { // self
+            argVn = call.getUse(0);
+          } else if (call instanceof PythonInvokeInstruction) {
+            // Try to find the argument index. This is simplified.
+            if (paramPos + 1 < call.getNumberOfUses()) {
+              argVn = call.getUse(paramPos + 1);
             }
+          } else if (paramPos < call.getNumberOfUses()) {
+            argVn = call.getUse(paramPos);
           }
-          if (!combinedRet.isEmpty()) return combinedRet;
+
+          if (argVn != -1) {
+            Set<List<Dimension<?>>> argShapes = this.getShapes(builder, caller, argVn);
+            if (argShapes != null) combinedRet.addAll(argShapes);
+          }
         }
+        if (!combinedRet.isEmpty()) return combinedRet;
       }
     }
 
@@ -1625,51 +1613,39 @@ public abstract class TensorGenerator {
       return ret;
     }
 
-    // 1. read_data is called by the operation's 'do' method.
-    Iterator<CGNode> doNodes = builder.getCallGraph().getPredNodes(readDataNode);
-    while (doNodes.hasNext()) {
-      CGNode doNode = doNodes.next();
+    // 1. read_data is called by the operation's 'do' method; the call-graph edges identify the
+    // calling instructions.
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, readDataNode)) {
+      CGNode doNode = callerInvoke.fst;
+      SSAAbstractInvokeInstruction call = callerInvoke.snd;
 
-      // 2. Find the instruction in 'do' that called 'read_data'.
-      // We use the context of the callee (readDataNode) to identify the specific call site.
-      CallString cs = (CallString) readDataNode.getContext().get(CALL_STRING);
-      if (cs != null && cs.getCallSiteRefs().length > 0) {
-        CallSiteReference readDataSite = cs.getCallSiteRefs()[0];
-        IMethod callerMethod = cs.getMethods()[0];
+      // Construct a source for the result of this call (which is the tensor object).
+      if (call.getNumberOfDefs() > 0) {
+        int def = call.getDef();
+        PointerKey defKey =
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(doNode, def);
+        PointsToSetVariable defSource = null;
+        if (!builder.getPropagationSystem().isImplicit(defKey)) {
+          defSource = builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
+        }
 
-        if (doNode.getMethod().equals(callerMethod)) {
-          SSAAbstractInvokeInstruction[] calls = doNode.getIR().getCalls(readDataSite);
-          for (SSAAbstractInvokeInstruction call : calls) {
-            // Construct a source for the result of this call (which is the tensor object).
-            if (call.getNumberOfDefs() > 0) {
-              int def = call.getDef();
-              PointerKey defKey =
-                  builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(doNode, def);
-              PointsToSetVariable defSource = null;
-              if (!builder.getPropagationSystem().isImplicit(defKey)) {
-                defSource = builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
-              }
-
-              // Try to create a manual generator for the caller (doNode) first.
-              TensorGenerator generator = createManualGenerator(doNode, builder);
-              if (generator == null) {
-                try {
-                  generator = TensorGeneratorFactory.getGenerator(defSource, builder);
-                } catch (IllegalArgumentException e) {
-                  // Factory couldn't resolve — treat as "no generator". See wala/ML#363.
-                  LOGGER.log(
-                      Level.FINE, "Delegating shape inference: factory IAE for " + defSource, e);
-                  generator = null;
-                }
-              }
-
-              if (generator != null) {
-                LOGGER.fine("Delegating shape inference to: " + generator);
-                Set<List<Dimension<?>>> delegatedShapes = generator.getShapes(builder);
-                if (delegatedShapes != null) ret.addAll(delegatedShapes);
-              }
-            }
+        // Try to create a manual generator for the caller (doNode) first.
+        TensorGenerator generator = createManualGenerator(doNode, builder);
+        if (generator == null) {
+          try {
+            generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+          } catch (IllegalArgumentException e) {
+            // Factory couldn't resolve — treat as "no generator". See wala/ML#363.
+            LOGGER.log(Level.FINE, "Delegating shape inference: factory IAE for " + defSource, e);
+            generator = null;
           }
+        }
+
+        if (generator != null) {
+          LOGGER.fine("Delegating shape inference to: " + generator);
+          Set<List<Dimension<?>>> delegatedShapes = generator.getShapes(builder);
+          if (delegatedShapes != null) ret.addAll(delegatedShapes);
         }
       }
     }
@@ -2067,35 +2043,26 @@ public abstract class TensorGenerator {
 
       if (paramPos >= -1) {
         Set<DType> combinedRet = EnumSet.noneOf(DType.class);
-        CallString cs = (CallString) node.getContext().get(CALL_STRING);
-        if (cs != null) {
-          for (int i = 0; i < cs.getCallSiteRefs().length; i++) {
-            CallSiteReference site = cs.getCallSiteRefs()[i];
-            IMethod callerMethod = cs.getMethods()[i];
-            for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(node); it.hasNext(); ) {
-              CGNode caller = it.next();
-              if (caller.getMethod().equals(callerMethod)) {
-                for (SSAAbstractInvokeInstruction call : caller.getIR().getCalls(site)) {
-                  int argVn = -1;
-                  if (paramPos == -1) { // self
-                    argVn = call.getUse(0);
-                  } else if (call instanceof PythonInvokeInstruction) {
-                    if (paramPos + 1 < call.getNumberOfUses()) {
-                      argVn = call.getUse(paramPos + 1);
-                    }
-                  } else if (paramPos < call.getNumberOfUses()) {
-                    argVn = call.getUse(paramPos);
-                  }
-
-                  if (argVn != -1) {
-                    combinedRet.addAll(this.getDTypes(builder, caller, argVn));
-                  }
-                }
-              }
+        for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+            getCallerInvokes(builder, node)) {
+          CGNode caller = callerInvoke.fst;
+          SSAAbstractInvokeInstruction call = callerInvoke.snd;
+          int argVn = -1;
+          if (paramPos == -1) { // self
+            argVn = call.getUse(0);
+          } else if (call instanceof PythonInvokeInstruction) {
+            if (paramPos + 1 < call.getNumberOfUses()) {
+              argVn = call.getUse(paramPos + 1);
             }
+          } else if (paramPos < call.getNumberOfUses()) {
+            argVn = call.getUse(paramPos);
           }
-          if (!combinedRet.isEmpty()) return combinedRet;
+
+          if (argVn != -1) {
+            combinedRet.addAll(this.getDTypes(builder, caller, argVn));
+          }
         }
+        if (!combinedRet.isEmpty()) return combinedRet;
       }
     }
 
@@ -2384,50 +2351,38 @@ public abstract class TensorGenerator {
     }
 
     // Trace back to the user-level call that invoked this generator.
-    // 1. read_data is called by the operation's 'do' method.
-    Iterator<CGNode> doNodes = builder.getCallGraph().getPredNodes(readDataNode);
-    while (doNodes.hasNext()) {
-      CGNode doNode = doNodes.next();
+    // 1. read_data is called by the operation's 'do' method; the call-graph edges identify the
+    // calling instructions.
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, readDataNode)) {
+      CGNode doNode = callerInvoke.fst;
+      SSAAbstractInvokeInstruction call = callerInvoke.snd;
 
-      // 2. Find the instruction in 'do' that called 'read_data'.
-      // We use the context of the callee (readDataNode) to identify the specific call site.
-      CallString cs = (CallString) readDataNode.getContext().get(CALL_STRING);
-      if (cs != null && cs.getCallSiteRefs().length > 0) {
-        CallSiteReference readDataSite = cs.getCallSiteRefs()[0];
-        IMethod callerMethod = cs.getMethods()[0];
+      // Construct a source for the result of this call (which is the tensor object).
+      if (call.getNumberOfDefs() > 0) {
+        int def = call.getDef();
+        PointerKey defKey =
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(doNode, def);
+        PointsToSetVariable defSource = null;
+        if (!builder.getPropagationSystem().isImplicit(defKey)) {
+          defSource = builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
+        }
 
-        if (doNode.getMethod().equals(callerMethod)) {
-          SSAAbstractInvokeInstruction[] calls = doNode.getIR().getCalls(readDataSite);
-          for (SSAAbstractInvokeInstruction call : calls) {
-            // Construct a source for the result of this call (which is the tensor object).
-            if (call.getNumberOfDefs() > 0) {
-              int def = call.getDef();
-              PointerKey defKey =
-                  builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(doNode, def);
-              PointsToSetVariable defSource = null;
-              if (!builder.getPropagationSystem().isImplicit(defKey)) {
-                defSource = builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
-              }
-
-              // Try to create a manual generator for the caller (doNode) first.
-              TensorGenerator generator = createManualGenerator(doNode, builder);
-              if (generator == null) {
-                try {
-                  generator = TensorGeneratorFactory.getGenerator(defSource, builder);
-                } catch (IllegalArgumentException e) {
-                  // Factory couldn't resolve — treat as "no generator". See wala/ML#363.
-                  LOGGER.log(
-                      Level.FINE, "Delegating dtype inference: factory IAE for " + defSource, e);
-                  generator = null;
-                }
-              }
-
-              if (generator != null) {
-                LOGGER.fine("Delegating dtype inference to: " + generator);
-                ret.addAll(generator.getDTypes(builder));
-              }
-            }
+        // Try to create a manual generator for the caller (doNode) first.
+        TensorGenerator generator = createManualGenerator(doNode, builder);
+        if (generator == null) {
+          try {
+            generator = TensorGeneratorFactory.getGenerator(defSource, builder);
+          } catch (IllegalArgumentException e) {
+            // Factory couldn't resolve — treat as "no generator". See wala/ML#363.
+            LOGGER.log(Level.FINE, "Delegating dtype inference: factory IAE for " + defSource, e);
+            generator = null;
           }
+        }
+
+        if (generator != null) {
+          LOGGER.fine("Delegating dtype inference to: " + generator);
+          ret.addAll(generator.getDTypes(builder));
         }
       }
     }
@@ -2641,8 +2596,8 @@ public abstract class TensorGenerator {
   }
 
   /**
-   * Resolves shapes for the argument at the given parameter position by walking the {@link
-   * CallString} context to find each caller's invocation site, then delegating to {@link
+   * Resolves shapes for the argument at the given parameter position by walking the call-graph
+   * edges to find each caller's invocation site, then delegating to {@link
    * #getShapes(PropagationCallGraphBuilder, CGNode, int)} with the caller's value number. This is a
    * fallback path used when {@link #getArgumentPointsToSet(PropagationCallGraphBuilder, int,
    * String)} returns an empty set because the argument's points-to set is empty — commonly the case
@@ -2660,50 +2615,66 @@ public abstract class TensorGenerator {
    */
   protected Set<List<Dimension<?>>> getArgumentShapesViaCallers(
       PropagationCallGraphBuilder builder, int paramPos, String paramName) {
-    CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
-    LOGGER.fine(() -> "getArgumentShapesViaCallers: node=" + this.getNode() + ", cs=" + cs);
-    if (cs == null) return null;
     Set<List<Dimension<?>>> combined = null;
-    for (int i = 0; i < cs.getCallSiteRefs().length; i++) {
-      CallSiteReference siteRef = cs.getCallSiteRefs()[i];
-      IMethod callerMethod = cs.getMethods()[i];
-      for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode());
-          it.hasNext(); ) {
-        CGNode caller = it.next();
-        if (!caller.getMethod().equals(callerMethod)) continue;
-        for (SSAAbstractInvokeInstruction callInstr : caller.getIR().getCalls(siteRef)) {
-          if (!(callInstr instanceof PythonInvokeInstruction)) continue;
-          PythonInvokeInstruction pyCall = (PythonInvokeInstruction) callInstr;
-          int argVn = -1;
-          if (paramName != null) argVn = pyCall.getUse(paramName);
-          if (argVn == -1 && paramPos >= 0) {
-            int numPosParams = pyCall.getNumberOfPositionalParameters() - 1;
-            if (paramPos < numPosParams) argVn = pyCall.getUse(paramPos + 1);
-          }
-          if (argVn <= 0) continue;
-          final int finalArgVn = argVn;
-          final CGNode finalCaller = caller;
-          try {
-            Set<List<Dimension<?>>> argShapes = this.getShapes(builder, caller, argVn);
-            LOGGER.fine(
-                () -> "getArgumentShapesViaCallers: argVn=" + finalArgVn + " shapes=" + argShapes);
-            if (argShapes != null && !argShapes.isEmpty()) {
-              if (combined == null) combined = HashSetFactory.make();
-              combined.addAll(argShapes);
-            }
-          } catch (IllegalArgumentException e) {
-            LOGGER.log(
-                Level.FINE,
-                "getArgumentShapesViaCallers: IAE for argVn="
-                    + finalArgVn
-                    + " in caller="
-                    + finalCaller,
-                e);
-          }
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      CGNode caller = callerInvoke.fst;
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction)) continue;
+      PythonInvokeInstruction pyCall = (PythonInvokeInstruction) callerInvoke.snd;
+      int argVn = -1;
+      if (paramName != null) argVn = pyCall.getUse(paramName);
+      if (argVn == -1 && paramPos >= 0) {
+        int numPosParams = pyCall.getNumberOfPositionalParameters() - 1;
+        if (paramPos < numPosParams) argVn = pyCall.getUse(paramPos + 1);
+      }
+      if (argVn <= 0) continue;
+      final int finalArgVn = argVn;
+      final CGNode finalCaller = caller;
+      try {
+        Set<List<Dimension<?>>> argShapes = this.getShapes(builder, caller, argVn);
+        LOGGER.fine(
+            () -> "getArgumentShapesViaCallers: argVn=" + finalArgVn + " shapes=" + argShapes);
+        if (argShapes != null && !argShapes.isEmpty()) {
+          if (combined == null) combined = HashSetFactory.make();
+          combined.addAll(argShapes);
         }
+      } catch (IllegalArgumentException e) {
+        LOGGER.log(
+            Level.FINE,
+            "getArgumentShapesViaCallers: IAE for argVn="
+                + finalArgVn
+                + " in caller="
+                + finalCaller,
+            e);
       }
     }
     return combined;
+  }
+
+  /**
+   * Returns the calling invocations of the given node: for each call-graph predecessor, the invoke
+   * instructions at the sites that can dispatch to it. Derived from call-graph edges rather than a
+   * {@code CALL_STRING} lookup, so it works for any {@link com.ibm.wala.ipa.callgraph.Context}
+   * shape — the receiver-keyed contexts of <a
+   * href="https://github.com/wala/ML/issues/679">wala/ML#679</a> carry no call string.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph to consult.
+   * @param node The callee {@link CGNode}.
+   * @return The (caller, invoke) pairs whose invocations can dispatch to the given node.
+   */
+  protected static List<Pair<CGNode, SSAAbstractInvokeInstruction>> getCallerInvokes(
+      PropagationCallGraphBuilder builder, CGNode node) {
+    List<Pair<CGNode, SSAAbstractInvokeInstruction>> ret = new ArrayList<>();
+    CallGraph callGraph = builder.getCallGraph();
+    for (Iterator<CGNode> it = callGraph.getPredNodes(node); it.hasNext(); ) {
+      CGNode caller = it.next();
+      if (caller.getIR() == null) continue;
+      for (Iterator<CallSiteReference> sites = callGraph.getPossibleSites(caller, node);
+          sites.hasNext(); )
+        for (SSAAbstractInvokeInstruction call : caller.getIR().getCalls(sites.next()))
+          ret.add(Pair.make(caller, call));
+    }
+    return ret;
   }
 
   /**
@@ -2711,8 +2682,8 @@ public abstract class TensorGenerator {
    * {@code tf.ones(x.shape)}). Such an argument is a {@link PythonPropertyRead} of member {@code
    * "shape"} whose points-to set is empty, so ordinary shape resolution falls through to {@link
    * #getDefaultShapes}; this resolves the shape of the underlying tensor instead of dropping to ⊤.
-   * Walks the {@link CallString} callers (the allocation's synthetic node has no argument IR of its
-   * own) to find the call site and the shape argument's value number, mirroring {@link
+   * Walks the call-graph callers (the allocation's synthetic node has no argument IR of its own) to
+   * find the call site and the shape argument's value number, mirroring {@link
    * #getArgumentShapesViaCallers}.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
@@ -2723,51 +2694,41 @@ public abstract class TensorGenerator {
    */
   protected Set<List<Dimension<?>>> getShapeFromShapeAttributeArgument(
       PropagationCallGraphBuilder builder, int paramPos, String paramName) {
-    CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
-    if (cs == null) return null;
     Set<List<Dimension<?>>> combined = null;
-    for (int i = 0; i < cs.getCallSiteRefs().length; i++) {
-      CallSiteReference siteRef = cs.getCallSiteRefs()[i];
-      IMethod callerMethod = cs.getMethods()[i];
-      for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode());
-          it.hasNext(); ) {
-        CGNode caller = it.next();
-        if (!caller.getMethod().equals(callerMethod)) continue;
-        for (SSAAbstractInvokeInstruction callInstr : caller.getIR().getCalls(siteRef)) {
-          if (!(callInstr instanceof PythonInvokeInstruction)) continue;
-          PythonInvokeInstruction pyCall = (PythonInvokeInstruction) callInstr;
-          int argVn = -1;
-          if (paramName != null) argVn = pyCall.getUse(paramName);
-          if (argVn == -1 && paramPos >= 0) {
-            int numPosParams = pyCall.getNumberOfPositionalParameters() - 1;
-            if (paramPos < numPosParams) argVn = pyCall.getUse(paramPos + 1);
-          }
-          if (argVn <= 0) continue;
-          SSAInstruction def = caller.getDU().getDef(argVn);
-          if (!(def instanceof PythonPropertyRead)) continue;
-          PythonPropertyRead propRead = (PythonPropertyRead) def;
-          SymbolTable st = caller.getIR().getSymbolTable();
-          int memberVn = propRead.getMemberRef();
-          if (!st.isStringConstant(memberVn) || !"shape".equals(st.getStringValue(memberVn)))
-            continue;
-          int tensorVn = propRead.getObjectRef();
-          try {
-            Set<List<Dimension<?>>> tensorShapes = this.getShapes(builder, caller, tensorVn);
-            if (tensorShapes != null && !tensorShapes.isEmpty()) {
-              if (combined == null) combined = HashSetFactory.make();
-              combined.addAll(tensorShapes);
-            }
-          } catch (IllegalArgumentException e) {
-            // The source tensor's shape couldn't be resolved; fall through to ⊤.
-            LOGGER.log(
-                Level.FINE,
-                "getShapeFromShapeAttributeArgument: could not resolve .shape source tensorVn="
-                    + tensorVn
-                    + " in caller="
-                    + caller,
-                e);
-          }
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      CGNode caller = callerInvoke.fst;
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction)) continue;
+      PythonInvokeInstruction pyCall = (PythonInvokeInstruction) callerInvoke.snd;
+      int argVn = -1;
+      if (paramName != null) argVn = pyCall.getUse(paramName);
+      if (argVn == -1 && paramPos >= 0) {
+        int numPosParams = pyCall.getNumberOfPositionalParameters() - 1;
+        if (paramPos < numPosParams) argVn = pyCall.getUse(paramPos + 1);
+      }
+      if (argVn <= 0) continue;
+      SSAInstruction def = caller.getDU().getDef(argVn);
+      if (!(def instanceof PythonPropertyRead)) continue;
+      PythonPropertyRead propRead = (PythonPropertyRead) def;
+      SymbolTable st = caller.getIR().getSymbolTable();
+      int memberVn = propRead.getMemberRef();
+      if (!st.isStringConstant(memberVn) || !"shape".equals(st.getStringValue(memberVn))) continue;
+      int tensorVn = propRead.getObjectRef();
+      try {
+        Set<List<Dimension<?>>> tensorShapes = this.getShapes(builder, caller, tensorVn);
+        if (tensorShapes != null && !tensorShapes.isEmpty()) {
+          if (combined == null) combined = HashSetFactory.make();
+          combined.addAll(tensorShapes);
         }
+      } catch (IllegalArgumentException e) {
+        // The source tensor's shape couldn't be resolved; fall through to ⊤.
+        LOGGER.log(
+            Level.FINE,
+            "getShapeFromShapeAttributeArgument: could not resolve .shape source tensorVn="
+                + tensorVn
+                + " in caller="
+                + caller,
+            e);
       }
     }
     return combined;
@@ -2780,36 +2741,27 @@ public abstract class TensorGenerator {
    */
   protected Set<DType> getArgumentDTypesViaCallers(
       PropagationCallGraphBuilder builder, int paramPos, String paramName) {
-    CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
-    if (cs == null) return null;
     Set<DType> combined = null;
-    for (int i = 0; i < cs.getCallSiteRefs().length; i++) {
-      CallSiteReference siteRef = cs.getCallSiteRefs()[i];
-      IMethod callerMethod = cs.getMethods()[i];
-      for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode());
-          it.hasNext(); ) {
-        CGNode caller = it.next();
-        if (!caller.getMethod().equals(callerMethod)) continue;
-        for (SSAAbstractInvokeInstruction callInstr : caller.getIR().getCalls(siteRef)) {
-          if (!(callInstr instanceof PythonInvokeInstruction)) continue;
-          PythonInvokeInstruction pyCall = (PythonInvokeInstruction) callInstr;
-          int argVn = -1;
-          if (paramName != null) argVn = pyCall.getUse(paramName);
-          if (argVn == -1 && paramPos >= 0) {
-            int numPosParams = pyCall.getNumberOfPositionalParameters() - 1;
-            if (paramPos < numPosParams) argVn = pyCall.getUse(paramPos + 1);
-          }
-          if (argVn <= 0) continue;
-          try {
-            Set<DType> argDTypes = this.getDTypes(builder, caller, argVn);
-            if (argDTypes != null && !argDTypes.isEmpty()) {
-              if (combined == null) combined = EnumSet.noneOf(DType.class);
-              combined.addAll(argDTypes);
-            }
-          } catch (IllegalArgumentException e) {
-            LOGGER.log(Level.FINE, "Could not get dtypes for caller argument: " + argVn, e);
-          }
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      CGNode caller = callerInvoke.fst;
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction)) continue;
+      PythonInvokeInstruction pyCall = (PythonInvokeInstruction) callerInvoke.snd;
+      int argVn = -1;
+      if (paramName != null) argVn = pyCall.getUse(paramName);
+      if (argVn == -1 && paramPos >= 0) {
+        int numPosParams = pyCall.getNumberOfPositionalParameters() - 1;
+        if (paramPos < numPosParams) argVn = pyCall.getUse(paramPos + 1);
+      }
+      if (argVn <= 0) continue;
+      try {
+        Set<DType> argDTypes = this.getDTypes(builder, caller, argVn);
+        if (argDTypes != null && !argDTypes.isEmpty()) {
+          if (combined == null) combined = EnumSet.noneOf(DType.class);
+          combined.addAll(argDTypes);
         }
+      } catch (IllegalArgumentException e) {
+        LOGGER.log(Level.FINE, "Could not get dtypes for caller argument: " + argVn, e);
       }
     }
     return combined;
@@ -2831,7 +2783,7 @@ public abstract class TensorGenerator {
    *   <li><b>`read_data` Wrapper Handling:</b> If the node corresponds to a `read_data` method
    *       (common in TensorFlow synthetic models), it delegates the resolution to the preceding
    *       `do` method, which is the actual entry point for the operation logic.
-   *   <li><b>Context-Sensitive Caller Analysis:</b> It utilizes the {@link CallString} context to
+   *   <li><b>Caller Analysis:</b> It walks the call-graph edges to the calling invocations to
    *       identify the specific caller of the node. It then inspects the call sites in that caller
    *       to find the {@link PythonInvokeInstruction} that targets this node. This is crucial for
    *       distinguishing between different calls to the same operation in a context-sensitive
@@ -2925,82 +2877,53 @@ public abstract class TensorGenerator {
       return ret;
     }
 
-    // Strategy 3: Context-Sensitive Caller Analysis
-    // Use the CallString from the node's context to identify exactly which call site invoked this
-    // function.
-    // This allows us to look up the arguments passed at that specific call site in the caller's IR.
-    CallString cs = (CallString) node.getContext().get(CALL_STRING);
-    if (cs != null) {
+    // Strategy 3: Caller Analysis
+    // Walk the call-graph edges to the invocations dispatching to this node, then look up the
+    // arguments passed at those call sites in each caller's IR.
+    {
       OrdinalSet<InstanceKey> combinedPts = OrdinalSet.empty();
       boolean found = false;
       boolean callAnalyzed = false;
 
-      for (int i = 0; i < cs.getCallSiteRefs().length; i++) {
-        CallSiteReference siteReference = cs.getCallSiteRefs()[i];
-        IMethod callerMethod = cs.getMethods()[i];
-        LOGGER.finer(
-            "Strategy 3: Checking call site: " + siteReference + " in method: " + callerMethod);
+      for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+          getCallerInvokes(builder, node)) {
+        CGNode caller = callerInvoke.fst;
+        SSAAbstractInvokeInstruction callInstr = callerInvoke.snd;
+        callAnalyzed = true;
 
-        for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(node); it.hasNext(); ) {
-          CGNode caller = it.next();
+        if (callInstr instanceof PythonInvokeInstruction) {
+          PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
+          int argValNum = -1;
 
-          // Ensure we are looking at the caller that matches the method in our call string context.
-          if (!caller.getMethod().equals(callerMethod)) {
-            continue;
+          // Try to resolve by name (keyword argument).
+          if (paramName != null) {
+            argValNum = pyCallInstr.getUse(paramName);
           }
 
-          SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(siteReference);
-          for (SSAAbstractInvokeInstruction callInstr : calls) {
-            // Confirm that this instruction can actually target the current node.
-            // This handles polymorphism where a call site might have multiple possible targets.
-            boolean targetsThisNode = false;
-            for (CGNode target : builder.getCallGraph().getPossibleTargets(caller, siteReference)) {
-              if (target.equals(node)) {
-                targetsThisNode = true;
-                break;
+          // Try to resolve by position.
+          if (argValNum == -1) {
+            if (paramPos == RECEIVER_PARAMETER_POSITION) {
+              argValNum = getReceiverValueNumber(caller, pyCallInstr);
+            } else if (paramPos >= 0) {
+              int numPosParams =
+                  pyCallInstr.getNumberOfPositionalParameters() - 1; // Exclude function.
+              if (paramPos < numPosParams) {
+                argValNum =
+                    pyCallInstr.getUse(paramPos + 1); // Positional arguments start at index 1.
               }
             }
+          }
 
-            if (!targetsThisNode) {
-              continue;
-            }
-            callAnalyzed = true;
-
-            if (callInstr instanceof PythonInvokeInstruction) {
-              PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
-              int argValNum = -1;
-
-              // Try to resolve by name (keyword argument).
-              if (paramName != null) {
-                argValNum = pyCallInstr.getUse(paramName);
-              }
-
-              // Try to resolve by position.
-              if (argValNum == -1) {
-                if (paramPos == RECEIVER_PARAMETER_POSITION) {
-                  argValNum = getReceiverValueNumber(caller, pyCallInstr);
-                } else if (paramPos >= 0) {
-                  int numPosParams =
-                      pyCallInstr.getNumberOfPositionalParameters() - 1; // Exclude function.
-                  if (paramPos < numPosParams) {
-                    argValNum =
-                        pyCallInstr.getUse(paramPos + 1); // Positional arguments start at index 1.
-                  }
-                }
-              }
-
-              if (argValNum > 0) {
-                PointerKey argPk =
-                    builder
-                        .getPointerAnalysis()
-                        .getHeapModel()
-                        .getPointerKeyForLocal(caller, argValNum);
-                OrdinalSet<InstanceKey> argPts = builder.getPointerAnalysis().getPointsToSet(argPk);
-                if (argPts != null && !argPts.isEmpty()) {
-                  combinedPts = OrdinalSet.unify(combinedPts, argPts);
-                  found = true;
-                }
-              }
+          if (argValNum > 0) {
+            PointerKey argPk =
+                builder
+                    .getPointerAnalysis()
+                    .getHeapModel()
+                    .getPointerKeyForLocal(caller, argValNum);
+            OrdinalSet<InstanceKey> argPts = builder.getPointerAnalysis().getPointsToSet(argPk);
+            if (argPts != null && !argPts.isEmpty()) {
+              combinedPts = OrdinalSet.unify(combinedPts, argPts);
+              found = true;
             }
           }
         }
@@ -3149,22 +3072,12 @@ public abstract class TensorGenerator {
       return call.getKeywords().contains(paramName);
     }
 
-    CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
-    if (cs == null || cs.getCallSiteRefs().length == 0) return false;
-
-    CallSiteReference siteReference = cs.getCallSiteRefs()[0];
-
-    for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode());
-        it.hasNext(); ) {
-      CGNode caller = it.next();
-      SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(siteReference);
-
-      for (SSAAbstractInvokeInstruction callInstr : calls) {
-        if (callInstr instanceof PythonInvokeInstruction) {
-          PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
-          if (pyCallInstr.getKeywords().contains(paramName)) {
-            return true;
-          }
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      if (callerInvoke.snd instanceof PythonInvokeInstruction) {
+        PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callerInvoke.snd;
+        if (pyCallInstr.getKeywords().contains(paramName)) {
+          return true;
         }
       }
     }
@@ -3216,34 +3129,19 @@ public abstract class TensorGenerator {
       return ret;
     }
 
-    CallString cs = (CallString) this.getNode().getContext().get(CALL_STRING);
-    if (cs == null || cs.getCallSiteRefs().length == 0) return ret;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      SSAAbstractInvokeInstruction callInstr = callerInvoke.snd;
+      LOGGER.finest(() -> "Call instruction: " + callInstr + ".");
 
-    CallSiteReference siteReference = cs.getCallSiteRefs()[0];
-    LOGGER.fine(() -> "Analyzing call site: " + siteReference + ".");
+      if (callInstr instanceof PythonInvokeInstruction) {
+        PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
+        int numKeywords = pyCallInstr.getKeywords() != null ? pyCallInstr.getKeywords().size() : 0;
+        int numberOfPositionalParameters =
+            pyCallInstr.getNumberOfUses() - 1 - numKeywords; // Exclude the function name and
+        // keywords.
 
-    for (Iterator<CGNode> it = builder.getCallGraph().getPredNodes(this.getNode());
-        it.hasNext(); ) {
-      CGNode caller = it.next();
-      LOGGER.fine(() -> "Analyzing caller node: " + caller.getMethod().getSignature() + ".");
-
-      SSAAbstractInvokeInstruction[] calls = caller.getIR().getCalls(siteReference);
-      LOGGER.finest(() -> "Number of calls at this site: " + calls.length + ".");
-
-      for (SSAAbstractInvokeInstruction callInstr : calls) {
-        LOGGER.finest(() -> "Call instruction: " + callInstr + ".");
-
-        if (callInstr instanceof PythonInvokeInstruction) {
-          PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
-          int numKeywords =
-              pyCallInstr.getKeywords() != null ? pyCallInstr.getKeywords().size() : 0;
-          int numberOfPositionalParameters =
-              pyCallInstr.getNumberOfUses()
-                  - 1
-                  - numKeywords; // Exclude the function name and keywords.
-
-          ret.add(numberOfPositionalParameters);
-        }
+        ret.add(numberOfPositionalParameters);
       }
     }
 
