@@ -1806,7 +1806,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_bilstm_loader_e2e.py",
         "BiLSTM.call",
         1,
-        1,
+        2,
         Map.of(3, Set.of(TensorType.of(INT_64, 128))));
   }
 
@@ -1837,7 +1837,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "BiLSTM.call",
         "bilstm_proj",
         1,
-        1,
+        2,
         Map.of(3, Set.of(TENSOR_2_5_INT32)));
   }
 
@@ -1960,6 +1960,38 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         2,
         Map.of(3, Set.of(TENSOR_3_3_FLOAT32)));
+  }
+
+  /**
+   * Pins the <a href="https://github.com/wala/ML/issues/676">wala/ML#676</a> subject: {@code
+   * DynamicPositionEmbedding.call}'s {@code inputs} parameter on the vendored {@code
+   * jason9693/MusicTransformer-tensorflow2.0} {@code custom/layers.py}. With {@code
+   * tf.keras.layers.Embedding} modeled and constructor keyword arguments forwarded (wala/ML#664),
+   * the chain composes concretely: tokens {@code (2, 50)} int32 through the embedding to {@code (2,
+   * 50, 64)} float32 into the position encoding. On 0.52.13 the parameter was tensor- classified
+   * but shapeless ({@code ? of unknown}, an integer-arithmetic seed leaking through the pointer
+   * analysis); wala/ML#664 removed the leak and this modeling supplies the honest chain.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testMusicTransformerPositionEmbedding()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "musictx_proj/custom/__init__.py",
+          "musictx_proj/custom/layers.py",
+          "musictx_proj/tf2_test_musictx_encoder.py"
+        },
+        "custom/layers.py",
+        "DynamicPositionEmbedding.call",
+        "musictx_proj",
+        1,
+        6,
+        Map.of(3, Set.of(TensorType.of(FLOAT_32, 2, 50, 64))));
   }
 
   @Test
@@ -2898,12 +2930,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * {@code build()}-created {@code self._kernel} sublayer a points-to set. With constructor keyword
    * arguments forwarded to {@code __init__} (wala/ML#664), {@code units} resolves through the
    * {@code self._units} instance-field read, so the runtime-true {@code (4, 16) float32} is
-   * inferred. The union carries a spurious {@code (4, 8)} member because both {@code GCN(...)}
-   * constructions collapse into one {@code __init__} context, unioning the {@code units} values.
+   * inferred. With {@code __init__} dispatched in the constructor's calling context (wala/ML#671),
+   * the two instances' {@code self._units} fields hold {@code 16} and {@code 8} separately; the
+   * union's spurious {@code (4, 8)} member persists because both instances share one {@code build}
+   * context, so the {@code Dense} constructed inside it unions the values.
    *
    * <p>TODO: Expect exactly {@code (4, 16) float32} once <a
-   * href="https://github.com/wala/ML/issues/671">wala/ML#671</a> separates {@code __init__}
-   * argument values per construction site.
+   * href="https://github.com/wala/ML/issues/679">wala/ML#679</a> gives the layer-method trampolines
+   * receiver-object sensitivity.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2947,11 +2981,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * here it confirms that recovery holds for an integer-dtype parameter and a convolutional
    * (non-message-passing) body, not only the float-feature archetypes.
    *
-   * <p>The three tracked tensor variables are {@code inputs} (vn=3, concrete {@code (2, 5) int32}),
-   * the embedding/convolution intermediate (vn=36, ⊤ on both axes &mdash; {@code
-   * tf.keras.layers.Embedding}/{@code Conv1D}/{@code GlobalAvgPool1D} are unmodeled), and the
-   * softmax {@code Dense} head's output (vn=72, {@code float32} dtype but ⊤ shape &mdash; {@code
-   * DenseCall} hard-codes {@code float32} but loses the shape through the chained-layer body, <a
+   * <p>The tracked tensor variables are {@code inputs} (concrete {@code (2, 5) int32}), the
+   * embedding output (concrete {@code (2, 5, 8)} float32 with {@code Embedding} modeled,
+   * wala/ML#676), the convolution intermediate (⊤ on both axes &mdash; {@code Conv1D}/{@code
+   * GlobalAvgPool1D} remain unmodeled), and the softmax {@code Dense} head's output (vn=72, {@code
+   * float32} dtype but ⊤ shape &mdash; {@code DenseCall} hard-codes {@code float32} but loses the
+   * shape through the chained-layer body, <a
    * href="https://github.com/wala/ML/issues/358">wala/ML#358</a>/<a
    * href="https://github.com/wala/ML/issues/530">wala/ML#530</a>). These residual-⊤ body locals are
    * pre-existing shape gaps, not new findings, and are downstream of the (exact) input signature.
@@ -2975,7 +3010,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "TextCNN.call",
         "textcnn_proj",
         1,
-        3,
+        4,
         Map.of(3, Set.of(TENSOR_2_5_INT32)));
   }
 
@@ -5568,7 +5603,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_keras_call_embedding_param.py",
         "BiLSTM.call",
         1,
-        1,
+        2,
         Map.of(3, Set.of(TensorType.of(INT_32, 1, 3))));
   }
 

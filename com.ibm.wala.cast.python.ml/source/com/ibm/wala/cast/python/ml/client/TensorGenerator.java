@@ -3562,6 +3562,8 @@ public abstract class TensorGenerator {
       return new DenseCall(node);
     } else if (type.equals(TensorFlowTypes.GLOBAL_AVERAGE_POOLING_1D_CALL.getDeclaringClass())) {
       return new GlobalAveragePooling1DCall(node);
+    } else if (type.equals(TensorFlowTypes.EMBEDDING_LAYER_CALL.getDeclaringClass())) {
+      return new EmbeddingCall(node);
     } else if (type.equals(TensorFlowTypes.MODEL_CALL.getDeclaringClass())) {
       return new ModelCall(node);
     } else if (type.equals(TensorFlowTypes.MODEL.getDeclaringClass())) {

@@ -17,6 +17,7 @@ import static com.ibm.wala.cast.python.types.Util.makeGlobalRef;
 import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.loader.DynamicCallSiteReference;
+import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
@@ -376,7 +377,7 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
             ctor.setValueNames(Collections.singletonMap(1, Atom.findOrCreateUnicodeAtom("self")));
           }
 
-          ctors.put(receiver, new PythonSummarizedFunction(ref, ctor, receiver));
+          ctors.put(receiver, new PythonConstructorFunction(ref, ctor, receiver));
         }
 
         return ctors.get(receiver);

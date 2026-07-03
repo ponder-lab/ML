@@ -433,6 +433,8 @@
         <putfield class="LRoot" field="Flatten" fieldType="LRoot" ref="layers" value="FlattenLayerCls"/>
         <new def="GlobalAveragePooling1DCls" class="Ltensorflow/keras/layers/class/GlobalAveragePooling1D"/>
         <putfield class="LRoot" field="GlobalAveragePooling1D" fieldType="LRoot" ref="layers" value="GlobalAveragePooling1DCls"/>
+        <new def="EmbeddingCls" class="Ltensorflow/keras/layers/class/Embedding"/>
+        <putfield class="LRoot" field="Embedding" fieldType="LRoot" ref="layers" value="EmbeddingCls"/>
         <new def="DropoutLayerCls" class="Ltensorflow/keras/layers/class/Dropout"/>
         <putfield class="LRoot" field="Dropout" fieldType="LRoot" ref="layers" value="DropoutLayerCls"/>
         <new def="Model" class="Ltensorflow/keras/models/class/Model"/>
@@ -2445,6 +2447,14 @@
           <return value="res"/>
         </method>
       </class>
+      <class name="Embedding" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Embedding. The `output_dim` argument is stored on the instance so `EmbeddingCall` can append it to the input shape (wala/ML#676). -->
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self input_dim output_dim embeddings_initializer embeddings_regularizer embeddings_constraint mask_zero input_length">
+          <new def="res" class="Ltensorflow/keras/layers/Embedding"/>
+          <putfield class="LRoot" field="output_dim" fieldType="LRoot" ref="res" value="output_dim"/>
+          <return value="res"/>
+        </method>
+      </class>
       <class name="Dropout" allocatable="true">
         <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/Dropout -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self rate noise_shape seed">
@@ -2494,6 +2504,17 @@
       </class>
       <class name="GlobalAveragePooling1D" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GlobalAveragePooling1D. The output type is computed by `GlobalAveragePooling1DCall` (wala/ML#670). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="Embedding" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Embedding#__call__. The output type is computed by `EmbeddingCall`: the input shape with `output_dim` appended, float32 (wala/ML#676). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
