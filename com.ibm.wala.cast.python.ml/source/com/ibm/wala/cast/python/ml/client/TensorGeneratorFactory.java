@@ -65,6 +65,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIAG_PART;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIVIDE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.UNKNOWN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EINSUM;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EMBEDDING_LAYER_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EMBEDDING_LOOKUP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ERF;
@@ -1548,6 +1549,8 @@ public class TensorGeneratorFactory {
       return new FlattenCall(source);
     else if (isType(calledFunction, GLOBAL_AVERAGE_POOLING_1D_CALL.getDeclaringClass()))
       return new GlobalAveragePooling1DCall(source);
+    else if (isType(calledFunction, EMBEDDING_LAYER_CALL.getDeclaringClass()))
+      return new EmbeddingCall(source);
     else if (isType(calledFunction, MAX_POOL.getDeclaringClass())) return new MaxPool(source);
     else if (isType(calledFunction, SLICE_BUILTIN)) return new SliceBuiltinOperation(source);
     else {
