@@ -128,15 +128,22 @@ jobs:
         git config url."https://github.com/".insteadOf "git@github.com:"
       shell: bash
     - name: Run release:prepare
-      # No extra flags needed: the tag format is pinned to plain X.Y.Z (wala/ML#560) and the deps
-      # are installed at release coordinates above. `clean verify` builds and tests the release
-      # version before tagging, so a failure aborts before any commit or push; on success the two
-      # commits and the tag are pushed to master, firing the tag-push deploy + release-upload.
+      # The tag format is pinned to plain X.Y.Z (wala/ML#560) and the deps are installed at
+      # release coordinates above. `clean verify` builds and tests the release version before
+      # tagging, so a failure aborts before any commit or push; on success the two commits and
+      # the tag are pushed to master, firing the tag-push deploy + release-upload.
+      #
+      # `arguments` forwards the CI logging config to the forked verification build, matching
+      # the Continuous integration workflow: without it the fork picks up each module's local
+      # FINEST `logging.properties`, and the whole-project test fixtures then exhaust the heap
+      # building log strings (the 0.52.17 cut failed with `OutOfMemoryError` in the
+      # `testNlpgnnFull*` guards for exactly this reason).
       run: |
         mvn release:clean -B
         mvn release:prepare -B \
           -DreleaseVersion=${{ inputs.releaseVersion }} \
-          -DdevelopmentVersion=${{ inputs.developmentVersion }}
+          -DdevelopmentVersion=${{ inputs.developmentVersion }} \
+          -Darguments=-Dlogging.config.file=./logging.ci.properties
       shell: bash
     - name: Summary
       run: |
