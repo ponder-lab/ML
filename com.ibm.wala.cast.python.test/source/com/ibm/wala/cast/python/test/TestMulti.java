@@ -47,13 +47,13 @@ public class TestMulti extends TestJythonCallGraphShape {
 
   protected static final List<GraphAssertion> assertionsMulti2 =
       List.of(
-          new GraphAssertion(ROOT, new String[] {"script multi1.py", "script multi2.py"})
-          // TODO: Add the following code once https://github.com/wala/ML/issues/168 is fixed:
-          // new GraphAssertion("script multi1.py", new String[] {"script multi2.py/silly"})
-          // TODO: Add the following code once https://github.com/wala/ML/issues/168 is fixed:
-          // new GraphAssertion("script multi2.py/silly", new String[] {"script
-          // multi2.py/silly/inner"})
-          );
+          new GraphAssertion(ROOT, new String[] {"script multi1.py", "script multi2.py"}),
+          // Importer-first order resolves the cross-module edges (wala/ML#168): these two
+          // assertions match `assertionsMulti1`'s importee-first order, pinning that argument
+          // order no longer affects the call graph.
+          new GraphAssertion("script multi1.py", new String[] {"script multi2.py/silly"}),
+          new GraphAssertion(
+              "script multi2.py/silly", new String[] {"script multi2.py/silly/inner"}));
 
   @Test
   public void testMulti2()
