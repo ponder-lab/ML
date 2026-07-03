@@ -165,6 +165,49 @@ public abstract class TensorGenerator {
       DTYPES_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
+   * The previous resolution round's shape results (wala/ML#674). A recursive re-entry on the same
+   * {@code (node, vn)} key (a cycle in the value's producer graph, e.g. a loop-carried variable)
+   * reads the previous round's approximation instead of flooring to ⊤, so the resolved result no
+   * longer depends on which cycle member happens to be computed first. {@link
+   * PythonTensorAnalysisEngine#performAnalysis} drives rounds via {@link
+   * #advanceRound(PropagationCallGraphBuilder)} until the per-source types stabilize.
+   */
+  private static final Map<
+          PropagationCallGraphBuilder, Map<Pair<CGNode, Integer>, Set<List<Dimension<?>>>>>
+      PREVIOUS_SHAPES_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /** Dtype counterpart of {@link #PREVIOUS_SHAPES_CACHE}. */
+  private static final Map<PropagationCallGraphBuilder, Map<Pair<CGNode, Integer>, Set<DType>>>
+      PREVIOUS_DTYPES_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
+   * The {@code (node, vn)} shape computations currently on the recursion stack, per builder;
+   * membership marks a cycle re-entry (wala/ML#674).
+   */
+  private static final Map<PropagationCallGraphBuilder, Set<Pair<CGNode, Integer>>>
+      SHAPES_IN_PROGRESS = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /** Dtype counterpart of {@link #SHAPES_IN_PROGRESS}. */
+  private static final Map<PropagationCallGraphBuilder, Set<Pair<CGNode, Integer>>>
+      DTYPES_IN_PROGRESS = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
+   * Begins a new resolution round for the given builder (wala/ML#674): the current shape/dtype
+   * results become the previous round's approximations (read on cycle re-entry), and the current
+   * caches restart empty.
+   *
+   * @param builder The builder whose caches should advance.
+   */
+  public static void advanceRound(PropagationCallGraphBuilder builder) {
+    Map<Pair<CGNode, Integer>, Set<List<Dimension<?>>>> shapes = SHAPES_CACHE.remove(builder);
+    if (shapes != null) PREVIOUS_SHAPES_CACHE.put(builder, shapes);
+    Map<Pair<CGNode, Integer>, Set<DType>> dtypes = DTYPES_CACHE.remove(builder);
+    if (dtypes != null) PREVIOUS_DTYPES_CACHE.put(builder, dtypes);
+    SHAPES_IN_PROGRESS.remove(builder);
+    DTYPES_IN_PROGRESS.remove(builder);
+  }
+
+  /**
    * Drops the shape/dtype caches for the given builder. Intended to be called at the end of an
    * analysis to release cache memory deterministically, rather than waiting for the builder to be
    * garbage-collected. Safe to call more than once.
@@ -178,6 +221,10 @@ public abstract class TensorGenerator {
   public static void clearCaches(PropagationCallGraphBuilder builder) {
     SHAPES_CACHE.remove(builder);
     DTYPES_CACHE.remove(builder);
+    PREVIOUS_SHAPES_CACHE.remove(builder);
+    PREVIOUS_DTYPES_CACHE.remove(builder);
+    SHAPES_IN_PROGRESS.remove(builder);
+    DTYPES_IN_PROGRESS.remove(builder);
   }
 
   /** The source of the tensor, represented by a points-to set variable. */
@@ -821,9 +868,23 @@ public abstract class TensorGenerator {
     // inner `containsKey` / `get` / `put` calls are no-op re-entries.
     synchronized (cache) {
       if (cache.containsKey(key)) return cache.get(key);
-      Set<List<Dimension<?>>> result = computeShapes(builder, node, valueNumber);
-      cache.put(key, result);
-      return result;
+      // A same-key re-entry is a cycle in the value's producer graph (e.g. a loop-carried
+      // variable). Return the previous round's approximation instead of recursing — flooring
+      // here made the result depend on which cycle member was computed first (wala/ML#674).
+      Set<Pair<CGNode, Integer>> inProgress =
+          SHAPES_IN_PROGRESS.computeIfAbsent(builder, b -> HashSetFactory.make());
+      if (!inProgress.add(key)) {
+        Map<Pair<CGNode, Integer>, Set<List<Dimension<?>>>> previous =
+            PREVIOUS_SHAPES_CACHE.get(builder);
+        return previous == null ? null : previous.get(key);
+      }
+      try {
+        Set<List<Dimension<?>>> result = computeShapes(builder, node, valueNumber);
+        cache.put(key, result);
+        return result;
+      } finally {
+        inProgress.remove(key);
+      }
     }
   }
 
@@ -1877,12 +1938,23 @@ public abstract class TensorGenerator {
     Map<Pair<CGNode, Integer>, Set<DType>> cache =
         DTYPES_CACHE.computeIfAbsent(builder, b -> Collections.synchronizedMap(new HashMap<>()));
     Pair<CGNode, Integer> key = Pair.make(node, valueNumber);
-    // See `getShapes` above — same atomic check-compute-put pattern, same null-cache rationale.
+    // See `getShapes` above — same atomic check-compute-put pattern, same null-cache rationale,
+    // and the same previous-round approximation on a same-key cycle re-entry (wala/ML#674).
     synchronized (cache) {
       if (cache.containsKey(key)) return cache.get(key);
-      Set<DType> result = computeDTypes(builder, node, valueNumber);
-      cache.put(key, result);
-      return result;
+      Set<Pair<CGNode, Integer>> inProgress =
+          DTYPES_IN_PROGRESS.computeIfAbsent(builder, b -> HashSetFactory.make());
+      if (!inProgress.add(key)) {
+        Map<Pair<CGNode, Integer>, Set<DType>> previous = PREVIOUS_DTYPES_CACHE.get(builder);
+        return previous == null ? null : previous.get(key);
+      }
+      try {
+        Set<DType> result = computeDTypes(builder, node, valueNumber);
+        cache.put(key, result);
+        return result;
+      } finally {
+        inProgress.remove(key);
+      }
     }
   }
 
