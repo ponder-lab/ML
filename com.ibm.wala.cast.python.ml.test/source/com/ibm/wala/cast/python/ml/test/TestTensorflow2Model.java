@@ -2029,6 +2029,249 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Verbatim whole-project guard for <a
+   * href="https://github.com/wala/ML/issues/690">wala/ML#690</a>: the full NLPGNN subject vendored
+   * as-is (all 94 {@code .py} files, matching the consumer's whole-project run; no added {@code
+   * __init__.py}s under {@code tests/}). Before the fix, whichever same-named {@code GenGPT2}
+   * sibling's closure reached the shared {@code sample_sequence.step} node second lost its lexical
+   * {@code model} wiring (WALA's one-shot {@code visitLexical} snapshot), so its {@code
+   * predict}/{@code call} never dispatched and its method nodes vanished at whole-project scale.
+   * This pins the generation sibling's {@code predict} node and its parameter type, which must be
+   * symmetric with {@link #testNlpgnnFullInteractive()}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNlpgnnFullGeneration()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "nlpgnn_full_proj/nlpgnn/__init__.py",
+          "nlpgnn_full_proj/nlpgnn/abandoned/GCNConvv0.py",
+          "nlpgnn_full_proj/nlpgnn/abandoned/__init__.py",
+          "nlpgnn_full_proj/nlpgnn/abandoned/scatter.py",
+          "nlpgnn_full_proj/nlpgnn/bpemd/bpe.py",
+          "nlpgnn_full_proj/nlpgnn/callbacks.py",
+          "nlpgnn_full_proj/nlpgnn/datas/__init__.py",
+          "nlpgnn_full_proj/nlpgnn/datas/checkpoint.py",
+          "nlpgnn_full_proj/nlpgnn/datas/dataloader.py",
+          "nlpgnn_full_proj/nlpgnn/datas/graphloader.py",
+          "nlpgnn_full_proj/nlpgnn/datas/word2vec.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/GAAEConv.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/GATConv.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/GCNConv.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/GINConv.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/GSConv.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/RGCNConv.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/TGCNConv.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/__init__.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/glob.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/messagepassing.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/utils.py",
+          "nlpgnn_full_proj/nlpgnn/layers/__init__.py",
+          "nlpgnn_full_proj/nlpgnn/layers/albert_transformer.py",
+          "nlpgnn_full_proj/nlpgnn/layers/attention.py",
+          "nlpgnn_full_proj/nlpgnn/layers/bilstm.py",
+          "nlpgnn_full_proj/nlpgnn/layers/decoder.py",
+          "nlpgnn_full_proj/nlpgnn/layers/dense.py",
+          "nlpgnn_full_proj/nlpgnn/layers/embedding.py",
+          "nlpgnn_full_proj/nlpgnn/layers/gpt2_transformer.py",
+          "nlpgnn_full_proj/nlpgnn/layers/normalization.py",
+          "nlpgnn_full_proj/nlpgnn/layers/transformer.py",
+          "nlpgnn_full_proj/nlpgnn/metrics/Losess.py",
+          "nlpgnn_full_proj/nlpgnn/metrics/Metric.py",
+          "nlpgnn_full_proj/nlpgnn/metrics/__init__.py",
+          "nlpgnn_full_proj/nlpgnn/metrics/crf.py",
+          "nlpgnn_full_proj/nlpgnn/metrics/type.py",
+          "nlpgnn_full_proj/nlpgnn/models/GAAE.py",
+          "nlpgnn_full_proj/nlpgnn/models/GAT.py",
+          "nlpgnn_full_proj/nlpgnn/models/GCN.py",
+          "nlpgnn_full_proj/nlpgnn/models/GIN.py",
+          "nlpgnn_full_proj/nlpgnn/models/GraphSage.py",
+          "nlpgnn_full_proj/nlpgnn/models/PCNN.py",
+          "nlpgnn_full_proj/nlpgnn/models/RGCN.py",
+          "nlpgnn_full_proj/nlpgnn/models/TextCNN.py",
+          "nlpgnn_full_proj/nlpgnn/models/TextGCN2019.py",
+          "nlpgnn_full_proj/nlpgnn/models/__init__.py",
+          "nlpgnn_full_proj/nlpgnn/models/albert.py",
+          "nlpgnn_full_proj/nlpgnn/models/bert.py",
+          "nlpgnn_full_proj/nlpgnn/models/gpt2.py",
+          "nlpgnn_full_proj/nlpgnn/models/tucker.py",
+          "nlpgnn_full_proj/nlpgnn/optimizers/__init__.py",
+          "nlpgnn_full_proj/nlpgnn/optimizers/optim.py",
+          "nlpgnn_full_proj/nlpgnn/sample/__init__.py",
+          "nlpgnn_full_proj/nlpgnn/sample/samples.py",
+          "nlpgnn_full_proj/nlpgnn/savers.py",
+          "nlpgnn_full_proj/nlpgnn/tokenizers/__init__.py",
+          "nlpgnn_full_proj/nlpgnn/tokenizers/gpt2_tokenization.py",
+          "nlpgnn_full_proj/nlpgnn/tokenizers/tokenization.py",
+          "nlpgnn_full_proj/nlpgnn/tools.py",
+          "nlpgnn_full_proj/setup.py",
+          "nlpgnn_full_proj/tests/CLS/ALBERT/albert_cls_test.py",
+          "nlpgnn_full_proj/tests/CLS/ALBERT/albert_cls_train.py",
+          "nlpgnn_full_proj/tests/CLS/BERT/bert_classification_test.py",
+          "nlpgnn_full_proj/tests/CLS/BERT/bert_classification_train.py",
+          "nlpgnn_full_proj/tests/CLS/BilstmAttention/bilstm_attention_test.py",
+          "nlpgnn_full_proj/tests/CLS/BilstmAttention/bilstm_attention_train.py",
+          "nlpgnn_full_proj/tests/CLS/TextCNN/text_cnn_test.py",
+          "nlpgnn_full_proj/tests/CLS/TextCNN/text_cnn_train.py",
+          "nlpgnn_full_proj/tests/GNN/BERT-TextGCN/attention.py",
+          "nlpgnn_full_proj/tests/GNN/BERT-TextGCN/bert.py",
+          "nlpgnn_full_proj/tests/GNN/BERT-TextGCN/build_graph.py",
+          "nlpgnn_full_proj/tests/GNN/BERT-TextGCN/train_text_gcn.py",
+          "nlpgnn_full_proj/tests/GNN/BERT-TextGCN/transformer.py",
+          "nlpgnn_full_proj/tests/GNN/auto_encoder/GAAE.py",
+          "nlpgnn_full_proj/tests/GNN/gnn_for_nlp/text_gcn.py",
+          "nlpgnn_full_proj/tests/GNN/gnn_for_nlp/text_sage.py",
+          "nlpgnn_full_proj/tests/GNN/nodes_graph_classfication/train_gan.py",
+          "nlpgnn_full_proj/tests/GNN/nodes_graph_classfication/train_gcn.py",
+          "nlpgnn_full_proj/tests/GNN/nodes_graph_classfication/train_gin.py",
+          "nlpgnn_full_proj/tests/GNN/nodes_graph_classfication/train_graphsage.py",
+          "nlpgnn_full_proj/tests/KG2E/run_tucker.py",
+          "nlpgnn_full_proj/tests/NER/NER_EN/albert_ner_test.py",
+          "nlpgnn_full_proj/tests/NER/NER_EN/albert_ner_train.py",
+          "nlpgnn_full_proj/tests/NER/NER_EN/bert_ner_test.py",
+          "nlpgnn_full_proj/tests/NER/NER_EN/bert_ner_train.py",
+          "nlpgnn_full_proj/tests/NER/NER_EN/data_processing.py",
+          "nlpgnn_full_proj/tests/NER/NER_ZH/bert_ner_crf_test.py",
+          "nlpgnn_full_proj/tests/NER/NER_ZH/bert_ner_crf_train.py",
+          "nlpgnn_full_proj/tests/NER/NER_ZH/bert_ner_test.py",
+          "nlpgnn_full_proj/tests/NER/NER_ZH/bert_ner_train.py",
+          "nlpgnn_full_proj/tests/NER/NER_ZH/ner_data_preprocess.py",
+          "nlpgnn_full_proj/tests/TG/EN/generation.py",
+          "nlpgnn_full_proj/tests/TG/EN/interactive.py"
+        },
+        "tests/TG/EN/generation.py",
+        "GenGPT2.predict",
+        "nlpgnn_full_proj",
+        1,
+        1,
+        Map.of(3, Set.of(new TensorType(UNKNOWN, asList(DynamicDim.INSTANCE, new NumericDim(1))))));
+  }
+
+  /**
+   * Sibling half of {@link #testNlpgnnFullGeneration()} (wala/ML#690) — the {@code interactive}
+   * entry script, the one whose {@code predict}/{@code call} nodes vanished in the consumer's
+   * whole-project run. Its {@code predict} parameter typing must be symmetric with the generation
+   * sibling's.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNlpgnnFullInteractive()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "nlpgnn_full_proj/nlpgnn/__init__.py",
+          "nlpgnn_full_proj/nlpgnn/abandoned/GCNConvv0.py",
+          "nlpgnn_full_proj/nlpgnn/abandoned/__init__.py",
+          "nlpgnn_full_proj/nlpgnn/abandoned/scatter.py",
+          "nlpgnn_full_proj/nlpgnn/bpemd/bpe.py",
+          "nlpgnn_full_proj/nlpgnn/callbacks.py",
+          "nlpgnn_full_proj/nlpgnn/datas/__init__.py",
+          "nlpgnn_full_proj/nlpgnn/datas/checkpoint.py",
+          "nlpgnn_full_proj/nlpgnn/datas/dataloader.py",
+          "nlpgnn_full_proj/nlpgnn/datas/graphloader.py",
+          "nlpgnn_full_proj/nlpgnn/datas/word2vec.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/GAAEConv.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/GATConv.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/GCNConv.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/GINConv.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/GSConv.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/RGCNConv.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/TGCNConv.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/__init__.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/glob.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/messagepassing.py",
+          "nlpgnn_full_proj/nlpgnn/gnn/utils.py",
+          "nlpgnn_full_proj/nlpgnn/layers/__init__.py",
+          "nlpgnn_full_proj/nlpgnn/layers/albert_transformer.py",
+          "nlpgnn_full_proj/nlpgnn/layers/attention.py",
+          "nlpgnn_full_proj/nlpgnn/layers/bilstm.py",
+          "nlpgnn_full_proj/nlpgnn/layers/decoder.py",
+          "nlpgnn_full_proj/nlpgnn/layers/dense.py",
+          "nlpgnn_full_proj/nlpgnn/layers/embedding.py",
+          "nlpgnn_full_proj/nlpgnn/layers/gpt2_transformer.py",
+          "nlpgnn_full_proj/nlpgnn/layers/normalization.py",
+          "nlpgnn_full_proj/nlpgnn/layers/transformer.py",
+          "nlpgnn_full_proj/nlpgnn/metrics/Losess.py",
+          "nlpgnn_full_proj/nlpgnn/metrics/Metric.py",
+          "nlpgnn_full_proj/nlpgnn/metrics/__init__.py",
+          "nlpgnn_full_proj/nlpgnn/metrics/crf.py",
+          "nlpgnn_full_proj/nlpgnn/metrics/type.py",
+          "nlpgnn_full_proj/nlpgnn/models/GAAE.py",
+          "nlpgnn_full_proj/nlpgnn/models/GAT.py",
+          "nlpgnn_full_proj/nlpgnn/models/GCN.py",
+          "nlpgnn_full_proj/nlpgnn/models/GIN.py",
+          "nlpgnn_full_proj/nlpgnn/models/GraphSage.py",
+          "nlpgnn_full_proj/nlpgnn/models/PCNN.py",
+          "nlpgnn_full_proj/nlpgnn/models/RGCN.py",
+          "nlpgnn_full_proj/nlpgnn/models/TextCNN.py",
+          "nlpgnn_full_proj/nlpgnn/models/TextGCN2019.py",
+          "nlpgnn_full_proj/nlpgnn/models/__init__.py",
+          "nlpgnn_full_proj/nlpgnn/models/albert.py",
+          "nlpgnn_full_proj/nlpgnn/models/bert.py",
+          "nlpgnn_full_proj/nlpgnn/models/gpt2.py",
+          "nlpgnn_full_proj/nlpgnn/models/tucker.py",
+          "nlpgnn_full_proj/nlpgnn/optimizers/__init__.py",
+          "nlpgnn_full_proj/nlpgnn/optimizers/optim.py",
+          "nlpgnn_full_proj/nlpgnn/sample/__init__.py",
+          "nlpgnn_full_proj/nlpgnn/sample/samples.py",
+          "nlpgnn_full_proj/nlpgnn/savers.py",
+          "nlpgnn_full_proj/nlpgnn/tokenizers/__init__.py",
+          "nlpgnn_full_proj/nlpgnn/tokenizers/gpt2_tokenization.py",
+          "nlpgnn_full_proj/nlpgnn/tokenizers/tokenization.py",
+          "nlpgnn_full_proj/nlpgnn/tools.py",
+          "nlpgnn_full_proj/setup.py",
+          "nlpgnn_full_proj/tests/CLS/ALBERT/albert_cls_test.py",
+          "nlpgnn_full_proj/tests/CLS/ALBERT/albert_cls_train.py",
+          "nlpgnn_full_proj/tests/CLS/BERT/bert_classification_test.py",
+          "nlpgnn_full_proj/tests/CLS/BERT/bert_classification_train.py",
+          "nlpgnn_full_proj/tests/CLS/BilstmAttention/bilstm_attention_test.py",
+          "nlpgnn_full_proj/tests/CLS/BilstmAttention/bilstm_attention_train.py",
+          "nlpgnn_full_proj/tests/CLS/TextCNN/text_cnn_test.py",
+          "nlpgnn_full_proj/tests/CLS/TextCNN/text_cnn_train.py",
+          "nlpgnn_full_proj/tests/GNN/BERT-TextGCN/attention.py",
+          "nlpgnn_full_proj/tests/GNN/BERT-TextGCN/bert.py",
+          "nlpgnn_full_proj/tests/GNN/BERT-TextGCN/build_graph.py",
+          "nlpgnn_full_proj/tests/GNN/BERT-TextGCN/train_text_gcn.py",
+          "nlpgnn_full_proj/tests/GNN/BERT-TextGCN/transformer.py",
+          "nlpgnn_full_proj/tests/GNN/auto_encoder/GAAE.py",
+          "nlpgnn_full_proj/tests/GNN/gnn_for_nlp/text_gcn.py",
+          "nlpgnn_full_proj/tests/GNN/gnn_for_nlp/text_sage.py",
+          "nlpgnn_full_proj/tests/GNN/nodes_graph_classfication/train_gan.py",
+          "nlpgnn_full_proj/tests/GNN/nodes_graph_classfication/train_gcn.py",
+          "nlpgnn_full_proj/tests/GNN/nodes_graph_classfication/train_gin.py",
+          "nlpgnn_full_proj/tests/GNN/nodes_graph_classfication/train_graphsage.py",
+          "nlpgnn_full_proj/tests/KG2E/run_tucker.py",
+          "nlpgnn_full_proj/tests/NER/NER_EN/albert_ner_test.py",
+          "nlpgnn_full_proj/tests/NER/NER_EN/albert_ner_train.py",
+          "nlpgnn_full_proj/tests/NER/NER_EN/bert_ner_test.py",
+          "nlpgnn_full_proj/tests/NER/NER_EN/bert_ner_train.py",
+          "nlpgnn_full_proj/tests/NER/NER_EN/data_processing.py",
+          "nlpgnn_full_proj/tests/NER/NER_ZH/bert_ner_crf_test.py",
+          "nlpgnn_full_proj/tests/NER/NER_ZH/bert_ner_crf_train.py",
+          "nlpgnn_full_proj/tests/NER/NER_ZH/bert_ner_test.py",
+          "nlpgnn_full_proj/tests/NER/NER_ZH/bert_ner_train.py",
+          "nlpgnn_full_proj/tests/NER/NER_ZH/ner_data_preprocess.py",
+          "nlpgnn_full_proj/tests/TG/EN/generation.py",
+          "nlpgnn_full_proj/tests/TG/EN/interactive.py"
+        },
+        "tests/TG/EN/interactive.py",
+        "GenGPT2.predict",
+        "nlpgnn_full_proj",
+        1,
+        1,
+        Map.of(3, Set.of(new TensorType(UNKNOWN, asList(DynamicDim.INSTANCE, new NumericDim(1))))));
+  }
+
+  /**
    * Same-name-class guard for <a href="https://github.com/wala/ML/issues/678">wala/ML#678</a>: two
    * sibling scripts each define a Keras subclass named {@code GenGPT2} (with a {@code
    * super(GenGPT2, self)} by-name reference in {@code __init__}, mirroring the NLPGNN subject);
