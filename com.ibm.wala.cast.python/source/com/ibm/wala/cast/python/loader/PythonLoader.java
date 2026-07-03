@@ -118,7 +118,7 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
       entry.asModule().getEntries().forEachRemaining(this::collectScriptNames);
     else {
       String name = entry.getName();
-      LOGGER.fine("Collected script name in scope: " + name + " (wala/ML#691).");
+      LOGGER.fine(() -> "Collected script name in scope: " + name + " (wala/ML#691).");
       scriptNamesInScope.add(name);
       // Script class names are project-relative while module entry names may carry the project
       // root as their first component; record the stripped form too so the translator's
