@@ -154,9 +154,10 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
     PythonClass shell = (PythonClass) defineSummaryClassShell(name, superName);
     for (MethodSummary method : methods) {
       String methodName = method.getMethod().getName().toString();
-      if (methodName.equals(PythonTypes.DO_METHOD_NAME)
-          || methodName.equals("import")
-          || methodName.equals("__init__")) {
+      // `__init__` is carried like any other method: `addSummaryBypassLogic` registers its
+      // function class (wala/ML#683), so a source subclass's synthesized constructor can wire and
+      // dispatch the inherited summary initializer.
+      if (methodName.equals(PythonTypes.DO_METHOD_NAME) || methodName.equals("import")) {
         continue;
       }
       TypeReference funClsRef =

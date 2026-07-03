@@ -174,6 +174,7 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
           // the source class object to read; their function classes are bypass-registered and are
           // allocated directly below, mirroring the engine's summary-constructor rewriting.
           Set<MethodReference> summaryDeclaredMethods = new HashSet<>();
+          MethodReference inheritedSummaryInit = null;
 
           if (receiver instanceof IPythonClass) {
             IPythonClass x = (IPythonClass) receiver;
@@ -197,17 +198,22 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
                 parent instanceof IPythonClass;
                 parent = parent.getSuperclass()) {
               boolean shell = parent instanceof PythonSummaryShellClass;
-              ((IPythonClass) parent)
-                  .getMethodReferences().stream()
-                      // Dedup by the Python-level method name. Shell references are all named by
-                      // the generic function selector, so using `m.getName()` here would let the
-                      // first shell method shadow every other one. See wala/ML#667.
-                      .filter(m -> seenMethodNames.add(instanceFieldName(m, shell)))
-                      .forEach(
-                          m -> {
-                            methodReferences.add(m);
-                            if (shell) summaryDeclaredMethods.add(m);
-                          });
+              for (MethodReference m : ((IPythonClass) parent).getMethodReferences()) {
+                Atom pythonLevelName = instanceFieldName(m, shell);
+                // An inherited summary initializer is captured independently of the override
+                // dedup below: the subclass's own `__init__` overrides it as a method, but its
+                // framework effects still apply through the mandatory `super().__init__()`
+                // (wala/ML#683).
+                if (shell
+                    && inheritedSummaryInit == null
+                    && pythonLevelName.toString().equals("__init__")) inheritedSummaryInit = m;
+                // Dedup by the Python-level method name. Shell references are all named by the
+                // generic function selector, so using `m.getName()` here would let the first
+                // shell method shadow every other one. See wala/ML#667.
+                if (!seenMethodNames.add(pythonLevelName)) continue;
+                methodReferences.add(m);
+                if (shell) summaryDeclaredMethods.add(m);
+              }
             }
           } else {
             for (IMethod m : receiver.getDeclaredMethods()) {
@@ -313,6 +319,30 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
                         PythonTypes.Root,
                         instanceFieldName(r, summaryDeclaredMethods.contains(r)),
                         PythonTypes.Root)));
+            pc++;
+          }
+
+          // The Keras `Model.__init__` contract requires every subclass initializer to invoke
+          // `super().__init__()`, which assigns framework state such as
+          // `_distribution_strategy` (wala/ML#683). The `super()` machinery cannot dispatch
+          // summary-declared initializers (its synthesized `$self` never binds; wala/ML#580), so
+          // the synthesized constructor invokes an inherited summary `__init__` on the new
+          // instance directly. Over-approximates only for subclasses that unlawfully skip
+          // `super().__init__()`.
+          if (inheritedSummaryInit != null) {
+            int sf = v++;
+            ctor.addStatement(
+                insts.NewInstruction(
+                    pc, sf, NewSiteReference.make(pc, inheritedSummaryInit.getDeclaringClass())));
+            pc++;
+
+            int sres = v++;
+            int sexc = v++;
+            CallSiteReference sref = new DynamicCallSiteReference(site.getDeclaredTarget(), pc);
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            Pair<String, Integer>[] noKeywords = new Pair[0];
+            ctor.addStatement(
+                new PythonInvokeInstruction(2, sres, sexc, sref, new int[] {sf, inst}, noKeywords));
             pc++;
           }
 

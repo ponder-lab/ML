@@ -316,9 +316,13 @@ public abstract class PythonAnalysisEngine<T>
     for (MethodSummary s : xml.getSummaries().values()) {
       MethodReference mr = s.getMethod();
       String methodName = mr.getName().toString();
-      if (!methodName.equals(DO_METHOD_NAME)
-          && !methodName.equals("import")
-          && !methodName.equals("__init__")) {
+      // `__init__` is transformed like any other method so a summary initializer is dispatchable
+      // through the class-shell machinery (a source subclass's synthesized constructor reads the
+      // `__init__` instance field and invokes it; wala/ML#683) — but its ORIGINAL summary is also
+      // retained, because intra-XML `<call name="__init__" .../>` statements (e.g. the mnist
+      // import) resolve the untransformed method reference.
+      boolean isInit = methodName.equals("__init__");
+      if (!methodName.equals(DO_METHOD_NAME) && !methodName.equals("import")) {
         TypeReference t = mr.getDeclaringClass();
         TypeReference funClsRef =
             TypeReference.findOrCreate(
@@ -335,7 +339,7 @@ public abstract class PythonAnalysisEngine<T>
           if (inst != null) funSummary.addStatement(inst);
         funSummary.setValueNames(s.getValueNames());
         summaries.put(funDoRef, funSummary);
-        summaries.remove(mr);
+        if (!isInit) summaries.remove(mr);
 
         ldr.registerClass(
             funClsRef.getName(),
