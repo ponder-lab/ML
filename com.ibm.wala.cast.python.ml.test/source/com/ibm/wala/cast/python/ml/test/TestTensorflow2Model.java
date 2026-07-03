@@ -1959,7 +1959,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "samename_proj",
         1,
         2,
-        Map.of(3, Set.of(TensorType.of(FLOAT_32, 3, 3))));
+        Map.of(3, Set.of(TENSOR_3_3_FLOAT32)));
   }
 
   @Test
