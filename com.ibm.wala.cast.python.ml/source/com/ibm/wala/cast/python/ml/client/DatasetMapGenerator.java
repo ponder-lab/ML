@@ -283,8 +283,11 @@ public class DatasetMapGenerator extends DatasetGenerator {
         else if (inst instanceof AstPropertyWrite write && write.getObjectRef() == allocVn) {
           SymbolTable symbolTable = ir.getSymbolTable();
           int memberVn = write.getMemberRef();
-          if (symbolTable.isConstant(memberVn)
-              && fieldName.equals(String.valueOf(symbolTable.getConstantValue(memberVn))))
+          // The member constant may live in the symbol table or flow as a ConstantKey through the
+          // points-to set; check both, mirroring TensorGeneratorFactory.constantMemberEquals.
+          if ((symbolTable.isConstant(memberVn)
+                  && fieldName.equals(String.valueOf(symbolTable.getConstantValue(memberVn))))
+              || TensorGeneratorFactory.constantMemberEquals(node, memberVn, index, builder))
             ret.add(Pair.make(node, write.getValue()));
         }
       }

@@ -576,7 +576,7 @@ public class TensorGeneratorFactory {
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @return {@code true} iff the member reference is exactly the constant {@code index}.
    */
-  private static boolean constantMemberEquals(
+  static boolean constantMemberEquals(
       CGNode node, int memberRef, int index, PropagationCallGraphBuilder builder) {
     PointerKey memberKey =
         builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, memberRef);
