@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ipa.callgraph;
 
+import static com.ibm.wala.cast.python.types.PythonTypes.INIT_METHOD_NAME;
 import static com.ibm.wala.cast.python.types.Util.getRelativeFilename;
 import static com.ibm.wala.cast.python.util.Util.PYTHON_FILE_EXTENSION;
 import static java.util.Objects.requireNonNull;
@@ -99,7 +100,7 @@ public class PytestEntrypointBuilder implements EntrypointBuilder {
                 containerClass.getMethodReferences().stream()
                     .anyMatch(
                         mr -> {
-                          return mr.getName().toString().equals("__init__");
+                          return mr.getName().toString().equals(INIT_METHOD_NAME);
                         });
 
             // Test classes can't have constructors.

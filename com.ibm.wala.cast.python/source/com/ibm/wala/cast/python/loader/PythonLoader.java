@@ -137,12 +137,11 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
    * the same function-class mapping that {@code PythonAnalysisEngine.addSummaryBypassLogic}'s
    * method-to-function-class transformation applies (a method {@code m} of class {@code C} becomes
    * the function class {@code C/m}, invoked through its {@code fn} selector; the {@code do}/{@code
-   * import}/{@code __init__} names are the same ones that transformation leaves in place). Without
-   * them, a shell sharing its {@link TypeName} with a bypass-served class starves {@code
-   * IPythonClass}-based callable detection (e.g. {@code
-   * PythonInstanceMethodTrampolineTargetSelector}'s {@code isCallable}), which shadows the
-   * engine-registered synthetic class and drops dispatch on the summary's instances (wala/ML#106,
-   * wala/ML#662).
+   * import} names are the same ones that transformation leaves in place). Without them, a shell
+   * sharing its {@link TypeName} with a bypass-served class starves {@code IPythonClass}-based
+   * callable detection (e.g. {@code PythonInstanceMethodTrampolineTargetSelector}'s {@code
+   * isCallable}), which shadows the engine-registered synthetic class and drops dispatch on the
+   * summary's instances (wala/ML#106, wala/ML#662).
    */
   @Override
   public IClass defineSummaryClassShell(
@@ -154,9 +153,10 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
     PythonClass shell = (PythonClass) defineSummaryClassShell(name, superName);
     for (MethodSummary method : methods) {
       String methodName = method.getMethod().getName().toString();
-      if (methodName.equals(PythonTypes.DO_METHOD_NAME)
-          || methodName.equals("import")
-          || methodName.equals("__init__")) {
+      // `__init__` is carried like any other method: `addSummaryBypassLogic` registers its
+      // function class (wala/ML#683), so a source subclass's synthesized constructor can wire and
+      // dispatch the inherited summary initializer.
+      if (methodName.equals(PythonTypes.DO_METHOD_NAME) || methodName.equals("import")) {
         continue;
       }
       TypeReference funClsRef =

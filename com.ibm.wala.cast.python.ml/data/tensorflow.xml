@@ -2396,6 +2396,13 @@
           <putfield class="LRoot" field="non_trainable_weights" fieldType="LRoot" ref="res" value="x"/>
           <putfield class="LRoot" field="inputs" fieldType="LRoot" ref="res" value="inputs"/>
           <putfield class="LRoot" field="outputs" fieldType="LRoot" ref="res" value="outputs"/>
+          <!-- Functional-API models carry the same default distribution strategy as subclassed ones (wala/ML#683); see the shell `Model.__init__` above. -->
+          <new def="ds" class="Ltensorflow/distribute/MirroredStrategy"/>
+          <new def="runObj" class="Ltensorflow/distribute/run/run"/>
+          <putfield class="LRoot" field="run" fieldType="LRoot" ref="ds" value="runObj"/>
+          <putfield class="LRoot" field="experimental_run_v2" fieldType="LRoot" ref="ds" value="runObj"/>
+          <putfield class="LRoot" field="_distribution_strategy" fieldType="LRoot" ref="res" value="ds"/>
+          <putfield class="LRoot" field="distribute_strategy" fieldType="LRoot" ref="res" value="ds"/>
           <return value="res"/>
         </method>
       </class>
@@ -2407,6 +2414,21 @@
     <package name="tensorflow/keras/models">
       <!-- Declaring a `super` opts `Model` in to class-shell materialization (wala/WALA#1957), so a source subclass such as `class MyModel(tf.keras.models.Model)` resolves its base to this canonical instance type instead of falling back to `object` (wala/ML#118, wala/ML#662). The shell carries this class's method references (`PythonLoader.defineSummaryClassShell`, wala/ML#106), so it does not shadow the bypass-served `__call__`/`call` bodies below. -->
       <class name="Model" allocatable="true" super="Lobject">
+        <!-- Keras `Model.__init__` assigns the ambient distribution strategy to `self._distribution_strategy` (surfaced publicly as the `distribute_strategy` property). Source subclasses reach this through `super().__init__()`, so modeling it here resolves the receiver of `self._distribution_strategy.run(...)`/`experimental_run_v2(...)` and lets the existing `tensorflow/distribute/run` summaries materialize the invoke edge to the function argument (wala/ML#683). The strategy instance's fields replicate the strategy-constructor wiring above. -->
+        <method name="__init__" descriptor="()LRoot;" numArgs="2" paramNames="func self">
+          <new def="ds" class="Ltensorflow/distribute/MirroredStrategy"/>
+          <new def="x" class="Ltensorflow/distribute/run/run"/>
+          <putfield class="LRoot" field="run" fieldType="LRoot" ref="ds" value="x"/>
+          <putfield class="LRoot" field="experimental_run_v2" fieldType="LRoot" ref="ds" value="x"/>
+          <new def="ddff" class="Ltensorflow/distribute/run/distribute_datasets_from_function"/>
+          <putfield class="LRoot" field="distribute_datasets_from_function" fieldType="LRoot" ref="ds" value="ddff"/>
+          <putfield class="LRoot" field="experimental_distribute_datasets_from_function" fieldType="LRoot" ref="ds" value="ddff"/>
+          <new def="edd" class="Ltensorflow/distribute/run/experimental_distribute_dataset"/>
+          <putfield class="LRoot" field="experimental_distribute_dataset" fieldType="LRoot" ref="ds" value="edd"/>
+          <putfield class="LRoot" field="_distribution_strategy" fieldType="LRoot" ref="self" value="ds"/>
+          <putfield class="LRoot" field="distribute_strategy" fieldType="LRoot" ref="self" value="ds"/>
+          <return value="self"/>
+        </method>
         <method name="__call__" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs training mask">
           <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Model#call -->
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>

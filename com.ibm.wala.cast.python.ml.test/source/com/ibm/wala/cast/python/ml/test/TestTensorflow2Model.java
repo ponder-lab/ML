@@ -10495,6 +10495,30 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Pins <a href="https://github.com/wala/ML/issues/683">wala/ML#683</a>: {@code
+   * self._distribution_strategy} is Keras-internal state assigned by {@code Model.__init__}, never
+   * in user code. With the shell {@code Model.__init__} modeling the attribute, the receiver of
+   * {@code self._distribution_strategy.run(self.__train_step, args=(x, y))} resolves to the
+   * strategy instance and the {@code run} summary materializes the invoke edge, typing both
+   * callback parameters through the args-tuple forwarding (wala/ML#618).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDistTrainStep()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dist_train_step.py",
+        "MyModel.__train_step",
+        2,
+        3,
+        Map.of(3, Set.of(TensorType.of(FLOAT_32, 2, 3)), 4, Set.of(TensorType.of(FLOAT_32, 2, 3))));
+  }
+
+  /**
    * Pins the model self-call (wala/ML#618): a method calling {@code self(...)} and destructuring
    * the tuple result, mirroring gpt-2's {@code predictions, _ = self(inputs, training=True)}.
    *

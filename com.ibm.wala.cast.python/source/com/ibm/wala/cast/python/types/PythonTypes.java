@@ -63,6 +63,9 @@ public class PythonTypes extends AstTypeReference {
   /** The method name that is used for summarized methods . */
   public static final String DO_METHOD_NAME = "do";
 
+  /** The name of Python's instance initializer method. */
+  public static final String INIT_METHOD_NAME = "__init__";
+
   /** The method name used for trampoline methods. */
   public static final String TRAMPOLINE_METHOD_NAME = "trampoline";
 

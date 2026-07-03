@@ -5,6 +5,7 @@ import com.ibm.wala.cast.loader.DynamicCallSiteReference;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.loader.IPythonClass;
 import com.ibm.wala.cast.python.loader.PythonLoader.PythonClass;
+import com.ibm.wala.cast.python.loader.PythonLoader.PythonSummaryShellClass;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
@@ -40,6 +41,7 @@ import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.EmptyIterator;
 import com.ibm.wala.util.collections.HashMapFactory;
+import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.NonNullSingletonIterator;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.EmptyIntSet;
@@ -49,8 +51,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 
 public class PythonSuper {
 
@@ -236,11 +240,26 @@ public class PythonSuper {
 
           Collection<TypeReference> innerReferences = Collections.emptyList();
           Collection<MethodReference> methodReferences = new ArrayList<>();
+          Set<MethodReference> summaryDeclaredMethods = HashSetFactory.make();
 
           if (x instanceof IPythonClass) {
             IPythonClass px = (IPythonClass) x;
             innerReferences = px.getInnerReferences();
-            methodReferences = px.getMethodReferences();
+            // Walk the whole superclass chain, like the synthesized constructor does: the direct
+            // superclass may be an empty alias shell (e.g. `tensorflow/keras/Model` aliasing the
+            // canonical `tensorflow/keras/models/Model`), so the methods `super()` must expose
+            // live further up (wala/ML#683). Nearer declarations win on name collision.
+            Set<String> seenMethodNames = new HashSet<>();
+            for (IClass ancestor = x;
+                ancestor instanceof IPythonClass;
+                ancestor = ancestor.getSuperclass()) {
+              boolean shell = ancestor instanceof PythonSummaryShellClass;
+              for (MethodReference m : ((IPythonClass) ancestor).getMethodReferences()) {
+                if (!seenMethodNames.add(methodFieldName(m, shell).toString())) continue;
+                methodReferences.add(m);
+                if (shell) summaryDeclaredMethods.add(m);
+              }
+            }
           } else {
             for (IMethod m : x.getDeclaredMethods()) {
               if (!m.isInit()
@@ -290,12 +309,22 @@ public class PythonSuper {
             pc++;
 
             int orig_f = v++;
-            ctor.addStatement(
-                insts.GetInstruction(
-                    pc,
-                    orig_f,
-                    clss,
-                    FieldReference.findOrCreate(PythonTypes.Root, r.getName(), PythonTypes.Root)));
+            if (summaryDeclaredMethods.contains(r)) {
+              // The function object of a shell-declared summary method is not a field of the
+              // class global; allocate its bypass-registered function class directly, as the
+              // synthesized constructor does (wala/ML#683).
+              ctor.addStatement(
+                  insts.NewInstruction(
+                      pc, orig_f, NewSiteReference.make(pc, r.getDeclaringClass())));
+            } else {
+              ctor.addStatement(
+                  insts.GetInstruction(
+                      pc,
+                      orig_f,
+                      clss,
+                      FieldReference.findOrCreate(
+                          PythonTypes.Root, r.getName(), PythonTypes.Root)));
+            }
             pc++;
 
             ctor.addStatement(
@@ -314,7 +343,10 @@ public class PythonSuper {
                     pc,
                     inst,
                     f,
-                    FieldReference.findOrCreate(PythonTypes.Root, r.getName(), PythonTypes.Root)));
+                    FieldReference.findOrCreate(
+                        PythonTypes.Root,
+                        methodFieldName(r, summaryDeclaredMethods.contains(r)),
+                        PythonTypes.Root)));
             pc++;
           }
 
@@ -412,5 +444,22 @@ public class PythonSuper {
     ;
     builder.setContextSelector(new SuperContextSelector(builder.getContextSelector()));
     options.setSelector(new SuperMethodTargetSelector(options.getMethodTargetSelector()));
+  }
+
+  /**
+   * Returns the Python-level name under which the given method reference is exposed on the super
+   * object. Shell-declared summary methods are all named by the generic function selector, so their
+   * Python-level name is the declaring function class's last segment; source methods use the
+   * reference name directly. Mirrors {@code PythonConstructorTargetSelector.instanceFieldName}
+   * (wala/ML#683).
+   *
+   * @param r The method reference being wired.
+   * @param shellDeclared Whether the reference was declared by a {@link PythonSummaryShellClass}.
+   * @return The atom to use as the super-object field name.
+   */
+  private static Atom methodFieldName(MethodReference r, boolean shellDeclared) {
+    if (!shellDeclared) return r.getName();
+    String typeName = r.getDeclaringClass().getName().toString();
+    return Atom.findOrCreateUnicodeAtom(typeName.substring(typeName.lastIndexOf('/') + 1));
   }
 }
