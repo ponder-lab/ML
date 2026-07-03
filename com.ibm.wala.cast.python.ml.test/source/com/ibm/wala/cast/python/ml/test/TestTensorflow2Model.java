@@ -10824,6 +10824,37 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Probe for <a href="https://github.com/wala/ML/issues/684">wala/ML#684</a>: {@code tf} arrives
+   * through {@code from helpers import *} in a script with no direct tensorflow import, and is read
+   * inside a name-mangled {@code @staticmethod} of a {@code tf.keras.Model} subclass invoked
+   * self-qualified — the subject's {@code MusicTransformer.__prepare_train_data} shape, several
+   * levels deeper than {@link #testCollectionProbeWildcardTf()}'s script-level read. The wildcard
+   * binding resolves and the shape is concrete; the dtype is float32 rather than the runtime int32
+   * because the {@code dtype=y.dtype} attribute argument is not consumed.
+   *
+   * <p>TODO: Expect {@code (2, 1) int32} once <a
+   * href="https://github.com/wala/ML/issues/686">wala/ML#686</a> consumes dtype arguments that read
+   * another tensor's {@code dtype} attribute.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testWildcardMethodTf()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"wildcard_proj/helpers.py", "wildcard_proj/tf2_test_wildcard_method_tf.py"},
+        "tf2_test_wildcard_method_tf.py",
+        "consume",
+        "wildcard_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 1))));
+  }
+
+  /**
    * Pins the vendored {@code LayerNormalization} forward result: {@code add_weight}-created {@code
    * gamma}/{@code beta} dispatch (wala/ML#595, wala/ML#618) and the normalization body types.
    * Receiver-keyed contexts (wala/ML#679) dropped the shapeless-and-dtypeless union member, so the
