@@ -1977,6 +1977,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test(
         new String[] {
           "nlpgnn_slice_proj/nlpgnn/__init__.py",
+          "nlpgnn_slice_proj/nlpgnn/callbacks.py",
           "nlpgnn_slice_proj/nlpgnn/models/__init__.py",
           "nlpgnn_slice_proj/nlpgnn/models/gpt2.py",
           "nlpgnn_slice_proj/nlpgnn/sample/__init__.py",
@@ -2010,6 +2011,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     test(
         new String[] {
           "nlpgnn_slice_proj/nlpgnn/__init__.py",
+          "nlpgnn_slice_proj/nlpgnn/callbacks.py",
           "nlpgnn_slice_proj/nlpgnn/models/__init__.py",
           "nlpgnn_slice_proj/nlpgnn/models/gpt2.py",
           "nlpgnn_slice_proj/nlpgnn/sample/__init__.py",
