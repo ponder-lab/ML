@@ -21,6 +21,8 @@ import com.google.common.collect.Maps;
 import com.ibm.wala.cast.ipa.callgraph.AstSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.ipa.callgraph.GlobalObjectKey;
 import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
+import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
+import com.ibm.wala.cast.ir.ssa.AstLexicalWrite;
 import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
@@ -36,6 +38,7 @@ import com.ibm.wala.classLoader.NewSiteReference;
 import com.ibm.wala.core.util.CancelRuntimeException;
 import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.fixpoint.AbstractOperator;
+import com.ibm.wala.fixpoint.UnaryOperator;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
@@ -171,6 +174,78 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
           || cha.isSubclassOf(objType, cha.lookupClass(PythonTypes.set))
           || cha.isSubclassOf(objType, cha.lookupClass(PythonTypes.iterator))
           || cha.isSubclassOf(objType, cha.lookupClass(PythonTypes.CodeBody));
+    }
+
+    /**
+     * Re-runs the given lexical-access visit whenever a new closure function object reaches this
+     * node's function value (value number 1). {@code AstConstraintVisitor.visitLexical} resolves
+     * the defining frames of a lexical access from a one-time snapshot of that value's points-to
+     * set; when distinct closures of the same function share this node (e.g. under call-string
+     * context truncation), a closure arriving after the snapshot never gets its frame wired,
+     * silently starving the access and every dispatch downstream of it (<a
+     * href="https://github.com/wala/ML/issues/690">wala/ML#690</a>). The side effect re-resolves on
+     * every growth of the function value's points-to set; the underlying constraint additions are
+     * idempotent, so re-running is safe.
+     *
+     * @param instruction The lexical access to re-resolve on closure growth.
+     * @param revisit Re-invokes the superclass visit for {@code instruction}.
+     */
+    private void refreshLexicalOnClosureGrowth(SSAInstruction instruction, Runnable revisit) {
+      PointerKey function = getPointerKeyForLocal(1);
+      system.newSideEffect(
+          new LexicalRefreshOperator(node, instruction.iIndex(), revisit), function);
+    }
+
+    /**
+     * The side-effect operator registered by {@link #refreshLexicalOnClosureGrowth}; identity is
+     * the (node, instruction index) pair so the fixpoint system de-duplicates re-registrations of
+     * the same lexical access.
+     */
+    private static final class LexicalRefreshOperator extends UnaryOperator<PointsToSetVariable> {
+      private final CGNode node;
+      private final int instructionIndex;
+      private final Runnable revisit;
+
+      private LexicalRefreshOperator(CGNode node, int instructionIndex, Runnable revisit) {
+        this.node = node;
+        this.instructionIndex = instructionIndex;
+        this.revisit = revisit;
+      }
+
+      @Override
+      public byte evaluate(PointsToSetVariable lhs, PointsToSetVariable rhs) {
+        revisit.run();
+        return NOT_CHANGED;
+      }
+
+      @Override
+      public int hashCode() {
+        return node.hashCode() * 31 + instructionIndex;
+      }
+
+      @Override
+      public boolean equals(Object o) {
+        return o instanceof LexicalRefreshOperator other
+            && instructionIndex == other.instructionIndex
+            && node.equals(other.node);
+      }
+
+      @Override
+      public String toString() {
+        return "lexical refresh of " + instructionIndex + " in " + node;
+      }
+    }
+
+    @Override
+    public void visitAstLexicalRead(AstLexicalRead instruction) {
+      super.visitAstLexicalRead(instruction);
+      refreshLexicalOnClosureGrowth(instruction, () -> super.visitAstLexicalRead(instruction));
+    }
+
+    @Override
+    public void visitAstLexicalWrite(AstLexicalWrite instruction) {
+      super.visitAstLexicalWrite(instruction);
+      refreshLexicalOnClosureGrowth(instruction, () -> super.visitAstLexicalWrite(instruction));
     }
 
     @Override
