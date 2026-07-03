@@ -126,23 +126,27 @@ public class Model extends TensorGenerator {
                 DenseCall.Parameters.INPUTS.getName(),
                 false);
         Set<List<Dimension<?>>> inputShapes = denseCall.getShapes(builder, valNum);
-        if (inputShapes == null) continue;
-        Set<Long> unitsValues = denseCall.getPossibleUnits(builder);
+        // An unresolvable input skips only this node's kernel/bias contribution; the trace-back
+        // below still runs, so one unmodeled layer input does not stop the upstream walk
+        // (wala/ML#670).
+        if (inputShapes != null) {
+          Set<Long> unitsValues = denseCall.getPossibleUnits(builder);
 
-        for (List<Dimension<?>> inputShape : inputShapes) {
-          if (inputShape.isEmpty()) continue;
-          Dimension<?> lastDim = inputShape.get(inputShape.size() - 1);
-          for (Long units : unitsValues) {
-            // Kernel shape: (input_dim, units)
-            List<Dimension<?>> kernelShape = new ArrayList<>();
-            kernelShape.add(lastDim);
-            kernelShape.add(new NumericDim(units.intValue()));
-            weightShapes.add(kernelShape);
+          for (List<Dimension<?>> inputShape : inputShapes) {
+            if (inputShape.isEmpty()) continue;
+            Dimension<?> lastDim = inputShape.get(inputShape.size() - 1);
+            for (Long units : unitsValues) {
+              // Kernel shape: (input_dim, units)
+              List<Dimension<?>> kernelShape = new ArrayList<>();
+              kernelShape.add(lastDim);
+              kernelShape.add(new NumericDim(units.intValue()));
+              weightShapes.add(kernelShape);
 
-            // Bias shape: (units,)
-            List<Dimension<?>> biasShape = new ArrayList<>();
-            biasShape.add(new NumericDim(units.intValue()));
-            weightShapes.add(biasShape);
+              // Bias shape: (units,)
+              List<Dimension<?>> biasShape = new ArrayList<>();
+              biasShape.add(new NumericDim(units.intValue()));
+              weightShapes.add(biasShape);
+            }
           }
         }
       }

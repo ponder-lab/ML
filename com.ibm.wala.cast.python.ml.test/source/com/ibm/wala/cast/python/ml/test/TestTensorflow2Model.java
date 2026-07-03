@@ -2743,14 +2743,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    *
    * <p>{@code hidden} (the {@code GCN.call} return, a {@code Dense} output) is tensor-classified
    * because the modeled Keras lazy-{@code build} protocol invokes {@code GCN.build}, giving the
-   * {@code build()}-created {@code self._kernel} sublayer a points-to set. The inferred type is
-   * {@code (4, 8) float32}: the dtype and leading dimension are exact, but the trailing dimension
-   * carries the {@code matmul} input shape through the {@code Dense} instead of its {@code
-   * units=16} (the runtime shape is {@code (4, 16)}; the fixture asserts it).
+   * {@code build()}-created {@code self._kernel} sublayer a points-to set. With constructor keyword
+   * arguments forwarded to {@code __init__} (wala/ML#664), {@code units} resolves through the
+   * {@code self._units} instance-field read, so the runtime-true {@code (4, 16) float32} is
+   * inferred. The union carries a spurious {@code (4, 8)} member because both {@code GCN(...)}
+   * constructions collapse into one {@code __init__} context, unioning the {@code units} values.
    *
-   * <p>TODO: Expect {@code (4, 16) float32} once <a
-   * href="https://github.com/wala/ML/issues/664">wala/ML#664</a> resolves the {@code units} value
-   * through the {@code self._units} instance-field read.
+   * <p>TODO: Expect exactly {@code (4, 16) float32} once <a
+   * href="https://github.com/wala/ML/issues/671">wala/ML#671</a> separates {@code __init__}
+   * argument values per construction site.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2774,7 +2775,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "gcn_chain_proj",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_4_8_FLOAT32, TensorType.of(FLOAT_32, 4, 16))));
   }
 
   /**
@@ -4847,10 +4848,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * to {@code (?,)} int32.
    *
    * <p>{@code pred} types too (wala/ML#665): the model forward output is a tensor union. With
-   * {@code add_weight} consuming its {@code shape}/{@code dtype} arguments (wala/ML#667), the union
-   * gains a rank-2 float32 member (the flat logits matmul against the embedding weight before the
-   * output reshape). Analyzed statically here, like the consumer's vendoring; it runs in the
-   * perf-eval with its tfrecord/data setup.
+   * {@code add_weight} consuming its {@code shape}/{@code dtype} arguments (wala/ML#667) and
+   * constructor keyword arguments forwarded to {@code __init__} (wala/ML#664), the runtime-true
+   * vocab dimension is concrete ({@code (?, ?, 10)}) and the flat-logits matmul member carries the
+   * embedding dimension ({@code (?, 8)} float32). The {@code (?, ?, 4)} member is spurious
+   * constructor-context collapse (wala/ML#671). Analyzed statically here, like the consumer's
+   * vendoring; it runs in the perf-eval with its tfrecord/data setup.
    */
   @Test
   public void testGpt2GetLossVendored()
@@ -4875,8 +4878,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             4,
             Set.of(
                 new TensorType(
-                    UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, DynamicDim.INSTANCE)),
-                new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE)),
+                    UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(10))),
+                new TensorType(
+                    UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(4))),
+                new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(8))),
                 new TensorType(
                     UNKNOWN,
                     asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))))));
@@ -10090,6 +10095,30 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_list_append_constant.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
   }
 
+  /**
+   * Probes the wala/ML#570 residual: a list accumulated with {@code append} in a loop feeds {@code
+   * tf.concat} (mirroring {@code MessagePassing._calculate_messages_all_type} feeding {@code
+   * _aggregate_function}). The appended values' shapes and dtype survive the list: the result keeps
+   * the rank and non-axis dims with a dynamic axis dim (the element count is not statically known)
+   * and the float32 dtype.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCollectionProbeListAppendConcat()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_append_concat.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(8))))));
+  }
+
   @Test
   public void testCollectionProbeZipIterate()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -10254,8 +10283,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Pins the vendored gpt-2 forward output (the wala/ML#618 {@code pred} source): with wala/ML#665
    * forwarding wildcard import bindings, the full decoder stack types and the model output is a
    * rank-3 tensor union. With {@code add_weight} consuming its {@code shape}/{@code dtype}
-   * arguments (wala/ML#667), one member carries the concrete batch/sequence dims and the float32
-   * dtype: {@code (2, 3, ?)} float32.
+   * arguments (wala/ML#667) and constructor keyword arguments forwarded to {@code __init__}
+   * (wala/ML#664), the float32 member is fully concrete ({@code (2, 3, 8)}) and the runtime-true
+   * vocab member is {@code (?, ?, 10)}; the {@code (?, ?, 4)}/{@code (?, ?, 12)} members are
+   * spurious constructor-context collapse (wala/ML#671).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -10282,14 +10313,38 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(
             2,
             Set.of(
-                new TensorType(
-                    FLOAT_32, asList(new NumericDim(2), new NumericDim(3), DynamicDim.INSTANCE)),
+                TensorType.of(FLOAT_32, 2, 3, 8),
                 new TensorType(
                     UNKNOWN,
                     asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
                 new TensorType(
+                    UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(10))),
+                new TensorType(
+                    UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(4))),
+                new TensorType(
                     UNKNOWN,
-                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, DynamicDim.INSTANCE)))));
+                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(12))))));
+  }
+
+  /**
+   * Pins wala/ML#670's fixes directly: {@code GlobalAveragePooling1D} is modeled (rank-3 input,
+   * temporal axis dropped), so the functional model's weight walk resolves the downstream {@code
+   * Dense} kernel {@code (8, 5)} and bias {@code (5,)} concretely.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGap1dWeights()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gap1d_weights.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 5), TENSOR_5_FLOAT32)));
   }
 
   /**
@@ -10303,11 +10358,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * which this harness does not enable, so this guard pins that the walk completes; the {@code
    * getConstantValues} degrade contract is exercised structurally.
    *
-   * <p>The walk currently yields no weight shapes for this topology (the head {@code Dense}'s input
-   * is an unmodeled {@code GlobalAveragePooling1D}, and the unresolvable input also stops the
-   * upstream trace-back), so the sink parameter has no tensor types despite the runtime weights
-   * asserted in the fixture. TODO: expect the concrete weight-shape union once <a
-   * href="https://github.com/wala/ML/issues/670">wala/ML#670</a> is fixed.
+   * <p>With wala/ML#670 fixed, the walk traverses past the head {@code Dense} into the transformer
+   * (an unresolvable input no longer stops the trace-back, and {@code GlobalAveragePooling1D} is
+   * modeled — see {@link #testGap1dWeights()}), but it still yields no weight shapes here: the
+   * pooling input is the vendored transformer's forward output, whose shape is the wala/ML#570
+   * residual. TODO: expect the concrete weight-shape union once <a
+   * href="https://github.com/wala/ML/issues/570">wala/ML#570</a> is fixed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.

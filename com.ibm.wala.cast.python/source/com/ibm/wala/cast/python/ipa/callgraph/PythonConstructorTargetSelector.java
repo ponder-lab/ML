@@ -15,6 +15,7 @@ import static com.ibm.wala.cast.python.types.Util.getGlobalName;
 import static com.ibm.wala.cast.python.types.Util.makeGlobalRef;
 
 import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
+import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.loader.DynamicCallSiteReference;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
@@ -343,6 +344,30 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
             ctor.addStatement(
                 new PythonInvokeInstruction(2, result, except, cref, cps, keywordParams));
             pc++;
+
+            // Declare `__init__`'s parameter names on the constructor's own formals, so a caller's
+            // keyword arguments map onto them (the keyword resolver matches callee local names) and
+            // flow through the positional forwarding above. Without this, keyword arguments to any
+            // source-class constructor were silently dropped: `GCN(units=16)` never reached
+            // `__init__`'s `units`, so `self._units`-style fields stayed empty (wala/ML#664).
+            // Constructor formal `j` feeds `__init__`'s formal `j + 1` via `cps` (`__init__` has
+            // the extra function-object formal in front).
+            if ((ctor.getValueNames() == null || ctor.getValueNames().isEmpty())
+                && init instanceof AstMethod astInit) {
+              String[][] initNames = astInit.debugInfo().getSourceNamesForValues();
+              Map<Integer, Atom> ctorValueNames = HashMapFactory.make();
+              ctorValueNames.put(1, Atom.findOrCreateUnicodeAtom("self"));
+              for (int j = 2; j < numberOfParameters; j++) {
+                int initVn = j + 1;
+                if (initNames != null
+                    && initVn < initNames.length
+                    && initNames[initVn] != null
+                    && initNames[initVn].length > 0) {
+                  ctorValueNames.put(j, Atom.findOrCreateUnicodeAtom(initNames[initVn][0]));
+                }
+              }
+              ctor.setValueNames(ctorValueNames);
+            }
           }
 
           ctor.addStatement(insts.ReturnInstruction(pc++, inst, false));

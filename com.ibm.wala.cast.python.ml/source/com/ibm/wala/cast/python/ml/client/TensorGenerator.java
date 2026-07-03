@@ -28,6 +28,7 @@ import static com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelect
 import static java.util.Collections.emptyList;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -2348,6 +2349,31 @@ public abstract class TensorGenerator {
     return result;
   }
 
+  /**
+   * Resolves the points-to set of the synthetic {@code __list_append_contents__} field on the given
+   * list allocation: the union of all values accumulated onto the list through {@code append}
+   * (modeled in {@code PythonSSAPropagationCallGraphBuilder.processListAppend}). Element order and
+   * multiplicity are not represented; generators reading elements through this helper should treat
+   * the result as an unordered value union (wala/ML#570).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param listAsin The list allocation whose appended contents to read.
+   * @return The union points-to set of the appended values, or {@code null} if the list has none.
+   */
+  protected static OrdinalSet<InstanceKey> getAppendedContentsPts(
+      PropagationCallGraphBuilder builder, AllocationSiteInNode listAsin) {
+    FieldReference contentsRef =
+        FieldReference.findOrCreate(
+            PythonTypes.Root,
+            findOrCreateAsciiAtom(PythonSSAPropagationCallGraphBuilder.LIST_APPEND_CONTENTS_FIELD),
+            PythonTypes.Root);
+    IField f = builder.getClassHierarchy().resolveField(contentsRef);
+    if (f == null) return null;
+    PointerKey pk = builder.getPointerKeyForInstanceField(listAsin, f);
+    OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
+    return pts == null || pts.isEmpty() ? null : pts;
+  }
+
   protected CGNode getNode() {
     if (this.manualNode != null) {
       return this.manualNode;
@@ -3414,6 +3440,8 @@ public abstract class TensorGenerator {
       return new Placeholder(node);
     } else if (type.equals(TensorFlowTypes.DENSE_CALL.getDeclaringClass())) {
       return new DenseCall(node);
+    } else if (type.equals(TensorFlowTypes.GLOBAL_AVERAGE_POOLING_1D_CALL.getDeclaringClass())) {
+      return new GlobalAveragePooling1DCall(node);
     } else if (type.equals(TensorFlowTypes.MODEL_CALL.getDeclaringClass())) {
       return new ModelCall(node);
     } else if (type.equals(TensorFlowTypes.MODEL.getDeclaringClass())) {

@@ -94,6 +94,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_VALUE_ROWID
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GATHER_ND;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GLOBAL_AVERAGE_POOLING_1D_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GRADIENT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GREATER;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GREATER_EQUAL;
@@ -1533,6 +1534,8 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, FLATTEN.getDeclaringClass())) return new Flatten(source);
     else if (isType(calledFunction, FLATTEN_LAYER_CALL.getDeclaringClass()))
       return new FlattenCall(source);
+    else if (isType(calledFunction, GLOBAL_AVERAGE_POOLING_1D_CALL.getDeclaringClass()))
+      return new GlobalAveragePooling1DCall(source);
     else if (isType(calledFunction, MAX_POOL.getDeclaringClass())) return new MaxPool(source);
     else if (isType(calledFunction, SLICE_BUILTIN)) return new SliceBuiltinOperation(source);
     else {
