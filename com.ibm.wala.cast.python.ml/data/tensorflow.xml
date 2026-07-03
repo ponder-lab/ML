@@ -2401,6 +2401,11 @@
           <new def="runObj" class="Ltensorflow/distribute/run/run"/>
           <putfield class="LRoot" field="run" fieldType="LRoot" ref="ds" value="runObj"/>
           <putfield class="LRoot" field="experimental_run_v2" fieldType="LRoot" ref="ds" value="runObj"/>
+          <new def="ddffObj" class="Ltensorflow/distribute/run/distribute_datasets_from_function"/>
+          <putfield class="LRoot" field="distribute_datasets_from_function" fieldType="LRoot" ref="ds" value="ddffObj"/>
+          <putfield class="LRoot" field="experimental_distribute_datasets_from_function" fieldType="LRoot" ref="ds" value="ddffObj"/>
+          <new def="eddObj" class="Ltensorflow/distribute/run/experimental_distribute_dataset"/>
+          <putfield class="LRoot" field="experimental_distribute_dataset" fieldType="LRoot" ref="ds" value="eddObj"/>
           <putfield class="LRoot" field="_distribution_strategy" fieldType="LRoot" ref="res" value="ds"/>
           <putfield class="LRoot" field="distribute_strategy" fieldType="LRoot" ref="res" value="ds"/>
           <return value="res"/>
