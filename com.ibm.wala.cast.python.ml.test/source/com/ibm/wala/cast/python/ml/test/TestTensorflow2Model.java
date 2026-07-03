@@ -10829,12 +10829,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * inside a name-mangled {@code @staticmethod} of a {@code tf.keras.Model} subclass invoked
    * self-qualified — the subject's {@code MusicTransformer.__prepare_train_data} shape, several
    * levels deeper than {@link #testCollectionProbeWildcardTf()}'s script-level read. The wildcard
-   * binding resolves and the shape is concrete; the dtype is float32 rather than the runtime int32
-   * because the {@code dtype=y.dtype} attribute argument is not consumed.
-   *
-   * <p>TODO: Expect {@code (2, 1) int32} once <a
-   * href="https://github.com/wala/ML/issues/686">wala/ML#686</a> consumes dtype arguments that read
-   * another tensor's {@code dtype} attribute.
+   * binding resolves, the shape is concrete, and the {@code dtype=y.dtype} attribute argument is
+   * consumed (wala/ML#686), so the result is the runtime-true {@code (2, 1) int32}.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -10851,7 +10847,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "wildcard_proj",
         1,
         1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 1))));
+        Map.of(2, Set.of(TensorType.of(INT_32, 2, 1))));
   }
 
   /**

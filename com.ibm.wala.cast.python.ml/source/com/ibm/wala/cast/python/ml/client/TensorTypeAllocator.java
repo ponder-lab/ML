@@ -55,6 +55,22 @@ public abstract class TensorTypeAllocator extends TensorGenerator {
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    // Recovery: an allocator whose dtype argument is another tensor's `.dtype` (e.g.
+    // `tf.ones((2, 1), dtype=y.dtype)`) takes its dtype from that tensor. Resolve it rather than
+    // taking the float32 default. wala/ML#686.
+    Set<DType> fromDTypeAttribute =
+        this.getDTypeFromDTypeAttributeArgument(
+            builder, this.getDTypeParameterPosition(), this.getDTypeParameterName());
+    if (fromDTypeAttribute != null && !fromDTypeAttribute.isEmpty()) {
+      LOGGER.fine(
+          "Recovered allocator dtype from a `.dtype` argument for source: "
+              + source
+              + " -> "
+              + fromDTypeAttribute
+              + ".");
+      return fromDTypeAttribute;
+    }
+
     LOGGER.fine(
         "No dtype specified for source: " + source + ". Using default dtype of: " + FLOAT32 + " .");
 

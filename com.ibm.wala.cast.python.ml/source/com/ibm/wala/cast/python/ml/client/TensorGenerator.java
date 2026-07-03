@@ -2735,6 +2735,63 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Dtype twin of {@link #getShapeFromShapeAttributeArgument(PropagationCallGraphBuilder, int,
+   * String)}: recovers an allocator's dtype when its dtype argument is another tensor's {@code
+   * .dtype} (e.g. {@code tf.ones((2, 1), dtype=y.dtype)}). Such an argument is a {@link
+   * PythonPropertyRead} of member {@code "dtype"} whose points-to set is empty, so ordinary dtype
+   * resolution falls through to {@link #getDefaultDTypes}; this resolves the dtype of the
+   * underlying tensor instead of taking the allocator's default (<a
+   * href="https://github.com/wala/ML/issues/686">wala/ML#686</a>).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param paramPos The 0-based positional index of the dtype parameter (excluding {@code self}).
+   * @param paramName The dtype parameter's keyword name, or {@code null}.
+   * @return The union of the source tensors' dtypes, or {@code null} if no {@code .dtype} argument
+   *     is found or none resolves.
+   */
+  protected Set<DType> getDTypeFromDTypeAttributeArgument(
+      PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    Set<DType> combined = null;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      CGNode caller = callerInvoke.fst;
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction)) continue;
+      PythonInvokeInstruction pyCall = (PythonInvokeInstruction) callerInvoke.snd;
+      int argVn = -1;
+      if (paramName != null) argVn = pyCall.getUse(paramName);
+      if (argVn == -1 && paramPos >= 0) {
+        int numPosParams = pyCall.getNumberOfPositionalParameters() - 1;
+        if (paramPos < numPosParams) argVn = pyCall.getUse(paramPos + 1);
+      }
+      if (argVn <= 0) continue;
+      SSAInstruction def = caller.getDU().getDef(argVn);
+      if (!(def instanceof PythonPropertyRead)) continue;
+      PythonPropertyRead propRead = (PythonPropertyRead) def;
+      SymbolTable st = caller.getIR().getSymbolTable();
+      int memberVn = propRead.getMemberRef();
+      if (!st.isStringConstant(memberVn) || !"dtype".equals(st.getStringValue(memberVn))) continue;
+      int tensorVn = propRead.getObjectRef();
+      try {
+        Set<DType> tensorDTypes = this.getDTypes(builder, caller, tensorVn);
+        if (tensorDTypes != null && !tensorDTypes.isEmpty()) {
+          if (combined == null) combined = EnumSet.noneOf(DType.class);
+          combined.addAll(tensorDTypes);
+        }
+      } catch (IllegalArgumentException e) {
+        // The source tensor's dtype couldn't be resolved; fall through to the default.
+        LOGGER.log(
+            Level.FINE,
+            "getDTypeFromDTypeAttributeArgument: could not resolve .dtype source tensorVn="
+                + tensorVn
+                + " in caller="
+                + caller,
+            e);
+      }
+    }
+    return combined;
+  }
+
+  /**
    * Dtype counterpart of {@link #getArgumentShapesViaCallers(PropagationCallGraphBuilder, int,
    * String)}. See that method for the rationale; the behaviour is the same but returns a set of
    * {@link DType}s resolved via {@link #getDTypes(PropagationCallGraphBuilder, CGNode, int)}.
