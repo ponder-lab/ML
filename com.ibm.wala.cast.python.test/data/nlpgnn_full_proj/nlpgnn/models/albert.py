@@ -3,6 +3,7 @@
 """
 @Author:zhoukaiyin
 """
+
 import tensorflow as tf
 from nlpgnn.tools import get_activation, get_shape_list, create_initializer
 from nlpgnn.layers import dense

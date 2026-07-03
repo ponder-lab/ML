@@ -19,7 +19,6 @@ from typing import Union, Callable, List
 import numpy as np
 import tensorflow as tf
 
-
 Number = Union[
     float,
     int,

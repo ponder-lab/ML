@@ -11,6 +11,7 @@ adjacency_lists = [
 layer = RGraphConvolution(out_features=12)
 x = layer(GNNInput(node_embeddings, adjacency_lists))
 """
+
 import tensorflow as tf
 
 from nlpgnn.gnn.messagepassing import MessagePassing

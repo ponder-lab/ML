@@ -3,6 +3,7 @@
 """
 https://github.com/ConnorJL/GPT2/blob/master/models/gpt2/encoder.py
 """
+
 """Byte pair encoding utilities"""
 
 import codecs

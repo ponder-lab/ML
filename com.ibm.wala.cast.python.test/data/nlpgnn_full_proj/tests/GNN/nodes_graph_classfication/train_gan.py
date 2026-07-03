@@ -2,6 +2,7 @@
 """
 @Author:Kaiyin Zhou
 """
+
 import time
 import tensorflow as tf
 from nlpgnn.datas import Planetoid

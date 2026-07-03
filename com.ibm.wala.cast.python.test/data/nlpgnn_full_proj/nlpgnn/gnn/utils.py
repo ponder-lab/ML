@@ -3,6 +3,7 @@
 """
 @Author:Kaiyin Zhou
 """
+
 from typing import NamedTuple, List
 import numpy as np
 import tensorflow as tf

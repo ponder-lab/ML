@@ -5,6 +5,7 @@
 @Tensorflow 2.0
 All of the following Code was follow Google BERT!
 """
+
 import tensorflow as tf
 from nlpgnn.tools import create_initializer, get_shape_list
 

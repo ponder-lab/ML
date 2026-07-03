@@ -3,6 +3,7 @@
 """
 @Author:Kaiyin Zhou
 """
+
 import tensorflow as tf
 from typing import NamedTuple, List
 from nlpgnn.gnn.utils import batch_read_out

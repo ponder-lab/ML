@@ -3,6 +3,7 @@
 """
 @Author:Kaiyin Zhou
 """
+
 import tensorflow as tf
 import numpy as np
 from nlpgnn.models import TextCNN

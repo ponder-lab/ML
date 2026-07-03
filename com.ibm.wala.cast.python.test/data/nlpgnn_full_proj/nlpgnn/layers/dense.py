@@ -3,6 +3,7 @@
 """
 @Author:Kaiyin Zhou
 """
+
 import numpy as np
 import tensorflow as tf
 from nlpgnn.tools import get_shape_list, create_initializer

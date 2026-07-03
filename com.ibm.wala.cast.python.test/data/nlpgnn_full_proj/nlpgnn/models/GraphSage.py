@@ -3,6 +3,7 @@
 """
 @Author:Kaiyin Zhou
 """
+
 from nlpgnn.gnn.utils import *
 from nlpgnn.gnn.GSConv import GraphSAGEConvolution
 

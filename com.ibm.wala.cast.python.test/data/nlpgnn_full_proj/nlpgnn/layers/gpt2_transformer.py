@@ -3,6 +3,7 @@
 """
 @Author:zhoukaiyin
 """
+
 import tensorflow as tf
 
 from nlpgnn.tools import create_initializer, get_activation
