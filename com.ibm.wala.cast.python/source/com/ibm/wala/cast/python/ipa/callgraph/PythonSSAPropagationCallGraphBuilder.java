@@ -23,6 +23,7 @@ import com.ibm.wala.cast.ipa.callgraph.GlobalObjectKey;
 import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
 import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
 import com.ibm.wala.cast.loader.AstMethod;
+import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.ssa.ForElementGetInstruction;
 import com.ibm.wala.cast.python.ssa.PythonBinaryOpInstruction;
@@ -38,8 +39,12 @@ import com.ibm.wala.fixpoint.AbstractOperator;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
+import com.ibm.wala.ipa.callgraph.ContextItem;
+import com.ibm.wala.ipa.callgraph.ContextKey;
 import com.ibm.wala.ipa.callgraph.IAnalysisCacheView;
 import com.ibm.wala.ipa.callgraph.propagation.AbstractFieldPointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.FilteredPointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.FilteredPointerKey.TypeFilter;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
@@ -766,7 +771,17 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
               && refersToAnObject(rval)) {
             // Ensure that lval's variable refers to the callable method instead of callable object,
             // precisely linking the object to its trampoline using the `__call__` (or similar)
-            // field.
+            // field. When the target is a trampoline keyed on a receiver instance (wala/ML#679),
+            // link only that receiver's field; the site's other receivers dispatch to their own
+            // trampoline nodes. Non-trampoline targets may inherit a receiver-keyed context whose
+            // instance is unrelated to this site's receivers, so they are not restricted.
+            ContextItem receiverItem =
+                target.getMethod().getDeclaringClass() instanceof PythonInstanceMethodTrampoline
+                    ? target.getContext().get(ContextKey.RECEIVER)
+                    : null;
+            InstanceKey contextReceiver =
+                receiverItem instanceof InstanceKey ? (InstanceKey) receiverItem : null;
+
             IClassHierarchy cha = getClassHierarchy();
 
             Atom[] possibleFields = {
@@ -786,6 +801,8 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                               .foreach(
                                   i -> {
                                     InstanceKey ik = getSystem().getInstanceKey(i);
+                                    if (contextReceiver != null && !contextReceiver.equals(ik))
+                                      return;
 
                                     for (Atom fieldName : possibleFields) {
                                       FieldReference fieldRef =
@@ -824,7 +841,14 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
                     },
                     new PointerKey[] {rval});
           } else {
-            getSystem().newConstraint(lval, assignOperator, rval);
+            // A receiver-keyed target (wala/ML#679) filters the dispatched parameter to the
+            // context's receiver instance; every other target binds the full argument set.
+            PointerKey formal = i == 0 ? getReceiverFilteredPointerKey(target, lval) : lval;
+            getSystem()
+                .newConstraint(
+                    formal,
+                    formal instanceof FilteredPointerKey ? filterOperator : assignOperator,
+                    rval);
           }
         }
       }
@@ -887,6 +911,28 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
       PointerKey leret = getPointerKeyForLocal(caller, call.getException());
       getSystem().newConstraint(leret, assignOperator, reret);
     }
+  }
+
+  /**
+   * Returns the {@link PointerKey} to bind for the given target's dispatched (position-0)
+   * parameter, honoring a receiver filter the target's context carries (<a
+   * href="https://github.com/wala/ML/issues/679">wala/ML#679</a>). The filter applies only to
+   * trampoline targets: their first parameter <em>is</em> the dispatched object the context is
+   * keyed on. A real method body inheriting a per-receiver context has the same context item, but
+   * its first parameter is the function object, which the receiver filter would wrongly empty.
+   *
+   * @param target The callee {@link CGNode}.
+   * @param dflt The unfiltered {@link PointerKey} for the target's first parameter.
+   * @return A {@link FilteredPointerKey} restricted to the context's receiver when the target is a
+   *     trampoline whose context supplies a parameter-0 filter; otherwise {@code dflt}.
+   */
+  private PointerKey getReceiverFilteredPointerKey(CGNode target, PointerKey dflt) {
+    if (!(target.getMethod().getDeclaringClass() instanceof PythonInstanceMethodTrampoline))
+      return dflt;
+    TypeFilter filter = (TypeFilter) target.getContext().get(ContextKey.PARAMETERS[0]);
+    if (filter != null && !filter.isRootFilter())
+      return getFilteredPointerKeyForLocal(target, 1, filter);
+    return dflt;
   }
 
   /**
