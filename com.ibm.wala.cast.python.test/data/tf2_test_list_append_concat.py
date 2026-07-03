@@ -11,7 +11,7 @@ def consume(t):
 
 
 xs = []
-for i in range(3):
+for _ in range(3):
     xs.append(tf.ones((2, 8)))
 
 y = tf.concat(xs, axis=0)

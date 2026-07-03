@@ -124,12 +124,11 @@ public class Concat extends TensorGenerator {
           pa.getPointsToSet(
               ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                   .getPointerKeyForObjectCatalog(asin));
-      if (catalog.size() == 0) continue;
-
-      List<Dimension<?>> outShape = computeConcatenatedShape(builder, asin, catalog, axis);
-      // An append-populated list has no numeric catalog; its elements live under the synthetic
-      // append-contents field. The element count is not statically known, so the axis dim is
-      // dynamic while the rank and non-axis dims survive (wala/ML#570).
+      List<Dimension<?>> outShape =
+          catalog.size() == 0 ? null : computeConcatenatedShape(builder, asin, catalog, axis);
+      // An append-populated list has no numeric catalog entries; its elements live under the
+      // synthetic append-contents field. The element count is not statically known, so the axis
+      // dim is dynamic while the rank and non-axis dims survive (wala/ML#570).
       if (outShape == null) outShape = computeAppendedShape(builder, asin, axis);
       if (outShape != null) ret.add(outShape);
     }
