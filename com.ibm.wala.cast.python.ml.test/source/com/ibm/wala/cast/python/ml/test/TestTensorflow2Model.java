@@ -10175,6 +10175,29 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Pins <a href="https://github.com/wala/ML/issues/672">wala/ML#672</a>: {@code add_weight}
+   * without a {@code dtype} argument follows Keras's documented default and types float32 (the
+   * layer variable dtype under the default global policy), via the allocator's float32 default.
+   * Completes the dtype-form trio with {@link #testCollectionProbeAddWeight()} (string) and {@link
+   * #testAddWeightArguments()} (module constant).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightDefaultDtype()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight3.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
+  }
+
+  /**
    * Pins the vendored gpt-2 {@code EmbeddingLayer} forward result (wala/ML#618): the {@code
    * add_weight}-created weight dispatches and both {@code mode} branches contribute to the result
    * union. With {@code add_weight} consuming its {@code shape}/{@code dtype} arguments
