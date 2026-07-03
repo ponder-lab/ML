@@ -10,6 +10,7 @@ import static java.util.logging.Logger.getLogger;
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -126,6 +127,10 @@ public class Concat extends TensorGenerator {
       if (catalog.size() == 0) continue;
 
       List<Dimension<?>> outShape = computeConcatenatedShape(builder, asin, catalog, axis);
+      // An append-populated list has no numeric catalog; its elements live under the synthetic
+      // append-contents field. The element count is not statically known, so the axis dim is
+      // dynamic while the rank and non-axis dims survive (wala/ML#570).
+      if (outShape == null) outShape = computeAppendedShape(builder, asin, axis);
       if (outShape != null) ret.add(outShape);
     }
     return ret.isEmpty() ? null : ret;
@@ -152,11 +157,52 @@ public class Concat extends TensorGenerator {
               ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                   .getPointerKeyForObjectCatalog(asin));
       OrdinalSet<InstanceKey> firstElemPts = getElementPts(builder, asin, catalog, 0);
+      // An append-populated list has no numeric catalog; union the dtypes of the values
+      // accumulated under the synthetic append-contents field instead (wala/ML#570).
+      if (firstElemPts == null) firstElemPts = getAppendedContentsPts(builder, asin);
       if (firstElemPts == null) continue;
       Set<DType> firstDTypes = this.getDTypesOfValue(builder, firstElemPts);
       if (firstDTypes != null) ret.addAll(firstDTypes);
     }
     return ret.isEmpty() ? EnumSet.of(DType.UNKNOWN) : ret;
+  }
+
+  /**
+   * Computes the concatenated shape for an append-populated list: every appended value's shape must
+   * share the rank; the output keeps the (agreeing) non-axis dims and the axis dim is {@link
+   * DynamicDim} since the element count (and each element's axis extent) is not statically known.
+   *
+   * @param builder The propagation call graph builder.
+   * @param listAsin The list allocation whose appended contents to read.
+   * @param axis The resolved concatenation axis.
+   * @return The output shape, or {@code null} if the appended values' shapes cannot be resolved or
+   *     disagree.
+   */
+  private List<Dimension<?>> computeAppendedShape(
+      PropagationCallGraphBuilder builder, AllocationSiteInNode listAsin, int axis) {
+    OrdinalSet<InstanceKey> contentsPts = getAppendedContentsPts(builder, listAsin);
+    if (contentsPts == null) return null;
+    Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, contentsPts);
+    if (shapes == null || shapes.isEmpty()) return null;
+
+    List<Dimension<?>> template = null;
+    for (List<Dimension<?>> shape : shapes) {
+      if (template == null) template = shape;
+      else if (shape.size() != template.size()) return null; // rank mismatch — can't concat soundly
+    }
+
+    int rank = template.size();
+    int normalizedAxis = axis < 0 ? axis + rank : axis;
+    if (normalizedAxis < 0 || normalizedAxis >= rank) return null;
+
+    List<Dimension<?>> outShape = new ArrayList<>(template);
+    for (List<Dimension<?>> shape : shapes)
+      for (int d = 0; d < rank; d++)
+        if (d != normalizedAxis && !shape.get(d).equals(outShape.get(d)))
+          return null; // non-axis dim disagreement — can't pick a sound template
+
+    outShape.set(normalizedAxis, DynamicDim.INSTANCE);
+    return outShape;
   }
 
   /**
