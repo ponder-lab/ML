@@ -357,6 +357,38 @@ public abstract class TensorGenerator {
       if (asin == null) continue;
       TypeReference reference = asin.concreteType().getReference();
 
+      if (reference.equals(dict)) {
+        // A dict-structured shape specification, e.g. `padded_shapes={'h_r': [None], 't':
+        // [None]}`. The values (keyed by arbitrary string names) are the per-leaf shape specs;
+        // recurse into each value and union the results, mirroring the dict-structured dtype
+        // handling (wala/ML#615). See wala/ML#673.
+        OrdinalSet<InstanceKey> dictCatalogPts =
+            pointerAnalysis.getPointsToSet(
+                ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                    .getPointerKeyForObjectCatalog(asin));
+
+        for (InstanceKey catalogIK : dictCatalogPts) {
+          if (!(catalogIK instanceof ConstantKey)) continue;
+          Object keyValue = ((ConstantKey<?>) catalogIK).getValue();
+          // Dict keys are strings; the value is stored as an instance field named by the key.
+          if (!(keyValue instanceof String)) continue;
+
+          FieldReference subscript =
+              FieldReference.findOrCreate(Root, findOrCreateAsciiAtom((String) keyValue), Root);
+
+          IField f = builder.getClassHierarchy().resolveField(subscript);
+          if (f != null) {
+            PointerKey pk = builder.getPointerKeyForInstanceField(asin, f);
+            OrdinalSet<InstanceKey> fieldPts = pointerAnalysis.getPointsToSet(pk);
+            if (fieldPts == null || fieldPts.isEmpty()) continue;
+            Set<List<Dimension<?>>> sub = this.getShapesFromShapeArgument(builder, fieldPts);
+            if (sub == null) return null;
+            ret.addAll(sub);
+          }
+        }
+        continue;
+      }
+
       if (reference.equals(list) || reference.equals(tuple)) {
         // We have a list of integers that represent the shape.
         OrdinalSet<InstanceKey> objectCatalogPointsToSet =
@@ -876,7 +908,15 @@ public abstract class TensorGenerator {
       if (!inProgress.add(key)) {
         Map<Pair<CGNode, Integer>, Set<List<Dimension<?>>>> previous =
             PREVIOUS_SHAPES_CACHE.get(builder);
-        return previous == null ? null : previous.get(key);
+        Set<List<Dimension<?>>> approximation = previous == null ? null : previous.get(key);
+        LOGGER.fine(
+            () ->
+                "Shape cycle re-entry on key: "
+                    + key
+                    + "; returning previous-round approximation: "
+                    + approximation
+                    + ".");
+        return approximation;
       }
       try {
         Set<List<Dimension<?>>> result = computeShapes(builder, node, valueNumber);
@@ -1946,7 +1986,15 @@ public abstract class TensorGenerator {
           DTYPES_IN_PROGRESS.computeIfAbsent(builder, b -> HashSetFactory.make());
       if (!inProgress.add(key)) {
         Map<Pair<CGNode, Integer>, Set<DType>> previous = PREVIOUS_DTYPES_CACHE.get(builder);
-        return previous == null ? null : previous.get(key);
+        Set<DType> approximation = previous == null ? null : previous.get(key);
+        LOGGER.fine(
+            () ->
+                "Dtype cycle re-entry on key: "
+                    + key
+                    + "; returning previous-round approximation: "
+                    + approximation
+                    + ".");
+        return approximation;
       }
       try {
         Set<DType> result = computeDTypes(builder, node, valueNumber);

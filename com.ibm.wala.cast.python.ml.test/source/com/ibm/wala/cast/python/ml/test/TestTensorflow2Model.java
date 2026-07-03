@@ -4955,10 +4955,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * constructor keyword arguments forwarded to {@code __init__} (wala/ML#664), the runtime-true
    * vocab dimension is concrete ({@code (?, ?, 10)}) and the flat-logits matmul member carries the
    * embedding dimension ({@code (?, 8)} float32). The {@code (?, ?, 4)} member is spurious
-   * constructor-context collapse (wala/ML#671). The pinned union is the suite-mode result; a fresh
-   * JVM yields a coarser (also stable) union, an iteration-order dependence tracked by <a
-   * href="https://github.com/wala/ML/issues/674">wala/ML#674</a>. Analyzed statically here, like
-   * the consumer's vendoring; it runs in the perf-eval with its tfrecord/data setup.
+   * constructor-context collapse (wala/ML#671). The union is the order-independent fixed point
+   * (wala/ML#674): identical across runs and across suite/single-test modes. Analyzed statically
+   * here, like the consumer's vendoring; it runs in the perf-eval with its tfrecord/data setup.
    */
   @Test
   public void testGpt2GetLossVendored()
@@ -4979,9 +4978,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         8,
         Map.of(
             3,
-            Set.of(
-                new TensorType(INT_32, asList(new NumericDim(32), DynamicDim.INSTANCE)),
-                new TensorType(INT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE))),
+            Set.of(new TensorType(INT_32, asList(DynamicDim.INSTANCE))),
             4,
             Set.of(
                 new TensorType(
