@@ -2115,23 +2115,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Multi-Model precision regression with one extra call-chain frame: both Models are constructed
-   * inside a {@code make_model(units)} helper, so both user-side calls of {@code make_model(...)}
-   * share the same call site for {@code Model.do} (the one inside {@code make_model}). Under {@code
-   * nCFAContextSelector(2)} the 2 most-recent call sites in the context for {@code
-   * Model.read_data}'s inner allocation are {@code (read_data_call_in_Model.do,
-   * Model.do_call_in_make_model)} — the user-side {@code make_model} call site falls outside those
-   * two frames, so both user models collapse to the same allocation context and each sink ends up
-   * with the union of both models' weight shapes. The assertion below pins that observed
-   * (imprecise) union, which makes a precision improvement detectable as a regression: when the fix
-   * lands, the actual set will shrink to the per-Model 2-element subset and this test will start
-   * failing with a clear "expected union, got per-Model" diff — the cue to update the assertion to
-   * its precise form.
-   *
-   * <p>TODO(wala/ML#380): When inlining of {@code Model.read_data} (or wala/ML#379's configurable-k
-   * work) distinguishes the per-Model contexts here, narrow the assertion to {@code
-   * Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32)} for {@code f} and the matching pair for {@code
-   * g} in {@link #testModelAttributesMultiModelWrapped2()}.
+   * Multi-Model separation with one extra call-chain frame: both Models are constructed inside a
+   * {@code make_model(units)} helper, so both user-side calls of {@code make_model(...)} share the
+   * same call site for {@code Model.do} (the one inside {@code make_model}). Call strings alone
+   * collapsed both user models into one allocation context, unioning both models' weight shapes at
+   * every sink; the receiver-keyed trampoline contexts of <a
+   * href="https://github.com/wala/ML/issues/679">wala/ML#679</a> keep each model's dispatch chain
+   * separate, so each sink now sees exactly its own model's weight shapes.
    */
   @Test
   public void testModelAttributesMultiModelWrapped()
@@ -2141,17 +2131,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "f",
         1,
         1,
-        Map.of(
-            2,
-            Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32, TENSOR_64_7_FLOAT32, TENSOR_7_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32)));
   }
 
   /**
-   * Companion to {@link #testModelAttributesMultiModelWrapped()} — same fixture, second sink. The
-   * assertion pins the same observed union; both sinks see the union under 2-CFA.
-   *
-   * <p>TODO(wala/ML#380): When the per-Model collapse is fixed, narrow the assertion to {@code
-   * Set.of(TENSOR_64_7_FLOAT32, TENSOR_7_FLOAT32)}.
+   * Companion to {@link #testModelAttributesMultiModelWrapped()} — same fixture, second sink,
+   * pinned to the second model's weight shapes only (wala/ML#679).
    */
   @Test
   public void testModelAttributesMultiModelWrapped2()
@@ -2161,52 +2146,35 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "g",
         1,
         1,
-        Map.of(
-            2,
-            Set.of(TENSOR_64_5_FLOAT32, TENSOR_5_FLOAT32, TENSOR_64_7_FLOAT32, TENSOR_7_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_64_7_FLOAT32, TENSOR_7_FLOAT32)));
   }
 
   /**
-   * Multi-Model precision regression on the {@code model(x)} call-output path: two distinct Models
+   * Multi-Model separation on the {@code model(x)} call-output path: two distinct Models
    * constructed inside a {@code make_and_call(units, x)} helper that also performs the call. Each
    * user-side {@code make_and_call(...)} returns the model's output, with disjoint shapes (5 vs 7)
-   * per call. Under 2-CFA the two user-side {@code make_and_call} call sites collapse into one
-   * context for {@code Model.__call__}'s output allocation, so each sink ends up with the union
-   * {@code {(20, 5), (20, 7)}} rather than the per-Model shape — same precision-loss mechanism as
-   * {@link #testModelAttributesMultiModelWrapped()}, but on the call-output path instead of the
-   * trainable-weights path. The assertion pins the observed union; a precision improvement will
-   * narrow it.
-   *
-   * <p>TODO(wala/ML#380): When the per-Model collapse is fixed, narrow the assertion to {@code
-   * Set.of(TENSOR_20_5_FLOAT32)} for {@code f} and {@code Set.of(TENSOR_20_7_FLOAT32)} for {@code
-   * g} in {@link #testModelCallMultiModelWrapped2()}.
+   * per call. Call strings alone collapsed both models into one context for {@code
+   * Model.__call__}'s output allocation, unioning {@code {(20, 5), (20, 7)}} at every sink; the
+   * receiver-keyed trampoline contexts of <a
+   * href="https://github.com/wala/ML/issues/679">wala/ML#679</a> keep each model's dispatch chain
+   * separate, so each sink now sees exactly its own model's output shape — same mechanism as {@link
+   * #testModelAttributesMultiModelWrapped()}, on the call-output path instead of the
+   * trainable-weights path.
    */
   @Test
   public void testModelCallMultiModelWrapped()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_model_call_multi_wrapped.py",
-        "f",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_20_5_FLOAT32, TENSOR_20_7_FLOAT32)));
+    test("tf2_test_model_call_multi_wrapped.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_20_5_FLOAT32)));
   }
 
   /**
-   * Companion to {@link #testModelCallMultiModelWrapped()} — same fixture, second sink.
-   *
-   * <p>TODO(wala/ML#380): When the per-Model collapse is fixed, narrow the assertion to {@code
-   * Set.of(TENSOR_20_7_FLOAT32)}.
+   * Companion to {@link #testModelCallMultiModelWrapped()} — same fixture, second sink, pinned to
+   * the second model's output shape only (wala/ML#679).
    */
   @Test
   public void testModelCallMultiModelWrapped2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_model_call_multi_wrapped.py",
-        "g",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_20_5_FLOAT32, TENSOR_20_7_FLOAT32)));
+    test("tf2_test_model_call_multi_wrapped.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_20_7_FLOAT32)));
   }
 
   /**
@@ -2928,16 +2896,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * <p>{@code hidden} (the {@code GCN.call} return, a {@code Dense} output) is tensor-classified
    * because the modeled Keras lazy-{@code build} protocol invokes {@code GCN.build}, giving the
    * {@code build()}-created {@code self._kernel} sublayer a points-to set. With constructor keyword
-   * arguments forwarded to {@code __init__} (wala/ML#664), {@code units} resolves through the
-   * {@code self._units} instance-field read, so the runtime-true {@code (4, 16) float32} is
-   * inferred. With {@code __init__} dispatched in the constructor's calling context (wala/ML#671),
-   * the two instances' {@code self._units} fields hold {@code 16} and {@code 8} separately; the
-   * union's spurious {@code (4, 8)} member persists because both instances share one {@code build}
-   * context, so the {@code Dense} constructed inside it unions the values.
+   * arguments forwarded to {@code __init__} (wala/ML#664) and the layer-method trampolines keyed on
+   * the receiver instance (wala/ML#679), each instance's {@code build} constructs its own {@code
+   * Dense}, so the runtime-true {@code (4, 16) float32} is inferred without the other instance's
+   * spurious {@code (4, 8)}. The remaining {@code ? of float32} member comes from the statically
+   * dead {@code outputs += features} residual branch ({@code self._residual} is constantly {@code
+   * False}), which the path-insensitive analysis still evaluates.
    *
    * <p>TODO: Expect exactly {@code (4, 16) float32} once <a
-   * href="https://github.com/wala/ML/issues/679">wala/ML#679</a> gives the layer-method trampolines
-   * receiver-object sensitivity.
+   * href="https://github.com/wala/ML/issues/681">wala/ML#681</a> prunes branches guarded by
+   * statically-constant instance fields.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2961,7 +2929,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "gcn_chain_proj",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_4_8_FLOAT32, TensorType.of(FLOAT_32, 4, 16))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 16), TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
@@ -5039,11 +5007,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * <p>{@code pred} types too (wala/ML#665): the model forward output is a tensor union. With
    * {@code add_weight} consuming its {@code shape}/{@code dtype} arguments (wala/ML#667) and
    * constructor keyword arguments forwarded to {@code __init__} (wala/ML#664), the runtime-true
-   * vocab dimension is concrete ({@code (?, ?, 10)}) and the flat-logits matmul member carries the
-   * embedding dimension ({@code (?, 8)} float32). The {@code (?, ?, 4)} member is spurious
-   * constructor-context collapse (wala/ML#671). The union is the order-independent fixed point
-   * (wala/ML#674): identical across runs and across suite/single-test modes. Analyzed statically
-   * here, like the consumer's vendoring; it runs in the perf-eval with its tfrecord/data setup.
+   * vocab dimension is concrete ({@code (?, ?, 10)}). Receiver-keyed trampoline contexts
+   * (wala/ML#679) removed the spurious {@code (?, ?, 4)} constructor-collapse member, but the
+   * flat-logits matmul member that carried the embedding dimension ({@code (?, 8)} float32)
+   * degrades to {@code ? of float32} in decoder-stack propagation. The union is the
+   * order-independent fixed point (wala/ML#674): identical across runs and across suite/single-test
+   * modes. Analyzed statically here, like the consumer's vendoring; it runs in the perf-eval with
+   * its tfrecord/data setup.
+   *
+   * <p>TODO: Expect the float32 member's concrete shape back once <a
+   * href="https://github.com/wala/ML/issues/682">wala/ML#682</a> recovers concrete shapes through
+   * the decoder stack under receiver-keyed contexts.
    */
   @Test
   public void testGpt2GetLossVendored()
@@ -5069,9 +5043,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             Set.of(
                 new TensorType(
                     UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(10))),
-                new TensorType(
-                    UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(4))),
-                new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(8))),
+                TENSOR_UNKNOWN_SHAPE_FLOAT32,
                 new TensorType(
                     UNKNOWN,
                     asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))))));
@@ -10472,11 +10444,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Pins the vendored gpt-2 forward output (the wala/ML#618 {@code pred} source): with wala/ML#665
    * forwarding wildcard import bindings, the full decoder stack types and the model output is a
-   * rank-3 tensor union. With {@code add_weight} consuming its {@code shape}/{@code dtype}
-   * arguments (wala/ML#667) and constructor keyword arguments forwarded to {@code __init__}
-   * (wala/ML#664), the float32 member is fully concrete ({@code (2, 3, 8)}) and the runtime-true
-   * vocab member is {@code (?, ?, 10)}; the {@code (?, ?, 4)}/{@code (?, ?, 12)} members are
-   * spurious constructor-context collapse (wala/ML#671).
+   * rank-3-dominated tensor union. Receiver-keyed trampoline contexts (wala/ML#679) removed the
+   * spurious {@code (?, ?, 4)}/{@code (?, ?, 12)} constructor-collapse members and kept the
+   * runtime-true vocab member {@code (?, ?, 10)}, but the previously concrete {@code (2, 3, 8)
+   * float32} member degrades to {@code ? of float32} in decoder-stack propagation ({@link
+   * #testCollectionProbeVendoredEmbedding()} still recovers it concretely at the embedding output).
+   *
+   * <p>TODO: Expect the float32 member's concrete shape back once <a
+   * href="https://github.com/wala/ML/issues/682">wala/ML#682</a> recovers concrete shapes through
+   * the decoder stack under receiver-keyed contexts.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -10503,17 +10479,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(
             2,
             Set.of(
-                TensorType.of(FLOAT_32, 2, 3, 8),
+                TENSOR_UNKNOWN_SHAPE_FLOAT32,
                 new TensorType(
                     UNKNOWN,
                     asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
                 new TensorType(
-                    UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(10))),
-                new TensorType(
-                    UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(4))),
-                new TensorType(
                     UNKNOWN,
-                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(12))))));
+                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(10))))));
   }
 
   /**
@@ -10624,8 +10596,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         // The scalar-rank result comes from the interpreter folding the computed output shape;
-        // the dtype is refinable once `add_weight` consumes its `dtype` argument.
-        Map.of(2, Set.of(new TensorType(UNKNOWN, emptyList()))));
+        // receiver-keyed contexts (wala/ML#679) recover the `add_weight` float32 dtype.
+        Map.of(2, Set.of(new TensorType(FLOAT_32, emptyList()))));
   }
 
   /**
@@ -10696,9 +10668,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * Pins the vendored {@code LayerNormalization} forward result: {@code add_weight}-created {@code
-   * gamma}/{@code beta} dispatch (wala/ML#595, wala/ML#618) and the normalization body types (a
-   * union including {@code ? of float32}). Count-only: the union's exact members shift with
-   * modeling precision.
+   * gamma}/{@code beta} dispatch (wala/ML#595, wala/ML#618) and the normalization body types.
+   * Receiver-keyed contexts (wala/ML#679) dropped the shapeless-and-dtypeless union member, so the
+   * result is exactly {@code ? of float32}.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -10722,7 +10694,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "gpt2_vendored",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE, TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
@@ -14036,20 +14008,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     Map<Integer, Set<TensorType>> actualTypesByValueNumber = new HashMap<>();
 
     for (Context ctx : contextToFunctionParameterPointerKeys.keySet()) {
-      // check tensor parameters.
       Set<LocalPointerKey> functionParameterPointerKeys =
           contextToFunctionParameterPointerKeys.get(ctx);
-
-      assertEquals(expectedNumberOfTensorParameters, functionParameterPointerKeys.size());
-
-      // check actual value numbers.
-      Set<Integer> actualParameterValueNumberSet =
-          functionParameterPointerKeys.stream()
-              .map(LocalPointerKey::getValueNumber)
-              .collect(Collectors.toSet());
-
-      assertEquals(
-          expectedTensorParameterValueNumberToTypes.keySet(), actualParameterValueNumberSet);
 
       // accumulate per-vn types across contexts.
       for (LocalPointerKey lpk : functionParameterPointerKeys) {
@@ -14064,6 +14024,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             .addAll(types);
       }
     }
+
+    // Check the tensor-parameter count and value numbers on the union across contexts, mirroring
+    // the function-variable count above: with receiver-keyed contexts (wala/ML#679), a single
+    // source-level call chain fans out into finer contexts and not every context sees every tensor
+    // argument, but the downstream consumer is indexed by source-level parameter position, so the
+    // source-level property is the per-vn union. A parameter that loses typing in *every* context
+    // still fails here.
+    assertEquals(expectedNumberOfTensorParameters, actualTypesByValueNumber.size());
+    assertEquals(
+        expectedTensorParameterValueNumberToTypes.keySet(), actualTypesByValueNumber.keySet());
 
     // compare expected against the union across contexts, per vn.
     for (Map.Entry<Integer, Set<TensorType>> entry :

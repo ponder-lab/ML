@@ -15,6 +15,7 @@ import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.ipa.callgraph.TrampolineReceiverContextSelector;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorType;
@@ -198,33 +199,38 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         new nCFAContextSelector(this.targetedCfaDepth, new ContextInsensitiveSelector());
     final IClass modelClass = cha.lookupClass(TensorFlowTypes.MODEL.getDeclaringClass());
 
+    // The trampoline-receiver rules must stay outermost: the targeted-CFA routing below matches
+    // trampoline classes too (a `$Foo/call` trampoline ends in a forward-method segment), and
+    // call strings re-collapse the per-receiver distinction those rules establish (wala/ML#679).
     builder.setContextSelector(
-        new ContextSelector() {
-          @Override
-          public Context getCalleeTarget(
-              CGNode caller,
-              CallSiteReference site,
-              IMethod callee,
-              InstanceKey[] actualParameters) {
-            String calleeClass = callee.getDeclaringClass().getName().toString();
-            // Apply k-CFA for any methods in the target framework, which includes internal helpers,
-            // as well as methods declared on user-defined `tf.keras.Model` subclasses (e.g.
-            // `NeuralNet.call`). Without the latter, a user model called from multiple sites (train
-            // vs. test) merges into one context-insensitive node, collapsing its layer-output
-            // allocations across callers and losing per-context shape (wala/ML#530).
-            if (calleeClass.contains(targetFramework)
-                || isModelSubclassMethod(callee, modelClass)
-                || isUserModelForwardMethod(calleeClass)) {
-              return targetedCFA.getCalleeTarget(caller, site, callee, actualParameters);
-            }
-            return base.getCalleeTarget(caller, site, callee, actualParameters);
-          }
+        new TrampolineReceiverContextSelector(
+            new ContextSelector() {
+              @Override
+              public Context getCalleeTarget(
+                  CGNode caller,
+                  CallSiteReference site,
+                  IMethod callee,
+                  InstanceKey[] actualParameters) {
+                String calleeClass = callee.getDeclaringClass().getName().toString();
+                // Apply k-CFA for any methods in the target framework, which includes internal
+                // helpers, as well as methods declared on user-defined `tf.keras.Model` subclasses
+                // (e.g. `NeuralNet.call`). Without the latter, a user model called from multiple
+                // sites (train vs. test) merges into one context-insensitive node, collapsing its
+                // layer-output allocations across callers and losing per-context shape
+                // (wala/ML#530).
+                if (calleeClass.contains(targetFramework)
+                    || isModelSubclassMethod(callee, modelClass)
+                    || isUserModelForwardMethod(calleeClass)) {
+                  return targetedCFA.getCalleeTarget(caller, site, callee, actualParameters);
+                }
+                return base.getCalleeTarget(caller, site, callee, actualParameters);
+              }
 
-          @Override
-          public IntSet getRelevantParameters(CGNode caller, CallSiteReference site) {
-            return base.getRelevantParameters(caller, site);
-          }
-        });
+              @Override
+              public IntSet getRelevantParameters(CGNode caller, CallSiteReference site) {
+                return base.getRelevantParameters(caller, site);
+              }
+            }));
 
     return builder;
   }

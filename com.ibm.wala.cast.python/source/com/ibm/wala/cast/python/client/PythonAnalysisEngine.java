@@ -25,9 +25,9 @@ import com.ibm.wala.cast.python.ipa.callgraph.PythonConstructorTargetSelector;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonInstanceMethodTrampolineTargetSelector;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonScopeMappingInstanceKeys;
+import com.ibm.wala.cast.python.ipa.callgraph.TrampolineReceiverContextSelector;
 import com.ibm.wala.cast.python.ipa.summaries.BuiltinFunctions;
 import com.ibm.wala.cast.python.ipa.summaries.PythonComprehensionTrampolines;
-import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
@@ -38,7 +38,6 @@ import com.ibm.wala.cast.python.loader.PythonLoaderFactory;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.cast.types.AstMethodReference;
 import com.ibm.wala.cast.util.Util;
-import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IClassLoader;
 import com.ibm.wala.classLoader.IField;
@@ -51,10 +50,7 @@ import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.AnalysisCacheImpl;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.AnalysisScope;
-import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.ClassTargetSelector;
-import com.ibm.wala.ipa.callgraph.Context;
-import com.ibm.wala.ipa.callgraph.ContextSelector;
 import com.ibm.wala.ipa.callgraph.Entrypoint;
 import com.ibm.wala.ipa.callgraph.IAnalysisCacheView;
 import com.ibm.wala.ipa.callgraph.MethodTargetSelector;
@@ -93,7 +89,6 @@ import com.ibm.wala.util.WalaException;
 import com.ibm.wala.util.WalaRuntimeException;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
-import com.ibm.wala.util.intset.IntSet;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -938,7 +933,7 @@ public abstract class PythonAnalysisEngine<T>
     builder.setContextInterpreter(interpreter);
 
     builder.setContextSelector(
-        new ConstructorContextSelector(
+        new TrampolineReceiverContextSelector(
             new nCFAContextSelector(1, new ContextInsensitiveSelector())));
 
     builder.setInstanceKeys(
@@ -954,41 +949,6 @@ public abstract class PythonAnalysisEngine<T>
   protected PythonSSAPropagationCallGraphBuilder makeBuilder(
       IClassHierarchy cha, AnalysisOptions options, IAnalysisCacheView cache) {
     return new PythonSSAPropagationCallGraphBuilder(cha, options, cache, new AstCFAPointerKeys());
-  }
-
-  /**
-   * Dispatches calls made <em>from</em> a synthesized constructor ({@link
-   * PythonConstructorFunction}) in the constructor's own calling context. The constructor body has
-   * a single internal {@code __init__} call site, so the base call-string selector collapses every
-   * construction of a class into one {@code __init__} context, unioning argument values across
-   * construction sites; inheriting the constructor's context keeps them apart (<a
-   * href="https://github.com/wala/ML/issues/671">wala/ML#671</a>).
-   */
-  private static class ConstructorContextSelector implements ContextSelector {
-
-    /** The selector handling every other call. */
-    private final ContextSelector base;
-
-    /**
-     * Constructs a {@link ConstructorContextSelector}.
-     *
-     * @param base The selector handling every other call.
-     */
-    ConstructorContextSelector(ContextSelector base) {
-      this.base = base;
-    }
-
-    @Override
-    public Context getCalleeTarget(
-        CGNode caller, CallSiteReference site, IMethod callee, InstanceKey[] actualParameters) {
-      if (caller.getMethod() instanceof PythonConstructorFunction) return caller.getContext();
-      return base.getCalleeTarget(caller, site, callee, actualParameters);
-    }
-
-    @Override
-    public IntSet getRelevantParameters(CGNode caller, CallSiteReference site) {
-      return base.getRelevantParameters(caller, site);
-    }
   }
 
   public abstract T performAnalysis(PropagationCallGraphBuilder builder) throws CancelException;
