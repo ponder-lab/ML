@@ -10460,6 +10460,58 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Probe for the indexed sub-layer dispatch shape of <a
+   * href="https://github.com/wala/ML/issues/661">wala/ML#661</a>: a plain list of sublayers
+   * populated by {@code append} in {@code build}, dispatched through a dynamic subscript ({@code
+   * self.sub_layers[i](out, training)}) in {@code call} — the miniature of NLPGNN's {@code
+   * GAAELayer.encoder}. The inner layer's {@code call} must exist in the call graph with its {@code
+   * inputs} parameter tensor-typed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIndexedLayerListCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_layer_list.py", "Inner.call", 1, 1, Map.of(3, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
+   * Constant-index variant of {@link #testIndexedLayerListCall()} (wala/ML#661): {@code
+   * self.sub_layers[0](out, training)} over an append-built list. Pins that the fix does not depend
+   * on the subscript being dynamic.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIndexedLayerListCallConst()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_layer_list_const.py", "Inner.call", 1, 1, Map.of(3, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
+   * List-literal variant of {@link #testIndexedLayerListCall()} (wala/ML#661): the sublayer list is
+   * built as a literal instead of by {@code append}, so the subscript read resolves through the
+   * ordinary numeric field. This passed before the fix and pins the discriminator that localized
+   * the gap to the append-contents property.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testIndexedLayerListCallLiteral()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_layer_list_lit.py", "Inner.call", 1, 1, Map.of(3, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
    * Pins the forward result of a nested layer call whose argument is a {@code NamedTuple} and whose
    * inner {@code call} computes through a field read, a matmul, and an {@code unsorted_segment_sum}
    * (<a href="https://github.com/wala/ML/issues/570">wala/ML#570</a>).
