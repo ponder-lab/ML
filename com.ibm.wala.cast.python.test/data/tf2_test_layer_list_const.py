@@ -1,6 +1,6 @@
 # Miniature of NLPGNN's `GAAELayer` indexed sub-layer dispatch (wala/ML#661 shape 3):
 # a plain list of sublayers populated by `append` in `build`, dispatched through a
-# dynamic subscript in `call`.
+# constant subscript in `call`, the index-form variant of `tf2_test_layer_list.py`.
 import tensorflow as tf
 
 
