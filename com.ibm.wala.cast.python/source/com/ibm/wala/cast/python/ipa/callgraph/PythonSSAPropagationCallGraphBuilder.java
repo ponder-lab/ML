@@ -384,6 +384,36 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     }
 
     /**
+     * Surfaces append-accumulated list contents at subscript reads (<a
+     * href="https://github.com/wala/ML/issues/661">wala/ML#661</a>): a property read whose member
+     * is not a constant string also reads the synthetic {@value #LIST_APPEND_CONTENTS_FIELD}
+     * property, the read-side dual of {@link #processListAppend}'s write. Without this, values
+     * accumulated through {@code append} surface only under value iteration, and an indexed
+     * dispatch such as {@code self.sub_layers[i](x)} over an append-built list has an empty callee
+     * set. Named-attribute reads (constant string members) are excluded so method and attribute
+     * lookups do not observe element values; the synthetic property is only ever written on append
+     * receivers, so on all other objects the extra read contributes nothing.
+     *
+     * @param instruction The property read to examine.
+     */
+    private void processListContentsRead(AstPropertyRead instruction) {
+      SymbolTable symtab = ir.getSymbolTable();
+      int memberRef = instruction.getMemberRef();
+      if (symtab.isConstant(memberRef) && symtab.getConstantValue(memberRef) instanceof String)
+        return;
+
+      InstanceKey contentsKey =
+          getBuilder().getInstanceKeyForConstant(PythonTypes.string, LIST_APPEND_CONTENTS_FIELD);
+
+      newFieldOperationFieldConstant(
+          node,
+          true,
+          fieldReadAction(getPointerKeyForLocal(instruction.getDef())),
+          instruction.getObjectRef(),
+          new InstanceKey[] {contentsKey});
+    }
+
+    /**
      * Models {@code xs.append(v)} as a property write of {@code v} onto {@code xs} under the
      * synthetic {@value #LIST_APPEND_CONTENTS_FIELD} key, so values accumulated through {@code
      * append} surface when the collection is iterated ({@code visitForElementGet} reads the
@@ -460,6 +490,7 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
     @Override
     public void visitPropertyRead(AstPropertyRead instruction) {
       super.visitPropertyRead(instruction);
+      processListContentsRead(instruction);
 
       if (this.ir.getSymbolTable().isConstant(instruction.getMemberRef())) {
         Object constantValue =
