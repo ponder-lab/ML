@@ -138,11 +138,15 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
    * @return {@code true} iff a source module whose path ends with that file name is in scope.
    */
   public boolean definesScriptInScope(String fileName) {
-    boolean defines = scriptNamesInScope.stream().anyMatch(n -> scriptNameMatches(n, fileName));
+    String suffix = "/" + fileName;
+    boolean defines =
+        scriptNamesInScope.stream().anyMatch(n -> scriptNameMatches(n, fileName, suffix));
 
     // On a miss, name the collected entries sharing the file name's base name, so a spelling
     // divergence in scope construction is visible from the log alone (wala/ML#687).
-    if (!defines)
+    if (!defines) {
+      String base = baseName(fileName);
+
       traceImportBinding(
           LOGGER,
           () ->
@@ -150,10 +154,11 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
                   + fileName
                   + " is not in scope; near misses: "
                   + scriptNamesInScope.stream()
-                      .filter(n -> baseName(n).equals(baseName(fileName)))
+                      .filter(n -> baseName(n).equals(base))
                       .sorted()
                       .collect(toList())
                   + " (wala/ML#687).");
+    }
 
     return defines;
   }
@@ -169,7 +174,20 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
    * @return {@code true} iff {@code collectedName} denotes {@code fileName}.
    */
   public static boolean scriptNameMatches(String collectedName, String fileName) {
-    return collectedName.equals(fileName) || collectedName.endsWith("/" + fileName);
+    return scriptNameMatches(collectedName, fileName, "/" + fileName);
+  }
+
+  /**
+   * The scan form of {@link #scriptNameMatches(String, String)}, taking the slash-prefixed lookup
+   * name so a membership scan over all collected entries allocates it once rather than per entry.
+   *
+   * @param collectedName An entry name as collected from the analysis scope.
+   * @param fileName The script file name as the importer spells it.
+   * @param suffix {@code "/" + fileName}, precomputed by the caller.
+   * @return {@code true} iff {@code collectedName} denotes {@code fileName}.
+   */
+  private static boolean scriptNameMatches(String collectedName, String fileName, String suffix) {
+    return collectedName.equals(fileName) || collectedName.endsWith(suffix);
   }
 
   /**

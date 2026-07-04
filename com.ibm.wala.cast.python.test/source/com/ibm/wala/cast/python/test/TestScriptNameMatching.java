@@ -39,7 +39,10 @@ public class TestScriptNameMatching {
             "/home/user/git/Client/tests/resources/Function/testModule6/in/B.py", "B.py"));
   }
 
-  /** A dotted (package-qualified) lookup matches at the same suffix boundary. */
+  /**
+   * A path-qualified lookup (the slashed spelling a dotted import such as {@code from custom.layers
+   * import *} produces) matches at the same suffix boundary.
+   */
   @Test
   public void testPackageQualifiedLookupMatch() {
     assertTrue(scriptNameMatches("/home/user/proj/custom/layers.py", "custom/layers.py"));
