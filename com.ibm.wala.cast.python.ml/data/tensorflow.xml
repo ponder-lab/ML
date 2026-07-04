@@ -271,6 +271,8 @@
         <putfield class="LRoot" field="read_data_sets" fieldType="LRoot" ref="id" value="rds"/>
         <new def="python" class="Lobject"/>
         <putfield class="LRoot" field="python" fieldType="LRoot" ref="x" value="python"/>
+        <!-- `from tensorflow.python import keras` (e.g. MusicTransformer-tensorflow2.0) binds the same Keras namespace through the private module path; without this alias `keras.Model` resolves to nothing there, the class shell misses `Model.__init__`'s `_distribution_strategy` assignment, and the strategy `run` invoke edge never materializes (wala/ML#683). -->
+        <putfield class="LRoot" field="keras" fieldType="LRoot" ref="python" value="keras"/>
         <new def="framework" class="Lobject"/>
         <putfield class="LRoot" field="framework" fieldType="LRoot" ref="python" value="framework"/>
         <new def="ops" class="Lobject"/>
@@ -2451,6 +2453,10 @@
       <!-- At runtime `tf.keras.Model` and `tf.keras.models.Model` are the same class under two attribute paths. Shell lookup is exact-match on the canonicalized base name (wala/ML#118), so this empty alias shell covers subclasses written against the `tf.keras.Model`/`from tensorflow.keras import Model` spelling; positioning it at the canonical `Ltensorflow/keras/models/Model` instance type keeps one hierarchy chain, so subtype queries against the canonical type also hold for subclasses reached through this alias (wala/ML#662). -->
       <class name="Model" super="Ltensorflow/keras/models/Model"></class>
     </package>
+    <package name="tensorflow/python/keras">
+      <!-- The private-module spelling `from tensorflow.python import keras; class M(keras.Model)` (e.g. MusicTransformer-tensorflow2.0) canonicalizes the base to `Ltensorflow/python/keras/Model`; alias it into the same hierarchy chain as the `tensorflow/keras` shell above so the class shell carries `Model.__init__`'s `_distribution_strategy` wiring (wala/ML#683). -->
+      <class name="Model" super="Ltensorflow/keras/models/Model"></class>
+    </package>
     <package name="tensorflow/keras/layers/class">
       <class name="Dense" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Dense -->
@@ -3406,12 +3412,17 @@
       </class>
     </package>
     <package name="tensorflow/distribute/run">
-      <!-- `strategy.run(fn, args=(a, b, ...))` invokes `fn(a, b, ...)` per replica, unpacking the `args` tuple positionally into the callback. This synthetic body forwards the tuple's first two elements (fields `0` and `1`) so a two-parameter callback such as gpt-2's `step_fn(inp, tar)` receives both, not just the first; forwarding only `args[0]` left the second parameter (and everything reached from it) untyped (wala/ML#618). Reading a missing field (e.g. `args[1]` of a one-element tuple) yields an empty points-to set, and passing an argument the callback has no parameter for is dropped, so a one-argument callback is unaffected. Tuples longer than two are still truncated; widen if a longer `args` arises. The keyword form `run(fn, args=(...))` binds the tuple to the `args` parameter by name; WALA 1.8.0's summary reader preserves it (wala/WALA#1972), so no repair is needed; see wala/ML#618. -->
+      <!-- `strategy.run(fn, args=(a, b, ...))` invokes `fn(a, b, ...)` per replica, unpacking the `args` tuple positionally into the callback. This synthetic body forwards the tuple's first seven elements (fields `0` through `6`); forwarding only `args[0]` left the second parameter (and everything reached from it) untyped (wala/ML#618), and forwarding only two truncated MusicTransformer-tensorflow2.0's four- and seven-element tuples (wala/ML#683). Reading a missing field (e.g. `args[2]` of a two-element tuple) yields an empty points-to set, and passing an argument the callback has no parameter for is dropped, so a shorter callback is unaffected. Tuples longer than seven are still truncated; widen if a longer `args` arises. The keyword form `run(fn, args=(...))` binds the tuple to the `args` parameter by name; WALA 1.8.0's summary reader preserves it (wala/WALA#1972), so no repair is needed; see wala/ML#618. -->
       <class name="run" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self fn args">
           <getfield class="LRoot" field="0" fieldType="LRoot" ref="arg2" def="x0"/>
           <getfield class="LRoot" field="1" fieldType="LRoot" ref="arg2" def="x1"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="arg1" arg1="x0" arg2="x1" numArgs="3" def="v"/>
+          <getfield class="LRoot" field="2" fieldType="LRoot" ref="arg2" def="x2"/>
+          <getfield class="LRoot" field="3" fieldType="LRoot" ref="arg2" def="x3"/>
+          <getfield class="LRoot" field="4" fieldType="LRoot" ref="arg2" def="x4"/>
+          <getfield class="LRoot" field="5" fieldType="LRoot" ref="arg2" def="x5"/>
+          <getfield class="LRoot" field="6" fieldType="LRoot" ref="arg2" def="x6"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="arg1" arg1="x0" arg2="x1" arg3="x2" arg4="x3" arg5="x4" arg6="x5" arg7="x6" numArgs="8" def="v"/>
           <return value="v"/>
         </method>
       </class>
@@ -3419,7 +3430,12 @@
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self fn args">
           <getfield class="LRoot" field="0" fieldType="LRoot" ref="arg2" def="x0"/>
           <getfield class="LRoot" field="1" fieldType="LRoot" ref="arg2" def="x1"/>
-          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="arg1" arg1="x0" arg2="x1" numArgs="3" def="v"/>
+          <getfield class="LRoot" field="2" fieldType="LRoot" ref="arg2" def="x2"/>
+          <getfield class="LRoot" field="3" fieldType="LRoot" ref="arg2" def="x3"/>
+          <getfield class="LRoot" field="4" fieldType="LRoot" ref="arg2" def="x4"/>
+          <getfield class="LRoot" field="5" fieldType="LRoot" ref="arg2" def="x5"/>
+          <getfield class="LRoot" field="6" fieldType="LRoot" ref="arg2" def="x6"/>
+          <call class="LRoot" name="do" descriptor="()LRoot;" type="virtual" arg0="arg1" arg1="x0" arg2="x1" arg3="x2" arg4="x3" arg5="x4" arg6="x5" arg7="x6" numArgs="8" def="v"/>
           <return value="v"/>
         </method>
       </class>
