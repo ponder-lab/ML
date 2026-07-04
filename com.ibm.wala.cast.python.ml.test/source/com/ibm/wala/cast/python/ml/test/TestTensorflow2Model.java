@@ -10936,12 +10936,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * vendored MusicTransformer-tensorflow2.0 whole-project analysis, {@code
    * MusicTransformer.__prepare_train_data}'s direct {@code tf.ones((y.shape[0], 1), dtype=y.dtype)}
    * must be visible through the {@code tf} binding carried by {@code from custom.layers import *}
-   * (a wildcard re-export of an import binding), typing the runtime-true {@code (Dynamic, 1)}
-   * result at vn 6. (The sibling {@code MusicTransformerDecoder.__prepare_train_data} has no live
-   * {@code tf} use; all its tensor lines are commented out in the subject.) Before the wala/ML#683
-   * `tensorflow.python` namespace binding, the empty {@code keras} binding that {@code
-   * custom/layers.py} re-exports starved the whole chain, and only the two ⊤-typed parameters
-   * survived here.
+   * (a wildcard re-export of an import binding). What is asserted is the function's tensor-variable
+   * census: seven distinct value numbers, which include the {@code tf.ones} result and its
+   * downstream locals (observed as the runtime-true {@code (Dynamic, 1)} of float32 at vn 6);
+   * pre-fix, only the two ⊤-typed parameters survived, so any regression of the binding collapses
+   * the count. The vendored file is verbatim, so no {@code consume} sink can pin the local's exact
+   * type here; the exact-type pins live in the fixture-scale probes ({@link #testWildcardUsedTf()},
+   * {@link #testWildcardPkgNoInitTf()}). (The sibling {@code
+   * MusicTransformerDecoder.__prepare_train_data} has no live {@code tf} use; all its tensor lines
+   * are commented out in the subject.) Before the wala/ML#683 {@code tensorflow.python} namespace
+   * binding, the empty {@code keras} binding that {@code custom/layers.py} re-exports starved the
+   * whole chain.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
