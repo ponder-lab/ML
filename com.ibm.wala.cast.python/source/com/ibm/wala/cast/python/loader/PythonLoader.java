@@ -151,7 +151,7 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
                   + scriptNamesInScope.stream()
                       .filter(n -> n.endsWith("/" + fileName) || fileName.endsWith("/" + n))
                       .sorted()
-                      .collect(Collectors.toList())
+                      .collect(toList())
                   + " (wala/ML#687).");
 
     return defines;
