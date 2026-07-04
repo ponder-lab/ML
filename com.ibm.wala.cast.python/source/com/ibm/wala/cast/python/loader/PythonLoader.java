@@ -122,29 +122,31 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
       traceImportBinding(
           LOGGER, () -> "Collected script name in scope: " + name + " (wala/ML#691).");
       scriptNamesInScope.add(name);
-      // Script class names are project-relative while module entry names may carry the project
-      // root as their first component; record the stripped form too so the translator's
-      // scope-membership check matches the naming the script classes will use.
-      int slash = name.indexOf('/');
-      if (slash >= 0) scriptNamesInScope.add(name.substring(slash + 1));
     }
   }
 
   /**
    * Returns whether a source module with the given file name is in the analysis scope, regardless
    * of whether it has been translated yet (<a
-   * href="https://github.com/wala/ML/issues/691">wala/ML#691</a>).
+   * href="https://github.com/wala/ML/issues/691">wala/ML#691</a>). Collected entry names are
+   * matched by path suffix, not exact spelling: depending on how the embedding client constructs
+   * its modules, entries may carry a project-relative prefix or the absolute filesystem path of the
+   * checkout, while the importer always looks up the script-relative name (<a
+   * href="https://github.com/wala/ML/issues/687">wala/ML#687</a>).
    *
-   * @param fileName The script file name as it appears in the scope (e.g. {@code B.py}).
-   * @return {@code true} iff a source module with that file name is in scope.
+   * @param fileName The script file name as the importer spells it (e.g. {@code B.py}).
+   * @return {@code true} iff a source module whose path ends with that file name is in scope.
    */
   public boolean definesScriptInScope(String fileName) {
-    boolean defines = scriptNamesInScope.contains(fileName);
+    String suffix = "/" + fileName;
+    boolean defines =
+        scriptNamesInScope.stream().anyMatch(n -> scriptNameMatches(n, fileName, suffix));
 
-    // On a miss, name the collected entries that differ only in path prefix, so a per-machine
-    // divergence in scope construction (e.g. project-relative vs root-prefixed entry names) is
-    // visible from the log alone (wala/ML#687).
-    if (!defines)
+    // On a miss, name the collected entries sharing the file name's base name, so a spelling
+    // divergence in scope construction is visible from the log alone (wala/ML#687).
+    if (!defines) {
+      String base = baseName(fileName);
+
       traceImportBinding(
           LOGGER,
           () ->
@@ -152,12 +154,50 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
                   + fileName
                   + " is not in scope; near misses: "
                   + scriptNamesInScope.stream()
-                      .filter(n -> n.endsWith("/" + fileName) || fileName.endsWith("/" + n))
+                      .filter(n -> baseName(n).equals(base))
                       .sorted()
                       .collect(toList())
                   + " (wala/ML#687).");
+    }
 
     return defines;
+  }
+
+  /**
+   * Returns whether the given collected in-scope entry name denotes the script the importer looks
+   * up: either the spellings are identical, or the entry name ends with the looked-up name at a
+   * path-component boundary (e.g. entry {@code /home/user/proj/in/B.py} matches lookup {@code B.py}
+   * but not {@code AB.py}).
+   *
+   * @param collectedName An entry name as collected from the analysis scope.
+   * @param fileName The script file name as the importer spells it.
+   * @return {@code true} iff {@code collectedName} denotes {@code fileName}.
+   */
+  public static boolean scriptNameMatches(String collectedName, String fileName) {
+    return scriptNameMatches(collectedName, fileName, "/" + fileName);
+  }
+
+  /**
+   * The scan form of {@link #scriptNameMatches(String, String)}, taking the slash-prefixed lookup
+   * name so a membership scan over all collected entries allocates it once rather than per entry.
+   *
+   * @param collectedName An entry name as collected from the analysis scope.
+   * @param fileName The script file name as the importer spells it.
+   * @param suffix {@code "/" + fileName}, precomputed by the caller.
+   * @return {@code true} iff {@code collectedName} denotes {@code fileName}.
+   */
+  private static boolean scriptNameMatches(String collectedName, String fileName, String suffix) {
+    return collectedName.equals(fileName) || collectedName.endsWith(suffix);
+  }
+
+  /**
+   * Returns the last path component of the given name.
+   *
+   * @param name A possibly slash-separated name.
+   * @return The substring after the last {@code /}, or {@code name} itself if it has none.
+   */
+  private static String baseName(String name) {
+    return name.substring(name.lastIndexOf('/') + 1);
   }
 
   /**
