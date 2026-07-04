@@ -2133,6 +2133,27 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   };
 
   /**
+   * The complete MusicTransformer-tensorflow2.0 subject vendored verbatim under {@code
+   * musictransformer_proj} (wala/ML#683, wala/ML#684), so its whole-project guards analyze the
+   * subject shape rather than a distilled fixture.
+   */
+  private static final String[] MUSICTRANSFORMER_PROJECT_FILES = {
+    "musictransformer_proj/custom/callback.py",
+    "musictransformer_proj/custom/layers.py",
+    "musictransformer_proj/data.py",
+    "musictransformer_proj/deprecated/seq_test.py",
+    "musictransformer_proj/deprecated/sequence.py",
+    "musictransformer_proj/deprecated/train.py",
+    "musictransformer_proj/dist_train.py",
+    "musictransformer_proj/generate.py",
+    "musictransformer_proj/model.py",
+    "musictransformer_proj/params.py",
+    "musictransformer_proj/preprocess.py",
+    "musictransformer_proj/train.py",
+    "musictransformer_proj/utils.py"
+  };
+
+  /**
    * Verbatim whole-project guard for <a
    * href="https://github.com/wala/ML/issues/690">wala/ML#690</a>: the full NLPGNN subject vendored
    * as-is (all 94 {@code .py} files, matching the consumer's whole-project run; no added {@code
@@ -10911,6 +10932,40 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Pins <a href="https://github.com/wala/ML/issues/684">wala/ML#684</a> at subject scale: in the
+   * vendored MusicTransformer-tensorflow2.0 whole-project analysis, {@code
+   * MusicTransformer.__prepare_train_data}'s direct {@code tf.ones((y.shape[0], 1), dtype=y.dtype)}
+   * must be visible through the {@code tf} binding carried by {@code from custom.layers import *}
+   * (a wildcard re-export of an import binding), typing the runtime-true {@code (Dynamic, 1)}
+   * result at vn 6. (The sibling {@code MusicTransformerDecoder.__prepare_train_data} has no live
+   * {@code tf} use; all its tensor lines are commented out in the subject.) Before the wala/ML#683
+   * `tensorflow.python` namespace binding, the empty {@code keras} binding that {@code
+   * custom/layers.py} re-exports starved the whole chain, and only the two ⊤-typed parameters
+   * survived here.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testMusicTransformerPrepareTrainData()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        MUSICTRANSFORMER_PROJECT_FILES,
+        "model.py",
+        "MusicTransformer.__prepare_train_data",
+        "musictransformer_proj",
+        2,
+        7,
+        Map.of(
+            2,
+            Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE),
+            3,
+            Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
    * Pins the model self-call (wala/ML#618): a method calling {@code self(...)} and destructuring
    * the tuple result, mirroring gpt-2's {@code predictions, _ = self(inputs, training=True)}.
    *
@@ -11272,6 +11327,61 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(INT_32, 2, 1))));
+  }
+
+  /**
+   * Pins <a href="https://github.com/wala/ML/issues/684">wala/ML#684</a> at fixture scale: {@code
+   * tf} reached through {@code from helpers_used import *} where the exporting module also reads
+   * {@code tf} inside one of its own functions. The intra-module use lexically exposes the binding,
+   * which drops it from the script body's SSA local names, so the wildcard scan's named-binding
+   * match (wala/ML#665) must consult the exposed-name information as well. The subject's {@code
+   * custom/layers.py} has this shape; the untouched-binding {@code helpers.py} probes do not.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testWildcardUsedTf()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "wildcard_proj/helpers_used.py", "wildcard_proj/tf2_test_wildcard_used_tf.py"
+        },
+        "tf2_test_wildcard_used_tf.py",
+        "consume",
+        "wildcard_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
+  /**
+   * Pins <a href="https://github.com/wala/ML/issues/684">wala/ML#684</a> at fixture scale for the
+   * package-qualified form: {@code tf} reached through {@code from pkgnoinit.helpers3 import *},
+   * where the package has no {@code __init__.py} (a namespace package, like the subject's {@code
+   * custom/}) and the exporting module also reads {@code tf} in one of its own functions — the
+   * exact {@code from custom.layers import *} shape of MusicTransformer-tensorflow2.0.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testWildcardPkgNoInitTf()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "wildcard_proj/pkgnoinit/helpers3.py", "wildcard_proj/tf2_test_wildcard_pkgnoinit_tf.py"
+        },
+        "tf2_test_wildcard_pkgnoinit_tf.py",
+        "consume",
+        "wildcard_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
   }
 
   /**
