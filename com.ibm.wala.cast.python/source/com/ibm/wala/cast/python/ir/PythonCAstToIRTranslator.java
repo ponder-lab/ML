@@ -1112,12 +1112,33 @@ public class PythonCAstToIRTranslator extends AstTranslator {
       // already translated, so an importer translated before its importee silently fell through
       // to the (nonexistent) library-import path and the module never bound (wala/ML#691). The
       // scope-name check decides by what the analysis scope CONTAINS, not by translation order.
-      if (loader.lookupClass(TypeName.findOrCreate("Lscript " + name + ".py")) != null
-          || (loader instanceof PythonLoader pythonLoader
-              && pythonLoader.definesScriptInScope(name + ".py"))) {
+      boolean alreadyTranslated =
+          loader.lookupClass(TypeName.findOrCreate("Lscript " + name + ".py")) != null;
+      boolean inScope =
+          loader instanceof PythonLoader pythonLoader
+              && pythonLoader.definesScriptInScope(name + ".py");
+
+      if (alreadyTranslated || inScope) {
+        LOGGER.fine(
+            () ->
+                "Binding import of: "
+                    + name
+                    + " to script: "
+                    + name
+                    + ".py (already translated: "
+                    + alreadyTranslated
+                    + ", in scope: "
+                    + inScope
+                    + ") (wala/ML#687).");
         FieldReference global = makeGlobalRef("script " + name + ".py");
         context.cfg().addInstruction(new AstGlobalRead(idx, resultVal, global));
       } else {
+        LOGGER.fine(
+            () ->
+                "Import of: "
+                    + name
+                    + " matches no script in scope; treating it as a library import"
+                    + " (wala/ML#687).");
         TypeReference imprt = TypeReference.findOrCreate(PythonTypes.pythonLoader, "L" + name);
         MethodReference call =
             MethodReference.findOrCreate(

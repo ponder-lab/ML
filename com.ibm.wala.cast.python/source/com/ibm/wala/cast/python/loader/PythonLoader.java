@@ -137,7 +137,24 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
    * @return {@code true} iff a source module with that file name is in scope.
    */
   public boolean definesScriptInScope(String fileName) {
-    return scriptNamesInScope.contains(fileName);
+    boolean defines = scriptNamesInScope.contains(fileName);
+
+    // On a miss, name the collected entries that differ only in path prefix, so a per-machine
+    // divergence in scope construction (e.g. project-relative vs root-prefixed entry names) is
+    // visible from the log alone (wala/ML#687).
+    if (!defines)
+      LOGGER.fine(
+          () ->
+              "Script: "
+                  + fileName
+                  + " is not in scope; near misses: "
+                  + scriptNamesInScope.stream()
+                      .filter(n -> n.endsWith("/" + fileName) || fileName.endsWith("/" + n))
+                      .sorted()
+                      .collect(Collectors.toList())
+                  + " (wala/ML#687).");
+
+    return defines;
   }
 
   /**
