@@ -10845,6 +10845,72 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Pins <a href="https://github.com/wala/ML/issues/683">wala/ML#683</a> at subject shape
+   * (MusicTransformer-tensorflow2.0): the model base is {@code keras.Model} bound by {@code from
+   * tensorflow.python import keras}, so the summary {@code Model} must be reachable through the
+   * {@code tensorflow.python} module object for the class shell to carry {@code Model.__init__}'s
+   * {@code _distribution_strategy} assignment; and the callback args tuple has four elements, so
+   * the strategy {@code run} summary must forward past the first two.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDistTrainStep2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dist_train_step2.py",
+        "MyModel.__train_step",
+        3,
+        4,
+        Map.of(
+            3,
+            Set.of(TensorType.of(FLOAT_32, 2, 3)),
+            4,
+            Set.of(TensorType.of(FLOAT_32, 2, 3)),
+            5,
+            Set.of(TensorType.of(FLOAT_32, 2, 3))));
+  }
+
+  /**
+   * Pins <a href="https://github.com/wala/ML/issues/683">wala/ML#683</a> at the
+   * MusicTransformer-tensorflow2.0 encoder-decoder shape: the callback args tuple has seven
+   * elements, the widest the subject passes to the strategy, so the {@code run} summary's tuple
+   * forwarding must reach fields 2 through 6. The fixture's callback computes from the tuple's
+   * fifth and sixth elements specifically, so the pinned result only types if the later fields
+   * flow.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDistTrainStep3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dist_train_step3.py",
+        "MyModel.__train_step",
+        6,
+        7,
+        Map.of(
+            3,
+            Set.of(TensorType.of(FLOAT_32, 2, 3)),
+            4,
+            Set.of(TensorType.of(FLOAT_32, 2, 3)),
+            5,
+            Set.of(TensorType.of(FLOAT_32, 2, 3)),
+            6,
+            Set.of(TensorType.of(FLOAT_32, 2, 3)),
+            7,
+            Set.of(TensorType.of(FLOAT_32, 2, 3)),
+            8,
+            Set.of(TensorType.of(FLOAT_32, 2, 3))));
+  }
+
+  /**
    * Pins the model self-call (wala/ML#618): a method calling {@code self(...)} and destructuring
    * the tuple result, mirroring gpt-2's {@code predictions, _ = self(inputs, training=True)}.
    *
