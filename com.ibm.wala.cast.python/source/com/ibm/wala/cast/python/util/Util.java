@@ -38,6 +38,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -115,6 +116,32 @@ public class Util {
       getNameWithoutExtension(MODULE_INITIALIZATION_FILENAME);
 
   public static final String IMPORT_WILDCARD_CHARACTER = "*";
+
+  /**
+   * System property that, when {@code true}, echoes the plain-import binding-decision trace (<a
+   * href="https://github.com/wala/ML/issues/687">wala/ML#687</a>) to {@link System#err} in addition
+   * to the FINE log. Embedding runtimes such as a Tycho-surefire OSGi harness preempt {@code
+   * java.util.logging} configuration, making the FINE channel unobservable exactly where the
+   * binding divergence manifests; stderr survives those harnesses.
+   */
+  public static final String IMPORT_BINDING_TRACE_PROPERTY = "wala.ml.import.binding.trace";
+
+  /**
+   * Emits the given import-binding trace message to {@link System#err} when {@link
+   * #IMPORT_BINDING_TRACE_PROPERTY} is set to {@code true}, and to the FINE log unconditionally.
+   * The message text is shared between the two channels so the wala/ML#687 grep recipe applies to
+   * either.
+   *
+   * @param logger The logger of the emitting class, so the FINE line carries its source.
+   * @param message Supplier of the trace message; evaluated only if a channel consumes it.
+   */
+  public static void traceImportBinding(Logger logger, Supplier<String> message) {
+    if (Boolean.getBoolean(IMPORT_BINDING_TRACE_PROPERTY)) {
+      String text = message.get();
+      System.err.println(text);
+      logger.fine(text);
+    } else logger.fine(message);
+  }
 
   /**
    * Add Pytest entrypoints to the given {@link PropagationCallGraphBuilder}.
