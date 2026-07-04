@@ -9,7 +9,6 @@ import datetime
 import argparse
 from midi_processor.processor import decode_midi, encode_midi
 
-
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--max_seq", default=2048, help="최대 길이", type=int)
