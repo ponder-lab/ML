@@ -15,6 +15,7 @@ import static com.ibm.wala.cast.python.ir.PythonLanguage.Python;
 import static com.ibm.wala.cast.python.types.PythonTypes.pythonLoader;
 import static com.ibm.wala.cast.python.util.Util.IMPORT_WILDCARD_CHARACTER;
 import static com.ibm.wala.cast.python.util.Util.MODULE_INITIALIZATION_FILENAME;
+import static com.ibm.wala.cast.python.util.Util.traceImportBinding;
 
 import com.ibm.wala.cast.ir.ssa.AssignInstruction;
 import com.ibm.wala.cast.ir.ssa.AstGlobalRead;
@@ -1119,7 +1120,8 @@ public class PythonCAstToIRTranslator extends AstTranslator {
               && pythonLoader.definesScriptInScope(name + ".py");
 
       if (alreadyTranslated || inScope) {
-        LOGGER.fine(
+        traceImportBinding(
+            LOGGER,
             () ->
                 "Binding import of: "
                     + name
@@ -1133,7 +1135,8 @@ public class PythonCAstToIRTranslator extends AstTranslator {
         FieldReference global = makeGlobalRef("script " + name + ".py");
         context.cfg().addInstruction(new AstGlobalRead(idx, resultVal, global));
       } else {
-        LOGGER.fine(
+        traceImportBinding(
+            LOGGER,
             () ->
                 "Import of: "
                     + name

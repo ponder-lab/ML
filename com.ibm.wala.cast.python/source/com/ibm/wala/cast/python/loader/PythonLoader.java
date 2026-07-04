@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.loader;
 
 import static com.ibm.wala.cast.python.types.PythonTypes.pythonLoader;
 import static com.ibm.wala.cast.python.util.Util.getNames;
+import static com.ibm.wala.cast.python.util.Util.traceImportBinding;
 import static java.util.stream.Collectors.toList;
 
 import com.ibm.wala.cast.ir.translator.AstTranslator.AstLexicalInformation;
@@ -118,7 +119,8 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
       entry.asModule().getEntries().forEachRemaining(this::collectScriptNames);
     else {
       String name = entry.getName();
-      LOGGER.fine(() -> "Collected script name in scope: " + name + " (wala/ML#691).");
+      traceImportBinding(
+          LOGGER, () -> "Collected script name in scope: " + name + " (wala/ML#691).");
       scriptNamesInScope.add(name);
       // Script class names are project-relative while module entry names may carry the project
       // root as their first component; record the stripped form too so the translator's
@@ -143,7 +145,8 @@ public abstract class PythonLoader extends CAstAbstractModuleLoader {
     // divergence in scope construction (e.g. project-relative vs root-prefixed entry names) is
     // visible from the log alone (wala/ML#687).
     if (!defines)
-      LOGGER.fine(
+      traceImportBinding(
+          LOGGER,
           () ->
               "Script: "
                   + fileName
