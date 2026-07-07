@@ -10655,6 +10655,134 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Probe for the model-forward tuple-of-reshapes shape: a {@code tf.keras.Model} subclass whose
+   * {@code call} returns a tuple of {@code tf.reshape} results, unpacked at the top-level call site
+   * and passed to {@code consume}. Discriminates the reshape-producer axis against the passing
+   * layer-tuple-return shape ({@link #testCollectionProbeLayerTupleReturn()}).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testModelForwardTupleReshapeReturn()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_tuple_reshape_return.py",
+        "consume",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_4_4_FLOAT32), 3, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
+  /**
+   * Control for {@link #testModelForwardTupleReshapeReturn()}: identical shape but the returned
+   * tuple's elements are elementwise results rather than {@code tf.reshape} results.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testModelForwardTupleAddReturn()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_tuple_add_return.py",
+        "consume",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_4_4_FLOAT32), 3, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
+  /**
+   * Probe for the generator-fed model-forward shape: as {@link
+   * #testModelForwardTupleReshapeReturn()} but the model input arrives via {@code next()} on a
+   * generator function, tuple-unpacked at the call site. The generator transit drops the tensor
+   * typing (<a href="https://github.com/wala/ML/issues/696">wala/ML#696</a>), so {@code consume}
+   * currently sees zero tensor parameters, which this test captures.
+   *
+   * <p>TODO: Expect two tensor parameters, both typed {@code [4, 4] float32}, once <a
+   * href="https://github.com/wala/ML/issues/696">wala/ML#696</a> is fixed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testModelForwardTupleReshapeGenInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_model_tuple_reshape_gen_input.py", "consume", 0, 0, Map.of());
+  }
+
+  /**
+   * Probe for the bare generator/next transit: a tensor yielded by a generator function, obtained
+   * via {@code next()} with tuple unpacking, flows directly to {@code consume} with no model in
+   * between. The typing is dropped (<a
+   * href="https://github.com/wala/ML/issues/696">wala/ML#696</a>), so {@code consume} currently
+   * sees zero tensor parameters, which this test captures.
+   *
+   * <p>TODO: Expect one tensor parameter typed {@code [4, 4] float32}, once <a
+   * href="https://github.com/wala/ML/issues/696">wala/ML#696</a> is fixed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGenNextUnpack()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_gen_next_unpack.py", "consume", 0, 0, Map.of());
+  }
+
+  /**
+   * Narrowing probe for the generator transit: the generator yields a single tensor (no tuple),
+   * retrieved via {@code next()} with no unpacking. The minimal failing shape of <a
+   * href="https://github.com/wala/ML/issues/696">wala/ML#696</a>: neither tuple unpacking nor a
+   * model forward is involved, yet the typing is dropped and {@code consume} currently sees zero
+   * tensor parameters, which this test captures.
+   *
+   * <p>TODO: Expect one tensor parameter typed {@code [4, 4] float32}, once <a
+   * href="https://github.com/wala/ML/issues/696">wala/ML#696</a> is fixed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGenNextSingle()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_gen_next_single.py", "consume", 0, 0, Map.of());
+  }
+
+  /**
+   * Companion probe for the generator transit: the same yielded pair consumed by for-loop
+   * destructuring over the generator instead of {@code next()}. Also dropped (<a
+   * href="https://github.com/wala/ML/issues/696">wala/ML#696</a>); distinct from the {@code
+   * tf.data} destructuring shape of <a
+   * href="https://github.com/wala/ML/issues/396">wala/ML#396</a>, where the producer is modeled and
+   * the symptom is swapped element types. {@code consume} currently sees zero tensor parameters,
+   * which this test captures.
+   *
+   * <p>TODO: Expect one tensor parameter typed {@code [4, 4] float32}, once <a
+   * href="https://github.com/wala/ML/issues/696">wala/ML#696</a> is fixed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGenForUnpack()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_gen_for_unpack.py", "consume", 0, 0, Map.of());
+  }
+
+  /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/668">wala/ML#668</a>: appending
    * a constant (an invariant-contents value whose pointer key the invoke's own argument processing
    * records as implicitly represented) must not crash call-graph construction with {@code
