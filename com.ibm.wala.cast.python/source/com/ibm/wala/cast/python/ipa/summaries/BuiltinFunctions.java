@@ -145,6 +145,36 @@ public class BuiltinFunctions {
     return new PythonSummarizedFunction(ref, x, cls);
   }
 
+  /**
+   * Builds the summary for {@code next}: a read of the {@value
+   * PythonTypes#GENERATOR_CONTENT_FIELD_NAME} field off the argument. A generator function's object
+   * accumulates every yielded value in that field (the front-end translates {@code yield x} as a
+   * write to it and calling a generator evaluates to that object), so {@code next(gen)} recovers
+   * the yields. Without this, {@code next} returned a freshly-allocated opaque {@code object} and
+   * every value flowing through it unraveled (wala/ML#696). On arguments lacking the field (e.g.,
+   * dataset iterators), the read has an empty points-to set and contributes nothing, matching the
+   * previous behavior for the dataflow analysis.
+   *
+   * @param cls The builtin function class whose summary this is.
+   * @param name The builtin's name ({@code next}).
+   * @return The populated summary.
+   */
+  private static IMethod nextSummary(IClass cls, String name) {
+    TypeReference type = builtinFunction(name);
+    MethodReference ref = MethodReference.findOrCreate(type, AstMethodReference.fnSelector);
+    PythonSummary x = new PythonSummary(ref, 10);
+
+    AstInstructionFactory factory = PythonLanguage.Python.instructionFactory();
+    int result = 11;
+    int fieldKey = 12;
+
+    x.addConstant(fieldKey, new ConstantValue(PythonTypes.GENERATOR_CONTENT_FIELD_NAME));
+    x.addStatement(factory.PropertyRead(0, result, 2, fieldKey));
+    x.addStatement(factory.ReturnInstruction(1, result, false));
+
+    return new PythonSummarizedFunction(ref, x, cls);
+  }
+
   private static IMethod argSummary(IClass cls, String name, int arg) {
     PythonSummary S = argSummary(cls, builtinFunction(name), arg);
     return new PythonSummarizedFunction(S.getMethod(), S, cls);
@@ -194,7 +224,11 @@ public class BuiltinFunctions {
                   // see `zipSummary` (wala/ML#618).
                   : name.equals("zip")
                       ? zipSummary(this, name)
-                      : typeSummary(this, name, returnedType);
+                      // `next` must read the yields accumulated on a generator object; see
+                      // `nextSummary` (wala/ML#696).
+                      : name.equals("next")
+                          ? nextSummary(this, name)
+                          : typeSummary(this, name, returnedType);
     }
 
     private BuiltinFunction(IClassHierarchy cha, String name, int arg) {

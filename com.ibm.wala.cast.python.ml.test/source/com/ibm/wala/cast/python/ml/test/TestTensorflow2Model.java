@@ -10701,10 +10701,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * #testModelForwardTupleReshapeReturn()} but the model input arrives via {@code next()} on a
    * generator function, tuple-unpacked at the call site. The generator transit drops the tensor
    * typing (<a href="https://github.com/wala/ML/issues/696">wala/ML#696</a>), so {@code consume}
-   * currently sees zero tensor parameters, which this test captures.
-   *
-   * <p>TODO: Expect two tensor parameters, both typed {@code [4, 4] float32}, once <a
-   * href="https://github.com/wala/ML/issues/696">wala/ML#696</a> is fixed.
+   * previously saw zero tensor parameters; a regression guard for <a
+   * href="https://github.com/wala/ML/issues/696">wala/ML#696</a>.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -10714,18 +10712,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testModelForwardTupleReshapeGenInput()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_model_tuple_reshape_gen_input.py", "consume", 0, 0, Map.of());
+    test(
+        "tf2_test_model_tuple_reshape_gen_input.py",
+        "consume",
+        2,
+        2,
+        Map.of(2, Set.of(TENSOR_4_4_FLOAT32), 3, Set.of(TENSOR_4_4_FLOAT32)));
   }
 
   /**
    * Probe for the bare generator/next transit: a tensor yielded by a generator function, obtained
    * via {@code next()} with tuple unpacking, flows directly to {@code consume} with no model in
-   * between. The typing is dropped (<a
-   * href="https://github.com/wala/ML/issues/696">wala/ML#696</a>), so {@code consume} currently
-   * sees zero tensor parameters, which this test captures.
-   *
-   * <p>TODO: Expect one tensor parameter typed {@code [4, 4] float32}, once <a
-   * href="https://github.com/wala/ML/issues/696">wala/ML#696</a> is fixed.
+   * between; a regression guard for <a
+   * href="https://github.com/wala/ML/issues/696">wala/ML#696</a>, where the generator transit
+   * dropped the typing.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -10735,18 +10735,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testGenNextUnpack()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_gen_next_unpack.py", "consume", 0, 0, Map.of());
+    test("tf2_test_gen_next_unpack.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
   }
 
   /**
    * Narrowing probe for the generator transit: the generator yields a single tensor (no tuple),
    * retrieved via {@code next()} with no unpacking. The minimal failing shape of <a
    * href="https://github.com/wala/ML/issues/696">wala/ML#696</a>: neither tuple unpacking nor a
-   * model forward is involved, yet the typing is dropped and {@code consume} currently sees zero
-   * tensor parameters, which this test captures.
-   *
-   * <p>TODO: Expect one tensor parameter typed {@code [4, 4] float32}, once <a
-   * href="https://github.com/wala/ML/issues/696">wala/ML#696</a> is fixed.
+   * model forward is involved. The minimal shape of <a
+   * href="https://github.com/wala/ML/issues/696">wala/ML#696</a>, where the generator transit
+   * dropped the typing; now a regression guard for it.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -10756,7 +10754,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testGenNextSingle()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_gen_next_single.py", "consume", 0, 0, Map.of());
+    test("tf2_test_gen_next_single.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
   }
 
   /**
@@ -10765,11 +10763,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * href="https://github.com/wala/ML/issues/696">wala/ML#696</a>); distinct from the {@code
    * tf.data} destructuring shape of <a
    * href="https://github.com/wala/ML/issues/396">wala/ML#396</a>, where the producer is modeled and
-   * the symptom is swapped element types. {@code consume} currently sees zero tensor parameters,
-   * which this test captures.
-   *
-   * <p>TODO: Expect one tensor parameter typed {@code [4, 4] float32}, once <a
-   * href="https://github.com/wala/ML/issues/696">wala/ML#696</a> is fixed.
+   * the symptom is swapped element types. A regression guard for <a
+   * href="https://github.com/wala/ML/issues/696">wala/ML#696</a>, where the generator transit
+   * dropped the typing.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -10779,7 +10775,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testGenForUnpack()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_gen_for_unpack.py", "consume", 0, 0, Map.of());
+    test("tf2_test_gen_for_unpack.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
   }
 
   /**

@@ -188,6 +188,25 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
     default void addGlobal(String n) {
       getParent().addGlobal(n);
     }
+
+    /**
+     * Marks the nearest enclosing function context as a generator. Called when a {@code yield} (or
+     * {@code yield from}) is translated; delegates up the context chain, since the yield may be
+     * nested in loop or try contexts whose visitors are distinct from the function body's.
+     */
+    default void markGenerator() {
+      getParent().markGenerator();
+    }
+
+    /**
+     * Returns whether the nearest enclosing function context has been marked as a generator.
+     *
+     * @return True iff a {@code yield} (or {@code yield from}) has been translated in the nearest
+     *     enclosing function context.
+     */
+    default boolean isGenerator() {
+      return getParent().isGenerator();
+    }
   }
 
   private static class RootContext extends TranslatorToCAst.RootContext<WalkContext, PythonTree>
@@ -236,6 +255,15 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
     public CAstNode getCatchTarget(String s) {
       return null;
     }
+
+    /** A module-level {@code yield} is a syntax error in Python; ignore it rather than crash. */
+    @Override
+    public void markGenerator() {}
+
+    @Override
+    public boolean isGenerator() {
+      return false;
+    }
   }
 
   private static class FunctionContext
@@ -243,6 +271,13 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
     private final AbstractCodeEntity fun;
     private final java.util.Set<String> downwardGlobals;
     private final java.util.Set<String> definedNames = HashSetFactory.make();
+
+    /**
+     * Whether this function is a generator, i.e., a {@code yield} (or {@code yield from}) has been
+     * translated in its body (possibly by a nested loop or try visitor delegating up the context
+     * chain).
+     */
+    private boolean generator;
 
     public WalkContext getParent() {
       return parent;
@@ -294,6 +329,16 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
     @Override
     public Map<CAstNode, Collection<CAstEntity>> getScopedEntities() {
       return fun.getAllScopedEntities();
+    }
+
+    @Override
+    public void markGenerator() {
+      this.generator = true;
+    }
+
+    @Override
+    public boolean isGenerator() {
+      return this.generator;
     }
   }
 
@@ -1410,6 +1455,12 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
         private final Collection<CAstAnnotation> annotations;
 
+        /**
+         * Whether this function is a generator, i.e., its body contains a {@code yield} (or {@code
+         * yield from}). Known only after the body has been visited, hence mutable.
+         */
+        private boolean generator;
+
         @Override
         public Iterable<CAstNode> dynamicAnnotations() {
           return dynamicAnnotations;
@@ -1432,6 +1483,47 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
         @Override
         public int getKind() {
           return CAstEntity.FUNCTION_ENTITY;
+        }
+
+        /**
+         * Marks this function as a generator, adding a {@code return} of the function object to its
+         * AST so that calling it evaluates to the object accumulating its yields.
+         *
+         * @param generator Whether the function's body contains a {@code yield} (or {@code yield
+         *     from}).
+         */
+        protected void setGenerator(boolean generator) {
+          this.generator = generator;
+        }
+
+        /**
+         * Prepends a conditional {@code return} of the enclosing function object to the given body
+         * when this function is a generator, so that calling it evaluates to the object carrying
+         * the yields written to {@value PythonTypes#GENERATOR_CONTENT_FIELD_NAME} (wala/ML#696).
+         *
+         * <p>The {@code return} is guarded by a test on the (non-constant) function object rather
+         * than appended after the body: a generator body commonly ends in {@code while True:},
+         * which the translator emits as an unconditional back edge, leaving any trailing statement
+         * unreachable and dropped from the IR. Both branches of a non-constant test survive
+         * translation, so the {@code return} stays reachable while the body is still analyzed on
+         * the fall-through path.
+         *
+         * @param body The function body {@link CAstNode} to extend.
+         * @return The given body, with the guarded {@code return} prepended when this function is a
+         *     generator.
+         */
+        private CAstNode prependGeneratorReturn(CAstNode body) {
+          if (!generator) return body;
+          CAst Ast = PythonParser.Ast;
+          return Ast.makeNode(
+              CAstNode.BLOCK_STMT,
+              Ast.makeNode(
+                  CAstNode.IF_STMT,
+                  Ast.makeNode(CAstNode.VAR, Ast.makeConstant("the function")),
+                  Ast.makeNode(
+                      CAstNode.RETURN,
+                      Ast.makeNode(CAstNode.VAR, Ast.makeConstant("the function")))),
+              body);
         }
 
         @Override
@@ -1474,9 +1566,10 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
                               Ast.makeConstant("$self")),
                           Ast.makeNode(CAstNode.VAR, Ast.makeConstant(getArgumentNames()[1]))));
 
-              return PythonParser.Ast.makeNode(CAstNode.BLOCK_STMT, newNodes);
+              return prependGeneratorReturn(
+                  PythonParser.Ast.makeNode(CAstNode.BLOCK_STMT, newNodes));
             } else {
-              return PythonParser.Ast.makeNode(CAstNode.BLOCK_STMT, nodes);
+              return prependGeneratorReturn(PythonParser.Ast.makeNode(CAstNode.BLOCK_STMT, nodes));
             }
           } else {
             return PythonParser.Ast.makeNode(
@@ -1541,6 +1634,8 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       for (S s : body) {
         nodes[i++] = s.accept(cv);
       }
+
+      fun.setGenerator(child.isGenerator());
 
       if (isMethod) {
         context.addScopedEntity(null, fun);
@@ -2497,10 +2592,29 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
       return handleWith(arg0.getInternalBody(), arg0.getInternalItems());
     }
 
+    /**
+     * Makes an access to the synthetic field of the enclosing function object that accumulates the
+     * values the enclosing generator yields.
+     *
+     * @return A {@link CAstNode} referencing {@value PythonTypes#GENERATOR_CONTENT_FIELD_NAME} on
+     *     the enclosing function object.
+     */
+    private CAstNode makeGeneratorContentRef() {
+      return Ast.makeNode(
+          CAstNode.OBJECT_REF,
+          Ast.makeNode(CAstNode.VAR, Ast.makeConstant("the function")),
+          Ast.makeConstant(PythonTypes.GENERATOR_CONTENT_FIELD_NAME));
+    }
+
     @Override
     public CAstNode visitYield(Yield arg0) throws Exception {
+      context.markGenerator();
+
       if (arg0.getInternalValue() != null) {
-        return arg0.getInternalValue().accept(this);
+        // Accumulate the yielded value in the enclosing function object's synthetic content
+        // field, where `next()` and `for`-loop value iteration read it back out (wala/ML#696).
+        return Ast.makeNode(
+            CAstNode.ASSIGN, makeGeneratorContentRef(), arg0.getInternalValue().accept(this));
       } else {
         return Ast.makeNode(CAstNode.RETURN_WITHOUT_BRANCH);
       }
@@ -2586,7 +2700,17 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
     @Override
     public CAstNode visitYieldFrom(YieldFrom arg0) throws Exception {
-      return arg0.getInternalValue().accept(this);
+      context.markGenerator();
+
+      // Forward the delegate generator's accumulated yields into the enclosing function object's
+      // synthetic content field (wala/ML#696).
+      return Ast.makeNode(
+          CAstNode.ASSIGN,
+          makeGeneratorContentRef(),
+          Ast.makeNode(
+              CAstNode.OBJECT_REF,
+              arg0.getInternalValue().accept(this),
+              Ast.makeConstant(PythonTypes.GENERATOR_CONTENT_FIELD_NAME)));
     }
   }
 
