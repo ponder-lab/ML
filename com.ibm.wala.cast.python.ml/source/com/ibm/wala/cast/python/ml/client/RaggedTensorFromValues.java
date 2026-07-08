@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
+
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
@@ -43,12 +45,7 @@ public abstract class RaggedTensorFromValues extends TensorGenerator {
     if (valuesPts != null && !valuesPts.isEmpty()) {
       Set<DType> ret = this.getDTypesOfValue(builder, valuesPts);
       LOGGER.fine(
-          () ->
-              "Inferred dtypes from values for "
-                  + Loggables.describe(this.getSource())
-                  + ": "
-                  + ret
-                  + ".");
+          () -> "Inferred dtypes from values for " + describe(this.getSource()) + ": " + ret + ".");
       return ret;
     }
     return EnumSet.of(DType.UNKNOWN);
@@ -68,7 +65,7 @@ public abstract class RaggedTensorFromValues extends TensorGenerator {
       LOGGER.fine(
           () ->
               "Determined default ragged shapes for "
-                  + Loggables.describe(this.getSource())
+                  + describe(this.getSource())
                   + ": "
                   + ret
                   + ".");
@@ -91,11 +88,7 @@ public abstract class RaggedTensorFromValues extends TensorGenerator {
 
     LOGGER.fine(
         () ->
-            "Determined final ragged shapes for "
-                + Loggables.describe(this.getSource())
-                + ": "
-                + ret
-                + ".");
+            "Determined final ragged shapes for " + describe(this.getSource()) + ": " + ret + ".");
     return ret;
   }
 }

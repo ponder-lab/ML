@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
+
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -72,9 +74,7 @@ public class Squeeze extends PassThroughUnaryTensorGenerator {
     } else {
       axes = resolveAxisInts(builder, axisPts);
       if (axes == null) {
-        LOGGER.fine(
-            () ->
-                "Non-constant axis for " + Loggables.describe(this.getSource()) + "; returning ⊤.");
+        LOGGER.fine(() -> "Non-constant axis for " + describe(this.getSource()) + "; returning ⊤.");
         return null;
       }
     }
@@ -136,12 +136,7 @@ public class Squeeze extends PassThroughUnaryTensorGenerator {
           // `getShapesFromShapeArgument` throws `IllegalStateException` for an unrecognized shape
           // form; degrade that to ⊤. Other runtime exceptions propagate as intended diagnostics.
           LOGGER.fine(
-              () ->
-                  "Could not resolve axis of "
-                      + Loggables.describe(this.getSource())
-                      + ": "
-                      + e
-                      + ".");
+              () -> "Could not resolve axis of " + describe(this.getSource()) + ": " + e + ".");
           return null;
         }
         if (lists == null) return null;

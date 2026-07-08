@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT64;
 import static java.util.logging.Logger.getLogger;
 
@@ -48,7 +49,7 @@ public class NpOnes extends Ones {
     LOGGER.fine(
         () ->
             "No dtype specified for source: "
-                + source
+                + describe(source)
                 + ". Using NumPy default dtype of: "
                 + FLOAT64
                 + ".");

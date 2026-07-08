@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -98,9 +99,9 @@ public class Input extends TensorTypeAllocator {
 
     LOGGER.fine(
         "Found possible dtypes: "
-            + Loggables.describe(pointsToSet)
+            + describe(pointsToSet)
             + " for source: "
-            + Loggables.describe(this.getSource())
+            + describe(this.getSource())
             + ".");
     return this.getDTypesFromDTypeArgument(builder, pointsToSet);
   }
@@ -120,9 +121,7 @@ public class Input extends TensorTypeAllocator {
               builder, this.getTensorParameterPosition(), this.getTensorParameterName());
       if (tensorPts != null && !tensorPts.isEmpty()) {
         LOGGER.fine(
-            "Reading shape from `tensor` argument for source: "
-                + Loggables.describe(this.getSource())
-                + ".");
+            "Reading shape from `tensor` argument for source: " + describe(this.getSource()) + ".");
         return this.getShapes(builder, tensorValNum);
       }
     }
@@ -153,7 +152,7 @@ public class Input extends TensorTypeAllocator {
       if (shapePts == null || shapePts.isEmpty()) {
         LOGGER.fine(
             "No shapes found for source: "
-                + Loggables.describe(this.getSource())
+                + describe(this.getSource())
                 + "; using default shapes.");
         shapes = this.getDefaultShapes(builder);
       } else {
@@ -167,9 +166,7 @@ public class Input extends TensorTypeAllocator {
       }
     } else {
       LOGGER.fine(
-          "No shapes found for source: "
-              + Loggables.describe(this.getSource())
-              + "; using default shapes.");
+          "No shapes found for source: " + describe(this.getSource()) + "; using default shapes.");
       shapes = this.getDefaultShapes(builder);
     }
 
@@ -232,8 +229,7 @@ public class Input extends TensorTypeAllocator {
       }
     }
 
-    LOGGER.fine(
-        "Generated shapes: " + newShapes + " for source: " + Loggables.describe(source) + ".");
+    LOGGER.fine("Generated shapes: " + newShapes + " for source: " + describe(source) + ".");
     return newShapes;
   }
 

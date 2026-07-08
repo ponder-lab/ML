@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
+
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -111,14 +113,7 @@ public class Slice extends PassThroughUnaryTensorGenerator {
       // `getShapesFromShapeArgument` throws `IllegalStateException` for an unrecognized shape form;
       // degrade that to ⊤. Other runtime exceptions propagate as intended diagnostics.
       LOGGER.fine(
-          () ->
-              "Could not resolve "
-                  + name
-                  + " of "
-                  + Loggables.describe(this.getSource())
-                  + ": "
-                  + e
-                  + ".");
+          () -> "Could not resolve " + name + " of " + describe(this.getSource()) + ": " + e + ".");
       return null;
     }
   }

@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.ml.util.TensorShapeUtil.areBroadcastable;
 import static com.ibm.wala.cast.python.ml.util.TensorShapeUtil.getBroadcastedShapes;
 import static java.util.Collections.emptyList;
@@ -98,9 +99,9 @@ public class ElementWiseOperation extends TensorGenerator {
     LOGGER.fine(
         () ->
             "EWO.getDefaultShapes entered with source="
-                + Loggables.describe(this.source)
+                + describe(this.source)
                 + ", node="
-                + Loggables.describe(this.getNode()));
+                + describe(this.getNode()));
 
     int xVn = this.getXArgumentValueNumber(builder);
     LOGGER.fine(() -> "EWO.getDefaultShapes xVn: " + xVn);

@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
@@ -86,7 +87,7 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
 
     if (pointsToSet == null || pointsToSet.isEmpty())
       throw new IllegalArgumentException(
-          "Empty points-to set in source: " + Loggables.describe(this.getSource()) + ".");
+          "Empty points-to set in source: " + describe(this.getSource()) + ".");
 
     Set<Long> ret = HashSetFactory.make();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
@@ -147,9 +148,7 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
       }
     }
 
-    LOGGER.fine(
-        () ->
-            "Possible value rowids for " + Loggables.describe(this.getSource()) + ": " + ret + ".");
+    LOGGER.fine(() -> "Possible value rowids for " + describe(this.getSource()) + ": " + ret + ".");
     return ret;
   }
 
@@ -192,18 +191,13 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
       }
       final Set<Long> finalNrowsArgs = nrowsArgs;
       LOGGER.fine(
-          () ->
-              "Inferred nrows for "
-                  + Loggables.describe(this.getSource())
-                  + ": "
-                  + finalNrowsArgs
-                  + ".");
+          () -> "Inferred nrows for " + describe(this.getSource()) + ": " + finalNrowsArgs + ".");
     } else {
       final Set<Long> finalNrowsArgs = nrowsArgs;
       LOGGER.fine(
           () ->
               "Found nrows arguments for "
-                  + Loggables.describe(this.getSource())
+                  + describe(this.getSource())
                   + ": "
                   + finalNrowsArgs
                   + ".");
@@ -238,7 +232,7 @@ public class RaggedFromValueRowIds extends RaggedTensorFromValues {
     LOGGER.fine(
         () ->
             "Possible values shapes for "
-                + Loggables.describe(this.getSource())
+                + describe(this.getSource())
                 + ": "
                 + finalValuesShapes
                 + ".");

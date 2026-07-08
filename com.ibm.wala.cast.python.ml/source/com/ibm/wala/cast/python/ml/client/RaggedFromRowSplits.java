@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.ml.client.RaggedFromRowSplits.Parameters.ROW_SPLITS;
 import static com.ibm.wala.cast.python.ml.client.RaggedFromRowSplits.Parameters.VALUES;
 import static java.util.Collections.emptySet;
@@ -95,11 +96,7 @@ public class RaggedFromRowSplits extends RaggedTensorFromValues {
     final Set<Dimension<?>> finalPossibleRowDims = possibleRowDims;
     LOGGER.fine(
         () ->
-            "Inferred nrows for "
-                + Loggables.describe(this.getSource())
-                + ": "
-                + finalPossibleRowDims
-                + ".");
+            "Inferred nrows for " + describe(this.getSource()) + ": " + finalPossibleRowDims + ".");
 
     // 2. Determine shape of `values`.
     OrdinalSet<InstanceKey> valuesPts =
@@ -114,7 +111,7 @@ public class RaggedFromRowSplits extends RaggedTensorFromValues {
     LOGGER.fine(
         () ->
             "Possible values shapes for "
-                + Loggables.describe(this.getSource())
+                + describe(this.getSource())
                 + ": "
                 + finalValuesShapes
                 + ".");

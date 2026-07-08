@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
@@ -133,11 +134,7 @@ public class EmbeddingCall extends TensorGenerator {
       Set<Long> values = getPossibleLongValues(dimPts);
       LOGGER.fine(
           () ->
-              "Possible `output_dim` values: "
-                  + values
-                  + " for source: "
-                  + Loggables.describe(selfIK)
-                  + ".");
+              "Possible `output_dim` values: " + values + " for source: " + describe(selfIK) + ".");
       if (values != null) ret.addAll(values);
     }
     return ret;

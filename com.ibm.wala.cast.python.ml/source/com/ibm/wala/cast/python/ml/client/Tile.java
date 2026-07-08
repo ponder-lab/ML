@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
+
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -77,10 +79,7 @@ public class Tile extends PassThroughUnaryTensorGenerator {
         resolveMultiplesList(builder, this.getArgumentPointsToSet(builder, 1, "multiples"));
     if (multiples == null) {
       LOGGER.fine(
-          () ->
-              "Non-constant multiples for "
-                  + Loggables.describe(this.getSource())
-                  + "; returning ⊤.");
+          () -> "Non-constant multiples for " + describe(this.getSource()) + "; returning ⊤.");
       return null;
     }
 
@@ -136,12 +135,7 @@ public class Tile extends PassThroughUnaryTensorGenerator {
       } catch (IllegalStateException e) {
         // `getShapesFromShapeArgument` throws for an unrecognized shape form; degrade that to ⊤.
         LOGGER.fine(
-            () ->
-                "Could not resolve multiples of "
-                    + Loggables.describe(this.getSource())
-                    + ": "
-                    + e
-                    + ".");
+            () -> "Could not resolve multiples of " + describe(this.getSource()) + ": " + e + ".");
         return null;
       }
       if (lists == null) return null;

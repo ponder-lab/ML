@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
@@ -356,9 +357,7 @@ public class DatasetFromTensorsGenerator extends DatasetGenerator implements Tup
       Set<DType> ret = HashSetFactory.make();
       for (InstanceKey ik : tensorsPTS) {
         LOGGER.fine(
-            DatasetFromTensorsGenerator.class.getName()
-                + ": processing ik="
-                + Loggables.describe(ik));
+            DatasetFromTensorsGenerator.class.getName() + ": processing ik=" + describe(ik));
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
         if (asin != null && asin.concreteType().getReference().equals(tuple)) {
           // It's a structured element. We return the union of all possible dtypes of its members.

@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
@@ -45,11 +46,7 @@ public class NpArray extends TensorGenerator {
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     int sourceVn = getArgumentValueNumber(0);
     LOGGER.fine(
-        () ->
-            "NpArray.getDefaultShapes: source="
-                + Loggables.describe(source)
-                + ", sourceVn="
-                + sourceVn);
+        () -> "NpArray.getDefaultShapes: source=" + describe(source) + ", sourceVn=" + sourceVn);
     if (sourceVn > 0) {
       try {
         Set<List<Dimension<?>>> shapes = getShapes(builder, getNode(), sourceVn);
