@@ -155,6 +155,11 @@ public class BuiltinFunctions {
    * dataset iterators), the read has an empty points-to set and contributes nothing, matching the
    * previous behavior for the dataflow analysis.
    *
+   * <p>The two-argument form {@code next(it, default)} returns {@code default} when the iterator is
+   * exhausted, so the yields are unioned with the default (arg 3) through a common box field. The
+   * union is a reachable join rather than a second, unreachable return, which would be dropped
+   * (wala/ML#699).
+   *
    * @param cls The builtin function class whose summary this is.
    * @param name The builtin's name ({@code next}).
    * @return The populated summary.
@@ -165,12 +170,30 @@ public class BuiltinFunctions {
     PythonSummary x = new PythonSummary(ref, 10);
 
     AstInstructionFactory factory = PythonLanguage.Python.instructionFactory();
-    int result = 11;
+    int content = 11;
     int fieldKey = 12;
+    int box = 13;
+    int joinKey = 14;
+    int result = 15;
+    int idx = 0;
 
+    // content = arg2[GENERATOR_CONTENT_FIELD_NAME] -- the generator's accumulated yields.
     x.addConstant(fieldKey, new ConstantValue(PythonTypes.GENERATOR_CONTENT_FIELD_NAME));
-    x.addStatement(factory.PropertyRead(0, result, 2, fieldKey));
-    x.addStatement(factory.ReturnInstruction(1, result, false));
+    x.addStatement(factory.PropertyRead(idx++, content, 2, fieldKey));
+
+    // Union the yields with the two-argument default (`next(it, default)`, arg 3) through a common
+    // box field, so the default reaches the result via a reachable join rather than a second,
+    // unreachable return (which would be dropped -- the trap that forced the guarded prepended
+    // return of wala/ML#696). When `next` is called with one argument, arg 3 is unbound: its read
+    // has an empty points-to set and contributes nothing, so the same summary serves both call
+    // forms. See wala/ML#699.
+    x.addStatement(
+        factory.NewInstruction(idx++, box, NewSiteReference.make(0, PythonTypes.object)));
+    x.addConstant(joinKey, new ConstantValue(0));
+    x.addStatement(factory.PropertyWrite(idx++, box, joinKey, content));
+    x.addStatement(factory.PropertyWrite(idx++, box, joinKey, 3));
+    x.addStatement(factory.PropertyRead(idx++, result, box, joinKey));
+    x.addStatement(factory.ReturnInstruction(idx++, result, false));
 
     return new PythonSummarizedFunction(ref, x, cls);
   }
