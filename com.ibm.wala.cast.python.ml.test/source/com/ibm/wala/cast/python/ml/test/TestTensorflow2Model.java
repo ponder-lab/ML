@@ -81,6 +81,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final Logger LOGGER = Logger.getLogger(TestTensorflow2Model.class.getName());
 
+  /**
+   * The largest call graph, in nodes, whose per-node FINE dump is emitted. Above this, only the
+   * node count is logged. Large graphs (e.g., nlpgnn) would otherwise emit gigabytes of log output;
+   * see <a href="https://github.com/wala/ML/issues/697">wala/ML#697</a>.
+   */
+  private static final int CALL_GRAPH_DUMP_NODE_LIMIT = 10_000;
+
   private static final String FLOAT_32 = FLOAT32.name().toLowerCase();
 
   private static final String COMPLEX_64 = COMPLEX64.name().toLowerCase();
@@ -14714,7 +14721,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
           ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
           builder.getPointerAnalysis(),
           CG);
-      LOGGER.fine("Call graph:\n" + CG);
+      // Log the call graph one node at a time rather than via CallGraph.toString(), whose
+      // monolithic string materialization exhausts the heap on large graphs (e.g., nlpgnn); see
+      // https://github.com/wala/ML/issues/697.
+      int nodeCount = CG.getNumberOfNodes();
+      if (nodeCount <= CALL_GRAPH_DUMP_NODE_LIMIT) {
+        LOGGER.fine("Call graph has " + nodeCount + " node(s):");
+        for (CGNode node : CG) LOGGER.fine(node::toString);
+      } else
+        LOGGER.fine(
+            "Call graph has "
+                + nodeCount
+                + " node(s); per-node dump skipped (limit "
+                + CALL_GRAPH_DUMP_NODE_LIMIT
+                + ").");
     }
 
     TensorTypeAnalysis analysis = engine.performAnalysis(builder);
