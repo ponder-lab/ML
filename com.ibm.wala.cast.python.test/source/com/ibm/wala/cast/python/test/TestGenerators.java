@@ -1,6 +1,6 @@
 package com.ibm.wala.cast.python.test;
 
-import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertFalse;
 
 import com.ibm.wala.cast.util.test.TestCallGraphShape.GraphAssertion;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -8,7 +8,9 @@ import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import org.junit.Test;
 
 /**
@@ -138,11 +140,11 @@ public class TestGenerators extends TestJythonCallGraphShape {
    * @param absentClassNames The qualified declaring-class names expected to have no node.
    */
   private static void assertNodesAbsent(CallGraph cg, String... absentClassNames) {
-    for (CGNode node : cg) {
-      String declaringClass = node.getMethod().getDeclaringClass().getName().toString();
-      for (String absent : absentClassNames)
-        assertNotEquals(
-            "Expected no call-graph node declared by " + absent, absent, declaringClass);
-    }
+    Set<String> declaringClasses = new HashSet<>();
+    for (CGNode node : cg)
+      declaringClasses.add(node.getMethod().getDeclaringClass().getName().toString());
+    for (String absent : absentClassNames)
+      assertFalse(
+          "Expected no call-graph node declared by " + absent, declaringClasses.contains(absent));
   }
 }
