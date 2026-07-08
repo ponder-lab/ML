@@ -10777,6 +10777,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Probe for the two-argument {@code next(it, default)} form: the iterator is an empty generator,
+   * so at runtime {@code next} returns the default and its type must reach the result. The
+   * default's flow was dropped because the summary read only the iterator's generator content
+   * field. A regression guard for <a href="https://github.com/wala/ML/issues/699">wala/ML#699</a>,
+   * where the default (arg 3) is unioned into the result through a reachable join.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGenNextDefault()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_gen_next_default.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
+  /**
    * Companion probe for the generator transit: the same yielded pair consumed by for-loop
    * destructuring over the generator instead of {@code next()}. Also dropped (<a
    * href="https://github.com/wala/ML/issues/696">wala/ML#696</a>); distinct from the {@code
