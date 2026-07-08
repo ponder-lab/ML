@@ -164,9 +164,10 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
      *     <p>For some collection types in Python, mainly sets and lists, iteration over a
      *     collection returns the values contained in that collection. For other types, such as
      *     dictionaries, iteration is over the keys that that collection contains.
-     *     <p>We also use this mechanism for generators, which put everything in a fake field named
-     *     "__contents__" which is read by this mechanism. Generator expressions use the iterator
-     *     type and generator functions use CodeBody.
+     *     <p>We also use this mechanism for generators, which put every yielded value in the
+     *     synthetic field named {@value PythonTypes#GENERATOR_CONTENT_FIELD_NAME}, which is read by
+     *     this mechanism. Generator expressions use the iterator type and generator functions use
+     *     CodeBody (wala/ML#696).
      */
     private boolean isValueForKeyType(IClass objType) {
       IClassHierarchy cha = getClassHierarchy();

@@ -76,6 +76,16 @@ public class PythonTypes extends AstTypeReference {
    */
   public static final String ARTIFICIAL_SUFFIX_FOR_TRAMPOLINED_SYNTHETIC_CLASSES = "class";
 
+  /**
+   * The name of the synthetic field on a generator function's object that holds every value the
+   * generator yields. The front-end translates {@code yield x} as a write of {@code x} into this
+   * field of the enclosing function object and adds a {@code return} of that object to the
+   * generator's body, so calling a generator function evaluates to an object carrying its yields;
+   * the {@code next} builtin and {@code for}-loop value iteration read the yields back out. Mirrors
+   * the JEP front-end's modeling (<a href="https://github.com/wala/ML/issues/696">wala/ML#696</a>).
+   */
+  public static final String GENERATOR_CONTENT_FIELD_NAME = "__content__";
+
   public static final Atom pythonName = Atom.findOrCreateUnicodeAtom(pythonNameStr);
 
   public static final Atom pythonLoaderName = Atom.findOrCreateUnicodeAtom(pythonLoaderNameStr);
