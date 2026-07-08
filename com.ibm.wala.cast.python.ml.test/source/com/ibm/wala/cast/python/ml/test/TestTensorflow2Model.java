@@ -2214,6 +2214,63 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Diagnostic-logging volume guard (<a
+   * href="https://github.com/wala/ML/issues/702">wala/ML#702</a> ). Reruns the nlpgnn generation
+   * analysis — the cyclic-closure call graph that triggered <a
+   * href="https://github.com/wala/ML/issues/697">wala/ML#697</a> — with every {@code
+   * com.ibm.wala.cast.python} logger at {@code FINEST}, routing records through {@link
+   * DiscardingFormattingHandler}, which formats and discards them while summing their volume.
+   *
+   * <p>Correct code renders diagnostics through the bounded {@code Loggables.describe(...)} (~0.6
+   * GB of formatted {@code FINEST} output for this analysis); a bare render of a {@code
+   * Context}-bearing value inflates that by more than an order of magnitude (~14 GB measured),
+   * which this bound catches. The failure is invisible at CI's {@code WARNING} level (the message
+   * strings are never built), so this test is the pipeline's guard against its return. See {@code
+   * CONTRIBUTING.md}'s Diagnostic Logging section and <a
+   * href="https://github.com/wala/WALA/issues/1992">wala/WALA#1992 </a> for the upstream root
+   * cause.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDiagnosticLoggingVolumeBounded()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    // Fixed code emits ~0.6 GB of formatted FINEST volume for this analysis; a bare `Context`
+    // render measured ~14 GB. 2 GB sits well above the former and far below the latter.
+    final long maxFormattedChars = 2_000_000_000L;
+
+    Logger pkg = Logger.getLogger("com.ibm.wala.cast.python");
+    DiscardingFormattingHandler handler = new DiscardingFormattingHandler();
+    handler.setLevel(Level.ALL);
+    Level oldLevel = pkg.getLevel();
+    boolean oldUseParentHandlers = pkg.getUseParentHandlers();
+    pkg.addHandler(handler);
+    pkg.setLevel(Level.FINEST);
+    // Count the FINEST volume here; don't also propagate it to the console handlers.
+    pkg.setUseParentHandlers(false);
+    try {
+      DiscardingFormattingHandler.reset();
+      testNlpgnnFullGeneration();
+      long volume = DiscardingFormattingHandler.totalChars();
+      assertTrue(
+          "Diagnostic FINEST volume "
+              + volume
+              + " chars exceeds the "
+              + maxFormattedChars
+              + "-char bound; a pointer-analysis or call-graph value is likely logged without"
+              + " Loggables.describe(...). See CONTRIBUTING.md's Diagnostic Logging section.",
+          volume < maxFormattedChars);
+    } finally {
+      pkg.removeHandler(handler);
+      pkg.setLevel(oldLevel);
+      pkg.setUseParentHandlers(oldUseParentHandlers);
+    }
+  }
+
+  /**
    * Same-name-class guard for <a href="https://github.com/wala/ML/issues/678">wala/ML#678</a>: two
    * sibling scripts each define a Keras subclass named {@code GenGPT2} (with a {@code
    * super(GenGPT2, self)} by-name reference in {@code __init__}, mirroring the NLPGNN subject);
