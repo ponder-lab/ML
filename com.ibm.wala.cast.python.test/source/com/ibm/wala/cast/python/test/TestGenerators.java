@@ -1,6 +1,10 @@
 package com.ibm.wala.cast.python.test;
 
+import static org.junit.Assert.assertNotEquals;
+
 import com.ibm.wala.cast.util.test.TestCallGraphShape.GraphAssertion;
+import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
@@ -87,7 +91,12 @@ public class TestGenerators extends TestJythonCallGraphShape {
   @Test
   public void testGen1()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    verifyGraphAssertions(process("gen1.py"), assertionsGen1);
+    CallGraph cg = process("gen1.py");
+    verifyGraphAssertions(cg, assertionsGen1);
+    // The generator expression's yielded functions are not reachable; assert their absence so the
+    // gap cannot silently regress. When wala/ML#701 is fixed these will start failing, cueing an
+    // update to positive reachability.
+    assertNodesAbsent(cg, "Lscript gen1.py/f1", "Lscript gen1.py/f2", "Lscript gen1.py/f3");
   }
 
   /**
@@ -101,6 +110,25 @@ public class TestGenerators extends TestJythonCallGraphShape {
   @Test
   public void testGen3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    verifyGraphAssertions(process("gen3.py"), assertionsGen3);
+    CallGraph cg = process("gen3.py");
+    verifyGraphAssertions(cg, assertionsGen3);
+    // As with gen1.py, the generator expression's yielded functions are not reachable; assert their
+    // absence so the gap cannot silently regress (wala/ML#701).
+    assertNodesAbsent(cg, "Lscript gen3.py/f1", "Lscript gen3.py/f2", "Lscript gen3.py/f3");
+  }
+
+  /**
+   * Asserts that no call-graph node is declared by any of the given classes.
+   *
+   * @param cg The call graph to check.
+   * @param absentClassNames The qualified declaring-class names expected to have no node.
+   */
+  private static void assertNodesAbsent(CallGraph cg, String... absentClassNames) {
+    for (CGNode node : cg) {
+      String declaringClass = node.getMethod().getDeclaringClass().getName().toString();
+      for (String absent : absentClassNames)
+        assertNotEquals(
+            "Expected no call-graph node declared by " + absent, absent, declaringClass);
+    }
   }
 }
