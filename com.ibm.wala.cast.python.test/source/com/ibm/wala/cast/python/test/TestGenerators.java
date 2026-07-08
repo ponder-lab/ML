@@ -45,7 +45,8 @@ public class TestGenerators extends TestJythonCallGraphShape {
    * called. Unlike the generator function of {@code gen2.py}, the expression's yielded functions
    * {@code f1}/{@code f2}/{@code f3} are <em>not</em> reachable; only the script itself is. This
    * pins the current behavior. TODO: extend to reach {@code f1}/{@code f2}/{@code f3} once
-   * generator expressions are modeled at the call-graph level.
+   * generator expressions are modeled at the call-graph level (<a
+   * href="https://github.com/wala/ML/issues/701">wala/ML#701</a>).
    */
   protected static final List<GraphAssertion> assertionsGen1 =
       List.of(new GraphAssertion(ROOT, new String[] {"script gen1.py"}));
@@ -55,7 +56,7 @@ public class TestGenerators extends TestJythonCallGraphShape {
    * makeGenerator} is reachable, but the expression's yielded functions {@code f1}/{@code
    * f2}/{@code f3} are not — the same generator-expression gap as {@code gen1.py}. TODO: extend to
    * reach {@code f1}/{@code f2}/{@code f3} once generator expressions are modeled at the call-graph
-   * level.
+   * level (<a href="https://github.com/wala/ML/issues/701">wala/ML#701</a>).
    */
   protected static final List<GraphAssertion> assertionsGen3 =
       List.of(
