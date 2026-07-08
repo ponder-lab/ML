@@ -44,7 +44,12 @@ public class NpArray extends TensorGenerator {
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     int sourceVn = getArgumentValueNumber(0);
-    LOGGER.fine(() -> "NpArray.getDefaultShapes: source=" + source + ", sourceVn=" + sourceVn);
+    LOGGER.fine(
+        () ->
+            "NpArray.getDefaultShapes: source="
+                + Loggables.describe(source)
+                + ", sourceVn="
+                + sourceVn);
     if (sourceVn > 0) {
       try {
         Set<List<Dimension<?>>> shapes = getShapes(builder, getNode(), sourceVn);

@@ -62,10 +62,10 @@ public class SliceBuiltinOperation extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    LOGGER.fine(() -> "Entered getDefaultShapes for source=" + source);
+    LOGGER.fine(() -> "Entered getDefaultShapes for source=" + Loggables.describe(source));
     CallSiteView view = findCallSite(builder);
     if (view == null) {
-      LOGGER.fine(() -> "No call site resolved for " + source);
+      LOGGER.fine(() -> "No call site resolved for " + Loggables.describe(source));
       return null;
     }
 

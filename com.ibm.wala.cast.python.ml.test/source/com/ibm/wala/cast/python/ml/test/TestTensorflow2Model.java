@@ -14716,23 +14716,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     assertNotNull(CG);
 
     if (LOGGER.isLoggable(Level.FINE)) {
-      CAstCallGraphUtil.AVOID_DUMP.set(false);
-      CAstCallGraphUtil.dumpCG(
-          ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
-          builder.getPointerAnalysis(),
-          CG);
-      // Log the call graph one node at a time rather than via CallGraph.toString(), whose
-      // monolithic string materialization exhausts the heap on large graphs (e.g., nlpgnn); see
+      // Both the IR dump (`dumpCG`) and the per-node call-graph dump render each node's context,
+      // whose scope-mapping/receiver contexts recurse and materialize gigantic strings on large
+      // graphs (e.g., nlpgnn). Gate the whole dump behind a node-count limit rather than via
+      // CallGraph.toString(), whose monolithic materialization exhausts the heap; see
       // https://github.com/wala/ML/issues/697.
       int nodeCount = CG.getNumberOfNodes();
       if (nodeCount <= CALL_GRAPH_DUMP_NODE_LIMIT) {
+        CAstCallGraphUtil.AVOID_DUMP.set(false);
+        CAstCallGraphUtil.dumpCG(
+            ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
+            builder.getPointerAnalysis(),
+            CG);
         LOGGER.fine("Call graph has " + nodeCount + " node(s):");
         for (CGNode node : CG) LOGGER.fine(node::toString);
       } else
         LOGGER.fine(
             "Call graph has "
                 + nodeCount
-                + " node(s); per-node dump skipped (limit "
+                + " node(s); dump skipped (limit "
                 + CALL_GRAPH_DUMP_NODE_LIMIT
                 + ").");
     }

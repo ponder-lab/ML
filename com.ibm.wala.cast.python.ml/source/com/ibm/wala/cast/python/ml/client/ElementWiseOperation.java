@@ -97,7 +97,10 @@ public class ElementWiseOperation extends TensorGenerator {
 
     LOGGER.fine(
         () ->
-            "EWO.getDefaultShapes entered with source=" + this.source + ", node=" + this.getNode());
+            "EWO.getDefaultShapes entered with source="
+                + Loggables.describe(this.source)
+                + ", node="
+                + Loggables.describe(this.getNode()));
 
     int xVn = this.getXArgumentValueNumber(builder);
     LOGGER.fine(() -> "EWO.getDefaultShapes xVn: " + xVn);

@@ -131,7 +131,13 @@ public class EmbeddingCall extends TensorGenerator {
       PointerKey fieldPK = builder.getPointerKeyForInstanceField(selfAsin, f);
       OrdinalSet<InstanceKey> dimPts = builder.getPointerAnalysis().getPointsToSet(fieldPK);
       Set<Long> values = getPossibleLongValues(dimPts);
-      LOGGER.fine(() -> "Possible `output_dim` values: " + values + " for source: " + selfIK + ".");
+      LOGGER.fine(
+          () ->
+              "Possible `output_dim` values: "
+                  + values
+                  + " for source: "
+                  + Loggables.describe(selfIK)
+                  + ".");
       if (values != null) ret.addAll(values);
     }
     return ret;

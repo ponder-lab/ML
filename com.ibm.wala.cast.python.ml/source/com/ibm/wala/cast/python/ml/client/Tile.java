@@ -76,7 +76,11 @@ public class Tile extends PassThroughUnaryTensorGenerator {
     List<Integer> multiples =
         resolveMultiplesList(builder, this.getArgumentPointsToSet(builder, 1, "multiples"));
     if (multiples == null) {
-      LOGGER.fine(() -> "Non-constant multiples for " + this.getSource() + "; returning ⊤.");
+      LOGGER.fine(
+          () ->
+              "Non-constant multiples for "
+                  + Loggables.describe(this.getSource())
+                  + "; returning ⊤.");
       return null;
     }
 
@@ -131,7 +135,13 @@ public class Tile extends PassThroughUnaryTensorGenerator {
         lists = this.getShapesFromShapeArgument(builder, Collections.singleton(ik));
       } catch (IllegalStateException e) {
         // `getShapesFromShapeArgument` throws for an unrecognized shape form; degrade that to ⊤.
-        LOGGER.fine(() -> "Could not resolve multiples of " + this.getSource() + ": " + e + ".");
+        LOGGER.fine(
+            () ->
+                "Could not resolve multiples of "
+                    + Loggables.describe(this.getSource())
+                    + ": "
+                    + e
+                    + ".");
         return null;
       }
       if (lists == null) return null;

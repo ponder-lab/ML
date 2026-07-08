@@ -72,7 +72,9 @@ public class Squeeze extends PassThroughUnaryTensorGenerator {
     } else {
       axes = resolveAxisInts(builder, axisPts);
       if (axes == null) {
-        LOGGER.fine(() -> "Non-constant axis for " + this.getSource() + "; returning ⊤.");
+        LOGGER.fine(
+            () ->
+                "Non-constant axis for " + Loggables.describe(this.getSource()) + "; returning ⊤.");
         return null;
       }
     }
@@ -133,7 +135,13 @@ public class Squeeze extends PassThroughUnaryTensorGenerator {
         } catch (IllegalStateException e) {
           // `getShapesFromShapeArgument` throws `IllegalStateException` for an unrecognized shape
           // form; degrade that to ⊤. Other runtime exceptions propagate as intended diagnostics.
-          LOGGER.fine(() -> "Could not resolve axis of " + this.getSource() + ": " + e + ".");
+          LOGGER.fine(
+              () ->
+                  "Could not resolve axis of "
+                      + Loggables.describe(this.getSource())
+                      + ": "
+                      + e
+                      + ".");
           return null;
         }
         if (lists == null) return null;

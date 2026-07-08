@@ -95,7 +95,13 @@ public class RaggedFromRowStarts extends RaggedTensorFromValues {
     }
 
     final Set<Dimension<?>> finalPossibleRowDims = possibleRowDims;
-    LOGGER.fine(() -> "Inferred nrows for " + this.getSource() + ": " + finalPossibleRowDims + ".");
+    LOGGER.fine(
+        () ->
+            "Inferred nrows for "
+                + Loggables.describe(this.getSource())
+                + ": "
+                + finalPossibleRowDims
+                + ".");
 
     // 2. Determine shape of `values`.
     OrdinalSet<InstanceKey> valuesPts = this.getValuesPointsToSet(builder);
@@ -106,7 +112,12 @@ public class RaggedFromRowStarts extends RaggedTensorFromValues {
 
     final Set<List<Dimension<?>>> finalValuesShapes = valuesShapes;
     LOGGER.fine(
-        () -> "Possible values shapes for " + this.getSource() + ": " + finalValuesShapes + ".");
+        () ->
+            "Possible values shapes for "
+                + Loggables.describe(this.getSource())
+                + ": "
+                + finalValuesShapes
+                + ".");
 
     return constructRaggedShape(possibleRowDims, valuesShapes);
   }

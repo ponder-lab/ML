@@ -413,7 +413,7 @@ public class TensorGeneratorFactory {
     // toString() renders the node's context, whose scope-mapping/receiver contexts reference each
     // other cyclically and recurse until the heap is exhausted on large graphs (e.g., nlpgnn); see
     // https://github.com/wala/ML/issues/697.
-    LOGGER.fine(() -> "findCreator started for source: " + describe(source));
+    LOGGER.fine(() -> "findCreator started for source: " + Loggables.describe(source));
 
     while (!queue.isEmpty()) {
       PointsToSetVariable current = queue.poll();
@@ -421,10 +421,10 @@ public class TensorGeneratorFactory {
       // is enqueued below; skip it rather than dereferencing null. wala/ML#613.
       if (current == null) continue;
       PointerKey pk = current.getPointerKey();
-      LOGGER.fine(() -> "findCreator visiting: " + describe(pk));
+      LOGGER.fine(() -> "findCreator visiting: " + Loggables.describe(pk));
 
       if (pk instanceof ReturnValueKey) {
-        LOGGER.fine(() -> "findCreator found ReturnValueKey: " + describe(pk));
+        LOGGER.fine(() -> "findCreator found ReturnValueKey: " + Loggables.describe(pk));
         return current;
       }
 
@@ -443,43 +443,15 @@ public class TensorGeneratorFactory {
           it.hasNext(); ) {
         PointsToSetVariable pred = it.next();
         if (pred != null && visited.add(pred)) {
-          LOGGER.fine(() -> "findCreator adding pred: " + describe(pred));
+          LOGGER.fine(() -> "findCreator adding pred: " + Loggables.describe(pred));
           queue.add(pred);
         }
       }
     }
 
-    LOGGER.fine(() -> "findCreator fallback returning original source: " + describe(source));
+    LOGGER.fine(
+        () -> "findCreator fallback returning original source: " + Loggables.describe(source));
     return source;
-  }
-
-  /**
-   * Describes a points-to variable for logging without rendering its context.
-   *
-   * @param variable The {@link PointsToSetVariable} to describe.
-   * @return A bounded, context-free description of {@code variable}.
-   */
-  private static String describe(PointsToSetVariable variable) {
-    return variable == null ? "null" : describe(variable.getPointerKey());
-  }
-
-  /**
-   * Describes a pointer key for logging using only context-free fields (the value number and method
-   * signature). The key's own {@code toString()} renders the node's context, whose scope-mapping
-   * and receiver contexts reference each other cyclically and recurse until the heap is exhausted
-   * on large graphs (e.g., nlpgnn); see <a
-   * href="https://github.com/wala/ML/issues/697">wala/ML#697</a>.
-   *
-   * @param pk The {@link PointerKey} to describe.
-   * @return A bounded, context-free description of {@code pk}.
-   */
-  private static String describe(PointerKey pk) {
-    if (pk == null) return "null";
-    if (pk instanceof LocalPointerKey) {
-      LocalPointerKey lpk = (LocalPointerKey) pk;
-      return "v" + lpk.getValueNumber() + " in " + lpk.getNode().getMethod().getSignature();
-    }
-    return pk.getClass().getSimpleName();
   }
 
   private static PointsToSetVariable getPointsToSetVariable(

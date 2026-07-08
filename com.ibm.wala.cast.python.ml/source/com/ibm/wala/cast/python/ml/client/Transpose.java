@@ -83,7 +83,9 @@ public class Transpose extends PassThroughUnaryTensorGenerator {
     } else {
       perm = resolvePermList(builder, permPts);
       if (perm == null) {
-        LOGGER.fine(() -> "Non-constant perm for " + this.getSource() + "; returning ⊤.");
+        LOGGER.fine(
+            () ->
+                "Non-constant perm for " + Loggables.describe(this.getSource()) + "; returning ⊤.");
         return null;
       }
     }
@@ -160,7 +162,13 @@ public class Transpose extends PassThroughUnaryTensorGenerator {
         lists = this.getShapesFromShapeArgument(builder, Collections.singleton(ik));
       } catch (IllegalStateException e) {
         // `getShapesFromShapeArgument` throws for an unrecognized shape form; degrade that to ⊤.
-        LOGGER.fine(() -> "Could not resolve perm of " + this.getSource() + ": " + e + ".");
+        LOGGER.fine(
+            () ->
+                "Could not resolve perm of "
+                    + Loggables.describe(this.getSource())
+                    + ": "
+                    + e
+                    + ".");
         return null;
       }
       if (lists == null) return null;

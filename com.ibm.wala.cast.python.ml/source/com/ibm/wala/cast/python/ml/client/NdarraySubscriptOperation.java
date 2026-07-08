@@ -106,7 +106,10 @@ public class NdarraySubscriptOperation extends TensorGenerator {
 
     List<SubscriptField> fields = extractSubscriptFields(propRead, getNode(), builder);
     if (fields == null) {
-      LOGGER.fine(() -> "NdarraySubscriptOperation: unsupported subscript pattern for " + source);
+      LOGGER.fine(
+          () ->
+              "NdarraySubscriptOperation: unsupported subscript pattern for "
+                  + Loggables.describe(source));
       return null;
     }
 

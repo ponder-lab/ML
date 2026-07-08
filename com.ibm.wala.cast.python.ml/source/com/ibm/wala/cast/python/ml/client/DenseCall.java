@@ -99,12 +99,22 @@ public class DenseCall extends TensorGenerator {
     OrdinalSet<InstanceKey> selfPTS =
         this.getArgumentPointsToSet(builder, Parameters.SELF.getIndex(), Parameters.SELF.getName());
     LOGGER.fine(
-        () -> "Found `self` points-to set: " + selfPTS + " for node: " + this.getNode() + ".");
+        () ->
+            "Found `self` points-to set: "
+                + Loggables.describe(selfPTS)
+                + " for node: "
+                + Loggables.describe(this.getNode())
+                + ".");
 
     if (selfPTS != null)
       for (InstanceKey selfIK : selfPTS) {
         LOGGER.finer(
-            () -> "Found `self` instance key: " + selfIK + " for node: " + this.getNode() + ".");
+            () ->
+                "Found `self` instance key: "
+                    + Loggables.describe(selfIK)
+                    + " for node: "
+                    + Loggables.describe(this.getNode())
+                    + ".");
 
         // Extract the 'units' value from the Dense layer instance (Parameters.SELF).
         AllocationSiteInNode selfASIN = getAllocationSiteInNode(selfIK);
@@ -124,7 +134,12 @@ public class DenseCall extends TensorGenerator {
               "Field pointer key: " + fieldPK + " for field reference: " + unitsFieldRef + ".");
 
           OrdinalSet<InstanceKey> unitsPTS = builder.getPointerAnalysis().getPointsToSet(fieldPK);
-          LOGGER.finer("Points-to set: " + unitsPTS + " for field pointer key: " + fieldPK + ".");
+          LOGGER.finer(
+              "Points-to set: "
+                  + Loggables.describe(unitsPTS)
+                  + " for field pointer key: "
+                  + Loggables.describe(fieldPK)
+                  + ".");
 
           Set<Long> unitValues = getPossibleLongValues(unitsPTS);
           LOGGER.finer(
@@ -141,7 +156,7 @@ public class DenseCall extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    LOGGER.fine(() -> "Deriving shape for Dense call at: " + this.getNode());
+    LOGGER.fine(() -> "Deriving shape for Dense call at: " + Loggables.describe(this.getNode()));
 
     Set<List<Dimension<?>>> inputShapes = this.getInputShapes(builder);
     if (inputShapes == null || inputShapes.isEmpty()) return null;
@@ -189,7 +204,11 @@ public class DenseCall extends TensorGenerator {
       // Cyclic chain: this `Dense.__call__` node's input flows back to itself (e.g., a layer-list
       // loop whose output feeds in as its own input under 1-CFA node collapse). Break the cycle;
       // the other phi operand supplies the base shape. See wala/ML#599.
-      LOGGER.fine(() -> "getInputShapes: cycle detected at node " + self + "; breaking recursion.");
+      LOGGER.fine(
+          () ->
+              "getInputShapes: cycle detected at node "
+                  + Loggables.describe(self)
+                  + "; breaking recursion.");
       return null;
     }
     try {

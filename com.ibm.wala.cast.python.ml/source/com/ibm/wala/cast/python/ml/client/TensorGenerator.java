@@ -344,7 +344,9 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
     if (pointsToSet == null || !pointsToSet.iterator().hasNext())
       throw new IllegalArgumentException(
-          "Empty points-to set for shape argument in source: " + this.getSource() + ".");
+          "Empty points-to set for shape argument in source: "
+              + Loggables.describe(this.getSource())
+              + ".");
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
@@ -418,12 +420,18 @@ public abstract class TensorGenerator {
 
           // We can now get the pointer key for the instance field.
           PointerKey pointerKeyForInstanceField = builder.getPointerKeyForInstanceField(asin, f);
-          LOGGER.fine("Found pointer key for instance field: " + pointerKeyForInstanceField + ".");
+          LOGGER.fine(
+              "Found pointer key for instance field: "
+                  + Loggables.describe(pointerKeyForInstanceField)
+                  + ".");
 
           // Get the points-to set for the instance field.
           OrdinalSet<InstanceKey> instanceFieldPointsToSet =
               pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
-          LOGGER.fine("Points-to set for instance field: " + instanceFieldPointsToSet + ".");
+          LOGGER.fine(
+              "Points-to set for instance field: "
+                  + Loggables.describe(instanceFieldPointsToSet)
+                  + ".");
 
           // If the instance field points to a constant, we can use it as the shape.
           // TODO: Is it possible to also do it for (simple) expressions?
@@ -1478,7 +1486,10 @@ public abstract class TensorGenerator {
 
             OrdinalSet<InstanceKey> instanceFieldPointsToSet =
                 pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
-            LOGGER.fine("Points-to set for instance field: " + instanceFieldPointsToSet + ".");
+            LOGGER.fine(
+                "Points-to set for instance field: "
+                    + Loggables.describe(instanceFieldPointsToSet)
+                    + ".");
 
             Set<List<Dimension<?>>> shapesOfField =
                 this.getShapesOfValue(builder, instanceFieldPointsToSet);
@@ -1497,9 +1508,9 @@ public abstract class TensorGenerator {
             }
           }
         } else if (reference.equals(TensorFlowTypes.D_TYPE)) {
-          LOGGER.fine("Ignoring DType: " + asin);
+          LOGGER.fine("Ignoring DType: " + Loggables.describe(asin));
         } else if (reference.equals(TensorFlowTypes.FEATURE)) {
-          LOGGER.fine("Ignoring feature: " + asin);
+          LOGGER.fine("Ignoring feature: " + Loggables.describe(asin));
         } else {
           // Assume the value is a tensor and attempt to find the generator that created it
           // to ask for its shape.
@@ -1664,7 +1675,9 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
     if (pointsToSet == null || !pointsToSet.iterator().hasNext())
       throw new IllegalArgumentException(
-          "Empty points-to set for dtype argument in source: " + this.getSource() + ".");
+          "Empty points-to set for dtype argument in source: "
+              + Loggables.describe(this.getSource())
+              + ".");
 
     Set<DType> ret = EnumSet.noneOf(DType.class);
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
@@ -1696,7 +1709,7 @@ public abstract class TensorGenerator {
         CGNode importNode = ((AllocationSiteInNode) instanceKey).getNode();
 
         if (importNode != null) {
-          LOGGER.fine("Found import node of interest: " + importNode + ".");
+          LOGGER.fine("Found import node of interest: " + Loggables.describe(importNode) + ".");
           for (TypeReference ownerType :
               new TypeReference[] {TENSORFLOW_TYPE, TensorFlowTypes.NUMPY_TYPE}) {
             InstanceKey ownerIK =
@@ -2245,17 +2258,20 @@ public abstract class TensorGenerator {
 
             OrdinalSet<InstanceKey> instanceFieldPointsToSet =
                 pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
-            LOGGER.fine("Points-to set for instance field: " + instanceFieldPointsToSet + ".");
+            LOGGER.fine(
+                "Points-to set for instance field: "
+                    + Loggables.describe(instanceFieldPointsToSet)
+                    + ".");
 
             Set<DType> fieldDTypes = this.getDTypesOfValue(builder, instanceFieldPointsToSet);
             if (fieldDTypes != null) ret.addAll(fieldDTypes);
           }
         } else if (reference.equals(TensorFlowTypes.FEATURE)) {
           // Ignore features.
-          LOGGER.fine("Ignoring feature: " + asin);
+          LOGGER.fine("Ignoring feature: " + Loggables.describe(asin));
         } else if (reference.equals(TensorFlowTypes.D_TYPE)) {
           // Ignore DTypes.
-          LOGGER.fine("Ignoring DType: " + asin);
+          LOGGER.fine("Ignoring DType: " + Loggables.describe(asin));
         } else {
           // Assume the value is a tensor and attempt to find the generator that created it
           // to ask for its dtype.

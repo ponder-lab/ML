@@ -1,0 +1,100 @@
+package com.ibm.wala.cast.python.ml.client;
+
+import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceFieldKey;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+import com.ibm.wala.util.intset.OrdinalSet;
+
+/**
+ * Context-free renderers for logging pointer-analysis and call-graph values. Their own {@code
+ * toString()} methods render the enclosing {@link com.ibm.wala.ipa.callgraph.Context}, whose
+ * scope-mapping and receiver contexts can reference each other cyclically and recurse until the
+ * heap is exhausted on large graphs (e.g., nlpgnn). These helpers render only bounded, context-free
+ * fields (value numbers, method signatures, allocation sites), so a {@code LOGGER.fine("..." +
+ * describe(x))} is safe at any logging level. See <a
+ * href="https://github.com/wala/ML/issues/697">wala/ML#697</a>.
+ */
+final class Loggables {
+
+  private Loggables() {}
+
+  /**
+   * Describes a points-to variable by its pointer key.
+   *
+   * @param variable The variable to describe, or {@code null}.
+   * @return A bounded, context-free description.
+   */
+  static String describe(PointsToSetVariable variable) {
+    return variable == null ? "null" : describe(variable.getPointerKey());
+  }
+
+  /**
+   * Describes a pointer key using only context-free fields.
+   *
+   * @param pk The pointer key to describe, or {@code null}.
+   * @return A bounded, context-free description.
+   */
+  static String describe(PointerKey pk) {
+    if (pk == null) return "null";
+    if (pk instanceof LocalPointerKey) {
+      LocalPointerKey lpk = (LocalPointerKey) pk;
+      return "v" + lpk.getValueNumber() + " in " + signature(lpk.getNode());
+    }
+    if (pk instanceof InstanceFieldKey) {
+      InstanceFieldKey ifk = (InstanceFieldKey) pk;
+      return ifk.getField().getName() + " on " + describe(ifk.getInstanceKey());
+    }
+    return pk.getClass().getSimpleName();
+  }
+
+  /**
+   * Describes a call-graph node by its method signature, omitting its context.
+   *
+   * @param node The node to describe, or {@code null}.
+   * @return A bounded, context-free description.
+   */
+  static String describe(CGNode node) {
+    return node == null ? "null" : signature(node);
+  }
+
+  /**
+   * Describes an instance key by its allocation site, omitting the allocating node's context.
+   *
+   * @param ik The instance key to describe, or {@code null}.
+   * @return A bounded, context-free description.
+   */
+  static String describe(InstanceKey ik) {
+    if (ik == null) return "null";
+    if (ik instanceof AllocationSiteInNode) {
+      AllocationSiteInNode asin = (AllocationSiteInNode) ik;
+      return asin.getSite() + " in " + signature(asin.getNode());
+    }
+    return ik.getClass().getSimpleName();
+  }
+
+  /**
+   * Describes a set of instance keys element-wise.
+   *
+   * @param set The set to describe, or {@code null}.
+   * @return A bounded, context-free description.
+   */
+  static String describe(OrdinalSet<InstanceKey> set) {
+    if (set == null) return "null";
+    StringBuilder sb = new StringBuilder("[");
+    boolean first = true;
+    for (InstanceKey ik : set) {
+      if (!first) sb.append(", ");
+      sb.append(describe(ik));
+      first = false;
+    }
+    return sb.append("]").toString();
+  }
+
+  private static String signature(CGNode node) {
+    return node.getMethod().getSignature();
+  }
+}

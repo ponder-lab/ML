@@ -42,7 +42,13 @@ public abstract class RaggedTensorFromValues extends TensorGenerator {
     OrdinalSet<InstanceKey> valuesPts = getValuesPointsToSet(builder);
     if (valuesPts != null && !valuesPts.isEmpty()) {
       Set<DType> ret = this.getDTypesOfValue(builder, valuesPts);
-      LOGGER.fine(() -> "Inferred dtypes from values for " + this.getSource() + ": " + ret + ".");
+      LOGGER.fine(
+          () ->
+              "Inferred dtypes from values for "
+                  + Loggables.describe(this.getSource())
+                  + ": "
+                  + ret
+                  + ".");
       return ret;
     }
     return EnumSet.of(DType.UNKNOWN);
@@ -60,7 +66,12 @@ public abstract class RaggedTensorFromValues extends TensorGenerator {
         ret.add(shape);
       }
       LOGGER.fine(
-          () -> "Determined default ragged shapes for " + this.getSource() + ": " + ret + ".");
+          () ->
+              "Determined default ragged shapes for "
+                  + Loggables.describe(this.getSource())
+                  + ": "
+                  + ret
+                  + ".");
       return ret;
     }
 
@@ -78,7 +89,13 @@ public abstract class RaggedTensorFromValues extends TensorGenerator {
       }
     }
 
-    LOGGER.fine(() -> "Determined final ragged shapes for " + this.getSource() + ": " + ret + ".");
+    LOGGER.fine(
+        () ->
+            "Determined final ragged shapes for "
+                + Loggables.describe(this.getSource())
+                + ": "
+                + ret
+                + ".");
     return ret;
   }
 }

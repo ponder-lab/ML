@@ -110,7 +110,15 @@ public class Slice extends PassThroughUnaryTensorGenerator {
     } catch (IllegalStateException e) {
       // `getShapesFromShapeArgument` throws `IllegalStateException` for an unrecognized shape form;
       // degrade that to ⊤. Other runtime exceptions propagate as intended diagnostics.
-      LOGGER.fine(() -> "Could not resolve " + name + " of " + this.getSource() + ": " + e + ".");
+      LOGGER.fine(
+          () ->
+              "Could not resolve "
+                  + name
+                  + " of "
+                  + Loggables.describe(this.getSource())
+                  + ": "
+                  + e
+                  + ".");
       return null;
     }
   }
