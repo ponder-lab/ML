@@ -93,10 +93,17 @@ public class TestGenerators extends TestJythonCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph cg = process("gen1.py");
     verifyGraphAssertions(cg, assertionsGen1);
-    // The generator expression's yielded functions are not reachable; assert their absence so the
-    // gap cannot silently regress. When wala/ML#701 is fixed these will start failing, cueing an
-    // update to positive reachability.
-    assertNodesAbsent(cg, "Lscript gen1.py/f1", "Lscript gen1.py/f2", "Lscript gen1.py/f3");
+    // The generator expression's yielded functions and their returned lambdas are not reachable;
+    // assert their absence so the gap cannot silently regress. When wala/ML#701 is fixed these will
+    // start failing, cueing an update to positive reachability.
+    assertNodesAbsent(
+        cg,
+        "Lscript gen1.py/f1",
+        "Lscript gen1.py/f2",
+        "Lscript gen1.py/f3",
+        "Lscript gen1.py/f1/lambda1",
+        "Lscript gen1.py/f2/lambda1",
+        "Lscript gen1.py/f3/lambda1");
   }
 
   /**
@@ -112,9 +119,16 @@ public class TestGenerators extends TestJythonCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph cg = process("gen3.py");
     verifyGraphAssertions(cg, assertionsGen3);
-    // As with gen1.py, the generator expression's yielded functions are not reachable; assert their
-    // absence so the gap cannot silently regress (wala/ML#701).
-    assertNodesAbsent(cg, "Lscript gen3.py/f1", "Lscript gen3.py/f2", "Lscript gen3.py/f3");
+    // As with gen1.py, the generator expression's yielded functions and their returned lambdas are
+    // not reachable; assert their absence so the gap cannot silently regress (wala/ML#701).
+    assertNodesAbsent(
+        cg,
+        "Lscript gen3.py/f1",
+        "Lscript gen3.py/f2",
+        "Lscript gen3.py/f3",
+        "Lscript gen3.py/f1/lambda1",
+        "Lscript gen3.py/f2/lambda1",
+        "Lscript gen3.py/f3/lambda1");
   }
 
   /**
