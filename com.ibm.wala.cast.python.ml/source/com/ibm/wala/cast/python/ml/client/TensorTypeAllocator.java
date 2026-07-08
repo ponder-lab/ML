@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static java.util.logging.Logger.getLogger;
 
@@ -64,7 +65,7 @@ public abstract class TensorTypeAllocator extends TensorGenerator {
     if (fromDTypeAttribute != null && !fromDTypeAttribute.isEmpty()) {
       LOGGER.fine(
           "Recovered allocator dtype from a `.dtype` argument for source: "
-              + source
+              + describe(source)
               + " -> "
               + fromDTypeAttribute
               + ".");
@@ -72,7 +73,11 @@ public abstract class TensorTypeAllocator extends TensorGenerator {
     }
 
     LOGGER.fine(
-        "No dtype specified for source: " + source + ". Using default dtype of: " + FLOAT32 + " .");
+        "No dtype specified for source: "
+            + describe(source)
+            + ". Using default dtype of: "
+            + FLOAT32
+            + " .");
 
     // Use the default dtype of float32.
     return EnumSet.of(FLOAT32);
@@ -107,7 +112,7 @@ public abstract class TensorTypeAllocator extends TensorGenerator {
     if (fromShapeAttribute != null && !fromShapeAttribute.isEmpty()) {
       LOGGER.fine(
           "Recovered allocator shape from a `.shape` argument for source: "
-              + source
+              + describe(source)
               + " -> "
               + fromShapeAttribute
               + ".");
@@ -120,7 +125,7 @@ public abstract class TensorTypeAllocator extends TensorGenerator {
     // (which is what throwing here did, wala/ML#604).
     LOGGER.fine(
         "Unresolved allocator shape for source: "
-            + source
+            + describe(source)
             + "; returning ⊤ (unknown shape). Candidate for a wala/ML#370 shape annotation.");
     return null;
   }
@@ -160,6 +165,6 @@ public abstract class TensorTypeAllocator extends TensorGenerator {
     }
 
     throw new IllegalArgumentException(
-        "Cannot get integer value from non-constant InstanceKey: " + instanceKey + ".");
+        "Cannot get integer value from non-constant InstanceKey: " + describe(instanceKey) + ".");
   }
 }

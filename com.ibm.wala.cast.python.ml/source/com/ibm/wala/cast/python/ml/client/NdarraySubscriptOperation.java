@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.types.PythonTypes.ELLIPSIS;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
@@ -89,7 +90,7 @@ public class NdarraySubscriptOperation extends TensorGenerator {
     LOGGER.fine(
         () ->
             "isApplicable: source="
-                + source
+                + describe(source)
                 + " propRead="
                 + propRead
                 + " fields="
@@ -106,7 +107,8 @@ public class NdarraySubscriptOperation extends TensorGenerator {
 
     List<SubscriptField> fields = extractSubscriptFields(propRead, getNode(), builder);
     if (fields == null) {
-      LOGGER.fine(() -> "NdarraySubscriptOperation: unsupported subscript pattern for " + source);
+      LOGGER.fine(
+          () -> "NdarraySubscriptOperation: unsupported subscript pattern for " + describe(source));
       return null;
     }
 

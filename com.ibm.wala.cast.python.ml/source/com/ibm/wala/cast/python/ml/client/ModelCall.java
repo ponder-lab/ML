@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
@@ -205,15 +206,15 @@ public class ModelCall extends TensorGenerator {
                   + ".");
 
       for (InstanceKey outputIK : outputsPTS) {
-        LOGGER.finest("Found output instance key: " + outputIK + ".");
+        LOGGER.finest("Found output instance key: " + describe(outputIK) + ".");
 
         AllocationSiteInNode outputASIN = getAllocationSiteInNode(outputIK);
         if (outputASIN != null) {
           LOGGER.finest(
               "Found output allocation site: "
-                  + outputASIN
+                  + describe(outputASIN)
                   + " for instance key: "
-                  + outputIK
+                  + describe(outputIK)
                   + ".");
 
           TensorGenerator outputGenerator = createManualGenerator(outputASIN.getNode(), builder);
@@ -222,7 +223,7 @@ public class ModelCall extends TensorGenerator {
                 "Created tensor generator: "
                     + outputGenerator
                     + " for output allocation site: "
-                    + outputASIN
+                    + describe(outputASIN)
                     + ".");
 
             ret.add(outputGenerator);

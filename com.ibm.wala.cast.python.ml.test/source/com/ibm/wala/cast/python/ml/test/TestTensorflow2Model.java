@@ -81,6 +81,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final Logger LOGGER = Logger.getLogger(TestTensorflow2Model.class.getName());
 
+  /**
+   * The largest call graph, in nodes, whose per-node FINE dump is emitted. Above this, only the
+   * node count is logged. Large graphs (e.g., nlpgnn) would otherwise emit gigabytes of log output;
+   * see <a href="https://github.com/wala/ML/issues/697">wala/ML#697</a>.
+   */
+  private static final int CALL_GRAPH_DUMP_NODE_LIMIT = 10_000;
+
   private static final String FLOAT_32 = FLOAT32.name().toLowerCase();
 
   private static final String COMPLEX_64 = COMPLEX64.name().toLowerCase();
@@ -14727,12 +14734,31 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
     assertNotNull(CG);
 
     if (LOGGER.isLoggable(Level.FINE)) {
-      CAstCallGraphUtil.AVOID_DUMP.set(false);
-      CAstCallGraphUtil.dumpCG(
-          ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
-          builder.getPointerAnalysis(),
-          CG);
-      LOGGER.fine("Call graph:\n" + CG);
+      // Both the IR dump (`dumpCG`) and the per-node call-graph dump render each node's context,
+      // whose scope-mapping/receiver contexts recurse and materialize gigantic strings on large
+      // graphs (e.g., nlpgnn). Gate the whole dump behind a node-count limit rather than via
+      // CallGraph.toString(), whose monolithic materialization exhausts the heap; see
+      // https://github.com/wala/ML/issues/697.
+      int nodeCount = CG.getNumberOfNodes();
+      if (nodeCount <= CALL_GRAPH_DUMP_NODE_LIMIT) {
+        CAstCallGraphUtil.AVOID_DUMP.set(false);
+        CAstCallGraphUtil.dumpCG(
+            ((SSAPropagationCallGraphBuilder) builder).getCFAContextInterpreter(),
+            builder.getPointerAnalysis(),
+            CG);
+        LOGGER.fine("Call graph has " + nodeCount + " node(s):");
+        // Render each node by number and method signature rather than CGNode.toString(), which
+        // renders the node's context and can trigger the same runaway recursion; see
+        // https://github.com/wala/ML/issues/697.
+        for (CGNode node : CG)
+          LOGGER.fine(() -> CG.getNumber(node) + ": " + node.getMethod().getSignature());
+      } else
+        LOGGER.fine(
+            "Call graph has "
+                + nodeCount
+                + " node(s); dump skipped (limit "
+                + CALL_GRAPH_DUMP_NODE_LIMIT
+                + ").");
     }
 
     TensorTypeAnalysis analysis = engine.performAnalysis(builder);

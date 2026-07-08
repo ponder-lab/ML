@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
@@ -99,12 +100,22 @@ public class DenseCall extends TensorGenerator {
     OrdinalSet<InstanceKey> selfPTS =
         this.getArgumentPointsToSet(builder, Parameters.SELF.getIndex(), Parameters.SELF.getName());
     LOGGER.fine(
-        () -> "Found `self` points-to set: " + selfPTS + " for node: " + this.getNode() + ".");
+        () ->
+            "Found `self` points-to set: "
+                + describe(selfPTS)
+                + " for node: "
+                + describe(this.getNode())
+                + ".");
 
     if (selfPTS != null)
       for (InstanceKey selfIK : selfPTS) {
         LOGGER.finer(
-            () -> "Found `self` instance key: " + selfIK + " for node: " + this.getNode() + ".");
+            () ->
+                "Found `self` instance key: "
+                    + describe(selfIK)
+                    + " for node: "
+                    + describe(this.getNode())
+                    + ".");
 
         // Extract the 'units' value from the Dense layer instance (Parameters.SELF).
         AllocationSiteInNode selfASIN = getAllocationSiteInNode(selfIK);
@@ -121,10 +132,19 @@ public class DenseCall extends TensorGenerator {
         if (f != null) {
           PointerKey fieldPK = builder.getPointerKeyForInstanceField(selfASIN, f);
           LOGGER.finer(
-              "Field pointer key: " + fieldPK + " for field reference: " + unitsFieldRef + ".");
+              "Field pointer key: "
+                  + describe(fieldPK)
+                  + " for field reference: "
+                  + unitsFieldRef
+                  + ".");
 
           OrdinalSet<InstanceKey> unitsPTS = builder.getPointerAnalysis().getPointsToSet(fieldPK);
-          LOGGER.finer("Points-to set: " + unitsPTS + " for field pointer key: " + fieldPK + ".");
+          LOGGER.finer(
+              "Points-to set: "
+                  + describe(unitsPTS)
+                  + " for field pointer key: "
+                  + describe(fieldPK)
+                  + ".");
 
           Set<Long> unitValues = getPossibleLongValues(unitsPTS);
           LOGGER.finer(
@@ -141,7 +161,7 @@ public class DenseCall extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    LOGGER.fine(() -> "Deriving shape for Dense call at: " + this.getNode());
+    LOGGER.fine(() -> "Deriving shape for Dense call at: " + describe(this.getNode()));
 
     Set<List<Dimension<?>>> inputShapes = this.getInputShapes(builder);
     if (inputShapes == null || inputShapes.isEmpty()) return null;
@@ -189,7 +209,9 @@ public class DenseCall extends TensorGenerator {
       // Cyclic chain: this `Dense.__call__` node's input flows back to itself (e.g., a layer-list
       // loop whose output feeds in as its own input under 1-CFA node collapse). Break the cycle;
       // the other phi operand supplies the base shape. See wala/ML#599.
-      LOGGER.fine(() -> "getInputShapes: cycle detected at node " + self + "; breaking recursion.");
+      LOGGER.fine(
+          () ->
+              "getInputShapes: cycle detected at node " + describe(self) + "; breaking recursion.");
       return null;
     }
     try {
@@ -231,7 +253,7 @@ public class DenseCall extends TensorGenerator {
     Set<List<Dimension<?>>> ret = new HashSet<>();
 
     for (InstanceKey inputIK : inputPts) {
-      LOGGER.fine(() -> "Found input tensor instance key: " + inputIK);
+      LOGGER.fine(() -> "Found input tensor instance key: " + describe(inputIK));
       AllocationSiteInNode inputASIN = getAllocationSiteInNode(inputIK);
       if (inputASIN == null) continue;
 
@@ -242,9 +264,9 @@ public class DenseCall extends TensorGenerator {
               "Found input tensor generator: "
                   + generator
                   + " for instance key: "
-                  + inputIK
+                  + describe(inputIK)
                   + " at node: "
-                  + node
+                  + describe(node)
                   + ".");
 
       if (generator != null) {
@@ -253,7 +275,12 @@ public class DenseCall extends TensorGenerator {
         if (generatorShapes != null) ret.addAll(generatorShapes);
       } else {
         LOGGER.fine(
-            () -> "No generator found for instance key: " + inputIK + " at node: " + node + ".");
+            () ->
+                "No generator found for instance key: "
+                    + describe(inputIK)
+                    + " at node: "
+                    + describe(node)
+                    + ".");
       }
     }
 

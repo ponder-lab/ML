@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import static com.google.common.collect.Sets.newHashSet;
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory.getGenerator;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATA_PACKAGE_PREFIX;
@@ -367,7 +368,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         } else if (inst instanceof SSABinaryOpInstruction) {
           // Binary operations (e.g. +, *) on tensors are also sources.
           sources.add(src);
-          LOGGER.fine("Added dataflow source from binary op: " + src + ".");
+          LOGGER.fine("Added dataflow source from binary op: " + describe(src) + ".");
         } else if (inst instanceof EachElementGetInstruction) {
           // We are potentially pulling a tensor out of a tensor iterable.
           EachElementGetInstruction eachElementGetInstruction = (EachElementGetInstruction) inst;
@@ -482,9 +483,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           || methodName.equals(DO_METHOD_NAME)) {
         try {
           TensorGenerator generator = getGenerator(src, builder);
-          LOGGER.fine(() -> "Found tensor generator: " + generator + " for source: " + src + ".");
+          LOGGER.fine(
+              () -> "Found tensor generator: " + generator + " for source: " + describe(src) + ".");
           sources.add(src);
-          LOGGER.fine("Added dataflow source from tensor generator: " + src + ".");
+          LOGGER.fine("Added dataflow source from tensor generator: " + describe(src) + ".");
           ret = true;
         } catch (IllegalArgumentException e) {
           // not a tensor source.
@@ -635,7 +637,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         // First try intraprocedural analysis.
         if (definesTensorIterable(def, node, callGraph, pointerAnalysis)) {
           sources.add(src);
-          LOGGER.fine("Added dataflow source from tensor iterable: " + src + ".");
+          LOGGER.fine("Added dataflow source from tensor iterable: " + describe(src) + ".");
           return true;
         } else {
           // Use interprocedural analysis using the PA.
@@ -698,7 +700,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                 || reference.getName().toString().startsWith(DATA_PACKAGE_PREFIX))
             && isDatasetTensorElement(src, use, pointerAnalysis)) {
           sources.add(src);
-          LOGGER.fine("Added dataflow source from tensor dataset: " + src + ".");
+          LOGGER.fine("Added dataflow source from tensor dataset: " + describe(src) + ".");
           return true;
         }
       }
@@ -1214,7 +1216,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         if (isEnumerateFirstFieldRead(v, builder)) drops.add(v);
       }
       LOGGER.fine(() -> "wala/ML#409 drops (enumerate-first-field): " + drops.size());
-      for (PointsToSetVariable d : drops) LOGGER.fine(() -> "  drop: " + d.getPointerKey());
+      for (PointsToSetVariable d : drops)
+        LOGGER.fine(() -> "  drop: " + describe(d.getPointerKey()));
 
       TensorTypeAnalysis tt =
           new TensorTypeAnalysis(
@@ -1266,7 +1269,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    */
   private Set<TensorType> getTensorTypes(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
-    LOGGER.fine("Getting tensor types for source: " + source + ".");
+    LOGGER.fine("Getting tensor types for source: " + describe(source) + ".");
 
     try {
       TensorGenerator generator = getGenerator(source, builder);
@@ -1285,7 +1288,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
       return tensorTypes;
     } catch (IllegalArgumentException e) {
-      LOGGER.log(Level.FINER, "Source " + source + " is not a recognized tensor generator.", e);
+      LOGGER.log(
+          Level.FINER,
+          e,
+          () -> "Source " + describe(source) + " is not a recognized tensor generator.");
       return HashSetFactory.make();
     }
   }

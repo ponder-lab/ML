@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
+
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
@@ -26,7 +28,11 @@ public class AstypeOperation extends TensorGenerator {
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     int receiverVn = getReceiverVn();
     LOGGER.fine(
-        () -> "AstypeOperation.getDefaultShapes: source=" + source + ", receiverVn=" + receiverVn);
+        () ->
+            "AstypeOperation.getDefaultShapes: source="
+                + describe(source)
+                + ", receiverVn="
+                + receiverVn);
     if (receiverVn > 0) {
       try {
         Set<List<Dimension<?>>> shapes = getShapes(builder, getNode(), receiverVn);

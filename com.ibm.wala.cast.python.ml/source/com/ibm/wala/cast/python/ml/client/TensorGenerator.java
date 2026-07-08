@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine.TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_CHOOSE_FROM_DATASETS_TYPE;
@@ -344,7 +345,7 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
     if (pointsToSet == null || !pointsToSet.iterator().hasNext())
       throw new IllegalArgumentException(
-          "Empty points-to set for shape argument in source: " + this.getSource() + ".");
+          "Empty points-to set for shape argument in source: " + describe(this.getSource()) + ".");
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
@@ -418,12 +419,16 @@ public abstract class TensorGenerator {
 
           // We can now get the pointer key for the instance field.
           PointerKey pointerKeyForInstanceField = builder.getPointerKeyForInstanceField(asin, f);
-          LOGGER.fine("Found pointer key for instance field: " + pointerKeyForInstanceField + ".");
+          LOGGER.fine(
+              "Found pointer key for instance field: "
+                  + describe(pointerKeyForInstanceField)
+                  + ".");
 
           // Get the points-to set for the instance field.
           OrdinalSet<InstanceKey> instanceFieldPointsToSet =
               pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
-          LOGGER.fine("Points-to set for instance field: " + instanceFieldPointsToSet + ".");
+          LOGGER.fine(
+              "Points-to set for instance field: " + describe(instanceFieldPointsToSet) + ".");
 
           // If the instance field points to a constant, we can use it as the shape.
           // TODO: Is it possible to also do it for (simple) expressions?
@@ -475,18 +480,18 @@ public abstract class TensorGenerator {
                 // resolvable, so return ⊤ rather than aborting (wala/ML#471).
                 LOGGER.fine(
                     "Unrecognized nested shape element for instance field: "
-                        + pointerKeyForInstanceField
+                        + describe(pointerKeyForInstanceField)
                         + ", got: "
-                        + instanceFieldIK
+                        + describe(instanceFieldIK)
                         + "; treating the shape as unknown (⊤).");
                 return null;
               }
             } else {
               LOGGER.fine(
                   "Unrecognized shape element for instance field: "
-                      + pointerKeyForInstanceField
+                      + describe(pointerKeyForInstanceField)
                       + ", got: "
-                      + instanceFieldIK
+                      + describe(instanceFieldIK)
                       + "; treating the shape as unknown (⊤).");
               return null;
             }
@@ -496,9 +501,9 @@ public abstract class TensorGenerator {
               "Found possible shape dimensions: "
                   + tensorDimensions
                   + " for field: "
-                  + pointerKeyForInstanceField
+                  + describe(pointerKeyForInstanceField)
                   + " for source: "
-                  + this.getSource()
+                  + describe(this.getSource())
                   + ".");
 
           // Add the shape dimensions.
@@ -934,7 +939,7 @@ public abstract class TensorGenerator {
     LOGGER.fine(
         () ->
             "getShapes(node, vn): node="
-                + node
+                + describe(node)
                 + ", vn="
                 + valueNumber
                 + ", ptsEmpty="
@@ -1027,7 +1032,7 @@ public abstract class TensorGenerator {
             "Could not trace shape for value number "
                 + valueNumber
                 + " in "
-                + node
+                + describe(node)
                 + "; flooring to ⊥ (not a tensor). wala/ML#620.");
     return Collections.emptySet();
   }
@@ -1474,11 +1479,14 @@ public abstract class TensorGenerator {
 
             PointerKey pointerKeyForInstanceField = builder.getPointerKeyForInstanceField(asin, f);
             LOGGER.fine(
-                "Found pointer key for instance field: " + pointerKeyForInstanceField + ".");
+                "Found pointer key for instance field: "
+                    + describe(pointerKeyForInstanceField)
+                    + ".");
 
             OrdinalSet<InstanceKey> instanceFieldPointsToSet =
                 pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
-            LOGGER.fine("Points-to set for instance field: " + instanceFieldPointsToSet + ".");
+            LOGGER.fine(
+                "Points-to set for instance field: " + describe(instanceFieldPointsToSet) + ".");
 
             Set<List<Dimension<?>>> shapesOfField =
                 this.getShapesOfValue(builder, instanceFieldPointsToSet);
@@ -1497,9 +1505,9 @@ public abstract class TensorGenerator {
             }
           }
         } else if (reference.equals(TensorFlowTypes.D_TYPE)) {
-          LOGGER.fine("Ignoring DType: " + asin);
+          LOGGER.fine("Ignoring DType: " + describe(asin));
         } else if (reference.equals(TensorFlowTypes.FEATURE)) {
-          LOGGER.fine("Ignoring feature: " + asin);
+          LOGGER.fine("Ignoring feature: " + describe(asin));
         } else {
           // Assume the value is a tensor and attempt to find the generator that created it
           // to ask for its shape.
@@ -1664,7 +1672,7 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, Iterable<InstanceKey> pointsToSet) {
     if (pointsToSet == null || !pointsToSet.iterator().hasNext())
       throw new IllegalArgumentException(
-          "Empty points-to set for dtype argument in source: " + this.getSource() + ".");
+          "Empty points-to set for dtype argument in source: " + describe(this.getSource()) + ".");
 
     Set<DType> ret = EnumSet.noneOf(DType.class);
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
@@ -1696,7 +1704,7 @@ public abstract class TensorGenerator {
         CGNode importNode = ((AllocationSiteInNode) instanceKey).getNode();
 
         if (importNode != null) {
-          LOGGER.fine("Found import node of interest: " + importNode + ".");
+          LOGGER.fine("Found import node of interest: " + describe(importNode) + ".");
           for (TypeReference ownerType :
               new TypeReference[] {TENSORFLOW_TYPE, TensorFlowTypes.NUMPY_TYPE}) {
             InstanceKey ownerIK =
@@ -1723,9 +1731,9 @@ public abstract class TensorGenerator {
                           "Found dtype: "
                               + dtype
                               + " for source: "
-                              + this.getSource()
+                              + describe(this.getSource())
                               + " from dType: "
-                              + instanceKey
+                              + describe(instanceKey)
                               + ".");
                       found = true;
                       break;
@@ -1752,7 +1760,12 @@ public abstract class TensorGenerator {
         // whole call graph (wala/ML#637). Lose dtype precision for this one value rather than
         // killing the analysis, but log it so the modeling gap is still visible.
         LOGGER.warning(
-            () -> "Unmodeled dtype: " + instanceKey + "; degrading to " + DType.UNKNOWN + ".");
+            () ->
+                "Unmodeled dtype: "
+                    + describe(instanceKey)
+                    + "; degrading to "
+                    + DType.UNKNOWN
+                    + ".");
         ret.add(DType.UNKNOWN);
       } else if (asin != null
           && asin.getNode()
@@ -2075,7 +2088,7 @@ public abstract class TensorGenerator {
             "Could not trace dtype for value number "
                 + valueNumber
                 + " in "
-                + node
+                + describe(node)
                 + "; flooring to ⊥ (not a tensor). wala/ML#620.");
     return Collections.emptySet();
   }
@@ -2241,21 +2254,24 @@ public abstract class TensorGenerator {
 
             PointerKey pointerKeyForInstanceField = builder.getPointerKeyForInstanceField(asin, f);
             LOGGER.fine(
-                "Found pointer key for instance field: " + pointerKeyForInstanceField + ".");
+                "Found pointer key for instance field: "
+                    + describe(pointerKeyForInstanceField)
+                    + ".");
 
             OrdinalSet<InstanceKey> instanceFieldPointsToSet =
                 pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
-            LOGGER.fine("Points-to set for instance field: " + instanceFieldPointsToSet + ".");
+            LOGGER.fine(
+                "Points-to set for instance field: " + describe(instanceFieldPointsToSet) + ".");
 
             Set<DType> fieldDTypes = this.getDTypesOfValue(builder, instanceFieldPointsToSet);
             if (fieldDTypes != null) ret.addAll(fieldDTypes);
           }
         } else if (reference.equals(TensorFlowTypes.FEATURE)) {
           // Ignore features.
-          LOGGER.fine("Ignoring feature: " + asin);
+          LOGGER.fine("Ignoring feature: " + describe(asin));
         } else if (reference.equals(TensorFlowTypes.D_TYPE)) {
           // Ignore DTypes.
-          LOGGER.fine("Ignoring DType: " + asin);
+          LOGGER.fine("Ignoring DType: " + describe(asin));
         } else {
           // Assume the value is a tensor and attempt to find the generator that created it
           // to ask for its dtype.

@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.ml.types.NumpyTypes.ASTYPE;
 import static com.ibm.wala.cast.python.ml.types.NumpyTypes.ASTYPE_METHOD_NAME;
 import static com.ibm.wala.cast.python.ml.types.NumpyTypes.RESHAPE_METHOD;
@@ -409,7 +410,11 @@ public class TensorGeneratorFactory {
     Queue<PointsToSetVariable> queue = new LinkedList<>();
     queue.add(source);
     visited.add(source);
-    LOGGER.fine("findCreator started for source: " + source);
+    // Log a context-free description rather than the variable or its pointer key: the key's
+    // toString() renders the node's context, whose scope-mapping/receiver contexts reference each
+    // other cyclically and recurse until the heap is exhausted on large graphs (e.g., nlpgnn); see
+    // https://github.com/wala/ML/issues/697.
+    LOGGER.fine(() -> "findCreator started for source: " + describe(source));
 
     while (!queue.isEmpty()) {
       PointsToSetVariable current = queue.poll();
@@ -417,10 +422,10 @@ public class TensorGeneratorFactory {
       // is enqueued below; skip it rather than dereferencing null. wala/ML#613.
       if (current == null) continue;
       PointerKey pk = current.getPointerKey();
-      LOGGER.fine("findCreator visiting: " + current);
+      LOGGER.fine(() -> "findCreator visiting: " + describe(current));
 
       if (pk instanceof ReturnValueKey) {
-        LOGGER.fine("findCreator found ReturnValueKey: " + current);
+        LOGGER.fine(() -> "findCreator found ReturnValueKey: " + describe(pk));
         return current;
       }
 
@@ -430,7 +435,7 @@ public class TensorGeneratorFactory {
         if (def instanceof SSAAbstractInvokeInstruction
             || def instanceof EachElementGetInstruction
             || def instanceof PythonPropertyRead) {
-          LOGGER.fine("findCreator found creator instruction: " + def);
+          LOGGER.fine(() -> "findCreator found creator instruction: " + def);
           return current;
         }
       }
@@ -439,13 +444,13 @@ public class TensorGeneratorFactory {
           it.hasNext(); ) {
         PointsToSetVariable pred = it.next();
         if (pred != null && visited.add(pred)) {
-          LOGGER.fine("findCreator adding pred: " + pred);
+          LOGGER.fine(() -> "findCreator adding pred: " + describe(pred));
           queue.add(pred);
         }
       }
     }
 
-    LOGGER.fine("findCreator fallback returning original source: " + source);
+    LOGGER.fine(() -> "findCreator fallback returning original source: " + describe(source));
     return source;
   }
 
@@ -653,7 +658,7 @@ public class TensorGeneratorFactory {
                 "TensorGeneratorFactory: dispatching `."
                     + value
                     + "(...)` call at "
-                    + node
+                    + describe(node)
                     + " v"
                     + vn
                     + " via property-name registry.");
@@ -677,7 +682,8 @@ public class TensorGeneratorFactory {
     try {
       return getGenerator(source, builder, visited);
     } catch (IllegalArgumentException e) {
-      LOGGER.log(Level.FINE, "tryGetGenerator: swallowed IAE for source=" + source, e);
+      LOGGER.log(
+          Level.FINE, e, () -> "tryGetGenerator: swallowed IAE for source=" + describe(source));
       return null;
     }
   }
@@ -928,7 +934,7 @@ public class TensorGeneratorFactory {
             LOGGER.fine(
                 () ->
                     "TensorGeneratorFactory: dispatching astype call at "
-                        + node
+                        + describe(node)
                         + " v"
                         + vn
                         + " to AstypeOperation.");
@@ -947,7 +953,7 @@ public class TensorGeneratorFactory {
             LOGGER.fine(
                 () ->
                     "TensorGeneratorFactory: dispatching ndarray.reshape call at "
-                        + node
+                        + describe(node)
                         + " v"
                         + vn
                         + " to NdarrayReshape.");
@@ -1307,8 +1313,9 @@ public class TensorGeneratorFactory {
             () ->
                 "Rejecting ElementWiseOperation dispatch — no operand has tensor"
                     + " evidence. source="
-                    + source);
-        throw new IllegalArgumentException("Binary op with no tensor operand: " + source + ".");
+                    + describe(source));
+        throw new IllegalArgumentException(
+            "Binary op with no tensor operand: " + describe(source) + ".");
       }
       return new ElementWiseOperation(source);
     } else if (isType(calledFunction, SPARSE_ADD.getDeclaringClass())) return new SparseAdd(source);
@@ -1602,7 +1609,7 @@ public class TensorGeneratorFactory {
         return new ReadDataFallback(source);
       }
       throw new IllegalArgumentException(
-          "Unknown call: " + calledFunction + " for source: " + source + ".");
+          "Unknown call: " + calledFunction + " for source: " + describe(source) + ".");
     }
   }
 
