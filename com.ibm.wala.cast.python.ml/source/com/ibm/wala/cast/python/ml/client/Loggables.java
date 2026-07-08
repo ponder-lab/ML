@@ -20,6 +20,9 @@ import com.ibm.wala.util.intset.OrdinalSet;
  */
 final class Loggables {
 
+  /** The most instance keys {@link #describe(OrdinalSet)} renders before truncating. */
+  private static final int MAX_SET_ELEMENTS = 10;
+
   private Loggables() {}
 
   /**
@@ -58,7 +61,7 @@ final class Loggables {
    * @return A bounded, context-free description.
    */
   static String describe(CGNode node) {
-    return node == null ? "null" : signature(node);
+    return signature(node);
   }
 
   /**
@@ -77,7 +80,8 @@ final class Loggables {
   }
 
   /**
-   * Describes a set of instance keys element-wise.
+   * Describes a set of instance keys element-wise, rendering at most {@link #MAX_SET_ELEMENTS} of
+   * them so a large points-to set cannot materialize a large string.
    *
    * @param set The set to describe, or {@code null}.
    * @return A bounded, context-free description.
@@ -85,16 +89,20 @@ final class Loggables {
   static String describe(OrdinalSet<InstanceKey> set) {
     if (set == null) return "null";
     StringBuilder sb = new StringBuilder("[");
-    boolean first = true;
+    int rendered = 0;
     for (InstanceKey ik : set) {
-      if (!first) sb.append(", ");
+      if (rendered == MAX_SET_ELEMENTS) {
+        sb.append(", ... (").append(set.size()).append(" total)");
+        break;
+      }
+      if (rendered > 0) sb.append(", ");
       sb.append(describe(ik));
-      first = false;
+      rendered++;
     }
     return sb.append("]").toString();
   }
 
   private static String signature(CGNode node) {
-    return node.getMethod().getSignature();
+    return node == null ? "null" : node.getMethod().getSignature();
   }
 }

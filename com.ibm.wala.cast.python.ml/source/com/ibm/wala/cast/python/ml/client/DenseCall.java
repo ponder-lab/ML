@@ -250,7 +250,7 @@ public class DenseCall extends TensorGenerator {
     Set<List<Dimension<?>>> ret = new HashSet<>();
 
     for (InstanceKey inputIK : inputPts) {
-      LOGGER.fine(() -> "Found input tensor instance key: " + inputIK);
+      LOGGER.fine(() -> "Found input tensor instance key: " + Loggables.describe(inputIK));
       AllocationSiteInNode inputASIN = getAllocationSiteInNode(inputIK);
       if (inputASIN == null) continue;
 

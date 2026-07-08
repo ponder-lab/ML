@@ -205,7 +205,7 @@ public class ModelCall extends TensorGenerator {
                   + ".");
 
       for (InstanceKey outputIK : outputsPTS) {
-        LOGGER.finest("Found output instance key: " + outputIK + ".");
+        LOGGER.finest("Found output instance key: " + Loggables.describe(outputIK) + ".");
 
         AllocationSiteInNode outputASIN = getAllocationSiteInNode(outputIK);
         if (outputASIN != null) {

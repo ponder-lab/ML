@@ -14747,7 +14747,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             builder.getPointerAnalysis(),
             CG);
         LOGGER.fine("Call graph has " + nodeCount + " node(s):");
-        for (CGNode node : CG) LOGGER.fine(node::toString);
+        // Render each node by number and method signature rather than CGNode.toString(), which
+        // renders the node's context and can trigger the same runaway recursion; see
+        // https://github.com/wala/ML/issues/697.
+        for (CGNode node : CG)
+          LOGGER.fine(() -> CG.getNumber(node) + ": " + node.getMethod().getSignature());
       } else
         LOGGER.fine(
             "Call graph has "

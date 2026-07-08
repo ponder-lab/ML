@@ -483,7 +483,7 @@ public abstract class TensorGenerator {
                 // resolvable, so return ⊤ rather than aborting (wala/ML#471).
                 LOGGER.fine(
                     "Unrecognized nested shape element for instance field: "
-                        + pointerKeyForInstanceField
+                        + Loggables.describe(pointerKeyForInstanceField)
                         + ", got: "
                         + instanceFieldIK
                         + "; treating the shape as unknown (⊤).");
@@ -492,7 +492,7 @@ public abstract class TensorGenerator {
             } else {
               LOGGER.fine(
                   "Unrecognized shape element for instance field: "
-                      + pointerKeyForInstanceField
+                      + Loggables.describe(pointerKeyForInstanceField)
                       + ", got: "
                       + instanceFieldIK
                       + "; treating the shape as unknown (⊤).");
@@ -504,7 +504,7 @@ public abstract class TensorGenerator {
               "Found possible shape dimensions: "
                   + tensorDimensions
                   + " for field: "
-                  + pointerKeyForInstanceField
+                  + Loggables.describe(pointerKeyForInstanceField)
                   + " for source: "
                   + this.getSource()
                   + ".");
@@ -1482,7 +1482,9 @@ public abstract class TensorGenerator {
 
             PointerKey pointerKeyForInstanceField = builder.getPointerKeyForInstanceField(asin, f);
             LOGGER.fine(
-                "Found pointer key for instance field: " + pointerKeyForInstanceField + ".");
+                "Found pointer key for instance field: "
+                    + Loggables.describe(pointerKeyForInstanceField)
+                    + ".");
 
             OrdinalSet<InstanceKey> instanceFieldPointsToSet =
                 pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
@@ -2254,7 +2256,9 @@ public abstract class TensorGenerator {
 
             PointerKey pointerKeyForInstanceField = builder.getPointerKeyForInstanceField(asin, f);
             LOGGER.fine(
-                "Found pointer key for instance field: " + pointerKeyForInstanceField + ".");
+                "Found pointer key for instance field: "
+                    + Loggables.describe(pointerKeyForInstanceField)
+                    + ".");
 
             OrdinalSet<InstanceKey> instanceFieldPointsToSet =
                 pointerAnalysis.getPointsToSet(pointerKeyForInstanceField);
