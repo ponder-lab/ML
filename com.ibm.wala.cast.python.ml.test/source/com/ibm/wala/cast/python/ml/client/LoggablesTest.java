@@ -44,6 +44,6 @@ public class LoggablesTest {
 
   @Test
   public void describeEmptyOrdinalSet() {
-    assertEquals("[]", Loggables.describe(OrdinalSet.<InstanceKey>empty()));
+    assertEquals("[]", Loggables.describe(OrdinalSet.empty()));
   }
 }

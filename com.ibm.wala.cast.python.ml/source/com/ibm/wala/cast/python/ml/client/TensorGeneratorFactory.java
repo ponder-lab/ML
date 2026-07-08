@@ -422,7 +422,7 @@ public class TensorGeneratorFactory {
       // is enqueued below; skip it rather than dereferencing null. wala/ML#613.
       if (current == null) continue;
       PointerKey pk = current.getPointerKey();
-      LOGGER.fine(() -> "findCreator visiting: " + describe(pk));
+      LOGGER.fine(() -> "findCreator visiting: " + describe(current));
 
       if (pk instanceof ReturnValueKey) {
         LOGGER.fine(() -> "findCreator found ReturnValueKey: " + describe(pk));
