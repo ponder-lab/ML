@@ -507,8 +507,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               SSAInstruction iteratorDef = du.getDef(iterator);
 
               // Let's see if the iterator is over a tensor dataset. First, check the iterator
-              // for a dataset source. NOTE: We can only do this because `iter()` is currently
-              // just passing-through its argument.
+              // for a dataset source. `iter()` returns a fresh iterator that does not carry a
+              // dataset's element flow (see `iterSummary`; wala/ML#698), so a dataset source is
+              // recovered by chasing `iter()`'s argument below.
               if (iteratorDef != null && iteratorDef.getNumberOfUses() > 1) {
                 boolean added =
                     processInstructionInterprocedurally(
@@ -554,8 +555,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                   }
                 }
               } else
-                // Use the original instruction. NOTE: We can only do this because `iter()` is
-                // currently just passing-through its argument.
+                // Use the original instruction to chase the iterator directly for a dataset
+                // source (see `iterSummary`; wala/ML#698).
                 ret |=
                     processInstructionInterprocedurally(
                         instruction, iterator, node, src, sources, pointerAnalysis);

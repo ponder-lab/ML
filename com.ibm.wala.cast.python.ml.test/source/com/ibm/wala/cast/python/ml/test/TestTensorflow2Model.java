@@ -10758,6 +10758,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Probe for the transit through an explicit {@code iter()} call: {@code next(iter(gen()))}.
+   * {@code iter()} was modeled as a fresh, empty {@code iterator} allocation, so {@code next}'s
+   * read of the generator content field landed on the empty iterator instead of the generator
+   * object and the yielded tensor's type was dropped. A regression guard for <a
+   * href="https://github.com/wala/ML/issues/698">wala/ML#698</a>, where {@code iter} is modeled as
+   * a pass-through of its argument.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGenNextIter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_gen_next_iter.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
+  /**
    * Companion probe for the generator transit: the same yielded pair consumed by for-loop
    * destructuring over the generator instead of {@code next()}. Also dropped (<a
    * href="https://github.com/wala/ML/issues/696">wala/ML#696</a>); distinct from the {@code
