@@ -141,10 +141,12 @@ public class TestGenerators extends TestJythonCallGraphShape {
    */
   private static void assertNodesAbsent(CallGraph cg, String... absentClassNames) {
     Set<String> declaringClasses = new HashSet<>();
-    for (CGNode node : cg)
+    for (CGNode node : cg) {
       declaringClasses.add(node.getMethod().getDeclaringClass().getName().toString());
-    for (String absent : absentClassNames)
+    }
+    for (String absent : absentClassNames) {
       assertFalse(
           "Expected no call-graph node declared by " + absent, declaringClasses.contains(absent));
+    }
   }
 }
