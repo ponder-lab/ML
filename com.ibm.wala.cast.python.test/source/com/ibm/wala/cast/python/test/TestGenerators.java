@@ -13,15 +13,14 @@ import org.junit.Test;
  * href="https://github.com/wala/ML/issues/696">wala/ML#696</a>'s modeling supports: iterating
  * {@code gen()} reaches the yielded {@code f1}/{@code f2}/{@code f3} and their returned lambdas.
  * {@code gen1.py} and {@code gen3.py} exercise generator <em>expressions</em>, whose yielded
- * functions are not reachable on this front-end — a distinct modeling gap pinned by the tests
- * below.
+ * functions are not reachable on this front-end, a distinct modeling gap pinned by the tests below.
  */
 public class TestGenerators extends TestJythonCallGraphShape {
 
   /**
    * {@code gen2.py}: {@code for f in gen(): g = f(i); g(i)} over a generator function that yields
    * {@code f1}/{@code f2}/{@code f3}. The yielded functions and their returned lambdas are all
-   * reachable — a call-graph-level regression guard for <a
+   * reachable, giving a call-graph-level regression guard for <a
    * href="https://github.com/wala/ML/issues/696">wala/ML#696</a> (the existing guards assert tensor
    * typing, not call-graph reachability).
    */
@@ -44,19 +43,19 @@ public class TestGenerators extends TestJythonCallGraphShape {
    * {@code gen1.py}: a generator <em>expression</em> {@code (f(3) for f in fs)} iterated and
    * called. Unlike the generator function of {@code gen2.py}, the expression's yielded functions
    * {@code f1}/{@code f2}/{@code f3} are <em>not</em> reachable; only the script itself is. This
-   * pins the current behavior. TODO: extend to reach {@code f1}/{@code f2}/{@code f3} once
-   * generator expressions are modeled at the call-graph level (<a
-   * href="https://github.com/wala/ML/issues/701">wala/ML#701</a>).
+   * pins the current behavior. TODO(<a
+   * href="https://github.com/wala/ML/issues/701">wala/ML#701</a>): extend to reach {@code
+   * f1}/{@code f2}/{@code f3} once generator expressions are modeled at the call-graph level.
    */
   protected static final List<GraphAssertion> assertionsGen1 =
       List.of(new GraphAssertion(ROOT, new String[] {"script gen1.py"}));
 
   /**
-   * {@code gen3.py}: a generator <em>expression</em> returned from {@code makeGenerator()}. {@code
-   * makeGenerator} is reachable, but the expression's yielded functions {@code f1}/{@code
-   * f2}/{@code f3} are not — the same generator-expression gap as {@code gen1.py}. TODO: extend to
-   * reach {@code f1}/{@code f2}/{@code f3} once generator expressions are modeled at the call-graph
-   * level (<a href="https://github.com/wala/ML/issues/701">wala/ML#701</a>).
+   * {@code gen3.py}: a generator <em>expression</em> returned from {@code makeGenerator(fs)}.
+   * {@code makeGenerator} is reachable, but the expression's yielded functions {@code f1}/{@code
+   * f2}/{@code f3} are not reachable, the same generator-expression gap as {@code gen1.py}. TODO(<a
+   * href="https://github.com/wala/ML/issues/701">wala/ML#701</a>): extend to reach {@code
+   * f1}/{@code f2}/{@code f3} once generator expressions are modeled at the call-graph level.
    */
   protected static final List<GraphAssertion> assertionsGen3 =
       List.of(
