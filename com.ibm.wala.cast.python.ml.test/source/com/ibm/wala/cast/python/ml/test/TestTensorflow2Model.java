@@ -12641,14 +12641,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Generator-dispatch test for {@code tf.einsum(equation, *inputs)}. Output dtype inherits from
-   * the first tensor input ({@code float32} in the fixture). See {@link
-   * com.ibm.wala.cast.python.ml.client.Einsum} (wala/ML#449 Tier 5).
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/507">wala/ML#507</a>): output shape is
-   * currently ⊤. Precise shape inference requires parsing the einsum equation string (e.g. {@code
-   * "ij,jk->ik"}) and composing it against each input's shape. Tighten to the precise post-parse
-   * shape ({@code (2, 2)} for this fixture) once #507 lands.
+   * Generator test for {@code tf.einsum(equation, *inputs)}. The {@link
+   * com.ibm.wala.cast.python.ml.client.Einsum} generator parses the equation string ({@code
+   * "ij,jk->ik"}) and composes the output shape from each input's shape: {@code (2, 2)} einsum
+   * {@code (2, 2)} over {@code "ij,jk->ik"} is {@code (2, 2)}. Output dtype inherits from the first
+   * tensor input ({@code float32}). See wala/ML#507.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -12658,7 +12655,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testEinsum()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_einsum.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test("tf2_test_einsum.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   /**
