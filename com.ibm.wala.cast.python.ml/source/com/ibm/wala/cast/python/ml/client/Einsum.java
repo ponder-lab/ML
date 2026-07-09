@@ -214,11 +214,20 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
    * Composes the output shape by mapping each label to the input dimension it names, then indexing
    * the output labels into that map.
    *
+   * <p>An input shape may encode a statically-unknown dimension size as a raw {@code null} entry
+   * (see {@code TensorType.RaggedDim}'s Javadoc and wala/ML#414). Presence in the label map is
+   * therefore tracked with {@code containsKey}, never by a null-check on the value: a label whose
+   * occurrences are all {@code null} stays {@code null} (unknown size) in the output, preserving
+   * the output's rank instead of degrading the whole shape to ⊤, and a label seen with both a
+   * {@code null} and a concrete dimension merges to {@code null} (statically unagreed) rather than
+   * letting either occurrence win.
+   *
    * @param parsed The parsed equation.
    * @param inputShapes The resolved shape of each input, in input order.
-   * @return The composed output shape, or {@code null} when a term's label count doesn't match its
-   *     input's rank, a term repeats a label (diagonal, unmodeled), or an output label names no
-   *     input.
+   * @return The composed output shape (possibly containing {@code null} unknown-size entries), or
+   *     {@code null} (⊤) when a term's label count doesn't match its input's rank, a term repeats a
+   *     label (diagonal, unmodeled), a shared label maps to conflicting known dimensions, or an
+   *     output label names no input.
    */
   private static List<Dimension<?>> composeOutputShape(
       ParsedEquation parsed, List<List<Dimension<?>>> inputShapes) {
@@ -234,18 +243,21 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
         String label = labels.get(d);
         if (!seenInTerm.add(label)) return null; // Repeated label within a term (diagonal): ⊤.
         Dimension<?> dim = shape.get(d);
-        Dimension<?> previous = labelToDim.putIfAbsent(label, dim);
-        // A label shared across inputs must name the same dimension; if the statically-known dims
-        // disagree, the equation's constraint isn't satisfied statically, so fall back to ⊤.
-        if (previous != null && !previous.equals(dim)) return null;
+        if (!labelToDim.containsKey(label)) labelToDim.put(label, dim);
+        else {
+          Dimension<?> previous = labelToDim.get(label);
+          // An unknown (null) occurrence keeps the label unknown; conflicting known dims mean the
+          // equation's same-dimension constraint isn't satisfied statically, so fall back to ⊤.
+          if (previous == null || dim == null) labelToDim.put(label, null);
+          else if (!previous.equals(dim)) return null;
+        }
       }
     }
 
     List<Dimension<?>> output = new ArrayList<>(parsed.output().size());
     for (String label : parsed.output()) {
-      Dimension<?> dim = labelToDim.get(label);
-      if (dim == null) return null; // Output label names no input.
-      output.add(dim);
+      if (!labelToDim.containsKey(label)) return null; // Output label names no input.
+      output.add(labelToDim.get(label)); // May be null: known rank, unknown size.
     }
     return output;
   }
