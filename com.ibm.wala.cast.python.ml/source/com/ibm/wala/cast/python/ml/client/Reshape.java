@@ -145,10 +145,13 @@ public class Reshape extends TensorGenerator {
 
               List<Dimension<?>> refinedShape = new ArrayList<>(shape);
               // The -1 dimension is only inferable when the division is exact; a zero known
-              // product (any inferred value satisfies 0 * k == 0) or a non-exact division leaves
-              // it symbolic.
-              if (inputKnown && productKnown != 0 && inputSize % productKnown == 0) {
-                long inferredDim = inputSize / productKnown;
+              // product (any inferred value satisfies 0 * k == 0), a non-exact division, or a
+              // quotient outside the non-negative int range leaves it symbolic.
+              long inferredDim =
+                  inputKnown && productKnown != 0 && inputSize % productKnown == 0
+                      ? inputSize / productKnown
+                      : -1;
+              if (inferredDim >= 0 && inferredDim <= Integer.MAX_VALUE) {
                 refinedShape.set(unknownIndex, new NumericDim((int) inferredDim));
               } else {
                 refinedShape.set(unknownIndex, new SymbolicDim("?"));
