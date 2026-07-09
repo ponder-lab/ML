@@ -78,6 +78,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.logging.Level;
@@ -2748,6 +2749,269 @@ public abstract class TensorGenerator {
       }
     }
     return combined;
+  }
+
+  /**
+   * Resolves a shape argument that is a <em>shape vector</em>: a Python value derived from a
+   * tensor's shape through the {@code t.shape} / {@code t.shape.as_list()} / {@code
+   * t.shape.as_list()[a:b]} idioms (<a
+   * href="https://github.com/wala/ML/issues/703">wala/ML#703</a>). Such values have an empty
+   * points-to set (the {@code shape} member and {@code as_list} are unmodeled), so ordinary shape
+   * resolution can't see them; this recovers the source tensor's shape by def-use walking and
+   * applies any slice with constant bounds.
+   *
+   * <p>Tries the generator's own invoke first (caller-side sources); for synthetic/manual nodes it
+   * walks the call-graph callers, mirroring {@link #getShapeFromShapeAttributeArgument}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param paramPos The 0-based positional index of the shape parameter (excluding {@code self}).
+   * @param paramName The shape parameter's keyword name, or {@code null}.
+   * @return The union of the recovered (sub-)shapes, or {@code null} if the argument isn't a
+   *     resolvable shape vector.
+   */
+  protected Set<List<Dimension<?>>> getShapesFromShapeVectorArgument(
+      PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    PythonInvokeInstruction call = getInvokeInstruction();
+    if (call != null) {
+      int argVn = -1;
+      if (paramName != null) argVn = call.getUse(paramName);
+      if (argVn == -1 && paramPos >= 0) {
+        int numKeywords = call.getKeywords() != null ? call.getKeywords().size() : 0;
+        int numPosParams = call.getNumberOfUses() - 1 - numKeywords;
+        if (paramPos < numPosParams) argVn = call.getUse(paramPos + 1);
+      }
+      if (argVn > 0) return this.getShapesOfShapeVector(builder, this.getNode(), argVn);
+      return null;
+    }
+
+    // Synthetic/manual node: walk the call-graph callers to find the argument's value number.
+    Set<List<Dimension<?>>> combined = null;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      CGNode caller = callerInvoke.fst;
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction)) continue;
+      PythonInvokeInstruction pyCall = (PythonInvokeInstruction) callerInvoke.snd;
+      int argVn = -1;
+      if (paramName != null) argVn = pyCall.getUse(paramName);
+      if (argVn == -1 && paramPos >= 0) {
+        int numPosParams = pyCall.getNumberOfPositionalParameters() - 1;
+        if (paramPos < numPosParams) argVn = pyCall.getUse(paramPos + 1);
+      }
+      if (argVn <= 0) continue;
+      Set<List<Dimension<?>>> shapes = this.getShapesOfShapeVector(builder, caller, argVn);
+      if (shapes != null && !shapes.isEmpty()) {
+        if (combined == null) combined = HashSetFactory.make();
+        combined.addAll(shapes);
+      }
+    }
+    return combined;
+  }
+
+  /**
+   * Def-use walker behind {@link #getShapesFromShapeVectorArgument}: resolves a value number to the
+   * tensor (sub-)shape it denotes. Recognizes, recursively:
+   *
+   * <ul>
+   *   <li>{@code t.shape} — a {@link PythonPropertyRead} of member {@code "shape"}; resolves the
+   *       source tensor's shapes via {@link #getShapes(PropagationCallGraphBuilder, CGNode, int)}.
+   *   <li>{@code v.as_list()} — an invoke whose function object is a property read of member {@code
+   *       "as_list"}; recurses on the receiver.
+   *   <li>{@code v[a:b]} — an invoke of the {@code slice} builtin with constant (or {@code None})
+   *       bounds and a unit step; recurses on the receiver and takes the corresponding sub-list of
+   *       each shape, with Python negative-index semantics.
+   * </ul>
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param vn The value number to resolve.
+   * @return The union of the denoted (sub-)shapes, or {@code null} (⊤) when the def-use chain
+   *     doesn't match a recognized shape-vector form, a slice bound isn't a compile-time constant
+   *     (the sub-list's rank is then unknown), or the source tensor's shape doesn't resolve.
+   */
+  protected Set<List<Dimension<?>>> getShapesOfShapeVector(
+      PropagationCallGraphBuilder builder, CGNode node, int vn) {
+    if (vn <= 0 || node.getDU() == null || node.getIR() == null) return null;
+    SSAInstruction def = node.getDU().getDef(vn);
+    SymbolTable st = node.getIR().getSymbolTable();
+
+    if (def instanceof PythonPropertyRead) {
+      PythonPropertyRead read = (PythonPropertyRead) def;
+      int memberVn = read.getMemberRef();
+      if (st.isStringConstant(memberVn) && "shape".equals(st.getStringValue(memberVn))) {
+        try {
+          return this.getShapes(builder, node, read.getObjectRef());
+        } catch (IllegalArgumentException e) {
+          LOGGER.log(
+              Level.FINE,
+              "getShapesOfShapeVector: could not resolve .shape source in node=" + node,
+              e);
+          return null;
+        }
+      }
+      return null;
+    }
+
+    if (def instanceof PythonInvokeInstruction) {
+      PythonInvokeInstruction invoke = (PythonInvokeInstruction) def;
+      if (invoke.getNumberOfUses() < 1) return null;
+      SSAInstruction funcDef = node.getDU().getDef(invoke.getUse(0));
+
+      // v.as_list(): peel the call and recurse on the receiver of the property read.
+      if (funcDef instanceof PythonPropertyRead) {
+        PythonPropertyRead funcRead = (PythonPropertyRead) funcDef;
+        int memberVn = funcRead.getMemberRef();
+        if (st.isStringConstant(memberVn) && "as_list".equals(st.getStringValue(memberVn)))
+          return this.getShapesOfShapeVector(builder, node, funcRead.getObjectRef());
+        return null;
+      }
+
+      // v[a:b]: a slice-builtin invoke of the form slice(receiver, lower, upper, step).
+      if (funcDef instanceof SSANewInstruction
+          && ((SSANewInstruction) funcDef)
+              .getNewSite()
+              .getDeclaredType()
+              .equals(PythonTypes.SLICE_BUILTIN)
+          && invoke.getNumberOfUses() >= 2) {
+        Set<List<Dimension<?>>> base = this.getShapesOfShapeVector(builder, node, invoke.getUse(1));
+        if (base == null || base.isEmpty()) return null;
+
+        // A nested slice object as a bound means a multi-dim subscript; a shape vector is 1-D, so
+        // that form isn't a shape-list slice.
+        for (int u = 2; u < invoke.getNumberOfUses(); u++)
+          if (isSliceObjectDef(node, invoke.getUse(u))) return null;
+
+        Integer lower = sliceBoundOrNull(builder, node, st, invoke, 2);
+        Integer upper = sliceBoundOrNull(builder, node, st, invoke, 3);
+        Integer step = sliceBoundOrNull(builder, node, st, invoke, 4);
+        if (Objects.equals(lower, UNRESOLVED_BOUND)
+            || Objects.equals(upper, UNRESOLVED_BOUND)
+            || Objects.equals(step, UNRESOLVED_BOUND))
+          return null; // Non-constant bound: the sub-list's rank is unknown.
+        if (step != null && step != 1) return null; // Non-unit step: unmodeled.
+
+        Set<List<Dimension<?>>> sliced = HashSetFactory.make();
+        for (List<Dimension<?>> dims : base) {
+          int n = dims.size();
+          int from = lower == null ? 0 : lower < 0 ? Math.max(0, n + lower) : Math.min(lower, n);
+          int to = upper == null ? n : upper < 0 ? Math.max(0, n + upper) : Math.min(upper, n);
+          sliced.add(from < to ? new ArrayList<>(dims.subList(from, to)) : new ArrayList<>());
+        }
+        return sliced;
+      }
+      return null;
+    }
+    return null;
+  }
+
+  /**
+   * Structural companion of {@link #getShapesOfShapeVector}: returns whether the value's def-use
+   * chain has the shape of a shape vector ({@code t.shape}, {@code v.as_list()}, or a {@code slice}
+   * of one), without resolving any shapes or bounds. Used to decide whether a shape operand should
+   * be left to the generator-side provenance walk rather than pinned (wala/ML#703).
+   *
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param vn The value number to test.
+   * @return {@code true} iff the def-use chain matches a shape-vector form.
+   */
+  public static boolean isShapeVectorChain(CGNode node, int vn) {
+    if (vn <= 0 || node.getDU() == null || node.getIR() == null) return false;
+    SSAInstruction def = node.getDU().getDef(vn);
+    SymbolTable st = node.getIR().getSymbolTable();
+
+    if (def instanceof PythonPropertyRead) {
+      int memberVn = ((PythonPropertyRead) def).getMemberRef();
+      return st.isStringConstant(memberVn) && "shape".equals(st.getStringValue(memberVn));
+    }
+
+    if (def instanceof PythonInvokeInstruction) {
+      PythonInvokeInstruction invoke = (PythonInvokeInstruction) def;
+      if (invoke.getNumberOfUses() < 1) return false;
+      SSAInstruction funcDef = node.getDU().getDef(invoke.getUse(0));
+      if (funcDef instanceof PythonPropertyRead) {
+        int memberVn = ((PythonPropertyRead) funcDef).getMemberRef();
+        return st.isStringConstant(memberVn)
+            && "as_list".equals(st.getStringValue(memberVn))
+            && isShapeVectorChain(node, ((PythonPropertyRead) funcDef).getObjectRef());
+      }
+      if (funcDef instanceof SSANewInstruction
+          && ((SSANewInstruction) funcDef)
+              .getNewSite()
+              .getDeclaredType()
+              .equals(PythonTypes.SLICE_BUILTIN)
+          && invoke.getNumberOfUses() >= 2) return isShapeVectorChain(node, invoke.getUse(1));
+      return false;
+    }
+    return false;
+  }
+
+  /**
+   * Sentinel returned by {@link #sliceBoundOrNull} for a bound that is present but not a
+   * compile-time constant. Compared by value ({@link Objects#equals}), so a genuine {@link
+   * Integer#MIN_VALUE} bound in user code conservatively degrades to ⊤ along with actually
+   * unresolved bounds.
+   */
+  protected static final Integer UNRESOLVED_BOUND = Integer.MIN_VALUE;
+
+  /**
+   * Resolves a slice bound at the given use index to a constant integer, {@code null} for an
+   * absent/{@code None} bound, or {@link #UNRESOLVED_BOUND} when the bound exists but isn't a
+   * compile-time constant. Reads the symbol table first (literal bounds), then a single {@code
+   * ConstantKey} in the bound's points-to set (propagated constants).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} providing the pointer analysis.
+   * @param node The {@link CGNode} whose IR contains the invoke.
+   * @param st The node's symbol table.
+   * @param invoke The slice-builtin invoke.
+   * @param useIndex The use index of the bound ({@code 2}=lower, {@code 3}=upper, {@code 4}=step).
+   * @return The constant bound, {@code null} for {@code None}/absent, or {@link #UNRESOLVED_BOUND}.
+   */
+  private static Integer sliceBoundOrNull(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      SymbolTable st,
+      PythonInvokeInstruction invoke,
+      int useIndex) {
+    if (useIndex >= invoke.getNumberOfUses()) return null; // Absent: Python default.
+    int vn = invoke.getUse(useIndex);
+    if (vn <= 0) return null;
+    if (st.isNullConstant(vn)) return null; // Explicit None.
+    if (st.isNumberConstant(vn)) return ((Number) st.getConstantValue(vn)).intValue();
+    PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+    if (pk == null) return UNRESOLVED_BOUND;
+    OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
+    Integer found = null;
+    for (InstanceKey ik : pts) {
+      if (!(ik instanceof ConstantKey)) return UNRESOLVED_BOUND;
+      Object value = ((ConstantKey<?>) ik).getValue();
+      if (value == null) return null; // Propagated None.
+      if (!(value instanceof Number)) return UNRESOLVED_BOUND;
+      int intValue = ((Number) value).intValue();
+      if (found != null && found != intValue) return UNRESOLVED_BOUND; // Ambiguous.
+      found = intValue;
+    }
+    return found == null ? UNRESOLVED_BOUND : found;
+  }
+
+  /**
+   * Returns whether the given value number is defined by a {@code slice(...)} object construction
+   * (an invoke whose function object is a {@link PythonTypes#SLICE_BUILTIN} allocation).
+   *
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param vn The value number to test.
+   * @return {@code true} iff {@code vn} is defined by a slice-object construction.
+   */
+  private static boolean isSliceObjectDef(CGNode node, int vn) {
+    if (vn <= 0) return false;
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (!(def instanceof SSAAbstractInvokeInstruction)) return false;
+    SSAAbstractInvokeInstruction inv = (SSAAbstractInvokeInstruction) def;
+    if (inv.getNumberOfUses() < 1) return false;
+    SSAInstruction funcDef = node.getDU().getDef(inv.getUse(0));
+    return funcDef instanceof SSANewInstruction
+        && ((SSANewInstruction) funcDef)
+            .getNewSite()
+            .getDeclaredType()
+            .equals(PythonTypes.SLICE_BUILTIN);
   }
 
   /**
