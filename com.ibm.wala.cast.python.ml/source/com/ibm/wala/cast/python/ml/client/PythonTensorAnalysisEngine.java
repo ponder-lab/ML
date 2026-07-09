@@ -52,6 +52,7 @@ import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
@@ -917,6 +918,23 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         builder,
         (CGNode src, SSAAbstractInvokeInstruction call) -> {
           if (call.getNumberOfUses() > param) {
+            // `TensorType.shapeArg` reads the shape operand's element writes, so it is only
+            // meaningful for a literal container construction (a `new` list/tuple). A shape
+            // vector (`t.shape.as_list()[-2:]` and friends) is resolved precisely by the
+            // generator-side provenance walk, so pinning would only pollute its result — skip it
+            // (wala/ML#703). Any other opaque operand — a `tf.shape(y)` tensor, a computed list,
+            // or a parameter — has no element writes, and `shapeArg` would fabricate a scalar
+            // type for it; pin a tensor of unknown rank instead, which keeps the result
+            // tensor-classified without asserting a wrong shape.
+            int shapeVn = call.getUse(param);
+            if (TensorGenerator.isShapeVectorChain(src, shapeVn)) return;
+            SSAInstruction shapeDef = src.getDU().getDef(shapeVn);
+            TensorType pinned =
+                shapeDef instanceof SSANewInstruction
+                    ? TensorType.shapeArg(src, shapeVn, builder)
+                    : new TensorType(
+                        TensorFlowTypes.DType.FLOAT32.name().toLowerCase(java.util.Locale.ROOT),
+                        null);
             PointerKey defKey =
                 builder
                     .getPointerAnalysis()
@@ -926,9 +944,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             // graph's IR (an unconditional debug print), so skip it; implicit keys carry no
             // explicit dataflow variable to pin (wala/ML#573).
             if (!builder.getPropagationSystem().isImplicit(defKey))
-              targets.put(
-                  builder.getPropagationSystem().findOrCreatePointsToSet(defKey),
-                  TensorType.shapeArg(src, call.getUse(param), builder));
+              targets.put(builder.getPropagationSystem().findOrCreatePointsToSet(defKey), pinned);
           }
         });
     return targets;
