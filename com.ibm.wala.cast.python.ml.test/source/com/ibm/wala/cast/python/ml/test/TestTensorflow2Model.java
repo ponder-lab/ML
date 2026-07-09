@@ -10897,6 +10897,31 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Indexed dispatch over a comprehension-built sublayer list (wala/ML#661 shape 3, wala/ML#694):
+   * {@code self.sub_layers = [Inner() for _ in range(n)]} dispatched through {@code
+   * self.sub_layers[i](out)} in a loop. {@code Inner.call} returns a distinctly-shaped {@code (6,
+   * 1)} tensor, so a working dispatch would flow {@code (6, 1)} to {@code consume}. The analysis
+   * instead reports the pre-loop input's {@code (2, 3)} (carried by the loop phi): the
+   * comprehension-built indexed call materializes no callee, so the sub-layer forward result never
+   * reaches the sink.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/694">wala/ML#694</a>): once the
+   * comprehension-built indexed dispatch materializes its callee, tighten the assertion to the
+   * precise {@code (6, 1)} shape (the Python runtime shape).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testIndexedComprehensionLayerListCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    // TODO(wala/ML#694): observed-but-imprecise (2, 3); the runtime shape is (6, 1).
+    test("tf2_test_layer_list_compr.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
    * Pins {@code self.add_weight(...)} (wala/ML#618): the Keras weight-creation API, called from the
    * lazily-invoked {@code build} (wala/ML#595), creates a tensor whose shape and dtype come from
    * the call's {@code shape} list and {@code dtype} string arguments (wala/ML#667), so the matmul
