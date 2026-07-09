@@ -12812,6 +12812,41 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Interprocedural shape-vector provenance (wala/ML#706): the shape list is produced by a user
+   * helper ({@code def get_shape(t): return t.shape.as_list()}, the BERT/ALBERT {@code
+   * get_shape_list} pattern), so the def-use walk follows the helper invoke to its returned {@code
+   * .shape.as_list()} chain; the callee parameter's interprocedural points-to set resolves the
+   * source tensor. The {@code [-2:]} slice of {@code (4, 5, 6)} is the precise {@code (5, 6)}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapeHelperSlice()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_shape_helper_slice.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_6_FLOAT32)));
+  }
+
+  /**
+   * Combines {@link #testShapeHelperSlice()}'s interprocedural hop with {@link
+   * #testShapeAsListSliceVar()}'s negated variable bound: {@code get_shape(t)[-k:]} with a constant
+   * {@code k} is structurally NLPGNN's {@code einsum_via_matmul} shape read ({@code
+   * get_shape_list(input_tensor)[-num_inner_dims:]}). See wala/ML#706 and wala/ML#704.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapeHelperSliceVar()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_shape_helper_slice_var.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_6_FLOAT32)));
+  }
+
+  /**
    * Tier-5 generator (wala/ML#449): {@code tf.math.top_k(input, k)}. Returns a {@code (values,
    * indices)} 2-tuple. The dedicated {@link com.ibm.wala.cast.python.ml.client.TopK} generator
    * implements {@link com.ibm.wala.cast.python.ml.client.TupleElementProvider} with per-index dtype
