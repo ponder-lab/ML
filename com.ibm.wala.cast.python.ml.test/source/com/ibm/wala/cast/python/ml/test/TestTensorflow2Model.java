@@ -11295,7 +11295,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         // The computed output shape is opaque (a runtime-built list), so the reshape result is
         // pinned at unknown rank (wala/ML#703); receiver-keyed contexts (wala/ML#679) recover the
         // `add_weight` float32 dtype.
-        Map.of(2, Set.of(new TensorType(FLOAT_32, null))));
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
@@ -11340,7 +11340,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         // (2, 3, 16); the opaque-shape-operand unknown-rank pin (wala/ML#703) rides along in the
         // union. TODO(https://github.com/wala/ML/issues/703): drop the ⊤ member once the pin
         // defers to interpreter-resolved shape operands.
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 16), new TensorType(FLOAT_32, null))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 16), TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
@@ -12454,7 +12454,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "f",
         1,
         1,
-        Map.of(2, Set.of(new TensorType(FLOAT_32, null))));
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   @Test

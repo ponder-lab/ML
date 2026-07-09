@@ -929,8 +929,18 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             int shapeVn = call.getUse(param);
             if (TensorGenerator.isShapeVectorChain(src, shapeVn)) return;
             SSAInstruction shapeDef = src.getDU().getDef(shapeVn);
-            TensorType pinned =
+            boolean literalContainer =
                 shapeDef instanceof SSANewInstruction
+                    && (((SSANewInstruction) shapeDef)
+                            .getNewSite()
+                            .getDeclaredType()
+                            .equals(PythonTypes.list)
+                        || ((SSANewInstruction) shapeDef)
+                            .getNewSite()
+                            .getDeclaredType()
+                            .equals(PythonTypes.tuple));
+            TensorType pinned =
+                literalContainer
                     ? TensorType.shapeArg(src, shapeVn, builder)
                     : new TensorType(
                         TensorFlowTypes.DType.FLOAT32.name().toLowerCase(java.util.Locale.ROOT),

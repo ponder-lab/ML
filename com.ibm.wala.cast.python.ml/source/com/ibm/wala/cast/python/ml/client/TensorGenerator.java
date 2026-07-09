@@ -2977,6 +2977,7 @@ public abstract class TensorGenerator {
     if (st.isNullConstant(vn)) return null; // Explicit None.
     if (st.isNumberConstant(vn)) return ((Number) st.getConstantValue(vn)).intValue();
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+    if (pk == null) return UNRESOLVED_BOUND;
     OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
     Integer found = null;
     for (InstanceKey ik : pts) {
