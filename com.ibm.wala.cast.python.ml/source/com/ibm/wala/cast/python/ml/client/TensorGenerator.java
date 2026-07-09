@@ -64,6 +64,7 @@ import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPutInstruction;
+import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SSAUnaryOpInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
@@ -2832,6 +2833,21 @@ public abstract class TensorGenerator {
    */
   protected Set<List<Dimension<?>>> getShapesOfShapeVector(
       PropagationCallGraphBuilder builder, CGNode node, int vn) {
+    return getShapesOfShapeVector(builder, node, vn, HashSetFactory.make());
+  }
+
+  /**
+   * Core of {@link #getShapesOfShapeVector(PropagationCallGraphBuilder, CGNode, int)} threading the
+   * set of callee nodes already on the walk, guarding recursive helpers (wala/ML#706).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param vn The value number to resolve.
+   * @param visited The callee nodes already on the walk.
+   * @return The union of the denoted (sub-)shapes, or {@code null} (⊤); see the wrapper.
+   */
+  private Set<List<Dimension<?>>> getShapesOfShapeVector(
+      PropagationCallGraphBuilder builder, CGNode node, int vn, Set<CGNode> visited) {
     if (vn <= 0 || node.getDU() == null || node.getIR() == null) return null;
     SSAInstruction def = node.getDU().getDef(vn);
     SymbolTable st = node.getIR().getSymbolTable();
@@ -2863,7 +2879,7 @@ public abstract class TensorGenerator {
         PythonPropertyRead funcRead = (PythonPropertyRead) funcDef;
         int memberVn = funcRead.getMemberRef();
         if (st.isStringConstant(memberVn) && "as_list".equals(st.getStringValue(memberVn)))
-          return this.getShapesOfShapeVector(builder, node, funcRead.getObjectRef());
+          return this.getShapesOfShapeVector(builder, node, funcRead.getObjectRef(), visited);
         return null;
       }
 
@@ -2874,7 +2890,8 @@ public abstract class TensorGenerator {
               .getDeclaredType()
               .equals(PythonTypes.SLICE_BUILTIN)
           && invoke.getNumberOfUses() >= 2) {
-        Set<List<Dimension<?>>> base = this.getShapesOfShapeVector(builder, node, invoke.getUse(1));
+        Set<List<Dimension<?>>> base =
+            this.getShapesOfShapeVector(builder, node, invoke.getUse(1), visited);
         if (base == null || base.isEmpty()) return null;
 
         // A nested slice object as a bound means a multi-dim subscript; a shape vector is 1-D, so
@@ -2900,9 +2917,62 @@ public abstract class TensorGenerator {
         }
         return sliced;
       }
-      return null;
+
+      // A call to a user helper (the BERT/ALBERT get_shape_list pattern): follow each callee's
+      // returned value. The callee's parameters carry the caller's arguments in their points-to
+      // sets (the PA is interprocedural), so the .shape base case resolves across the boundary
+      // without an explicit parameter-to-argument mapping (wala/ML#706).
+      return this.shapesOfCalleeReturns(builder, node, invoke, visited);
     }
     return null;
+  }
+
+  /**
+   * Follows an invoke into each callee the call graph resolves for it and walks every returned
+   * value's def-use chain via {@link #getShapesOfShapeVector}, unioning the results (wala/ML#706).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the targets.
+   * @param node The calling {@link CGNode}.
+   * @param invoke The invoke instruction to follow.
+   * @param visited The callee nodes already on the walk, guarding recursive helpers.
+   * @return The union of the callees' returned (sub-)shapes, or {@code null} (⊤) when there are no
+   *     resolvable targets or any return doesn't resolve to a shape vector.
+   */
+  private Set<List<Dimension<?>>> shapesOfCalleeReturns(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      PythonInvokeInstruction invoke,
+      Set<CGNode> visited) {
+    Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite());
+    if (targets == null || targets.isEmpty()) return null;
+
+    Set<List<Dimension<?>>> combined = HashSetFactory.make();
+    for (CGNode callee : targets) {
+      if (callee.getIR() == null || callee.getDU() == null) return null;
+      if (!visited.add(callee)) return null; // Recursive helper: unmodeled.
+      try {
+        boolean sawReturn = false;
+        for (Iterator<SSAInstruction> it = callee.getIR().iterateAllInstructions();
+            it.hasNext(); ) {
+          SSAInstruction instruction = it.next();
+          if (!(instruction instanceof SSAReturnInstruction)) continue;
+          SSAReturnInstruction ret = (SSAReturnInstruction) instruction;
+          // A bare `return` means the helper can produce no value (None) on some path, so the
+          // call's result isn't a resolvable shape vector.
+          if (ret.getResult() < 0) return null;
+          sawReturn = true;
+          Set<List<Dimension<?>>> shapes =
+              this.getShapesOfShapeVector(builder, callee, ret.getResult(), visited);
+          // Every return must resolve; a single unresolvable return makes the union unsound.
+          if (shapes == null || shapes.isEmpty()) return null;
+          combined.addAll(shapes);
+        }
+        if (!sawReturn) return null;
+      } finally {
+        visited.remove(callee);
+      }
+    }
+    return combined.isEmpty() ? null : combined;
   }
 
   /**
@@ -2928,7 +2998,7 @@ public abstract class TensorGenerator {
         int numPosParams = call.getNumberOfUses() - 1 - numKeywords;
         if (paramPos < numPosParams) argVn = call.getUse(paramPos + 1);
       }
-      return argVn > 0 && isShapeVectorChain(this.getNode(), argVn);
+      return argVn > 0 && isShapeVectorChain(builder, this.getNode(), argVn);
     }
     for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
         getCallerInvokes(builder, this.getNode())) {
@@ -2941,7 +3011,7 @@ public abstract class TensorGenerator {
         int numPosParams = pyCall.getNumberOfPositionalParameters() - 1;
         if (paramPos < numPosParams) argVn = pyCall.getUse(paramPos + 1);
       }
-      if (argVn > 0 && isShapeVectorChain(caller, argVn)) return true;
+      if (argVn > 0 && isShapeVectorChain(builder, caller, argVn)) return true;
     }
     return false;
   }
@@ -2952,11 +3022,29 @@ public abstract class TensorGenerator {
    * of one), without resolving any shapes or bounds. Used to decide whether a shape operand should
    * be left to the generator-side provenance walk rather than pinned (wala/ML#703).
    *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves helper calls
+   *     (wala/ML#706).
    * @param node The {@link CGNode} whose IR defines {@code vn}.
    * @param vn The value number to test.
    * @return {@code true} iff the def-use chain matches a shape-vector form.
    */
-  public static boolean isShapeVectorChain(CGNode node, int vn) {
+  public static boolean isShapeVectorChain(
+      PropagationCallGraphBuilder builder, CGNode node, int vn) {
+    return isShapeVectorChain(builder, node, vn, HashSetFactory.make());
+  }
+
+  /**
+   * Core of {@link #isShapeVectorChain(PropagationCallGraphBuilder, CGNode, int)} threading the set
+   * of callee nodes already on the walk, guarding recursive helpers (wala/ML#706).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves helper calls.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param vn The value number to test.
+   * @param visited The callee nodes already on the walk.
+   * @return {@code true} iff the def-use chain matches a shape-vector form.
+   */
+  private static boolean isShapeVectorChain(
+      PropagationCallGraphBuilder builder, CGNode node, int vn, Set<CGNode> visited) {
     if (vn <= 0 || node.getDU() == null || node.getIR() == null) return false;
     SSAInstruction def = node.getDU().getDef(vn);
     SymbolTable st = node.getIR().getSymbolTable();
@@ -2974,15 +3062,43 @@ public abstract class TensorGenerator {
         int memberVn = ((PythonPropertyRead) funcDef).getMemberRef();
         return st.isStringConstant(memberVn)
             && "as_list".equals(st.getStringValue(memberVn))
-            && isShapeVectorChain(node, ((PythonPropertyRead) funcDef).getObjectRef());
+            && isShapeVectorChain(
+                builder, node, ((PythonPropertyRead) funcDef).getObjectRef(), visited);
       }
       if (funcDef instanceof SSANewInstruction
           && ((SSANewInstruction) funcDef)
               .getNewSite()
               .getDeclaredType()
               .equals(PythonTypes.SLICE_BUILTIN)
-          && invoke.getNumberOfUses() >= 2) return isShapeVectorChain(node, invoke.getUse(1));
-      return false;
+          && invoke.getNumberOfUses() >= 2)
+        return isShapeVectorChain(builder, node, invoke.getUse(1), visited);
+
+      // A call to a user helper: the chain is a shape vector iff every callee's every returned
+      // value is (wala/ML#706).
+      Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite());
+      if (targets == null || targets.isEmpty()) return false;
+      for (CGNode callee : targets) {
+        if (callee.getIR() == null || callee.getDU() == null) return false;
+        if (!visited.add(callee)) return false; // Recursive helper: unmodeled.
+        try {
+          boolean sawReturn = false;
+          for (Iterator<SSAInstruction> it = callee.getIR().iterateAllInstructions();
+              it.hasNext(); ) {
+            SSAInstruction instruction = it.next();
+            if (!(instruction instanceof SSAReturnInstruction)) continue;
+            SSAReturnInstruction ret = (SSAReturnInstruction) instruction;
+            // A bare `return` means the helper can produce None on some path, so the call isn't
+            // a shape-vector chain.
+            if (ret.getResult() < 0) return false;
+            sawReturn = true;
+            if (!isShapeVectorChain(builder, callee, ret.getResult(), visited)) return false;
+          }
+          if (!sawReturn) return false;
+        } finally {
+          visited.remove(callee);
+        }
+      }
+      return true;
     }
     return false;
   }

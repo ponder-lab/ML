@@ -927,7 +927,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             // type for it; pin a tensor of unknown rank instead, which keeps the result
             // tensor-classified without asserting a wrong shape.
             int shapeVn = call.getUse(param);
-            if (TensorGenerator.isShapeVectorChain(src, shapeVn)) return;
+            if (TensorGenerator.isShapeVectorChain(builder, src, shapeVn)) return;
             SSAInstruction shapeDef = src.getDU().getDef(shapeVn);
             boolean literalContainer =
                 shapeDef instanceof SSANewInstruction
