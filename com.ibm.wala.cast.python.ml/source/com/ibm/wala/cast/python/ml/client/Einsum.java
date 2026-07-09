@@ -142,9 +142,11 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
 
     String found = null;
     for (InstanceKey ik : pts) {
-      if (!(ik instanceof ConstantKey)) continue;
+      // Any non-string-constant possible value makes the equation unknown: fall back to ⊤ rather
+      // than treating a mixed argument as a single constant.
+      if (!(ik instanceof ConstantKey)) return null;
       Object value = ((ConstantKey<?>) ik).getValue();
-      if (!(value instanceof String)) continue;
+      if (!(value instanceof String)) return null;
       if (found == null) found = (String) value;
       else if (!found.equals(value)) return null; // Ambiguous equation across contexts.
     }
@@ -231,7 +233,11 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
       for (int d = 0; d < labels.size(); d++) {
         String label = labels.get(d);
         if (!seenInTerm.add(label)) return null; // Repeated label within a term (diagonal): ⊤.
-        labelToDim.putIfAbsent(label, shape.get(d));
+        Dimension<?> dim = shape.get(d);
+        Dimension<?> previous = labelToDim.putIfAbsent(label, dim);
+        // A label shared across inputs must name the same dimension; if the statically-known dims
+        // disagree, the equation's constraint isn't satisfied statically, so fall back to ⊤.
+        if (previous != null && !previous.equals(dim)) return null;
       }
     }
 
