@@ -34,7 +34,8 @@ import java.util.TreeMap;
  * <ul>
  *   <li>position 0: {@code equation} (string).
  *   <li>position 1: the first tensor input; the dtype source.
- *   <li>position 2, 3, ...: the remaining tensor inputs, one per equation term.
+ *   <li>position 2, 3, ...: the remaining tensor inputs; input {@code i} of the equation's terms
+ *       sits at position {@code i + 1}.
  * </ul>
  *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/linalg/einsum">tf.linalg.einsum</a>
