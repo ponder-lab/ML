@@ -185,7 +185,7 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
       List<String> labels = new ArrayList<>();
       for (int i = 0; i < term.length(); i++) {
         char c = term.charAt(i);
-        if (!Character.isLetter(c)) return null;
+        if (!isAsciiLetter(c)) return null;
         labels.add(String.valueOf(c));
       }
       inputs.add(labels);
@@ -202,7 +202,7 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
     } else {
       for (int i = 0; i < outputPart.length(); i++) {
         char c = outputPart.charAt(i);
-        if (!Character.isLetter(c)) return null;
+        if (!isAsciiLetter(c)) return null;
         output.add(String.valueOf(c));
       }
     }
@@ -260,6 +260,18 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
       output.add(labelToDim.get(label)); // May be null: known rank, unknown size.
     }
     return output;
+  }
+
+  /**
+   * Returns whether the character is an ASCII letter. Einsum subscript labels are restricted to
+   * {@code [A-Za-z]} by TensorFlow/NumPy (aside from the ellipsis), so a Unicode letter accepted by
+   * {@link Character#isLetter(char)} would type an equation the runtime rejects.
+   *
+   * @param c The candidate label character.
+   * @return {@code true} iff {@code c} is in {@code [A-Za-z]}.
+   */
+  private static boolean isAsciiLetter(char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
   }
 
   /**
