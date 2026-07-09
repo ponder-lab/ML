@@ -364,6 +364,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_3_2_2_FLOAT32 = TensorType.of(FLOAT_32, 3, 2, 2);
 
+  private static final TensorType TENSOR_5_6_FLOAT32 = TensorType.of(FLOAT_32, 5, 6);
+
+  private static final TensorType TENSOR_4_5_6_FLOAT32 = TensorType.of(FLOAT_32, 4, 5, 6);
+
   private static final TensorType TENSOR_7_5_2_FLOAT32 = TensorType.of(FLOAT_32, 7, 5, 2);
 
   private static final TensorType TENSOR_30_3_2_FLOAT32 = TensorType.of(FLOAT_32, 30, 3, 2);
@@ -10953,6 +10957,31 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Indexed dispatch over a comprehension-built sublayer list (wala/ML#661 shape 3, wala/ML#694):
+   * {@code self.sub_layers = [Inner() for _ in range(n)]} dispatched through {@code
+   * self.sub_layers[i](out)} in a loop. {@code Inner.call} returns a distinctly-shaped {@code (6,
+   * 1)} tensor, so a working dispatch would flow {@code (6, 1)} to {@code consume}. The analysis
+   * instead reports the pre-loop input's {@code (2, 3)} (carried by the loop phi): the
+   * comprehension-built indexed call materializes no callee, so the sub-layer forward result never
+   * reaches the sink.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/694">wala/ML#694</a>): once the
+   * comprehension-built indexed dispatch materializes its callee, tighten the assertion to the
+   * precise {@code (6, 1)} shape (the Python runtime shape).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testIndexedComprehensionLayerListCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    // TODO(wala/ML#694): observed-but-imprecise (2, 3); the runtime shape is (6, 1).
+    test("tf2_test_layer_list_compr.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
    * Pins {@code self.add_weight(...)} (wala/ML#618): the Keras weight-creation API, called from the
    * lazily-invoked {@code build} (wala/ML#595), creates a tensor whose shape and dtype come from
    * the call's {@code shape} list and {@code dtype} string arguments (wala/ML#667), so the matmul
@@ -11344,9 +11373,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "gpt2_vendored",
         1,
         1,
-        // The scalar-rank result comes from the interpreter folding the computed output shape;
-        // receiver-keyed contexts (wala/ML#679) recover the `add_weight` float32 dtype.
-        Map.of(2, Set.of(new TensorType(FLOAT_32, emptyList()))));
+        // The computed output shape is opaque (a runtime-built list), so the reshape result is
+        // pinned at unknown rank (wala/ML#703); receiver-keyed contexts (wala/ML#679) recover the
+        // `add_weight` float32 dtype.
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
@@ -11388,8 +11418,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         // The interpreter evaluates the concatenated shape expression to the concrete
-        // (2, 3, 16); a scalar leak rides along in the union.
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 16), SCALAR_TENSOR_OF_FLOAT32)));
+        // (2, 3, 16); the opaque-shape-operand unknown-rank pin (wala/ML#703) rides along in the
+        // union. TODO(https://github.com/wala/ML/issues/703): drop the ⊤ member once the pin
+        // defers to interpreter-resolved shape operands.
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 16), TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
@@ -12488,8 +12520,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * com.ibm.wala.cast.python.ml.client.Reshape} (mirroring {@link
    * com.ibm.wala.cast.python.ml.client.BroadcastTo}'s localized try/catch), the analysis no longer
    * throws on the {@code tf.shape(...)} shape arg. The inferred parameter type for {@code x} (vn=2)
-   * is currently the imprecise union {@code [() of float32, (⊤) of float32]} rather than the
-   * precise {@code (2, 3) float32}.
+   * is currently the imprecise {@code (⊤) of float32} (the opaque-shape-operand unknown-rank pin,
+   * wala/ML#703) rather than the precise {@code (2, 3) float32}.
    *
    * <p>TODO(<a href="https://github.com/wala/ML/issues/473">wala/ML#473</a>): tighten the parameter
    * type to {@link #TENSOR_2_3_FLOAT32} when the helper learns to resolve {@code tf.shape(y)}'s
@@ -12503,7 +12535,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "f",
         1,
         1,
-        Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32, new TensorType(FLOAT_32, null))));
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   @Test
@@ -12697,14 +12729,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Generator-dispatch test for {@code tf.einsum(equation, *inputs)}. Output dtype inherits from
-   * the first tensor input ({@code float32} in the fixture). See {@link
-   * com.ibm.wala.cast.python.ml.client.Einsum} (wala/ML#449 Tier 5).
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/507">wala/ML#507</a>): output shape is
-   * currently ⊤. Precise shape inference requires parsing the einsum equation string (e.g. {@code
-   * "ij,jk->ik"}) and composing it against each input's shape. Tighten to the precise post-parse
-   * shape ({@code (2, 2)} for this fixture) once #507 lands.
+   * Generator test for {@code tf.einsum(equation, *inputs)}. The {@link
+   * com.ibm.wala.cast.python.ml.client.Einsum} generator parses the equation string and composes
+   * the output shape from each input's shape. Here {@code einsum("ij,jk->ik", a, b)} with {@code a}
+   * and {@code b} both {@code (2, 2)} yields {@code (2, 2)}. Output dtype inherits from the first
+   * tensor input ({@code float32}). See wala/ML#507.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -12714,7 +12743,95 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testEinsum()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_einsum.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test("tf2_test_einsum.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  /**
+   * Implicit-output einsum: with no {@code ->}, the output labels are those occurring exactly once,
+   * in alphabetical order, so {@code "ij,jk"} composes the same {@code (2, 2)} shape as {@code
+   * "ij,jk->ik"}. See wala/ML#507.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsumImplicit()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_einsum_implicit.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
+  }
+
+  /**
+   * Broadcasting-ellipsis einsum: the parser doesn't model {@code ...}, so it soundly falls back to
+   * an unknown ({@code ⊤}) shape while keeping the dtype precise. The Python runtime shape is
+   * {@code (2, 2)}; the analysis reports {@code ⊤} until the ellipsis form is modeled.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/705">wala/ML#705</a>): tighten to the
+   * precise shape once ellipsis and diagonal einsum forms are handled.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsumEllipsisFallback()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_einsum_ellipsis.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Diagonal einsum (a repeated label within one term, {@code "ii->i"}): the parser doesn't model
+   * diagonal extraction, so it soundly falls back to an unknown ({@code ⊤}) shape while keeping the
+   * dtype precise. The Python runtime shape is {@code (2,)}; the analysis reports {@code ⊤} until
+   * the diagonal form is modeled.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/705">wala/ML#705</a>): tighten to the
+   * precise shape once ellipsis and diagonal einsum forms are handled.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsumDiagonalFallback()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_einsum_diag.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Shape-vector provenance (wala/ML#703): {@code tf.reshape(x, t.shape.as_list()[-2:])} resolves
+   * to the source tensor's trailing sub-shape. The shape argument's points-to set is empty (the
+   * {@code shape} member, {@code as_list}, and the slice are unmodeled in the heap), so {@code
+   * Reshape} recovers it by def-use provenance: the slice of the {@code as_list()} of the {@code
+   * .shape} of {@code t} of shape {@code (4, 5, 6)}, sliced with {@code [-2:]}, is {@code (5, 6)}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapeAsListSlice()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_shape_as_list_slice.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_6_FLOAT32)));
+  }
+
+  /**
+   * Unsliced companion of {@link #testShapeAsListSlice()} (wala/ML#703): {@code tf.reshape(x,
+   * t.shape.as_list())} resolves to the source tensor's full shape.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapeAsList()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_shape_as_list.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_5_6_FLOAT32)));
   }
 
   /**

@@ -2,29 +2,44 @@ package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
- * Generator for {@code tf.einsum(equation, *inputs, **kwargs)}. Output shape is left at ⊤ pending
- * equation-string parsing — the precise shape is derivable from the equation's output label
- * sequence and each input's shape, but that requires an einsum-equation parser that this generator
- * doesn't yet implement. Output dtype inherits from the first tensor input (TF promotes per-input
- * dtypes upstream of einsum, so the first input's dtype is the canonical source).
+ * Generator for {@code tf.einsum(equation, *inputs, **kwargs)}. Parses the equation string (e.g.
+ * {@code "ij,jk->ik"}) and composes the precise output shape from each input's shape: every output
+ * label is resolved to the input dimension it names. Output dtype inherits from the first tensor
+ * input (TF promotes per-input dtypes upstream of einsum, so the first input's dtype is the
+ * canonical source).
  *
- * <p>Argument layout per {@code tensorflow.xml}:
+ * <p>Falls back to ⊤ (unknown shape) when the equation can't be resolved to a single constant
+ * string, uses broadcasting ellipsis ({@code ...}) or a repeated (diagonal) label within one term,
+ * or when any input's shape is itself ⊤ — the sound answer in those cases.
+ *
+ * <p>Argument layout at the call site: the {@code *inputs} varargs are spread positionally after
+ * the equation (the packing into a single {@code inputs} tuple is callee-side only), so:
  *
  * <ul>
  *   <li>position 0: {@code equation} (string).
- *   <li>position 1: first tensor input (varargs); dtype source.
- *   <li>position 2+: additional tensor inputs.
+ *   <li>position 1: the first tensor input; the dtype source.
+ *   <li>position 2, 3, ...: the remaining tensor inputs; input {@code i} of the equation's terms
+ *       sits at position {@code i + 1}.
  * </ul>
  *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/linalg/einsum">tf.linalg.einsum</a>
- * @see <a href="https://github.com/wala/ML/issues/449">wala/ML#449</a> (Tier 5).
+ * @see <a href="https://github.com/wala/ML/issues/507">wala/ML#507</a>
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
 public class Einsum extends PassThroughUnaryTensorGenerator {
@@ -36,10 +51,10 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
    * source is {@code INPUTS} at position 1.
    */
   protected enum Parameters {
-    /** The einsum equation string (e.g. {@code "ij,jk->ik"}); not consumed by this generator. */
+    /** The einsum equation string (e.g. {@code "ij,jk->ik"}). */
     EQUATION,
 
-    /** The first tensor input (the {@code *inputs} varargs); the dtype source. */
+    /** The first tensor input (positional index 1); the dtype source and the first shape input. */
     INPUTS;
 
     /**
@@ -81,16 +96,194 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
   }
 
   /**
-   * Override the inherited shape passthrough to ⊤. The first tensor input's shape isn't a sound
-   * approximation for einsum's output shape — the equation can permute, contract, or expand dims
-   * arbitrarily. Without an einsum-equation parser, ⊤ is the only sound answer. (The dtype
-   * passthrough from the parent class IS sound, since einsum preserves the (promoted) dtype.)
+   * Composes the precise output shape by parsing the equation and indexing each output label into
+   * the corresponding input dimension. Returns ⊤ (unknown shape, {@code null}) when the equation or
+   * any input shape can't be resolved statically, or when the equation uses a form this parser
+   * doesn't model (ellipsis, diagonal labels).
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @return {@code null} — ⊤, unknown shape.
+   * @return The single composed output shape, or {@code null} (⊤) when it can't be resolved.
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    return null;
+    String equation = this.getEquation(builder);
+    if (equation == null) return null;
+
+    ParsedEquation parsed = parseEquation(equation);
+    if (parsed == null) return null;
+
+    // The inputs are spread positionally after the equation (they only pack into the callee's
+    // *inputs tuple), so input i is at positional index i + 1.
+    int inputCount = parsed.inputs().size();
+    List<List<Dimension<?>>> inputShapes = new ArrayList<>(inputCount);
+    for (int i = 0; i < inputCount; i++) {
+      int position = Parameters.INPUTS.getIndex() + i;
+      Set<List<Dimension<?>>> shapes = this.shapesOfArg(builder, position, null);
+      // Require a single known shape per input. A ⊤ or multi-shape input yields a ⊤ output; the
+      // multi-shape cross-product is deferred as a precision follow-up.
+      if (shapes == null || shapes.size() != 1) return null;
+      inputShapes.add(shapes.iterator().next());
+    }
+
+    List<Dimension<?>> outputShape = composeOutputShape(parsed, inputShapes);
+    return outputShape == null ? null : Collections.singleton(outputShape);
   }
+
+  /**
+   * Resolves the {@code equation} argument to a single constant string.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The equation string, or {@code null} if the argument isn't a single constant string.
+   */
+  private String getEquation(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> pts =
+        this.getArgumentPointsToSet(
+            builder, Parameters.EQUATION.getIndex(), Parameters.EQUATION.getName());
+    if (pts == null || pts.isEmpty()) return null;
+
+    String found = null;
+    for (InstanceKey ik : pts) {
+      // Any non-string-constant possible value makes the equation unknown: fall back to ⊤ rather
+      // than treating a mixed argument as a single constant.
+      if (!(ik instanceof ConstantKey)) return null;
+      Object value = ((ConstantKey<?>) ik).getValue();
+      if (!(value instanceof String)) return null;
+      if (found == null) found = (String) value;
+      else if (!found.equals(value)) return null; // Ambiguous equation across contexts.
+    }
+    return found;
+  }
+
+  /**
+   * Parses an einsum equation into its per-input label lists and its output label list.
+   *
+   * <p>Supports explicit ({@code "ij,jk->ik"}) and implicit ({@code "ij,jk"}) output modes. In
+   * implicit mode the output is the labels occurring exactly once, in alphabetical order (the
+   * NumPy/TensorFlow convention). Returns {@code null} for forms this parser doesn't model:
+   * broadcasting ellipsis ({@code ...}), a malformed equation, or a non-letter label.
+   *
+   * @param equation The raw equation string.
+   * @return The parsed equation, or {@code null} if it uses an unsupported or malformed form.
+   */
+  private static ParsedEquation parseEquation(String equation) {
+    String eq = equation.replace(" ", "");
+    if (eq.isEmpty() || eq.contains("...")) return null; // Broadcasting ellipsis: ⊤.
+
+    String inputsPart;
+    String outputPart;
+    int arrow = eq.indexOf("->");
+    if (arrow >= 0) {
+      if (eq.indexOf("->", arrow + 2) >= 0) return null; // A second arrow is malformed.
+      inputsPart = eq.substring(0, arrow);
+      outputPart = eq.substring(arrow + 2);
+    } else {
+      inputsPart = eq;
+      outputPart = null; // Implicit output mode.
+    }
+
+    List<List<String>> inputs = new ArrayList<>();
+    for (String term : inputsPart.split(",", -1)) {
+      List<String> labels = new ArrayList<>();
+      for (int i = 0; i < term.length(); i++) {
+        char c = term.charAt(i);
+        if (!isAsciiLetter(c)) return null;
+        labels.add(String.valueOf(c));
+      }
+      inputs.add(labels);
+    }
+
+    List<String> output = new ArrayList<>();
+    if (outputPart == null) {
+      // Implicit mode: labels occurring exactly once, alphabetical (TreeMap key order).
+      Map<String, Integer> counts = new TreeMap<>();
+      for (List<String> term : inputs)
+        for (String label : term) counts.merge(label, 1, Integer::sum);
+      for (Map.Entry<String, Integer> entry : counts.entrySet())
+        if (entry.getValue() == 1) output.add(entry.getKey());
+    } else {
+      for (int i = 0; i < outputPart.length(); i++) {
+        char c = outputPart.charAt(i);
+        if (!isAsciiLetter(c)) return null;
+        String label = String.valueOf(c);
+        // TensorFlow/NumPy require output subscripts to be unique; a repeated output label (e.g.
+        // "ij,jk->ii") is rejected at runtime, so don't infer a shape for it.
+        if (output.contains(label)) return null;
+        output.add(label);
+      }
+    }
+
+    return new ParsedEquation(inputs, output);
+  }
+
+  /**
+   * Composes the output shape by mapping each label to the input dimension it names, then indexing
+   * the output labels into that map.
+   *
+   * <p>An input shape may encode a statically-unknown dimension size as a raw {@code null} entry
+   * (see {@code TensorType.RaggedDim}'s Javadoc and wala/ML#414). Presence in the label map is
+   * therefore tracked with {@code containsKey}, never by a null-check on the value: a label whose
+   * occurrences are all {@code null} stays {@code null} (unknown size) in the output, preserving
+   * the output's rank instead of degrading the whole shape to ⊤, and a label seen with both a
+   * {@code null} and a concrete dimension merges to {@code null} (statically unagreed) rather than
+   * letting either occurrence win.
+   *
+   * @param parsed The parsed equation.
+   * @param inputShapes The resolved shape of each input, in input order.
+   * @return The composed output shape (possibly containing {@code null} unknown-size entries), or
+   *     {@code null} (⊤) when a term's label count doesn't match its input's rank, a term repeats a
+   *     label (diagonal, unmodeled), a shared label maps to conflicting known dimensions, or an
+   *     output label names no input.
+   */
+  private static List<Dimension<?>> composeOutputShape(
+      ParsedEquation parsed, List<List<Dimension<?>>> inputShapes) {
+    Map<String, Dimension<?>> labelToDim = new HashMap<>();
+
+    for (int i = 0; i < parsed.inputs().size(); i++) {
+      List<String> labels = parsed.inputs().get(i);
+      List<Dimension<?>> shape = inputShapes.get(i);
+      if (labels.size() != shape.size()) return null; // Rank mismatch: labels vs. shape.
+
+      Set<String> seenInTerm = new HashSet<>();
+      for (int d = 0; d < labels.size(); d++) {
+        String label = labels.get(d);
+        if (!seenInTerm.add(label)) return null; // Repeated label within a term (diagonal): ⊤.
+        Dimension<?> dim = shape.get(d);
+        if (!labelToDim.containsKey(label)) labelToDim.put(label, dim);
+        else {
+          Dimension<?> previous = labelToDim.get(label);
+          // An unknown (null) occurrence keeps the label unknown; conflicting known dims mean the
+          // equation's same-dimension constraint isn't satisfied statically, so fall back to ⊤.
+          if (previous == null || dim == null) labelToDim.put(label, null);
+          else if (!previous.equals(dim)) return null;
+        }
+      }
+    }
+
+    List<Dimension<?>> output = new ArrayList<>(parsed.output().size());
+    for (String label : parsed.output()) {
+      if (!labelToDim.containsKey(label)) return null; // Output label names no input.
+      output.add(labelToDim.get(label)); // May be null: known rank, unknown size.
+    }
+    return output;
+  }
+
+  /**
+   * Returns whether the character is an ASCII letter. Einsum subscript labels are restricted to
+   * {@code [A-Za-z]} by TensorFlow/NumPy (aside from the ellipsis), so a Unicode letter accepted by
+   * {@link Character#isLetter(char)} would type an equation the runtime rejects.
+   *
+   * @param c The candidate label character.
+   * @return {@code true} iff {@code c} is in {@code [A-Za-z]}.
+   */
+  private static boolean isAsciiLetter(char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+  }
+
+  /**
+   * A parsed einsum equation: the label list of each input term and the output label list.
+   *
+   * @param inputs The per-input-term label lists, in input order.
+   * @param output The output label list.
+   */
+  private record ParsedEquation(List<List<String>> inputs, List<String> output) {}
 }
