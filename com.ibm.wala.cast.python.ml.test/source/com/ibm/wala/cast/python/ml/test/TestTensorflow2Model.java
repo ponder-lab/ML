@@ -12694,6 +12694,26 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Diagonal einsum (a repeated label within one term, {@code "ii->i"}): the parser doesn't model
+   * diagonal extraction, so it soundly falls back to an unknown ({@code ⊤}) shape while keeping the
+   * dtype precise. The Python runtime shape is {@code (2,)}; the analysis reports {@code ⊤} until
+   * the diagonal form is modeled.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/705">wala/ML#705</a>): tighten to the
+   * precise shape once ellipsis and diagonal einsum forms are handled.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsumDiagonalFallback()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_einsum_diag.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
    * Tier-5 generator (wala/ML#449): {@code tf.math.top_k(input, k)}. Returns a {@code (values,
    * indices)} 2-tuple. The dedicated {@link com.ibm.wala.cast.python.ml.client.TopK} generator
    * implements {@link com.ibm.wala.cast.python.ml.client.TupleElementProvider} with per-index dtype
