@@ -78,6 +78,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.logging.Level;
@@ -2829,7 +2830,7 @@ public abstract class TensorGenerator {
    */
   protected Set<List<Dimension<?>>> getShapesOfShapeVector(
       PropagationCallGraphBuilder builder, CGNode node, int vn) {
-    if (vn <= 0 || node.getDU() == null) return null;
+    if (vn <= 0 || node.getDU() == null || node.getIR() == null) return null;
     SSAInstruction def = node.getDU().getDef(vn);
     SymbolTable st = node.getIR().getSymbolTable();
 
@@ -2882,7 +2883,9 @@ public abstract class TensorGenerator {
         Integer lower = sliceBoundOrNull(builder, node, st, invoke, 2);
         Integer upper = sliceBoundOrNull(builder, node, st, invoke, 3);
         Integer step = sliceBoundOrNull(builder, node, st, invoke, 4);
-        if (lower == UNRESOLVED_BOUND || upper == UNRESOLVED_BOUND || step == UNRESOLVED_BOUND)
+        if (Objects.equals(lower, UNRESOLVED_BOUND)
+            || Objects.equals(upper, UNRESOLVED_BOUND)
+            || Objects.equals(step, UNRESOLVED_BOUND))
           return null; // Non-constant bound: the sub-list's rank is unknown.
         if (step != null && step != 1) return null; // Non-unit step: unmodeled.
 
@@ -2943,10 +2946,11 @@ public abstract class TensorGenerator {
 
   /**
    * Sentinel returned by {@link #sliceBoundOrNull} for a bound that is present but not a
-   * compile-time constant. Distinct by identity from both {@code null} (absent/{@code None}) and
-   * any boxed constant value.
+   * compile-time constant. Compared by value ({@link Objects#equals}), so a genuine {@link
+   * Integer#MIN_VALUE} bound in user code conservatively degrades to ⊤ along with actually
+   * unresolved bounds.
    */
-  protected static final Integer UNRESOLVED_BOUND = Integer.valueOf(Integer.MIN_VALUE);
+  protected static final Integer UNRESOLVED_BOUND = Integer.MIN_VALUE;
 
   /**
    * Resolves a slice bound at the given use index to a constant integer, {@code null} for an
