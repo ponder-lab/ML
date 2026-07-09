@@ -2183,6 +2183,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testNlpgnnFullGeneration()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    runNlpgnnFullGeneration();
+  }
+
+  /**
+   * Runs the NLPGNN whole-project generation analysis with its call-graph and type assertions.
+   * Package-visible so {@link DiagnosticLoggingVolumeTest} can rerun the analysis under {@code
+   * FINEST} without invoking another class's {@code @Test} method.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  void runNlpgnnFullGeneration()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         NLPGNN_FULL_PROJECT_FILES,
         "tests/TG/EN/generation.py",
