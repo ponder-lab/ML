@@ -2957,7 +2957,9 @@ public abstract class TensorGenerator {
           SSAInstruction instruction = it.next();
           if (!(instruction instanceof SSAReturnInstruction)) continue;
           SSAReturnInstruction ret = (SSAReturnInstruction) instruction;
-          if (ret.getResult() < 0) continue; // A bare `return`.
+          // A bare `return` means the helper can produce no value (None) on some path, so the
+          // call's result isn't a resolvable shape vector.
+          if (ret.getResult() < 0) return null;
           sawReturn = true;
           Set<List<Dimension<?>>> shapes =
               this.getShapesOfShapeVector(builder, callee, ret.getResult(), visited);
@@ -3085,7 +3087,9 @@ public abstract class TensorGenerator {
             SSAInstruction instruction = it.next();
             if (!(instruction instanceof SSAReturnInstruction)) continue;
             SSAReturnInstruction ret = (SSAReturnInstruction) instruction;
-            if (ret.getResult() < 0) continue; // A bare `return`.
+            // A bare `return` means the helper can produce None on some path, so the call isn't
+            // a shape-vector chain.
+            if (ret.getResult() < 0) return false;
             sawReturn = true;
             if (!isShapeVectorChain(builder, callee, ret.getResult(), visited)) return false;
           }
