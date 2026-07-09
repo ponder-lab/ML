@@ -87,6 +87,21 @@ mvn spotless:apply
 black --fast .
 ```
 
+## Diagnostic Logging
+
+Write analysis diagnostics at `FINE`/`FINER` directly (do not add them at `INFO` and demote later).
+
+**Never concatenate a pointer-analysis or call-graph value straight into a log message or an exception message.** `PointsToSetVariable`, `PointerKey`, `CGNode`, `InstanceKey`, `AllocationSiteInNode`, and `OrdinalSet<InstanceKey>` all render their enclosing WALA `Context` in `toString()`, which can reference itself cyclically and recurse until the heap is exhausted on large graphs (e.g., nlpgnn). Route every such value through the context-free `Loggables.describe(...)` renderer (statically imported as `describe`):
+
+```java
+// Wrong — can OOM on a cyclic-context graph:
+LOGGER.fine("visiting " + node);
+// Right:
+LOGGER.fine(() -> "visiting " + describe(node));
+```
+
+This class of bug is invisible in CI (which logs at `WARNING`, so the message strings are never built) and only surfaces under local `FINEST`, so review is the main line of defense—flag any bare render of the types above. See wala/ML#697 for the incident and wala/WALA#1992 for the upstream root cause (the missing cycle detection in `Context.toString()`).
+
 ## Python Testing
 
 - Always verify that newly created Python test files run to completion using `python3.10`.
