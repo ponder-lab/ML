@@ -28,6 +28,7 @@ import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.util.Collections.emptyList;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
+import com.ibm.wala.cast.ir.ssa.CAstUnaryOp;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
@@ -63,6 +64,7 @@ import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPutInstruction;
+import com.ibm.wala.ssa.SSAUnaryOpInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
@@ -2904,6 +2906,47 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Returns whether this generator's shape argument is structurally a shape vector (see {@link
+   * #isShapeVectorChain}), regardless of whether the provenance walk can resolve it. Consumers use
+   * this to distinguish "the shape is determined by a shape vector we couldn't resolve" (output is
+   * ⊤) from "no shape information at all" (an input-derived fallback may apply). Mirrors {@link
+   * #getShapesFromShapeVectorArgument}'s direct-invoke and caller-walk arms.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph lookup.
+   * @param paramPos The 0-based positional index of the shape parameter (excluding {@code self}).
+   * @param paramName The shape parameter's keyword name, or {@code null}.
+   * @return {@code true} iff the shape argument's def-use chain matches a shape-vector form.
+   */
+  protected boolean isShapeVectorArgument(
+      PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    PythonInvokeInstruction call = getInvokeInstruction();
+    if (call != null) {
+      int argVn = -1;
+      if (paramName != null) argVn = call.getUse(paramName);
+      if (argVn == -1 && paramPos >= 0) {
+        int numKeywords = call.getKeywords() != null ? call.getKeywords().size() : 0;
+        int numPosParams = call.getNumberOfUses() - 1 - numKeywords;
+        if (paramPos < numPosParams) argVn = call.getUse(paramPos + 1);
+      }
+      return argVn > 0 && isShapeVectorChain(this.getNode(), argVn);
+    }
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      CGNode caller = callerInvoke.fst;
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction)) continue;
+      PythonInvokeInstruction pyCall = (PythonInvokeInstruction) callerInvoke.snd;
+      int argVn = -1;
+      if (paramName != null) argVn = pyCall.getUse(paramName);
+      if (argVn == -1 && paramPos >= 0) {
+        int numPosParams = pyCall.getNumberOfPositionalParameters() - 1;
+        if (paramPos < numPosParams) argVn = pyCall.getUse(paramPos + 1);
+      }
+      if (argVn > 0 && isShapeVectorChain(caller, argVn)) return true;
+    }
+    return false;
+  }
+
+  /**
    * Structural companion of {@link #getShapesOfShapeVector}: returns whether the value's def-use
    * chain has the shape of a shape vector ({@code t.shape}, {@code v.as_list()}, or a {@code slice}
    * of one), without resolving any shapes or bounds. Used to decide whether a shape operand should
@@ -2972,23 +3015,58 @@ public abstract class TensorGenerator {
       PythonInvokeInstruction invoke,
       int useIndex) {
     if (useIndex >= invoke.getNumberOfUses()) return null; // Absent: Python default.
-    int vn = invoke.getUse(useIndex);
+    return constantIntValueOrSentinel(builder, node, st, invoke.getUse(useIndex));
+  }
+
+  /**
+   * Resolves a value number to a constant integer, {@code null} for {@code None}, or {@link
+   * #UNRESOLVED_BOUND}. Reads the symbol table first (literals), then constant-folds a unary
+   * negation of a resolvable operand ({@code -k} for a constant {@code k}, the {@code
+   * shape[-num_inner_dims:]} idiom — the PA does not fold arithmetic, so the negated value itself
+   * has an empty points-to set), then falls back to a single {@code ConstantKey} in the value's
+   * points-to set (propagated constants).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} providing the pointer analysis.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param st The node's symbol table.
+   * @param vn The value number to resolve.
+   * @return The constant value, {@code null} for {@code None}, or {@link #UNRESOLVED_BOUND}.
+   */
+  private static Integer constantIntValueOrSentinel(
+      PropagationCallGraphBuilder builder, CGNode node, SymbolTable st, int vn) {
     if (vn <= 0) return null;
     if (st.isNullConstant(vn)) return null; // Explicit None.
     if (st.isNumberConstant(vn)) return ((Number) st.getConstantValue(vn)).intValue();
+
+    // Constant-fold a unary minus of a resolvable operand.
+    SSAInstruction def = node.getDU() != null ? node.getDU().getDef(vn) : null;
+    if (def instanceof SSAUnaryOpInstruction
+        && CAstUnaryOp.MINUS.equals(((SSAUnaryOpInstruction) def).getOpcode())) {
+      Integer operand = constantIntValueOrSentinel(builder, node, st, def.getUse(0));
+      if (operand == null || Objects.equals(operand, UNRESOLVED_BOUND)) return UNRESOLVED_BOUND;
+      return -operand;
+    }
+
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
     if (pk == null) return UNRESOLVED_BOUND;
     OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
     Integer found = null;
+    boolean sawNone = false;
     for (InstanceKey ik : pts) {
       if (!(ik instanceof ConstantKey)) return UNRESOLVED_BOUND;
       Object value = ((ConstantKey<?>) ik).getValue();
-      if (value == null) return null; // Propagated None.
+      if (value == null) { // Propagated None.
+        sawNone = true;
+        continue;
+      }
       if (!(value instanceof Number)) return UNRESOLVED_BOUND;
       int intValue = ((Number) value).intValue();
       if (found != null && found != intValue) return UNRESOLVED_BOUND; // Ambiguous.
       found = intValue;
     }
+    // A points-to set holding both None and a numeric constant is ambiguous; collapsing it to
+    // either would assert a bound the other execution violates.
+    if (sawNone) return found == null ? null : UNRESOLVED_BOUND;
     return found == null ? UNRESOLVED_BOUND : found;
   }
 
