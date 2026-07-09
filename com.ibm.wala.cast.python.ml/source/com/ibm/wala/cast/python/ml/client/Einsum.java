@@ -203,7 +203,11 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
       for (int i = 0; i < outputPart.length(); i++) {
         char c = outputPart.charAt(i);
         if (!isAsciiLetter(c)) return null;
-        output.add(String.valueOf(c));
+        String label = String.valueOf(c);
+        // TensorFlow/NumPy require output subscripts to be unique; a repeated output label (e.g.
+        // "ij,jk->ii") is rejected at runtime, so don't infer a shape for it.
+        if (output.contains(label)) return null;
+        output.add(label);
       }
     }
 
