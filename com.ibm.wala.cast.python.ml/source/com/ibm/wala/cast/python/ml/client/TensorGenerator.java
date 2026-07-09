@@ -750,9 +750,48 @@ public abstract class TensorGenerator {
       if (objRef != listVn || index == null || index.intValue() != fieldIndex) continue;
 
       // Shared with `TensorType.shapeArg` so the two shape-argument paths agree (wala/ML#581).
-      return TensorType.foldArithmeticDim(builder, node, st, du, writtenVal);
+      Dimension<?> folded = TensorType.foldArithmeticDim(builder, node, st, du, writtenVal);
+      if (folded != null) return folded;
+      return this.prodOfShapeVectorDim(builder, node, st, writtenVal);
     }
     return null;
+  }
+
+  /**
+   * Folds an {@code np.prod(v)} call over a resolvable shape vector into a {@link NumericDim}
+   * holding the product of its static dimensions (wala/ML#707). Mirrors NLPGNN's {@code
+   * einsum_via_matmul}, where {@code inner_dim = np.prod(input_shape[-num_inner_dims:])} feeds a
+   * {@code tf.reshape} target shape.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param st The node's symbol table.
+   * @param vn The value number of the candidate {@code np.prod} result.
+   * @return The folded {@link NumericDim}, or {@code null} when the value isn't an {@code np.prod}
+   *     call, its argument doesn't resolve to a single shape, any dimension is non-static, or the
+   *     product exceeds the int range.
+   */
+  private Dimension<?> prodOfShapeVectorDim(
+      PropagationCallGraphBuilder builder, CGNode node, SymbolTable st, int vn) {
+    if (vn <= 0) return null;
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (!(def instanceof PythonInvokeInstruction)) return null;
+    PythonInvokeInstruction invoke = (PythonInvokeInstruction) def;
+    if (invoke.getNumberOfUses() < 2) return null;
+    SSAInstruction funcDef = node.getDU().getDef(invoke.getUse(0));
+    if (!(funcDef instanceof PythonPropertyRead)) return null;
+    int memberVn = ((PythonPropertyRead) funcDef).getMemberRef();
+    if (!st.isStringConstant(memberVn) || !"prod".equals(st.getStringValue(memberVn))) return null;
+
+    Set<List<Dimension<?>>> shapes = this.getShapesOfShapeVector(builder, node, invoke.getUse(1));
+    if (shapes == null || shapes.size() != 1) return null;
+    long product = 1;
+    for (Dimension<?> d : shapes.iterator().next()) {
+      if (!(d instanceof NumericDim)) return null; // A dynamic or unknown axis: not foldable.
+      product *= ((NumericDim) d).value();
+      if (product < 0 || product > Integer.MAX_VALUE) return null;
+    }
+    return new NumericDim((int) product);
   }
 
   /**

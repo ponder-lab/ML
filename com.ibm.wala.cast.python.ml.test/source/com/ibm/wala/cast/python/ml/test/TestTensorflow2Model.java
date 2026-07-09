@@ -366,6 +366,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_5_6_FLOAT32 = TensorType.of(FLOAT_32, 5, 6);
 
+  private static final TensorType TENSOR_30_FLOAT32 = TensorType.of(FLOAT_32, 30);
+
   private static final TensorType TENSOR_4_5_6_FLOAT32 = TensorType.of(FLOAT_32, 4, 5, 6);
 
   private static final TensorType TENSOR_7_5_2_FLOAT32 = TensorType.of(FLOAT_32, 7, 5, 2);
@@ -12844,6 +12846,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testShapeHelperSliceVar()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_shape_helper_slice_var.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_6_FLOAT32)));
+  }
+
+  /**
+   * {@code np.prod} over a shape-derived list (wala/ML#707): {@code [np.prod(get_shape(t)[-2:])]}
+   * folds the product of the static trailing dimensions ({@code 5 * 6}) into the reshape target, so
+   * the result is the precise {@code (30,)}. Mirrors NLPGNN's {@code einsum_via_matmul} ({@code
+   * inner_dim = np.prod(input_shape[-num_inner_dims:])}).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapeProd()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_shape_prod.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_30_FLOAT32)));
   }
 
   /**
