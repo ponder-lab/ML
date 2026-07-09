@@ -3020,6 +3020,8 @@ public abstract class TensorGenerator {
    * of one), without resolving any shapes or bounds. Used to decide whether a shape operand should
    * be left to the generator-side provenance walk rather than pinned (wala/ML#703).
    *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves helper calls
+   *     (wala/ML#706).
    * @param node The {@link CGNode} whose IR defines {@code vn}.
    * @param vn The value number to test.
    * @return {@code true} iff the def-use chain matches a shape-vector form.
