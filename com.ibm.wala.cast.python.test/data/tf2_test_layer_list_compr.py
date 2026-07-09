@@ -33,7 +33,8 @@ def consume(t):
 layer = Outer()
 x = tf.ones((2, 3))
 out = layer(x)
-consume(out)
 
 assert out.shape == (6, 1)
 assert out.dtype == tf.float32
+
+consume(out)

@@ -12794,6 +12794,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Variable-bound companion of {@link #testShapeAsListSlice()} (wala/ML#703, wala/ML#704): the
+   * slice bound is a negated local ({@code shape[-k:]} with a constant {@code k}), mirroring
+   * NLPGNN's {@code einsum_via_matmul} idiom ({@code input_shape[-num_inner_dims:]}). The unary
+   * negation is constant-folded by the slice-bound resolver, so the trailing sub-shape resolves to
+   * the precise {@code (5, 6)}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapeAsListSliceVar()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_shape_as_list_slice_var.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_6_FLOAT32)));
+  }
+
+  /**
    * Tier-5 generator (wala/ML#449): {@code tf.math.top_k(input, k)}. Returns a {@code (values,
    * indices)} 2-tuple. The dedicated {@link com.ibm.wala.cast.python.ml.client.TopK} generator
    * implements {@link com.ibm.wala.cast.python.ml.client.TupleElementProvider} with per-index dtype

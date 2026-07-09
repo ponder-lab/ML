@@ -92,6 +92,11 @@ public class Reshape extends TensorGenerator {
           this.getShapesFromShapeVectorArgument(
               builder, this.getShapeParameterPosition(), this.getShapeParameterName());
       if (vectorShapes != null && !vectorShapes.isEmpty()) rawShapes = vectorShapes;
+      // Soundness: a structurally-recognized shape vector whose walk fails (e.g. a bound that
+      // isn't statically constant) determines the output shape but is unknown, so the output is ⊤;
+      // falling through to input-shape inference would leak the input's shape (wala/ML#704).
+      else if (this.isShapeVectorArgument(
+          builder, this.getShapeParameterPosition(), this.getShapeParameterName())) return null;
     }
 
     if (rawShapes != null && !rawShapes.isEmpty()) {
@@ -139,8 +144,14 @@ public class Reshape extends TensorGenerator {
               }
 
               List<Dimension<?>> refinedShape = new ArrayList<>(shape);
-              if (inputKnown) {
-                long inferredDim = inputSize / productKnown;
+              // The -1 dimension is only inferable when the division is exact; a zero known
+              // product (any inferred value satisfies 0 * k == 0), a non-exact division, or a
+              // quotient outside the non-negative int range leaves it symbolic.
+              long inferredDim =
+                  inputKnown && productKnown != 0 && inputSize % productKnown == 0
+                      ? inputSize / productKnown
+                      : -1;
+              if (inferredDim >= 0 && inferredDim <= Integer.MAX_VALUE) {
                 refinedShape.set(unknownIndex, new NumericDim((int) inferredDim));
               } else {
                 refinedShape.set(unknownIndex, new SymbolicDim("?"));
