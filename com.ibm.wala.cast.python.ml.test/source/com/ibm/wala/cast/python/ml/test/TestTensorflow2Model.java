@@ -12866,6 +12866,30 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * NLPGNN's {@code DenseLayer3d} einsum path in miniature (wala/ML#704): the weight is built flat
+   * from configuration fields, reshaped to rank 3 in {@code call} (the {@code hidden} leading dim
+   * stays dynamic since {@code build}'s {@code input_shape} subscript doesn't resolve), and
+   * consumed by {@code einsum("BFH,HND->BFND", ...)}. The parser refines the contracted {@code H}
+   * label's dynamic occurrence with the input's known {@code 6} and composes the precise runtime
+   * {@code (2, 4, 3, 5)}: the trailing head dims are static, per the issue's expectation.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dEinsum()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_einsum.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 3, 5))));
+  }
+
+  /**
    * NLPGNN's {@code einsum_via_matmul} matmul path in miniature, end to end (wala/ML#704): the
    * {@code get_shape_list} hop, the negated-parameter slice bounds, the {@code np.prod} folds, and
    * the {@code batch_dims + outer_dims} concatenation (wala/ML#708) all resolve, so the reshape arm
