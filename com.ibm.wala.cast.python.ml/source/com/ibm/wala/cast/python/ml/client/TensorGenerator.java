@@ -3013,7 +3013,7 @@ public abstract class TensorGenerator {
     if (!allocated.equals(list) && !allocated.equals(tuple)) return null;
 
     SymbolTable st = node.getIR().getSymbolTable();
-    Map<Integer, Dimension<?>> byIndex = new TreeMap<>();
+    TreeMap<Integer, Dimension<?>> byIndex = new TreeMap<>();
     for (Iterator<SSAInstruction> uses = node.getDU().getUses(vn); uses.hasNext(); ) {
       SSAInstruction use = uses.next();
       int objRef;
@@ -3026,9 +3026,8 @@ public abstract class TensorGenerator {
         memberVn = w.getMemberRef();
       } else if (use instanceof SSAPutInstruction && !((SSAPutInstruction) use).isStatic()) {
         SSAPutInstruction w = (SSAPutInstruction) use;
-        objRef = w.getRef();
+        if (w.getRef() != vn) continue; // A write to some other object.
         writtenVal = w.getVal();
-        memberVn = -1;
         try {
           byIndex.put(
               Integer.parseInt(w.getDeclaredField().getName().toString()),
@@ -3053,6 +3052,8 @@ public abstract class TensorGenerator {
       byIndex.put(index, elementDim(builder, node, st, writtenVal));
     }
     if (byIndex.isEmpty() || byIndex.containsValue(null)) return null;
+    // The indices must be contiguous from 0 or the element order can't be reconstructed.
+    if (byIndex.firstKey() != 0 || byIndex.lastKey() != byIndex.size() - 1) return null;
     return Collections.singleton(new ArrayList<>(byIndex.values()));
   }
 
@@ -3277,14 +3278,12 @@ public abstract class TensorGenerator {
     // list construction (wala/ML#708).
     if (def instanceof SSABinaryOpInstruction
         && ((SSABinaryOpInstruction) def).getOperator() == IBinaryOpInstruction.Operator.ADD) {
-      boolean anyChain =
-          isShapeVectorChain(builder, node, def.getUse(0), visited)
-              || isShapeVectorChain(builder, node, def.getUse(1), visited);
-      if (!anyChain) return false;
+      boolean leftChain = isShapeVectorChain(builder, node, def.getUse(0), visited);
+      boolean rightChain = isShapeVectorChain(builder, node, def.getUse(1), visited);
+      if (!leftChain && !rightChain) return false;
       for (int u = 0; u < 2; u++) {
-        int operand = def.getUse(u);
-        if (isShapeVectorChain(builder, node, operand, visited)) continue;
-        SSAInstruction operandDef = node.getDU().getDef(operand);
+        if (u == 0 ? leftChain : rightChain) continue;
+        SSAInstruction operandDef = node.getDU().getDef(def.getUse(u));
         if (!(operandDef instanceof SSANewInstruction)) return false;
         TypeReference allocated = ((SSANewInstruction) operandDef).getNewSite().getDeclaredType();
         if (!allocated.equals(list) && !allocated.equals(tuple)) return false;
