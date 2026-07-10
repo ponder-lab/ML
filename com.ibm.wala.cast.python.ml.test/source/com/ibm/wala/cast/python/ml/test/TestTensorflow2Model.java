@@ -12914,6 +12914,30 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * The two-inner-dims variant of {@link #testEinsumViaMatmul()} (NLPGNN's {@code DenseLayer3dProj}
+   * shape, {@code einsum_via_matmul(input_tensor, w, 2)}): exercises the {@code batch_dims +
+   * [inner_dim]} concatenation of a shape vector with a literal list whose element is an {@code
+   * np.prod} fold (wala/ML#708). The reshape-then-matmul arm types as the precise runtime {@code
+   * (2, 4, 6)}; the {@code (3, 6)} member is the untaken arm of the {@code num_inner_dims > 1}
+   * guard's φ (the rank-2 matmul of the unreshaped input), which flows statically.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsumViaMatmul2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_einsum_via_matmul2.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 6), TensorType.of(FLOAT_32, 3, 6))));
+  }
+
+  /**
    * Guard companion of {@link #testShapeProd()} (wala/ML#707): {@code np.prod} with an extra
    * argument ({@code axis=0}) can change the result's rank, so the fold refuses it and the shape
    * position degrades to a dynamic dimension in the walk-side contexts. The interpreter path
