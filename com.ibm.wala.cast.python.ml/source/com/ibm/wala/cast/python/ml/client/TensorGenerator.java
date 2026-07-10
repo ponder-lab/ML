@@ -2949,14 +2949,19 @@ public abstract class TensorGenerator {
             || Objects.equals(upper, UNRESOLVED_BOUND)
             || Objects.equals(step, UNRESOLVED_BOUND))
           return null; // Non-constant bound: the sub-list's rank is unknown.
-        if (step != null && step != 1) return null; // Non-unit step: unmodeled.
+        // A constant positive step strides the bounded range; negative steps (which also
+        // reverse) keep the ⊤ fallback (wala/ML#709).
+        int stride = step == null ? 1 : step;
+        if (stride < 1) return null;
 
         Set<List<Dimension<?>>> sliced = HashSetFactory.make();
         for (List<Dimension<?>> dims : base) {
           int n = dims.size();
           int from = lower == null ? 0 : lower < 0 ? Math.max(0, n + lower) : Math.min(lower, n);
           int to = upper == null ? n : upper < 0 ? Math.max(0, n + upper) : Math.min(upper, n);
-          sliced.add(from < to ? new ArrayList<>(dims.subList(from, to)) : new ArrayList<>());
+          List<Dimension<?>> taken = new ArrayList<>();
+          for (int i = from; i < to; i += stride) taken.add(dims.get(i));
+          sliced.add(taken);
         }
         return sliced;
       }

@@ -12999,9 +12999,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Guard companion of {@link #testShapeAsListSlice()} (wala/ML#703): a non-unit step over a shape
-   * list ({@code [::2]}) is unmodeled, so the walk soundly reports an unknown ({@code ⊤}) shape
-   * while keeping the dtype precise. The Python runtime shape is {@code (4, 6)}.
+   * Strided companion of {@link #testShapeAsListSlice()} (wala/ML#703, wala/ML#709): a constant
+   * positive step over a shape list ({@code [::2]}) strides the resolved dimensions, composing the
+   * precise {@code (4, 6)}. Negative steps keep the ⊤ fallback.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -13012,7 +13012,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testShapeSliceStep()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_shape_slice_step.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        "tf2_test_shape_slice_step.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 6))));
   }
 
   /**
@@ -13021,6 +13025,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * assert either slicing; the walk soundly reports an unknown ({@code ⊤}) shape. A bound that is a
    * distinct constant per calling context stays precise (context sensitivity disambiguates it); the
    * φ forces the ambiguity into a single context.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/710">wala/ML#710</a>): tighten to the union
+   * of the candidate slicings ({@code {(1, 30), (30)}}) once ambiguous constant bounds enumerate.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
