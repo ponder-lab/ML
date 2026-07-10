@@ -203,7 +203,7 @@ public abstract class TensorGenerator {
 
   /**
    * Memo of the {@code (class, attribute)} chase results of {@link
-   * #storedAttributeDimInClass(PropagationCallGraphBuilder, IClass, String)} per builder
+   * #resolveStoredAttributeDimInClass(PropagationCallGraphBuilder, IClass, String)} per builder
    * (wala/ML#712). The chase scans the whole call graph, so uncached re-runs are quadratic on large
    * analyses; the {@link Optional} payload caches the negative result too.
    */
@@ -775,9 +775,9 @@ public abstract class TensorGenerator {
       if (folded != null) return folded;
       folded = this.prodOfShapeVectorDim(builder, node, st, writtenVal);
       if (folded != null) return folded;
-      folded = this.shapeVectorElementDim(builder, node, st, writtenVal);
+      folded = this.resolveShapeVectorElementDim(builder, node, st, writtenVal);
       if (folded != null) return folded;
-      return this.storedAttributeDim(builder, node, writtenVal);
+      return this.resolveStoredAttributeDim(builder, node, writtenVal);
     }
     return null;
   }
@@ -793,7 +793,7 @@ public abstract class TensorGenerator {
    * @return The subscripted {@link Dimension}, or {@code null} when the value isn't a
    *     constant-indexed subscript of a resolvable shape vector or the index is out of range.
    */
-  private Dimension<?> shapeVectorElementDim(
+  private Dimension<?> resolveShapeVectorElementDim(
       PropagationCallGraphBuilder builder, CGNode node, SymbolTable st, int vn) {
     if (vn <= 0) return null;
     SSAInstruction def = node.getDU().getDef(vn);
@@ -840,7 +840,7 @@ public abstract class TensorGenerator {
    *     attribute read, no write site resolves, or distinct write sites resolve to different
    *     dimensions.
    */
-  private Dimension<?> storedAttributeDim(
+  private Dimension<?> resolveStoredAttributeDim(
       PropagationCallGraphBuilder builder, CGNode node, int vn) {
     if (vn <= 0 || node.getDU() == null || node.getIR() == null) return null;
     SSAInstruction def = node.getDU().getDef(vn);
@@ -885,10 +885,11 @@ public abstract class TensorGenerator {
         // through the shape machinery (a self-referential attribute), and the sentinel floors the
         // re-entry to "unresolved" (sound) instead of recursing.
         cache.put(key, Optional.empty());
-        Dimension<?> chased = this.storedAttributeDimInClass(builder, pythonClass, attributeName);
+        Dimension<?> chased =
+            this.resolveStoredAttributeDimInClass(builder, pythonClass, attributeName);
         LOGGER.fine(
             () ->
-                "storedAttributeDim: "
+                "resolveStoredAttributeDim: "
                     + pythonClass
                     + "."
                     + attributeName
@@ -915,7 +916,7 @@ public abstract class TensorGenerator {
    * @return The stored value's dimension, or {@code null} when no write resolves or distinct writes
    *     resolve to different dimensions.
    */
-  private Dimension<?> storedAttributeDimInClass(
+  private Dimension<?> resolveStoredAttributeDimInClass(
       PropagationCallGraphBuilder builder, IClass pythonClass, String attributeName) {
     String classPrefix = pythonClass.getReference().getName().toString() + "/";
     Dimension<?> found = null;
@@ -948,7 +949,8 @@ public abstract class TensorGenerator {
         Dimension<?> stored =
             TensorType.foldArithmeticDim(builder, candidate, st, candidate.getDU(), storedVn);
         if (stored == null) stored = this.prodOfShapeVectorDim(builder, candidate, st, storedVn);
-        if (stored == null) stored = this.shapeVectorElementDim(builder, candidate, st, storedVn);
+        if (stored == null)
+          stored = this.resolveShapeVectorElementDim(builder, candidate, st, storedVn);
         if (stored == null) {
           Integer constant = constantIntValueOrSentinel(builder, candidate, st, storedVn);
           if (constant != null && !Objects.equals(constant, UNRESOLVED_BOUND))
@@ -3356,9 +3358,9 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, CGNode node, SymbolTable st, int vn) {
     Dimension<?> prod = this.prodOfShapeVectorDim(builder, node, st, vn);
     if (prod != null) return prod;
-    Dimension<?> subscript = this.shapeVectorElementDim(builder, node, st, vn);
+    Dimension<?> subscript = this.resolveShapeVectorElementDim(builder, node, st, vn);
     if (subscript != null) return subscript;
-    Dimension<?> attribute = this.storedAttributeDim(builder, node, vn);
+    Dimension<?> attribute = this.resolveStoredAttributeDim(builder, node, vn);
     if (attribute != null) return attribute;
     Integer constant = constantIntValueOrSentinel(builder, node, st, vn);
     if (constant == null) return DynamicDim.INSTANCE; // None: the dynamic-dim marker.
