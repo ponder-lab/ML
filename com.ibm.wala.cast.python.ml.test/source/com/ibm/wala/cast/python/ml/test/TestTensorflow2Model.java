@@ -2211,6 +2211,52 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * In-vivo anchor for the reopened wala/ML#704: the vendored NLPGNN {@code einsum_via_matmul}
+   * ({@code nlpgnn/layers/dense.py}). Its {@code input_tensor} parameter is ⊤ in every calling
+   * context — not because the type is lost at the layer-call boundary (the distilled compositions
+   * {@link #testDense3dMatmul()} and {@link #testDense3dMatmul2()} carry it through one and two
+   * trampoline hops), but because the ⊤ originates at the top of the encoder's dataflow: {@code
+   * WDEmbedding.call}'s trailing reshape targets {@code input_shape[0:-1] + [input_shape[-1] *
+   * self.embedding_size]} over the unknown-rank {@code input_ids}, the shape-vector walk soundly
+   * degrades the result to ⊤, and that ⊤ floods every downstream float tensor. The {@code w}
+   * parameter keeps rank 3 and {@code float32} (its chain is layer-local) but no numeric
+   * dimensions, since {@code build}-computed head sizes also derive from the opaque {@code
+   * input_shape}.
+   *
+   * <p>TODO: Expect static trailing dimensions here once <a
+   * href="https://github.com/wala/ML/issues/711">wala/ML#711</a> (embedding-reshape ⊤ genesis) and
+   * <a href="https://github.com/wala/ML/issues/712">wala/ML#712</a> ({@code build} {@code
+   * input_shape} opacity) are resolved.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNlpgnnFullEinsumViaMatmul()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        NLPGNN_FULL_PROJECT_FILES,
+        "nlpgnn/layers/dense.py",
+        "einsum_via_matmul",
+        "nlpgnn_full_proj",
+        2,
+        13,
+        Map.of(
+            2,
+            Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE),
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, DynamicDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))))));
+  }
+
+  /**
    * Sibling half of {@link #testNlpgnnFullGeneration()} (wala/ML#690) — the {@code interactive}
    * entry script, the one whose {@code predict}/{@code call} nodes vanished in the consumer's
    * whole-project run. Its {@code predict} parameter typing must be symmetric with the generation
