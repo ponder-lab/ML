@@ -777,7 +777,10 @@ public abstract class TensorGenerator {
     SSAInstruction def = node.getDU().getDef(vn);
     if (!(def instanceof PythonInvokeInstruction)) return null;
     PythonInvokeInstruction invoke = (PythonInvokeInstruction) def;
-    if (invoke.getNumberOfUses() < 2) return null;
+    // Fold only the plain `np.prod(v)` form: an extra positional or keyword argument (e.g.
+    // `axis=...`) changes the semantics, including the result's rank.
+    int numKeywords = invoke.getKeywords() != null ? invoke.getKeywords().size() : 0;
+    if (invoke.getNumberOfUses() - numKeywords != 2 || numKeywords != 0) return null;
     SSAInstruction funcDef = node.getDU().getDef(invoke.getUse(0));
     if (!(funcDef instanceof PythonPropertyRead)) return null;
     int memberVn = ((PythonPropertyRead) funcDef).getMemberRef();
