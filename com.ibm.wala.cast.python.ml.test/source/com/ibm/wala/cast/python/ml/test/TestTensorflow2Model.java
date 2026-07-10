@@ -2212,21 +2212,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   /**
    * In-vivo anchor for the reopened wala/ML#704: the vendored NLPGNN {@code einsum_via_matmul}
-   * ({@code nlpgnn/layers/dense.py}). Its {@code input_tensor} parameter is ⊤ in every calling
-   * context — not because the type is lost at the layer-call boundary (the distilled compositions
-   * {@link #testDense3dMatmul()} and {@link #testDense3dMatmul2()} carry it through one and two
-   * trampoline hops), but because the ⊤ originates at the top of the encoder's dataflow: {@code
-   * WDEmbedding.call}'s trailing reshape targets {@code input_shape[0:-1] + [input_shape[-1] *
-   * self.embedding_size]} over the unknown-rank {@code input_ids}, the shape-vector walk soundly
-   * degrades the result to ⊤, and that ⊤ floods every downstream float tensor. The {@code w}
-   * parameter keeps rank 3 and {@code float32} (its chain is layer-local) but no numeric
+   * ({@code nlpgnn/layers/dense.py}). The {@code input_tensor} parameter's shape is ⊤ in every
+   * calling context, not because the type is lost at the layer-call boundary (the distilled
+   * compositions {@link #testDense3dMatmul()} and {@link #testDense3dMatmul2()} carry it through
+   * one and two trampoline hops), but because the ⊤ originates at the top of the encoder's
+   * dataflow: {@code WDEmbedding.call}'s trailing reshape targets {@code input_shape[0:-1] +
+   * [input_shape[-1] * self.embedding_size]} over the unknown-rank {@code input_ids}, and the
+   * shape-vector walk soundly degrades the result's shape. The {@code float32} dtype survives that
+   * reshape ({@link #testEmbeddingOutput()}) and reaches most contexts here; the pure-⊤ member is
+   * contributed by the remaining contexts whose feed crosses ops that still lose the dtype. The
+   * {@code w} parameter keeps rank 3 and {@code float32} (its chain is layer-local) but no numeric
    * dimensions, since {@code build}-computed head sizes also derive from the opaque {@code
-   * input_shape}.
+   * input_shape} through arithmetic the fold does not cover (wala/ML#714).
    *
    * <p>TODO: Expect static trailing dimensions here once <a
-   * href="https://github.com/wala/ML/issues/711">wala/ML#711</a> (embedding-reshape ⊤ genesis) and
-   * <a href="https://github.com/wala/ML/issues/712">wala/ML#712</a> ({@code build} {@code
-   * input_shape} opacity) are resolved.
+   * href="https://github.com/wala/ML/issues/711">wala/ML#711</a> (embedding-reshape shape ⊤) and <a
+   * href="https://github.com/wala/ML/issues/714">wala/ML#714</a> (arithmetic over {@code
+   * input_shape} subscripts) are resolved.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2245,7 +2247,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         13,
         Map.of(
             2,
-            Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE),
+            Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE, TENSOR_UNKNOWN_SHAPE_FLOAT32),
             3,
             Set.of(
                 new TensorType(
@@ -3111,7 +3113,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * that result does not propagate to the caller's {@code self.gc1(...)} local &mdash; the
    * user-subclass forward-result-typing gap (wala/ML#570, akin to <a
    * href="https://github.com/wala/ML/issues/595">wala/ML#595</a>). The decorated function's input
-   * signature, the analysis goal, is nonetheless exact.
+   * signature, the analysis goal, is nonetheless exact. The returned {@code tf.math.softmax} result
+   * counts as one more tracked variable since the {@code math.softmax} alias was wired
+   * (wala/ML#711).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -3136,7 +3140,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "GCNLayer.call",
         "gcn_proj",
         1,
-        6,
+        7,
         Map.of(3, Set.of(TENSOR_4_8_FLOAT32)));
   }
 
@@ -3155,14 +3159,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * across the {@code driver→GAT→GATConv→MessagePassing} module boundaries. ({@code
    * adjacency_lists} is a Python list of edge tensors, not a tensor itself, so it is not a tensor
    * parameter.) As with {@link #testGcnCall()}, the decorated function's input signature &mdash;
-   * the analysis goal &mdash; is exact, while the internal layer-output locals stay ⊤. The four
+   * the analysis goal &mdash; is exact, while the internal layer-output locals stay ⊤. The five
    * tracked tensor variables are {@code node_embeddings} (vn=3) and the {@code dropout1} output
-   * (vn=11), both concrete {@code (4, 8) float32} (dropout preserves shape and dtype), plus the
-   * {@code gc1}/{@code gc2} attention-convolution outputs (vn=18, vn=38), both ⊤ on each axis. The
-   * layer outputs are ⊤ for the same reason as GCN: {@code GraphAttentionConvolution.call} unwraps
-   * its input from a {@code GNNInput} {@code NamedTuple} field, which is not tracked as a tensor
-   * (wala/ML#579), so the input arrives ⊤ and the attention aggregation through {@code
-   * tf.math.unsorted_segment_*} (wala/ML#570, wala/ML#582) inherits it.
+   * (vn=11), both concrete {@code (4, 8) float32} (dropout preserves shape and dtype), the {@code
+   * gc1}/{@code gc2} attention-convolution outputs (vn=18, vn=38), both ⊤ on each axis, plus the
+   * returned {@code tf.math.softmax} result, typed since the {@code math.softmax} alias was wired
+   * (wala/ML#711). The layer outputs are ⊤ for the same reason as GCN: {@code
+   * GraphAttentionConvolution.call} unwraps its input from a {@code GNNInput} {@code NamedTuple}
+   * field, which is not tracked as a tensor (wala/ML#579), so the input arrives ⊤ and the attention
+   * aggregation through {@code tf.math.unsorted_segment_*} (wala/ML#570, wala/ML#582) inherits it.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -3187,7 +3192,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "GATLayer.call",
         "gat_proj",
         1,
-        4,
+        5,
         Map.of(3, Set.of(TENSOR_4_8_FLOAT32)));
   }
 
@@ -13198,6 +13203,49 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 6))));
+  }
+
+  /**
+   * A reshape whose target is a shape-vector slice with an opaque bound (wala/ML#711): the walk
+   * cannot resolve {@code k}, so the output shape is soundly unknown, but the input's {@code
+   * float32} dtype must survive rather than degrading to full ⊤.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testReshapeOpaqueBound()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_opaque_bound.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * NLPGNN's {@code WDEmbedding} in miniature (wala/ML#711): the output reshape's target slices the
+   * unknown-arity input shape, so the walk fails and the output shape is soundly unknown, but the
+   * embedding table's {@code float32} must survive through both the {@code gather} arm and the
+   * {@code one_hot}/{@code matmul} arm.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEmbeddingOutput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_embedding_output.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
