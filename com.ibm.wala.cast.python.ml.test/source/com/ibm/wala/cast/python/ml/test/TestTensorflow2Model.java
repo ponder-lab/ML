@@ -12960,6 +12960,80 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Composition of {@link #testDense3dEinsum()} and {@link #testEinsumViaMatmul()} (wala/ML#704):
+   * NLPGNN's {@code DenseLayer3d.call} delegates to the module-level {@code einsum_via_matmul}
+   * helper. The {@code input_tensor} parameter carries the precise type across the layer-call
+   * boundary. The {@code w} parameter's trailing dimensions are the folded configuration fields,
+   * but its leading (hidden) dimension stays dynamic because {@code build}'s {@code input_shape}
+   * parameter is opaque, so {@code self.hidden_size = input_shape[2]} never resolves.
+   *
+   * <p>TODO: Expect {@code (6, 3, 5)} for the {@code w} parameter once <a
+   * href="https://github.com/wala/ML/issues/712">wala/ML#712</a> resolves {@code build}'s {@code
+   * input_shape} subscripts from the call-site input tensor's shape.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dMatmul()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_matmul.py",
+        "einsum_via_matmul",
+        2,
+        9,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
+                new TensorType(
+                    FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(3), new NumericDim(5))))));
+  }
+
+  /**
+   * Escalation of {@link #testDense3dMatmul()} to NLPGNN's real dispatch shape (wala/ML#704): the
+   * {@code DenseLayer3d} is created in an outer attention layer's {@code build}, stored as an
+   * attribute, and invoked through it in the outer {@code call} — two trampoline hops before {@code
+   * einsum_via_matmul} sees the input tensor. The {@code input_tensor} parameter carries the
+   * precise type through both hops; the {@code w} parameter's leading (hidden) dimension stays
+   * dynamic exactly as in the one-hop composition.
+   *
+   * <p>TODO: Expect {@code (6, 3, 5)} for the {@code w} parameter once <a
+   * href="https://github.com/wala/ML/issues/712">wala/ML#712</a> resolves {@code build}'s {@code
+   * input_shape} subscripts from the call-site input tensor's shape.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dMatmul2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_matmul2.py",
+        "einsum_via_matmul",
+        2,
+        9,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
+                new TensorType(
+                    FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(3), new NumericDim(5))))));
+  }
+
+  /**
    * Guard companion of {@link #testShapeProd()} (wala/ML#707): {@code np.prod} with an extra
    * argument ({@code axis=0}) can change the result's rank, so the fold refuses it and the shape
    * position degrades to a dynamic dimension in the walk-side contexts. The interpreter path
