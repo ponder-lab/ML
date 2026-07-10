@@ -2949,8 +2949,9 @@ public abstract class TensorGenerator {
             || Objects.equals(upper, UNRESOLVED_BOUND)
             || Objects.equals(step, UNRESOLVED_BOUND))
           return null; // Non-constant bound: the sub-list's rank is unknown.
-        // A constant positive step strides the bounded range; negative steps (which also
-        // reverse) keep the ⊤ fallback (wala/ML#709).
+        // A constant positive step strides the bounded range; a non-positive one keeps the ⊤
+        // fallback, covering negative steps (which also reverse) and the invalid zero
+        // (wala/ML#709).
         int stride = step == null ? 1 : step;
         if (stride < 1) return null;
 
