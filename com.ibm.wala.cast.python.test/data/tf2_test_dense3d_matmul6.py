@@ -40,7 +40,7 @@ class DenseLayer3d(tf.keras.layers.Layer):
         self.num_attention_heads = num_attention_heads
 
     def build(self, input_shape):
-        self.hidden_size = input_shape[2]
+        self.hidden_size = int(input_shape[2])
         self.head_size = int(input_shape[2] / self.num_attention_heads)
         self.w = self.add_weight(
             name="kernel",
