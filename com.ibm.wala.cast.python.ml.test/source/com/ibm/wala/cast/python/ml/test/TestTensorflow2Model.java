@@ -12866,14 +12866,12 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * End-to-end measurement of NLPGNN's {@code einsum_via_matmul} matmul path in miniature
-   * (wala/ML#704): the {@code get_shape_list} hop, slices, and {@code np.prod} folds all resolve,
-   * but the final {@code tf.reshape(ret, batch_dims + outer_dims)} concatenates two shape vectors,
-   * which the walk doesn't model, so the result is the union of the pre-reshape rank-2 matmul
-   * {@code (4, 5)} and ⊤ rather than the runtime {@code (2, 4, 3, 5)}.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/708">wala/ML#708</a>): tighten to the
-   * precise {@code (2, 4, 3, 5)} once shape-vector concatenation is modeled.
+   * NLPGNN's {@code einsum_via_matmul} matmul path in miniature, end to end (wala/ML#704): the
+   * {@code get_shape_list} hop, the negated-parameter slice bounds, the {@code np.prod} folds, and
+   * the {@code batch_dims + outer_dims} concatenation (wala/ML#708) all resolve, so the reshape arm
+   * types as the precise runtime {@code (2, 4, 3, 5)}. The {@code (4, 5)} member is the other arm
+   * of the {@code len(outer_dims) > 1} guard's φ (the raw rank-2 matmul), which flows statically
+   * even though the runtime always takes the reshape arm here.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -12888,7 +12886,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 5), TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 3, 5), TensorType.of(FLOAT_32, 4, 5))));
   }
 
   /**
@@ -12913,6 +12911,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         Map.of(
             2, Set.of(TENSOR_30_FLOAT32, new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE)))));
+  }
+
+  /**
+   * Concatenation of two shape vectors (wala/ML#708): {@code get_shape(t)[:1] + get_shape(t)[-2:]}
+   * over {@code (4, 5, 6)} composes the reshape target {@code (4, 5, 6)}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapeConcat()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_shape_concat.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_5_6_FLOAT32)));
   }
 
   /**
