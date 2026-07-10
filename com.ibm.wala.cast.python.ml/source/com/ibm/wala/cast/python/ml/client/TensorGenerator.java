@@ -58,6 +58,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey;
+import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
@@ -83,6 +84,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.WeakHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -2930,12 +2932,7 @@ public abstract class TensorGenerator {
       }
 
       // v[a:b]: a slice-builtin invoke of the form slice(receiver, lower, upper, step).
-      if (funcDef instanceof SSANewInstruction
-          && ((SSANewInstruction) funcDef)
-              .getNewSite()
-              .getDeclaredType()
-              .equals(PythonTypes.SLICE_BUILTIN)
-          && invoke.getNumberOfUses() >= 2) {
+      if (dispatchesToSliceBuiltin(builder, node, invoke) && invoke.getNumberOfUses() >= 2) {
         Set<List<Dimension<?>>> base =
             this.getShapesOfShapeVector(builder, node, invoke.getUse(1), visited);
         if (base == null || base.isEmpty()) return null;
@@ -2970,7 +2967,141 @@ public abstract class TensorGenerator {
       // without an explicit parameter-to-argument mapping (wala/ML#706).
       return this.shapesOfCalleeReturns(builder, node, invoke, visited);
     }
+
+    // a + b: the concatenation of two shape vectors, e.g. `batch_dims + outer_dims`
+    // (wala/ML#708). Either operand may also be a literal list of resolvable elements
+    // (`batch_dims + [inner_dim]`).
+    if (def instanceof SSABinaryOpInstruction
+        && ((SSABinaryOpInstruction) def).getOperator() == IBinaryOpInstruction.Operator.ADD) {
+      Set<List<Dimension<?>>> left =
+          this.shapesOfShapeVectorOrLiteralList(builder, node, def.getUse(0), visited);
+      if (left == null || left.isEmpty()) return null;
+      Set<List<Dimension<?>>> right =
+          this.shapesOfShapeVectorOrLiteralList(builder, node, def.getUse(1), visited);
+      if (right == null || right.isEmpty()) return null;
+      Set<List<Dimension<?>>> concatenated = HashSetFactory.make();
+      for (List<Dimension<?>> l : left)
+        for (List<Dimension<?>> r : right) {
+          List<Dimension<?>> joined = new ArrayList<>(l);
+          joined.addAll(r);
+          concatenated.add(joined);
+        }
+      return concatenated;
+    }
     return null;
+  }
+
+  /**
+   * Resolves a concatenation operand: a shape vector per {@link #getShapesOfShapeVector}, or a
+   * literal list construction whose integer-indexed elements each resolve to a constant (including
+   * the {@code np.prod} fold) or {@code None} (wala/ML#708).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param vn The operand's value number.
+   * @param visited The callee nodes already on the walk.
+   * @return The operand's (sub-)shapes, or {@code null} (⊤) when it resolves as neither form.
+   */
+  private Set<List<Dimension<?>>> shapesOfShapeVectorOrLiteralList(
+      PropagationCallGraphBuilder builder, CGNode node, int vn, Set<CGNode> visited) {
+    Set<List<Dimension<?>>> shapes = this.getShapesOfShapeVector(builder, node, vn, visited);
+    if (shapes != null && !shapes.isEmpty()) return shapes;
+
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (!(def instanceof SSANewInstruction)) return null;
+    TypeReference allocated = ((SSANewInstruction) def).getNewSite().getDeclaredType();
+    if (!allocated.equals(list) && !allocated.equals(tuple)) return null;
+
+    SymbolTable st = node.getIR().getSymbolTable();
+    Map<Integer, Dimension<?>> byIndex = new TreeMap<>();
+    for (Iterator<SSAInstruction> uses = node.getDU().getUses(vn); uses.hasNext(); ) {
+      SSAInstruction use = uses.next();
+      int objRef;
+      int writtenVal;
+      int memberVn;
+      if (use instanceof PythonPropertyWrite) {
+        PythonPropertyWrite w = (PythonPropertyWrite) use;
+        objRef = w.getObjectRef();
+        writtenVal = w.getValue();
+        memberVn = w.getMemberRef();
+      } else if (use instanceof SSAPutInstruction && !((SSAPutInstruction) use).isStatic()) {
+        SSAPutInstruction w = (SSAPutInstruction) use;
+        objRef = w.getRef();
+        writtenVal = w.getVal();
+        memberVn = -1;
+        try {
+          byIndex.put(
+              Integer.parseInt(w.getDeclaredField().getName().toString()),
+              elementDim(builder, node, st, writtenVal));
+        } catch (NumberFormatException e) {
+          // Not an index write.
+        }
+        continue;
+      } else continue;
+      if (objRef != vn) continue;
+      Integer index = null;
+      if (st.isNumberConstant(memberVn))
+        index = ((Number) st.getConstantValue(memberVn)).intValue();
+      else if (st.isStringConstant(memberVn)) {
+        try {
+          index = Integer.parseInt(st.getStringValue(memberVn));
+        } catch (NumberFormatException e) {
+          // Not an index write.
+        }
+      }
+      if (index == null) continue;
+      byIndex.put(index, elementDim(builder, node, st, writtenVal));
+    }
+    if (byIndex.isEmpty() || byIndex.containsValue(null)) return null;
+    return Collections.singleton(new ArrayList<>(byIndex.values()));
+  }
+
+  /**
+   * Resolves one literal-list element to a dimension: a constant integer becomes a {@link
+   * NumericDim}, {@code None} becomes {@link DynamicDim}, and an {@code np.prod} over a resolvable
+   * shape vector folds (wala/ML#708).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param st The node's symbol table.
+   * @param vn The element's value number.
+   * @return The element's dimension, or {@code null} when it doesn't resolve.
+   */
+  private Dimension<?> elementDim(
+      PropagationCallGraphBuilder builder, CGNode node, SymbolTable st, int vn) {
+    Dimension<?> prod = this.prodOfShapeVectorDim(builder, node, st, vn);
+    if (prod != null) return prod;
+    Integer constant = constantIntValueOrSentinel(builder, node, st, vn);
+    if (constant == null) return DynamicDim.INSTANCE; // None: the dynamic-dim marker.
+    if (Objects.equals(constant, UNRESOLVED_BOUND)) return null;
+    return new NumericDim(constant);
+  }
+
+  /**
+   * Returns whether the invoke dispatches to the {@code slice} builtin, either syntactically (its
+   * function object is a {@link PythonTypes#SLICE_BUILTIN} allocation) or via the call graph. The
+   * latter covers slices inside nested functions, where the builtin's function object is a lexical
+   * read rather than a local allocation (wala/ML#708).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the targets.
+   * @param node The calling {@link CGNode}.
+   * @param invoke The invoke instruction to test.
+   * @return {@code true} iff the invoke dispatches to the slice builtin.
+   */
+  private static boolean dispatchesToSliceBuiltin(
+      PropagationCallGraphBuilder builder, CGNode node, PythonInvokeInstruction invoke) {
+    SSAInstruction funcDef = node.getDU().getDef(invoke.getUse(0));
+    if (funcDef instanceof SSANewInstruction
+        && ((SSANewInstruction) funcDef)
+            .getNewSite()
+            .getDeclaredType()
+            .equals(PythonTypes.SLICE_BUILTIN)) return true;
+    Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite());
+    if (targets == null || targets.isEmpty()) return false;
+    for (CGNode target : targets)
+      if (!target.getMethod().getDeclaringClass().getReference().equals(PythonTypes.SLICE_BUILTIN))
+        return false;
+    return true;
   }
 
   /**
@@ -3111,12 +3242,7 @@ public abstract class TensorGenerator {
             && isShapeVectorChain(
                 builder, node, ((PythonPropertyRead) funcDef).getObjectRef(), visited);
       }
-      if (funcDef instanceof SSANewInstruction
-          && ((SSANewInstruction) funcDef)
-              .getNewSite()
-              .getDeclaredType()
-              .equals(PythonTypes.SLICE_BUILTIN)
-          && invoke.getNumberOfUses() >= 2)
+      if (dispatchesToSliceBuiltin(builder, node, invoke) && invoke.getNumberOfUses() >= 2)
         return isShapeVectorChain(builder, node, invoke.getUse(1), visited);
 
       // A call to a user helper: the chain is a shape vector iff every callee's every returned
@@ -3143,6 +3269,25 @@ public abstract class TensorGenerator {
         } finally {
           visited.remove(callee);
         }
+      }
+      return true;
+    }
+
+    // a + b: a concatenation is a shape-vector chain iff each operand is one or is a literal
+    // list construction (wala/ML#708).
+    if (def instanceof SSABinaryOpInstruction
+        && ((SSABinaryOpInstruction) def).getOperator() == IBinaryOpInstruction.Operator.ADD) {
+      boolean anyChain =
+          isShapeVectorChain(builder, node, def.getUse(0), visited)
+              || isShapeVectorChain(builder, node, def.getUse(1), visited);
+      if (!anyChain) return false;
+      for (int u = 0; u < 2; u++) {
+        int operand = def.getUse(u);
+        if (isShapeVectorChain(builder, node, operand, visited)) continue;
+        SSAInstruction operandDef = node.getDU().getDef(operand);
+        if (!(operandDef instanceof SSANewInstruction)) return false;
+        TypeReference allocated = ((SSANewInstruction) operandDef).getNewSite().getDeclaredType();
+        if (!allocated.equals(list) && !allocated.equals(tuple)) return false;
       }
       return true;
     }
