@@ -777,6 +777,8 @@ public abstract class TensorGenerator {
       if (folded != null) return folded;
       folded = this.resolveShapeVectorElementDim(builder, node, st, writtenVal);
       if (folded != null) return folded;
+      folded = this.resolveArithmeticOverSubscriptDim(builder, node, st, writtenVal);
+      if (folded != null) return folded;
       return this.resolveStoredAttributeDim(builder, node, writtenVal);
     }
     return null;
@@ -821,6 +823,159 @@ public abstract class TensorGenerator {
     int k = index < 0 ? dims.size() + index : index;
     if (k < 0 || k >= dims.size()) return null;
     return dims.get(k);
+  }
+
+  /**
+   * Folds an arithmetic expression whose operands may be shape-vector subscripts (e.g. {@code
+   * int(input_shape[2] / self.num_attention_heads)}, NLPGNN's {@code ALBERTAttention.build}) to a
+   * {@link NumericDim} (wala/ML#714). An {@code int(...)} builtin wrapper is peeled first; a
+   * division only folds when the wrapper marked the truncation or the division is exact, since a
+   * bare {@code /} is Python float division.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param st The node's symbol table.
+   * @param vn The value number of the candidate expression result.
+   * @return The folded {@link NumericDim}, or {@code null} when the expression doesn't resolve.
+   */
+  private Dimension<?> resolveArithmeticOverSubscriptDim(
+      PropagationCallGraphBuilder builder, CGNode node, SymbolTable st, int vn) {
+    if (vn <= 0 || node.getDU() == null) return null;
+    int peeled = peelIntBuiltin(builder, node, vn);
+    boolean truncated = peeled != vn;
+    SSAInstruction def = node.getDU().getDef(peeled);
+
+    if (def instanceof SSABinaryOpInstruction) {
+      SSABinaryOpInstruction binOp = (SSABinaryOpInstruction) def;
+      Integer left = this.scalarOperandOrNull(builder, node, st, binOp.getUse(0));
+      if (left == null) return null;
+      Integer right = this.scalarOperandOrNull(builder, node, st, binOp.getUse(1));
+      if (right == null) return null;
+      if (binOp.getOperator() == IBinaryOpInstruction.Operator.DIV
+          && !truncated
+          && (right == 0 || left % right != 0)) return null; // Non-exact bare float division.
+      Integer value = TensorType.applyIntBinOp(binOp.getOperator(), left, right);
+      return value == null ? null : new NumericDim(value);
+    }
+
+    // A bare int(x) wrapper over a directly resolvable scalar.
+    if (truncated) {
+      Dimension<?> dim = this.resolveShapeVectorElementDim(builder, node, st, peeled);
+      if (dim != null) return dim;
+      return this.prodOfShapeVectorDim(builder, node, st, peeled);
+    }
+    return null;
+  }
+
+  /**
+   * Resolves an arithmetic operand to a constant integer: a points-to constant, a numeric
+   * shape-vector subscript, an {@code np.prod} fold, or a nested arithmetic expression
+   * (wala/ML#714).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param st The node's symbol table.
+   * @param vn The operand's value number.
+   * @return The operand's integer value, or {@code null} when it doesn't resolve.
+   */
+  private Integer scalarOperandOrNull(
+      PropagationCallGraphBuilder builder, CGNode node, SymbolTable st, int vn) {
+    int peeled = peelIntBuiltin(builder, node, vn);
+    Integer constant = constantIntValueOrSentinel(builder, node, st, peeled);
+    if (constant != null && !Objects.equals(constant, UNRESOLVED_BOUND)) return constant;
+    Dimension<?> dim = this.resolveShapeVectorElementDim(builder, node, st, peeled);
+    if (dim == null) dim = this.prodOfShapeVectorDim(builder, node, st, peeled);
+    if (dim == null) dim = this.resolveArithmeticOverSubscriptDim(builder, node, st, peeled);
+    return dim instanceof NumericDim ? ((NumericDim) dim).value() : null;
+  }
+
+  /**
+   * Resolves a single-element list/tuple allocation to its constant integer element (e.g. the
+   * {@code axis=[-1]} form of {@code tf.expand_dims}, as in NLPGNN's {@code WDEmbedding.call}).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for PA lookup.
+   * @param ik The candidate container {@link InstanceKey}.
+   * @return The single element's constant value, or {@code null} when the key isn't a
+   *     single-element list/tuple allocation of a resolvable constant (wala/ML#714).
+   */
+  protected static Integer singleElementConstant(
+      PropagationCallGraphBuilder builder, InstanceKey ik) {
+    AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+    if (asin == null) return null;
+    TypeReference type = asin.getSite().getDeclaredType();
+    if (!type.equals(list) && !type.equals(tuple)) return null;
+    CGNode node = asin.getNode();
+    if (node.getIR() == null || node.getDU() == null) return null;
+    SSANewInstruction alloc = node.getIR().getNew(asin.getSite());
+    if (alloc == null) return null;
+    int containerVn = alloc.getDef();
+    SymbolTable st = node.getIR().getSymbolTable();
+    Integer element = null;
+    for (Iterator<SSAInstruction> uses = node.getDU().getUses(containerVn); uses.hasNext(); ) {
+      SSAInstruction use = uses.next();
+      int writtenVal;
+      Integer index = null;
+      if (use instanceof PythonPropertyWrite) {
+        PythonPropertyWrite write = (PythonPropertyWrite) use;
+        if (write.getObjectRef() != containerVn) continue;
+        int memberVn = write.getMemberRef();
+        if (st.isNumberConstant(memberVn))
+          index = ((Number) st.getConstantValue(memberVn)).intValue();
+        else if (st.isStringConstant(memberVn)) {
+          try {
+            index = Integer.parseInt(st.getStringValue(memberVn));
+          } catch (NumberFormatException e) {
+            continue;
+          }
+        }
+        writtenVal = write.getValue();
+      } else if (use instanceof SSAPutInstruction && !((SSAPutInstruction) use).isStatic()) {
+        SSAPutInstruction put = (SSAPutInstruction) use;
+        if (put.getRef() != containerVn) continue;
+        try {
+          index = Integer.parseInt(put.getDeclaredField().getName().toString());
+        } catch (NumberFormatException e) {
+          continue;
+        }
+        writtenVal = put.getVal();
+      } else continue;
+      if (index == null) continue;
+      if (index != 0 || element != null) return null; // Not a single-element container.
+      Integer constant = constantIntValueOrSentinel(builder, node, st, writtenVal);
+      if (constant == null || Objects.equals(constant, UNRESOLVED_BOUND)) return null;
+      element = constant;
+    }
+    return element;
+  }
+
+  /**
+   * Peels an {@code int(...)} builtin wrapper: for an invoke of the {@code int} builtin with a
+   * single positional argument, returns the argument's value number; otherwise returns {@code vn}
+   * unchanged (wala/ML#714).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the target.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param vn The value number to peel.
+   * @return The wrapped argument's value number, or {@code vn} when it isn't an {@code int(x)}
+   *     call.
+   */
+  private static int peelIntBuiltin(PropagationCallGraphBuilder builder, CGNode node, int vn) {
+    if (vn <= 0 || node.getDU() == null) return vn;
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (!(def instanceof PythonInvokeInstruction)) return vn;
+    PythonInvokeInstruction invoke = (PythonInvokeInstruction) def;
+    if (invoke.getNumberOfUses() != 2) return vn; // Exactly `int(x)`: the callable plus one arg.
+    Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite());
+    if (targets == null || targets.isEmpty()) return vn;
+    for (CGNode target : targets)
+      if (!target
+          .getMethod()
+          .getDeclaringClass()
+          .getReference()
+          .getName()
+          .toString()
+          .equals("Lwala/builtin/int")) return vn;
+    return invoke.getUse(1);
   }
 
   /**
@@ -951,6 +1106,8 @@ public abstract class TensorGenerator {
         if (stored == null) stored = this.prodOfShapeVectorDim(builder, candidate, st, storedVn);
         if (stored == null)
           stored = this.resolveShapeVectorElementDim(builder, candidate, st, storedVn);
+        if (stored == null)
+          stored = this.resolveArithmeticOverSubscriptDim(builder, candidate, st, storedVn);
         if (stored == null) {
           Integer constant = constantIntValueOrSentinel(builder, candidate, st, storedVn);
           if (constant != null && !Objects.equals(constant, UNRESOLVED_BOUND))
@@ -3360,6 +3517,8 @@ public abstract class TensorGenerator {
     if (prod != null) return prod;
     Dimension<?> subscript = this.resolveShapeVectorElementDim(builder, node, st, vn);
     if (subscript != null) return subscript;
+    Dimension<?> arithmetic = this.resolveArithmeticOverSubscriptDim(builder, node, st, vn);
+    if (arithmetic != null) return arithmetic;
     Dimension<?> attribute = this.resolveStoredAttributeDim(builder, node, vn);
     if (attribute != null) return attribute;
     Integer constant = constantIntValueOrSentinel(builder, node, st, vn);
