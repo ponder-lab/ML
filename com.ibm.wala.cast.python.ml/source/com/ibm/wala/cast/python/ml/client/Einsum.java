@@ -224,9 +224,9 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
    * (see {@code TensorType.RaggedDim}'s Javadoc and wala/ML#414). Presence in the label map is
    * therefore tracked with {@code containsKey}, never by a null-check on the value: a label whose
    * occurrences are all {@code null} stays {@code null} (unknown size) in the output, preserving
-   * the output's rank instead of degrading the whole shape to ⊤, and a label seen with both a
-   * {@code null} and a concrete dimension merges to {@code null} (statically unagreed) rather than
-   * letting either occurrence win.
+   * the output's rank instead of degrading the whole shape to ⊤. A shared label names the same
+   * dimension and the runtime requires the sizes equal, so a statically-known occurrence refines an
+   * unknown or dynamic one (wala/ML#704); two known occurrences that disagree fall back to ⊤.
    *
    * @param parsed The parsed equation.
    * @param inputShapes The resolved shape of each input, in input order.
