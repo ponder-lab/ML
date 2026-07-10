@@ -103,10 +103,16 @@ public class ExpandDims extends PassThroughUnaryTensorGenerator {
     if (axisPts == null || axisPts.isEmpty()) return null;
     Set<Integer> axisValues = new HashSet<>();
     for (InstanceKey ik : axisPts) {
-      if (!(ik instanceof ConstantKey)) return null;
-      Object val = ((ConstantKey<?>) ik).getValue();
-      if (!(val instanceof Number)) return null;
-      axisValues.add(((Number) val).intValue());
+      Integer axisValue = null;
+      if (ik instanceof ConstantKey) {
+        Object val = ((ConstantKey<?>) ik).getValue();
+        if (val instanceof Number) axisValue = ((Number) val).intValue();
+      } else
+        // The list form `axis=[-1]` (as in NLPGNN's `WDEmbedding.call`): a single-element
+        // list/tuple whose only element is a constant is equivalent to the scalar (wala/ML#714).
+        axisValue = singleElementConstant(builder, ik);
+      if (axisValue == null) return null;
+      axisValues.add(axisValue);
     }
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
