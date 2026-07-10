@@ -14,7 +14,9 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FIELD_REFERENCE_
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.PLACEHOLDER;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORFLOW_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
+import static com.ibm.wala.cast.python.types.PythonTypes.CALLABLE_METHOD_NAME_FOR_KERAS_MODELS;
 import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
+import static com.ibm.wala.cast.python.types.PythonTypes.KERAS_BUILD_METHOD_NAME;
 import static com.ibm.wala.cast.python.types.PythonTypes.Root;
 import static com.ibm.wala.cast.python.types.PythonTypes.dict;
 import static com.ibm.wala.cast.python.types.PythonTypes.list;
@@ -29,6 +31,7 @@ import static java.util.Collections.emptyList;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.ir.ssa.CAstUnaryOp;
+import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
@@ -46,6 +49,7 @@ import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.classLoader.CallSiteReference;
 import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
+import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.classLoader.NewSiteReference;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
@@ -62,6 +66,7 @@ import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
+import com.ibm.wala.ssa.SSAGetInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPutInstruction;
@@ -83,6 +88,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.WeakHashMap;
@@ -196,6 +202,16 @@ public abstract class TensorGenerator {
       DTYPES_IN_PROGRESS = Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
+   * Memo of the {@code (class, attribute)} chase results of {@link
+   * #resolveStoredAttributeDimInClass(PropagationCallGraphBuilder, IClass, String)} per builder
+   * (wala/ML#712). The chase scans the whole call graph, so uncached re-runs are quadratic on large
+   * analyses; the {@link Optional} payload caches the negative result too.
+   */
+  private static final Map<
+          PropagationCallGraphBuilder, Map<Pair<IClass, String>, Optional<Dimension<?>>>>
+      STORED_ATTRIBUTE_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
    * Begins a new resolution round for the given builder (wala/ML#674): the current shape/dtype
    * results become the previous round's approximations (read on cycle re-entry), and the current
    * caches restart empty.
@@ -209,6 +225,8 @@ public abstract class TensorGenerator {
     if (dtypes != null) PREVIOUS_DTYPES_CACHE.put(builder, dtypes);
     SHAPES_IN_PROGRESS.remove(builder);
     DTYPES_IN_PROGRESS.remove(builder);
+    // The chase reads shape results that may change between rounds, so its memo restarts too.
+    STORED_ATTRIBUTE_CACHE.remove(builder);
   }
 
   /**
@@ -229,6 +247,7 @@ public abstract class TensorGenerator {
     PREVIOUS_DTYPES_CACHE.remove(builder);
     SHAPES_IN_PROGRESS.remove(builder);
     DTYPES_IN_PROGRESS.remove(builder);
+    STORED_ATTRIBUTE_CACHE.remove(builder);
   }
 
   /** The source of the tensor, represented by a points-to set variable. */
@@ -754,9 +773,195 @@ public abstract class TensorGenerator {
       // Shared with `TensorType.shapeArg` so the two shape-argument paths agree (wala/ML#581).
       Dimension<?> folded = TensorType.foldArithmeticDim(builder, node, st, du, writtenVal);
       if (folded != null) return folded;
-      return this.prodOfShapeVectorDim(builder, node, st, writtenVal);
+      folded = this.prodOfShapeVectorDim(builder, node, st, writtenVal);
+      if (folded != null) return folded;
+      folded = this.resolveShapeVectorElementDim(builder, node, st, writtenVal);
+      if (folded != null) return folded;
+      return this.resolveStoredAttributeDim(builder, node, writtenVal);
     }
     return null;
+  }
+
+  /**
+   * Resolves a constant-indexed subscript of a shape vector (e.g. {@code input_shape[2]}) to the
+   * denoted dimension, with Python negative-index semantics (wala/ML#712).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param st The node's symbol table.
+   * @param vn The value number of the candidate subscript result.
+   * @return The subscripted {@link Dimension}, or {@code null} when the value isn't a
+   *     constant-indexed subscript of a resolvable shape vector or the index is out of range.
+   */
+  private Dimension<?> resolveShapeVectorElementDim(
+      PropagationCallGraphBuilder builder, CGNode node, SymbolTable st, int vn) {
+    if (vn <= 0) return null;
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (!(def instanceof PythonPropertyRead)) return null;
+    PythonPropertyRead read = (PythonPropertyRead) def;
+    int memberVn = read.getMemberRef();
+    Integer index;
+    if (st.isStringConstant(memberVn)) {
+      // Subscript indices can surface as string constants (like the index writes above); a
+      // non-numeric string is an attribute read, not a subscript.
+      try {
+        index = Integer.parseInt(st.getStringValue(memberVn));
+      } catch (NumberFormatException e) {
+        return null;
+      }
+    } else {
+      index = constantIntValueOrSentinel(builder, node, st, memberVn);
+      if (index == null || Objects.equals(index, UNRESOLVED_BOUND)) return null;
+    }
+
+    Set<List<Dimension<?>>> shapes =
+        this.getShapesOfShapeVector(builder, node, read.getObjectRef());
+    if (shapes == null || shapes.size() != 1) return null; // Ambiguous ranks: not resolvable.
+    List<Dimension<?>> dims = shapes.iterator().next();
+    int k = index < 0 ? dims.size() + index : index;
+    if (k < 0 || k >= dims.size()) return null;
+    return dims.get(k);
+  }
+
+  /**
+   * Resolves a bare instance-attribute read off the enclosing method's {@code self} (e.g. {@code
+   * self.hidden_size}) to a dimension by chasing the attribute's write sites in the receiver
+   * class's method bodies and resolving each stored value in its defining node. Covers {@code
+   * build}-computed sizes such as {@code self.hidden_size = input_shape[2]}, whose stored value has
+   * an empty points-to set, so the constant-propagation path cannot see it (wala/ML#712).
+   *
+   * <p>The chase is depth-one by construction: a stored value that is itself another bare attribute
+   * read does not resolve.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param vn The value number of the candidate attribute read.
+   * @return The stored value's dimension, or {@code null} when the value isn't a {@code self}
+   *     attribute read, no write site resolves, or distinct write sites resolve to different
+   *     dimensions.
+   */
+  private Dimension<?> resolveStoredAttributeDim(
+      PropagationCallGraphBuilder builder, CGNode node, int vn) {
+    if (vn <= 0 || node.getDU() == null || node.getIR() == null) return null;
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (!(def instanceof PythonPropertyRead) && !(def instanceof SSAGetInstruction)) return null;
+
+    String attributeName;
+    int objectVn;
+    if (def instanceof PythonPropertyRead) {
+      PythonPropertyRead read = (PythonPropertyRead) def;
+      SymbolTable st = node.getIR().getSymbolTable();
+      int memberVn = read.getMemberRef();
+      if (!st.isStringConstant(memberVn)) return null;
+      attributeName = st.getStringValue(memberVn);
+      objectVn = read.getObjectRef();
+    } else {
+      SSAGetInstruction get = (SSAGetInstruction) def;
+      if (get.isStatic()) return null;
+      attributeName = get.getDeclaredField().getName().toString();
+      objectVn = get.getRef();
+    }
+
+    // Only chase reads off the enclosing method's `self`.
+    if (node.getMethod().getNumberOfParameters() < 2 || objectVn != node.getIR().getParameter(1))
+      return null;
+
+    PointerKey selfPk =
+        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, objectVn);
+    Dimension<?> found = null;
+    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(selfPk)) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      if (asin == null) return null;
+      // A user Python object allocates as `Lobject` inside its class's synthetic constructor, so
+      // the class identity lives in the allocating node's declaring class.
+      IClass pythonClass = asin.getNode().getMethod().getDeclaringClass();
+      Map<Pair<IClass, String>, Optional<Dimension<?>>> cache =
+          STORED_ATTRIBUTE_CACHE.computeIfAbsent(
+              builder, b -> Collections.synchronizedMap(new HashMap<>()));
+      Pair<IClass, String> key = Pair.make(pythonClass, attributeName);
+      Optional<Dimension<?>> memo = cache.get(key);
+      if (memo == null) {
+        // Seed an empty sentinel before computing: the chase can re-enter itself on the same key
+        // through the shape machinery (a self-referential attribute), and the sentinel floors the
+        // re-entry to "unresolved" (sound) instead of recursing.
+        cache.put(key, Optional.empty());
+        Dimension<?> chased =
+            this.resolveStoredAttributeDimInClass(builder, pythonClass, attributeName);
+        LOGGER.fine(
+            () ->
+                "resolveStoredAttributeDim: "
+                    + pythonClass
+                    + "."
+                    + attributeName
+                    + " resolved to "
+                    + chased);
+        memo = Optional.ofNullable(chased);
+        cache.put(key, memo);
+      }
+      Dimension<?> stored = memo.orElse(null);
+      if (stored == null) return null;
+      if (found != null && !found.equals(stored)) return null; // Conflicting receivers.
+      found = stored;
+    }
+    return found;
+  }
+
+  /**
+   * Chases the write sites of {@code attributeName} on {@code self} across the given Python class's
+   * method-body nodes and resolves each stored value in its defining node.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param pythonClass The Python class whose method bodies are scanned.
+   * @param attributeName The attribute whose writes are chased.
+   * @return The stored value's dimension, or {@code null} when no write resolves or distinct writes
+   *     resolve to different dimensions.
+   */
+  private Dimension<?> resolveStoredAttributeDimInClass(
+      PropagationCallGraphBuilder builder, IClass pythonClass, String attributeName) {
+    String classPrefix = pythonClass.getReference().getName().toString() + "/";
+    Dimension<?> found = null;
+    for (CGNode candidate : builder.getCallGraph()) {
+      if (candidate.getIR() == null || candidate.getDU() == null) continue;
+      IMethod method = candidate.getMethod();
+      if (!(method instanceof AstMethod)) continue; // Only real method bodies hold user writes.
+      String declaringClassName = method.getDeclaringClass().getReference().getName().toString();
+      if (!declaringClassName.startsWith(classPrefix)) continue;
+      if (method.getNumberOfParameters() < 2) continue;
+      int selfVn = candidate.getIR().getParameter(1);
+      SymbolTable st = candidate.getIR().getSymbolTable();
+
+      for (SSAInstruction inst : candidate.getIR().getInstructions()) {
+        int storedVn = -1;
+        if (inst instanceof PythonPropertyWrite) {
+          PythonPropertyWrite write = (PythonPropertyWrite) inst;
+          int memberVn = write.getMemberRef();
+          if (write.getObjectRef() == selfVn
+              && st.isStringConstant(memberVn)
+              && attributeName.equals(st.getStringValue(memberVn))) storedVn = write.getValue();
+        } else if (inst instanceof SSAPutInstruction && !((SSAPutInstruction) inst).isStatic()) {
+          SSAPutInstruction put = (SSAPutInstruction) inst;
+          if (put.getRef() == selfVn
+              && attributeName.equals(put.getDeclaredField().getName().toString()))
+            storedVn = put.getVal();
+        }
+        if (storedVn <= 0) continue;
+
+        Dimension<?> stored =
+            TensorType.foldArithmeticDim(builder, candidate, st, candidate.getDU(), storedVn);
+        if (stored == null) stored = this.prodOfShapeVectorDim(builder, candidate, st, storedVn);
+        if (stored == null)
+          stored = this.resolveShapeVectorElementDim(builder, candidate, st, storedVn);
+        if (stored == null) {
+          Integer constant = constantIntValueOrSentinel(builder, candidate, st, storedVn);
+          if (constant != null && !Objects.equals(constant, UNRESOLVED_BOUND))
+            stored = new NumericDim(constant);
+        }
+        if (stored == null) return null; // An unresolvable write makes the attribute unresolvable.
+        if (found != null && !found.equals(stored)) return null; // Conflicting writes.
+        found = stored;
+      }
+    }
+    return found;
   }
 
   /**
@@ -2720,6 +2925,24 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Returns whether the given node is a synthetic instance-method trampoline for a method of the
+   * given name (e.g. the {@code build} or {@code call} trampoline of a Keras layer).
+   *
+   * @param node The {@link CGNode} to test.
+   * @param methodName The trampolined method's Python-level name.
+   * @return {@code true} iff {@code node} is a trampoline whose target method has the given name.
+   */
+  protected static boolean isTrampolineFor(CGNode node, String methodName) {
+    return node.getMethod().getName().toString().startsWith("trampoline")
+        && node.getMethod()
+            .getDeclaringClass()
+            .getReference()
+            .getName()
+            .toString()
+            .endsWith("/" + methodName);
+  }
+
+  /**
    * Returns the calling invocations of the given node: for each call-graph predecessor, the invoke
    * instructions at the sites that can dispatch to it. Derived from call-graph edges rather than a
    * {@code CALL_STRING} lookup, so it works for any {@link com.ibm.wala.ipa.callgraph.Context}
@@ -2900,6 +3123,63 @@ public abstract class TensorGenerator {
     SSAInstruction def = node.getDU().getDef(vn);
     SymbolTable st = node.getIR().getSymbolTable();
 
+    // The `input_shape` parameter of a Keras `build` method denotes the shape of the layer-call
+    // input, but the lazy-build machinery invokes `build` through the method's own trampoline
+    // with `self` as the only argument (wala/ML#595), so the parameter never receives a shape in
+    // the PA. Resolve it via the callers: the build body's caller is the build trampoline, whose
+    // own caller is either the layer-call trampoline (the lazy-build pattern — its second
+    // parameter is the layer call's first positional argument, the input tensor) or a real method
+    // body issuing an explicit `x.build(shape)` call, whose argument is walked as a shape vector
+    // (wala/ML#712).
+    if (def == null
+        && node.getMethod()
+            .getDeclaringClass()
+            .getReference()
+            .getName()
+            .toString()
+            .endsWith("/" + KERAS_BUILD_METHOD_NAME)
+        && node.getMethod().getNumberOfParameters() >= 3
+        && vn == node.getIR().getParameter(2)) {
+      LOGGER.fine(
+          () ->
+              "getShapesOfShapeVector: resolving the build input_shape parameter in "
+                  + describe(node));
+      Set<List<Dimension<?>>> combined = null;
+      for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+          getCallerInvokes(builder, node)) {
+        CGNode buildTrampoline = callerInvoke.fst;
+        if (!isTrampolineFor(buildTrampoline, KERAS_BUILD_METHOD_NAME)) return null;
+        for (Pair<CGNode, SSAAbstractInvokeInstruction> outerInvoke :
+            getCallerInvokes(builder, buildTrampoline)) {
+          CGNode outerCaller = outerInvoke.fst;
+          SSAAbstractInvokeInstruction outerCall = outerInvoke.snd;
+          Set<List<Dimension<?>>> shapes = null;
+          if (isTrampolineFor(outerCaller, CALLABLE_METHOD_NAME_FOR_KERAS_MODELS)
+              && outerCaller.getIR() != null
+              && outerCaller.getMethod().getNumberOfParameters() >= 2) {
+            try {
+              shapes = this.getShapes(builder, outerCaller, outerCaller.getIR().getParameter(1));
+            } catch (IllegalArgumentException e) {
+              LOGGER.log(
+                  Level.FINE,
+                  "getShapesOfShapeVector: could not resolve the layer-call input via caller="
+                      + describe(outerCaller),
+                  e);
+            }
+          } else if (outerCall.getNumberOfUses() >= 2 && visited.add(outerCaller))
+            // An explicit `x.build(shape)` call: walk the actual argument.
+            shapes =
+                this.getShapesOfShapeVector(builder, outerCaller, outerCall.getUse(1), visited);
+          // Any unresolved caller makes the parameter's denotation unknown (⊤): the parameter
+          // unions all callers.
+          if (shapes == null || shapes.isEmpty()) return null;
+          if (combined == null) combined = HashSetFactory.make();
+          combined.addAll(shapes);
+        }
+      }
+      return combined;
+    }
+
     if (def instanceof PythonPropertyRead) {
       PythonPropertyRead read = (PythonPropertyRead) def;
       int memberVn = read.getMemberRef();
@@ -3078,6 +3358,10 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, CGNode node, SymbolTable st, int vn) {
     Dimension<?> prod = this.prodOfShapeVectorDim(builder, node, st, vn);
     if (prod != null) return prod;
+    Dimension<?> subscript = this.resolveShapeVectorElementDim(builder, node, st, vn);
+    if (subscript != null) return subscript;
+    Dimension<?> attribute = this.resolveStoredAttributeDim(builder, node, vn);
+    if (attribute != null) return attribute;
     Integer constant = constantIntValueOrSentinel(builder, node, st, vn);
     if (constant == null) return DynamicDim.INSTANCE; // None: the dynamic-dim marker.
     if (Objects.equals(constant, UNRESOLVED_BOUND)) return null;

@@ -13009,13 +13009,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Composition of {@link #testDense3dEinsum()} and {@link #testEinsumViaMatmul()} (wala/ML#704):
    * NLPGNN's {@code DenseLayer3d.call} delegates to the module-level {@code einsum_via_matmul}
    * helper. The {@code input_tensor} parameter carries the precise type across the layer-call
-   * boundary. The {@code w} parameter's trailing dimensions are the folded configuration fields,
-   * but its leading (hidden) dimension stays dynamic because {@code build}'s {@code input_shape}
-   * parameter is opaque, so {@code self.hidden_size = input_shape[2]} never resolves.
+   * boundary, and the {@code w} parameter's generator-side member is fully static: the trailing
+   * dimensions are the folded configuration fields and the leading (hidden) dimension resolves
+   * through {@code build}'s {@code input_shape} subscript ({@code self.hidden_size =
+   * input_shape[2]}, wala/ML#712). The all-symbolic member is the legacy literal-shape pin ({@code
+   * TensorType.shapeArg}), which folds neither field reads nor {@code build} subscripts.
    *
-   * <p>TODO: Expect {@code (6, 3, 5)} for the {@code w} parameter once <a
-   * href="https://github.com/wala/ML/issues/712">wala/ML#712</a> resolves {@code build}'s {@code
-   * input_shape} subscripts from the call-site input tensor's shape.
+   * <p>TODO: Expect only {@code (6, 3, 5)} for the {@code w} parameter once <a
+   * href="https://github.com/wala/ML/issues/713">wala/ML#713</a> reconciles the {@code shapeArg}
+   * pin path with the generator-side element folds.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -13038,8 +13040,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
                 new TensorType(
                     FLOAT_32,
                     asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
-                new TensorType(
-                    FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(3), new NumericDim(5))))));
+                TensorType.of(FLOAT_32, 6, 3, 5))));
   }
 
   /**
@@ -13047,12 +13048,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * {@code DenseLayer3d} is created in an outer attention layer's {@code build}, stored as an
    * attribute, and invoked through it in the outer {@code call} — two trampoline hops before {@code
    * einsum_via_matmul} sees the input tensor. The {@code input_tensor} parameter carries the
-   * precise type through both hops; the {@code w} parameter's leading (hidden) dimension stays
-   * dynamic exactly as in the one-hop composition.
+   * precise type through both hops, and the {@code w} parameter resolves exactly as in the one-hop
+   * composition, including the hidden dimension through {@code build}'s {@code input_shape}
+   * subscript (wala/ML#712).
    *
-   * <p>TODO: Expect {@code (6, 3, 5)} for the {@code w} parameter once <a
-   * href="https://github.com/wala/ML/issues/712">wala/ML#712</a> resolves {@code build}'s {@code
-   * input_shape} subscripts from the call-site input tensor's shape.
+   * <p>TODO: Expect only {@code (6, 3, 5)} for the {@code w} parameter once <a
+   * href="https://github.com/wala/ML/issues/713">wala/ML#713</a> reconciles the {@code shapeArg}
+   * pin path with the generator-side element folds.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -13075,8 +13077,127 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
                 new TensorType(
                     FLOAT_32,
                     asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
+                TensorType.of(FLOAT_32, 6, 3, 5))));
+  }
+
+  /**
+   * Negative-index companion of {@link #testDense3dMatmul()} (wala/ML#712): {@code build} stores
+   * {@code input_shape[-1]}, exercising the Python negative-index arm of the shape-vector subscript
+   * resolution.
+   *
+   * <p>TODO: Expect only {@code (6, 3, 5)} for the {@code w} parameter once <a
+   * href="https://github.com/wala/ML/issues/713">wala/ML#713</a> reconciles the {@code shapeArg}
+   * pin path with the generator-side element folds.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dMatmul3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_matmul3.py",
+        "einsum_via_matmul",
+        2,
+        9,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
+                TensorType.of(FLOAT_32, 6, 3, 5))));
+  }
+
+  /**
+   * Explicit-{@code build} companion of {@link #testDense3dMatmul()} (wala/ML#712): the script
+   * calls {@code layer.build(x.shape)} before the layer call, so the {@code input_shape} parameter
+   * also receives a real argument, exercising the explicit-caller arm of the walk alongside the
+   * lazy-build trampoline hop.
+   *
+   * <p>TODO: Expect only {@code (6, 3, 5)} for the {@code w} parameter once <a
+   * href="https://github.com/wala/ML/issues/713">wala/ML#713</a> reconciles the {@code shapeArg}
+   * pin path with the generator-side element folds.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dMatmul4()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_matmul4.py",
+        "einsum_via_matmul",
+        2,
+        9,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
+                TensorType.of(FLOAT_32, 6, 3, 5))));
+  }
+
+  /**
+   * Two-instance guard for the {@code build} subscript resolution (wala/ML#712): the class is
+   * instantiated on inputs with different hidden sizes, so the per-class attribute chase sees
+   * conflicting {@code hidden_size} stores and must bail; the weight's leading dimension stays
+   * dynamic (a sound conservative result) while the folded configuration fields keep their
+   * constants.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dMatmul5()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_matmul5.py",
+        "einsum_via_matmul",
+        2,
+        14,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 4, 6), TensorType.of(FLOAT_32, 2, 4, 8)),
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
                 new TensorType(
                     FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(3), new NumericDim(5))))));
+  }
+
+  /**
+   * A configuration attribute as a literal concat element (wala/ML#712): the reshape target
+   * concatenates a shape-vector slice with {@code [self.units]}, whose stored value is the
+   * constructor argument, exercising the constant fallback of the attribute chase.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapeConcatAttr()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_shape_concat_attr.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 6))));
   }
 
   /**
