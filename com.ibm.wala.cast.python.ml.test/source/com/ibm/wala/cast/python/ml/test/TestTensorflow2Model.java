@@ -13148,6 +13148,59 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Two-instance guard for the {@code build} subscript resolution (wala/ML#712): the class is
+   * instantiated on inputs with different hidden sizes, so the per-class attribute chase sees
+   * conflicting {@code hidden_size} stores and must bail; the weight's leading dimension stays
+   * dynamic (a sound conservative result) while the folded configuration fields keep their
+   * constants.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dMatmul5()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_matmul5.py",
+        "einsum_via_matmul",
+        2,
+        14,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 4, 6), TensorType.of(FLOAT_32, 2, 4, 8)),
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
+                new TensorType(
+                    FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(3), new NumericDim(5))))));
+  }
+
+  /**
+   * A configuration attribute as a literal concat element (wala/ML#712): the reshape target
+   * concatenates a shape-vector slice with {@code [self.units]}, whose stored value is the
+   * constructor argument, exercising the constant fallback of the attribute chase.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapeConcatAttr()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_shape_concat_attr.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 6))));
+  }
+
+  /**
    * Guard companion of {@link #testShapeProd()} (wala/ML#707): {@code np.prod} with an extra
    * argument ({@code axis=0}) can change the result's rank, so the fold refuses it and the shape
    * position degrades to a dynamic dimension in the walk-side contexts. The interpreter path
