@@ -791,7 +791,11 @@ public abstract class TensorGenerator {
     long product = 1;
     for (Dimension<?> d : shapes.iterator().next()) {
       if (!(d instanceof NumericDim)) return null; // A dynamic or unknown axis: not foldable.
-      product *= ((NumericDim) d).value();
+      try {
+        product = Math.multiplyExact(product, ((NumericDim) d).value());
+      } catch (ArithmeticException e) {
+        return null; // The product overflows long: not representable.
+      }
       if (product < 0 || product > Integer.MAX_VALUE) return null;
     }
     return new NumericDim((int) product);
