@@ -2211,6 +2211,52 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * In-vivo anchor for the reopened wala/ML#704: the vendored NLPGNN {@code einsum_via_matmul}
+   * ({@code nlpgnn/layers/dense.py}). Its {@code input_tensor} parameter is ⊤ in every calling
+   * context — not because the type is lost at the layer-call boundary (the distilled compositions
+   * {@link #testDense3dMatmul()} and {@link #testDense3dMatmul2()} carry it through one and two
+   * trampoline hops), but because the ⊤ originates at the top of the encoder's dataflow: {@code
+   * WDEmbedding.call}'s trailing reshape targets {@code input_shape[0:-1] + [input_shape[-1] *
+   * self.embedding_size]} over the unknown-rank {@code input_ids}, the shape-vector walk soundly
+   * degrades the result to ⊤, and that ⊤ floods every downstream float tensor. The {@code w}
+   * parameter keeps rank 3 and {@code float32} (its chain is layer-local) but no numeric
+   * dimensions, since {@code build}-computed head sizes also derive from the opaque {@code
+   * input_shape}.
+   *
+   * <p>TODO: Expect static trailing dimensions here once <a
+   * href="https://github.com/wala/ML/issues/711">wala/ML#711</a> (embedding-reshape ⊤ genesis) and
+   * <a href="https://github.com/wala/ML/issues/712">wala/ML#712</a> ({@code build} {@code
+   * input_shape} opacity) are resolved.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNlpgnnFullEinsumViaMatmul()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        NLPGNN_FULL_PROJECT_FILES,
+        "nlpgnn/layers/dense.py",
+        "einsum_via_matmul",
+        "nlpgnn_full_proj",
+        2,
+        13,
+        Map.of(
+            2,
+            Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE),
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, DynamicDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))))));
+  }
+
+  /**
    * Sibling half of {@link #testNlpgnnFullGeneration()} (wala/ML#690) — the {@code interactive}
    * entry script, the one whose {@code predict}/{@code call} nodes vanished in the consumer's
    * whole-project run. Its {@code predict} parameter typing must be symmetric with the generation
@@ -12957,6 +13003,80 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 6), TensorType.of(FLOAT_32, 3, 6))));
+  }
+
+  /**
+   * Composition of {@link #testDense3dEinsum()} and {@link #testEinsumViaMatmul()} (wala/ML#704):
+   * NLPGNN's {@code DenseLayer3d.call} delegates to the module-level {@code einsum_via_matmul}
+   * helper. The {@code input_tensor} parameter carries the precise type across the layer-call
+   * boundary. The {@code w} parameter's trailing dimensions are the folded configuration fields,
+   * but its leading (hidden) dimension stays dynamic because {@code build}'s {@code input_shape}
+   * parameter is opaque, so {@code self.hidden_size = input_shape[2]} never resolves.
+   *
+   * <p>TODO: Expect {@code (6, 3, 5)} for the {@code w} parameter once <a
+   * href="https://github.com/wala/ML/issues/712">wala/ML#712</a> resolves {@code build}'s {@code
+   * input_shape} subscripts from the call-site input tensor's shape.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dMatmul()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_matmul.py",
+        "einsum_via_matmul",
+        2,
+        9,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
+                new TensorType(
+                    FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(3), new NumericDim(5))))));
+  }
+
+  /**
+   * Escalation of {@link #testDense3dMatmul()} to NLPGNN's real dispatch shape (wala/ML#704): the
+   * {@code DenseLayer3d} is created in an outer attention layer's {@code build}, stored as an
+   * attribute, and invoked through it in the outer {@code call} — two trampoline hops before {@code
+   * einsum_via_matmul} sees the input tensor. The {@code input_tensor} parameter carries the
+   * precise type through both hops; the {@code w} parameter's leading (hidden) dimension stays
+   * dynamic exactly as in the one-hop composition.
+   *
+   * <p>TODO: Expect {@code (6, 3, 5)} for the {@code w} parameter once <a
+   * href="https://github.com/wala/ML/issues/712">wala/ML#712</a> resolves {@code build}'s {@code
+   * input_shape} subscripts from the call-site input tensor's shape.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dMatmul2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_matmul2.py",
+        "einsum_via_matmul",
+        2,
+        9,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
+                new TensorType(
+                    FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(3), new NumericDim(5))))));
   }
 
   /**
