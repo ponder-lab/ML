@@ -13003,6 +13003,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * list ({@code [::2]}) is unmodeled, so the walk soundly reports an unknown ({@code ⊤}) shape
    * while keeping the dtype precise. The Python runtime shape is {@code (4, 6)}.
    *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/709">wala/ML#709</a>): tighten to the
+   * precise {@code (4, 6)} once constant non-unit steps are modeled.
+   *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
    * @throws CancelException if the analysis is cancelled.
@@ -13021,6 +13024,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * assert either slicing; the walk soundly reports an unknown ({@code ⊤}) shape. A bound that is a
    * distinct constant per calling context stays precise (context sensitivity disambiguates it); the
    * φ forces the ambiguity into a single context.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/710">wala/ML#710</a>): tighten to the union
+   * of the candidate slicings ({@code {(1, 30), (30)}}) once ambiguous constant bounds enumerate.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
