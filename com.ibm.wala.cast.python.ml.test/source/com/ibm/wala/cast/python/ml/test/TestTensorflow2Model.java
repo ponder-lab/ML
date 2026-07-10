@@ -13011,12 +13011,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testShapeSliceStep()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_shape_slice_step.py",
-        "f",
-        1,
-        1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 6))));
+    test("tf2_test_shape_slice_step.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_6_FLOAT32)));
   }
 
   /**
