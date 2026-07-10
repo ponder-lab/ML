@@ -12999,12 +12999,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Guard companion of {@link #testShapeAsListSlice()} (wala/ML#703): a non-unit step over a shape
-   * list ({@code [::2]}) is unmodeled, so the walk soundly reports an unknown ({@code ⊤}) shape
-   * while keeping the dtype precise. The Python runtime shape is {@code (4, 6)}.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/709">wala/ML#709</a>): tighten to the
-   * precise {@code (4, 6)} once constant non-unit steps are modeled.
+   * Strided companion of {@link #testShapeAsListSlice()} (wala/ML#703, wala/ML#709): a constant
+   * positive step over a shape list ({@code [::2]}) strides the resolved dimensions, composing the
+   * precise {@code (4, 6)}. Negative steps keep the ⊤ fallback.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -13015,7 +13012,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testShapeSliceStep()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
-        "tf2_test_shape_slice_step.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        "tf2_test_shape_slice_step.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 6))));
   }
 
   /**
