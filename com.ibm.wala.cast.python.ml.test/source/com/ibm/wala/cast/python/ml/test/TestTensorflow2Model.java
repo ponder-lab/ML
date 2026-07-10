@@ -13081,6 +13081,73 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Negative-index companion of {@link #testDense3dMatmul()} (wala/ML#712): {@code build} stores
+   * {@code input_shape[-1]}, exercising the Python negative-index arm of the shape-vector subscript
+   * resolution.
+   *
+   * <p>TODO: Expect only {@code (6, 3, 5)} for the {@code w} parameter once <a
+   * href="https://github.com/wala/ML/issues/713">wala/ML#713</a> reconciles the {@code shapeArg}
+   * pin path with the generator-side element folds.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dMatmul3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_matmul3.py",
+        "einsum_via_matmul",
+        2,
+        9,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
+                TensorType.of(FLOAT_32, 6, 3, 5))));
+  }
+
+  /**
+   * Explicit-{@code build} companion of {@link #testDense3dMatmul()} (wala/ML#712): the script
+   * calls {@code layer.build(x.shape)} before the layer call, so the {@code input_shape} parameter
+   * also receives a real argument, exercising the explicit-caller arm of the walk alongside the
+   * lazy-build trampoline hop.
+   *
+   * <p>TODO: Expect only {@code (6, 3, 5)} for the {@code w} parameter once <a
+   * href="https://github.com/wala/ML/issues/713">wala/ML#713</a> reconciles the {@code shapeArg}
+   * pin path with the generator-side element folds.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dMatmul4()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_matmul4.py",
+        "einsum_via_matmul",
+        2,
+        9,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
+                TensorType.of(FLOAT_32, 6, 3, 5))));
+  }
+
+  /**
    * Guard companion of {@link #testShapeProd()} (wala/ML#707): {@code np.prod} with an extra
    * argument ({@code axis=0}) can change the result's rank, so the fold refuses it and the shape
    * position degrades to a dynamic dimension in the walk-side contexts. The interpreter path
