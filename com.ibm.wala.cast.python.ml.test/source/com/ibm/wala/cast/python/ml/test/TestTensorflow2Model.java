@@ -12977,6 +12977,46 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Guard companion of {@link #testShapeAsListSlice()} (wala/ML#703): a non-unit step over a shape
+   * list ({@code [::2]}) is unmodeled, so the walk soundly reports an unknown ({@code ⊤}) shape
+   * while keeping the dtype precise. The Python runtime shape is {@code (4, 6)}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapeSliceStep()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_shape_slice_step.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Guard companion of {@link #testShapeAsListSlice()} (wala/ML#703): the slice bound is a φ of two
+   * constants, so within one context its points-to set is ambiguous and the bound resolver must not
+   * assert either slicing; the walk soundly reports an unknown ({@code ⊤}) shape. A bound that is a
+   * distinct constant per calling context stays precise (context sensitivity disambiguates it); the
+   * φ forces the ambiguity into a single context.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapeSliceAmbiguous()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_shape_slice_ambiguous.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
    * Tier-5 generator (wala/ML#449): {@code tf.math.top_k(input, k)}. Returns a {@code (values,
    * indices)} 2-tuple. The dedicated {@link com.ibm.wala.cast.python.ml.client.TopK} generator
    * implements {@link com.ibm.wala.cast.python.ml.client.TupleElementProvider} with per-index dtype
