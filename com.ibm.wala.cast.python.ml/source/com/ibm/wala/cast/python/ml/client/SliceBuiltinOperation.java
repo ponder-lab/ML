@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.types.PythonTypes.ELLIPSIS;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 
@@ -62,10 +63,10 @@ public class SliceBuiltinOperation extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    LOGGER.fine(() -> "Entered getDefaultShapes for source=" + source);
+    LOGGER.fine(() -> "Entered getDefaultShapes for source=" + describe(source));
     CallSiteView view = findCallSite(builder);
     if (view == null) {
-      LOGGER.fine(() -> "No call site resolved for " + source);
+      LOGGER.fine(() -> "No call site resolved for " + describe(source));
       return null;
     }
 

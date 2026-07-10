@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
@@ -96,7 +97,12 @@ public class Input extends TensorTypeAllocator {
       // Fallback to default.
       return this.getDefaultDTypes(builder);
 
-    LOGGER.fine("Found possible dtypes: " + pointsToSet + " for source: " + this.getSource() + ".");
+    LOGGER.fine(
+        "Found possible dtypes: "
+            + describe(pointsToSet)
+            + " for source: "
+            + describe(this.getSource())
+            + ".");
     return this.getDTypesFromDTypeArgument(builder, pointsToSet);
   }
 
@@ -114,7 +120,8 @@ public class Input extends TensorTypeAllocator {
           this.getArgumentPointsToSet(
               builder, this.getTensorParameterPosition(), this.getTensorParameterName());
       if (tensorPts != null && !tensorPts.isEmpty()) {
-        LOGGER.fine("Reading shape from `tensor` argument for source: " + this.getSource() + ".");
+        LOGGER.fine(
+            "Reading shape from `tensor` argument for source: " + describe(this.getSource()) + ".");
         return this.getShapes(builder, tensorValNum);
       }
     }
@@ -143,7 +150,10 @@ public class Input extends TensorTypeAllocator {
               builder, this.getShapeParameterPosition(), this.getShapeParameterName());
 
       if (shapePts == null || shapePts.isEmpty()) {
-        LOGGER.fine("No shapes found for source: " + this.getSource() + "; using default shapes.");
+        LOGGER.fine(
+            "No shapes found for source: "
+                + describe(this.getSource())
+                + "; using default shapes.");
         shapes = this.getDefaultShapes(builder);
       } else {
         LOGGER.fine(
@@ -155,7 +165,8 @@ public class Input extends TensorTypeAllocator {
         shapes = this.getShapesFromShapeArgument(builder, shapePts);
       }
     } else {
-      LOGGER.fine("No shapes found for source: " + this.getSource() + "; using default shapes.");
+      LOGGER.fine(
+          "No shapes found for source: " + describe(this.getSource()) + "; using default shapes.");
       shapes = this.getDefaultShapes(builder);
     }
 
@@ -218,7 +229,7 @@ public class Input extends TensorTypeAllocator {
       }
     }
 
-    LOGGER.fine("Generated shapes: " + newShapes + " for source: " + source + ".");
+    LOGGER.fine("Generated shapes: " + newShapes + " for source: " + describe(source) + ".");
     return newShapes;
   }
 

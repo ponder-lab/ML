@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FILL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_TO_SIGNATURE;
 import static java.util.logging.Logger.getLogger;
@@ -129,7 +130,7 @@ public class Fill extends Constant {
           "Recovered "
               + SIGNATURE
               + " shape from a .shape argument for source: "
-              + source
+              + describe(source)
               + " -> "
               + fromShapeAttribute
               + ".");
@@ -144,11 +145,11 @@ public class Fill extends Constant {
             ? "Could not resolve the dims argument of "
                 + SIGNATURE
                 + " for source: "
-                + source
+                + describe(source)
                 + "; returning ⊤. Candidate for a wala/ML#370 shape annotation."
             : SIGNATURE
                 + " reached without its mandatory dims argument for source: "
-                + source
+                + describe(source)
                 + " (malformed call?); returning ⊤.");
     return null;
   }

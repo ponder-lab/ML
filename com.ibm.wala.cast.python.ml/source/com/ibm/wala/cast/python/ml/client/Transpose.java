@@ -1,5 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
+
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -83,7 +85,7 @@ public class Transpose extends PassThroughUnaryTensorGenerator {
     } else {
       perm = resolvePermList(builder, permPts);
       if (perm == null) {
-        LOGGER.fine(() -> "Non-constant perm for " + this.getSource() + "; returning ⊤.");
+        LOGGER.fine(() -> "Non-constant perm for " + describe(this.getSource()) + "; returning ⊤.");
         return null;
       }
     }
@@ -160,7 +162,8 @@ public class Transpose extends PassThroughUnaryTensorGenerator {
         lists = this.getShapesFromShapeArgument(builder, Collections.singleton(ik));
       } catch (IllegalStateException e) {
         // `getShapesFromShapeArgument` throws for an unrecognized shape form; degrade that to ⊤.
-        LOGGER.fine(() -> "Could not resolve perm of " + this.getSource() + ": " + e + ".");
+        LOGGER.fine(
+            () -> "Could not resolve perm of " + describe(this.getSource()) + ": " + e + ".");
         return null;
       }
       if (lists == null) return null;

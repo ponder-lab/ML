@@ -70,86 +70,110 @@ public class Reshape extends TensorGenerator {
         this.getArgumentPointsToSet(
             builder, this.getShapeParameterPosition(), this.getShapeParameterName());
 
+    Set<List<Dimension<?>>> rawShapes = null;
+
     if (shapePts != null && !shapePts.isEmpty()) {
       // `tf.reshape(arr, tf.shape(other))` is a common pattern where the shape argument is itself a
       // runtime Tensor (the result of `tf.shape(...)`); `getShapesFromShapeArgument` degrades such
       // unrecognized forms to ⊤ ("output shape unknown") rather than throwing (wala/ML#471). See
       // wala/ML#538 for the surfacing fixture (`tf2_test_take_along_axis.py`).
-      Set<List<Dimension<?>>> rawShapes = this.getShapesFromShapeArgument(builder, shapePts);
+      rawShapes = this.getShapesFromShapeArgument(builder, shapePts);
       // Soundness: when the `shape` argument is present but unparseable, the output shape is ⊤
       // (the result is determined by `shape`, not the input tensor — falling back to input-shape
       // inference would be unsound).
       if (rawShapes == null) return null;
-      if (!rawShapes.isEmpty()) {
-        Set<List<Dimension<?>>> refinedShapes = HashSetFactory.make();
+    }
 
-        for (List<Dimension<?>> shape : rawShapes) {
-          int unknownIndex = -1;
-          long productKnown = 1;
-          boolean canInfer = true;
+    if (rawShapes == null || rawShapes.isEmpty()) {
+      // The shape argument's points-to set is empty (or held no shape-bearing allocation). A shape
+      // vector derived from a tensor's shape (`t.shape.as_list()[-2:]` and friends) has no
+      // points-to state at all, so resolve it by def-use provenance instead (wala/ML#703).
+      Set<List<Dimension<?>>> vectorShapes =
+          this.getShapesFromShapeVectorArgument(
+              builder, this.getShapeParameterPosition(), this.getShapeParameterName());
+      if (vectorShapes != null && !vectorShapes.isEmpty()) rawShapes = vectorShapes;
+      // Soundness: a structurally-recognized shape vector whose walk fails (e.g. a bound that
+      // isn't statically constant) determines the output shape but is unknown, so the output is ⊤;
+      // falling through to input-shape inference would leak the input's shape (wala/ML#704).
+      else if (this.isShapeVectorArgument(
+          builder, this.getShapeParameterPosition(), this.getShapeParameterName())) return null;
+    }
 
-          for (int i = 0; i < shape.size(); i++) {
-            Dimension<?> dim = shape.get(i);
-            if (dim instanceof NumericDim) {
-              int val = ((NumericDim) dim).value();
-              if (val == -1) {
-                if (unknownIndex != -1) {
-                  canInfer = false; // More than one -1
+    if (rawShapes != null && !rawShapes.isEmpty()) {
+      Set<List<Dimension<?>>> refinedShapes = HashSetFactory.make();
+
+      for (List<Dimension<?>> shape : rawShapes) {
+        int unknownIndex = -1;
+        long productKnown = 1;
+        boolean canInfer = true;
+
+        for (int i = 0; i < shape.size(); i++) {
+          Dimension<?> dim = shape.get(i);
+          if (dim instanceof NumericDim) {
+            int val = ((NumericDim) dim).value();
+            if (val == -1) {
+              if (unknownIndex != -1) {
+                canInfer = false; // More than one -1
+                break;
+              }
+              unknownIndex = i;
+            } else {
+              productKnown *= val;
+            }
+          } else {
+            canInfer = false; // Non-numeric dimension
+            break;
+          }
+        }
+
+        if (unknownIndex != -1) {
+          // We need input shapes to infer -1 dimension.
+          Set<List<Dimension<?>>> inputShapes = this.getDefaultShapes(builder);
+
+          if (canInfer && inputShapes != null && !inputShapes.isEmpty()) {
+            for (List<Dimension<?>> inputShape : inputShapes) {
+              long inputSize = 1;
+              boolean inputKnown = true;
+              for (Dimension<?> d : inputShape) {
+                if (d instanceof NumericDim) {
+                  inputSize *= ((NumericDim) d).value();
+                } else {
+                  inputKnown = false;
                   break;
                 }
-                unknownIndex = i;
+              }
+
+              List<Dimension<?>> refinedShape = new ArrayList<>(shape);
+              // The -1 dimension is only inferable when the division is exact; a zero known
+              // product (any inferred value satisfies 0 * k == 0), a non-exact division, or a
+              // quotient outside the non-negative int range leaves it symbolic.
+              long inferredDim =
+                  inputKnown && productKnown != 0 && inputSize % productKnown == 0
+                      ? inputSize / productKnown
+                      : -1;
+              if (inferredDim >= 0 && inferredDim <= Integer.MAX_VALUE) {
+                refinedShape.set(unknownIndex, new NumericDim((int) inferredDim));
               } else {
-                productKnown *= val;
-              }
-            } else {
-              canInfer = false; // Non-numeric dimension
-              break;
-            }
-          }
-
-          if (unknownIndex != -1) {
-            // We need input shapes to infer -1 dimension.
-            Set<List<Dimension<?>>> inputShapes = this.getDefaultShapes(builder);
-
-            if (canInfer && inputShapes != null && !inputShapes.isEmpty()) {
-              for (List<Dimension<?>> inputShape : inputShapes) {
-                long inputSize = 1;
-                boolean inputKnown = true;
-                for (Dimension<?> d : inputShape) {
-                  if (d instanceof NumericDim) {
-                    inputSize *= ((NumericDim) d).value();
-                  } else {
-                    inputKnown = false;
-                    break;
-                  }
-                }
-
-                List<Dimension<?>> refinedShape = new ArrayList<>(shape);
-                if (inputKnown) {
-                  long inferredDim = inputSize / productKnown;
-                  refinedShape.set(unknownIndex, new NumericDim((int) inferredDim));
-                } else {
-                  refinedShape.set(unknownIndex, new SymbolicDim("?"));
-                }
-                refinedShapes.add(refinedShape);
-              }
-            } else {
-              List<Dimension<?>> refinedShape = new ArrayList<>();
-              for (Dimension<?> dim : shape) {
-                if (dim instanceof NumericDim && ((NumericDim) dim).value() == -1) {
-                  refinedShape.add(new SymbolicDim("?"));
-                } else {
-                  refinedShape.add(dim);
-                }
+                refinedShape.set(unknownIndex, new SymbolicDim("?"));
               }
               refinedShapes.add(refinedShape);
             }
           } else {
-            refinedShapes.add(shape);
+            List<Dimension<?>> refinedShape = new ArrayList<>();
+            for (Dimension<?> dim : shape) {
+              if (dim instanceof NumericDim && ((NumericDim) dim).value() == -1) {
+                refinedShape.add(new SymbolicDim("?"));
+              } else {
+                refinedShape.add(dim);
+              }
+            }
+            refinedShapes.add(refinedShape);
           }
+        } else {
+          refinedShapes.add(shape);
         }
-        return refinedShapes;
       }
+      return refinedShapes;
     }
 
     // 2. Fallback: infer from input tensor.
