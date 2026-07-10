@@ -12866,6 +12866,30 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Guard companion of {@link #testShapeProd()} (wala/ML#707): {@code np.prod} with an extra
+   * argument ({@code axis=0}) can change the result's rank, so the fold refuses it and the shape
+   * position degrades to a dynamic dimension in the walk-side contexts. The interpreter path
+   * evaluates the call concretely and contributes the precise {@code (30,)} in its context, so the
+   * union carries both.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapeProdAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_shape_prod_axis.py",
+        "f",
+        1,
+        1,
+        Map.of(
+            2, Set.of(TENSOR_30_FLOAT32, new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE)))));
+  }
+
+  /**
    * Tier-5 generator (wala/ML#449): {@code tf.math.top_k(input, k)}. Returns a {@code (values,
    * indices)} 2-tuple. The dedicated {@link com.ibm.wala.cast.python.ml.client.TopK} generator
    * implements {@link com.ibm.wala.cast.python.ml.client.TupleElementProvider} with per-index dtype
