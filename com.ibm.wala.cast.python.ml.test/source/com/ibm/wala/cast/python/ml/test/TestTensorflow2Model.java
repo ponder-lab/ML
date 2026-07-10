@@ -13220,6 +13220,66 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Bare-division guard companion of {@link #testDense3dMatmul6()} (wala/ML#714): a branch the
+   * runtime never takes stores {@code input_shape[2] / 4}, a bare float division the fold must
+   * refuse (its non-exact truncation is undefined without the {@code int(...)} wrapper), so the
+   * attribute is unresolvable and the weight's trailing dimension soundly stays dynamic.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dMatmul7()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_matmul7.py",
+        "einsum_via_matmul",
+        2,
+        9,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
+                new TensorType(
+                    FLOAT_32, asList(new NumericDim(6), new NumericDim(3), DynamicDim.INSTANCE)))));
+  }
+
+  /**
+   * Nested-arithmetic companion of {@link #testDense3dMatmul6()} (wala/ML#714): the divisor is
+   * itself an arithmetic expression over a configuration field ({@code
+   * int(input_shape[2]/(self.num_attention_heads - 1))}), so the operand resolution recurses.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dMatmul8()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_matmul8.py",
+        "einsum_via_matmul",
+        2,
+        9,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
+                TensorType.of(FLOAT_32, 6, 3, 3))));
+  }
+
+  /**
    * A configuration attribute as a literal concat element (wala/ML#712): the reshape target
    * concatenates a shape-vector slice with {@code [self.units]}, whose stored value is the
    * constructor argument, exercising the constant fallback of the attribute chase.
