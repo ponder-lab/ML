@@ -12866,6 +12866,30 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * NLPGNN's {@code DenseLayer3d} einsum path in miniature (wala/ML#704): the weight is built flat
+   * from configuration fields, reshaped to rank 3 in {@code call} (the {@code hidden} leading dim
+   * stays dynamic since {@code build}'s {@code input_shape} subscript doesn't resolve), and
+   * consumed by {@code einsum("BFH,HND->BFND", ...)}. The parser refines the contracted {@code H}
+   * label's dynamic occurrence with the input's known {@code 6} and composes the precise runtime
+   * {@code (2, 4, 3, 5)}: the trailing head dims are static, per the issue's expectation.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dEinsum()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_einsum.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 3, 5))));
+  }
+
+  /**
    * NLPGNN's {@code einsum_via_matmul} matmul path in miniature, end to end (wala/ML#704): the
    * {@code get_shape_list} hop, the negated-parameter slice bounds, the {@code np.prod} folds, and
    * the {@code batch_dims + outer_dims} concatenation (wala/ML#708) all resolve, so the reshape arm
@@ -12887,6 +12911,30 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 3, 5), TensorType.of(FLOAT_32, 4, 5))));
+  }
+
+  /**
+   * The two-inner-dims variant of {@link #testEinsumViaMatmul()} (NLPGNN's {@code DenseLayer3dProj}
+   * shape, {@code einsum_via_matmul(input_tensor, w, 2)}): exercises the {@code batch_dims +
+   * [inner_dim]} concatenation of a shape vector with a literal list whose element is an {@code
+   * np.prod} fold (wala/ML#708). The reshape-then-matmul arm types as the precise runtime {@code
+   * (2, 4, 6)}; the {@code (3, 6)} member is the untaken arm of the {@code num_inner_dims > 1}
+   * guard's φ (the rank-2 matmul of the unreshaped input), which flows statically.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsumViaMatmul2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_einsum_via_matmul2.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 6), TensorType.of(FLOAT_32, 3, 6))));
   }
 
   /**

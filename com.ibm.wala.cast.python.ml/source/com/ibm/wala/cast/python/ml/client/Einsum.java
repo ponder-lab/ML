@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -223,9 +224,9 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
    * (see {@code TensorType.RaggedDim}'s Javadoc and wala/ML#414). Presence in the label map is
    * therefore tracked with {@code containsKey}, never by a null-check on the value: a label whose
    * occurrences are all {@code null} stays {@code null} (unknown size) in the output, preserving
-   * the output's rank instead of degrading the whole shape to ⊤, and a label seen with both a
-   * {@code null} and a concrete dimension merges to {@code null} (statically unagreed) rather than
-   * letting either occurrence win.
+   * the output's rank instead of degrading the whole shape to ⊤. A shared label names the same
+   * dimension and the runtime requires the sizes equal, so a statically-known occurrence refines an
+   * unknown or dynamic one (wala/ML#704); two known occurrences that disagree fall back to ⊤.
    *
    * @param parsed The parsed equation.
    * @param inputShapes The resolved shape of each input, in input order.
@@ -251,10 +252,17 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
         if (!labelToDim.containsKey(label)) labelToDim.put(label, dim);
         else {
           Dimension<?> previous = labelToDim.get(label);
-          // An unknown (null) occurrence keeps the label unknown; conflicting known dims mean the
-          // equation's same-dimension constraint isn't satisfied statically, so fall back to ⊤.
-          if (previous == null || dim == null) labelToDim.put(label, null);
-          else if (!previous.equals(dim)) return null;
+          // A shared label names the same dimension, and einsum requires the sizes equal at
+          // runtime, so a statically-known occurrence refines an unknown or dynamic one
+          // (wala/ML#704: the contracted hidden dim is known on the input but dynamic on the
+          // reshaped weight). Two known occurrences that disagree mean the constraint isn't
+          // satisfiable, so fall back to ⊤.
+          boolean previousKnown = previous instanceof NumericDim;
+          boolean dimKnown = dim instanceof NumericDim;
+          if (previousKnown && dimKnown) {
+            if (!previous.equals(dim)) return null;
+          } else if (dimKnown) labelToDim.put(label, dim);
+          else if (!previousKnown && previous == null && dim != null) labelToDim.put(label, dim);
         }
       }
     }
