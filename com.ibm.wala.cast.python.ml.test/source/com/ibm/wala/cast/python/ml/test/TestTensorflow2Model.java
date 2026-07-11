@@ -2259,6 +2259,43 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * In-vivo anchor for the wala/ML#716 exactness mode and the wala/ML#717 contract seed: the
+   * vendored NLPGNN {@code WDEmbedding.call}'s {@code input_ids} parameter resolves to each entry
+   * script's declared {@code model.build(input_shape=(3, batch_size, maxlen))} contract, delivered
+   * through the {@code tf.split}/{@code tf.squeeze}/{@code tf.cast} chain of the wrapper's {@code
+   * call}. The expected set is the union across the vendored entry scripts' contracts (the helper
+   * unions per value number across calling contexts), each contract's leading stack dimension
+   * divided out by the split and squeezed away, leaving the per-entry {@code (batch_size, maxlen)}
+   * pairs; all are {@code int32} after the cast.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNlpgnnFullEmbeddingInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        NLPGNN_FULL_PROJECT_FILES,
+        "nlpgnn/layers/embedding.py",
+        "WDEmbedding.call",
+        "nlpgnn_full_proj",
+        1,
+        10,
+        Map.of(
+            3,
+            Set.of(
+                TensorType.of(INT_32, 8, 100),
+                TensorType.of(INT_32, 16, 100),
+                TensorType.of(INT_32, 8, 10),
+                TensorType.of(INT_32, 1, 512),
+                TensorType.of(INT_32, 6, 128),
+                TensorType.of(INT_32, 2, 4),
+                TensorType.of(INT_32, 2, 10))));
+  }
+
+  /**
    * Sibling half of {@link #testNlpgnnFullGeneration()} (wala/ML#690) — the {@code interactive}
    * entry script, the one whose {@code predict}/{@code call} nodes vanished in the consumer's
    * whole-project run. Its {@code predict} parameter typing must be symmetric with the generation
