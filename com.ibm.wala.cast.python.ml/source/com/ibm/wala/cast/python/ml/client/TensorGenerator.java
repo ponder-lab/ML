@@ -1479,6 +1479,7 @@ public abstract class TensorGenerator {
                 + ", ptsEmpty="
                 + valuePointsToSet.isEmpty());
 
+    boolean poisoned = false;
     if (!valuePointsToSet.isEmpty()) {
       Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, valuePointsToSet, exact);
       if (shapes == null || !shapes.isEmpty()) {
@@ -1491,7 +1492,12 @@ public abstract class TensorGenerator {
               this.contractSeedForCallInput(builder, node, valueNumber);
           if (contract != null && !contract.isEmpty()) return contract;
         }
-        return shapes;
+        // In exact mode a poisoned points-to union commonly reflects context collapse in a
+        // synthetic parameter, not genuine runtime possibilities, so fall through to the
+        // per-context producer and caller-walk paths, which are themselves exact; only when
+        // those fail is the result ⊤ (wala/ML#716).
+        if (shapes == null && exact) poisoned = true;
+        else return shapes;
       }
     }
 
@@ -1581,6 +1587,7 @@ public abstract class TensorGenerator {
     // caught upstream and treated as not-a-tensor, but removes the abort risk for any caller that
     // doesn't catch it. wala/ML#620, mirroring the non-aborting floors in wala/ML#604 and
     // wala/ML#611.
+    if (poisoned) return null; // The exact-mode union stayed incomplete (⊤), wala/ML#716.
     LOGGER.fine(
         () ->
             "Could not trace shape for value number "
@@ -3229,7 +3236,9 @@ public abstract class TensorGenerator {
       final int finalArgVn = argVn;
       final CGNode finalCaller = caller;
       try {
-        Set<List<Dimension<?>>> argShapes = this.getShapes(builder, caller, argVn);
+        // Exact mode (wala/ML#716): the caller walk feeds generator output computations, so the
+        // per-context argument shape must be the complete set of possibilities.
+        Set<List<Dimension<?>>> argShapes = this.getShapes(builder, caller, argVn, true);
         LOGGER.fine(
             () -> "getArgumentShapesViaCallers: argVn=" + finalArgVn + " shapes=" + argShapes);
         if (argShapes != null && !argShapes.isEmpty()) {

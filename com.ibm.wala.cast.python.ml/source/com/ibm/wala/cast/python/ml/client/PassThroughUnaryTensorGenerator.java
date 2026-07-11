@@ -122,7 +122,10 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
               + " override getDefaultShapes entirely.");
     OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPos, paramName);
     if (pts != null && !pts.isEmpty()) {
-      Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, pts);
+      // Exact mode (wala/ML#716): the generator asserts an output shape computed from "the"
+      // input shape, so a partial union here would overclaim; an unresolvable member falls
+      // through to the per-context caller walk, and failing that, ⊤.
+      Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, pts, true);
       if (shapes != null && !shapes.isEmpty()) return shapes;
     }
     return this.getArgumentShapesViaCallers(builder, paramPos, paramName);
