@@ -221,6 +221,16 @@ public abstract class TensorGenerator {
       STORED_ATTRIBUTE_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
+   * Memo of the per-class contract results of {@link
+   * #explicitBuildContractShapes(PropagationCallGraphBuilder, CGNode)} per builder (wala/ML#717).
+   * The recognizer scans the whole call graph, so uncached re-runs are quadratic on large analyses;
+   * the {@link Optional} payload caches the negative result too.
+   */
+  private static final Map<
+          PropagationCallGraphBuilder, Map<IClass, Optional<Set<List<Dimension<?>>>>>>
+      BUILD_CONTRACT_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
    * Begins a new resolution round for the given builder (wala/ML#674): the current shape/dtype
    * results become the previous round's approximations (read on cycle re-entry), and the current
    * caches restart empty.
@@ -236,6 +246,7 @@ public abstract class TensorGenerator {
     DTYPES_IN_PROGRESS.remove(builder);
     // The chase reads shape results that may change between rounds, so its memo restarts too.
     STORED_ATTRIBUTE_CACHE.remove(builder);
+    BUILD_CONTRACT_CACHE.remove(builder);
   }
 
   /**
@@ -257,6 +268,7 @@ public abstract class TensorGenerator {
     SHAPES_IN_PROGRESS.remove(builder);
     DTYPES_IN_PROGRESS.remove(builder);
     STORED_ATTRIBUTE_CACHE.remove(builder);
+    BUILD_CONTRACT_CACHE.remove(builder);
   }
 
   /** The source of the tensor, represented by a points-to set variable. */
@@ -973,7 +985,32 @@ public abstract class TensorGenerator {
     if (node.getDU().getDef(valueNumber) != null) return null; // Not a parameter.
     if (node.getMethod().isStatic() || node.getIR().getNumberOfParameters() < 3) return null;
     if (node.getIR().getParameter(2) != valueNumber) return null; // Not the first input.
-    return this.explicitBuildContractShapes(builder, node);
+
+    // The recognizer scans the whole call graph and the result depends only on the call body's
+    // class, so it is memoized per class. A sentinel is seeded before computing: the contract's
+    // literal resolution can re-enter the seed through the shape machinery, and the sentinel
+    // floors the re-entry to "no contract" (sound) instead of recursing.
+    Map<IClass, Optional<Set<List<Dimension<?>>>>> cache =
+        BUILD_CONTRACT_CACHE.computeIfAbsent(
+            builder, b -> Collections.synchronizedMap(new HashMap<>()));
+    IClass key = node.getMethod().getDeclaringClass();
+    Optional<Set<List<Dimension<?>>>> memo = cache.get(key);
+    if (memo == null) {
+      cache.put(key, Optional.empty());
+      Set<List<Dimension<?>>> computed = this.explicitBuildContractShapes(builder, node);
+      LOGGER.fine(
+          () ->
+              "Contract seed consulted for vn "
+                  + valueNumber
+                  + " of "
+                  + describe(node)
+                  + " -> "
+                  + computed
+                  + ".");
+      memo = Optional.ofNullable(computed);
+      cache.put(key, memo);
+    }
+    return memo.orElse(null);
   }
 
   /**
