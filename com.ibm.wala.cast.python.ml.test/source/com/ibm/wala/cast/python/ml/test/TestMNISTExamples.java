@@ -124,7 +124,7 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
               cgBuilder.getPointerAnalysis(),
               CG);
 
-          String in = "[{[D:Symbolic,?, D:Constant,784] of " + FLOAT32.name().toLowerCase() + "}]";
+          String in = "[{[D:Dynamic, D:Constant,784] of " + FLOAT32.name().toLowerCase() + "}]";
           String out =
               "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of "
                   + FLOAT32.name().toLowerCase()
@@ -264,7 +264,7 @@ public class TestMNISTExamples extends TestPythonMLCallGraphShape {
     checkTensorOps(
         Ex5URL,
         (PropagationCallGraphBuilder cgBuilder, CallGraph CG, TensorTypeAnalysis result) -> {
-          String in = "[{[D:Symbolic,?, D:Constant,784] of " + FLOAT32.name().toLowerCase() + "}]";
+          String in = "[{[D:Dynamic, D:Constant,784] of " + FLOAT32.name().toLowerCase() + "}]";
           String out =
               "[{[D:Symbolic,?, D:Constant,28, D:Constant,28, D:Constant,1] of "
                   + FLOAT32.name().toLowerCase()

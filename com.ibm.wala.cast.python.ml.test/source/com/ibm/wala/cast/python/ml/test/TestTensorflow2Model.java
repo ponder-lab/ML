@@ -5418,9 +5418,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             Set.of(
                 new TensorType(
                     UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(100))),
-                new TensorType(
-                    UNKNOWN,
-                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
                 TensorType.of(INT_32, 2, 2))));
   }
 
@@ -5485,10 +5482,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             Set.of(
                 new TensorType(
                     UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(10))),
-                TENSOR_UNKNOWN_SHAPE_FLOAT32,
-                new TensorType(
-                    UNKNOWN,
-                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))))));
+                TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
@@ -5764,9 +5758,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             Set.of(
                 new TensorType(
                     UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(100))),
-                new TensorType(
-                    UNKNOWN,
-                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
                 TensorType.of(INT_32, 2, 2))));
   }
 
@@ -11081,10 +11072,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             Set.of(
                 TensorType.of(FLOAT_32, 2, 3, 8),
                 new TensorType(
-                    INT_32, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(10))),
-                new TensorType(
                     INT_32,
-                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))))));
+                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(10))))));
   }
 
   /**
@@ -11270,9 +11259,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             2,
             Set.of(
                 TENSOR_UNKNOWN_SHAPE_FLOAT32,
-                new TensorType(
-                    UNKNOWN,
-                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
                 new TensorType(
                     UNKNOWN,
                     asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(10))))));
@@ -13014,15 +13000,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Composition of {@link #testDense3dEinsum()} and {@link #testEinsumViaMatmul()} (wala/ML#704):
    * NLPGNN's {@code DenseLayer3d.call} delegates to the module-level {@code einsum_via_matmul}
    * helper. The {@code input_tensor} parameter carries the precise type across the layer-call
-   * boundary, and the {@code w} parameter's generator-side member is fully static: the trailing
-   * dimensions are the folded configuration fields and the leading (hidden) dimension resolves
-   * through {@code build}'s {@code input_shape} subscript ({@code self.hidden_size =
-   * input_shape[2]}, wala/ML#712). The all-symbolic member is the legacy literal-shape pin ({@code
-   * TensorType.shapeArg}), which folds neither field reads nor {@code build} subscripts.
-   *
-   * <p>TODO: Expect only {@code (6, 3, 5)} for the {@code w} parameter once <a
-   * href="https://github.com/wala/ML/issues/713">wala/ML#713</a> reconciles the {@code shapeArg}
-   * pin path with the generator-side element folds.
+   * boundary, and the {@code w} parameter is fully static: the trailing dimensions are the folded
+   * configuration fields, the leading (hidden) dimension resolves through {@code build}'s {@code
+   * input_shape} subscript ({@code self.hidden_size = input_shape[2]}, wala/ML#712), and the
+   * literal-shape pin agrees with the generator-side result (wala/ML#713), so the union is a single
+   * member.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -13041,11 +13023,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             2,
             Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
             3,
-            Set.of(
-                new TensorType(
-                    FLOAT_32,
-                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
-                TensorType.of(FLOAT_32, 6, 3, 5))));
+            Set.of(TensorType.of(FLOAT_32, 6, 3, 5))));
   }
 
   /**
@@ -13056,10 +13034,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * precise type through both hops, and the {@code w} parameter resolves exactly as in the one-hop
    * composition, including the hidden dimension through {@code build}'s {@code input_shape}
    * subscript (wala/ML#712).
-   *
-   * <p>TODO: Expect only {@code (6, 3, 5)} for the {@code w} parameter once <a
-   * href="https://github.com/wala/ML/issues/713">wala/ML#713</a> reconciles the {@code shapeArg}
-   * pin path with the generator-side element folds.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -13078,21 +13052,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             2,
             Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
             3,
-            Set.of(
-                new TensorType(
-                    FLOAT_32,
-                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
-                TensorType.of(FLOAT_32, 6, 3, 5))));
+            Set.of(TensorType.of(FLOAT_32, 6, 3, 5))));
   }
 
   /**
    * Negative-index companion of {@link #testDense3dMatmul()} (wala/ML#712): {@code build} stores
    * {@code input_shape[-1]}, exercising the Python negative-index arm of the shape-vector subscript
    * resolution.
-   *
-   * <p>TODO: Expect only {@code (6, 3, 5)} for the {@code w} parameter once <a
-   * href="https://github.com/wala/ML/issues/713">wala/ML#713</a> reconciles the {@code shapeArg}
-   * pin path with the generator-side element folds.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -13111,11 +13077,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             2,
             Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
             3,
-            Set.of(
-                new TensorType(
-                    FLOAT_32,
-                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
-                TensorType.of(FLOAT_32, 6, 3, 5))));
+            Set.of(TensorType.of(FLOAT_32, 6, 3, 5))));
   }
 
   /**
@@ -13123,10 +13085,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * calls {@code layer.build(x.shape)} before the layer call, so the {@code input_shape} parameter
    * also receives a real argument, exercising the explicit-caller arm of the walk alongside the
    * lazy-build trampoline hop.
-   *
-   * <p>TODO: Expect only {@code (6, 3, 5)} for the {@code w} parameter once <a
-   * href="https://github.com/wala/ML/issues/713">wala/ML#713</a> reconciles the {@code shapeArg}
-   * pin path with the generator-side element folds.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -13145,11 +13103,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             2,
             Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
             3,
-            Set.of(
-                new TensorType(
-                    FLOAT_32,
-                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
-                TensorType.of(FLOAT_32, 6, 3, 5))));
+            Set.of(TensorType.of(FLOAT_32, 6, 3, 5))));
   }
 
   /**
@@ -13178,9 +13132,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             3,
             Set.of(
                 new TensorType(
-                    FLOAT_32,
-                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
-                new TensorType(
                     FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(3), new NumericDim(5))))));
   }
 
@@ -13190,10 +13141,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * shape subscript by a configuration field under an {@code int(...)} wrapper ({@code
    * self.head_size = int(input_shape[2]/self.num_attention_heads)}), so the reshaped weight's
    * dimensions all fold.
-   *
-   * <p>TODO: Expect only {@code (6, 3, 2)} for the {@code w} parameter once <a
-   * href="https://github.com/wala/ML/issues/713">wala/ML#713</a> reconciles the {@code shapeArg}
-   * pin path with the generator-side element folds.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -13212,11 +13159,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             2,
             Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
             3,
-            Set.of(
-                new TensorType(
-                    FLOAT_32,
-                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
-                TensorType.of(FLOAT_32, 6, 3, 2))));
+            Set.of(TensorType.of(FLOAT_32, 6, 3, 2))));
   }
 
   /**
@@ -13244,9 +13187,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             3,
             Set.of(
                 new TensorType(
-                    FLOAT_32,
-                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
-                new TensorType(
                     FLOAT_32, asList(new NumericDim(6), new NumericDim(3), DynamicDim.INSTANCE)))));
   }
 
@@ -13272,11 +13212,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             2,
             Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
             3,
-            Set.of(
-                new TensorType(
-                    FLOAT_32,
-                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
-                TensorType.of(FLOAT_32, 6, 3, 3))));
+            Set.of(TensorType.of(FLOAT_32, 6, 3, 3))));
   }
 
   /**
