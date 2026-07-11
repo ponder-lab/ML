@@ -13466,6 +13466,29 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Single-member counterpart of {@link #testEmbeddingDynamicSize()} (wala/ML#717): dimension
+   * arithmetic over a plain (non-φ) shape-vector subscript with a config-sourced factor exercises
+   * the singleton fold's degradation, so that element's value is dynamic while the rank and the
+   * literal element survive.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testReshapeDynamicFactor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_dynamic_factor.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(6))))));
+  }
+
+  /**
    * Guard companion of {@link #testShapeProd()} (wala/ML#707): {@code np.prod} with an extra
    * argument ({@code axis=0}) can change the result's rank, so the fold refuses it and the shape
    * position degrades to a dynamic dimension in the walk-side contexts. The interpreter path
