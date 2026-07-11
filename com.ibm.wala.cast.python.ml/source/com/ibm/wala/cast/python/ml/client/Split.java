@@ -5,12 +5,15 @@ import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.List;
@@ -67,23 +70,23 @@ public class Split extends PassThroughUnaryTensorGenerator {
     if (inputShapes == null) return null;
 
     Integer count = constantIntArgOrNull(builder, 1, "num_or_size_splits");
-    Integer axisArg = constantIntArgOrNull(builder, 2, "axis");
+
+    // An absent axis defaults to 0; a passed one must resolve to a constant, since an empty
+    // points-to set on a passed argument means a computed value (the PA does not fold
+    // arithmetic), not an absent one, and assuming 0 for it would be unsound.
+    Integer axis;
+    if (isAxisPassed(builder)) {
+      axis = constantIntArgOrNull(builder, 2, "axis");
+      if (axis == null) {
+        LOGGER.fine(() -> "Non-constant axis for " + describe(this.getSource()) + "; returning ⊤.");
+        return null;
+      }
+    } else axis = 0;
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     for (List<Dimension<?>> input : inputShapes) {
       int rank = input.size();
       if (rank == 0) return null; // Splitting a scalar is a runtime error.
-      Integer axis = axisArg;
-      if (axis == null) {
-        OrdinalSet<InstanceKey> axisPts = this.getArgumentPointsToSet(builder, 2, "axis");
-        // An absent axis defaults to 0; a present but non-constant one is unknown.
-        if (axisPts != null && !axisPts.isEmpty()) {
-          LOGGER.fine(
-              () -> "Non-constant axis for " + describe(this.getSource()) + "; returning ⊤.");
-          return null;
-        }
-        axis = 0;
-      }
       int normalized = axis < 0 ? axis + rank : axis;
       if (normalized < 0 || normalized >= rank) return null;
 
@@ -100,6 +103,27 @@ public class Split extends PassThroughUnaryTensorGenerator {
       ret.add(out);
     }
     return ret.isEmpty() ? null : ret;
+  }
+
+  /**
+   * Whether the {@code axis} argument is passed at the call site, positionally (a fourth use beyond
+   * the callable, {@code value}, and {@code num_or_size_splits}) or as a resolvable keyword. A
+   * keyword-passed <em>computed</em> axis is indistinguishable from an absent one here and is
+   * treated as absent.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @return {@code true} iff some call site passes {@code axis}.
+   */
+  private boolean isAxisPassed(PropagationCallGraphBuilder builder) {
+    PythonInvokeInstruction call = getInvokeInstruction();
+    if (call != null) return call.getNumberOfPositionalParameters() > 3;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode()))
+      if (callerInvoke.snd instanceof PythonInvokeInstruction
+          && ((PythonInvokeInstruction) callerInvoke.snd).getNumberOfPositionalParameters() > 3)
+        return true;
+    OrdinalSet<InstanceKey> keywordPts = this.getArgumentPointsToSet(builder, 2, "axis");
+    return keywordPts != null && !keywordPts.isEmpty();
   }
 
   /**

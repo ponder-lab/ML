@@ -3724,6 +3724,68 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * The absent-axis default of {@code tf.split} (wala/ML#717): {@code tf.split(x, 2)} over {@code
+   * (4, 6)} splits on axis 0, giving pieces of {@code (2, 6)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSplitDefaultAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_split.py",
+        "consume_default_axis",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6))));
+  }
+
+  /**
+   * The size-list arm of {@code tf.split} (wala/ML#717): {@code tf.split(x, [1, 3], 0)} produces
+   * differently-shaped pieces, which the single-piece model soundly represents with a dynamic
+   * dimension at the axis; the other dimension still transfers.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSplitSizeList()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_split.py",
+        "consume_size_list",
+        1,
+        1,
+        Map.of(
+            2, Set.of(new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(6))))));
+  }
+
+  /**
+   * The non-constant-axis guard of {@code tf.split} (wala/ML#717): an opaque {@code axis} leaves
+   * the output shape soundly unknown while the dtype still inherits from {@code value}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSplitOpaqueAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_split.py",
+        "consume_opaque_axis",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
    * Pins the output shape of {@code tf.squeeze} with no axis (wala/ML#513). {@code tf.squeeze(x)}
    * over a {@code (2, 1, 3, 1)} tensor drops every statically size-1 axis: {@code (2, 3)}.
    *
