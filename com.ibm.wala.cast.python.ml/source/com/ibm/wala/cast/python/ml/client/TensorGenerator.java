@@ -1044,6 +1044,20 @@ public abstract class TensorGenerator {
         if (argVn <= 0) continue;
         Set<List<Dimension<?>>> declared =
             this.shapesOfShapeVectorOrLiteralList(builder, caller, argVn, HashSetFactory.make());
+        int finalArgVn = argVn;
+        LOGGER.fine(
+            () ->
+                "Explicit build contract for "
+                    + pythonClassName
+                    + " found in "
+                    + describe(caller)
+                    + " at "
+                    + call
+                    + " with input_shape vn "
+                    + finalArgVn
+                    + " -> "
+                    + declared
+                    + ".");
         if (declared == null || declared.isEmpty()) continue;
         if (combined == null) combined = HashSetFactory.make();
         combined.addAll(declared);
@@ -1121,9 +1135,13 @@ public abstract class TensorGenerator {
       objectVn = get.getRef();
     }
 
-    // Only chase reads off the enclosing method's `self`.
+    // Chase reads off the enclosing method's `self` through the receiver class's method bodies;
+    // for any other local object, chase the write sites in the same code body (e.g. a
+    // module-level `param.batch_size = 8` feeding `model.build(input_shape=(3, param.batch_size,
+    // param.maxlen))`, wala/ML#717). The object commonly has an empty points-to set (an opaque
+    // producer), so the constant-propagation path cannot see the stored value.
     if (node.getMethod().getNumberOfParameters() < 2 || objectVn != node.getIR().getParameter(1))
-      return null;
+      return this.resolveLocalObjectAttributeDim(builder, node, objectVn, attributeName);
 
     PointerKey selfPk =
         builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, objectVn);
@@ -1205,24 +1223,83 @@ public abstract class TensorGenerator {
         }
         if (storedVn <= 0) continue;
 
-        Dimension<?> stored =
-            TensorType.foldArithmeticDim(builder, candidate, st, candidate.getDU(), storedVn);
-        if (stored == null) stored = this.prodOfShapeVectorDim(builder, candidate, st, storedVn);
-        if (stored == null)
-          stored = this.resolveShapeVectorElementDim(builder, candidate, st, storedVn);
-        if (stored == null)
-          stored = this.resolveArithmeticOverSubscriptDim(builder, candidate, st, storedVn);
-        if (stored == null) {
-          Integer constant = constantIntValueOrSentinel(builder, candidate, st, storedVn);
-          if (constant != null && !Objects.equals(constant, UNRESOLVED_BOUND))
-            stored = new NumericDim(constant);
-        }
+        Dimension<?> stored = this.resolveStoredValueDim(builder, candidate, st, storedVn);
         if (stored == null) return null; // An unresolvable write makes the attribute unresolvable.
         if (found != null && !found.equals(stored)) return null; // Conflicting writes.
         found = stored;
       }
     }
     return found;
+  }
+
+  /**
+   * Chases the write sites of {@code attributeName} on the given local object within the same code
+   * body and resolves each stored value (wala/ML#717). Covers NLPGNN's entry idiom, where a
+   * module-level {@code param.batch_size = 8} feeds {@code model.build(input_shape=(3,
+   * param.batch_size, param.maxlen))} but {@code param}'s opaque producer leaves its points-to set
+   * empty. The chase is same-body and same-value-number by construction: writes through other
+   * references to the object do not resolve and are not seen.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose code body holds the read and the chased writes.
+   * @param objectVn The value number of the object whose attribute writes are chased.
+   * @param attributeName The attribute whose writes are chased.
+   * @return The stored value's dimension, or {@code null} when no write resolves or distinct writes
+   *     resolve to different dimensions.
+   */
+  private Dimension<?> resolveLocalObjectAttributeDim(
+      PropagationCallGraphBuilder builder, CGNode node, int objectVn, String attributeName) {
+    SymbolTable st = node.getIR().getSymbolTable();
+    Dimension<?> found = null;
+    for (Iterator<SSAInstruction> uses = node.getDU().getUses(objectVn); uses.hasNext(); ) {
+      SSAInstruction use = uses.next();
+      int storedVn = -1;
+      if (use instanceof PythonPropertyWrite) {
+        PythonPropertyWrite write = (PythonPropertyWrite) use;
+        int memberVn = write.getMemberRef();
+        if (write.getObjectRef() == objectVn
+            && st.isStringConstant(memberVn)
+            && attributeName.equals(st.getStringValue(memberVn))) storedVn = write.getValue();
+      } else if (use instanceof SSAPutInstruction && !((SSAPutInstruction) use).isStatic()) {
+        SSAPutInstruction put = (SSAPutInstruction) use;
+        if (put.getRef() == objectVn
+            && attributeName.equals(put.getDeclaredField().getName().toString()))
+          storedVn = put.getVal();
+      }
+      if (storedVn <= 0) continue;
+
+      Dimension<?> stored = this.resolveStoredValueDim(builder, node, st, storedVn);
+      if (stored == null) return null; // An unresolvable write makes the attribute unresolvable.
+      if (found != null && !found.equals(stored)) return null; // Conflicting writes.
+      found = stored;
+    }
+    return found;
+  }
+
+  /**
+   * Resolves a stored attribute value to a dimension in its defining node: an arithmetic fold, an
+   * {@code np.prod} over a shape vector, a shape-vector subscript, arithmetic over a subscript, or
+   * a constant.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code storedVn}.
+   * @param st The node's symbol table.
+   * @param storedVn The stored value's value number.
+   * @return The stored value's dimension, or {@code null} when it doesn't resolve.
+   */
+  private Dimension<?> resolveStoredValueDim(
+      PropagationCallGraphBuilder builder, CGNode node, SymbolTable st, int storedVn) {
+    Dimension<?> stored = TensorType.foldArithmeticDim(builder, node, st, node.getDU(), storedVn);
+    if (stored == null) stored = this.prodOfShapeVectorDim(builder, node, st, storedVn);
+    if (stored == null) stored = this.resolveShapeVectorElementDim(builder, node, st, storedVn);
+    if (stored == null)
+      stored = this.resolveArithmeticOverSubscriptDim(builder, node, st, storedVn);
+    if (stored == null) {
+      Integer constant = constantIntValueOrSentinel(builder, node, st, storedVn);
+      if (constant != null && !Objects.equals(constant, UNRESOLVED_BOUND))
+        stored = new NumericDim(constant);
+    }
+    return stored;
   }
 
   /**
