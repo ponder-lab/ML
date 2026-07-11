@@ -312,28 +312,25 @@ public abstract class TensorGenerator {
    * @return A set of possible {@link TensorType}s, or {@code null} if the shape is unknown.
    */
   public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
-    Set<List<Dimension<?>>> shapes = this.getShapes(builder);
+    ShapeResult shapes = ShapeResult.fromLegacy(this.getShapes(builder));
     Set<DType> dTypes = this.getDTypes(builder);
 
     // If we have no dtype info at all, fall back to signaling "unknown tensor" when shapes are
     // also unknown, otherwise produce an empty set (⊥, not a tensor).
     if (dTypes == null || dTypes.isEmpty()) {
-      return shapes == null ? null : HashSetFactory.make();
+      return shapes.members().isEmpty() && shapes.hasUnknown() ? null : HashSetFactory.make();
     }
 
     Set<TensorType> ret = HashSetFactory.make();
 
     final Layout layout = this.producesSparseTensor() ? Layout.SPARSE : Layout.DENSE;
 
-    if (shapes == null) {
-      // Shape is unknown (⊤), but dtype info may still be available. Emit TensorTypes with null
-      // dims so the dtype information is preserved.
-      for (DType dtype : dTypes) ret.add(TensorType.of(dtype, null, layout));
-    } else {
-      // Create a tensor type for each possible shape and dtype combination.
-      for (List<Dimension<?>> dimensionList : shapes)
-        for (DType dtype : dTypes) ret.add(TensorType.of(dtype, dimensionList, layout));
-    }
+    // Create a tensor type for each resolved shape and dtype combination; an unknown remainder
+    // additionally emits null-dims (⊤-shape) types so the dtype information is preserved and a
+    // partially resolved set keeps its concrete members alongside the unknown one (wala/ML#718).
+    if (shapes.hasUnknown()) for (DType dtype : dTypes) ret.add(TensorType.of(dtype, null, layout));
+    for (List<Dimension<?>> dimensionList : shapes.members())
+      for (DType dtype : dTypes) ret.add(TensorType.of(dtype, dimensionList, layout));
 
     LOGGER.fine("Generator " + this.getClass().getSimpleName() + " produced types: " + ret);
 
