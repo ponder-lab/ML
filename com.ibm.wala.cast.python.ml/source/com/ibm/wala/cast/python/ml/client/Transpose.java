@@ -75,8 +75,21 @@ public class Transpose extends PassThroughUnaryTensorGenerator {
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    Set<List<Dimension<?>>> inputShapes = super.getDefaultShapes(builder);
-    if (inputShapes == null) return null;
+    return this.getDefaultShapeResult(builder).toLegacy();
+  }
+
+  /**
+   * Member-wise record view (wala/ML#718): the permutation applies per resolvable input member, and
+   * a member the permutation cannot apply to joins the unknown remainder instead of collapsing the
+   * whole result.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The permuted result.
+   */
+  @Override
+  protected ShapeResult getDefaultShapeResult(PropagationCallGraphBuilder builder) {
+    ShapeResult input = super.getDefaultShapeResult(builder);
+    if (input.members().isEmpty()) return input;
 
     OrdinalSet<InstanceKey> permPts = this.getArgumentPointsToSet(builder, 1, "perm");
     List<Integer> perm; // null means "reverse every axis" (the default transpose).
@@ -86,18 +99,19 @@ public class Transpose extends PassThroughUnaryTensorGenerator {
       perm = resolvePermList(builder, permPts);
       if (perm == null) {
         LOGGER.fine(() -> "Non-constant perm for " + describe(this.getSource()) + "; returning ⊤.");
-        return null;
+        return ShapeResult.unknown();
       }
     }
 
+    boolean hasUnknown = input.hasUnknown();
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
-    for (List<Dimension<?>> input : inputShapes) {
-      List<Dimension<?>> out = permuteShape(input, perm);
-      // A ⊤ (null) for any input alternative joins to ⊤ for the whole result.
-      if (out == null) return null;
-      ret.add(out);
+    for (List<Dimension<?>> in : input.members()) {
+      List<Dimension<?>> out = permuteShape(in, perm);
+      // A member the permutation cannot apply to joins the unknown remainder.
+      if (out == null) hasUnknown = true;
+      else ret.add(out);
     }
-    return ret.isEmpty() ? null : ret;
+    return ret.isEmpty() ? ShapeResult.unknown() : new ShapeResult(ret, hasUnknown);
   }
 
   /**
@@ -178,18 +192,5 @@ public class Transpose extends PassThroughUnaryTensorGenerator {
     }
     // Exactly one distinct candidate is the resolved permutation; zero or several is ⊤.
     return candidates.size() == 1 ? candidates.iterator().next() : null;
-  }
-
-  /**
-   * Collapse-safe record view (wala/ML#718): this generator transforms its input shapes in {@link
-   * #getDefaultShapes}, which the pass-through identity record path would bypass, so the record
-   * view routes through the legacy transform until a member-wise upgrade.
-   *
-   * @param builder The propagation call graph builder.
-   * @return The transformed result, with any partial input collapsed by the legacy view.
-   */
-  @Override
-  protected ShapeResult getDefaultShapeResult(PropagationCallGraphBuilder builder) {
-    return ShapeResult.fromLegacy(this.getDefaultShapes(builder));
   }
 }
