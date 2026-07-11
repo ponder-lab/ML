@@ -166,9 +166,19 @@ public abstract class TensorGenerator {
    *       PythonTensorAnalysisEngine#performAnalysis} invokes it.
    * </ul>
    */
-  private static final Map<
-          PropagationCallGraphBuilder, Map<Pair<CGNode, Integer>, Set<List<Dimension<?>>>>>
+  private static final Map<PropagationCallGraphBuilder, Map<ShapeQuery, Set<List<Dimension<?>>>>>
       SHAPES_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
+   * A shape-resolution cache key (wala/ML#716): the queried value plus the resolution mode.
+   * Exact-mode results poison to ⊤ whenever any points-to member fails to resolve, so they cannot
+   * share cache entries with the default partial-union results.
+   *
+   * @param node The {@link CGNode} whose IR defines the value.
+   * @param valueNumber The queried value number.
+   * @param exact Whether an unresolvable union member poisons the result to ⊤.
+   */
+  private record ShapeQuery(CGNode node, int valueNumber, boolean exact) {}
 
   /** Dtype counterpart of {@link #SHAPES_CACHE}. */
   private static final Map<PropagationCallGraphBuilder, Map<Pair<CGNode, Integer>, Set<DType>>>
@@ -182,8 +192,7 @@ public abstract class TensorGenerator {
    * PythonTensorAnalysisEngine#performAnalysis} drives rounds via {@link
    * #advanceRound(PropagationCallGraphBuilder)} until the per-source types stabilize.
    */
-  private static final Map<
-          PropagationCallGraphBuilder, Map<Pair<CGNode, Integer>, Set<List<Dimension<?>>>>>
+  private static final Map<PropagationCallGraphBuilder, Map<ShapeQuery, Set<List<Dimension<?>>>>>
       PREVIOUS_SHAPES_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
 
   /** Dtype counterpart of {@link #PREVIOUS_SHAPES_CACHE}. */
@@ -194,8 +203,8 @@ public abstract class TensorGenerator {
    * The {@code (node, vn)} shape computations currently on the recursion stack, per builder;
    * membership marks a cycle re-entry (wala/ML#674).
    */
-  private static final Map<PropagationCallGraphBuilder, Set<Pair<CGNode, Integer>>>
-      SHAPES_IN_PROGRESS = Collections.synchronizedMap(new WeakHashMap<>());
+  private static final Map<PropagationCallGraphBuilder, Set<ShapeQuery>> SHAPES_IN_PROGRESS =
+      Collections.synchronizedMap(new WeakHashMap<>());
 
   /** Dtype counterpart of {@link #SHAPES_IN_PROGRESS}. */
   private static final Map<PropagationCallGraphBuilder, Set<Pair<CGNode, Integer>>>
@@ -219,7 +228,7 @@ public abstract class TensorGenerator {
    * @param builder The builder whose caches should advance.
    */
   public static void advanceRound(PropagationCallGraphBuilder builder) {
-    Map<Pair<CGNode, Integer>, Set<List<Dimension<?>>>> shapes = SHAPES_CACHE.remove(builder);
+    Map<ShapeQuery, Set<List<Dimension<?>>>> shapes = SHAPES_CACHE.remove(builder);
     if (shapes != null) PREVIOUS_SHAPES_CACHE.put(builder, shapes);
     Map<Pair<CGNode, Integer>, Set<DType>> dtypes = DTYPES_CACHE.remove(builder);
     if (dtypes != null) PREVIOUS_DTYPES_CACHE.put(builder, dtypes);
@@ -1401,9 +1410,26 @@ public abstract class TensorGenerator {
    */
   protected Set<List<Dimension<?>>> getShapes(
       PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
-    Map<Pair<CGNode, Integer>, Set<List<Dimension<?>>>> cache =
+    return getShapes(builder, node, valueNumber, false);
+  }
+
+  /**
+   * Mode-aware variant of {@link #getShapes(PropagationCallGraphBuilder, CGNode, int)}
+   * (wala/ML#716): in exact mode, any points-to member whose shapes do not resolve poisons the
+   * result to ⊤, so the returned set is the complete set of possibilities; in the default mode,
+   * unresolvable members drop and the result is the resolvable subset.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code valueNumber}.
+   * @param valueNumber The value number to resolve.
+   * @param exact Whether an unresolvable union member poisons the result to ⊤.
+   * @return The possible shapes, {@code null} (⊤), or an empty set (⊥).
+   */
+  protected Set<List<Dimension<?>>> getShapes(
+      PropagationCallGraphBuilder builder, CGNode node, int valueNumber, boolean exact) {
+    Map<ShapeQuery, Set<List<Dimension<?>>>> cache =
         SHAPES_CACHE.computeIfAbsent(builder, b -> Collections.synchronizedMap(new HashMap<>()));
-    Pair<CGNode, Integer> key = Pair.make(node, valueNumber);
+    ShapeQuery key = new ShapeQuery(node, valueNumber, exact);
     // Atomic check-compute-put: concurrent threads hitting the same key will serialize on the
     // cache's mutex so exactly one `computeShapes` call runs. The null result is cached too
     // (null = ⊤), which `Map.computeIfAbsent` cannot express, so we use `containsKey` instead.
@@ -1414,11 +1440,10 @@ public abstract class TensorGenerator {
       // A same-key re-entry is a cycle in the value's producer graph (e.g. a loop-carried
       // variable). Return the previous round's approximation instead of recursing — flooring
       // here made the result depend on which cycle member was computed first (wala/ML#674).
-      Set<Pair<CGNode, Integer>> inProgress =
+      Set<ShapeQuery> inProgress =
           SHAPES_IN_PROGRESS.computeIfAbsent(builder, b -> HashSetFactory.make());
       if (!inProgress.add(key)) {
-        Map<Pair<CGNode, Integer>, Set<List<Dimension<?>>>> previous =
-            PREVIOUS_SHAPES_CACHE.get(builder);
+        Map<ShapeQuery, Set<List<Dimension<?>>>> previous = PREVIOUS_SHAPES_CACHE.get(builder);
         Set<List<Dimension<?>>> approximation = previous == null ? null : previous.get(key);
         LOGGER.fine(
             () ->
@@ -1430,7 +1455,7 @@ public abstract class TensorGenerator {
         return approximation;
       }
       try {
-        Set<List<Dimension<?>>> result = computeShapes(builder, node, valueNumber);
+        Set<List<Dimension<?>>> result = computeShapes(builder, node, valueNumber, exact);
         cache.put(key, result);
         return result;
       } finally {
@@ -1440,7 +1465,7 @@ public abstract class TensorGenerator {
   }
 
   private Set<List<Dimension<?>>> computeShapes(
-      PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
+      PropagationCallGraphBuilder builder, CGNode node, int valueNumber, boolean exact) {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
     PointerKey valuePK = pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, valueNumber);
     OrdinalSet<InstanceKey> valuePointsToSet = pointerAnalysis.getPointsToSet(valuePK);
@@ -1455,7 +1480,7 @@ public abstract class TensorGenerator {
                 + valuePointsToSet.isEmpty());
 
     if (!valuePointsToSet.isEmpty()) {
-      Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, valuePointsToSet);
+      Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, valuePointsToSet, exact);
       if (shapes == null || !shapes.isEmpty()) {
         // An unresolvable (⊤) result for a Keras call input can still be seeded from an explicit
         // `model.build(input_shape=...)` contract: the runtime value exists (non-empty PTS) but
@@ -1532,7 +1557,10 @@ public abstract class TensorGenerator {
           }
 
           if (argVn != -1) {
-            Set<List<Dimension<?>>> argShapes = this.getShapes(builder, caller, argVn);
+            Set<List<Dimension<?>>> argShapes = this.getShapes(builder, caller, argVn, exact);
+            // In exact mode an unresolvable caller makes the union incomplete (⊤); the default
+            // mode keeps the resolvable subset (wala/ML#716).
+            if (argShapes == null && exact) return null;
             if (argShapes != null) combinedRet.addAll(argShapes);
           }
         }
@@ -1962,6 +1990,23 @@ public abstract class TensorGenerator {
    */
   protected Set<List<Dimension<?>>> getShapesOfValue(
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
+    return getShapesOfValue(builder, valuePointsToSet, false);
+  }
+
+  /**
+   * Mode-aware variant of {@link #getShapesOfValue(PropagationCallGraphBuilder, OrdinalSet)}
+   * (wala/ML#716): in exact mode, a member whose shapes do not resolve poisons the union to ⊤
+   * instead of silently dropping.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param valuePointsToSet The points-to set of the value from which the shape will be derived.
+   * @param exact Whether an unresolvable union member poisons the result to ⊤.
+   * @return A set of possible shapes of the tensor returned by this generator.
+   */
+  protected Set<List<Dimension<?>>> getShapesOfValue(
+      PropagationCallGraphBuilder builder,
+      OrdinalSet<InstanceKey> valuePointsToSet,
+      boolean exact) {
     if (valuePointsToSet == null || valuePointsToSet.isEmpty()) {
       LOGGER.fine(
           () ->
@@ -2015,9 +2060,12 @@ public abstract class TensorGenerator {
                 "Points-to set for instance field: " + describe(instanceFieldPointsToSet) + ".");
 
             Set<List<Dimension<?>>> shapesOfField =
-                this.getShapesOfValue(builder, instanceFieldPointsToSet);
+                this.getShapesOfValue(builder, instanceFieldPointsToSet, exact);
 
-            if (shapesOfField == null) continue;
+            if (shapesOfField == null) {
+              if (exact) return null; // An unresolvable element makes the union incomplete (⊤).
+              continue;
+            }
 
             for (List<Dimension<?>> shapeList : shapesOfField) {
               List<Dimension<?>> shape = new ArrayList<>();
@@ -2041,8 +2089,11 @@ public abstract class TensorGenerator {
               "Encountered "
                   + reference.getName()
                   + ". Attempting to retrieve shape from producer.");
-          Set<List<Dimension<?>>> fromTensor = this.getShapesFromTensor(builder, asin);
-          if (fromTensor != null) ret.addAll(fromTensor);
+          Set<List<Dimension<?>>> fromTensor = this.getShapesFromTensor(builder, asin, exact);
+          // An empty result means no producer resolved for this member, not a scalar.
+          if (fromTensor == null || fromTensor.isEmpty()) {
+            if (exact) return null; // The union would be incomplete (⊤), wala/ML#716.
+          } else ret.addAll(fromTensor);
         }
       } else if (getAllocationSiteInNode(valueIK) != null) {
         // Unwrap ScopeMappingInstanceKey or similar wrapping keys
@@ -2063,10 +2114,12 @@ public abstract class TensorGenerator {
           if (generator != null && !generator.getClass().equals(this.getClass())) {
             Set<List<Dimension<?>>> generatorShapes = generator.getShapes(builder);
             if (generatorShapes != null) ret.addAll(generatorShapes);
-          }
+            else if (exact) return null; // Incomplete union (⊤), wala/ML#716.
+          } else if (exact) return null;
         } catch (IllegalArgumentException e) {
           // Not a recognized generator.
           LOGGER.log(Level.FINE, "No generator found for variable: " + var, e);
+          if (exact) return null;
         }
       } else {
         throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
@@ -2099,7 +2152,7 @@ public abstract class TensorGenerator {
    * @return a set of possible shapes for the tensor
    */
   private Set<List<Dimension<?>>> getShapesFromTensor(
-      PropagationCallGraphBuilder builder, AllocationSiteInNode asin) {
+      PropagationCallGraphBuilder builder, AllocationSiteInNode asin, boolean exact) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     CGNode readDataNode = asin.getNode();
 
@@ -2125,6 +2178,7 @@ public abstract class TensorGenerator {
           LOGGER.fine("Delegating shape inference to: " + generator);
           Set<List<Dimension<?>>> delegatedShapes = generator.getShapes(builder);
           if (delegatedShapes != null) ret.addAll(delegatedShapes);
+          else if (exact) return null; // Incomplete union (⊤), wala/ML#716.
         } else if (defSource != null) {
           // Avoid infinite recursion if the current generator is for the same source.
           if (this.getSource() != null && this.getSource().equals(defSource)) {
@@ -2141,7 +2195,8 @@ public abstract class TensorGenerator {
             LOGGER.fine("Delegating shape inference to: " + generator);
             Set<List<Dimension<?>>> delegatedShapes = generator.getShapes(builder);
             if (delegatedShapes != null) ret.addAll(delegatedShapes);
-          }
+            else if (exact) return null; // Incomplete union (⊤), wala/ML#716.
+          } else if (exact) return null;
         }
       }
       return ret;
@@ -2180,7 +2235,8 @@ public abstract class TensorGenerator {
           LOGGER.fine("Delegating shape inference to: " + generator);
           Set<List<Dimension<?>>> delegatedShapes = generator.getShapes(builder);
           if (delegatedShapes != null) ret.addAll(delegatedShapes);
-        }
+          else if (exact) return null; // Incomplete union (⊤), wala/ML#716.
+        } else if (exact) return null;
       }
     }
     return ret;
