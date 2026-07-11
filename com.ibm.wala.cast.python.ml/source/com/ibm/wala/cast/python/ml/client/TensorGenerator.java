@@ -869,9 +869,18 @@ public abstract class TensorGenerator {
     if (def instanceof SSABinaryOpInstruction) {
       SSABinaryOpInstruction binOp = (SSABinaryOpInstruction) def;
       Integer left = this.scalarOperandOrNull(builder, node, st, binOp.getUse(0));
-      if (left == null) return null;
       Integer right = this.scalarOperandOrNull(builder, node, st, binOp.getUse(1));
-      if (right == null) return null;
+      if (left == null || right == null) {
+        // When exactly one operand resolves and that operand derives from a shape vector, the
+        // expression is dimension arithmetic and the result is one scalar dimension whose value
+        // is unknown, so the value degrades rather than the element (wala/ML#717). NLPGNN's
+        // `input_shape[-1] * self.embedding_size` with a config-sourced factor is the witness.
+        if ((left == null) != (right == null)
+            && this.derivesFromShapeVector(
+                builder, node, st, left == null ? binOp.getUse(1) : binOp.getUse(0)))
+          return DynamicDim.INSTANCE;
+        return null;
+      }
       if (binOp.getOperator() == IBinaryOpInstruction.Operator.DIV
           && !truncated
           && (right == 0 || left % right != 0)) return null; // Non-exact bare float division.
@@ -886,6 +895,25 @@ public abstract class TensorGenerator {
       return this.prodOfShapeVectorDim(builder, node, st, peeled);
     }
     return null;
+  }
+
+  /**
+   * Decides whether a value derives from a shape vector: a shape-vector subscript (single- or
+   * multi-member) or an {@code np.prod} fold. Evidence that arithmetic over the value is dimension
+   * arithmetic (wala/ML#717).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param st The node's symbol table.
+   * @param vn The value number to test.
+   * @return {@code true} iff the value resolves through a shape-vector path.
+   */
+  private boolean derivesFromShapeVector(
+      PropagationCallGraphBuilder builder, CGNode node, SymbolTable st, int vn) {
+    int peeled = peelIntBuiltin(builder, node, vn);
+    if (this.resolveShapeVectorElementDim(builder, node, st, peeled) != null) return true;
+    if (this.resolveShapeVectorElementDims(builder, node, st, peeled) != null) return true;
+    return this.prodOfShapeVectorDim(builder, node, st, peeled) != null;
   }
 
   /**
@@ -3921,9 +3949,16 @@ public abstract class TensorGenerator {
     SSABinaryOpInstruction binOp = (SSABinaryOpInstruction) def;
 
     Set<Integer> lefts = this.scalarOperandOptionsOrNull(builder, node, st, binOp.getUse(0));
-    if (lefts == null) return null;
     Set<Integer> rights = this.scalarOperandOptionsOrNull(builder, node, st, binOp.getUse(1));
-    if (rights == null) return null;
+    if (lefts == null || rights == null) {
+      // Mirror of the singleton path's degradation (wala/ML#717): dimension arithmetic with an
+      // unresolvable co-operand is one scalar dimension of unknown value.
+      if ((lefts == null) != (rights == null)
+          && this.derivesFromShapeVector(
+              builder, node, st, lefts == null ? binOp.getUse(1) : binOp.getUse(0)))
+        return Collections.singleton(DynamicDim.INSTANCE);
+      return null;
+    }
     if (lefts.size() < 2 && rights.size() < 2) return null; // The singleton path covers this.
 
     Set<Dimension<?>> options = HashSetFactory.make();

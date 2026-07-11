@@ -2211,24 +2211,20 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * In-vivo anchor for the reopened wala/ML#704: the vendored NLPGNN {@code einsum_via_matmul}
-   * ({@code nlpgnn/layers/dense.py}). The {@code input_tensor} parameter's shape is ⊤ in every
-   * calling context, not because the type is lost at the layer-call boundary (the distilled
-   * compositions {@link #testDense3dMatmul()} and {@link #testDense3dMatmul2()} carry it through
-   * one and two trampoline hops), but because the ⊤ originates at the top of the encoder's
-   * dataflow: {@code WDEmbedding.call}'s trailing reshape targets {@code input_shape[0:-1] +
-   * [input_shape[-1] * self.embedding_size]} over the unknown-rank {@code input_ids}, and the
-   * shape-vector walk soundly degrades the result's shape. The {@code float32} dtype survives that
-   * reshape ({@link #testEmbeddingOutput()}) and reaches most contexts here; the pure-⊤ member is
-   * contributed by the remaining contexts whose feed crosses ops that still lose the dtype. The
-   * {@code w} parameter keeps rank 3 and {@code float32} (its chain is layer-local) but no numeric
-   * dimensions, since {@code build}-computed head sizes also derive from the opaque {@code
-   * input_shape} through arithmetic the fold does not cover (wala/ML#714).
-   *
-   * <p>TODO: Expect static trailing dimensions here once <a
-   * href="https://github.com/wala/ML/issues/711">wala/ML#711</a> (embedding-reshape shape ⊤) and <a
-   * href="https://github.com/wala/ML/issues/714">wala/ML#714</a> (arithmetic over {@code
-   * input_shape} subscripts) are resolved.
+   * In-vivo anchor for wala/ML#704: the vendored NLPGNN {@code einsum_via_matmul} ({@code
+   * nlpgnn/layers/dense.py}). The {@code input_tensor} parameter now carries concrete batch and
+   * sequence dimensions with a dynamic trailing (hidden) dimension, delivered from the entry
+   * scripts' explicit {@code model.build} contracts through the embedding's output reshape
+   * (wala/ML#716, wala/ML#717): {@code (8, 100)} and {@code (8, 10)} leading pairs from the entries
+   * whose pipelines reach this layer, each with the trailing {@code input_shape[-1] *
+   * self.embedding_size} element dynamic, since the factor comes from a checkpoint config the
+   * analysis cannot read; dynamic is the sound static answer there. The rank-2 {@code (8, D)}
+   * member is the embedding guard-φ's path-insensitive phantom (the pre-{@code expand_dims}
+   * member), and the pure-⊤ member is the residual contexts whose feed crosses the points-to
+   * substrate gaps of <a href="https://github.com/wala/ML/issues/661">wala/ML#661</a> and <a
+   * href="https://github.com/wala/ML/issues/570">wala/ML#570</a>. The {@code w} parameter keeps
+   * rank 3 and {@code float32} (its chain is layer-local) but no numeric dimensions, since the
+   * {@code build}-computed head sizes also derive from the config.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2247,7 +2243,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         13,
         Map.of(
             2,
-            Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE, TENSOR_UNKNOWN_SHAPE_FLOAT32),
+            Set.of(
+                TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE,
+                new TensorType(FLOAT_32, asList(new NumericDim(8), DynamicDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32, asList(new NumericDim(8), new NumericDim(10), DynamicDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32, asList(new NumericDim(8), new NumericDim(100), DynamicDim.INSTANCE))),
             3,
             Set.of(
                 new TensorType(
@@ -13432,6 +13434,35 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
                 TensorType.of(FLOAT_32, 2, 8),
                 TensorType.of(FLOAT_32, 2, 2, 16),
                 TensorType.of(FLOAT_32, 2, 2, 8))));
+  }
+
+  /**
+   * Opaque-size variant of {@link #testEmbeddingOutput()} (wala/ML#717), mirroring the vendored
+   * NLPGNN embedding, whose table size comes from a checkpoint config the analysis cannot read. The
+   * output reshape's trailing element {@code input_shape[-1] * self.embedding_size} then has an
+   * unresolvable factor, but arithmetic over a shape-vector subscript is one scalar dimension, so
+   * the value degrades to dynamic while the rank and the leading dimensions survive, per guard-φ
+   * member.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEmbeddingDynamicSize()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_embedding_dynamic_size.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(FLOAT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32, asList(new NumericDim(2), new NumericDim(2), DynamicDim.INSTANCE)))));
   }
 
   /**
