@@ -13367,10 +13367,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * NLPGNN's {@code WDEmbedding} in miniature (wala/ML#711): the output reshape's target slices the
-   * unknown-arity input shape, so the walk fails and the output shape is soundly unknown, but the
-   * embedding table's {@code float32} must survive through both the {@code gather} arm and the
-   * {@code one_hot}/{@code matmul} arm.
+   * NLPGNN's {@code WDEmbedding} in miniature (wala/ML#711, wala/ML#717): the output reshape's
+   * target slices the rank-conditional {@code tf.expand_dims} guard's φ, so the composition
+   * cross-products the two source shapes per position: four members, including the runtime {@code
+   * (2, 2, 8)}, with the trailing dimension static in every member. The mixed-pairing members are
+   * the cross-product's sound over-approximation; pairing the evaluation per φ member would drop
+   * them. The embedding table's {@code float32} survives through both the {@code gather} arm and
+   * the {@code one_hot}/{@code matmul} arm.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -13385,7 +13388,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 16),
+                TensorType.of(FLOAT_32, 2, 8),
+                TensorType.of(FLOAT_32, 2, 2, 16),
+                TensorType.of(FLOAT_32, 2, 2, 8))));
   }
 
   /**
