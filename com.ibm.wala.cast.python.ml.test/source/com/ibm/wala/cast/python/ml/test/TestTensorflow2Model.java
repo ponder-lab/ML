@@ -3786,6 +3786,28 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * The explicit {@code model.build(input_shape=...)} contract seed (wala/ML#717), NLPGNN's ALBERT
+   * entry idiom in miniature: the runtime inputs are opaque, so the declared {@code (3, 8, 100)}
+   * contract seeds the {@code call} input, and the {@code split}/{@code squeeze}/{@code cast} chain
+   * carries it to the returned piece: {@code (8, 100) int32}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testBuildContract()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_build_contract.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 8, 100))));
+  }
+
+  /**
    * Pins the output shape of {@code tf.squeeze} with no axis (wala/ML#513). {@code tf.squeeze(x)}
    * over a {@code (2, 1, 3, 1)} tensor drops every statically size-1 axis: {@code (2, 3)}.
    *

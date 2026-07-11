@@ -949,6 +949,82 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Resolves the input contract an explicitly invoked {@code model.build(input_shape=(...))}
+   * declares for the given Keras {@code call} body (wala/ML#717). The Keras contract ties a built
+   * layer's call inputs to the built shape, so when the runtime arguments do not resolve, the
+   * declared literal is a sound seed for the {@code call} input's shape. Only non-trampoline
+   * (user-written) {@code build} invocations count; the lazy-build trampoline passes no shape.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param callNode The code body of the Keras {@code call} whose input is being resolved.
+   * @return The union of the declared shapes across explicit {@code build} callers, or {@code null}
+   *     when there is none or none resolves.
+   */
+  private Set<List<Dimension<?>>> explicitBuildContractShapes(
+      PropagationCallGraphBuilder builder, CGNode callNode) {
+    String className = callNode.getMethod().getDeclaringClass().getReference().getName().toString();
+    String callSuffix = "/" + CALLABLE_METHOD_NAME_FOR_KERAS_MODELS;
+    if (!className.endsWith(callSuffix)) return null;
+    String pythonClassName = className.substring(0, className.length() - callSuffix.length());
+
+    // The receiving class commonly defines no `build` of its own (the explicit call hits Keras's
+    // base implementation, which the analysis does not model), so the contract is recognized
+    // syntactically: an invoke whose callable is a `build` attribute read off an instance of the
+    // class, mirroring the `set_shape` recognizer.
+    Set<List<Dimension<?>>> combined = null;
+    for (CGNode caller : builder.getCallGraph()) {
+      if (caller.getIR() == null || caller.getDU() == null) continue;
+      if (!(caller.getMethod() instanceof AstMethod)) continue;
+      SymbolTable st = caller.getIR().getSymbolTable();
+      for (Iterator<SSAInstruction> it = caller.getIR().iterateAllInstructions(); it.hasNext(); ) {
+        SSAInstruction inst = it.next();
+        if (!(inst instanceof PythonInvokeInstruction)) continue;
+        PythonInvokeInstruction call = (PythonInvokeInstruction) inst;
+        if (call.getNumberOfUses() < 1) continue;
+        SSAInstruction targetDef = caller.getDU().getDef(call.getUse(0));
+        if (!(targetDef instanceof PythonPropertyRead)) continue;
+        PythonPropertyRead prop = (PythonPropertyRead) targetDef;
+        int memberVn = prop.getMemberRef();
+        if (!st.isStringConstant(memberVn)
+            || !KERAS_BUILD_METHOD_NAME.equals(st.getStringValue(memberVn))) continue;
+
+        // The receiver must be an instance of the `call` body's class.
+        PointerKey receiverKey =
+            builder
+                .getPointerAnalysis()
+                .getHeapModel()
+                .getPointerKeyForLocal(caller, prop.getObjectRef());
+        boolean receiverMatches = false;
+        for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(receiverKey)) {
+          AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+          if (asin != null
+              && asin.getNode()
+                  .getMethod()
+                  .getDeclaringClass()
+                  .getReference()
+                  .getName()
+                  .toString()
+                  .equals(pythonClassName)) {
+            receiverMatches = true;
+            break;
+          }
+        }
+        if (!receiverMatches) continue;
+
+        int argVn = call.getUse("input_shape");
+        if (argVn <= 0 && call.getNumberOfUses() >= 2) argVn = call.getUse(1);
+        if (argVn <= 0) continue;
+        Set<List<Dimension<?>>> declared =
+            this.shapesOfShapeVectorOrLiteralList(builder, caller, argVn, HashSetFactory.make());
+        if (declared == null || declared.isEmpty()) continue;
+        if (combined == null) combined = HashSetFactory.make();
+        combined.addAll(declared);
+      }
+    }
+    return combined;
+  }
+
+  /**
    * Peels an {@code int(...)} builtin wrapper: for an invoke of the {@code int} builtin with a
    * single positional argument, returns the argument's value number; otherwise returns {@code vn}
    * unchanged (wala/ML#714).
@@ -1433,6 +1509,15 @@ public abstract class TensorGenerator {
           }
         }
         if (!combinedRet.isEmpty()) return combinedRet;
+
+        // The runtime arguments did not resolve. For a Keras `call`'s first input, an explicitly
+        // invoked `model.build(input_shape=(...))` with a resolvable literal declares the input
+        // contract (built layers validate call inputs against the built shape), so seed the
+        // parameter from it (wala/ML#717).
+        if (paramPos == 1) {
+          Set<List<Dimension<?>>> contract = this.explicitBuildContractShapes(builder, node);
+          if (contract != null && !contract.isEmpty()) return contract;
+        }
       }
     }
 
