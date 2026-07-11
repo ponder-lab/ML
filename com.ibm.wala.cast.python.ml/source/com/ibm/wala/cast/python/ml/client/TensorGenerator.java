@@ -949,6 +949,25 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Applies the explicit {@code model.build(input_shape=...)} contract seed when the given value is
+   * the first input parameter of a Keras {@code call} body (wala/ML#717).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code valueNumber}.
+   * @param valueNumber The value number being resolved.
+   * @return The declared contract shapes, or {@code null} when the value isn't a {@code call} input
+   *     or no contract resolves.
+   */
+  private Set<List<Dimension<?>>> contractSeedForCallInput(
+      PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
+    if (node.getDU() == null || node.getIR() == null) return null;
+    if (node.getDU().getDef(valueNumber) != null) return null; // Not a parameter.
+    if (node.getMethod().isStatic() || node.getIR().getNumberOfParameters() < 3) return null;
+    if (node.getIR().getParameter(2) != valueNumber) return null; // Not the first input.
+    return this.explicitBuildContractShapes(builder, node);
+  }
+
+  /**
    * Resolves the input contract an explicitly invoked {@code model.build(input_shape=(...))}
    * declares for the given Keras {@code call} body (wala/ML#717). The Keras contract ties a built
    * layer's call inputs to the built shape, so when the runtime arguments do not resolve, the
@@ -1438,6 +1457,15 @@ public abstract class TensorGenerator {
     if (!valuePointsToSet.isEmpty()) {
       Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, valuePointsToSet);
       if (shapes == null || !shapes.isEmpty()) {
+        // An unresolvable (⊤) result for a Keras call input can still be seeded from an explicit
+        // `model.build(input_shape=...)` contract: the runtime value exists (non-empty PTS) but
+        // its shape does not resolve, exactly the case the declared contract covers
+        // (wala/ML#717).
+        if (shapes == null) {
+          Set<List<Dimension<?>>> contract =
+              this.contractSeedForCallInput(builder, node, valueNumber);
+          if (contract != null && !contract.isEmpty()) return contract;
+        }
         return shapes;
       }
     }
@@ -1514,10 +1542,9 @@ public abstract class TensorGenerator {
         // invoked `model.build(input_shape=(...))` with a resolvable literal declares the input
         // contract (built layers validate call inputs against the built shape), so seed the
         // parameter from it (wala/ML#717).
-        if (paramPos == 1) {
-          Set<List<Dimension<?>>> contract = this.explicitBuildContractShapes(builder, node);
-          if (contract != null && !contract.isEmpty()) return contract;
-        }
+        Set<List<Dimension<?>>> contract =
+            this.contractSeedForCallInput(builder, node, valueNumber);
+        if (contract != null && !contract.isEmpty()) return contract;
       }
     }
 
@@ -3541,7 +3568,7 @@ public abstract class TensorGenerator {
     if (!allocated.equals(list) && !allocated.equals(tuple)) return null;
 
     SymbolTable st = node.getIR().getSymbolTable();
-    TreeMap<Integer, Dimension<?>> byIndex = new TreeMap<>();
+    TreeMap<Integer, Set<Dimension<?>>> byIndex = new TreeMap<>();
     for (Iterator<SSAInstruction> uses = node.getDU().getUses(vn); uses.hasNext(); ) {
       SSAInstruction use = uses.next();
       int objRef;
@@ -3559,7 +3586,7 @@ public abstract class TensorGenerator {
         try {
           byIndex.put(
               Integer.parseInt(w.getDeclaredField().getName().toString()),
-              elementDim(builder, node, st, writtenVal));
+              elementDims(builder, node, st, writtenVal));
         } catch (NumberFormatException e) {
           // Not an index write.
         }
@@ -3577,12 +3604,30 @@ public abstract class TensorGenerator {
         }
       }
       if (index == null) continue;
-      byIndex.put(index, elementDim(builder, node, st, writtenVal));
+      byIndex.put(index, elementDims(builder, node, st, writtenVal));
     }
     if (byIndex.isEmpty() || byIndex.containsValue(null)) return null;
     // The indices must be contiguous from 0 or the element order can't be reconstructed.
     if (byIndex.firstKey() != 0 || byIndex.lastKey() != byIndex.size() - 1) return null;
-    return Collections.singleton(new ArrayList<>(byIndex.values()));
+
+    // Cross-product the per-position options (a multi-member source shape contributes several,
+    // wala/ML#717); a blowup degrades to ⊤ rather than an unbounded union.
+    List<List<Dimension<?>>> composed = new ArrayList<>();
+    composed.add(new ArrayList<>());
+    for (Set<Dimension<?>> options : byIndex.values()) {
+      List<List<Dimension<?>>> next = new ArrayList<>(composed.size() * options.size());
+      for (List<Dimension<?>> prefix : composed)
+        for (Dimension<?> option : options) {
+          List<Dimension<?>> extended = new ArrayList<>(prefix);
+          extended.add(option);
+          next.add(extended);
+        }
+      if (next.size() > 16) return null;
+      composed = next;
+    }
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    ret.addAll(composed);
+    return ret;
   }
 
   /**
@@ -3610,6 +3655,154 @@ public abstract class TensorGenerator {
     if (constant == null) return DynamicDim.INSTANCE; // None: the dynamic-dim marker.
     if (Objects.equals(constant, UNRESOLVED_BOUND)) return null;
     return new NumericDim(constant);
+  }
+
+  /**
+   * Multi-member counterpart of {@link #elementDim}: when the element's source shape vector is a φ
+   * of several shapes (e.g. the rank-conditional {@code tf.expand_dims} guard of NLPGNN's {@code
+   * WDEmbedding.call}), returns one dimension option per member instead of bailing on the
+   * ambiguity; the literal-list composition cross-products the options (wala/ML#717). Mixed
+   * pairings the cross-product introduces are a sound over-approximation.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param st The node's symbol table.
+   * @param vn The element's value number.
+   * @return The element's dimension options, or {@code null} when it doesn't resolve.
+   */
+  private Set<Dimension<?>> elementDims(
+      PropagationCallGraphBuilder builder, CGNode node, SymbolTable st, int vn) {
+    Set<Dimension<?>> subscripts = this.resolveShapeVectorElementDims(builder, node, st, vn);
+    if (subscripts != null) return subscripts;
+    Set<Dimension<?>> arithmetic = this.resolveArithmeticOverSubscriptDims(builder, node, st, vn);
+    if (arithmetic != null) return arithmetic;
+    Dimension<?> single = this.elementDim(builder, node, st, vn);
+    return single == null ? null : Collections.singleton(single);
+  }
+
+  /**
+   * Multi-member counterpart of {@link #resolveShapeVectorElementDim}: resolves the subscript per
+   * source-shape member, skipping members the index cannot address (those cannot be the runtime
+   * shape, since the subscript would fail on them).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param st The node's symbol table.
+   * @param vn The value number of the candidate subscript result.
+   * @return The denoted dimension options, or {@code null} when the value isn't a constant-indexed
+   *     subscript of a resolvable shape vector with fewer than two members addressable.
+   */
+  private Set<Dimension<?>> resolveShapeVectorElementDims(
+      PropagationCallGraphBuilder builder, CGNode node, SymbolTable st, int vn) {
+    if (vn <= 0) return null;
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (!(def instanceof PythonPropertyRead)) return null;
+    PythonPropertyRead read = (PythonPropertyRead) def;
+    Integer index = subscriptIndexOrNull(builder, node, st, read.getMemberRef());
+    if (index == null) return null;
+
+    Set<List<Dimension<?>>> shapes =
+        this.getShapesOfShapeVector(builder, node, read.getObjectRef());
+    if (shapes == null || shapes.size() < 2) return null; // The singleton path covers size 1.
+    Set<Dimension<?>> options = HashSetFactory.make();
+    for (List<Dimension<?>> dims : shapes) {
+      int k = index < 0 ? dims.size() + index : index;
+      if (k < 0 || k >= dims.size()) continue;
+      options.add(dims.get(k));
+    }
+    return options.isEmpty() ? null : options;
+  }
+
+  /**
+   * Multi-member counterpart of {@link #resolveArithmeticOverSubscriptDim}: folds the binary op
+   * over the cross-product of the operands' options, so a subscript over a multi-member source
+   * yields one result option per member.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param st The node's symbol table.
+   * @param vn The value number of the candidate expression result.
+   * @return The folded dimension options, or {@code null} when the expression doesn't resolve as a
+   *     multi-option fold (the singleton path covers the unambiguous case).
+   */
+  private Set<Dimension<?>> resolveArithmeticOverSubscriptDims(
+      PropagationCallGraphBuilder builder, CGNode node, SymbolTable st, int vn) {
+    if (vn <= 0 || node.getDU() == null) return null;
+    int peeled = peelIntBuiltin(builder, node, vn);
+    boolean truncated = peeled != vn;
+    SSAInstruction def = node.getDU().getDef(peeled);
+    if (!(def instanceof SSABinaryOpInstruction)) return null;
+    SSABinaryOpInstruction binOp = (SSABinaryOpInstruction) def;
+
+    Set<Integer> lefts = this.scalarOperandOptionsOrNull(builder, node, st, binOp.getUse(0));
+    if (lefts == null) return null;
+    Set<Integer> rights = this.scalarOperandOptionsOrNull(builder, node, st, binOp.getUse(1));
+    if (rights == null) return null;
+    if (lefts.size() < 2 && rights.size() < 2) return null; // The singleton path covers this.
+
+    Set<Dimension<?>> options = HashSetFactory.make();
+    for (int left : lefts)
+      for (int right : rights) {
+        if (binOp.getOperator() == IBinaryOpInstruction.Operator.DIV
+            && !truncated
+            && (right == 0 || left % right != 0)) {
+          options.add(DynamicDim.INSTANCE); // Non-exact bare float division.
+          continue;
+        }
+        Integer value = TensorType.applyIntBinOp(binOp.getOperator(), left, right);
+        options.add(value == null ? DynamicDim.INSTANCE : new NumericDim(value));
+      }
+    return options.isEmpty() ? null : options;
+  }
+
+  /**
+   * Multi-member counterpart of {@link #scalarOperandOrNull}: the operand's possible integer
+   * values, one per source-shape member for a subscript operand.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param st The node's symbol table.
+   * @param vn The operand's value number.
+   * @return The operand's integer options, or {@code null} when it doesn't resolve or a member is
+   *     non-numeric (the set could not cover every runtime possibility).
+   */
+  private Set<Integer> scalarOperandOptionsOrNull(
+      PropagationCallGraphBuilder builder, CGNode node, SymbolTable st, int vn) {
+    Integer single = this.scalarOperandOrNull(builder, node, st, vn);
+    if (single != null) return Collections.singleton(single);
+
+    int peeled = peelIntBuiltin(builder, node, vn);
+    Set<Dimension<?>> dims = this.resolveShapeVectorElementDims(builder, node, st, peeled);
+    if (dims == null) return null;
+    Set<Integer> options = HashSetFactory.make();
+    for (Dimension<?> dim : dims) {
+      if (!(dim instanceof NumericDim)) return null; // A non-numeric member: not enumerable.
+      options.add(((NumericDim) dim).value());
+    }
+    return options.isEmpty() ? null : options;
+  }
+
+  /**
+   * Resolves a subscript's member reference to a constant index, accepting a numeric constant, an
+   * integer-parsable string constant, or a resolvable expression.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for PA lookup.
+   * @param node The {@link CGNode} whose IR defines the member reference.
+   * @param st The node's symbol table.
+   * @param memberVn The member reference's value number.
+   * @return The index, or {@code null} when it doesn't resolve.
+   */
+  private static Integer subscriptIndexOrNull(
+      PropagationCallGraphBuilder builder, CGNode node, SymbolTable st, int memberVn) {
+    if (st.isStringConstant(memberVn)) {
+      try {
+        return Integer.parseInt(st.getStringValue(memberVn));
+      } catch (NumberFormatException e) {
+        return null; // An attribute read, not a subscript.
+      }
+    }
+    Integer index = constantIntValueOrSentinel(builder, node, st, memberVn);
+    return index == null || Objects.equals(index, UNRESOLVED_BOUND) ? null : index;
   }
 
   /**
