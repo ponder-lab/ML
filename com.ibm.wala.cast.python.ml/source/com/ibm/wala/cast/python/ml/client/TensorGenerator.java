@@ -1399,17 +1399,60 @@ public abstract class TensorGenerator {
 
     Set<List<Dimension<?>>> shapes = this.getShapesOfShapeVector(builder, node, invoke.getUse(1));
     if (shapes == null || shapes.size() != 1) return null;
+    return prodOfDims(shapes.iterator().next());
+  }
+
+  /**
+   * Folds one shape's dimension product: a fully numeric shape folds to a {@link NumericDim}; a
+   * non-numeric member degrades the value to dynamic rather than the element to null, since the
+   * product of a shape vector is always one scalar dimension (wala/ML#718).
+   *
+   * @param dims The shape whose dimensions are folded.
+   * @return The folded dimension.
+   */
+  private static Dimension<?> prodOfDims(List<Dimension<?>> dims) {
     long product = 1;
-    for (Dimension<?> d : shapes.iterator().next()) {
-      if (!(d instanceof NumericDim)) return null; // A dynamic or unknown axis: not foldable.
+    for (Dimension<?> d : dims) {
+      if (!(d instanceof NumericDim)) return DynamicDim.INSTANCE; // Unknown factor: dynamic value.
       try {
         product = Math.multiplyExact(product, ((NumericDim) d).value());
       } catch (ArithmeticException e) {
-        return null; // The product overflows long: not representable.
+        return DynamicDim.INSTANCE; // The product overflows long: not representable.
       }
-      if (product < 0 || product > Integer.MAX_VALUE) return null;
+      if (product < 0 || product > Integer.MAX_VALUE) return DynamicDim.INSTANCE;
     }
     return new NumericDim((int) product);
+  }
+
+  /**
+   * Multi-member counterpart of {@link #prodOfShapeVectorDim}: one product option per source-shape
+   * member (wala/ML#718).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param st The node's symbol table.
+   * @param vn The value number of the candidate {@code np.prod} result.
+   * @return The product options, or {@code null} when the value isn't a plain {@code np.prod} over
+   *     a resolvable multi-member shape vector (the singleton path covers size one).
+   */
+  private Set<Dimension<?>> prodOfShapeVectorDims(
+      PropagationCallGraphBuilder builder, CGNode node, SymbolTable st, int vn) {
+    if (vn <= 0) return null;
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (!(def instanceof PythonInvokeInstruction)) return null;
+    PythonInvokeInstruction invoke = (PythonInvokeInstruction) def;
+    int numKeywords = invoke.getKeywords() != null ? invoke.getKeywords().size() : 0;
+    if (invoke.getNumberOfUses() - numKeywords != 2 || numKeywords != 0) return null;
+    SSAInstruction funcDef = node.getDU().getDef(invoke.getUse(0));
+    if (!(funcDef instanceof PythonPropertyRead)) return null;
+    int memberVn = ((PythonPropertyRead) funcDef).getMemberRef();
+    if (!st.isStringConstant(memberVn) || !"prod".equals(st.getStringValue(memberVn))) return null;
+
+    Set<List<Dimension<?>>> shapes = this.getShapesOfShapeVector(builder, node, invoke.getUse(1));
+    if (shapes == null || shapes.size() < 2) return null; // The singleton path covers size one.
+    Set<Dimension<?>> options = HashSetFactory.make();
+    for (List<Dimension<?>> dims : shapes) options.add(prodOfDims(dims));
+    return options;
   }
 
   /**
@@ -1478,6 +1521,19 @@ public abstract class TensorGenerator {
    * @return The default shapes, or {@code null} if the shape is unknown.
    */
   protected abstract Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder);
+
+  /**
+   * Record-carrying counterpart of {@link #getDefaultShapes(PropagationCallGraphBuilder)}
+   * (wala/ML#718). The default lifts the legacy result through virtual dispatch, so subclass
+   * overrides of {@link #getDefaultShapes} apply and partials merely collapse; generators whose
+   * default shape can be partially resolvable override this to keep the members.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The resolution result.
+   */
+  protected ShapeResult getDefaultShapeResult(PropagationCallGraphBuilder builder) {
+    return ShapeResult.fromLegacy(this.getDefaultShapes(builder));
+  }
 
   /**
    * Returns the value number for the shape argument in the function call. A return value of a
@@ -1583,7 +1639,12 @@ public abstract class TensorGenerator {
    */
   protected Set<List<Dimension<?>>> getShapes(
       PropagationCallGraphBuilder builder, CGNode node, int valueNumber, boolean exact) {
-    return this.getShapeResult(builder, node, valueNumber, exact).toLegacy();
+    ShapeResult result = this.getShapeResult(builder, node, valueNumber, exact);
+    // The default mode's contract has always been "the resolvable subset" (wala/ML#716), and a
+    // partial's members are exactly that subset, so they stand; only an exact read collapses a
+    // partial to ⊤ at this legacy view (wala/ML#718).
+    if (!exact && result.isPartial()) return result.members();
+    return result.toLegacy();
   }
 
   /**
@@ -3468,6 +3529,58 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Record-carrying counterpart of {@link #getArgumentShapesViaCallers(PropagationCallGraphBuilder,
+   * int, String)} (wala/ML#718): an unresolvable caller marks the union's unknown remainder and the
+   * resolvable callers' members still stand.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param paramPos The 0-based index of the positional parameter (excluding {@code self} for
+   *     instance methods).
+   * @param paramName The name of the keyword parameter, or {@code null}.
+   * @return The resolution result; ⊤ when no caller resolves at all.
+   */
+  protected ShapeResult getArgumentShapeResultViaCallers(
+      PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    boolean callerUnknown = false;
+    Set<List<Dimension<?>>> combined = null;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      CGNode caller = callerInvoke.fst;
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction)) continue;
+      PythonInvokeInstruction pyCall = (PythonInvokeInstruction) callerInvoke.snd;
+      int argVn = -1;
+      if (paramName != null) argVn = pyCall.getUse(paramName);
+      if (argVn == -1 && paramPos >= 0) {
+        int numPosParams = pyCall.getNumberOfPositionalParameters() - 1;
+        if (paramPos < numPosParams) argVn = pyCall.getUse(paramPos + 1);
+      }
+      if (argVn <= 0) continue;
+      final int finalArgVn = argVn;
+      final CGNode finalCaller = caller;
+      try {
+        // The caller walk feeds generator output computations, so the per-context argument shape
+        // must be the complete set of possibilities (wala/ML#716); a partially resolvable caller
+        // keeps its members with the remainder marked (wala/ML#718).
+        ShapeResult argShapes = this.getShapeResult(builder, caller, argVn, true);
+        if (argShapes.hasUnknown()) callerUnknown = true;
+        if (!argShapes.members().isEmpty()) {
+          if (combined == null) combined = HashSetFactory.make();
+          combined.addAll(argShapes.members());
+        }
+      } catch (IllegalArgumentException e) {
+        LOGGER.log(
+            Level.FINE,
+            "getArgumentShapeResultViaCallers: IAE for argVn="
+                + finalArgVn
+                + " in caller="
+                + finalCaller,
+            e);
+      }
+    }
+    return combined == null ? ShapeResult.unknown() : new ShapeResult(combined, callerUnknown);
+  }
+
+  /**
    * Returns whether the given node is a synthetic instance-method trampoline for a method of the
    * given name (e.g. the {@code build} or {@code call} trampoline of a Keras layer).
    *
@@ -4012,6 +4125,8 @@ public abstract class TensorGenerator {
     if (subscripts != null) return subscripts;
     Set<Dimension<?>> arithmetic = this.resolveArithmeticOverSubscriptDims(builder, node, st, vn);
     if (arithmetic != null) return arithmetic;
+    Set<Dimension<?>> products = this.prodOfShapeVectorDims(builder, node, st, vn);
+    if (products != null) return products;
     Dimension<?> single = this.elementDim(builder, node, st, vn);
     return single == null ? null : Collections.singleton(single);
   }
