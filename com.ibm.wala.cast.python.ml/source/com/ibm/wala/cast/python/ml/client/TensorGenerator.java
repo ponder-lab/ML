@@ -1175,8 +1175,10 @@ public abstract class TensorGenerator {
     // Chase reads off the enclosing method's `self` through the receiver class's method bodies;
     // for any other local object, chase the write sites in the same code body (e.g. a
     // module-level `param.batch_size = 8` feeding `model.build(input_shape=(3, param.batch_size,
-    // param.maxlen))`, wala/ML#717). The object commonly has an empty points-to set (an opaque
-    // producer), so the constant-propagation path cannot see the stored value.
+    // param.maxlen))`, wala/ML#717). The object's allocation site is commonly shared across
+    // scripts (a helper-allocated parameter holder under one calling context), so the abstract
+    // field unions every script's write and the constant-propagation path sees only the
+    // ambiguous merge; the same-body write is the one that holds at the read.
     if (node.getMethod().getNumberOfParameters() < 2 || objectVn != node.getIR().getParameter(1))
       return this.resolveLocalObjectAttributeDim(builder, node, objectVn, attributeName);
 
@@ -1273,9 +1275,11 @@ public abstract class TensorGenerator {
    * Chases the write sites of {@code attributeName} on the given local object within the same code
    * body and resolves each stored value (wala/ML#717). Covers NLPGNN's entry idiom, where a
    * module-level {@code param.batch_size = 8} feeds {@code model.build(input_shape=(3,
-   * param.batch_size, param.maxlen))} but {@code param}'s opaque producer leaves its points-to set
-   * empty. The chase is same-body and same-value-number by construction: writes through other
-   * references to the object do not resolve and are not seen.
+   * param.batch_size, param.maxlen))} but {@code param}'s helper-allocated holder is one abstract
+   * object shared by every entry script, so the field's points-to set is the ambiguous union of all
+   * scripts' writes. The chase is same-body and same-value-number by construction: it recovers the
+   * per-script value that holds at the read, and writes through other references to the object are
+   * not seen.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
    * @param node The {@link CGNode} whose code body holds the read and the chased writes.
