@@ -72,6 +72,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.MatchResult;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.Test;
@@ -2220,9 +2222,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * self.embedding_size} element dynamic, since the factor comes from a checkpoint config the
    * analysis cannot read; dynamic is the sound static answer there. The rank-2 {@code (8, D)}
    * member is the embedding guard-φ's path-insensitive phantom (the pre-{@code expand_dims}
-   * member), and the pure-⊤ member is the residual contexts whose feed crosses the points-to
-   * substrate gaps of <a href="https://github.com/wala/ML/issues/661">wala/ML#661</a> and <a
-   * href="https://github.com/wala/ML/issues/570">wala/ML#570</a>. The {@code w} parameter keeps
+   * member), and the pure-⊤ member is the shared-transformer loop's fixed point: the layer's ⊤
+   * output feeds back into its input, and a set read whose members include ⊤ collapses, so the four
+   * {@code DenseLayer3dProj} contexts (fed by the attention's return value) stay fully unknown — <a
+   * href="https://github.com/wala/ML/issues/718">wala/ML#718</a>. The {@code w} parameter keeps
    * rank 3 and {@code float32} (its chain is layer-local) but no numeric dimensions, since the
    * {@code build}-computed head sizes also derive from the config.
    *
@@ -15763,7 +15766,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
                             "vn="
                                 + pk.getValueNumber()
                                 + " -> "
-                                + pointerKeyToTensorVariable.get(pk))
+                                + pointerKeyToTensorVariable.get(pk)
+                                + " [ctx: "
+                                + summarizeContext(pk.getNode())
+                                + "]")
                     .collect(Collectors.joining("\n\t")));
 
     // Count tensor variables at the source level: one per distinct value number, deduplicated
@@ -15852,6 +15858,27 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
           expectedTypes,
           actualUnion);
     }
+  }
+
+  /** Matches the script-relative method identifiers a Python {@link Context} chain mentions. */
+  private static final Pattern CONTEXT_METHOD_PATTERN =
+      Pattern.compile("(?:tests|nlpgnn|src|proj[0-9]*)/[A-Za-z0-9_/.-]+\\.py/[A-Za-z0-9_]+");
+
+  /**
+   * Summarizes a node's calling context as the distinct script-relative method identifiers its
+   * context chain mentions, so the per-context tensor-variable dump identifies which caller
+   * pipeline contributed each value without printing the full recursive context.
+   *
+   * @param node The {@link CGNode} whose context is summarized.
+   * @return A comma-separated summary of the context's method identifiers.
+   */
+  private static String summarizeContext(CGNode node) {
+    return CONTEXT_METHOD_PATTERN
+        .matcher(node.getContext().toString())
+        .results()
+        .map(MatchResult::group)
+        .distinct()
+        .collect(Collectors.joining(", "));
   }
 
   /**
