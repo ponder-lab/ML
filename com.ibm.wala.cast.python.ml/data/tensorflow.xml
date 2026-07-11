@@ -1922,13 +1922,14 @@
         </method>
       </class>
       <class name="split" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/split. Inlined per wala/ML#380 (was a `read_data` materialization chain). Returns a list whose first element is a constant-materialized tensor. -->
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self *args **kwargs">
-          <new def="x" class="Llist"/>
-          <new def="z" class="Ltensorflow/functions/constant"/>
-          <call class="Ltensorflow/functions/constant" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="1" numArgs="2" def="y"/>
-          <putfield class="LRoot" field="0" fieldType="LRoot" ref="x" value="y"/>
-          <return value="x"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/split. Returns a list of same-shaped pieces for an integer `num_or_size_splits`, so one fresh tensor stands for every piece; the `Split` generator computes the quotient shape and inherits the dtype from `value` (wala/ML#717). The piece is written to the first three indices to cover the common unpacking arities (NLPGNN's `a, b, c = tf.split(x, 3, 0)`). -->
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self value num_or_size_splits axis num name">
+          <new def="lst" class="Llist"/>
+          <new def="piece" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="lst" value="piece"/>
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="lst" value="piece"/>
+          <putfield class="LRoot" field="2" fieldType="LRoot" ref="lst" value="piece"/>
+          <return value="lst"/>
         </method>
       </class>
       <class name="rank" allocatable="true">
