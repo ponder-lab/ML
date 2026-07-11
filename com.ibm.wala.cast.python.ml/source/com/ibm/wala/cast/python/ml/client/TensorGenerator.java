@@ -166,8 +166,8 @@ public abstract class TensorGenerator {
    *       PythonTensorAnalysisEngine#performAnalysis} invokes it.
    * </ul>
    */
-  private static final Map<PropagationCallGraphBuilder, Map<ShapeQuery, Set<List<Dimension<?>>>>>
-      SHAPES_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
+  private static final Map<PropagationCallGraphBuilder, Map<ShapeQuery, ShapeResult>> SHAPES_CACHE =
+      Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
    * A shape-resolution cache key (wala/ML#716): the queried value plus the resolution mode.
@@ -192,7 +192,7 @@ public abstract class TensorGenerator {
    * PythonTensorAnalysisEngine#performAnalysis} drives rounds via {@link
    * #advanceRound(PropagationCallGraphBuilder)} until the per-source types stabilize.
    */
-  private static final Map<PropagationCallGraphBuilder, Map<ShapeQuery, Set<List<Dimension<?>>>>>
+  private static final Map<PropagationCallGraphBuilder, Map<ShapeQuery, ShapeResult>>
       PREVIOUS_SHAPES_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
 
   /** Dtype counterpart of {@link #PREVIOUS_SHAPES_CACHE}. */
@@ -238,7 +238,7 @@ public abstract class TensorGenerator {
    * @param builder The builder whose caches should advance.
    */
   public static void advanceRound(PropagationCallGraphBuilder builder) {
-    Map<ShapeQuery, Set<List<Dimension<?>>>> shapes = SHAPES_CACHE.remove(builder);
+    Map<ShapeQuery, ShapeResult> shapes = SHAPES_CACHE.remove(builder);
     if (shapes != null) PREVIOUS_SHAPES_CACHE.put(builder, shapes);
     Map<Pair<CGNode, Integer>, Set<DType>> dtypes = DTYPES_CACHE.remove(builder);
     if (dtypes != null) PREVIOUS_DTYPES_CACHE.put(builder, dtypes);
@@ -1573,12 +1573,27 @@ public abstract class TensorGenerator {
    */
   protected Set<List<Dimension<?>>> getShapes(
       PropagationCallGraphBuilder builder, CGNode node, int valueNumber, boolean exact) {
-    Map<ShapeQuery, Set<List<Dimension<?>>>> cache =
+    return this.getShapeResult(builder, node, valueNumber, exact).toLegacy();
+  }
+
+  /**
+   * Record-carrying core of {@link #getShapes(PropagationCallGraphBuilder, CGNode, int, boolean)}
+   * (wala/ML#718): the {@link ShapeResult} keeps an unresolvable remainder explicit alongside the
+   * resolvable members instead of collapsing the whole result to ⊤.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code valueNumber}.
+   * @param valueNumber The value number to resolve.
+   * @param exact Whether an unresolvable union member poisons the result rather than dropping.
+   * @return The resolution result.
+   */
+  protected ShapeResult getShapeResult(
+      PropagationCallGraphBuilder builder, CGNode node, int valueNumber, boolean exact) {
+    Map<ShapeQuery, ShapeResult> cache =
         SHAPES_CACHE.computeIfAbsent(builder, b -> Collections.synchronizedMap(new HashMap<>()));
     ShapeQuery key = new ShapeQuery(node, valueNumber, exact);
     // Atomic check-compute-put: concurrent threads hitting the same key will serialize on the
-    // cache's mutex so exactly one `computeShapes` call runs. The null result is cached too
-    // (null = ⊤), which `Map.computeIfAbsent` cannot express, so we use `containsKey` instead.
+    // cache's mutex so exactly one `computeShapes` call runs.
     // Reentrant synchronization: `SynchronizedMap`'s own methods acquire the same mutex, so the
     // inner `containsKey` / `get` / `put` calls are no-op re-entries.
     synchronized (cache) {
@@ -1589,8 +1604,11 @@ public abstract class TensorGenerator {
       Set<ShapeQuery> inProgress =
           SHAPES_IN_PROGRESS.computeIfAbsent(builder, b -> HashSetFactory.make());
       if (!inProgress.add(key)) {
-        Map<ShapeQuery, Set<List<Dimension<?>>>> previous = PREVIOUS_SHAPES_CACHE.get(builder);
-        Set<List<Dimension<?>>> approximation = previous == null ? null : previous.get(key);
+        Map<ShapeQuery, ShapeResult> previous = PREVIOUS_SHAPES_CACHE.get(builder);
+        ShapeResult approximation =
+            previous == null || !previous.containsKey(key)
+                ? ShapeResult.unknown()
+                : previous.get(key);
         LOGGER.fine(
             () ->
                 "Shape cycle re-entry on key: "
@@ -1601,7 +1619,8 @@ public abstract class TensorGenerator {
         return approximation;
       }
       try {
-        Set<List<Dimension<?>>> result = computeShapes(builder, node, valueNumber, exact);
+        ShapeResult result =
+            ShapeResult.fromLegacy(computeShapes(builder, node, valueNumber, exact));
         cache.put(key, result);
         return result;
       } finally {
