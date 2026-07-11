@@ -2243,7 +2243,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "einsum_via_matmul",
         "nlpgnn_full_proj",
         2,
-        13,
+        14,
         Map.of(
             2,
             Set.of(

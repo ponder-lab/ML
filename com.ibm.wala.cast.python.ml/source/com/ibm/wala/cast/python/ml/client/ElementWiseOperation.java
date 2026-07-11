@@ -51,6 +51,17 @@ public class ElementWiseOperation extends TensorGenerator {
     super(source);
   }
 
+  /**
+   * Constructs an {@code ElementWiseOperation} anchored to a manual node (e.g. the {@code
+   * tf.multiply.do()} synthetic method), for producer delegation when the result's points-to chain
+   * is implicit (wala/ML#718).
+   *
+   * @param node The {@link CGNode} for the synthetic {@code do()} method.
+   */
+  public ElementWiseOperation(CGNode node) {
+    super(node);
+  }
+
   protected int getXParameterPosition() {
     return Parameters.X.getIndex();
   }
@@ -60,7 +71,7 @@ public class ElementWiseOperation extends TensorGenerator {
   }
 
   protected int getXArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    if (this.source.getPointerKey() instanceof LocalPointerKey) {
+    if (this.source != null && this.source.getPointerKey() instanceof LocalPointerKey) {
       LocalPointerKey lpk = (LocalPointerKey) this.source.getPointerKey();
       SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
       if (def instanceof SSABinaryOpInstruction) {
@@ -80,7 +91,7 @@ public class ElementWiseOperation extends TensorGenerator {
   }
 
   protected int getYArgumentValueNumber(PropagationCallGraphBuilder builder) {
-    if (this.source.getPointerKey() instanceof LocalPointerKey) {
+    if (this.source != null && this.source.getPointerKey() instanceof LocalPointerKey) {
       LocalPointerKey lpk = (LocalPointerKey) this.source.getPointerKey();
       SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
       if (def instanceof SSABinaryOpInstruction) {
