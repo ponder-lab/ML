@@ -949,6 +949,25 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Applies the explicit {@code model.build(input_shape=...)} contract seed when the given value is
+   * the first input parameter of a Keras {@code call} body (wala/ML#717).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code valueNumber}.
+   * @param valueNumber The value number being resolved.
+   * @return The declared contract shapes, or {@code null} when the value isn't a {@code call} input
+   *     or no contract resolves.
+   */
+  private Set<List<Dimension<?>>> contractSeedForCallInput(
+      PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
+    if (node.getDU() == null || node.getIR() == null) return null;
+    if (node.getDU().getDef(valueNumber) != null) return null; // Not a parameter.
+    if (node.getMethod().isStatic() || node.getIR().getNumberOfParameters() < 3) return null;
+    if (node.getIR().getParameter(2) != valueNumber) return null; // Not the first input.
+    return this.explicitBuildContractShapes(builder, node);
+  }
+
+  /**
    * Resolves the input contract an explicitly invoked {@code model.build(input_shape=(...))}
    * declares for the given Keras {@code call} body (wala/ML#717). The Keras contract ties a built
    * layer's call inputs to the built shape, so when the runtime arguments do not resolve, the
@@ -1438,6 +1457,15 @@ public abstract class TensorGenerator {
     if (!valuePointsToSet.isEmpty()) {
       Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, valuePointsToSet);
       if (shapes == null || !shapes.isEmpty()) {
+        // An unresolvable (⊤) result for a Keras call input can still be seeded from an explicit
+        // `model.build(input_shape=...)` contract: the runtime value exists (non-empty PTS) but
+        // its shape does not resolve, exactly the case the declared contract covers
+        // (wala/ML#717).
+        if (shapes == null) {
+          Set<List<Dimension<?>>> contract =
+              this.contractSeedForCallInput(builder, node, valueNumber);
+          if (contract != null && !contract.isEmpty()) return contract;
+        }
         return shapes;
       }
     }
@@ -1514,10 +1542,9 @@ public abstract class TensorGenerator {
         // invoked `model.build(input_shape=(...))` with a resolvable literal declares the input
         // contract (built layers validate call inputs against the built shape), so seed the
         // parameter from it (wala/ML#717).
-        if (paramPos == 1) {
-          Set<List<Dimension<?>>> contract = this.explicitBuildContractShapes(builder, node);
-          if (contract != null && !contract.isEmpty()) return contract;
-        }
+        Set<List<Dimension<?>>> contract =
+            this.contractSeedForCallInput(builder, node, valueNumber);
+        if (contract != null && !contract.isEmpty()) return contract;
       }
     }
 
