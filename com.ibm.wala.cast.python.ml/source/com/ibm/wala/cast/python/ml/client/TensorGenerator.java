@@ -3483,7 +3483,8 @@ public abstract class TensorGenerator {
               && outerCaller.getIR() != null
               && outerCaller.getMethod().getNumberOfParameters() >= 2) {
             try {
-              shapes = this.getShapes(builder, outerCaller, outerCaller.getIR().getParameter(1));
+              shapes =
+                  this.getShapes(builder, outerCaller, outerCaller.getIR().getParameter(1), true);
             } catch (IllegalArgumentException e) {
               LOGGER.log(
                   Level.FINE,
@@ -3510,7 +3511,9 @@ public abstract class TensorGenerator {
       int memberVn = read.getMemberRef();
       if (st.isStringConstant(memberVn) && "shape".equals(st.getStringValue(memberVn))) {
         try {
-          return this.getShapes(builder, node, read.getObjectRef());
+          // The walk's folds assert per-member facts (subscripts, slices, products), so the
+          // source must be the complete set of possibilities (wala/ML#716).
+          return this.getShapes(builder, node, read.getObjectRef(), true);
         } catch (IllegalArgumentException e) {
           LOGGER.log(
               Level.FINE,
