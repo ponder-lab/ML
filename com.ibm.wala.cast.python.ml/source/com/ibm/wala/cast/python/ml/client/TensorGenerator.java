@@ -4497,7 +4497,9 @@ public abstract class TensorGenerator {
 
     LOGGER.fine("createManualGenerator checking sanitized type: " + type.getName());
 
-    if (type.equals(TensorFlowTypes.ONES.getDeclaringClass())) {
+    if (type.equals(TensorFlowTypes.SPLIT.getDeclaringClass())) {
+      return new Split(node);
+    } else if (type.equals(TensorFlowTypes.ONES.getDeclaringClass())) {
       return new Ones(node);
     } else if (type.equals(TensorFlowTypes.ZEROS.getDeclaringClass())) {
       return new Zeros(node);

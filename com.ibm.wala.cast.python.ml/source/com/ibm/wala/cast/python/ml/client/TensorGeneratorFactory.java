@@ -176,6 +176,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_FROM_DENS
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPARSE_TO_DENSE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SPLIT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SQRT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SQUARE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SQUEEZE;
@@ -1166,6 +1167,11 @@ public class TensorGeneratorFactory {
           }
         }
 
+        // `tf.split` returns a list of same-shaped pieces, and its generator is defined to
+        // describe one piece, so a subscript of the result is the piece itself; the generic
+        // `TensorElementGenerator` fallthrough would peel a real dimension (wala/ML#717).
+        if (effectiveGenerator instanceof Split) return effectiveGenerator;
+
         if (containerGenerator instanceof TensorElementGenerator
             && ((TensorElementGenerator) containerGenerator).getContainerGenerator()
                 instanceof EnumerateGenerator) {
@@ -1495,6 +1501,7 @@ public class TensorGeneratorFactory {
       return new BooleanMask(source);
     else if (isType(calledFunction, SLICE.getDeclaringClass())) return new Slice(source);
     else if (isType(calledFunction, SQUEEZE.getDeclaringClass())) return new Squeeze(source);
+    else if (isType(calledFunction, SPLIT.getDeclaringClass())) return new Split(source);
     else if (isType(calledFunction, EXTRACT_PATCHES.getDeclaringClass()))
       return new ExtractPatches(source);
     else if (isType(calledFunction, TAN.getDeclaringClass())) return new Tan(source);
