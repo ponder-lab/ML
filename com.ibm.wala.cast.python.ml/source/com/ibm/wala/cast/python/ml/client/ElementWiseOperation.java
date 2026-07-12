@@ -12,6 +12,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
@@ -22,6 +23,7 @@ import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSAUnaryOpInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -120,6 +122,7 @@ public class ElementWiseOperation extends TensorGenerator {
    */
   @Override
   protected ShapeResult getDefaultShapeResult(PropagationCallGraphBuilder builder) {
+    if (this.source == null) return this.getManualShapeResult(builder);
     int xVn = this.getXArgumentValueNumber(builder);
     if (xVn <= 0) return ShapeResult.unknown();
     Set<List<Dimension<?>>> xShapes = this.getOperandShapes(builder, xVn);
@@ -139,6 +142,90 @@ public class ElementWiseOperation extends TensorGenerator {
   }
 
   /**
+   * Broadcast resolution for a manually anchored generator (producer delegation to a synthetic op
+   * node, e.g. {@code tf.multiply.do()}): the operands resolve through the caller-aware argument
+   * machinery, since the value-number-based operand path pairs caller-frame value numbers with the
+   * synthetic node's IR (wala/ML#718). The one-sided scalar rule tests the opaque argument per
+   * caller frame.
+   *
+   * @param builder The propagation call graph builder.
+   * @return The broadcast result.
+   */
+  private ShapeResult getManualShapeResult(PropagationCallGraphBuilder builder) {
+    ShapeResult x =
+        this.manualArgShapeResult(builder, getXParameterPosition(), getXParameterName());
+    ShapeResult y =
+        this.manualArgShapeResult(builder, getYParameterPosition(), getYParameterName());
+
+    boolean xHas = !x.members().isEmpty();
+    boolean yHas = !y.members().isEmpty();
+    if (xHas && yHas) {
+      Set<List<Dimension<?>>> ret = HashSetFactory.make();
+      for (List<Dimension<?>> xShape : x.members())
+        for (List<Dimension<?>> yShape : y.members())
+          if (areBroadcastable(xShape, yShape)) ret.add(getBroadcastedShapes(xShape, yShape));
+      return ret.isEmpty()
+          ? ShapeResult.unknown()
+          : new ShapeResult(ret, x.hasUnknown() || y.hasUnknown());
+    }
+    if (xHas != yHas) {
+      Set<List<Dimension<?>>> resolved = xHas ? x.members() : y.members();
+      int opaquePos = xHas ? getYParameterPosition() : getXParameterPosition();
+      if (resolved.stream().anyMatch(dims -> !dims.isEmpty())
+          && this.isScalarArgumentInAllCallers(builder, opaquePos))
+        return new ShapeResult(resolved, x.hasUnknown() || y.hasUnknown());
+    }
+    return ShapeResult.unknown();
+  }
+
+  /**
+   * Caller-aware argument-shape resolution for the manual anchoring: the argument's points-to union
+   * first (exact), then the per-context caller walk, with the union's members as the floor
+   * (wala/ML#716, wala/ML#718).
+   *
+   * @param builder The propagation call graph builder.
+   * @param paramPos The positional index of the arg.
+   * @param paramName The keyword parameter name.
+   * @return The resolution result.
+   */
+  private ShapeResult manualArgShapeResult(
+      PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    ShapeResult fromValue = ShapeResult.unknown();
+    OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPos, paramName);
+    if (pts != null && !pts.isEmpty()) {
+      fromValue = this.getShapeResultOfValue(builder, pts, true);
+      if (!fromValue.members().isEmpty() && !fromValue.hasUnknown()) return fromValue;
+    }
+    ShapeResult viaCallers = this.getArgumentShapeResultViaCallers(builder, paramPos, paramName);
+    if (!viaCallers.members().isEmpty()) return viaCallers;
+    return fromValue.members().isEmpty() ? viaCallers : fromValue;
+  }
+
+  /**
+   * Whether the argument at the given position is structurally a scalar expression in every caller
+   * frame (wala/ML#718).
+   *
+   * @param builder The propagation call graph builder.
+   * @param paramPos The positional index of the arg.
+   * @return {@code true} iff every resolvable caller passes a scalar expression.
+   */
+  private boolean isScalarArgumentInAllCallers(PropagationCallGraphBuilder builder, int paramPos) {
+    boolean saw = false;
+    for (com.ibm.wala.util.collections.Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction)) continue;
+      PythonInvokeInstruction pyCall = (PythonInvokeInstruction) callerInvoke.snd;
+      int numPosParams = pyCall.getNumberOfPositionalParameters() - 1;
+      if (paramPos >= numPosParams) continue;
+      int argVn = pyCall.getUse(paramPos + 1);
+      if (argVn <= 0) continue;
+      saw = true;
+      if (!isScalarExpression(builder, callerInvoke.fst, argVn)) return false;
+    }
+    return saw;
+  }
+
+  /**
    * Recognizes a statically opaque scalar expression: a scalar literal, a {@code float(...)} or
    * {@code int(...)} builtin call, a {@code math.<fn>(...)} call, a unary minus, or a binary op
    * whose operands are both scalar expressions (wala/ML#718). The value never resolves (the PA does
@@ -150,16 +237,28 @@ public class ElementWiseOperation extends TensorGenerator {
    * @return {@code true} iff the operand is structurally a Python scalar expression.
    */
   private boolean isScalarExpression(PropagationCallGraphBuilder builder, int vn) {
+    return isScalarExpression(builder, this.getNode(), vn);
+  }
+
+  /**
+   * Node-explicit core of {@link #isScalarExpression(PropagationCallGraphBuilder, int)}, so a
+   * manually anchored generator can test an argument in its caller's frame (wala/ML#718).
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param vn The operand's value number.
+   * @return {@code true} iff the operand is structurally a Python scalar expression.
+   */
+  private boolean isScalarExpression(PropagationCallGraphBuilder builder, CGNode node, int vn) {
     if (vn <= 0) return false;
-    CGNode node = this.getNode();
     if (node.getDU() == null || node.getIR() == null) return false;
-    if (isScalarLiteral(builder, vn)) return true;
     if (node.getIR().getSymbolTable().isConstant(vn)) return true;
     SSAInstruction def = node.getDU().getDef(vn);
     if (def instanceof SSABinaryOpInstruction)
-      return isScalarExpression(builder, def.getUse(0))
-          && isScalarExpression(builder, def.getUse(1));
-    if (def instanceof SSAUnaryOpInstruction) return isScalarExpression(builder, def.getUse(0));
+      return isScalarExpression(builder, node, def.getUse(0))
+          && isScalarExpression(builder, node, def.getUse(1));
+    if (def instanceof SSAUnaryOpInstruction)
+      return isScalarExpression(builder, node, def.getUse(0));
     if (def instanceof PythonInvokeInstruction) {
       SSAInstruction funcDef = node.getDU().getDef(def.getUse(0));
       if (funcDef instanceof PythonPropertyRead) {
