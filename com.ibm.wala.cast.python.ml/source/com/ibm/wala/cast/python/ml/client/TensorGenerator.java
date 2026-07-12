@@ -42,6 +42,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.Layout;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.ssa.PythonPropertyWrite;
@@ -568,8 +569,9 @@ public abstract class TensorGenerator {
 
         // Build the Cartesian product of dimension possibilities across all positions. Empty
         // positions (where `possibleDimensions[k]` has no resolved constant, e.g., a non-literal
-        // `BATCH_SIZE` in `tf.random.normal([BATCH_SIZE, 100])`) contribute `DynamicDim.INSTANCE`
-        // as the single fallback option — https://github.com/wala/ML/issues/545. The prior
+        // `BATCH_SIZE` in `tf.random.normal([BATCH_SIZE, 100])`) contribute
+        // `UnresolvedDim.INSTANCE` as the single fallback option — wala/ML#721 (previously
+        // `DynamicDim`, https://github.com/wala/ML/issues/545). The prior
         // implementation iterated each
         // position's set but only retained the last iterated element, producing a
         // non-deterministic single shape per `i` rather than the full product.
@@ -580,13 +582,16 @@ public abstract class TensorGenerator {
             resolved.add(s);
             continue;
           }
-          // An empty position holds no resolved constant. Before degrading to `DynamicDim`, try to
-          // fold a binary op over constant-valued operands (e.g. `self.heads * self.out_features`)
-          // via the analysis. `interpretAsInt` in `TensorType.shapeArg` only handles pure-literal
-          // source text; this generator-side path resolves field reads and globals through the PTS,
-          // reconciling the two shape-argument-extraction paths (wala/ML#581).
+          // An empty position holds no resolved constant. Before degrading, try to fold a binary
+          // op over constant-valued operands (e.g. `self.heads * self.out_features`) via the
+          // analysis. `interpretAsInt` in `TensorType.shapeArg` only handles pure-literal source
+          // text; this generator-side path resolves field reads and globals through the PTS,
+          // reconciling the two shape-argument-extraction paths (wala/ML#581). An unfoldable
+          // position is a fixed runtime size the analysis could not compute — `UnresolvedDim`,
+          // not `DynamicDim`; an explicit `None` resolves through the constant path above
+          // (wala/ML#721).
           Dimension<?> folded = foldArithmeticShapeDim(builder, asin, k);
-          resolved.add(Collections.singleton(folded != null ? folded : DynamicDim.INSTANCE));
+          resolved.add(Collections.singleton(folded != null ? folded : UnresolvedDim.INSTANCE));
         }
 
         List<List<Dimension<?>>> shapes = new ArrayList<>();
@@ -871,11 +876,13 @@ public abstract class TensorGenerator {
         // When exactly one operand resolves and that operand derives from a shape vector, the
         // expression is dimension arithmetic and the result is one scalar dimension whose value
         // is unknown, so the value degrades rather than the element (wala/ML#717). NLPGNN's
-        // `input_shape[-1] * self.embedding_size` with a config-sourced factor is the witness.
+        // `input_shape[-1] * self.embedding_size` with a config-sourced factor is the witness:
+        // a fixed runtime size the analysis could not compute, i.e. `UnresolvedDim`, not
+        // `DynamicDim` (wala/ML#721).
         if ((left == null) != (right == null)
             && this.derivesFromShapeVector(
                 builder, node, st, left == null ? binOp.getUse(1) : binOp.getUse(0)))
-          return DynamicDim.INSTANCE;
+          return UnresolvedDim.INSTANCE;
         return null;
       }
       if (binOp.getOperator() == IBinaryOpInstruction.Operator.DIV
@@ -1404,22 +1411,27 @@ public abstract class TensorGenerator {
 
   /**
    * Folds one shape's dimension product: a fully numeric shape folds to a {@link NumericDim}; a
-   * non-numeric member degrades the value to dynamic rather than the element to null, since the
-   * product of a shape vector is always one scalar dimension (wala/ML#718).
+   * non-numeric member degrades the value rather than the element to null, since the product of a
+   * shape vector is always one scalar dimension (wala/ML#718). Degradation taints toward {@link
+   * DynamicDim} (wala/ML#721): a product over any {@code Dynamic} factor is itself {@code Dynamic}
+   * (the runtime {@code TensorShape} reports {@code None} for arithmetic over a {@code None} axis),
+   * while a product over merely unresolved factors — or one that overflows the representable range
+   * — is a fixed runtime value the analysis could not compute, {@link UnresolvedDim}.
    *
    * @param dims The shape whose dimensions are folded.
    * @return The folded dimension.
    */
   private static Dimension<?> prodOfDims(List<Dimension<?>> dims) {
+    for (Dimension<?> d : dims) if (d instanceof DynamicDim) return DynamicDim.INSTANCE;
     long product = 1;
     for (Dimension<?> d : dims) {
-      if (!(d instanceof NumericDim)) return DynamicDim.INSTANCE; // Unknown factor: dynamic value.
+      if (!(d instanceof NumericDim)) return UnresolvedDim.INSTANCE; // Unknown fixed factor.
       try {
         product = Math.multiplyExact(product, ((NumericDim) d).value());
       } catch (ArithmeticException e) {
-        return DynamicDim.INSTANCE; // The product overflows long: not representable.
+        return UnresolvedDim.INSTANCE; // The product overflows long: not representable.
       }
-      if (product < 0 || product > Integer.MAX_VALUE) return DynamicDim.INSTANCE;
+      if (product < 0 || product > Integer.MAX_VALUE) return UnresolvedDim.INSTANCE;
     }
     return new NumericDim((int) product);
   }
@@ -4208,11 +4220,11 @@ public abstract class TensorGenerator {
     Set<Integer> rights = this.scalarOperandOptionsOrNull(builder, node, st, binOp.getUse(1));
     if (lefts == null || rights == null) {
       // Mirror of the singleton path's degradation (wala/ML#717): dimension arithmetic with an
-      // unresolvable co-operand is one scalar dimension of unknown value.
+      // unresolvable co-operand is one scalar dimension of unknown fixed value (wala/ML#721).
       if ((lefts == null) != (rights == null)
           && this.derivesFromShapeVector(
               builder, node, st, lefts == null ? binOp.getUse(1) : binOp.getUse(0)))
-        return Collections.singleton(DynamicDim.INSTANCE);
+        return Collections.singleton(UnresolvedDim.INSTANCE);
       return null;
     }
     if (lefts.size() < 2 && rights.size() < 2) return null; // The singleton path covers this.
@@ -4223,11 +4235,11 @@ public abstract class TensorGenerator {
         if (binOp.getOperator() == IBinaryOpInstruction.Operator.DIV
             && !truncated
             && (right == 0 || left % right != 0)) {
-          options.add(DynamicDim.INSTANCE); // Non-exact bare float division.
+          options.add(UnresolvedDim.INSTANCE); // Non-exact bare float division: fixed value.
           continue;
         }
         Integer value = TensorType.applyIntBinOp(binOp.getOperator(), left, right);
-        options.add(value == null ? DynamicDim.INSTANCE : new NumericDim(value));
+        options.add(value == null ? UnresolvedDim.INSTANCE : new NumericDim(value));
       }
     return options.isEmpty() ? null : options;
   }

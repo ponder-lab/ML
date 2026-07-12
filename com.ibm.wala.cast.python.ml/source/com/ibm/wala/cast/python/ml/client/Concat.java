@@ -12,6 +12,7 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -168,8 +169,10 @@ public class Concat extends TensorGenerator {
 
   /**
    * Computes the concatenated shape for an append-populated list: every appended value's shape must
-   * share the rank; the output keeps the (agreeing) non-axis dims and the axis dim is {@link
-   * DynamicDim} since the element count (and each element's axis extent) is not statically known.
+   * share the rank; the output keeps the (agreeing) non-axis dims and the axis dim degrades, since
+   * the element count (and each element's axis extent) is not statically known — to {@link
+   * DynamicDim} when an element's axis is itself {@code None}-evidenced, else to {@link
+   * UnresolvedDim} (wala/ML#721).
    *
    * @param builder The propagation call graph builder.
    * @param listAsin The list allocation whose appended contents to read.
@@ -200,7 +203,13 @@ public class Concat extends TensorGenerator {
         if (d != normalizedAxis && !shape.get(d).equals(outShape.get(d)))
           return null; // non-axis dim disagreement — can't pick a sound template
 
-    outShape.set(normalizedAxis, DynamicDim.INSTANCE);
+    // The concatenation axis sums the appended elements' axis sizes over an unknown element
+    // count: a sum involving any `None` axis is itself `None` at run time; otherwise it is a
+    // fixed value (the loop's trip count times fixed extents) the analysis could not compute
+    // (wala/ML#721).
+    boolean anyDynamicAxis =
+        shapes.stream().anyMatch(shape -> shape.get(normalizedAxis) instanceof DynamicDim);
+    outShape.set(normalizedAxis, anyDynamicAxis ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE);
     return outShape;
   }
 
