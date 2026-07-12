@@ -153,7 +153,10 @@ public class Range extends TensorGenerator {
       }
     }
 
-    return ret;
+    // No bound combination resolved. The call still produces a rank-1 tensor whose fixed length
+    // the analysis could not compute, so fall back to the unresolved-length default rather than
+    // returning the empty set — ⊥ ("not a tensor") silently drops the variable (wala/ML#721).
+    return ret.isEmpty() ? this.getDefaultShapes(builder) : ret;
   }
 
   /**
