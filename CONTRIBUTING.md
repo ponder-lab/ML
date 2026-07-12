@@ -147,12 +147,22 @@ The per-variable result aggregated from the per-axis lattice tables above follow
 
 Downstream consumers iterating aggregated state (e.g., `TensorTypeAnalysis.iterator()`) filter to `state != null && !state.isEmpty()`. Under contract-compliant generators this filters out ⊥ (empty Set); ⊤ at the variable level remains visible to the iterator as a non-empty Set with `TensorType(UNKNOWN, null)` inside. A non-empty entry may carry shape-⊤ or dtype-⊤ on individual `TensorType` instances, which consumers must handle.
 
+### Partial Results—`ShapeResult` (wala/ML#718)
+
+The legacy `null`/empty-set convention cannot express a *partially* resolved value set (some members concrete, some unknown), so a read over, e.g., a loop-carried φ used to collapse entirely on one unknown member. The `ShapeResult` record makes the remainder explicit: `members` holds the resolvable shapes and `hasUnknown` marks the unresolvable remainder, mirroring how dtype sets already carry `DType.UNKNOWN` in band. Key rules:
+
+- **Read modes.** Exact reads (`getShapeResult(builder, node, vn, true)` and friends) never drop an unresolvable member—it becomes `hasUnknown`. Default-mode reads keep the pre-existing "resolvable subset" contract: the legacy view of a partial returns its `members`. Consumers that fold per-member facts (subscripts, slices, products) must read exactly; dataflow seeding may read the default mode.
+- **Record-override pairing.** `getShapes`/`getDefaultShapes` legacy methods and their `getShapeResult`/`getDefaultShapeResult` record counterparts dispatch independently. A subclass that overrides a legacy method on a base whose record method does NOT route through it (e.g., `Reshape`'s subclasses, or shape-transformers under `PassThroughUnaryTensorGenerator`'s identity record path) MUST pair the override—either with the member-wise transform over `members()` or with the collapse-safe `ShapeResult.fromLegacy(this.getDefaultShapes(builder))`. An unpaired override is silently bypassed for record consumers (this bit `NpReshape` during the wala/ML#718 work).
+- **Member-wise transforms.** When upgrading a transformer, apply the transform per resolvable member and let the input's `hasUnknown` ride through to the output; a member the transform cannot apply to joins the remainder rather than collapsing the whole result.
+
 ### Checklist When Adding a New Generator
 
 - [ ] Audit every final-fallback return in `getDefaultShapes` and `getDefaultDTypes` against the tables above.
 - [ ] Prefer `null` over `Collections.emptySet()` when the intended meaning is "we know it's a tensor, we just can't figure out the shape."
 - [ ] Prefer `EnumSet.of(DType.UNKNOWN)` over `EnumSet.noneOf(DType.class)`/`Collections.emptySet()` for unknown dtypes.
 - [ ] If your generator's result is accumulated into a `ret` set inside a loop, verify the final `return ret` cannot return an empty set when you actually meant "unknown." Add `return ret.isEmpty() ? null : ret;` if it can.
+- [ ] If the op's result is a generic `Ltensorflow/python/framework/ops/Tensor` allocation, register the generator in `TensorGenerator.createManualGenerator` so producer-side delegation can reach it; an unregistered producer dead-ends the resolution of every value it feeds.
+- [ ] If you override a legacy shape method on a record-capable base, pair it per "Partial Results" above.
 
 ## Modeling APIs in `tensorflow.xml`
 

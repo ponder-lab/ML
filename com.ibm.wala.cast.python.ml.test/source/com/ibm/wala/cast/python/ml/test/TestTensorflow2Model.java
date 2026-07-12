@@ -2243,7 +2243,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "einsum_via_matmul",
         "nlpgnn_full_proj",
         2,
-        13,
+        14,
         Map.of(
             2,
             Set.of(
@@ -11092,7 +11092,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Pins the gpt-2 decoder-stack shape in miniature (wala/ML#618): layers built by a list
    * comprehension, iterated with {@code zip} against a {@code [None] * n} list, each call's tuple
-   * result destructured and the hidden state carried through the loop.
+   * result destructured and the hidden state carried through the loop. The runtime {@code (4, 4)}
+   * resolves; the ⊤-shape member is the loop-carried hidden state's unknown remainder, which the
+   * exact operand reads surface instead of silently dropping (wala/ML#716, wala/ML#718) — the
+   * loop's later iterations consume the stack's own unresolved output, so a fully resolved union
+   * cannot be claimed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -11107,7 +11111,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_4_4_FLOAT32, TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
@@ -13103,9 +13107,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * NLPGNN's {@code einsum_via_matmul} matmul path in miniature, end to end (wala/ML#704): the
    * {@code get_shape_list} hop, the negated-parameter slice bounds, the {@code np.prod} folds, and
    * the {@code batch_dims + outer_dims} concatenation (wala/ML#708) all resolve, so the reshape arm
-   * types as the precise runtime {@code (2, 4, 3, 5)}. The {@code (4, 5)} member is the other arm
-   * of the {@code len(outer_dims) > 1} guard's φ (the raw rank-2 matmul), which flows statically
-   * even though the runtime always takes the reshape arm here.
+   * types as the precise runtime {@code (2, 4, 3, 5)}. The {@code (2, 4, 15)} member is the other
+   * arm of the {@code len(outer_dims) > 1} guard's φ: the raw matmul result, which flows statically
+   * even though the runtime always takes the reshape arm here, and which the batched {@code
+   * tf.matmul} semantics type as the runtime-true intermediate {@code matmul((2, 4, 6), (6, 15))}
+   * (wala/ML#718; previously the rank-collapsed artifact {@code (4, 5)}).
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -13120,16 +13126,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 3, 5), TensorType.of(FLOAT_32, 4, 5))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 3, 5), TensorType.of(FLOAT_32, 2, 4, 15))));
   }
 
   /**
    * The two-inner-dims variant of {@link #testEinsumViaMatmul()} (NLPGNN's {@code DenseLayer3dProj}
    * shape, {@code einsum_via_matmul(input_tensor, w, 2)}): exercises the {@code batch_dims +
    * [inner_dim]} concatenation of a shape vector with a literal list whose element is an {@code
-   * np.prod} fold (wala/ML#708). The reshape-then-matmul arm types as the precise runtime {@code
-   * (2, 4, 6)}; the {@code (3, 6)} member is the untaken arm of the {@code num_inner_dims > 1}
-   * guard's φ (the rank-2 matmul of the unreshaped input), which flows statically.
+   * np.prod} fold (wala/ML#708). The result types as exactly the precise runtime {@code (2, 4, 6)}:
+   * the batched {@code tf.matmul} semantics (wala/ML#718) type every guard-arm pairing to the same
+   * runtime-true product, eliminating the rank-collapsed {@code (3, 6)} artifact this test
+   * previously pinned.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -13144,7 +13151,28 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 6), TensorType.of(FLOAT_32, 3, 6))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 6))));
+  }
+
+  /**
+   * Distilled regression guard for {@code tf.matmul}'s batched form (wala/ML#718): the leading
+   * (batch) dimensions carry through and the trailing two dimensions compose as the matrix product,
+   * so the rank is preserved. The analysis previously collapsed every product to rank two.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testBatchedMatMul()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_batched_matmul.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 5))));
   }
 
   /**

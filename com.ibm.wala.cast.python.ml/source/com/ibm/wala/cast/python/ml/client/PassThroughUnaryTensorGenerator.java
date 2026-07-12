@@ -92,6 +92,36 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
     return shapesOfArg(builder, getInputParameterPosition(), getInputParameterName());
   }
 
+  /**
+   * Identity record path for the pass-through family (wala/ML#718): the input argument's {@link
+   * ShapeResult} passes through unchanged, so a partially resolvable input keeps its members with
+   * the remainder marked. A subclass that transforms shapes (an override of {@link
+   * #getDefaultShapes}) MUST also override this method — either with the member-wise transform over
+   * {@code members()} or with the collapse-safe {@code
+   * ShapeResult.fromLegacy(this.getDefaultShapes(builder))} — since this identity default would
+   * otherwise bypass the transform for record consumers.
+   *
+   * @param builder The propagation call graph builder.
+   * @return The input argument's resolution result.
+   */
+  @Override
+  protected ShapeResult getDefaultShapeResult(PropagationCallGraphBuilder builder) {
+    return shapeResultOfArg(builder, getInputParameterPosition(), getInputParameterName());
+  }
+
+  /**
+   * Routes the generator's output-shape resolution through {@link #getDefaultShapeResult} (this
+   * family has no {@code shape} parameter), so partial results cross the generator boundary
+   * (wala/ML#718).
+   *
+   * @param builder The propagation call graph builder.
+   * @return The resolution result.
+   */
+  @Override
+  protected ShapeResult getShapeResult(PropagationCallGraphBuilder builder) {
+    return this.getDefaultShapeResult(builder);
+  }
+
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     Set<DType> dtypes = dtypesOfArg(builder, getInputParameterPosition(), getInputParameterName());
@@ -112,6 +142,21 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
    */
   protected Set<List<Dimension<?>>> shapesOfArg(
       PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    return this.shapeResultOfArg(builder, paramPos, paramName).toLegacy();
+  }
+
+  /**
+   * Record-carrying core of {@link #shapesOfArg} (wala/ML#718): a partially resolvable input keeps
+   * its members with the remainder marked, first over the argument's points-to union and, when that
+   * has no members, over the per-context caller walk.
+   *
+   * @param builder The propagation call graph builder.
+   * @param paramPos The positional index of the arg.
+   * @param paramName The keyword parameter name.
+   * @return The resolution result.
+   */
+  protected ShapeResult shapeResultOfArg(
+      PropagationCallGraphBuilder builder, int paramPos, String paramName) {
     if (paramPos == UNDEFINED_PARAMETER_POSITION)
       throw new IllegalStateException(
           getClass().getSimpleName()
@@ -120,15 +165,20 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
               + "'s default getDefaultShapes (which reads from the input arg) but did not"
               + " override getInputParameterPosition. Either override the input-arg getters or"
               + " override getDefaultShapes entirely.");
+    ShapeResult fromValue = ShapeResult.unknown();
     OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPos, paramName);
     if (pts != null && !pts.isEmpty()) {
       // Exact mode (wala/ML#716): the generator asserts an output shape computed from "the"
-      // input shape, so a partial union here would overclaim; an unresolvable member falls
-      // through to the per-context caller walk, and failing that, ⊤.
-      Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, pts, true);
-      if (shapes != null && !shapes.isEmpty()) return shapes;
+      // input shape, so a partial union here would overclaim.
+      fromValue = this.getShapeResultOfValue(builder, pts, true);
+      if (!fromValue.members().isEmpty() && !fromValue.hasUnknown()) return fromValue;
     }
-    return this.getArgumentShapesViaCallers(builder, paramPos, paramName);
+    // An incomplete points-to union commonly reflects context collapse, so the per-context
+    // caller walk is preferred; the union's resolvable members are the floor when the walk
+    // fails (wala/ML#716, wala/ML#718).
+    ShapeResult viaCallers = this.getArgumentShapeResultViaCallers(builder, paramPos, paramName);
+    if (!viaCallers.members().isEmpty()) return viaCallers;
+    return fromValue.members().isEmpty() ? viaCallers : fromValue;
   }
 
   /**

@@ -65,11 +65,25 @@ public class Reshape extends TensorGenerator {
    */
   @Override
   public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+    return this.getShapeResult(builder).toLegacy();
+  }
+
+  /**
+   * Record-carrying core of {@link #getShapes(PropagationCallGraphBuilder)} (wala/ML#718): a
+   * partially resolvable target shape vector keeps its resolvable members, refined per member, with
+   * the unknown remainder riding through to the output.
+   *
+   * @param builder The propagation call graph builder used for analysis.
+   * @return The resolution result.
+   */
+  @Override
+  protected ShapeResult getShapeResult(PropagationCallGraphBuilder builder) {
     // 1. Try to get shape from the 'shape' argument.
     OrdinalSet<InstanceKey> shapePts =
         this.getArgumentPointsToSet(
             builder, this.getShapeParameterPosition(), this.getShapeParameterName());
 
+    boolean hasUnknown = false;
     Set<List<Dimension<?>>> rawShapes = null;
 
     if (shapePts != null && !shapePts.isEmpty()) {
@@ -81,22 +95,28 @@ public class Reshape extends TensorGenerator {
       // Soundness: when the `shape` argument is present but unparseable, the output shape is ⊤
       // (the result is determined by `shape`, not the input tensor — falling back to input-shape
       // inference would be unsound).
-      if (rawShapes == null) return null;
+      if (rawShapes == null) return ShapeResult.unknown();
     }
 
     if (rawShapes == null || rawShapes.isEmpty()) {
       // The shape argument's points-to set is empty (or held no shape-bearing allocation). A shape
       // vector derived from a tensor's shape (`t.shape.as_list()[-2:]` and friends) has no
       // points-to state at all, so resolve it by def-use provenance instead (wala/ML#703).
-      Set<List<Dimension<?>>> vectorShapes =
-          this.getShapesFromShapeVectorArgument(
+      ShapeResult vectorShapes =
+          this.getShapeResultFromShapeVectorArgument(
               builder, this.getShapeParameterPosition(), this.getShapeParameterName());
-      if (vectorShapes != null && !vectorShapes.isEmpty()) rawShapes = vectorShapes;
+      if (!vectorShapes.members().isEmpty()) {
+        // A partially resolvable target keeps its members; the remainder rides through
+        // (wala/ML#718).
+        rawShapes = vectorShapes.members();
+        hasUnknown = vectorShapes.hasUnknown();
+      }
       // Soundness: a structurally-recognized shape vector whose walk fails (e.g. a bound that
       // isn't statically constant) determines the output shape but is unknown, so the output is ⊤;
       // falling through to input-shape inference would leak the input's shape (wala/ML#704).
       else if (this.isShapeVectorArgument(
-          builder, this.getShapeParameterPosition(), this.getShapeParameterName())) return null;
+          builder, this.getShapeParameterPosition(), this.getShapeParameterName()))
+        return ShapeResult.unknown();
     }
 
     if (rawShapes != null && !rawShapes.isEmpty()) {
@@ -173,11 +193,11 @@ public class Reshape extends TensorGenerator {
           refinedShapes.add(shape);
         }
       }
-      return refinedShapes;
+      return new ShapeResult(refinedShapes, hasUnknown);
     }
 
     // 2. Fallback: infer from input tensor.
-    return getDefaultShapes(builder);
+    return ShapeResult.fromLegacy(getDefaultShapes(builder));
   }
 
   @Override
