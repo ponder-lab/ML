@@ -2974,7 +2974,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testTopPLogits()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_top_p_logits.py", "top_p_logits", 1, 11, Map.of(2, Set.of(TENSOR_1_5_FLOAT32)));
+    test("tf2_test_top_p_logits.py", "top_p_logits", 1, 12, Map.of(2, Set.of(TENSOR_1_5_FLOAT32)));
   }
 
   /**
@@ -3001,7 +3001,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_take_along_axis.py",
         "_take_long_axis",
         2,
-        9,
+        10,
         Map.of(2, Set.of(TENSOR_2_3_FLOAT32), 3, Set.of(TENSOR_2_2_INT32)));
   }
 
@@ -3639,7 +3639,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_crf.py",
         "crf_unary_score",
         3,
-        18,
+        20,
         Map.of(
             2, Set.of(TENSOR_2_3_INT32),
             3, Set.of(TENSOR_2_INT32),
@@ -3782,7 +3782,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_crf.py",
         "crf_forward",
         4,
-        15,
+        16,
         Map.of(
             2, Set.of(TENSOR_2_2_4_FLOAT32),
             3, Set.of(TENSOR_2_4_FLOAT32),
@@ -4096,7 +4096,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_gather_elements_along_row.py",
         "_gather_elements_along_row",
         2,
-        9,
+        10,
         Map.of(
             2, Set.of(TENSOR_2_4_FLOAT32),
             3, Set.of(TENSOR_2_3_INT32)));
@@ -13279,6 +13279,57 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(
             2,
             Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(100))))));
+  }
+
+  /**
+   * Pins the fold taint of the dimension-provenance split (wala/ML#721): {@code np.prod} over a
+   * shape list whose leading axis is {@code None} stays {@link DynamicDim} — arithmetic over a
+   * {@code None} axis is itself {@code None} at run time — rather than degrading to {@link
+   * UnresolvedDim}. The runtime guards the {@code None} away before folding (the BERT {@code
+   * get_shape_list} idiom), but the static walk sees the unguarded shape. The {@code (24)} member
+   * is the guarded arm — the runtime-true fold over the patched {@code [1, 4, 6]} — flowing
+   * alongside per the guard-φ.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testProdOverDynamic()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_prod_over_dynamic.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE)),
+                TensorType.of(FLOAT_32, 24))));
+  }
+
+  /**
+   * Pins the {@code tf.range} arm of the dimension-provenance split (wala/ML#721): a
+   * configuration-sourced limit (an environment read the analysis cannot fold) types the rank-1
+   * length as {@link UnresolvedDim} — a fixed runtime size of unknown value — not {@link
+   * DynamicDim}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testRangeUnresolved()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_range_unresolved.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_32, asList(UnresolvedDim.INSTANCE)))));
   }
 
   /**
