@@ -46,10 +46,12 @@ public class DiagnosticLoggingVolumeTest {
     // Fixed code emitted ~0.6 GB of formatted FINEST volume for this analysis when the guard was
     // calibrated (wala/ML#697, July 8); the shape-provenance machinery merged since (wala/ML#703
     // through wala/ML#714) organically grew that to ~2.2 GB measured in-suite on a clean master,
-    // with run-to-run variance around the old 2 GB bound (wala/ML#715). A bare `Context` render,
-    // the failure mode this guard exists to catch, measured ~14 GB. 4 GB sits well above the
-    // organic level and still far below the failure mode.
-    final long maxFormattedChars = 4_000_000_000L;
+    // with run-to-run variance around the old 2 GB bound (wala/ML#715), and the tf.reshape /
+    // tf.squeeze producer registrations plus the callee-return descent (wala/ML#718) grew it again
+    // to ~5.6 GB — the same messages over roughly 2.5x the delegation traversals, no new render
+    // sites. A bare `Context` render, the failure mode this guard exists to catch, measured ~14 GB
+    // before that growth and scales with the same traversal count, so 8 GB keeps the gap.
+    final long maxFormattedChars = 8_000_000_000L;
 
     Logger pkg = Logger.getLogger("com.ibm.wala.cast.python");
     DiscardingFormattingHandler handler = new DiscardingFormattingHandler();

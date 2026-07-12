@@ -1772,6 +1772,20 @@ public abstract class TensorGenerator {
 
     // No direct generator. Try tracing the definition or parameters.
     SSAInstruction def = node.getDU().getDef(valueNumber);
+
+    // A value defined by an invoke that neither the points-to set nor the factory resolved is
+    // typically a Python-callable result whose allocation the PA lost through a synthetic return
+    // (e.g., a chained layer-call result in a `call` body). The callee's own return value still
+    // resolves per context — recursing through a trampoline body reaches the underlying op result
+    // and its generator — so descend into each callee's returns (wala/ML#718).
+    if (def instanceof SSAAbstractInvokeInstruction) {
+      ShapeResult fromCallees =
+          this.shapeResultOfCalleeReturnValues(
+              builder, node, (SSAAbstractInvokeInstruction) def, exact);
+      if (!fromCallees.members().isEmpty()) return fromCallees;
+      if (fromCallees.hasUnknown() && partial == null) partial = ShapeResult.unknown();
+    }
+
     if (def == null) {
       // It's a parameter. Trace back to call sites.
       int paramPos = -1;
@@ -3203,7 +3217,10 @@ public abstract class TensorGenerator {
             return ret;
           }
           LOGGER.fine("Delegating dtype inference to: " + generator);
-          ret.addAll(generator.getDTypes(builder));
+          Set<DType> delegated = generator.getDTypes(builder);
+          // A null delegation result is ⊤ (e.g., an argument dtype that resolves through neither
+          // the points-to set nor the caller walk); contribute UNKNOWN rather than NPE-ing.
+          ret.addAll(delegated == null ? EnumSet.of(UNKNOWN) : delegated);
         } else if (defSource != null) {
           if (this.getSource() != null && this.getSource().equals(defSource)) {
             return ret;
@@ -3218,7 +3235,9 @@ public abstract class TensorGenerator {
           }
           if (generator != null) {
             LOGGER.fine("Delegating dtype inference to: " + generator);
-            ret.addAll(generator.getDTypes(builder));
+            Set<DType> delegated = generator.getDTypes(builder);
+            // A null delegation result is ⊤; contribute UNKNOWN rather than NPE-ing.
+            ret.addAll(delegated == null ? EnumSet.of(UNKNOWN) : delegated);
           }
         }
       }
@@ -4343,6 +4362,66 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Tensor-value twin of {@link #shapeResultOfCalleeReturns}: follows an invoke into each callee
+   * the call graph resolves for it and reads every returned value's shape via {@link
+   * #getShapeResult(PropagationCallGraphBuilder, CGNode, int, boolean)}, unioning the results
+   * (wala/ML#718). Unlike the shape-vector walk, whose folds assert per-member facts and must
+   * resolve every return, a tensor-value read is partial-friendly: an unresolvable return (or a
+   * bare {@code return}, whose {@code None} is not a tensor) marks the unknown remainder while the
+   * resolvable returns' members stand.
+   *
+   * <p>Recursion through cyclic call chains is bounded by the memoized core's in-progress guard,
+   * which answers a re-entered {@code (node, vn)} with the previous round's approximation.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the targets.
+   * @param node The calling {@link CGNode}.
+   * @param invoke The invoke instruction whose result is being read.
+   * @param exact Whether the read is exact (see {@link #getShapeResult(PropagationCallGraphBuilder,
+   *     CGNode, int, boolean)}).
+   * @return The union of the callees' return-value shapes; ⊤ when nothing resolves.
+   */
+  private ShapeResult shapeResultOfCalleeReturnValues(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      SSAAbstractInvokeInstruction invoke,
+      boolean exact) {
+    Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite());
+    if (targets == null || targets.isEmpty()) return ShapeResult.unknown();
+
+    boolean hasUnknown = false;
+    Set<List<Dimension<?>>> combined = HashSetFactory.make();
+    for (CGNode callee : targets) {
+      if (callee.getIR() == null || callee.getDU() == null) return ShapeResult.unknown();
+      boolean sawReturn = false;
+      for (Iterator<SSAInstruction> it = callee.getIR().iterateAllInstructions(); it.hasNext(); ) {
+        SSAInstruction instruction = it.next();
+        if (!(instruction instanceof SSAReturnInstruction)) continue;
+        SSAReturnInstruction ret = (SSAReturnInstruction) instruction;
+        sawReturn = true;
+        if (ret.getResult() < 0) {
+          hasUnknown = true;
+          continue;
+        }
+        ShapeResult shapes;
+        try {
+          shapes = this.getShapeResult(builder, callee, ret.getResult(), exact);
+        } catch (IllegalArgumentException e) {
+          LOGGER.log(
+              Level.FINE,
+              e,
+              () -> "shapeResultOfCalleeReturnValues: IAE reading a return of " + describe(callee));
+          hasUnknown = true;
+          continue;
+        }
+        if (shapes.hasUnknown() || shapes.isBottom()) hasUnknown = true;
+        combined.addAll(shapes.members());
+      }
+      if (!sawReturn) hasUnknown = true;
+    }
+    return combined.isEmpty() ? ShapeResult.unknown() : new ShapeResult(combined, hasUnknown);
+  }
+
+  /**
    * Returns whether this generator's shape argument is structurally a shape vector (see {@link
    * #isShapeVectorChain}), regardless of whether the provenance walk can resolve it. Consumers use
    * this to distinguish "the shape is determined by a shape vector we couldn't resolve" (output is
@@ -5313,6 +5392,10 @@ public abstract class TensorGenerator {
       return new ElementWiseOperation(node);
     } else if (type.equals(TensorFlowTypes.TRANSPOSE.getDeclaringClass())) {
       return new Transpose(node);
+    } else if (type.equals(TensorFlowTypes.RESHAPE.getDeclaringClass())) {
+      return new Reshape(node);
+    } else if (type.equals(TensorFlowTypes.SQUEEZE.getDeclaringClass())) {
+      return new Squeeze(node);
     } else if (type.equals(TensorFlowTypes.SIGMOID.getDeclaringClass())) {
       return new Sigmoid(node);
     } else if (type.equals(TensorFlowTypes.SOFTMAX.getDeclaringClass())) {

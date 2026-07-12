@@ -2222,9 +2222,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * self.embedding_size} element dynamic, since the factor comes from a checkpoint config the
    * analysis cannot read; dynamic is the sound static answer there. The rank-2 {@code (8, D)}
    * member is the embedding guard-φ's path-insensitive phantom (the pre-{@code expand_dims}
-   * member), and the pure-⊤ member is the shared-transformer loop's fixed point: the layer's ⊤
-   * output feeds back into its input, and a set read whose members include ⊤ collapses, so the four
-   * {@code DenseLayer3dProj} contexts (fed by the attention's return value) stay fully unknown — <a
+   * member). The {@code tf.reshape}/{@code tf.squeeze} producer registrations and the callee-return
+   * descent for layer-call results add the degraded-rank members ({@code (D, D)}, {@code (D, D,
+   * D)}, {@code (8, D, D)}): the einsum body's own reshapes now compute generator-side through the
+   * {@code get_shape_list} walk, whose non-entry contexts resolve rank but not every dimension. The
+   * shape-⊤ {@code float32} member is the four {@code DenseLayer3dProj} contexts (fed by the
+   * attention's return value): the dtype now relays through the descent, but the shared-transformer
+   * loop's fixed point still keeps their shapes fully unknown, as does the pure-⊤ member — TODO: <a
    * href="https://github.com/wala/ML/issues/718">wala/ML#718</a>. The {@code w} parameter keeps
    * rank 3 and {@code float32} (its chain is layer-local) but no numeric dimensions, since the
    * {@code build}-computed head sizes also derive from the config.
@@ -2248,7 +2252,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             2,
             Set.of(
                 TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE,
+                TENSOR_UNKNOWN_SHAPE_FLOAT32,
                 new TensorType(FLOAT_32, asList(new NumericDim(8), DynamicDim.INSTANCE)),
+                new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, DynamicDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32, asList(new NumericDim(8), DynamicDim.INSTANCE, DynamicDim.INSTANCE)),
                 new TensorType(
                     FLOAT_32, asList(new NumericDim(8), new NumericDim(10), DynamicDim.INSTANCE)),
                 new TensorType(
@@ -2287,7 +2298,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "WDEmbedding.call",
         "nlpgnn_full_proj",
         1,
-        10,
+        12,
         Map.of(
             3,
             Set.of(
@@ -3139,7 +3150,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_masked_sparse_ce.py",
         "MaskSparseCategoricalCrossentropy.__call__",
         3,
-        6,
+        7,
         Map.of(
             3, Set.of(TENSOR_4_INT32),
             4, Set.of(TENSOR_4_10_FLOAT32),
@@ -4462,7 +4473,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testAutoencoder3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("autoencoder.py", "run_optimization", 1, 5, Map.of(2, Set.of(TENSOR_256_784_FLOAT32)));
+    test("autoencoder.py", "run_optimization", 1, 6, Map.of(2, Set.of(TENSOR_256_784_FLOAT32)));
   }
 
   /**
@@ -13157,7 +13168,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * arm of the {@code len(outer_dims) > 1} guard's φ: the raw matmul result, which flows statically
    * even though the runtime always takes the reshape arm here, and which the batched {@code
    * tf.matmul} semantics type as the runtime-true intermediate {@code matmul((2, 4, 6), (6, 15))}
-   * (wala/ML#718; previously the rank-collapsed artifact {@code (4, 5)}).
+   * (wala/ML#718; previously the rank-collapsed artifact {@code (4, 5)}). The {@code (2, 4, 5)}
+   * member is the same φ's other pairing: {@code w}'s points-to set carries both its defs (the
+   * original {@code (6, 3, 5)} and the {@code len(w_shape) > 2} arm's reshape to {@code (6, 15)}),
+   * so the batched product also composes against the un-reshaped def, taking its trailing {@code
+   * 5}. Both extras are path-insensitive unions, not miscomputations.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -13172,17 +13187,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 3, 5), TensorType.of(FLOAT_32, 2, 4, 15))));
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 4, 3, 5),
+                TensorType.of(FLOAT_32, 2, 4, 15),
+                TensorType.of(FLOAT_32, 2, 4, 5))));
   }
 
   /**
    * The two-inner-dims variant of {@link #testEinsumViaMatmul()} (NLPGNN's {@code DenseLayer3dProj}
    * shape, {@code einsum_via_matmul(input_tensor, w, 2)}): exercises the {@code batch_dims +
    * [inner_dim]} concatenation of a shape vector with a literal list whose element is an {@code
-   * np.prod} fold (wala/ML#708). The result types as exactly the precise runtime {@code (2, 4, 6)}:
-   * the batched {@code tf.matmul} semantics (wala/ML#718) type every guard-arm pairing to the same
-   * runtime-true product, eliminating the rank-collapsed {@code (3, 6)} artifact this test
-   * previously pinned.
+   * np.prod} fold (wala/ML#708). The result types the precise runtime {@code (2, 4, 6)} (the
+   * batched {@code tf.matmul} semantics, wala/ML#718, eliminated the rank-collapsed {@code (3, 6)}
+   * artifact this test previously pinned) plus the {@code (2, 4, 3, 6)} phantom: {@code
+   * input_tensor}'s points-to set carries both its defs (the original {@code (2, 4, 3, 5)} and the
+   * {@code num_inner_dims > 1} arm's reshape to {@code (2, 4, 15)}), so the batched product also
+   * composes against the un-reshaped def — a path-insensitive union, not a miscomputation.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -13197,7 +13219,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 6))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 6), TensorType.of(FLOAT_32, 2, 4, 3, 6))));
   }
 
   /**
@@ -13265,7 +13287,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_dense3d_matmul.py",
         "einsum_via_matmul",
         2,
-        9,
+        14,
         Map.of(
             2,
             Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
@@ -13294,7 +13316,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_dense3d_matmul2.py",
         "einsum_via_matmul",
         2,
-        9,
+        14,
         Map.of(
             2,
             Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
@@ -13319,7 +13341,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_dense3d_matmul3.py",
         "einsum_via_matmul",
         2,
-        9,
+        14,
         Map.of(
             2,
             Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
@@ -13345,7 +13367,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_dense3d_matmul4.py",
         "einsum_via_matmul",
         2,
-        9,
+        14,
         Map.of(
             2,
             Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
@@ -13401,7 +13423,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_dense3d_matmul6.py",
         "einsum_via_matmul",
         2,
-        9,
+        14,
         Map.of(
             2,
             Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
@@ -13427,7 +13449,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_dense3d_matmul7.py",
         "einsum_via_matmul",
         2,
-        9,
+        14,
         Map.of(
             2,
             Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
@@ -13454,7 +13476,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_dense3d_matmul8.py",
         "einsum_via_matmul",
         2,
-        9,
+        14,
         Map.of(
             2,
             Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
