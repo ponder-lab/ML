@@ -2301,6 +2301,35 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Captures the redefined-top-level-function collapse of <a
+   * href="https://github.com/wala/ML/issues/719">wala/ML#719</a>: the script defines {@code
+   * compute} twice and calls each definition, but the CAst translation keys the function's
+   * synthetic class by name alone, so only the second definition's body survives and both call
+   * sites bind to it. The parameter therefore unions both calls' types — {@code (2, 2)} from the
+   * first call (which executes the lost {@code reduce_sum} definition at runtime) and {@code (3,
+   * 3)} from the second — on the single surviving method.
+   *
+   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/719">wala/ML#719</a> lands
+   * definition-site-distinct synthetic classes, each definition should carry only its own call's
+   * type, and this test should split per definition.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testRedefinedFunction()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_redefined_function.py",
+        "compute",
+        1,
+        2,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 2), TensorType.of(FLOAT_32, 3, 3))));
+  }
+
+  /**
    * Sibling half of {@link #testNlpgnnFullGeneration()} (wala/ML#690) — the {@code interactive}
    * entry script, the one whose {@code predict}/{@code call} nodes vanished in the consumer's
    * whole-project run. Its {@code predict} parameter typing must be symmetric with the generation
