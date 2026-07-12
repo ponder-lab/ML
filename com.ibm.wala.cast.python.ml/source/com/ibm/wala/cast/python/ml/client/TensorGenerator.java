@@ -3203,7 +3203,10 @@ public abstract class TensorGenerator {
             return ret;
           }
           LOGGER.fine("Delegating dtype inference to: " + generator);
-          ret.addAll(generator.getDTypes(builder));
+          Set<DType> delegated = generator.getDTypes(builder);
+          // A null delegation result is ⊤ (e.g., an argument dtype that resolves through neither
+          // the points-to set nor the caller walk); contribute UNKNOWN rather than NPE-ing.
+          ret.addAll(delegated == null ? EnumSet.of(UNKNOWN) : delegated);
         } else if (defSource != null) {
           if (this.getSource() != null && this.getSource().equals(defSource)) {
             return ret;
@@ -3218,7 +3221,9 @@ public abstract class TensorGenerator {
           }
           if (generator != null) {
             LOGGER.fine("Delegating dtype inference to: " + generator);
-            ret.addAll(generator.getDTypes(builder));
+            Set<DType> delegated = generator.getDTypes(builder);
+            // A null delegation result is ⊤; contribute UNKNOWN rather than NPE-ing.
+            ret.addAll(delegated == null ? EnumSet.of(UNKNOWN) : delegated);
           }
         }
       }
