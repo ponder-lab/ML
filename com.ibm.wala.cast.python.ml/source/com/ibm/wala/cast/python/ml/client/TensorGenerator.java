@@ -5318,6 +5318,10 @@ public abstract class TensorGenerator {
       return new ElementWiseOperation(node);
     } else if (type.equals(TensorFlowTypes.TRANSPOSE.getDeclaringClass())) {
       return new Transpose(node);
+    } else if (type.equals(TensorFlowTypes.RESHAPE.getDeclaringClass())) {
+      return new Reshape(node);
+    } else if (type.equals(TensorFlowTypes.SQUEEZE.getDeclaringClass())) {
+      return new Squeeze(node);
     } else if (type.equals(TensorFlowTypes.SIGMOID.getDeclaringClass())) {
       return new Sigmoid(node);
     } else if (type.equals(TensorFlowTypes.SOFTMAX.getDeclaringClass())) {
