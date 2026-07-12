@@ -287,19 +287,36 @@ public class PythonCAstToIRTranslator extends AstTranslator {
   	}
   */
 
+  /**
+   * The source line owning each composed name, so a same-named sibling definition (a different
+   * source position) composes a distinct name instead of collapsing onto the first, while re-walks
+   * of the same definition (fresh {@link CAstEntity} instances at the same position) keep composing
+   * the same name (wala/ML#719).
+   */
+  private final Map<String, Integer> composedNameOwnerLines = HashMapFactory.make();
+
   @Override
   protected String composeEntityName(WalkContext parent, CAstEntity f) {
     // Use the entity signature here to resolve entities in files under different directories.
     if (f.getKind() == CAstEntity.SCRIPT_ENTITY) return f.getSignature();
     else {
-      String name;
-      // if (f.getType() instanceof CAstType.Method) {
-      //	name = ((CAstType.Method)f.getType()).getDeclaringType().getName() + "/" + f.getName();
-      // } else {
-      name = f.getName();
-      // }
+      String name = parent.getName() + "/" + f.getName();
 
-      return parent.getName() + "/" + name;
+      // Entities without positions (synthetic) cannot be distinguished by definition site; they
+      // keep the historical name-keyed behavior.
+      Position position = f.getPosition();
+      if (position == null) return name;
+
+      // A definition at a different source position already owns this name (e.g. the same
+      // top-level function name defined twice); key this definition by its line so both bodies
+      // survive rather than the later definition replacing the earlier in the loader
+      // (wala/ML#719). The suffix character cannot appear in a Python identifier, so user names
+      // cannot collide with it. The binding write keeps the plain name (see
+      // doMaterializeFunction) so a redefinition still rebinds.
+      int line = position.getFirstLine();
+      Integer ownerLine = composedNameOwnerLines.putIfAbsent(name, line);
+      if (ownerLine == null || ownerLine == line) return name;
+      return name + "$" + line;
     }
   }
 
@@ -461,7 +478,11 @@ public class PythonCAstToIRTranslator extends AstTranslator {
         .cfg()
         .unknownInstructions(
             () -> {
-              doGlobalWrite(context, fnName, PythonTypes.Root, result);
+              // The binding uses the plain composed name, not the position-disambiguated one, so
+              // a redefinition of the same name rebinds the same variable (wala/ML#719); the
+              // disambiguated name applies to the function's type and code body only.
+              doGlobalWrite(
+                  context, context.getName() + "/" + fn.getName(), PythonTypes.Root, result);
               FieldReference fnField =
                   FieldReference.findOrCreate(
                       PythonTypes.Root,
