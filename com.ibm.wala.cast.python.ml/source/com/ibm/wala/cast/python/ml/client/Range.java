@@ -6,6 +6,7 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -152,7 +153,10 @@ public class Range extends TensorGenerator {
       }
     }
 
-    return ret;
+    // No bound combination resolved. The call still produces a rank-1 tensor whose fixed length
+    // the analysis could not compute, so fall back to the unresolved-length default rather than
+    // returning the empty set — ⊥ ("not a tensor") silently drops the variable (wala/ML#721).
+    return ret.isEmpty() ? this.getDefaultShapes(builder) : ret;
   }
 
   /**
@@ -287,7 +291,9 @@ public class Range extends TensorGenerator {
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     List<Dimension<?>> rank1 = new ArrayList<>();
-    rank1.add(DynamicDim.INSTANCE);
+    // Unresolvable bounds are typically Python scalars, so the length is a fixed runtime value
+    // the analysis could not compute (wala/ML#721).
+    rank1.add(UnresolvedDim.INSTANCE);
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     ret.add(rank1);
     return ret;

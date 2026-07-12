@@ -5,6 +5,7 @@ import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
@@ -98,8 +99,13 @@ public class Split extends PassThroughUnaryTensorGenerator {
           && ((NumericDim) axisDim).value() % count == 0)
         out.set(normalized, new NumericDim(((NumericDim) axisDim).value() / count));
       // A size-list split, a non-constant count, a non-numeric axis dimension, or a non-exact
-      // division: the quotient is unknown, but the rank and the other dimensions still hold.
-      else out.set(normalized, DynamicDim.INSTANCE);
+      // division: the quotient is unknown, but the rank and the other dimensions still hold. A
+      // quotient of a `None` axis is itself `None` at run time; otherwise it is a fixed size the
+      // analysis could not compute (wala/ML#721).
+      else
+        out.set(
+            normalized,
+            axisDim instanceof DynamicDim ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE);
       ret.add(out);
     }
     return ret.isEmpty() ? null : ret;

@@ -1,8 +1,8 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
-import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
@@ -147,14 +147,16 @@ public abstract class EyeBase extends TensorTypeAllocator {
 
   /**
    * Maps a possibly-unknown axis size to a dimension: a {@link NumericDim} when the value is known,
-   * a {@link DynamicDim} when it isn't (so an unresolvable {@code num_rows}/{@code num_columns}
-   * floors to a dynamic axis rather than crashing on {@link Optional#get()}). wala/ML#611.
+   * an {@link UnresolvedDim} when it isn't (so an unresolvable {@code num_rows}/{@code num_columns}
+   * floors to an unknown fixed axis rather than crashing on {@link Optional#get()}, wala/ML#611) —
+   * the argument is a Python scalar, so the runtime size is a fixed value the analysis could not
+   * compute (wala/ML#721).
    *
    * @param value The possibly-unknown axis size.
-   * @return A {@link NumericDim} if present, else {@link DynamicDim#INSTANCE}.
+   * @return A {@link NumericDim} if present, else {@link UnresolvedDim#INSTANCE}.
    */
   private static Dimension<?> axisDim(Optional<Integer> value) {
-    return value.isPresent() ? new NumericDim(value.get()) : DynamicDim.INSTANCE;
+    return value.isPresent() ? new NumericDim(value.get()) : UnresolvedDim.INSTANCE;
   }
 
   private Set<Optional<Integer>> getNumberOfColumns(PropagationCallGraphBuilder builder) {

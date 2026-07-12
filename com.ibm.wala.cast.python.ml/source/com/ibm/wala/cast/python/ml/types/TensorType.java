@@ -62,7 +62,8 @@ public class TensorType implements Iterable<Dimension<?>> {
     Symbolic,
     Compound,
     Ragged,
-    Dynamic
+    Dynamic,
+    Unresolved
   };
 
   public abstract static class Dimension<T> {
@@ -302,6 +303,12 @@ public class TensorType implements Iterable<Dimension<?>> {
    * size varies across rows of a single tensor instance, see {@link RaggedDim}). See <a
    * href="https://github.com/wala/ML/issues/545">wala/ML#545</a>.
    *
+   * <p>The criterion is TensorFlow's own static shape: an axis is {@code Dynamic} iff the runtime
+   * {@code TensorShape} would report {@code None} there, so {@code tensor.shape.as_list()} yields
+   * {@code None} and shape-helper code patches it with {@code tf.shape(...)}. A size that is a
+   * fixed runtime integer the <em>analysis</em> could not compute is {@link UnresolvedDim}, not
+   * {@code Dynamic} (<a href="https://github.com/wala/ML/issues/721">wala/ML#721</a>).
+   *
    * <p>The {@link Dimension#value() value} is always {@code null}&mdash;dynamic-ness carries no
    * payload beyond its identity. Because every instance is structurally equal to every other, use
    * the shared {@link #INSTANCE} rather than allocating fresh objects.
@@ -363,6 +370,90 @@ public class TensorType implements Iterable<Dimension<?>> {
      * Override paired with {@link #hashCode} to satisfy the {@code equals}/{@code hashCode}
      * contract under CodeQL's {@code java/inconsistent-equals-and-hashcode}. See {@link
      * RaggedDim#equals} for the shared singleton-identity rationale.
+     */
+    @Override
+    public boolean equals(Object obj) {
+      return this == obj;
+    }
+  }
+
+  /**
+   * Marker for a statically unresolved dimension&mdash;a dimension with a single fixed size at run
+   * time that the analysis could not compute (e.g., a size loaded from a configuration file, or
+   * arithmetic over such a size). The runtime {@code TensorShape} reports a concrete integer there,
+   * so {@code tensor.shape.as_list()} stays static; contrast {@link DynamicDim}, where the runtime
+   * {@code TensorShape} itself reports {@code None} (a feed-dependent batch axis, an axis declared
+   * {@code None}) and shape reads go symbolic. Keeping the two apart lets a consumer stay
+   * conservative about runtime-varying axes without over-approximating the runtime-fixed ones. See
+   * <a href="https://github.com/wala/ML/issues/721">wala/ML#721</a>.
+   *
+   * <p>The classification is evidence-based, not proof: an unresolved size with no static evidence
+   * of {@code None} is marked unresolved, but the analysis cannot in general prove the runtime
+   * shape holds a concrete integer there. Dimension arithmetic taints toward {@link DynamicDim}: a
+   * product or fold over any {@code Dynamic} factor is {@code Dynamic}, and degrades to {@code
+   * Unresolved} only when no factor carries {@code None}-evidence.
+   *
+   * <p>The {@link Dimension#value() value} is always {@code null}&mdash;unresolvedness carries no
+   * payload beyond its identity. Because every instance is structurally equal to every other, use
+   * the shared {@link #INSTANCE} rather than allocating fresh objects.
+   */
+  public static class UnresolvedDim extends Dimension<Void> {
+    /** Shared singleton; {@code UnresolvedDim} carries no per-instance state. */
+    public static final UnresolvedDim INSTANCE = new UnresolvedDim();
+
+    /**
+     * @implNote Private&mdash;all callers should use {@link #INSTANCE}. The {@code super(null)}
+     *     call is mechanical: {@link Dimension} requires a value of type {@code T}, and {@code
+     *     Void} has no instances, so {@code null} is the only legal argument. Unresolvedness
+     *     carries no payload beyond the type's identity.
+     */
+    private UnresolvedDim() {
+      super(null);
+    }
+
+    @Override
+    DimensionType type() {
+      return DimensionType.Unresolved;
+    }
+
+    @Override
+    int concreteSize() {
+      return -1;
+    }
+
+    @Override
+    int symbolicDims() {
+      return 1;
+    }
+
+    @Override
+    String toMDString() {
+      return "*unresolved*";
+    }
+
+    @Override
+    String toCString(boolean useMarkdown) {
+      if (useMarkdown) {
+        return "*unresolved*";
+      } else {
+        return "unresolved";
+      }
+    }
+
+    /**
+     * Override {@link Dimension#hashCode} (which hashes only the payload {@code value}) so that
+     * null-payload singletons of different concrete classes don't collide. See {@link
+     * RaggedDim#hashCode} for the shared rationale.
+     */
+    @Override
+    public int hashCode() {
+      return UnresolvedDim.class.hashCode();
+    }
+
+    /**
+     * Override paired with {@link #hashCode} to satisfy the {@code equals}/{@code hashCode}
+     * contract under CodeQL's {@code java/inconsistent-equals-and-hashcode}. See {@link
+     * DynamicDim#equals} for the shared singleton-identity rationale.
      */
     @Override
     public boolean equals(Object obj) {

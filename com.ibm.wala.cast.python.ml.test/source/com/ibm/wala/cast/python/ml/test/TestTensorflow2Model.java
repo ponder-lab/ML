@@ -39,6 +39,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.core.util.io.FileProvider;
@@ -440,8 +441,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_2_FLOAT64 = TensorType.of(FLOAT_64, 2);
 
-  private static final TensorType TENSOR_DYNAMIC_DYNAMIC_FLOAT32 =
-      new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE));
+  private static final TensorType TENSOR_UNRESOLVED_UNRESOLVED_FLOAT32 =
+      new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE));
 
   private static final TensorType TENSOR_2_INT32 = TensorType.of(INT_32, 2);
 
@@ -1009,7 +1010,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testDataset19()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     TensorType images = TensorType.of(FLOAT_32, 512, 112, 112, 3);
-    TensorType labels = new TensorType(FLOAT_32, asList(new NumericDim(512), DynamicDim.INSTANCE));
+    TensorType labels =
+        new TensorType(FLOAT_32, asList(new NumericDim(512), UnresolvedDim.INSTANCE));
 
     test(
         "tf2_test_dataset19.py", "distributed_train_step", 1, 1, Map.of(2, Set.of(images, labels)));
@@ -2209,7 +2211,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "nlpgnn_full_proj",
         1,
         1,
-        Map.of(3, Set.of(new TensorType(UNKNOWN, asList(DynamicDim.INSTANCE, new NumericDim(1))))));
+        Map.of(
+            3, Set.of(new TensorType(UNKNOWN, asList(UnresolvedDim.INSTANCE, new NumericDim(1))))));
   }
 
   /**
@@ -2219,13 +2222,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * scripts' explicit {@code model.build} contracts through the embedding's output reshape
    * (wala/ML#716, wala/ML#717): {@code (8, 100)} and {@code (8, 10)} leading pairs from the entries
    * whose pipelines reach this layer, each with the trailing {@code input_shape[-1] *
-   * self.embedding_size} element dynamic, since the factor comes from a checkpoint config the
-   * analysis cannot read; dynamic is the sound static answer there. The rank-2 {@code (8, D)}
-   * member is the embedding guard-φ's path-insensitive phantom (the pre-{@code expand_dims}
-   * member). The {@code tf.reshape}/{@code tf.squeeze} producer registrations and the callee-return
-   * descent for layer-call results add the degraded-rank members ({@code (D, D)}, {@code (D, D,
-   * D)}, {@code (8, D, D)}): the einsum body's own reshapes now compute generator-side through the
-   * {@code get_shape_list} walk, whose non-entry contexts resolve rank but not every dimension. The
+   * self.embedding_size} element unresolved, since the factor comes from a checkpoint config the
+   * analysis cannot read — a fixed runtime size of unknown value ({@link UnresolvedDim},
+   * wala/ML#721), not a runtime-{@code None} axis. The rank-2 {@code (8, D)} member is the
+   * embedding guard-φ's path-insensitive phantom (the pre-{@code expand_dims} member). The {@code
+   * tf.reshape}/{@code tf.squeeze} producer registrations and the callee-return descent for
+   * layer-call results add the degraded-rank members ({@code (D, D)}, {@code (D, D, D)}, {@code (8,
+   * D, D)}): the einsum body's own reshapes now compute generator-side through the {@code
+   * get_shape_list} walk, whose non-entry contexts resolve rank but not every dimension. The
    * shape-⊤ {@code float32} member is the four {@code DenseLayer3dProj} contexts (fed by the
    * attention's return value): the dtype now relays through the descent, but the shared-transformer
    * loop's fixed point still keeps their shapes fully unknown, as does the pure-⊤ member — TODO: <a
@@ -2253,22 +2257,25 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             Set.of(
                 TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE,
                 TENSOR_UNKNOWN_SHAPE_FLOAT32,
-                new TensorType(FLOAT_32, asList(new NumericDim(8), DynamicDim.INSTANCE)),
-                new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE)),
+                new TensorType(FLOAT_32, asList(new NumericDim(8), UnresolvedDim.INSTANCE)),
+                new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
                 new TensorType(
                     FLOAT_32,
-                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, DynamicDim.INSTANCE)),
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
                 new TensorType(
-                    FLOAT_32, asList(new NumericDim(8), DynamicDim.INSTANCE, DynamicDim.INSTANCE)),
+                    FLOAT_32,
+                    asList(new NumericDim(8), UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
                 new TensorType(
-                    FLOAT_32, asList(new NumericDim(8), new NumericDim(10), DynamicDim.INSTANCE)),
+                    FLOAT_32,
+                    asList(new NumericDim(8), new NumericDim(10), UnresolvedDim.INSTANCE)),
                 new TensorType(
-                    FLOAT_32, asList(new NumericDim(8), new NumericDim(100), DynamicDim.INSTANCE))),
+                    FLOAT_32,
+                    asList(new NumericDim(8), new NumericDim(100), UnresolvedDim.INSTANCE))),
             3,
             Set.of(
                 new TensorType(
                     FLOAT_32,
-                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, DynamicDim.INSTANCE)),
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
                 new TensorType(
                     FLOAT_32,
                     asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))))));
@@ -2378,7 +2385,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "nlpgnn_full_proj",
         1,
         1,
-        Map.of(3, Set.of(new TensorType(UNKNOWN, asList(DynamicDim.INSTANCE, new NumericDim(1))))));
+        Map.of(
+            3, Set.of(new TensorType(UNKNOWN, asList(UnresolvedDim.INSTANCE, new NumericDim(1))))));
   }
 
   /**
@@ -2966,7 +2974,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testTopPLogits()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_top_p_logits.py", "top_p_logits", 1, 11, Map.of(2, Set.of(TENSOR_1_5_FLOAT32)));
+    test("tf2_test_top_p_logits.py", "top_p_logits", 1, 12, Map.of(2, Set.of(TENSOR_1_5_FLOAT32)));
   }
 
   /**
@@ -2993,7 +3001,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_take_along_axis.py",
         "_take_long_axis",
         2,
-        9,
+        10,
         Map.of(2, Set.of(TENSOR_2_3_FLOAT32), 3, Set.of(TENSOR_2_2_INT32)));
   }
 
@@ -3631,7 +3639,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_crf.py",
         "crf_unary_score",
         3,
-        18,
+        20,
         Map.of(
             2, Set.of(TENSOR_2_3_INT32),
             3, Set.of(TENSOR_2_INT32),
@@ -3774,7 +3782,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_crf.py",
         "crf_forward",
         4,
-        15,
+        16,
         Map.of(
             2, Set.of(TENSOR_2_2_4_FLOAT32),
             3, Set.of(TENSOR_2_4_FLOAT32),
@@ -3861,7 +3869,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(
-            2, Set.of(new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(6))))));
+            2,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(6))))));
   }
 
   /**
@@ -4087,7 +4096,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_gather_elements_along_row.py",
         "_gather_elements_along_row",
         2,
-        9,
+        10,
         Map.of(
             2, Set.of(TENSOR_2_4_FLOAT32),
             3, Set.of(TENSOR_2_3_INT32)));
@@ -5625,7 +5634,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             // argument. The (2, 2) int32 member is the call-site union with the label tensor.
             Set.of(
                 new TensorType(
-                    UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(100))),
+                    UNKNOWN,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(100))),
                 TensorType.of(INT_32, 2, 2))));
   }
 
@@ -5689,7 +5699,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             4,
             Set.of(
                 new TensorType(
-                    UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(10))),
+                    UNKNOWN,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))),
                 TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
@@ -5965,7 +5976,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             // argument. The (2, 2) int32 member is the call-site union with the label tensor.
             Set.of(
                 new TensorType(
-                    UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(100))),
+                    UNKNOWN,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(100))),
                 TensorType.of(INT_32, 2, 2))));
   }
 
@@ -11113,7 +11125,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(
-            2, Set.of(new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(8))))));
+            2,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(8))))));
   }
 
   @Test
@@ -11285,7 +11298,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
                 TensorType.of(FLOAT_32, 2, 3, 8),
                 new TensorType(
                     INT_32,
-                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(10))))));
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))))));
   }
 
   /**
@@ -11473,7 +11486,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
                 TENSOR_UNKNOWN_SHAPE_FLOAT32,
                 new TensorType(
                     UNKNOWN,
-                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(10))))));
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))))));
   }
 
   /**
@@ -13245,6 +13258,81 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Distilled guard for the dimension-provenance split (wala/ML#721): a configuration-sourced size
+   * — here an environment read the analysis cannot fold — types as {@link UnresolvedDim}, a fixed
+   * runtime size of unknown value, not {@link DynamicDim}, which is reserved for axes the runtime
+   * {@code TensorShape} reports as {@code None}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testUnresolvedDim()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_unresolved_dim.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(100))))));
+  }
+
+  /**
+   * Pins the fold taint of the dimension-provenance split (wala/ML#721): {@code np.prod} over a
+   * shape list whose leading axis is {@code None} stays {@link DynamicDim} — arithmetic over a
+   * {@code None} axis is itself {@code None} at run time — rather than degrading to {@link
+   * UnresolvedDim}. The runtime guards the {@code None} away before folding (the BERT {@code
+   * get_shape_list} idiom), but the static walk sees the unguarded shape. The {@code (24)} member
+   * is the guarded arm — the runtime-true fold over the patched {@code [1, 4, 6]} — flowing
+   * alongside per the guard-φ.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testProdOverDynamic()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_prod_over_dynamic.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE)),
+                TensorType.of(FLOAT_32, 24))));
+  }
+
+  /**
+   * Pins the {@code tf.range} arm of the dimension-provenance split (wala/ML#721): a
+   * configuration-sourced limit (an environment read the analysis cannot fold) types the rank-1
+   * length as {@link UnresolvedDim} — a fixed runtime size of unknown value — not {@link
+   * DynamicDim}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testRangeUnresolved()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_range_unresolved.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_32, asList(UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
    * Distilled regression guard for {@code tf.matmul}'s batched form (wala/ML#718): the leading
    * (batch) dimensions carry through and the trailing two dimensions compose as the matrix product,
    * so the rank is preserved. The analysis previously collapsed every product to rank two.
@@ -13401,7 +13489,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             3,
             Set.of(
                 new TensorType(
-                    FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(3), new NumericDim(5))))));
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, new NumericDim(3), new NumericDim(5))))));
   }
 
   /**
@@ -13456,7 +13545,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             3,
             Set.of(
                 new TensorType(
-                    FLOAT_32, asList(new NumericDim(6), new NumericDim(3), DynamicDim.INSTANCE)))));
+                    FLOAT_32,
+                    asList(new NumericDim(6), new NumericDim(3), UnresolvedDim.INSTANCE)))));
   }
 
   /**
@@ -13581,9 +13671,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(
             2,
             Set.of(
-                new TensorType(FLOAT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)),
+                new TensorType(FLOAT_32, asList(new NumericDim(2), UnresolvedDim.INSTANCE)),
                 new TensorType(
-                    FLOAT_32, asList(new NumericDim(2), new NumericDim(2), DynamicDim.INSTANCE)))));
+                    FLOAT_32,
+                    asList(new NumericDim(2), new NumericDim(2), UnresolvedDim.INSTANCE)))));
   }
 
   /**
@@ -13606,7 +13697,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(
-            2, Set.of(new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(6))))));
+            2,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(6))))));
   }
 
   /**
@@ -13630,7 +13722,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(
-            2, Set.of(TENSOR_30_FLOAT32, new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE)))));
+            2,
+            Set.of(TENSOR_30_FLOAT32, new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE)))));
   }
 
   /**
@@ -15288,22 +15381,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_DYNAMIC_DYNAMIC_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_UNRESOLVED_UNRESOLVED_FLOAT32)));
   }
 
   /**
    * Complements {@link #testEyeUnresolvableBatchShape()}: when {@code batch_shape} is a list
    * literal whose length (and hence the output rank) is statically known but whose element is
    * unresolvable (here from {@code json.loads}), precision is preserved rather than floored to ⊤.
-   * The single leading batch dimension is dynamic and the {@code (num_rows, num_columns)} suffix
-   * stays exact, so {@code tf.eye(3, batch_shape=[<unknown>])} types to {@code (Dynamic, 3, 3)}
-   * float32. See <a href="https://github.com/wala/ML/issues/611">wala/ML#611</a>.
+   * The single leading batch dimension is a fixed runtime size the analysis cannot compute ({@link
+   * UnresolvedDim}, wala/ML#721) and the {@code (num_rows, num_columns)} suffix stays exact, so
+   * {@code tf.eye(3, batch_shape=[<unknown>])} types to {@code (Unresolved, 3, 3)} float32. See <a
+   * href="https://github.com/wala/ML/issues/611">wala/ML#611</a>.
    */
   @Test
   public void testEyeDynamicBatch()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     TensorType t =
-        new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(3), new NumericDim(3)));
+        new TensorType(
+            FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(3), new NumericDim(3)));
     test("tf2_test_eye_dynamic_batch.py", "consume", 1, 1, Map.of(2, Set.of(t)));
   }
 

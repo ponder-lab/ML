@@ -21,9 +21,9 @@ import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
-import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.types.PythonTypes;
@@ -945,7 +945,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       Dimension<?> fromGenerator = generatorDims.get(i);
       Dimension<?> fromShapeArg = shapeArgDims.get(i);
       if (fromGenerator instanceof NumericDim && fromShapeArg instanceof NumericDim)
-        merged.add(fromGenerator.equals(fromShapeArg) ? fromGenerator : DynamicDim.INSTANCE);
+        // Two concrete computations disagreeing means the size is fixed but the analysis cannot
+        // tell which value holds — an unresolved size, not a runtime-varying one (wala/ML#721).
+        merged.add(fromGenerator.equals(fromShapeArg) ? fromGenerator : UnresolvedDim.INSTANCE);
       else if (fromGenerator instanceof NumericDim) merged.add(fromGenerator);
       else if (fromShapeArg instanceof NumericDim) merged.add(fromShapeArg);
       else if (!generatorHasNumeric && fromShapeArg instanceof SymbolicDim)
