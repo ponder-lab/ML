@@ -121,7 +121,7 @@ When writing a new `TensorGenerator` subclass in `com.ibm.wala.cast.python.ml.cl
 | empty set (`Collections.emptySet()`) | ⊥—the variable is provably not a tensor. |
 | non-empty set | The set of concrete shapes the tensor may take. |
 
-Within a single shape, use `new SymbolicDim("?")` for a known-rank-but-unknown-size dimension (e.g., a dynamic batch size). A `null` shape *list* means even the rank is unknown.
+Within a single shape, a known-rank-but-unknown-size dimension is one of two sentinels, chosen by TensorFlow's own static shape ([wala/ML#721](https://github.com/wala/ML/issues/721)): `DynamicDim.INSTANCE` iff the runtime `TensorShape` would report `None` there (a feed-dependent batch axis, an explicit `None` declaration), and `UnresolvedDim.INSTANCE` for a fixed runtime integer the analysis could not compute (a config-file value, unfoldable arithmetic, a non-literal Python scalar). Dimension arithmetic taints toward `Dynamic`: a fold over any `Dynamic` factor stays `Dynamic`; it degrades to `Unresolved` only when no factor carries `None`-evidence. (`new SymbolicDim("?")` is the reshape family's inferred-`-1` placeholder and carries no runtime-`None` guarantee either way.) A `null` shape *list* means even the rank is unknown.
 
 ### Dtypes—`getDefaultDTypes`
 
