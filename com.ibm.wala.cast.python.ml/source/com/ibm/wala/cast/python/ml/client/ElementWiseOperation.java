@@ -9,13 +9,18 @@ import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
+import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.ssa.SSAUnaryOpInstruction;
+import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.util.collections.HashSetFactory;
 import java.util.EnumSet;
 import java.util.List;
@@ -100,6 +105,123 @@ public class ElementWiseOperation extends TensorGenerator {
     }
     return this.getArgumentValueNumber(
         builder, this.getYParameterPosition(), this.getYParameterName(), false);
+  }
+
+  /**
+   * Record view of the broadcast (wala/ML#718): when one operand resolves to shape members and the
+   * other is a statically opaque <em>scalar expression</em> (e.g. {@code 1.0 /
+   * math.sqrt(float(...))}, whose value never resolves), the scalar broadcast preserves the
+   * resolved side's shapes exactly, so they stand; the legacy path returned ⊥ and erased the tensor
+   * entirely. An opaque co-operand that is not provably scalar keeps the legacy result, since
+   * broadcast can change the shape when the opaque side's rank dominates.
+   *
+   * @param builder The propagation call graph builder.
+   * @return The broadcast result.
+   */
+  @Override
+  protected ShapeResult getDefaultShapeResult(PropagationCallGraphBuilder builder) {
+    int xVn = this.getXArgumentValueNumber(builder);
+    if (xVn <= 0) return ShapeResult.unknown();
+    Set<List<Dimension<?>>> xShapes = this.getOperandShapes(builder, xVn);
+    int yVn = this.getYArgumentValueNumber(builder);
+    if (yVn <= 0) return ShapeResult.unknown();
+    Set<List<Dimension<?>>> yShapes = this.getOperandShapes(builder, yVn);
+
+    boolean xHas = xShapes != null && !xShapes.isEmpty();
+    boolean yHas = yShapes != null && !yShapes.isEmpty();
+    if (xHas != yHas) {
+      Set<List<Dimension<?>>> resolved = xHas ? xShapes : yShapes;
+      int opaqueVn = xHas ? yVn : xVn;
+      if (resolved.stream().anyMatch(dims -> !dims.isEmpty())
+          && isScalarExpression(builder, opaqueVn)) return ShapeResult.of(resolved);
+    }
+    return ShapeResult.fromLegacy(this.getDefaultShapes(builder));
+  }
+
+  /**
+   * Recognizes a statically opaque scalar expression: a scalar literal, a {@code float(...)} or
+   * {@code int(...)} builtin call, a {@code math.<fn>(...)} call, a unary minus, or a binary op
+   * whose operands are both scalar expressions (wala/ML#718). The value never resolves (the PA does
+   * not fold arithmetic), but its scalarness is structural, so a broadcast against it preserves the
+   * tensor operand's shape.
+   *
+   * @param builder The propagation call graph builder.
+   * @param vn The operand's value number.
+   * @return {@code true} iff the operand is structurally a Python scalar expression.
+   */
+  private boolean isScalarExpression(PropagationCallGraphBuilder builder, int vn) {
+    if (vn <= 0) return false;
+    CGNode node = this.getNode();
+    if (node.getDU() == null || node.getIR() == null) return false;
+    if (isScalarLiteral(builder, vn)) return true;
+    if (node.getIR().getSymbolTable().isConstant(vn)) return true;
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (def instanceof SSABinaryOpInstruction)
+      return isScalarExpression(builder, def.getUse(0))
+          && isScalarExpression(builder, def.getUse(1));
+    if (def instanceof SSAUnaryOpInstruction) return isScalarExpression(builder, def.getUse(0));
+    if (def instanceof PythonInvokeInstruction) {
+      SSAInstruction funcDef = node.getDU().getDef(def.getUse(0));
+      if (funcDef instanceof PythonPropertyRead) {
+        int objVn = ((PythonPropertyRead) funcDef).getObjectRef();
+        SSAInstruction objDef = node.getDU().getDef(objVn);
+        // `math.<fn>(...)`: the receiver is the `math` module read.
+        if (objDef == null && node.getIR().getSymbolTable().isConstant(objVn)) return false;
+        int memberVn = ((PythonPropertyRead) funcDef).getMemberRef();
+        SymbolTable st = node.getIR().getSymbolTable();
+        return st.isStringConstant(memberVn) && isMathScalarFunction(st.getStringValue(memberVn));
+      }
+      // `float(...)` / `int(...)` builtins resolve to builtin classes.
+      Set<CGNode> targets =
+          builder
+              .getCallGraph()
+              .getPossibleTargets(node, ((SSAAbstractInvokeInstruction) def).getCallSite());
+      if (targets == null || targets.isEmpty()) return false;
+      for (CGNode target : targets) {
+        String cls = target.getMethod().getDeclaringClass().getReference().getName().toString();
+        if (!cls.equals("Lwala/builtin/float") && !cls.equals("Lwala/builtin/int")) return false;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Whether the given name is a scalar-returning {@code math}-module function.
+   *
+   * @param name The attribute name read off the receiver.
+   * @return {@code true} for the recognized scalar functions.
+   */
+  private static boolean isMathScalarFunction(String name) {
+    switch (name) {
+      case "sqrt":
+      case "exp":
+      case "log":
+      case "log2":
+      case "log10":
+      case "pow":
+      case "floor":
+      case "ceil":
+      case "fabs":
+      case "sin":
+      case "cos":
+      case "tan":
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Routes the output-shape resolution through {@link #getDefaultShapeResult} (this generator has
+   * no {@code shape} parameter), so partial results cross the generator boundary (wala/ML#718).
+   *
+   * @param builder The propagation call graph builder.
+   * @return The resolution result.
+   */
+  @Override
+  protected ShapeResult getShapeResult(PropagationCallGraphBuilder builder) {
+    return this.getDefaultShapeResult(builder);
   }
 
   @Override

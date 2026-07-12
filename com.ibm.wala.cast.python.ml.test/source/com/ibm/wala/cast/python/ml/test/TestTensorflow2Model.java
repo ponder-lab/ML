@@ -13201,6 +13201,28 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Distilled regression guard for the scalar-expression broadcast (wala/ML#718): a tensor scaled
+   * by a statically opaque scalar expression ({@code 1.0 / math.sqrt(4.0)}) keeps its shape, since
+   * the expression's scalarness is structural even though its value never resolves. The analysis
+   * previously erased the result to ⊥. Mirrors NLPGNN's attention-logit scaling.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testScalarExpressionScale()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_scalar_scale.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
+  }
+
+  /**
    * Distilled regression guard for {@code tf.matmul}'s batched form (wala/ML#718): the leading
    * (batch) dimensions carry through and the trailing two dimensions compose as the matrix product,
    * so the rank is preserved. The analysis previously collapsed every product to rank two.
