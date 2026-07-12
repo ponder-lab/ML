@@ -2301,17 +2301,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Captures the redefined-top-level-function collapse of <a
+   * The first definition of the redefined top-level function of <a
    * href="https://github.com/wala/ML/issues/719">wala/ML#719</a>: the script defines {@code
-   * compute} twice and calls each definition, but the CAst translation keys the function's
-   * synthetic class by name alone, so only the second definition's body survives and both call
-   * sites bind to it. The parameter therefore unions both calls' types — {@code (2, 2)} from the
-   * first call (which executes the lost {@code reduce_sum} definition at runtime) and {@code (3,
-   * 3)} from the second — on the single surviving method.
-   *
-   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/719">wala/ML#719</a> lands
-   * definition-site-distinct synthetic classes, each definition should carry only its own call's
-   * type, and this test should split per definition.
+   * compute} twice and calls each definition. Definition-site-distinct synthetic classes keep both
+   * bodies, the module binding rebinds at the second {@code def}, and straight-line SSA binds each
+   * call to the definition in scope, so this definition's parameter carries exactly its own call's
+   * {@code (2, 2)} — where the pre-fix collapse lost this body entirely and bound its call to the
+   * second definition.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2326,7 +2322,28 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "compute",
         1,
         2,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 2), TensorType.of(FLOAT_32, 3, 3))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 2))));
+  }
+
+  /**
+   * The second definition of {@link #testRedefinedFunction()}'s redefined function (wala/ML#719):
+   * the definition at line 11 composes the position-disambiguated synthetic class {@code
+   * compute$11}, and its parameter carries exactly the second call's {@code (3, 3)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testRedefinedFunction2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_redefined_function.py",
+        "compute$11",
+        1,
+        2,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 3, 3))));
   }
 
   /**
