@@ -72,6 +72,7 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -1240,19 +1241,38 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       Map<PointsToSetVariable, Set<TensorType>> init = HashMapFactory.make();
       Map<PointsToSetVariable, Set<TensorType>> previousRound = null;
 
-      for (int round = 0; round < MAX_TYPE_RESOLUTION_ROUNDS; round++) {
-        init = HashMapFactory.make();
-        for (PointsToSetVariable v : sources) init.put(v, getTensorTypes(v, builder));
-
-        if (init.equals(previousRound)) {
-          final int stableRound = round;
-          LOGGER.fine(() -> "Source-type resolution stabilized after round: " + stableRound + ".");
-          break;
+      // Phase 2 of the wala/ML#365 design: under the flag, a single worklist fixpoint replaces
+      // the round loop; the memo layers divert to the engine and the seeding reads stabilized
+      // values, so the results are independent of the seeding order.
+      if (WorklistTypeResolver.enabled()) {
+        LOGGER.fine("Type resolution: worklist engine (wala/ML#365 Phase 2).");
+        WorklistTypeResolver.install(builder);
+        try {
+          // The engine's results are order-independent; the reverse-seeds property exists so the
+          // invariance is a tested property rather than a design claim (wala/ML#365, Phase 2).
+          List<PointsToSetVariable> ordered = new ArrayList<>(sources);
+          if (Boolean.getBoolean("ariadne.typeResolution.reverseSeeds")
+              || "true".equals(System.getenv("ARIADNE_REVERSE_SEEDS")))
+            Collections.reverse(ordered);
+          for (PointsToSetVariable v : ordered) init.put(v, getTensorTypes(v, builder));
+        } finally {
+          WorklistTypeResolver.uninstall(builder);
         }
+      } else
+        for (int round = 0; round < MAX_TYPE_RESOLUTION_ROUNDS; round++) {
+          init = HashMapFactory.make();
+          for (PointsToSetVariable v : sources) init.put(v, getTensorTypes(v, builder));
 
-        previousRound = init;
-        TensorGenerator.advanceRound(builder);
-      }
+          if (init.equals(previousRound)) {
+            final int stableRound = round;
+            LOGGER.fine(
+                () -> "Source-type resolution stabilized after round: " + stableRound + ".");
+            break;
+          }
+
+          previousRound = init;
+          TensorGenerator.advanceRound(builder);
+        }
 
       Map<PointsToSetVariable, TensorType> placeholders =
           handleShapeSourceOp(builder, dataflow, placeholder, 2);
