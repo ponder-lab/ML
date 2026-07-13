@@ -1955,13 +1955,10 @@
         </method>
       </class>
       <class name="range" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/range returns a 1-D tensor. Modeled as `<new>+<return>` (fresh allocation) paired with the `Range` generator, which computes the length from the bounds; the previous stub returned a one-element `Llist` whose catalog fabricated a phantom `(1,)` shape for every consumer of the result (wala/ML#723). -->
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self start limit delta dtype name">
-          <new def="x" class="Llist"/>
-          <new def="z" class="Ltensorflow/functions/constant"/>
-          <constant name="p" type="int" value="1"/> <!-- FIXME: The type may actually depend on the arguments passed to `tf.range()`. It may not necessarily be `int`. -->
-          <call class="Ltensorflow/functions/constant" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="p" numArgs="2" def="y"/>
-          <putfield class="LRoot" field="0" fieldType="LRoot" ref="x" value="y"/>
-          <return value="x"/>
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
         </method>
       </class>
       <class name="Tensor" allocatable="true">
