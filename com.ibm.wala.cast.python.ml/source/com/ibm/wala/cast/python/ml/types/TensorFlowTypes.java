@@ -481,6 +481,12 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/fill")),
           AstMethodReference.fnSelector);
 
+  public static final MethodReference SHAPE_OF =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/shape")),
+          AstMethodReference.fnSelector);
+
   private static final String FILL_SIGNATURE = "tf.fill()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/linspace. */

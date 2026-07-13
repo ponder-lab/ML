@@ -3666,6 +3666,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * types. Function body mirrors {@code crf_binary_score} from {@code
    * kyzhouhzau/NLPGNN/nlpgnn/metrics/crf.py} for tensor-type inference coverage.
    *
+   * <p>The local count captures one {@code tf.shape}-scalar arithmetic intermediate regressing to ⊥
+   * when the wala/ML#722 arm made its chain live — TODO: <a
+   * href="https://github.com/wala/ML/issues/723">wala/ML#723</a>.
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
@@ -3678,7 +3682,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_crf.py",
         "crf_binary_score",
         3,
-        14,
+        13,
         Map.of(
             2, Set.of(TENSOR_2_3_INT32),
             3, Set.of(TENSOR_2_INT32),
@@ -4094,10 +4098,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * runtime-dimensioned final {@code tf.reshape} leaves the local <em>result</em> symbolic, but the
    * parameters themselves are exact.)
    *
-   * <p>The local tensor-variable count is {@code 9}: the {@code tf.tile} call now allocates a
-   * distinct tensor rather than aliasing its input as first-argument {@code pass_through} did
-   * (wala/ML#513 bucket 2a), so {@code row_indices} and a downstream use are additionally counted
-   * as tensor locals.
+   * <p>The local tensor-variable count is {@code 8}: the {@code tf.shape} shape-vector arm
+   * (wala/ML#722) made the previously-⊤ {@code range}/{@code expand_dims}/{@code tile} chain live,
+   * and it currently misresolves — {@code tf.range(num_row)} folds a leaked constant as its bound
+   * (typing {@code (1,)} where the runtime is {@code (2,)}), and the {@code row_indices *
+   * num_column + column_indices} arithmetic and its {@code [-1]} reshape regressed to ⊥ (both are
+   * genuine runtime tensors) — TODO: <a
+   * href="https://github.com/wala/ML/issues/723">wala/ML#723</a>. The function's final reshape, by
+   * contrast, now types its exact runtime {@code (2, 3)} through the same arm.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -4111,7 +4119,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_gather_elements_along_row.py",
         "_gather_elements_along_row",
         2,
-        10,
+        8,
         Map.of(
             2, Set.of(TENSOR_2_4_FLOAT32),
             3, Set.of(TENSOR_2_3_INT32)));
@@ -11311,9 +11319,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             2,
             Set.of(
                 TensorType.of(FLOAT_32, 2, 3, 8),
-                new TensorType(
-                    INT_32,
-                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))))));
+                // The one-hot member's leading dims fold to the runtime-true (2, 3) through the
+                // tf.shape shape-vector arm (wala/ML#722).
+                TensorType.of(INT_32, 2, 3, 10))));
   }
 
   /**
@@ -13294,6 +13302,34 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(
             2,
             Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(100))))));
+  }
+
+  /**
+   * Distilled guard for the {@code tf.shape} arm of the shape-vector walk (wala/ML#722): a reshape
+   * target built from {@code tf.shape(x)[i]} extractions classifies each element by {@code x}'s own
+   * axis {@code i} — the {@code None} batch axis contributes its {@link DynamicDim} (the dynamic
+   * evidence the wala/ML#721 degradation over-captured as {@link UnresolvedDim}), and the
+   * statically known sequence axis folds to its constant, as TensorFlow itself does over static
+   * axes.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testReshapeTfShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_tf_shape.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(4), new NumericDim(3))))));
   }
 
   /**

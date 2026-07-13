@@ -4016,6 +4016,24 @@ public abstract class TensorGenerator {
       if (invoke.getNumberOfUses() < 1) return ShapeResult.unknown();
       SSAInstruction funcDef = node.getDU().getDef(invoke.getUse(0));
 
+      // tf.shape(x): a shape vector by construction — element i is the runtime size of x's axis
+      // i — so the vector's members are exactly x's shapes, classified per axis on both sides of
+      // the wala/ML#721 criterion: a `None` axis contributes its DynamicDim (the dynamic
+      // evidence wala/ML#722's over-capture ignored), a statically known axis its constant
+      // (TensorFlow itself constant-folds tf.shape over static axes), an unresolved axis its
+      // UnresolvedDim.
+      if (dispatchesToTfShape(builder, node, invoke) && invoke.getNumberOfUses() >= 2) {
+        try {
+          return this.getShapeResult(builder, node, invoke.getUse(1), true);
+        } catch (IllegalArgumentException e) {
+          LOGGER.log(
+              Level.FINE,
+              "getShapesOfShapeVector: could not resolve the tf.shape input in node=" + node,
+              e);
+          return ShapeResult.unknown();
+        }
+      }
+
       // v.as_list(): peel the call and recurse on the receiver of the property read.
       if (funcDef instanceof PythonPropertyRead) {
         PythonPropertyRead funcRead = (PythonPropertyRead) funcDef;
@@ -4402,6 +4420,27 @@ public abstract class TensorGenerator {
     for (CGNode target : targets)
       if (!target.getMethod().getDeclaringClass().getReference().equals(PythonTypes.SLICE_BUILTIN))
         return false;
+    return true;
+  }
+
+  /**
+   * Returns whether the invoke dispatches to {@code tf.shape} via the call graph (wala/ML#722).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the targets.
+   * @param node The calling {@link CGNode}.
+   * @param invoke The invoke instruction to test.
+   * @return {@code true} iff every resolved target is {@code tf.shape}'s synthetic method.
+   */
+  private static boolean dispatchesToTfShape(
+      PropagationCallGraphBuilder builder, CGNode node, PythonInvokeInstruction invoke) {
+    Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite());
+    if (targets == null || targets.isEmpty()) return false;
+    for (CGNode target : targets)
+      if (!target
+          .getMethod()
+          .getDeclaringClass()
+          .getReference()
+          .equals(TensorFlowTypes.SHAPE_OF.getDeclaringClass())) return false;
     return true;
   }
 
