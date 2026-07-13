@@ -146,101 +146,15 @@ public abstract class TensorGenerator {
   private static final Logger LOGGER = Logger.getLogger(TensorGenerator.class.getName());
 
   /**
-   * Per-builder memoization cache for {@link #getShapes(PropagationCallGraphBuilder, CGNode, int)}.
-   * Branch-267's caller-walk + SSA-DU chain fallback paths recursively re-query the same {@code
-   * (node, vn)} pairs many times during a single analysis (e.g., autoencoder's chained layers
-   * trigger a walk from the final Dense that repeatedly lands on the same intermediate vns). Since
-   * the pointer analysis is already stable by the time {@link TensorGenerator} methods run, {@code
-   * getShapes(builder, node, vn)} is a pure function of its inputs for the duration of a single
-   * analysis, so caching is safe.
-   *
-   * <p>Lifecycle:
-   *
-   * <ul>
-   *   <li>Keyed by the {@link PropagationCallGraphBuilder} so distinct analyses do not share state.
-   *   <li>Wrapped in {@link Collections#synchronizedMap} to accommodate clients that invoke {@link
-   *       #getShapes(PropagationCallGraphBuilder, CGNode, int)} from multiple threads (rare but not
-   *       unreasonable for a long-running analysis service).
-   *   <li>Stored in a {@link WeakHashMap} so builder entries become eligible for GC automatically,
-   *       but clients should prefer the explicit {@link #clearCaches(PropagationCallGraphBuilder)}
-   *       hook at analysis end for deterministic cleanup (especially important in long-running
-   *       processes where builders may be retained beyond their analysis). {@link
-   *       PythonTensorAnalysisEngine#performAnalysis} invokes it.
-   * </ul>
-   */
-  private static final Map<PropagationCallGraphBuilder, Map<ShapeQuery, ShapeResult>> SHAPES_CACHE =
-      Collections.synchronizedMap(new WeakHashMap<>());
-
-  /**
-   * A shape-resolution cache key (wala/ML#716): the queried value plus the resolution mode.
+   * A shape-resolution query key (wala/ML#716): the queried value plus the resolution mode.
    * Exact-mode results poison to ⊤ whenever any points-to member fails to resolve, so they cannot
-   * share cache entries with the default partial-union results.
+   * share engine state entries with the default partial-union results.
    *
    * @param node The {@link CGNode} whose IR defines the value.
    * @param valueNumber The queried value number.
    * @param exact Whether an unresolvable union member poisons the result to ⊤.
    */
   private record ShapeQuery(CGNode node, int valueNumber, boolean exact) {}
-
-  /** Dtype counterpart of {@link #SHAPES_CACHE}. */
-  private static final Map<PropagationCallGraphBuilder, Map<Pair<CGNode, Integer>, Set<DType>>>
-      DTYPES_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
-
-  /**
-   * The previous resolution round's shape results (wala/ML#674). A recursive re-entry on the same
-   * {@code (node, vn)} key (a cycle in the value's producer graph, e.g. a loop-carried variable)
-   * reads the previous round's approximation instead of flooring to ⊤, so the resolved result no
-   * longer depends on which cycle member happens to be computed first. {@link
-   * PythonTensorAnalysisEngine#performAnalysis} drives rounds via {@link
-   * #advanceRound(PropagationCallGraphBuilder)} until the per-source types stabilize.
-   */
-  private static final Map<PropagationCallGraphBuilder, Map<ShapeQuery, ShapeResult>>
-      PREVIOUS_SHAPES_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
-
-  /** Dtype counterpart of {@link #PREVIOUS_SHAPES_CACHE}. */
-  private static final Map<PropagationCallGraphBuilder, Map<Pair<CGNode, Integer>, Set<DType>>>
-      PREVIOUS_DTYPES_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
-
-  /**
-   * The {@code (node, vn)} shape computations currently on the recursion stack, per builder;
-   * membership marks a cycle re-entry (wala/ML#674).
-   */
-  private static final Map<PropagationCallGraphBuilder, Set<ShapeQuery>> SHAPES_IN_PROGRESS =
-      Collections.synchronizedMap(new WeakHashMap<>());
-
-  /** Dtype counterpart of {@link #SHAPES_IN_PROGRESS}. */
-  private static final Map<PropagationCallGraphBuilder, Set<Pair<CGNode, Integer>>>
-      DTYPES_IN_PROGRESS = Collections.synchronizedMap(new WeakHashMap<>());
-
-  /**
-   * The allocation sites whose producer delegations are currently on the recursion stack, per
-   * builder; membership marks a cycle in the value's producer graph (e.g., a loop-carried tensor
-   * whose points-to union includes its own downstream producers). Re-entry masks just that member
-   * (⊤), so the caller's union keeps its non-cyclic members with the remainder marked instead of
-   * recursing without bound (wala/ML#718).
-   */
-  private static final Map<PropagationCallGraphBuilder, Set<InstanceKey>>
-      SHAPE_DELEGATIONS_IN_PROGRESS = Collections.synchronizedMap(new WeakHashMap<>());
-
-  /** Dtype counterpart of {@link #SHAPE_DELEGATIONS_IN_PROGRESS}. */
-  private static final Map<PropagationCallGraphBuilder, Set<InstanceKey>>
-      DTYPE_DELEGATIONS_IN_PROGRESS = Collections.synchronizedMap(new WeakHashMap<>());
-
-  /**
-   * Memo of whole-generator shape evaluations per builder, keyed on the generator's identity: its
-   * concrete class plus its anchor (the source's {@link PointerKey} for source-anchored instances,
-   * the synthetic {@link CGNode} for manual ones). Completes the wala/ML#365 memoization to the
-   * 1-arg evaluation layer: seeding, factory recovery, and producer delegation re-evaluate the same
-   * generator many times per round, and each evaluation recursively re-walks its arguments. Cleared
-   * per round alongside the {@code (node, vn)} caches, since evaluations legitimately change as the
-   * round guards' approximations advance.
-   */
-  private static final Map<PropagationCallGraphBuilder, Map<Object, ShapeResult>>
-      GENERATOR_SHAPE_EVALS = Collections.synchronizedMap(new WeakHashMap<>());
-
-  /** Dtype counterpart of {@link #GENERATOR_SHAPE_EVALS}. */
-  private static final Map<PropagationCallGraphBuilder, Map<Object, Set<DType>>>
-      GENERATOR_DTYPE_EVALS = Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
    * Returns the memo key identifying a generator evaluation (wala/ML#365).
@@ -257,41 +171,26 @@ public abstract class TensorGenerator {
   }
 
   /**
-   * Evaluates the generator's shapes through the per-builder evaluation memo (wala/ML#365). Atomic
-   * check-compute-put under the cache's mutex, mirroring the {@code (node, vn)} layer.
+   * Evaluates the generator's shapes through the worklist engine (wala/ML#365), which memoizes,
+   * records the dependency edge, and converges cycles.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
    * @param generator The generator to evaluate.
-   * @return The (possibly cached) evaluation result.
+   * @return The evaluation result.
    */
   static ShapeResult memoizedShapeResult(
       PropagationCallGraphBuilder builder, TensorGenerator generator) {
-    Map<Object, ShapeResult> cache =
-        GENERATOR_SHAPE_EVALS.computeIfAbsent(
-            builder, b -> Collections.synchronizedMap(new HashMap<>()));
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
-    if (engine != null) {
-      Object key = Pair.make("shape-eval", evaluationKey(generator));
-      java.util.function.Supplier<Object> transfer = () -> generator.getShapeResult(builder);
-      return (ShapeResult)
-          (engine.isEvaluating()
-              ? engine.read(key, transfer, true)
-              : engine.demand(key, transfer, true));
-    }
-    synchronized (cache) {
-      Object key = evaluationKey(generator);
-      QueryDependencyGraph graph = QueryDependencyGraph.of(builder);
-      graph.access(key);
-      if (cache.containsKey(key)) return cache.get(key);
-      try {
-        graph.enter(key);
-        ShapeResult result = generator.getShapeResult(builder);
-        cache.put(key, result);
-        return result;
-      } finally {
-        graph.exit(key);
-      }
-    }
+    // The engine is installed for every analysis run's resolution (wala/ML#365, Phase 3); a null
+    // engine occurs only for direct generator use outside one (e.g. unit tests) and computes
+    // unmemoized.
+    if (engine == null) return generator.getShapeResult(builder);
+    Object key = Pair.make("shape-eval", evaluationKey(generator));
+    java.util.function.Supplier<Object> transfer = () -> generator.getShapeResult(builder);
+    return (ShapeResult)
+        (engine.isEvaluating()
+            ? engine.read(key, transfer, true)
+            : engine.demand(key, transfer, true));
   }
 
   /**
@@ -300,39 +199,21 @@ public abstract class TensorGenerator {
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
    * @param generator The generator to evaluate.
-   * @return The (possibly cached) evaluation result; may be {@code null} (⊤) per the legacy dtype
-   *     convention.
+   * @return The evaluation result; may be {@code null} (⊤) per the legacy dtype convention.
    */
   static Set<DType> memoizedDTypes(PropagationCallGraphBuilder builder, TensorGenerator generator) {
-    Map<Object, Set<DType>> cache =
-        GENERATOR_DTYPE_EVALS.computeIfAbsent(
-            builder, b -> Collections.synchronizedMap(new HashMap<>()));
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
-    if (engine != null) {
-      Object key = Pair.make("dtype-eval", evaluationKey(generator));
-      java.util.function.Supplier<Object> transfer = () -> generator.getDTypes(builder);
-      @SuppressWarnings("unchecked")
-      Set<DType> diverted =
-          (Set<DType>)
-              (engine.isEvaluating()
-                  ? engine.read(key, transfer, false)
-                  : engine.demand(key, transfer, false));
-      return diverted;
-    }
-    synchronized (cache) {
-      Object key = evaluationKey(generator);
-      QueryDependencyGraph graph = QueryDependencyGraph.of(builder);
-      graph.access(key);
-      if (cache.containsKey(key)) return cache.get(key);
-      try {
-        graph.enter(key);
-        Set<DType> result = generator.getDTypes(builder);
-        cache.put(key, result);
-        return result;
-      } finally {
-        graph.exit(key);
-      }
-    }
+    // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback.
+    if (engine == null) return generator.getDTypes(builder);
+    Object key = Pair.make("dtype-eval", evaluationKey(generator));
+    java.util.function.Supplier<Object> transfer = () -> generator.getDTypes(builder);
+    @SuppressWarnings("unchecked")
+    Set<DType> diverted =
+        (Set<DType>)
+            (engine.isEvaluating()
+                ? engine.read(key, transfer, false)
+                : engine.demand(key, transfer, false));
+    return diverted;
   }
 
   /**
@@ -356,29 +237,6 @@ public abstract class TensorGenerator {
       BUILD_CONTRACT_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
-   * Begins a new resolution round for the given builder (wala/ML#674): the current shape/dtype
-   * results become the previous round's approximations (read on cycle re-entry), and the current
-   * caches restart empty.
-   *
-   * @param builder The builder whose caches should advance.
-   */
-  public static void advanceRound(PropagationCallGraphBuilder builder) {
-    Map<ShapeQuery, ShapeResult> shapes = SHAPES_CACHE.remove(builder);
-    if (shapes != null) PREVIOUS_SHAPES_CACHE.put(builder, shapes);
-    Map<Pair<CGNode, Integer>, Set<DType>> dtypes = DTYPES_CACHE.remove(builder);
-    if (dtypes != null) PREVIOUS_DTYPES_CACHE.put(builder, dtypes);
-    SHAPES_IN_PROGRESS.remove(builder);
-    DTYPES_IN_PROGRESS.remove(builder);
-    SHAPE_DELEGATIONS_IN_PROGRESS.remove(builder);
-    DTYPE_DELEGATIONS_IN_PROGRESS.remove(builder);
-    GENERATOR_SHAPE_EVALS.remove(builder);
-    GENERATOR_DTYPE_EVALS.remove(builder);
-    // The chase reads shape results that may change between rounds, so its memo restarts too.
-    STORED_ATTRIBUTE_CACHE.remove(builder);
-    BUILD_CONTRACT_CACHE.remove(builder);
-  }
-
-  /**
    * Drops the shape/dtype caches for the given builder. Intended to be called at the end of an
    * analysis to release cache memory deterministically, rather than waiting for the builder to be
    * garbage-collected. Safe to call more than once.
@@ -390,16 +248,6 @@ public abstract class TensorGenerator {
    *     small and the goal is "make each gap audible once," not "track gaps per analysis."
    */
   public static void clearCaches(PropagationCallGraphBuilder builder) {
-    SHAPES_CACHE.remove(builder);
-    DTYPES_CACHE.remove(builder);
-    PREVIOUS_SHAPES_CACHE.remove(builder);
-    PREVIOUS_DTYPES_CACHE.remove(builder);
-    SHAPES_IN_PROGRESS.remove(builder);
-    DTYPES_IN_PROGRESS.remove(builder);
-    SHAPE_DELEGATIONS_IN_PROGRESS.remove(builder);
-    DTYPE_DELEGATIONS_IN_PROGRESS.remove(builder);
-    GENERATOR_SHAPE_EVALS.remove(builder);
-    GENERATOR_DTYPE_EVALS.remove(builder);
     STORED_ATTRIBUTE_CACHE.remove(builder);
     BUILD_CONTRACT_CACHE.remove(builder);
     QueryDependencyGraph.clear(builder);
@@ -1761,9 +1609,9 @@ public abstract class TensorGenerator {
    * specified node. This method uses a multi-staged approach, falling back to interprocedural
    * generator-based tracing if standard points-to analysis fails.
    *
-   * <p>Memoized on {@code (node, valueNumber)} per builder via {@link #SHAPES_CACHE} to eliminate
-   * redundant recomputation across caller-walk / SSA-DU chain fallback recursion. The PA is stable
-   * when {@link TensorGenerator} runs, so caching is correctness-safe.
+   * <p>Memoized on {@code (node, valueNumber)} per builder by the worklist engine (wala/ML#365) to
+   * eliminate redundant recomputation across caller-walk / SSA-DU chain fallback recursion. The PA
+   * is stable when {@link TensorGenerator} runs, so caching is correctness-safe.
    */
   protected Set<List<Dimension<?>>> getShapes(
       PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
@@ -1805,55 +1653,16 @@ public abstract class TensorGenerator {
    */
   protected ShapeResult getShapeResult(
       PropagationCallGraphBuilder builder, CGNode node, int valueNumber, boolean exact) {
-    Map<ShapeQuery, ShapeResult> cache =
-        SHAPES_CACHE.computeIfAbsent(builder, b -> Collections.synchronizedMap(new HashMap<>()));
     ShapeQuery key = new ShapeQuery(node, valueNumber, exact);
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
-    if (engine != null) {
-      java.util.function.Supplier<Object> transfer =
-          () -> computeShapes(builder, node, valueNumber, exact);
-      return (ShapeResult)
-          (engine.isEvaluating()
-              ? engine.read(key, transfer, true)
-              : engine.demand(key, transfer, true));
-    }
-    // Atomic check-compute-put: concurrent threads hitting the same key will serialize on the
-    // cache's mutex so exactly one `computeShapes` call runs.
-    // Reentrant synchronization: `SynchronizedMap`'s own methods acquire the same mutex, so the
-    // inner `containsKey` / `get` / `put` calls are no-op re-entries.
-    synchronized (cache) {
-      QueryDependencyGraph.of(builder).access(key);
-      if (cache.containsKey(key)) return cache.get(key);
-      // A same-key re-entry is a cycle in the value's producer graph (e.g. a loop-carried
-      // variable). Return the previous round's approximation instead of recursing — flooring
-      // here made the result depend on which cycle member was computed first (wala/ML#674).
-      Set<ShapeQuery> inProgress =
-          SHAPES_IN_PROGRESS.computeIfAbsent(builder, b -> HashSetFactory.make());
-      if (!inProgress.add(key)) {
-        Map<ShapeQuery, ShapeResult> previous = PREVIOUS_SHAPES_CACHE.get(builder);
-        ShapeResult approximation =
-            previous == null || !previous.containsKey(key)
-                ? ShapeResult.unknown()
-                : previous.get(key);
-        LOGGER.fine(
-            () ->
-                "Shape cycle re-entry on key: "
-                    + key
-                    + "; returning previous-round approximation: "
-                    + approximation
-                    + ".");
-        return approximation;
-      }
-      try {
-        QueryDependencyGraph.of(builder).enter(key);
-        ShapeResult result = computeShapes(builder, node, valueNumber, exact);
-        cache.put(key, result);
-        return result;
-      } finally {
-        QueryDependencyGraph.of(builder).exit(key);
-        inProgress.remove(key);
-      }
-    }
+    // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback.
+    if (engine == null) return computeShapes(builder, node, valueNumber, exact);
+    java.util.function.Supplier<Object> transfer =
+        () -> computeShapes(builder, node, valueNumber, exact);
+    return (ShapeResult)
+        (engine.isEvaluating()
+            ? engine.read(key, transfer, true)
+            : engine.demand(key, transfer, true));
   }
 
   private ShapeResult computeShapes(
@@ -2610,38 +2419,23 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, AllocationSiteInNode asin, boolean exact) {
     // A producer chain that re-encounters an allocation site is a cycle in the value's producer
     // graph (a loop-carried tensor whose points-to union includes its own downstream producers).
-    // Mask just this member (⊤): the caller's union keeps its non-cyclic members with the
-    // remainder marked, and the round loop can then converge upward from that base instead of
-    // recursing without bound or inheriting a whole-read ⊤ (wala/ML#718).
+    // The engine converges the cycle from its non-cyclic base instead of recursing without bound
+    // or inheriting a whole-read ⊤ (wala/ML#718).
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
-    if (engine != null) {
-      Object key = Pair.make("shape-delegation", asin);
-      java.util.function.Supplier<Object> transfer =
-          () -> this.doGetShapeResultFromTensor(builder, asin, exact);
-      return (ShapeResult)
-          (engine.isEvaluating()
-              ? engine.read(key, transfer, true)
-              : engine.demand(key, transfer, true));
-    }
-    Set<InstanceKey> delegationsInProgress =
-        SHAPE_DELEGATIONS_IN_PROGRESS.computeIfAbsent(builder, b -> HashSetFactory.make());
-    QueryDependencyGraph.of(builder).access(Pair.make("shape-delegation", asin));
-    if (!delegationsInProgress.add(asin)) {
-      LOGGER.fine(() -> "Producer-cycle re-entry on allocation: " + describe(asin) + "; masking.");
-      return ShapeResult.unknown();
-    }
-    try {
-      QueryDependencyGraph.of(builder).enter(Pair.make("shape-delegation", asin));
-      return this.doGetShapeResultFromTensor(builder, asin, exact);
-    } finally {
-      QueryDependencyGraph.of(builder).exit(Pair.make("shape-delegation", asin));
-      delegationsInProgress.remove(asin);
-    }
+    // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback.
+    if (engine == null) return this.doGetShapeResultFromTensor(builder, asin, exact);
+    Object key = Pair.make("shape-delegation", asin);
+    java.util.function.Supplier<Object> transfer =
+        () -> this.doGetShapeResultFromTensor(builder, asin, exact);
+    return (ShapeResult)
+        (engine.isEvaluating()
+            ? engine.read(key, transfer, true)
+            : engine.demand(key, transfer, true));
   }
 
   /**
    * Body of {@link #getShapeResultFromTensor(PropagationCallGraphBuilder, AllocationSiteInNode,
-   * boolean)}, running under its producer-cycle mask.
+   * boolean)}, running as its engine query's transfer.
    *
    * @param builder the propagation call graph builder
    * @param asin the allocation site of the tensor
@@ -3065,54 +2859,24 @@ public abstract class TensorGenerator {
 
   /**
    * Returns the possible dtypes of the tensor represented by the given value number in the
-   * specified node. Memoized on {@code (node, valueNumber)} per builder via {@link #DTYPES_CACHE};
-   * see {@link #getShapes(PropagationCallGraphBuilder, CGNode, int)} for the rationale.
+   * specified node. Memoized on {@code (node, valueNumber)} per builder by the worklist engine
+   * (wala/ML#365); see {@link #getShapes(PropagationCallGraphBuilder, CGNode, int)} for the
+   * rationale.
    */
   protected Set<DType> getDTypes(
       PropagationCallGraphBuilder builder, CGNode node, int valueNumber) {
-    Map<Pair<CGNode, Integer>, Set<DType>> cache =
-        DTYPES_CACHE.computeIfAbsent(builder, b -> Collections.synchronizedMap(new HashMap<>()));
     Pair<CGNode, Integer> key = Pair.make(node, valueNumber);
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
-    if (engine != null) {
-      java.util.function.Supplier<Object> transfer =
-          () -> computeDTypes(builder, node, valueNumber);
-      @SuppressWarnings("unchecked")
-      Set<DType> diverted =
-          (Set<DType>)
-              (engine.isEvaluating()
-                  ? engine.read(key, transfer, false)
-                  : engine.demand(key, transfer, false));
-      return diverted;
-    }
-    // See `getShapes` above — same atomic check-compute-put pattern, same null-cache rationale,
-    // and the same previous-round approximation on a same-key cycle re-entry (wala/ML#674).
-    synchronized (cache) {
-      if (cache.containsKey(key)) return cache.get(key);
-      Set<Pair<CGNode, Integer>> inProgress =
-          DTYPES_IN_PROGRESS.computeIfAbsent(builder, b -> HashSetFactory.make());
-      if (!inProgress.add(key)) {
-        Map<Pair<CGNode, Integer>, Set<DType>> previous = PREVIOUS_DTYPES_CACHE.get(builder);
-        Set<DType> approximation = previous == null ? null : previous.get(key);
-        LOGGER.fine(
-            () ->
-                "Dtype cycle re-entry on key: "
-                    + key
-                    + "; returning previous-round approximation: "
-                    + approximation
-                    + ".");
-        return approximation;
-      }
-      try {
-        QueryDependencyGraph.of(builder).enter(key);
-        Set<DType> result = computeDTypes(builder, node, valueNumber);
-        cache.put(key, result);
-        return result;
-      } finally {
-        QueryDependencyGraph.of(builder).exit(key);
-        inProgress.remove(key);
-      }
-    }
+    // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback.
+    if (engine == null) return computeDTypes(builder, node, valueNumber);
+    java.util.function.Supplier<Object> transfer = () -> computeDTypes(builder, node, valueNumber);
+    @SuppressWarnings("unchecked")
+    Set<DType> diverted =
+        (Set<DType>)
+            (engine.isEvaluating()
+                ? engine.read(key, transfer, false)
+                : engine.demand(key, transfer, false));
+    return diverted;
   }
 
   private Set<DType> computeDTypes(
@@ -3442,41 +3206,27 @@ public abstract class TensorGenerator {
 
   private Set<DType> getDTypesFromTensor(
       PropagationCallGraphBuilder builder, AllocationSiteInNode asin) {
-    // Dtype counterpart of the producer-cycle mask in `getShapeResultFromTensor` (wala/ML#718).
-    // The mask contributes nothing rather than UNKNOWN: an in-band UNKNOWN would collapse the
-    // caller's union to {UNKNOWN} under the lattice normalization, erasing the sibling members'
-    // resolved dtypes.
+    // Dtype counterpart of the producer-cycle handling in `getShapeResultFromTensor`
+    // (wala/ML#718): the engine's bottom for an unconverged dtype read is the empty set rather
+    // than UNKNOWN, since an in-band UNKNOWN would collapse the caller's union to {UNKNOWN} under
+    // the lattice normalization, erasing the sibling members' resolved dtypes.
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
-    if (engine != null) {
-      Object key = Pair.make("dtype-delegation", asin);
-      java.util.function.Supplier<Object> transfer =
-          () -> this.doGetDTypesFromTensor(builder, asin);
-      @SuppressWarnings("unchecked")
-      Set<DType> diverted =
-          (Set<DType>)
-              (engine.isEvaluating()
-                  ? engine.read(key, transfer, false)
-                  : engine.demand(key, transfer, false));
-      return diverted;
-    }
-    Set<InstanceKey> delegationsInProgress =
-        DTYPE_DELEGATIONS_IN_PROGRESS.computeIfAbsent(builder, b -> HashSetFactory.make());
-    if (!delegationsInProgress.add(asin)) {
-      LOGGER.fine(() -> "Producer-cycle re-entry on allocation: " + describe(asin) + "; masking.");
-      return EnumSet.noneOf(DType.class);
-    }
-    try {
-      QueryDependencyGraph.of(builder).enter(Pair.make("dtype-delegation", asin));
-      return this.doGetDTypesFromTensor(builder, asin);
-    } finally {
-      QueryDependencyGraph.of(builder).exit(Pair.make("dtype-delegation", asin));
-      delegationsInProgress.remove(asin);
-    }
+    // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback.
+    if (engine == null) return this.doGetDTypesFromTensor(builder, asin);
+    Object key = Pair.make("dtype-delegation", asin);
+    java.util.function.Supplier<Object> transfer = () -> this.doGetDTypesFromTensor(builder, asin);
+    @SuppressWarnings("unchecked")
+    Set<DType> diverted =
+        (Set<DType>)
+            (engine.isEvaluating()
+                ? engine.read(key, transfer, false)
+                : engine.demand(key, transfer, false));
+    return diverted;
   }
 
   /**
    * Body of {@link #getDTypesFromTensor(PropagationCallGraphBuilder, AllocationSiteInNode)},
-   * running under its producer-cycle mask.
+   * running as its engine query's transfer.
    *
    * @param builder the propagation call graph builder
    * @param asin the allocation site of the tensor
@@ -4698,8 +4448,8 @@ public abstract class TensorGenerator {
    * bare {@code return}, whose {@code None} is not a tensor) marks the unknown remainder while the
    * resolvable returns' members stand.
    *
-   * <p>Recursion through cyclic call chains is bounded by the memoized core's in-progress guard,
-   * which answers a re-entered {@code (node, vn)} with the previous round's approximation.
+   * <p>Recursion through cyclic call chains is bounded by the worklist engine, which answers a
+   * re-entered {@code (node, vn)} read with its current state and converges the cycle.
    *
    * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the targets.
    * @param node The calling {@link CGNode}.

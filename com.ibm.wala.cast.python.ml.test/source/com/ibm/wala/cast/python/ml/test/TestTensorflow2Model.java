@@ -2231,11 +2231,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * D, D)}): the einsum body's own reshapes now compute generator-side through the {@code
    * get_shape_list} walk, whose non-entry contexts resolve rank but not every dimension. The rank-4
    * {@code (8, 100, U, U)}/{@code (8, 10, U, U)} members are the {@code DenseLayer3dProj} contexts'
-   * inputs (the attention's return value), delivered once the producer-cycle mask lets the
-   * loop-carried union converge from its non-cyclic base: three of the four proj contexts carry
-   * them. One entry's proj context and the pure-⊤/shape-⊤ members remain the loop fixed point's
-   * last residue—TODO: <a href="https://github.com/wala/ML/issues/718">wala/ML#718</a>. The {@code
-   * w} parameter keeps rank 3 and {@code float32} (its chain is layer-local) but no numeric
+   * inputs (the attention's return value): the worklist engine converges the loop-carried union
+   * from its non-cyclic base and all four proj contexts carry them (wala/ML#365 Phase 3 resolved
+   * the fourth, the wala/ML#718 residual under the retired round-based resolution). The remaining
+   * pure-⊤/shape-⊤ members come from the guard-φ phantom and non-entry contexts. The {@code w}
+   * parameter keeps rank 3 and {@code float32} (its chain is layer-local) but no numeric
    * dimensions, since the {@code build}-computed head sizes also derive from the config.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.

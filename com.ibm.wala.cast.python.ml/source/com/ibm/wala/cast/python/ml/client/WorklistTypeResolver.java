@@ -40,8 +40,8 @@ import java.util.logging.Logger;
  * promotion step). Widenings bound divergence: a member-set cardinality cap and a rank cap, both
  * logged when they fire.
  *
- * <p>Enabled by the {@code ariadne.typeResolution.worklist} system property; the default remains
- * the round-based resolution.
+ * <p>The default resolution engine since Phase 3, installed per analysis run by {@link
+ * PythonTensorAnalysisEngine#performAnalysis}; the historical round-based resolution is retired.
  */
 final class WorklistTypeResolver {
 
@@ -66,7 +66,7 @@ final class WorklistTypeResolver {
   /** Rank beyond which a member widens away. */
   private static final int RANK_WIDENING_CAP = 12;
 
-  /** The per-builder active engine; non-null only while the flag-gated resolution runs. */
+  /** The per-builder active engine; non-null only while an analysis run's resolution is active. */
   private static final Map<PropagationCallGraphBuilder, WorklistTypeResolver> ACTIVE =
       Collections.synchronizedMap(new WeakHashMap<>());
 
@@ -109,17 +109,7 @@ final class WorklistTypeResolver {
   private WorklistTypeResolver() {}
 
   /**
-   * Returns whether the flag-gated engine should run.
-   *
-   * @return {@code true} iff the {@code ariadne.typeResolution.worklist} property is set.
-   */
-  static boolean enabled() {
-    return Boolean.getBoolean("ariadne.typeResolution.worklist")
-        || "true".equals(System.getenv("ARIADNE_WORKLIST"));
-  }
-
-  /**
-   * Returns the builder's active engine, or {@code null} when the round-based resolution runs.
+   * Returns the builder's active engine, or {@code null} outside an analysis run's resolution.
    *
    * @param builder The builder whose engine to return.
    * @return The active engine or {@code null}.
