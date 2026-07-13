@@ -19,6 +19,7 @@ import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuild
 import com.ibm.wala.cast.python.ipa.callgraph.TrampolineReceiverContextSelector;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
+import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -73,6 +74,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -1282,12 +1284,26 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           TensorGenerator.advanceRound(builder);
         }
 
+      // Seed each source's producing library beside its types (wala/ML#724). Origins ride the
+      // same dataflow edges as the types, so the seeds are the only generator-side contribution;
+      // everything downstream (operators, merges) is the analysis's union.
+      Map<PointsToSetVariable, Set<TensorOrigin>> initOrigins = HashMapFactory.make();
+      for (PointsToSetVariable v : sources) {
+        Set<TensorType> types = init.get(v);
+        if (types != null && types.isEmpty()) continue; // ⊥: not a tensor, no origin to record
+        Set<TensorOrigin> origins = getTensorOrigins(v, builder);
+        if (!origins.isEmpty()) initOrigins.put(v, origins);
+      }
+
       Map<PointsToSetVariable, TensorType> placeholders =
           handleShapeSourceOp(builder, dataflow, placeholder, 2);
       LOGGER.fine("Placeholders: " + placeholders);
 
-      for (Map.Entry<PointsToSetVariable, TensorType> e : placeholders.entrySet())
+      for (Map.Entry<PointsToSetVariable, TensorType> e : placeholders.entrySet()) {
         init.put(e.getKey(), Set.of(e.getValue()));
+        // `tf.compat.v1.placeholder` is a TensorFlow API (wala/ML#724).
+        initOrigins.put(e.getKey(), EnumSet.of(TensorOrigin.TENSORFLOW));
+      }
 
       // wala/ML#509: recognize `x.set_shape(s)` via IR scanning rather than call-graph dispatch on
       // the `Ltensorflow/functions/set_shape` synthetic class. The legacy dispatch path requires
@@ -1299,7 +1315,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // the receiver. Remove receivers from `init` so the SetShapeOp edge transfer is the sole
       // source of state for those variables; otherwise the meet-time union re-introduces the
       // generator-seeded type (e.g., Cast generator's (?, float32) on the cast-result variable).
-      for (PointsToSetVariable recv : setCalls.keySet()) init.remove(recv);
+      for (PointsToSetVariable recv : setCalls.keySet()) {
+        init.remove(recv);
+        // The SetShapeOp edge transfer pins the receiver's origin too (wala/ML#724).
+        initOrigins.remove(recv);
+      }
 
       // Route subscript results through `setCalls` so `TensorTypeAnalysis`'s edge-transfer replaces
       // predecessor types rather than unioning them — the receiver's pre-subscript shape would
@@ -1347,7 +1367,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
       TensorTypeAnalysis tt =
           new TensorTypeAnalysis(
-              dataflow, init, shapeOps, setCalls, conv2ds, conv3ds, drops, errorLog);
+              dataflow, init, initOrigins, shapeOps, setCalls, conv2ds, conv3ds, drops, errorLog);
 
       tt.solve(new NullProgressMonitor());
 
@@ -1420,6 +1440,27 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           e,
           () -> "Source " + describe(source) + " is not a recognized tensor generator.");
       return HashSetFactory.make();
+    }
+  }
+
+  /**
+   * Returns the libraries whose operations produce the given dataflow source's value (wala/ML#724),
+   * classified by the source's dispatched {@link TensorGenerator}.
+   *
+   * @param source The dataflow source to classify.
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph and pointer
+   *     analysis.
+   * @return The producing libraries; empty when the source dispatches to no generator (so there is
+   *     no origin evidence to seed).
+   */
+  private Set<TensorOrigin> getTensorOrigins(
+      PointsToSetVariable source, PropagationCallGraphBuilder builder) {
+    try {
+      TensorGenerator generator = getGenerator(source, builder);
+      if (generator == null) return EnumSet.noneOf(TensorOrigin.class);
+      return generator.getOrigins(builder);
+    } catch (IllegalArgumentException e) {
+      return EnumSet.noneOf(TensorOrigin.class);
     }
   }
 
