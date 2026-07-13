@@ -6090,8 +6090,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Companion to {@link #testNpArrayBareParam()} for the non-literal-source floor of <a
    * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>: when {@code x} is itself an
    * {@code np.ndarray} rather than a Python literal, numpy preserves the source's dtype, which the
-   * walk does not model, so it floors to ⊤. The nested-array shape does not propagate through the
-   * outer {@code np.array} either, so both axes are ⊤.
+   * walk does not model, so the dtype floors to ⊤. The nested-array {@code (2,)} shape now
+   * propagates through the outer {@code np.array} via the producer registration (wala/ML#625); the
+   * dtype residue stays with wala/ML#626.
    */
   @Test
   public void testNpArrayArraySource()
@@ -6101,7 +6102,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "f",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+        Map.of(2, Set.of(new TensorType(UNKNOWN, asList(new NumericDim(2))))));
   }
 
   /**
@@ -6110,11 +6111,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * It currently types to {@code ⊤} unknown, coarser than the bare form's {@code (3,)} because
    * {@code tf.constant} drops the array shape.
    *
-   * <p>TODO: This pins the current imprecise shape. Once <a
-   * href="https://github.com/wala/ML/issues/625">wala/ML#625</a> lands, the parameter should type
-   * to {@code (3,)} {@code float64} (the bare form's result now that <a
-   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a> models numpy dtype promotion), and
-   * this assertion should be updated accordingly.
+   * <p>The {@code numpy.array} producer registration (wala/ML#625) delivers the concrete type: the
+   * wrapped array's {@code (3,)} shape survives {@code tf.constant}, and the dtype is numpy's
+   * {@code float64} default for float literals.
    */
   @Test
   public void testNpArrayWrappedParam()
@@ -6124,7 +6123,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "f",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 3))));
   }
 
   /**
@@ -15644,6 +15643,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * floors to ⊤ over the {@code np.ndarray} row (the unmodeled ragged rank over a tensor element).
    * Delegating the element to its producer generator would recover the shape (<a
    * href="https://github.com/wala/ML/issues/652">wala/ML#652</a>).
+   *
+   * <p>The {@code numpy.array} producer registration (wala/ML#625) adds the ⊤ {@code int64} member:
+   * the {@code np.ndarray} row's own type (numpy's integer default) joins the union through the
+   * flow-insensitive points-to substrate, alongside the ragged result's runtime {@code int32}.
    */
   @Test
   public void testRaggedConstantUnresolvableDepth()
@@ -15653,7 +15656,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+        Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE, new TensorType(INT_64, null))));
   }
 
   /**
