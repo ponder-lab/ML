@@ -268,6 +268,15 @@ public abstract class TensorGenerator {
     Map<Object, ShapeResult> cache =
         GENERATOR_SHAPE_EVALS.computeIfAbsent(
             builder, b -> Collections.synchronizedMap(new HashMap<>()));
+    WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
+    if (engine != null) {
+      Object key = Pair.make("shape-eval", evaluationKey(generator));
+      java.util.function.Supplier<Object> transfer = () -> generator.getShapeResult(builder);
+      return (ShapeResult)
+          (engine.isEvaluating()
+              ? engine.read(key, transfer, true)
+              : engine.demand(key, transfer, true));
+    }
     synchronized (cache) {
       Object key = evaluationKey(generator);
       QueryDependencyGraph graph = QueryDependencyGraph.of(builder);
@@ -297,6 +306,18 @@ public abstract class TensorGenerator {
     Map<Object, Set<DType>> cache =
         GENERATOR_DTYPE_EVALS.computeIfAbsent(
             builder, b -> Collections.synchronizedMap(new HashMap<>()));
+    WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
+    if (engine != null) {
+      Object key = Pair.make("dtype-eval", evaluationKey(generator));
+      java.util.function.Supplier<Object> transfer = () -> generator.getDTypes(builder);
+      @SuppressWarnings("unchecked")
+      Set<DType> diverted =
+          (Set<DType>)
+              (engine.isEvaluating()
+                  ? engine.read(key, transfer, false)
+                  : engine.demand(key, transfer, false));
+      return diverted;
+    }
     synchronized (cache) {
       Object key = evaluationKey(generator);
       QueryDependencyGraph graph = QueryDependencyGraph.of(builder);
@@ -1786,6 +1807,15 @@ public abstract class TensorGenerator {
     Map<ShapeQuery, ShapeResult> cache =
         SHAPES_CACHE.computeIfAbsent(builder, b -> Collections.synchronizedMap(new HashMap<>()));
     ShapeQuery key = new ShapeQuery(node, valueNumber, exact);
+    WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
+    if (engine != null) {
+      java.util.function.Supplier<Object> transfer =
+          () -> computeShapes(builder, node, valueNumber, exact);
+      return (ShapeResult)
+          (engine.isEvaluating()
+              ? engine.read(key, transfer, true)
+              : engine.demand(key, transfer, true));
+    }
     // Atomic check-compute-put: concurrent threads hitting the same key will serialize on the
     // cache's mutex so exactly one `computeShapes` call runs.
     // Reentrant synchronization: `SynchronizedMap`'s own methods acquire the same mutex, so the
@@ -2582,6 +2612,16 @@ public abstract class TensorGenerator {
     // Mask just this member (⊤): the caller's union keeps its non-cyclic members with the
     // remainder marked, and the round loop can then converge upward from that base instead of
     // recursing without bound or inheriting a whole-read ⊤ (wala/ML#718).
+    WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
+    if (engine != null) {
+      Object key = Pair.make("shape-delegation", asin);
+      java.util.function.Supplier<Object> transfer =
+          () -> this.doGetShapeResultFromTensor(builder, asin, exact);
+      return (ShapeResult)
+          (engine.isEvaluating()
+              ? engine.read(key, transfer, true)
+              : engine.demand(key, transfer, true));
+    }
     Set<InstanceKey> delegationsInProgress =
         SHAPE_DELEGATIONS_IN_PROGRESS.computeIfAbsent(builder, b -> HashSetFactory.make());
     QueryDependencyGraph.of(builder).access(Pair.make("shape-delegation", asin));
@@ -3008,6 +3048,18 @@ public abstract class TensorGenerator {
     Map<Pair<CGNode, Integer>, Set<DType>> cache =
         DTYPES_CACHE.computeIfAbsent(builder, b -> Collections.synchronizedMap(new HashMap<>()));
     Pair<CGNode, Integer> key = Pair.make(node, valueNumber);
+    WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
+    if (engine != null) {
+      java.util.function.Supplier<Object> transfer =
+          () -> computeDTypes(builder, node, valueNumber);
+      @SuppressWarnings("unchecked")
+      Set<DType> diverted =
+          (Set<DType>)
+              (engine.isEvaluating()
+                  ? engine.read(key, transfer, false)
+                  : engine.demand(key, transfer, false));
+      return diverted;
+    }
     // See `getShapes` above — same atomic check-compute-put pattern, same null-cache rationale,
     // and the same previous-round approximation on a same-key cycle re-entry (wala/ML#674).
     synchronized (cache) {
@@ -3369,6 +3421,19 @@ public abstract class TensorGenerator {
     // The mask contributes nothing rather than UNKNOWN: an in-band UNKNOWN would collapse the
     // caller's union to {UNKNOWN} under the lattice normalization, erasing the sibling members'
     // resolved dtypes.
+    WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
+    if (engine != null) {
+      Object key = Pair.make("dtype-delegation", asin);
+      java.util.function.Supplier<Object> transfer =
+          () -> this.doGetDTypesFromTensor(builder, asin);
+      @SuppressWarnings("unchecked")
+      Set<DType> diverted =
+          (Set<DType>)
+              (engine.isEvaluating()
+                  ? engine.read(key, transfer, false)
+                  : engine.demand(key, transfer, false));
+      return diverted;
+    }
     Set<InstanceKey> delegationsInProgress =
         DTYPE_DELEGATIONS_IN_PROGRESS.computeIfAbsent(builder, b -> HashSetFactory.make());
     if (!delegationsInProgress.add(asin)) {
