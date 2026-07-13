@@ -212,6 +212,20 @@ public abstract class TensorGenerator {
       DTYPES_IN_PROGRESS = Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
+   * The allocation sites whose producer delegations are currently on the recursion stack, per
+   * builder; membership marks a cycle in the value's producer graph (e.g., a loop-carried tensor
+   * whose points-to union includes its own downstream producers). Re-entry masks just that member
+   * (⊤), so the caller's union keeps its non-cyclic members with the remainder marked instead of
+   * recursing without bound (wala/ML#718).
+   */
+  private static final Map<PropagationCallGraphBuilder, Set<InstanceKey>>
+      SHAPE_DELEGATIONS_IN_PROGRESS = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /** Dtype counterpart of {@link #SHAPE_DELEGATIONS_IN_PROGRESS}. */
+  private static final Map<PropagationCallGraphBuilder, Set<InstanceKey>>
+      DTYPE_DELEGATIONS_IN_PROGRESS = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
    * Memo of the {@code (class, attribute)} chase results of {@link
    * #resolveStoredAttributeDimInClass(PropagationCallGraphBuilder, IClass, String)} per builder
    * (wala/ML#712). The chase scans the whole call graph, so uncached re-runs are quadratic on large
@@ -245,6 +259,8 @@ public abstract class TensorGenerator {
     if (dtypes != null) PREVIOUS_DTYPES_CACHE.put(builder, dtypes);
     SHAPES_IN_PROGRESS.remove(builder);
     DTYPES_IN_PROGRESS.remove(builder);
+    SHAPE_DELEGATIONS_IN_PROGRESS.remove(builder);
+    DTYPE_DELEGATIONS_IN_PROGRESS.remove(builder);
     // The chase reads shape results that may change between rounds, so its memo restarts too.
     STORED_ATTRIBUTE_CACHE.remove(builder);
     BUILD_CONTRACT_CACHE.remove(builder);
@@ -268,6 +284,8 @@ public abstract class TensorGenerator {
     PREVIOUS_DTYPES_CACHE.remove(builder);
     SHAPES_IN_PROGRESS.remove(builder);
     DTYPES_IN_PROGRESS.remove(builder);
+    SHAPE_DELEGATIONS_IN_PROGRESS.remove(builder);
+    DTYPE_DELEGATIONS_IN_PROGRESS.remove(builder);
     STORED_ATTRIBUTE_CACHE.remove(builder);
     BUILD_CONTRACT_CACHE.remove(builder);
   }
@@ -2388,6 +2406,16 @@ public abstract class TensorGenerator {
                   + reference.getName()
                   + ". Attempting to retrieve shape from producer.");
           ShapeResult fromTensor = this.getShapeResultFromTensor(builder, asin, exact);
+          LOGGER.fine(
+              () ->
+                  "DIAG creator [alloc="
+                      + asin.getNode().getMethod().getDeclaringClass().getName()
+                      + "@"
+                      + asin.getSite().getProgramCounter()
+                      + "] => members="
+                      + fromTensor.members().size()
+                      + " unk="
+                      + fromTensor.hasUnknown());
           // An empty result means no producer resolved for this member, not a scalar.
           if (fromTensor.hasUnknown() || fromTensor.isBottom()) {
             if (exact) hasUnknown = true; // The union is incomplete, wala/ML#718.
@@ -2452,6 +2480,35 @@ public abstract class TensorGenerator {
    * @return the resolution result; ⊥ when no producer resolves
    */
   private ShapeResult getShapeResultFromTensor(
+      PropagationCallGraphBuilder builder, AllocationSiteInNode asin, boolean exact) {
+    // A producer chain that re-encounters an allocation site is a cycle in the value's producer
+    // graph (a loop-carried tensor whose points-to union includes its own downstream producers).
+    // Mask just this member (⊤): the caller's union keeps its non-cyclic members with the
+    // remainder marked, and the round loop can then converge upward from that base instead of
+    // recursing without bound or inheriting a whole-read ⊤ (wala/ML#718).
+    Set<InstanceKey> delegationsInProgress =
+        SHAPE_DELEGATIONS_IN_PROGRESS.computeIfAbsent(builder, b -> HashSetFactory.make());
+    if (!delegationsInProgress.add(asin)) {
+      LOGGER.fine(() -> "Producer-cycle re-entry on allocation: " + describe(asin) + "; masking.");
+      return ShapeResult.unknown();
+    }
+    try {
+      return this.doGetShapeResultFromTensor(builder, asin, exact);
+    } finally {
+      delegationsInProgress.remove(asin);
+    }
+  }
+
+  /**
+   * Body of {@link #getShapeResultFromTensor(PropagationCallGraphBuilder, AllocationSiteInNode,
+   * boolean)}, running under its producer-cycle mask.
+   *
+   * @param builder the propagation call graph builder
+   * @param asin the allocation site of the tensor
+   * @param exact whether an unresolvable member marks the unknown remainder
+   * @return the resolution result; ⊥ when no producer resolves
+   */
+  private ShapeResult doGetShapeResultFromTensor(
       PropagationCallGraphBuilder builder, AllocationSiteInNode asin, boolean exact) {
     boolean hasUnknown = false;
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
@@ -3206,6 +3263,33 @@ public abstract class TensorGenerator {
   }
 
   private Set<DType> getDTypesFromTensor(
+      PropagationCallGraphBuilder builder, AllocationSiteInNode asin) {
+    // Dtype counterpart of the producer-cycle mask in `getShapeResultFromTensor` (wala/ML#718).
+    // The mask contributes nothing rather than UNKNOWN: an in-band UNKNOWN would collapse the
+    // caller's union to {UNKNOWN} under the lattice normalization, erasing the sibling members'
+    // resolved dtypes.
+    Set<InstanceKey> delegationsInProgress =
+        DTYPE_DELEGATIONS_IN_PROGRESS.computeIfAbsent(builder, b -> HashSetFactory.make());
+    if (!delegationsInProgress.add(asin)) {
+      LOGGER.fine(() -> "Producer-cycle re-entry on allocation: " + describe(asin) + "; masking.");
+      return EnumSet.noneOf(DType.class);
+    }
+    try {
+      return this.doGetDTypesFromTensor(builder, asin);
+    } finally {
+      delegationsInProgress.remove(asin);
+    }
+  }
+
+  /**
+   * Body of {@link #getDTypesFromTensor(PropagationCallGraphBuilder, AllocationSiteInNode)},
+   * running under its producer-cycle mask.
+   *
+   * @param builder the propagation call graph builder
+   * @param asin the allocation site of the tensor
+   * @return the resolved dtypes; empty when no producer resolves
+   */
+  private Set<DType> doGetDTypesFromTensor(
       PropagationCallGraphBuilder builder, AllocationSiteInNode asin) {
     Set<DType> ret = EnumSet.noneOf(DType.class);
     CGNode readDataNode = asin.getNode();
@@ -5408,6 +5492,16 @@ public abstract class TensorGenerator {
       return new Reshape(node);
     } else if (type.equals(TensorFlowTypes.SQUEEZE.getDeclaringClass())) {
       return new Squeeze(node);
+    } else if (type.equals(TensorFlowTypes.CONCAT.getDeclaringClass())) {
+      return new Concat(node);
+    } else if (type.equals(TensorFlowTypes.FILL.getDeclaringClass())) {
+      return new Fill(node);
+    } else if (type.equals(TensorFlowTypes.ONE_HOT.getDeclaringClass())) {
+      return new OneHot(node);
+    } else if (type.equals(TensorFlowTypes.REDUCE_MEAN.getDeclaringClass())) {
+      return new ReduceMean(node);
+    } else if (type.equals(TensorFlowTypes.CONVERT_TO_TENSOR.getDeclaringClass())) {
+      return new ConvertToTensor(node);
     } else if (type.equals(TensorFlowTypes.SIGMOID.getDeclaringClass())) {
       return new Sigmoid(node);
     } else if (type.equals(TensorFlowTypes.SOFTMAX.getDeclaringClass())) {

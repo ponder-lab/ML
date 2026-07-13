@@ -6,6 +6,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TYPE_REFERENCE_T
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import java.util.List;
@@ -51,6 +52,15 @@ public class Fill extends Constant {
 
   public Fill(PointsToSetVariable source) {
     super(source);
+  }
+
+  /**
+   * Constructs anchored to a manual node.
+   *
+   * @param node The {@link CGNode} for the synthetic {@code do()} method.
+   */
+  public Fill(CGNode node) {
+    super(node);
   }
 
   @Override
