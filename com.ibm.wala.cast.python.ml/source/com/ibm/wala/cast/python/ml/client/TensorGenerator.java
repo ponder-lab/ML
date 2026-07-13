@@ -68,7 +68,6 @@ import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
-import com.ibm.wala.ssa.SSAGetInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPutInstruction;
@@ -1167,23 +1166,17 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, CGNode node, int vn) {
     if (vn <= 0 || node.getDU() == null || node.getIR() == null) return null;
     SSAInstruction def = node.getDU().getDef(vn);
-    if (!(def instanceof PythonPropertyRead) && !(def instanceof SSAGetInstruction)) return null;
+    // A user attribute read is always a PythonPropertyRead: the front end emits
+    // SSAGetInstruction only for the inherited-member propagation of a class declaration, whose
+    // temporaries never surface as chased stored values (wala/ML#725).
+    if (!(def instanceof PythonPropertyRead)) return null;
 
-    String attributeName;
-    int objectVn;
-    if (def instanceof PythonPropertyRead) {
-      PythonPropertyRead read = (PythonPropertyRead) def;
-      SymbolTable st = node.getIR().getSymbolTable();
-      int memberVn = read.getMemberRef();
-      if (!st.isStringConstant(memberVn)) return null;
-      attributeName = st.getStringValue(memberVn);
-      objectVn = read.getObjectRef();
-    } else {
-      SSAGetInstruction get = (SSAGetInstruction) def;
-      if (get.isStatic()) return null;
-      attributeName = get.getDeclaredField().getName().toString();
-      objectVn = get.getRef();
-    }
+    PythonPropertyRead read = (PythonPropertyRead) def;
+    SymbolTable st = node.getIR().getSymbolTable();
+    int memberVn = read.getMemberRef();
+    if (!st.isStringConstant(memberVn)) return null;
+    String attributeName = st.getStringValue(memberVn);
+    int objectVn = read.getObjectRef();
 
     // Chase reads off the enclosing method's `self` through the receiver class's method bodies;
     // for any other local object, chase the write sites in the same code body (e.g. a
@@ -1261,17 +1254,17 @@ public abstract class TensorGenerator {
 
       for (SSAInstruction inst : candidate.getIR().getInstructions()) {
         int storedVn = -1;
+        // A `self` attribute write is always a PythonPropertyWrite: the front end emits
+        // SSAPutInstruction only for module, function-binding, and class-declaration member
+        // writes, whose receiver is the script or class object and can never be `self` (a method
+        // body declaring a nested config class carries such puts, and they must be skipped, which
+        // `tf2_test_build_stored_attr.py`'s nested-class cases pin). See wala/ML#725.
         if (inst instanceof PythonPropertyWrite) {
           PythonPropertyWrite write = (PythonPropertyWrite) inst;
           int memberVn = write.getMemberRef();
           if (write.getObjectRef() == selfVn
               && st.isStringConstant(memberVn)
               && attributeName.equals(st.getStringValue(memberVn))) storedVn = write.getValue();
-        } else if (inst instanceof SSAPutInstruction && !((SSAPutInstruction) inst).isStatic()) {
-          SSAPutInstruction put = (SSAPutInstruction) inst;
-          if (put.getRef() == selfVn
-              && attributeName.equals(put.getDeclaredField().getName().toString()))
-            storedVn = put.getVal();
         }
         if (storedVn <= 0) continue;
 
@@ -1308,17 +1301,15 @@ public abstract class TensorGenerator {
     for (Iterator<SSAInstruction> uses = node.getDU().getUses(objectVn); uses.hasNext(); ) {
       SSAInstruction use = uses.next();
       int storedVn = -1;
+      // A user attribute write is always a PythonPropertyWrite: the front end emits
+      // SSAPutInstruction only for module, function-binding, and class-declaration member writes,
+      // whose receiver is the script or class object rather than a chased local (wala/ML#725).
       if (use instanceof PythonPropertyWrite) {
         PythonPropertyWrite write = (PythonPropertyWrite) use;
         int memberVn = write.getMemberRef();
         if (write.getObjectRef() == objectVn
             && st.isStringConstant(memberVn)
             && attributeName.equals(st.getStringValue(memberVn))) storedVn = write.getValue();
-      } else if (use instanceof SSAPutInstruction && !((SSAPutInstruction) use).isStatic()) {
-        SSAPutInstruction put = (SSAPutInstruction) use;
-        if (put.getRef() == objectVn
-            && attributeName.equals(put.getDeclaredField().getName().toString()))
-          storedVn = put.getVal();
       }
       if (storedVn <= 0) continue;
 
