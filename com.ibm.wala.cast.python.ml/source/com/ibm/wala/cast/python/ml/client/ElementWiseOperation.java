@@ -8,6 +8,7 @@ import static java.util.Collections.singleton;
 import static java.util.logging.Logger.getLogger;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
@@ -107,6 +108,98 @@ public class ElementWiseOperation extends TensorGenerator {
     }
     return this.getArgumentValueNumber(
         builder, this.getYParameterPosition(), this.getYParameterName(), false);
+  }
+
+  /**
+   * Returns the producing library of a binary operator's result by classifying its operands
+   * (wala/ML#724). Runtime binary-operator dispatch decides the result's library: {@code ndarray +
+   * ndarray} stays numpy, while any TensorFlow operand makes the operation a TensorFlow one and the
+   * result a {@code tf.Tensor}. Each operand classifies through its producing generator (via {@link
+   * TensorGeneratorFactory#getGenerator}), recursing structurally through nested binary operators
+   * (whose results have no points-to set to dispatch on); a statically opaque scalar operand is
+   * skipped, since it keeps the tensor operand's library. An operand without origin evidence
+   * contributes {@link TensorOrigin#TENSORFLOW}, preserving the pre-wala/ML#724 reading where the
+   * analysis cannot prove numpy provenance.
+   *
+   * <p>A manual anchor models a TensorFlow API call ({@code tf.multiply.do()} etc.), so the default
+   * applies there.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The producing libraries of the operation's result.
+   */
+  @Override
+  protected Set<TensorOrigin> getOrigins(PropagationCallGraphBuilder builder) {
+    if (this.source == null || !(this.source.getPointerKey() instanceof LocalPointerKey))
+      return super.getOrigins(builder);
+    LocalPointerKey lpk = (LocalPointerKey) this.source.getPointerKey();
+    SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
+    if (!(def instanceof SSABinaryOpInstruction)) return super.getOrigins(builder);
+    return this.getBinaryOperationOrigins(builder, lpk.getNode(), (SSABinaryOpInstruction) def);
+  }
+
+  /**
+   * Classifies a binary operator's result by the per-execution dispatch product of its operands'
+   * origins: an execution pairing a TensorFlow operand with anything yields a TensorFlow result,
+   * and only a numpy-with-numpy pairing yields an ndarray. The product is more precise than a plain
+   * union: {@code {NUMPY} + {TENSORFLOW}} is {@code {TENSORFLOW}}, while {@code {NUMPY} + {NUMPY,
+   * TENSORFLOW}} keeps both.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param node The node whose IR defines the operator.
+   * @param binop The binary operator instruction.
+   * @return The producing libraries of the operator's result.
+   */
+  private Set<TensorOrigin> getBinaryOperationOrigins(
+      PropagationCallGraphBuilder builder, CGNode node, SSABinaryOpInstruction binop) {
+    Set<TensorOrigin> x = this.getOperandOrigins(builder, node, binop.getUse(0));
+    Set<TensorOrigin> y = this.getOperandOrigins(builder, node, binop.getUse(1));
+
+    // A scalar (or otherwise skipped) operand keeps the other operand's origins.
+    if (x == null && y == null) return EnumSet.of(TensorOrigin.TENSORFLOW);
+    if (x == null) return y;
+    if (y == null) return x;
+
+    Set<TensorOrigin> ret = EnumSet.noneOf(TensorOrigin.class);
+    for (TensorOrigin ox : x)
+      for (TensorOrigin oy : y)
+        ret.add(
+            ox == TensorOrigin.TENSORFLOW || oy == TensorOrigin.TENSORFLOW
+                ? TensorOrigin.TENSORFLOW
+                : TensorOrigin.NUMPY);
+    return ret;
+  }
+
+  /**
+   * Classifies one binary-operator operand's origins. A nested binary operator recurses
+   * structurally (its result has no points-to set to dispatch on); any other operand classifies
+   * through the generator its points-to chain dispatches to.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param node The node whose IR defines the operand.
+   * @param vn The operand's value number.
+   * @return The operand's origins, or {@code null} when the operand contributes no origin evidence
+   *     (a scalar expression, or an unresolvable points-to chain).
+   */
+  private Set<TensorOrigin> getOperandOrigins(
+      PropagationCallGraphBuilder builder, CGNode node, int vn) {
+    if (this.isScalarExpression(builder, node, vn)) return null;
+
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (def instanceof SSABinaryOpInstruction)
+      return this.getBinaryOperationOrigins(builder, node, (SSABinaryOpInstruction) def);
+
+    PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+    if (builder.getPropagationSystem().isImplicit(pk)) return null;
+    PointsToSetVariable operand = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
+    if (operand == null) return null;
+
+    TensorGenerator generator;
+    try {
+      generator = TensorGeneratorFactory.getGenerator(operand, builder);
+    } catch (IllegalArgumentException e) {
+      return null;
+    }
+    return generator == null ? null : generator.getOrigins(builder);
   }
 
   /**

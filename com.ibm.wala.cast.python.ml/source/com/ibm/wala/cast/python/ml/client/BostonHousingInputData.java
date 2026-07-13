@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -114,4 +115,16 @@ public class BostonHousingInputData extends TensorGenerator {
 
   /** Shape of {@code boston_housing.load_data()[1][1]}: {@code (102,)} of {@code float64}. */
   public static final List<Dimension<?>> Y_TEST_SHAPE = targetsShape(NUM_TEST_EXAMPLES);
+
+  /**
+   * Returns the producing library of the modeled value: {@code load_data} returns numpy arrays, not
+   * tensors, so the value is an ndarray (wala/ML#724).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return {@link TensorOrigin#NUMPY}, singleton.
+   */
+  @Override
+  protected Set<TensorOrigin> getOrigins(PropagationCallGraphBuilder builder) {
+    return EnumSet.of(TensorOrigin.NUMPY);
+  }
 }

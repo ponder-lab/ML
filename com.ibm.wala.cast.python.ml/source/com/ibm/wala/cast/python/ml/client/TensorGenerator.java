@@ -36,6 +36,7 @@ import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuild
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.CompoundDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -2994,6 +2995,30 @@ public abstract class TensorGenerator {
    *     cannot be determined.
    */
   protected abstract Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder);
+
+  /**
+   * Returns the libraries whose operations produce the value modeled by this generator
+   * (wala/ML#724).
+   *
+   * <p>The default is {@link TensorOrigin#TENSORFLOW}: generators model TensorFlow APIs unless they
+   * specifically model numpy ones ({@link NpArray}, {@link AstypeOperation}, etc.), which override
+   * this to {@link TensorOrigin#NUMPY}. A generator implementing {@link DelegatingTensorGenerator}
+   * answers with its underlying generator's origins, since the modeled value (a collection element,
+   * an enumerated item) is produced by whatever produced the underlying container's contents.
+   *
+   * <p>Classification is by the runtime type of the produced value, not the namespace of the
+   * invoked API; see {@link TensorOrigin}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The producing libraries of the modeled value.
+   */
+  protected Set<TensorOrigin> getOrigins(PropagationCallGraphBuilder builder) {
+    if (this instanceof DelegatingTensorGenerator) {
+      TensorGenerator underlying = ((DelegatingTensorGenerator) this).getUnderlying();
+      if (underlying != null && underlying != this) return underlying.getOrigins(builder);
+    }
+    return EnumSet.of(TensorOrigin.TENSORFLOW);
+  }
 
   /**
    * Returns the value number for the dtype argument in the function call.

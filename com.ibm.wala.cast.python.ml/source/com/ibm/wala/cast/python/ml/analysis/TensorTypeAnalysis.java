@@ -12,6 +12,7 @@ package com.ibm.wala.cast.python.ml.analysis;
 
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.lsp.AnalysisError;
+import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.CompoundDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -186,11 +187,20 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
 
     @Override
     public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
-      if (lhs != null && lhs.state != null && !lhs.state.isEmpty()) {
-        lhs.state.clear();
-        return CHANGED_AND_FIXED;
+      boolean changed = false;
+      if (lhs != null) {
+        if (lhs.state != null && !lhs.state.isEmpty()) {
+          lhs.state.clear();
+          changed = true;
+        }
+        // A dropped destination is semantically non-tensor; leaked origin evidence goes with the
+        // leaked types (wala/ML#724).
+        if (!lhs.origins.isEmpty()) {
+          lhs.origins.clear();
+          changed = true;
+        }
       }
-      return NOT_CHANGED_AND_FIXED;
+      return changed ? CHANGED_AND_FIXED : NOT_CHANGED_AND_FIXED;
     }
 
     @Override
@@ -279,12 +289,19 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               // previous `add`-only semantics caused the cast result's Cast-generator-seeded
               // `(?, dtype)` to leak into the post-set_shape state alongside the asserted shape.
               // Clear-then-add mirrors `DropOp`'s clear-state pattern with CHANGED_AND_FIXED.
-              if (lhs.state.size() == 1 && lhs.state.contains(setShapeTo)) {
-                return NOT_CHANGED_AND_FIXED;
+              boolean changed = false;
+              if (!(lhs.state.size() == 1 && lhs.state.contains(setShapeTo))) {
+                lhs.state.clear();
+                lhs.state.add(setShapeTo);
+                changed = true;
               }
-              lhs.state.clear();
-              lhs.state.add(setShapeTo);
-              return CHANGED_AND_FIXED;
+              // Pinning replaces the SHAPE, not the provenance: the destination's value is still
+              // produced by whatever produced the incoming flow (a `set_shape` receiver keeps its
+              // pre-assertion origins; a subscript result routed here by the wala/ML#405 reroute
+              // keeps its container's), so origins union from the predecessor as everywhere else
+              // (wala/ML#724).
+              if (rhs != null) changed |= lhs.origins.addAll(rhs.origins);
+              return changed ? CHANGED_AND_FIXED : NOT_CHANGED_AND_FIXED;
             }
 
             @Override
@@ -333,6 +350,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                         new ConvError(t, dimensions, pos, getTargetDef(v.getPointerKey())));
                   }
                 }
+                // A convolution is a TensorFlow operation; its result is TensorFlow-origin
+                // whatever produced the input (wala/ML#724).
+                changed |= lhs.origins.add(TensorOrigin.TENSORFLOW);
               }
               return changed ? CHANGED_AND_FIXED : NOT_CHANGED;
             }
@@ -418,6 +438,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                         new ReshapeError(t, reshapeTo, pos, getTargetDef(v.getPointerKey())));
                   }
                 }
+                // `tf.reshape` is a TensorFlow operation; its result is TensorFlow-origin
+                // whatever produced the input (wala/ML#724).
+                changed |= lhs.origins.add(TensorOrigin.TENSORFLOW);
               }
               return changed ? CHANGED_AND_FIXED : NOT_CHANGED;
             }
@@ -443,16 +466,25 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               new UnaryOperator<TensorVariable>() {
                 @Override
                 public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
-                  if (rhs != null && rhs.state != null) {
-                    if (lhs == null || lhs.state == null) {
+                  // The solver constructs every node variable, so a null endpoint has nothing to
+                  // update; the guard also keeps the null tests below honest (the previous
+                  // `lhs == null || lhs.state == null` guard dereferenced `lhs` in its own arm).
+                  if (lhs == null || rhs == null) return NOT_CHANGED;
+
+                  if (rhs.state != null) {
+                    if (lhs.state == null) {
                       lhs.copyState(rhs);
                       return CHANGED;
-                    } else {
-                      return lhs.state.addAll(rhs.state) ? CHANGED : NOT_CHANGED;
                     }
-                  } else {
-                    return NOT_CHANGED;
+                    boolean changed = lhs.state.addAll(rhs.state);
+                    changed |= lhs.origins.addAll(rhs.origins);
+                    return changed ? CHANGED : NOT_CHANGED;
                   }
+
+                  // A null-state (unknown tensor, ⊤) predecessor contributes no types, but its
+                  // producing library is still evidence and must flow: provenance matters most
+                  // exactly when the shape is unknown (wala/ML#724).
+                  return lhs.origins.addAll(rhs.origins) ? CHANGED : NOT_CHANGED;
                 }
 
                 @Override
@@ -517,6 +549,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                 boolean changed = false;
                 for (TensorVariable r : rhs) {
                   changed |= lhs.state.addAll(r.state);
+                  changed |= lhs.origins.addAll(r.origins);
                 }
                 return changed ? CHANGED : NOT_CHANGED;
               }
@@ -544,9 +577,26 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
 
   private final Map<PointsToSetVariable, Set<TensorType>> init;
 
+  private final Map<PointsToSetVariable, Set<TensorOrigin>> initOrigins;
+
+  /**
+   * Constructs the tensor type dataflow analysis over the PA assignment graph.
+   *
+   * @param G The dataflow graph (the PA assignment graph including implicit constraints).
+   * @param init The per-source seeded tensor types; a {@code null} value seeds an unknown tensor.
+   * @param initOrigins The per-source seeded producing libraries (wala/ML#724), unioned along the
+   *     same edges as the types.
+   * @param reshapeTypes Destinations pinned by an explicit reshape target shape.
+   * @param set_shapes Destinations pinned by an {@code x.set_shape(s)} assertion (wala/ML#509).
+   * @param conv2ds Destinations of 2D convolutions, rank-checked by {@code ConvOp}.
+   * @param conv3ds Destinations of 3D convolutions, rank-checked by {@code ConvOp}.
+   * @param drops Destinations pinned to empty-and-fixed (wala/ML#409).
+   * @param errorLog The sink for shape-mismatch diagnostics.
+   */
   public TensorTypeAnalysis(
       Graph<PointsToSetVariable> G,
       Map<PointsToSetVariable, Set<TensorType>> init,
+      Map<PointsToSetVariable, Set<TensorOrigin>> initOrigins,
       Map<PointsToSetVariable, TensorType> reshapeTypes,
       Map<PointsToSetVariable, TensorType> set_shapes,
       Set<PointsToSetVariable> conv2ds,
@@ -555,6 +605,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Map<PointerKey, AnalysisError> errorLog) {
     super(createProblem(G, reshapeTypes, set_shapes, conv2ds, conv3ds, drops, errorLog));
     this.init = init;
+    this.initOrigins = initOrigins;
   }
 
   @Override
@@ -583,6 +634,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
         getOut(src).state = null; // unknown tensor — distinguishable from empty (not-a-tensor)
       }
     }
+    for (PointsToSetVariable src : initOrigins.keySet())
+      getOut(src).origins.addAll(initOrigins.get(src));
   }
 
   public String toString() {
