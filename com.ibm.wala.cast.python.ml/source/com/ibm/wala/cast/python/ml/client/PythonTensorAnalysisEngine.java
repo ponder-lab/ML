@@ -95,13 +95,6 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   public static final int DEFAULT_TARGETED_CFA_DEPTH = 2;
 
   /**
-   * Upper bound on source-type resolution rounds (wala/ML#674). Convergence normally takes two to
-   * three rounds (one to seed, one for cycle members to see each other's approximations, one to
-   * confirm stability); the bound only guards against oscillation.
-   */
-  private static final int MAX_TYPE_RESOLUTION_ROUNDS = 5;
-
-  /**
    * The recommended targeted k-CFA depth for consumers analyzing the <em>model-forward
    * archetype</em>: {@code tf.keras.Model} subclasses whose {@code call}/{@code predict} chain
    * layer invocations ({@code x = self.layer1(x); x = self.layer2(x)}). Such a model invoked from
@@ -1247,6 +1240,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   @Override
   public TensorTypeAnalysis performAnalysis(PropagationCallGraphBuilder builder)
       throws CancelException {
+    // The wala/ML#365 worklist engine is installed for the whole analysis, not just the seeding
+    // loop: post-seeding passes (origin classification, the set_shape/subscript recognizers)
+    // dispatch generators whose evidence gates read shapes and dtypes, and those reads need the
+    // engine's memoization and cycle convergence just as the seeds do (an unguarded read recurses
+    // unboundedly through producer delegation on cyclic subjects).
+    WorklistTypeResolver.install(builder);
     try {
       Graph<PointsToSetVariable> dataflow =
           SlowSparseNumberedGraph.duplicate(
@@ -1254,56 +1253,26 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
       Set<PointsToSetVariable> sources = getDataflowSources(builder, dataflow);
 
-      // Resolve the per-source types in rounds until they stabilize (wala/ML#674): a cycle in a
-      // value's producer graph (e.g. a loop-carried variable) makes single-pass resolution depend
-      // on which cycle member is computed first, since the re-entered member floors to ⊤. Each
-      // round recomputes against the previous round's approximations (read on cycle re-entry in
-      // `TensorGenerator.getShapes`/`getDTypes`), so the result converges to an entry-order-
-      // independent fixed point. The bound is a safety net against oscillation; convergence is
-      // logged at FINE.
+      // Resolve the per-source types with the wala/ML#365 worklist engine: a single fixpoint over
+      // the recorded query-dependency graph replaces the historical round-based resolution
+      // (retired in Phase 3), the memo layers divert to the engine, and the seeding reads
+      // stabilized values, so the results are independent of the seeding order.
       Map<PointsToSetVariable, Set<TensorType>> init = HashMapFactory.make();
-      Map<PointsToSetVariable, Set<TensorType>> previousRound = null;
 
-      // Phase 2 of the wala/ML#365 design: under the flag, a single worklist fixpoint replaces
-      // the round loop; the memo layers divert to the engine and the seeding reads stabilized
-      // values, so the results are independent of the seeding order.
-      if (WorklistTypeResolver.enabled()) {
-        LOGGER.fine("Type resolution: worklist engine (wala/ML#365 Phase 2).");
-        WorklistTypeResolver.install(builder);
-        try {
-          // The engine's results are order-independent; the reverse-seeds property exists so the
-          // invariance is a tested property rather than a design claim (wala/ML#365, Phase 2).
-          List<PointsToSetVariable> ordered = new ArrayList<>(sources);
-          if (Boolean.getBoolean("ariadne.typeResolution.reverseSeeds")
-              || "true".equals(System.getenv("ARIADNE_REVERSE_SEEDS")))
-            Collections.reverse(ordered);
-          for (PointsToSetVariable v : ordered) init.put(v, getTensorTypes(v, builder));
+      // The engine's results are order-independent; the reverse-seeds property exists so the
+      // invariance is a tested property rather than a design claim (wala/ML#365, Phase 2).
+      List<PointsToSetVariable> ordered = new ArrayList<>(sources);
+      if (Boolean.getBoolean("ariadne.typeResolution.reverseSeeds")
+          || "true".equals(System.getenv("ARIADNE_REVERSE_SEEDS"))) Collections.reverse(ordered);
+      for (PointsToSetVariable v : ordered) init.put(v, getTensorTypes(v, builder));
 
-          // Second pass: a seed materialized early in the first pass predates the constraints
-          // later roots add, and the engine's state converges monotonically across the whole
-          // loop — the early snapshot can carry half-resolved members (e.g. an unknown-dtype
-          // twin of a member the converged state types fully). After the first pass every query
-          // is evaluated, so this pass adds no keys, edges, or evaluations; it only re-reads
-          // each seed's composition against the final fixpoint.
-          for (PointsToSetVariable v : ordered) init.put(v, getTensorTypes(v, builder));
-        } finally {
-          WorklistTypeResolver.uninstall(builder);
-        }
-      } else
-        for (int round = 0; round < MAX_TYPE_RESOLUTION_ROUNDS; round++) {
-          init = HashMapFactory.make();
-          for (PointsToSetVariable v : sources) init.put(v, getTensorTypes(v, builder));
-
-          if (init.equals(previousRound)) {
-            final int stableRound = round;
-            LOGGER.fine(
-                () -> "Source-type resolution stabilized after round: " + stableRound + ".");
-            break;
-          }
-
-          previousRound = init;
-          TensorGenerator.advanceRound(builder);
-        }
+      // Second pass: a seed materialized early in the first pass predates the constraints
+      // later roots add, and the engine's state converges monotonically across the whole
+      // loop — the early snapshot can carry half-resolved members (e.g. an unknown-dtype
+      // twin of a member the converged state types fully). After the first pass every query
+      // is evaluated, so this pass adds no keys, edges, or evaluations; it only re-reads
+      // each seed's composition against the final fixpoint.
+      for (PointsToSetVariable v : ordered) init.put(v, getTensorTypes(v, builder));
 
       // Seed each source's producing library beside its types (wala/ML#724). Origins ride the
       // same dataflow edges as the types, so the seeds are the only generator-side contribution;
@@ -1418,12 +1387,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
       return tt;
     } finally {
-      // `TensorGenerator.getShapes`/`getDTypes` memoize per-builder. Clear those caches now that
-      // the analysis is done rather than waiting for the builder to be garbage-collected &mdash;
-      // this keeps memory predictable in long-running clients (LSP server, repeated-analysis
-      // daemons) where builders may be held in other caches after their analysis completes. The
-      // `finally` ensures the caches are cleared and the interpreter-miss counter is reset even
-      // when the analysis exits early via `CancelException`, so neither leaks into the next run.
+      // The engine (with its query state) is uninstalled and the remaining per-builder memos are
+      // cleared now that the analysis is done rather than waiting for the builder to be
+      // garbage-collected &mdash; this keeps memory predictable in long-running clients (LSP
+      // server, repeated-analysis daemons) where builders may be held in other caches after their
+      // analysis completes. The `finally` ensures the state is released and the interpreter-miss
+      // counter is reset even when the analysis exits early via `CancelException`, so neither
+      // leaks into the next run.
+      WorklistTypeResolver.uninstall(builder);
       QueryDependencyGraph.of(builder).summarize();
       TensorGenerator.clearCaches(builder);
       reportAndResetInterpreterUnavailableMisses();
