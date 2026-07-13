@@ -475,6 +475,11 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                       changed |= lhs.origins.addAll(rhs.origins);
                       return changed ? CHANGED : NOT_CHANGED;
                     }
+                  } else if (rhs != null && lhs != null) {
+                    // A null-state (unknown tensor, ⊤) predecessor contributes no types, but its
+                    // producing library is still evidence and must flow: provenance matters most
+                    // exactly when the shape is unknown (wala/ML#724).
+                    return lhs.origins.addAll(rhs.origins) ? CHANGED : NOT_CHANGED;
                   } else {
                     return NOT_CHANGED;
                   }

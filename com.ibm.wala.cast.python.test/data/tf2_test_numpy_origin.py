@@ -23,7 +23,18 @@ def mixed(a, t):
     return a + t
 
 
+def make_opaque(k):
+    # The shape argument is a non-constant expression, so the analysis cannot resolve the array's
+    # shape (an unknown tensor, ⊤); only the numpy origin is known. Exercises origin propagation
+    # through a null-state predecessor.
+    return np.zeros((k * 1,), dtype=np.float32)
+
+
 def consume_np(x):
+    pass
+
+
+def consume_np_opaque(x):
     pass
 
 
@@ -52,7 +63,12 @@ assert isinstance(w, tf.Tensor)
 assert w.shape == (3,)
 assert w.dtype == tf.float32
 
+o = make_opaque(4)
+assert isinstance(o, np.ndarray)
+assert o.shape == (4,)
+
 consume_np(y)
 consume_np(r)
 consume_np(z)
+consume_np_opaque(o)
 consume_tf(w)

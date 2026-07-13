@@ -45,9 +45,13 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
   @Test
   public void testNumpyOrigin() throws ClassHierarchyException, CancelException, IOException {
     Map<String, Set<TensorOrigin>> sinkParameterOrigins =
-        getSinkParameterOrigins("tf2_test_numpy_origin.py", "consume_np", "consume_tf");
+        getSinkParameterOrigins(
+            "tf2_test_numpy_origin.py", "consume_np", "consume_np_opaque", "consume_tf");
 
     assertEquals(EnumSet.of(TensorOrigin.NUMPY), sinkParameterOrigins.get("consume_np"));
+    // The opaque sink receives an unknown-shape ndarray: provenance must survive even though the
+    // shape does not resolve, since a consumer needs the origin most exactly when the type is ⊤.
+    assertEquals(EnumSet.of(TensorOrigin.NUMPY), sinkParameterOrigins.get("consume_np_opaque"));
     assertEquals(EnumSet.of(TensorOrigin.TENSORFLOW), sinkParameterOrigins.get("consume_tf"));
   }
 
