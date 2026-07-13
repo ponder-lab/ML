@@ -1255,6 +1255,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               || "true".equals(System.getenv("ARIADNE_REVERSE_SEEDS")))
             Collections.reverse(ordered);
           for (PointsToSetVariable v : ordered) init.put(v, getTensorTypes(v, builder));
+
+          // Second pass: a seed materialized early in the first pass predates the constraints
+          // later roots add, and the engine's state converges monotonically across the whole
+          // loop — the early snapshot can carry half-resolved members (e.g. an unknown-dtype
+          // twin of a member the converged state types fully). After the first pass every query
+          // is evaluated, so this pass adds no keys, edges, or evaluations; it only re-reads
+          // each seed's composition against the final fixpoint.
+          for (PointsToSetVariable v : ordered) init.put(v, getTensorTypes(v, builder));
         } finally {
           WorklistTypeResolver.uninstall(builder);
         }
