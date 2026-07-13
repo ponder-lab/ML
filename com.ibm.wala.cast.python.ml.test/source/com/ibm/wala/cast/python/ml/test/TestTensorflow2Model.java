@@ -3640,7 +3640,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * body mirrors {@code crf_unary_score} from {@code kyzhouhzau/NLPGNN/nlpgnn/metrics/crf.py}, a
    * real-world linear-chain CRF function exercised for tensor-type inference coverage. Its {@code
    * tf.reshape} with runtime-derived dimensions ({@code tf.shape(inputs)[0]}) previously crashed
-   * the analysis (wala/ML#567).
+   * the analysis (wala/ML#567). The local count includes the {@code tf.range(...) * shape-element}
+   * offset chain, whose rank-0 co-operands preserve the range results' shapes through the
+   * elementwise scalar rule (wala/ML#723).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -3654,7 +3656,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_crf.py",
         "crf_unary_score",
         3,
-        20,
+        22,
         Map.of(
             2, Set.of(TENSOR_2_3_INT32),
             3, Set.of(TENSOR_2_INT32),
@@ -3666,10 +3668,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * types. Function body mirrors {@code crf_binary_score} from {@code
    * kyzhouhzau/NLPGNN/nlpgnn/metrics/crf.py} for tensor-type inference coverage.
    *
-   * <p>The local count captures one {@code tf.shape}-scalar arithmetic intermediate at ⊥; its
-   * gather-fixture siblings recovered with the {@code tf.range} remodel, but this one did not, and
-   * its cause is unidentified—TODO: <a
-   * href="https://github.com/wala/ML/issues/723">wala/ML#723</a>.
+   * <p>The local count includes the flat-index arithmetic ({@code start_tag_indices * num_tags +
+   * end_tag_indices}), typed exactly {@code (2, 2) int32}: a {@code tf.shape} element is a rank-0
+   * tensor, so the elementwise scalar-co-operand rule preserves the tensor operand's shape through
+   * the nested product (wala/ML#723).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -3683,7 +3685,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_crf.py",
         "crf_binary_score",
         3,
-        13,
+        14,
         Map.of(
             2, Set.of(TENSOR_2_3_INT32),
             3, Set.of(TENSOR_2_INT32),
