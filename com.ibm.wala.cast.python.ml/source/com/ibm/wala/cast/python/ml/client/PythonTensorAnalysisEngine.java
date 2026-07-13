@@ -1331,6 +1331,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // daemons) where builders may be held in other caches after their analysis completes. The
       // `finally` ensures the caches are cleared and the interpreter-miss counter is reset even
       // when the analysis exits early via `CancelException`, so neither leaks into the next run.
+      QueryDependencyGraph.of(builder).summarize();
       TensorGenerator.clearCaches(builder);
       reportAndResetInterpreterUnavailableMisses();
     }
