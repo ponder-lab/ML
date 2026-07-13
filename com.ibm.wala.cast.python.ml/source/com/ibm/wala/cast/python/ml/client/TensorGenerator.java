@@ -226,6 +226,80 @@ public abstract class TensorGenerator {
       DTYPE_DELEGATIONS_IN_PROGRESS = Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
+   * Memo of whole-generator shape evaluations per builder, keyed on the generator's identity: its
+   * concrete class plus its anchor (the source's {@link PointerKey} for source-anchored instances,
+   * the synthetic {@link CGNode} for manual ones). Completes the wala/ML#365 memoization to the
+   * 1-arg evaluation layer: seeding, factory recovery, and producer delegation re-evaluate the same
+   * generator many times per round, and each evaluation recursively re-walks its arguments. Cleared
+   * per round alongside the {@code (node, vn)} caches, since evaluations legitimately change as the
+   * round guards' approximations advance.
+   */
+  private static final Map<PropagationCallGraphBuilder, Map<Object, ShapeResult>>
+      GENERATOR_SHAPE_EVALS = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /** Dtype counterpart of {@link #GENERATOR_SHAPE_EVALS}. */
+  private static final Map<PropagationCallGraphBuilder, Map<Object, Set<DType>>>
+      GENERATOR_DTYPE_EVALS = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
+   * Returns the memo key identifying a generator evaluation (wala/ML#365).
+   *
+   * @param generator The generator whose evaluation is keyed.
+   * @return The concrete class paired with the anchor identity.
+   */
+  private static Object evaluationKey(TensorGenerator generator) {
+    Object anchorId =
+        generator.getSource() != null
+            ? generator.getSource().getPointerKey()
+            : generator.manualNode;
+    return Pair.make(generator.getClass(), anchorId);
+  }
+
+  /**
+   * Evaluates the generator's shapes through the per-builder evaluation memo (wala/ML#365). Atomic
+   * check-compute-put under the cache's mutex, mirroring the {@code (node, vn)} layer.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param generator The generator to evaluate.
+   * @return The (possibly cached) evaluation result.
+   */
+  static ShapeResult memoizedShapeResult(
+      PropagationCallGraphBuilder builder, TensorGenerator generator) {
+    Map<Object, ShapeResult> cache =
+        GENERATOR_SHAPE_EVALS.computeIfAbsent(
+            builder, b -> Collections.synchronizedMap(new HashMap<>()));
+    synchronized (cache) {
+      Object key = evaluationKey(generator);
+      if (cache.containsKey(key)) return cache.get(key);
+      ShapeResult result = generator.getShapeResult(builder);
+      cache.put(key, result);
+      return result;
+    }
+  }
+
+  /**
+   * Dtype counterpart of {@link #memoizedShapeResult(PropagationCallGraphBuilder,
+   * TensorGenerator)}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param generator The generator to evaluate.
+   * @return The (possibly cached) evaluation result; may be {@code null} (⊤) per the legacy dtype
+   *     convention.
+   */
+  static Set<DType> memoizedDTypes(PropagationCallGraphBuilder builder, TensorGenerator generator) {
+    Map<Object, Set<DType>> cache =
+        GENERATOR_DTYPE_EVALS.computeIfAbsent(
+            builder, b -> Collections.synchronizedMap(new HashMap<>()));
+    synchronized (cache) {
+      Object key = evaluationKey(generator);
+      if (cache.containsKey(key)) return cache.get(key);
+      Set<DType> result = generator.getDTypes(builder);
+      cache.put(key, result);
+      return result;
+    }
+  }
+
+  /**
    * Memo of the {@code (class, attribute)} chase results of {@link
    * #resolveStoredAttributeDimInClass(PropagationCallGraphBuilder, IClass, String)} per builder
    * (wala/ML#712). The chase scans the whole call graph, so uncached re-runs are quadratic on large
@@ -261,6 +335,8 @@ public abstract class TensorGenerator {
     DTYPES_IN_PROGRESS.remove(builder);
     SHAPE_DELEGATIONS_IN_PROGRESS.remove(builder);
     DTYPE_DELEGATIONS_IN_PROGRESS.remove(builder);
+    GENERATOR_SHAPE_EVALS.remove(builder);
+    GENERATOR_DTYPE_EVALS.remove(builder);
     // The chase reads shape results that may change between rounds, so its memo restarts too.
     STORED_ATTRIBUTE_CACHE.remove(builder);
     BUILD_CONTRACT_CACHE.remove(builder);
@@ -286,6 +362,8 @@ public abstract class TensorGenerator {
     DTYPES_IN_PROGRESS.remove(builder);
     SHAPE_DELEGATIONS_IN_PROGRESS.remove(builder);
     DTYPE_DELEGATIONS_IN_PROGRESS.remove(builder);
+    GENERATOR_SHAPE_EVALS.remove(builder);
+    GENERATOR_DTYPE_EVALS.remove(builder);
     STORED_ATTRIBUTE_CACHE.remove(builder);
     BUILD_CONTRACT_CACHE.remove(builder);
   }
@@ -331,8 +409,8 @@ public abstract class TensorGenerator {
    * @return A set of possible {@link TensorType}s, or {@code null} if the shape is unknown.
    */
   public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
-    ShapeResult shapes = this.getShapeResult(builder);
-    Set<DType> dTypes = this.getDTypes(builder);
+    ShapeResult shapes = memoizedShapeResult(builder, this);
+    Set<DType> dTypes = memoizedDTypes(builder, this);
 
     // If we have no dtype info at all, fall back to signaling "unknown tensor" when shapes are
     // also unknown, otherwise produce an empty set (⊥, not a tensor).
@@ -1787,7 +1865,7 @@ public abstract class TensorGenerator {
                       + generator.getClass().getSimpleName()
                       + " for vn="
                       + valueNumber);
-          ShapeResult generatorShapes = generator.getShapeResult(builder);
+          ShapeResult generatorShapes = memoizedShapeResult(builder, generator);
           // A ⊤ producer result cannot improve on a saved partial's members (wala/ML#718).
           if (generatorShapes.members().isEmpty() && partial != null) return partial;
           return generatorShapes;
@@ -2439,7 +2517,7 @@ public abstract class TensorGenerator {
         try {
           TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
           if (generator != null && !generator.getClass().equals(this.getClass())) {
-            ShapeResult generatorShapes = generator.getShapeResult(builder);
+            ShapeResult generatorShapes = memoizedShapeResult(builder, generator);
             ret.addAll(generatorShapes.members());
             if (exact && generatorShapes.hasUnknown())
               hasUnknown = true; // Incomplete union, wala/ML#718.
@@ -2534,7 +2612,7 @@ public abstract class TensorGenerator {
             return ShapeResult.bottom();
           }
           LOGGER.fine("Delegating shape inference to: " + generator);
-          ShapeResult delegatedShapes = generator.getShapeResult(builder);
+          ShapeResult delegatedShapes = memoizedShapeResult(builder, generator);
           ret.addAll(delegatedShapes.members());
           if (exact && delegatedShapes.hasUnknown())
             hasUnknown = true; // Incomplete union, wala/ML#718.
@@ -2552,7 +2630,7 @@ public abstract class TensorGenerator {
           }
           if (generator != null) {
             LOGGER.fine("Delegating shape inference to: " + generator);
-            ShapeResult delegatedShapes = generator.getShapeResult(builder);
+            ShapeResult delegatedShapes = memoizedShapeResult(builder, generator);
             ret.addAll(delegatedShapes.members());
             if (exact && delegatedShapes.hasUnknown())
               hasUnknown = true; // Incomplete union, wala/ML#718.
@@ -2977,7 +3055,7 @@ public abstract class TensorGenerator {
         // different `ElementWiseOperation` generators for different operand value numbers can
         // still recurse into each other.
         if (generator != null && !generator.getClass().equals(this.getClass())) {
-          return generator.getDTypes(builder);
+          return memoizedDTypes(builder, generator);
         }
       } catch (IllegalArgumentException e) {
         LOGGER.log(Level.FINE, "Not a recognized generator: " + var, e);
@@ -3240,7 +3318,7 @@ public abstract class TensorGenerator {
         try {
           TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
           if (generator != null && !generator.getClass().equals(this.getClass())) {
-            ret.addAll(generator.getDTypes(builder));
+            ret.addAll(memoizedDTypes(builder, generator));
           }
         } catch (IllegalArgumentException e) {
           // Factory couldn't resolve — skip this instance. See wala/ML#363.
@@ -3313,7 +3391,7 @@ public abstract class TensorGenerator {
             return ret;
           }
           LOGGER.fine("Delegating dtype inference to: " + generator);
-          Set<DType> delegated = generator.getDTypes(builder);
+          Set<DType> delegated = memoizedDTypes(builder, generator);
           // A null delegation result is ⊤ (e.g., an argument dtype that resolves through neither
           // the points-to set nor the caller walk); contribute UNKNOWN rather than NPE-ing.
           ret.addAll(delegated == null ? EnumSet.of(UNKNOWN) : delegated);
@@ -3331,7 +3409,7 @@ public abstract class TensorGenerator {
           }
           if (generator != null) {
             LOGGER.fine("Delegating dtype inference to: " + generator);
-            Set<DType> delegated = generator.getDTypes(builder);
+            Set<DType> delegated = memoizedDTypes(builder, generator);
             // A null delegation result is ⊤; contribute UNKNOWN rather than NPE-ing.
             ret.addAll(delegated == null ? EnumSet.of(UNKNOWN) : delegated);
           }
@@ -3372,7 +3450,7 @@ public abstract class TensorGenerator {
 
         if (generator != null) {
           LOGGER.fine("Delegating dtype inference to: " + generator);
-          ret.addAll(generator.getDTypes(builder));
+          ret.addAll(memoizedDTypes(builder, generator));
         }
       }
     }
