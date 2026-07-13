@@ -198,6 +198,43 @@ public class BuiltinFunctions {
     return new PythonSummarizedFunction(ref, x, cls);
   }
 
+  /**
+   * Builds the summary for {@code iter}: a freshly-allocated {@code iterator} that carries a copy
+   * of the argument's {@link PythonTypes#GENERATOR_CONTENT_FIELD_NAME} field. A generator is its
+   * own iterator, accumulating every yielded value in that field, so copying it through lets {@code
+   * next(iter(gen()))} recover the yields exactly as {@code next(gen())} does. Without this, {@code
+   * iter} returned a fresh, empty iterator disconnected from its argument and the element flow died
+   * at the hop (wala/ML#698). An argument lacking the field (e.g., a {@code tf.data} dataset)
+   * copies nothing, leaving the fresh iterator empty; that preserves the dataset-iterator seeding,
+   * which recovers element types by chasing {@code iter}'s argument rather than its result, and
+   * avoids aliasing the iterator with the dataset (which would leak the dataset's tensor type onto
+   * the iterator variable).
+   *
+   * @param cls The builtin function class whose summary this is.
+   * @param name The builtin's name ({@code iter}).
+   * @return The populated summary.
+   */
+  private static IMethod iterSummary(IClass cls, String name) {
+    TypeReference type = builtinFunction(name);
+    MethodReference ref = MethodReference.findOrCreate(type, AstMethodReference.fnSelector);
+    PythonSummary x = new PythonSummary(ref, 10);
+
+    AstInstructionFactory factory = PythonLanguage.Python.instructionFactory();
+    int iterator = 11;
+    int content = 12;
+    int fieldKey = 13;
+    int idx = 0;
+
+    x.addStatement(
+        factory.NewInstruction(idx++, iterator, NewSiteReference.make(0, PythonTypes.iterator)));
+    x.addConstant(fieldKey, new ConstantValue(PythonTypes.GENERATOR_CONTENT_FIELD_NAME));
+    x.addStatement(factory.PropertyRead(idx++, content, 2, fieldKey));
+    x.addStatement(factory.PropertyWrite(idx++, iterator, fieldKey, content));
+    x.addStatement(factory.ReturnInstruction(idx++, iterator, false));
+
+    return new PythonSummarizedFunction(ref, x, cls);
+  }
+
   private static IMethod argSummary(IClass cls, String name, int arg) {
     PythonSummary S = argSummary(cls, builtinFunction(name), arg);
     return new PythonSummarizedFunction(S.getMethod(), S, cls);
@@ -251,7 +288,12 @@ public class BuiltinFunctions {
                       // `nextSummary` (wala/ML#696).
                       : name.equals("next")
                           ? nextSummary(this, name)
-                          : typeSummary(this, name, returnedType);
+                          // `iter` must carry its argument's generator content through the fresh
+                          // iterator so that `next(iter(gen()))` recovers the yields; see
+                          // `iterSummary` (wala/ML#698).
+                          : name.equals("iter")
+                              ? iterSummary(this, name)
+                              : typeSummary(this, name, returnedType);
     }
 
     private BuiltinFunction(IClassHierarchy cha, String name, int arg) {
@@ -448,6 +490,9 @@ public class BuiltinFunctions {
     // https://docs.python.org/3/library/functions.html#print
     builtinFunctions.put("print", Either.forLeft(TypeReference.Void));
     // https://docs.python.org/3/library/functions.html#iter
+    // `iter` allocates an `iterator`, but its body (see `iterSummary`) copies the argument's
+    // generator content field through so that `next(iter(gen()))` recovers the yields
+    // (wala/ML#698).
     builtinFunctions.put("iter", Either.forLeft(PythonTypes.iterator));
     // https://docs.python.org/3/library/functions.html#next
     builtinFunctions.put("next", Either.forLeft(PythonTypes.object));

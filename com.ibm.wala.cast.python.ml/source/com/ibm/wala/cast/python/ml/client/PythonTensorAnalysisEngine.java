@@ -409,6 +409,26 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           // We are potentially pulling a tensor out of a non-scalar tensor iterable.
           PythonPropertyRead propertyRead = (PythonPropertyRead) inst;
 
+          // The content read inside the `iter` builtin's summary (see
+          // `BuiltinFunctions.iterSummary`; wala/ML#698) must not seed: the summary node is shared
+          // across its call site's calling contexts (1-CFA keys on the call site), so the
+          // argument's points-to set unions every caller's dataset, and a seed here injects that
+          // union into the shared iterator's content field, poisoning every context's `next`
+          // result. The element type is instead recovered context-sensitively at each `next`
+          // result, by chasing `iter`'s argument in the caller's frame.
+          if (localPointerKeyNode
+              .getMethod()
+              .getReference()
+              .getDeclaringClass()
+              .equals(PythonTypes.ITER_BUILTIN)) {
+            LOGGER.fine(
+                () ->
+                    "Skipping seeding of content read: "
+                        + describe(src)
+                        + " in the shared iter summary.");
+            continue;
+          }
+
           // Find the potential tensor iterable definition.
           int objectRef = propertyRead.getObjectRef();
           SSAInstruction def = du.getDef(objectRef);
@@ -518,8 +538,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               SSAInstruction iteratorDef = du.getDef(iterator);
 
               // Let's see if the iterator is over a tensor dataset. First, check the iterator
-              // for a dataset source. NOTE: We can only do this because `iter()` is currently
-              // just passing-through its argument.
+              // for a dataset source. `iter()` returns a fresh iterator that does not carry a
+              // dataset's element flow (see `iterSummary`; wala/ML#698), so a dataset source is
+              // recovered by chasing `iter()`'s argument below.
               if (iteratorDef != null && iteratorDef.getNumberOfUses() > 1) {
                 boolean added =
                     processInstructionInterprocedurally(
@@ -565,8 +586,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                   }
                 }
               } else
-                // Use the original instruction. NOTE: We can only do this because `iter()` is
-                // currently just passing-through its argument.
+                // Use the original instruction to chase the iterator directly for a dataset
+                // source (see `iterSummary`; wala/ML#698).
                 ret |=
                     processInstructionInterprocedurally(
                         instruction, iterator, node, src, sources, pointerAnalysis);
