@@ -1365,9 +1365,33 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       for (PointsToSetVariable d : drops)
         LOGGER.fine(() -> "  drop: " + describe(d.getPointerKey()));
 
+      // Parameter destinations get the hybridization-frame origin and a barrier against
+      // caller-side origin inflow (wala/ML#726): under `tf.function` tracing a tensor parameter is
+      // a symbolic tensor regardless of the library that produced its eager feeds, so its
+      // provenance is first-class rather than inherited. Types still flow into parameters; only
+      // provenance stops at the boundary. Seeding every parameter unconditionally is safe:
+      // non-tensor parameters never surface, since the solution iterator filters empty-state
+      // variables.
+      Set<PointsToSetVariable> parameters = HashSetFactory.make();
+      for (PointsToSetVariable v : dataflow)
+        if (v.getPointerKey() instanceof LocalPointerKey
+            && ((LocalPointerKey) v.getPointerKey()).isParameter()) parameters.add(v);
+      LOGGER.fine(() -> "wala/ML#726 parameter destinations: " + parameters.size());
+      for (PointsToSetVariable p : parameters)
+        initOrigins.put(p, EnumSet.of(TensorOrigin.PARAMETER));
+
       TensorTypeAnalysis tt =
           new TensorTypeAnalysis(
-              dataflow, init, initOrigins, shapeOps, setCalls, conv2ds, conv3ds, drops, errorLog);
+              dataflow,
+              init,
+              initOrigins,
+              shapeOps,
+              setCalls,
+              conv2ds,
+              conv3ds,
+              drops,
+              parameters,
+              errorLog);
 
       tt.solve(new NullProgressMonitor());
 

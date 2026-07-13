@@ -111,15 +111,16 @@ public class ElementWiseOperation extends TensorGenerator {
   }
 
   /**
-   * Returns the producing library of a binary operator's result by classifying its operands
-   * (wala/ML#724). Runtime binary-operator dispatch decides the result's library: {@code ndarray +
-   * ndarray} stays numpy, while any TensorFlow operand makes the operation a TensorFlow one and the
-   * result a {@code tf.Tensor}. Each operand classifies through its producing generator (via {@link
-   * TensorGeneratorFactory#getGenerator}), recursing structurally through nested binary operators
-   * (whose results have no points-to set to dispatch on); a statically opaque scalar operand is
-   * skipped, since it keeps the tensor operand's library. An operand without origin evidence
-   * contributes {@link TensorOrigin#TENSORFLOW}, preserving the pre-wala/ML#724 reading where the
-   * analysis cannot prove numpy provenance.
+   * Returns the origin of a binary operator's result by classifying its operands (wala/ML#724).
+   * Runtime binary-operator dispatch decides the result's origin: {@code ndarray + ndarray} stays
+   * numpy, any TensorFlow operand makes the operation a TensorFlow one and the result a {@code
+   * tf.Tensor}, and otherwise a parameter operand makes the traced operator a TensorFlow op whose
+   * result is the frame's symbolic value (wala/ML#726). Each non-parameter operand classifies
+   * through its producing generator (via {@link TensorGeneratorFactory#getGenerator}), recursing
+   * structurally through nested binary operators (whose results have no points-to set to dispatch
+   * on); a statically opaque scalar operand is skipped, since it keeps the tensor operand's
+   * library. An operand without origin evidence contributes {@link TensorOrigin#TENSORFLOW},
+   * preserving the pre-wala/ML#724 reading where the analysis cannot prove numpy provenance.
    *
    * <p>A manual anchor models a TensorFlow API call ({@code tf.multiply.do()} etc.), so the default
    * applies there.
@@ -139,15 +140,16 @@ public class ElementWiseOperation extends TensorGenerator {
 
   /**
    * Classifies a binary operator's result by the per-execution dispatch product of its operands'
-   * origins: an execution pairing a TensorFlow operand with anything yields a TensorFlow result,
-   * and only a numpy-with-numpy pairing yields an ndarray. The product is more precise than a plain
-   * union: {@code {NUMPY} + {TENSORFLOW}} is {@code {TENSORFLOW}}, while {@code {NUMPY} + {NUMPY,
-   * TENSORFLOW}} keeps both.
+   * origins: an execution pairing a TensorFlow operand with anything yields a TensorFlow result, a
+   * parameter operand paired with anything but TensorFlow yields the hybridization frame's symbolic
+   * value, and only a numpy-with-numpy pairing yields an ndarray. The product is more precise than
+   * a plain union: {@code {NUMPY} + {TENSORFLOW}} is {@code {TENSORFLOW}}, while {@code {NUMPY} +
+   * {NUMPY, TENSORFLOW}} keeps both.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param node The node whose IR defines the operator.
    * @param binop The binary operator instruction.
-   * @return The producing libraries of the operator's result.
+   * @return The origins of the operator's result.
    */
   private Set<TensorOrigin> getBinaryOperationOrigins(
       PropagationCallGraphBuilder builder, CGNode node, SSABinaryOpInstruction binop) {
@@ -160,19 +162,36 @@ public class ElementWiseOperation extends TensorGenerator {
     if (y == null) return x;
 
     Set<TensorOrigin> ret = EnumSet.noneOf(TensorOrigin.class);
-    for (TensorOrigin ox : x)
-      for (TensorOrigin oy : y)
-        ret.add(
-            ox == TensorOrigin.TENSORFLOW || oy == TensorOrigin.TENSORFLOW
-                ? TensorOrigin.TENSORFLOW
-                : TensorOrigin.NUMPY);
+    for (TensorOrigin ox : x) for (TensorOrigin oy : y) ret.add(getDispatchedOrigin(ox, oy));
     return ret;
   }
 
   /**
-   * Classifies one binary-operator operand's origins. A nested binary operator recurses
-   * structurally (its result has no points-to set to dispatch on); any other operand classifies
-   * through the generator its points-to chain dispatches to.
+   * Returns the origin a binary operator's runtime dispatch assigns to one pairing of operand
+   * origins, under the dominance order {@link TensorOrigin#TENSORFLOW} &gt; {@link
+   * TensorOrigin#PARAMETER} &gt; {@link TensorOrigin#NUMPY}: any TensorFlow operand makes the
+   * operation a TensorFlow one and the result a {@code tf.Tensor}; otherwise a parameter operand
+   * makes the traced operator a TensorFlow op whose result is the frame's symbolic value
+   * (wala/ML#726); only numpy with numpy stays an ndarray.
+   *
+   * @param x One operand's origin.
+   * @param y The other operand's origin.
+   * @return The origin of the operator's result for this pairing.
+   */
+  private static TensorOrigin getDispatchedOrigin(TensorOrigin x, TensorOrigin y) {
+    if (x == TensorOrigin.TENSORFLOW || y == TensorOrigin.TENSORFLOW)
+      return TensorOrigin.TENSORFLOW;
+    if (x == TensorOrigin.PARAMETER || y == TensorOrigin.PARAMETER) return TensorOrigin.PARAMETER;
+    return TensorOrigin.NUMPY;
+  }
+
+  /**
+   * Classifies one binary-operator operand's origins. A parameter of the defining frame carries the
+   * hybridization-frame origin (wala/ML#726): under tracing it is a symbolic tensor whatever its
+   * eager feeds, so it classifies as {@link TensorOrigin#PARAMETER} rather than through the
+   * creators its call sites feed it. A nested binary operator recurses structurally (its result has
+   * no points-to set to dispatch on); any other operand classifies through the generator its
+   * points-to chain dispatches to.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param node The node whose IR defines the operand.
@@ -183,6 +202,8 @@ public class ElementWiseOperation extends TensorGenerator {
   private Set<TensorOrigin> getOperandOrigins(
       PropagationCallGraphBuilder builder, CGNode node, int vn) {
     if (this.isScalarExpression(builder, node, vn)) return null;
+
+    if (node.getIR().getSymbolTable().isParameter(vn)) return EnumSet.of(TensorOrigin.PARAMETER);
 
     SSAInstruction def = node.getDU().getDef(vn);
     if (def instanceof SSABinaryOpInstruction)
