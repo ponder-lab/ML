@@ -2229,13 +2229,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * tf.reshape}/{@code tf.squeeze} producer registrations and the callee-return descent for
    * layer-call results add the degraded-rank members ({@code (D, D)}, {@code (D, D, D)}, {@code (8,
    * D, D)}): the einsum body's own reshapes now compute generator-side through the {@code
-   * get_shape_list} walk, whose non-entry contexts resolve rank but not every dimension. The
-   * shape-⊤ {@code float32} member is the four {@code DenseLayer3dProj} contexts (fed by the
-   * attention's return value): the dtype now relays through the descent, but the shared-transformer
-   * loop's fixed point still keeps their shapes fully unknown, as does the pure-⊤ member — TODO: <a
-   * href="https://github.com/wala/ML/issues/718">wala/ML#718</a>. The {@code w} parameter keeps
-   * rank 3 and {@code float32} (its chain is layer-local) but no numeric dimensions, since the
-   * {@code build}-computed head sizes also derive from the config.
+   * get_shape_list} walk, whose non-entry contexts resolve rank but not every dimension. The rank-4
+   * {@code (8, 100, U, U)}/{@code (8, 10, U, U)} members are the {@code DenseLayer3dProj} contexts'
+   * inputs (the attention's return value), delivered once the producer-cycle mask lets the
+   * loop-carried union converge from its non-cyclic base: three of the four proj contexts carry
+   * them. One entry's proj context and the pure-⊤/shape-⊤ members remain the loop fixed point's
+   * last residue—TODO: <a href="https://github.com/wala/ML/issues/718">wala/ML#718</a>. The {@code
+   * w} parameter keeps rank 3 and {@code float32} (its chain is layer-local) but no numeric
+   * dimensions, since the {@code build}-computed head sizes also derive from the config.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2270,7 +2271,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
                     asList(new NumericDim(8), new NumericDim(10), UnresolvedDim.INSTANCE)),
                 new TensorType(
                     FLOAT_32,
-                    asList(new NumericDim(8), new NumericDim(100), UnresolvedDim.INSTANCE))),
+                    asList(new NumericDim(8), new NumericDim(100), UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(8),
+                        new NumericDim(10),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(8),
+                        new NumericDim(100),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE))),
             3,
             Set.of(
                 new TensorType(
