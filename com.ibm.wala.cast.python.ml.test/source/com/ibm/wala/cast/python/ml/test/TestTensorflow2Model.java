@@ -13330,6 +13330,34 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Evidence-free twin of {@link #testReshapeTfShape()} (wala/ML#722): when the input's leading
+   * axes are fixed runtime sizes the analysis cannot compute, {@code tf.shape(x)[i]} carries no
+   * {@code None}-evidence and the reshape target's leading elements classify {@link UnresolvedDim}
+   * per the wala/ML#721 criterion, with the trailing constant exact. The pair pins the arm's
+   * discriminating variable: the input's own axis evidence, not the target's syntactic pattern.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testReshapeTfShapeUnresolved()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_tf_shape_unresolved.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))))));
+  }
+
+  /**
    * Pins the fold taint of the dimension-provenance split (wala/ML#721): {@code np.prod} over a
    * shape list whose leading axis is {@code None} stays {@link DynamicDim} — arithmetic over a
    * {@code None} axis is itself {@code None} at run time — rather than degrading to {@link
