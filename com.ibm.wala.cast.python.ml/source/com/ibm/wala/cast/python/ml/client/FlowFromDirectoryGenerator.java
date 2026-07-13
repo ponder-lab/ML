@@ -4,8 +4,8 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
-import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
@@ -68,13 +68,13 @@ public class FlowFromDirectoryGenerator extends DatasetGenerator {
     imageShape.add(new NumericDim(3)); // Default rgb color_mode
 
     // 4. Construct labels shape: (batch_size, num_classes).
-    // `num_classes` is unknown statically — use `DynamicDim`
-    // (https://github.com/wala/ML/issues/545). The test
+    // `num_classes` is the directory's class-subfolder count: fixed for a given run but unknown
+    // statically — `UnresolvedDim` (wala/ML#721; previously `DynamicDim`, wala/ML#545). The test
     // `tf2_test_dataset19.py` has a categorical `class_mode` but we don't know the exact class
     // count from `tensorflow.xml`'s modeling of `flow_from_directory`.
     List<Dimension<?>> labelShape = new ArrayList<>();
     labelShape.add(new NumericDim(batchSize.intValue()));
-    labelShape.add(DynamicDim.INSTANCE);
+    labelShape.add(UnresolvedDim.INSTANCE);
 
     ret.add(imageShape);
     ret.add(labelShape);

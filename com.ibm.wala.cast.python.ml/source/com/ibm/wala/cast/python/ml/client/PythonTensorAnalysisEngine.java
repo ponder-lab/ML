@@ -20,6 +20,10 @@ import com.ibm.wala.cast.python.ipa.callgraph.TrampolineReceiverContextSelector;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.cast.python.types.PythonTypes;
@@ -66,7 +70,9 @@ import com.ibm.wala.util.graph.impl.SlowSparseNumberedGraph;
 import com.ibm.wala.util.intset.IntSet;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -911,6 +917,57 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     }
   }
 
+  /**
+   * Pointwise merge of the two literal-shape pin candidates (wala/ML#713): the generator-side type
+   * and the {@code TensorType.shapeArg} type approximate the same shape, so each dimension takes
+   * the more useful of the two. Numeric wins, and disagreeing numeric dimensions degrade to dynamic
+   * rather than trusting either. Between the unresolved kinds, symbolic wins over dynamic only when
+   * the generator resolved no numeric dimension at all: {@code SetShapeOp}'s reshape transfer later
+   * fills a lone symbolic dimension from the input's element count (the {@code np.prod(...,
+   * axis=0)} pin owes its precision to that), whereas when the generator did resolve structure, its
+   * seeded member already carries it and a symbolic-flavored pin would only add a duplicate union
+   * member. An unknown-rank generator result yields the {@code shapeArg} type, a rank mismatch
+   * yields the generator type, and the cell type prefers the generator's unless it is unknown.
+   *
+   * @param generatorType The generator-side pin candidate.
+   * @param shapeArgType The {@code shapeArg} pin candidate.
+   * @return The merged pin type.
+   */
+  private static TensorType mergePinnedTypes(TensorType generatorType, TensorType shapeArgType) {
+    LOGGER.fine(
+        () -> "mergePinnedTypes: generator=" + generatorType + ", shapeArg=" + shapeArgType);
+    List<Dimension<?>> generatorDims = generatorType.getDims();
+    List<Dimension<?>> shapeArgDims = shapeArgType.getDims();
+    if (generatorDims == null) return shapeArgType;
+    if (shapeArgDims == null || shapeArgDims.size() != generatorDims.size()) return generatorType;
+
+    boolean generatorHasNumeric = generatorDims.stream().anyMatch(d -> d instanceof NumericDim);
+    List<Dimension<?>> merged = new ArrayList<>(generatorDims.size());
+    for (int i = 0; i < generatorDims.size(); i++) {
+      Dimension<?> fromGenerator = generatorDims.get(i);
+      Dimension<?> fromShapeArg = shapeArgDims.get(i);
+      if (fromGenerator instanceof NumericDim && fromShapeArg instanceof NumericDim)
+        // Two concrete computations disagreeing means the size is fixed but the analysis cannot
+        // tell which value holds — an unresolved size, not a runtime-varying one (wala/ML#721).
+        merged.add(fromGenerator.equals(fromShapeArg) ? fromGenerator : UnresolvedDim.INSTANCE);
+      else if (fromGenerator instanceof NumericDim) merged.add(fromGenerator);
+      else if (fromShapeArg instanceof NumericDim) merged.add(fromShapeArg);
+      else if (!generatorHasNumeric && fromShapeArg instanceof SymbolicDim)
+        merged.add(fromShapeArg);
+      else merged.add(fromGenerator);
+    }
+
+    String cellType =
+        generatorType.getCellType() == null
+                || TensorFlowTypes.DType.UNKNOWN
+                    .name()
+                    .toLowerCase(java.util.Locale.ROOT)
+                    .equals(generatorType.getCellType())
+            ? shapeArgType.getCellType()
+            : generatorType.getCellType();
+    return new TensorType(cellType, merged);
+  }
+
   private Map<PointsToSetVariable, TensorType> getShapeSourceCalls(
       MethodReference op, PropagationCallGraphBuilder builder, int param) {
     Map<PointsToSetVariable, TensorType> targets = HashMapFactory.make();
@@ -940,12 +997,6 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                             .getNewSite()
                             .getDeclaredType()
                             .equals(PythonTypes.tuple));
-            TensorType pinned =
-                literalContainer
-                    ? TensorType.shapeArg(src, shapeVn, builder)
-                    : new TensorType(
-                        TensorFlowTypes.DType.FLOAT32.name().toLowerCase(java.util.Locale.ROOT),
-                        null);
             PointerKey defKey =
                 builder
                     .getPointerAnalysis()
@@ -954,8 +1005,30 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             // Materializing an implicitly-represented key would make WALA dump the entire call
             // graph's IR (an unconditional debug print), so skip it; implicit keys carry no
             // explicit dataflow variable to pin (wala/ML#573).
-            if (!builder.getPropagationSystem().isImplicit(defKey))
-              targets.put(builder.getPropagationSystem().findOrCreatePointsToSet(defKey), pinned);
+            if (builder.getPropagationSystem().isImplicit(defKey)) return;
+            PointsToSetVariable defVariable =
+                builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
+            TensorType pinned = null;
+            if (literalContainer) {
+              // Merge the generator-side computation into the pinned type so the pin agrees with
+              // the seeded result instead of contributing a weaker parallel member (wala/ML#713).
+              // Neither path subsumes the other: `shapeArg` folds literal source text through the
+              // embedded interpreter (e.g. an `np.prod(..., axis=0)` the provenance walk refuses),
+              // while the generator side also resolves field reads, shape-vector subscripts, and
+              // `build`-computed attributes; the pointwise merge keeps the more precise dimension
+              // from each.
+              TensorType shapeArgType = TensorType.shapeArg(src, shapeVn, builder);
+              Set<TensorType> generatorTypes = this.getTensorTypes(defVariable, builder);
+              pinned =
+                  generatorTypes != null && generatorTypes.size() == 1
+                      ? mergePinnedTypes(generatorTypes.iterator().next(), shapeArgType)
+                      : shapeArgType;
+            } else
+              pinned =
+                  new TensorType(
+                      TensorFlowTypes.DType.FLOAT32.name().toLowerCase(java.util.Locale.ROOT),
+                      null);
+            targets.put(defVariable, pinned);
           }
         });
     return targets;
@@ -1169,19 +1242,46 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       Map<PointsToSetVariable, Set<TensorType>> init = HashMapFactory.make();
       Map<PointsToSetVariable, Set<TensorType>> previousRound = null;
 
-      for (int round = 0; round < MAX_TYPE_RESOLUTION_ROUNDS; round++) {
-        init = HashMapFactory.make();
-        for (PointsToSetVariable v : sources) init.put(v, getTensorTypes(v, builder));
+      // Phase 2 of the wala/ML#365 design: under the flag, a single worklist fixpoint replaces
+      // the round loop; the memo layers divert to the engine and the seeding reads stabilized
+      // values, so the results are independent of the seeding order.
+      if (WorklistTypeResolver.enabled()) {
+        LOGGER.fine("Type resolution: worklist engine (wala/ML#365 Phase 2).");
+        WorklistTypeResolver.install(builder);
+        try {
+          // The engine's results are order-independent; the reverse-seeds property exists so the
+          // invariance is a tested property rather than a design claim (wala/ML#365, Phase 2).
+          List<PointsToSetVariable> ordered = new ArrayList<>(sources);
+          if (Boolean.getBoolean("ariadne.typeResolution.reverseSeeds")
+              || "true".equals(System.getenv("ARIADNE_REVERSE_SEEDS")))
+            Collections.reverse(ordered);
+          for (PointsToSetVariable v : ordered) init.put(v, getTensorTypes(v, builder));
 
-        if (init.equals(previousRound)) {
-          final int stableRound = round;
-          LOGGER.fine(() -> "Source-type resolution stabilized after round: " + stableRound + ".");
-          break;
+          // Second pass: a seed materialized early in the first pass predates the constraints
+          // later roots add, and the engine's state converges monotonically across the whole
+          // loop — the early snapshot can carry half-resolved members (e.g. an unknown-dtype
+          // twin of a member the converged state types fully). After the first pass every query
+          // is evaluated, so this pass adds no keys, edges, or evaluations; it only re-reads
+          // each seed's composition against the final fixpoint.
+          for (PointsToSetVariable v : ordered) init.put(v, getTensorTypes(v, builder));
+        } finally {
+          WorklistTypeResolver.uninstall(builder);
         }
+      } else
+        for (int round = 0; round < MAX_TYPE_RESOLUTION_ROUNDS; round++) {
+          init = HashMapFactory.make();
+          for (PointsToSetVariable v : sources) init.put(v, getTensorTypes(v, builder));
 
-        previousRound = init;
-        TensorGenerator.advanceRound(builder);
-      }
+          if (init.equals(previousRound)) {
+            final int stableRound = round;
+            LOGGER.fine(
+                () -> "Source-type resolution stabilized after round: " + stableRound + ".");
+            break;
+          }
+
+          previousRound = init;
+          TensorGenerator.advanceRound(builder);
+        }
 
       Map<PointsToSetVariable, TensorType> placeholders =
           handleShapeSourceOp(builder, dataflow, placeholder, 2);
@@ -1260,6 +1360,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // daemons) where builders may be held in other caches after their analysis completes. The
       // `finally` ensures the caches are cleared and the interpreter-miss counter is reset even
       // when the analysis exits early via `CancelException`, so neither leaks into the next run.
+      QueryDependencyGraph.of(builder).summarize();
       TensorGenerator.clearCaches(builder);
       reportAndResetInterpreterUnavailableMisses();
     }

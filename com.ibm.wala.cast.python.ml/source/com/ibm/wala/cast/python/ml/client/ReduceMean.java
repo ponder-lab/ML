@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import java.util.HashSet;
@@ -18,6 +19,15 @@ public class ReduceMean extends Reduction {
 
   public ReduceMean(PointsToSetVariable source) {
     super(source);
+  }
+
+  /**
+   * Constructs anchored to a manual node.
+   *
+   * @param node The {@link CGNode} for the synthetic {@code do()} method.
+   */
+  public ReduceMean(CGNode node) {
+    super(node);
   }
 
   @Override

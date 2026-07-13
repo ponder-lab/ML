@@ -39,6 +39,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.core.util.io.FileProvider;
@@ -72,6 +73,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.MatchResult;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.Test;
@@ -438,8 +441,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
 
   private static final TensorType TENSOR_2_FLOAT64 = TensorType.of(FLOAT_64, 2);
 
-  private static final TensorType TENSOR_DYNAMIC_DYNAMIC_FLOAT32 =
-      new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE));
+  private static final TensorType TENSOR_UNRESOLVED_UNRESOLVED_FLOAT32 =
+      new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE));
 
   private static final TensorType TENSOR_2_INT32 = TensorType.of(INT_32, 2);
 
@@ -1007,7 +1010,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testDataset19()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     TensorType images = TensorType.of(FLOAT_32, 512, 112, 112, 3);
-    TensorType labels = new TensorType(FLOAT_32, asList(new NumericDim(512), DynamicDim.INSTANCE));
+    TensorType labels =
+        new TensorType(FLOAT_32, asList(new NumericDim(512), UnresolvedDim.INSTANCE));
 
     test(
         "tf2_test_dataset19.py", "distributed_train_step", 1, 1, Map.of(2, Set.of(images, labels)));
@@ -2207,7 +2211,172 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "nlpgnn_full_proj",
         1,
         1,
-        Map.of(3, Set.of(new TensorType(UNKNOWN, asList(DynamicDim.INSTANCE, new NumericDim(1))))));
+        Map.of(
+            3, Set.of(new TensorType(UNKNOWN, asList(UnresolvedDim.INSTANCE, new NumericDim(1))))));
+  }
+
+  /**
+   * In-vivo anchor for wala/ML#704: the vendored NLPGNN {@code einsum_via_matmul} ({@code
+   * nlpgnn/layers/dense.py}). The {@code input_tensor} parameter now carries concrete batch and
+   * sequence dimensions with a dynamic trailing (hidden) dimension, delivered from the entry
+   * scripts' explicit {@code model.build} contracts through the embedding's output reshape
+   * (wala/ML#716, wala/ML#717): {@code (8, 100)} and {@code (8, 10)} leading pairs from the entries
+   * whose pipelines reach this layer, each with the trailing {@code input_shape[-1] *
+   * self.embedding_size} element unresolved, since the factor comes from a checkpoint config the
+   * analysis cannot read — a fixed runtime size of unknown value ({@link UnresolvedDim},
+   * wala/ML#721), not a runtime-{@code None} axis. The rank-2 {@code (8, D)} member is the
+   * embedding guard-φ's path-insensitive phantom (the pre-{@code expand_dims} member). The {@code
+   * tf.reshape}/{@code tf.squeeze} producer registrations and the callee-return descent for
+   * layer-call results add the degraded-rank members ({@code (D, D)}, {@code (D, D, D)}, {@code (8,
+   * D, D)}): the einsum body's own reshapes now compute generator-side through the {@code
+   * get_shape_list} walk, whose non-entry contexts resolve rank but not every dimension. The rank-4
+   * {@code (8, 100, U, U)}/{@code (8, 10, U, U)} members are the {@code DenseLayer3dProj} contexts'
+   * inputs (the attention's return value), delivered once the producer-cycle mask lets the
+   * loop-carried union converge from its non-cyclic base: three of the four proj contexts carry
+   * them. One entry's proj context and the pure-⊤/shape-⊤ members remain the loop fixed point's
+   * last residue—TODO: <a href="https://github.com/wala/ML/issues/718">wala/ML#718</a>. The {@code
+   * w} parameter keeps rank 3 and {@code float32} (its chain is layer-local) but no numeric
+   * dimensions, since the {@code build}-computed head sizes also derive from the config.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNlpgnnFullEinsumViaMatmul()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        NLPGNN_FULL_PROJECT_FILES,
+        "nlpgnn/layers/dense.py",
+        "einsum_via_matmul",
+        "nlpgnn_full_proj",
+        2,
+        14,
+        Map.of(
+            2,
+            Set.of(
+                TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE,
+                TENSOR_UNKNOWN_SHAPE_FLOAT32,
+                new TensorType(FLOAT_32, asList(new NumericDim(8), UnresolvedDim.INSTANCE)),
+                new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new NumericDim(8), UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new NumericDim(8), new NumericDim(10), UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new NumericDim(8), new NumericDim(100), UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(8),
+                        new NumericDim(10),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(8),
+                        new NumericDim(100),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE))),
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))))));
+  }
+
+  /**
+   * In-vivo anchor for the wala/ML#716 exactness mode and the wala/ML#717 contract seed: the
+   * vendored NLPGNN {@code WDEmbedding.call}'s {@code input_ids} parameter resolves to each entry
+   * script's declared {@code model.build(input_shape=(3, batch_size, maxlen))} contract, delivered
+   * through the {@code tf.split}/{@code tf.squeeze}/{@code tf.cast} chain of the wrapper's {@code
+   * call}. The expected set is the union across the vendored entry scripts' contracts (the helper
+   * unions per value number across calling contexts), each contract's leading stack dimension
+   * divided out by the split and squeezed away, leaving the per-entry {@code (batch_size, maxlen)}
+   * pairs; all are {@code int32} after the cast.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNlpgnnFullEmbeddingInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        NLPGNN_FULL_PROJECT_FILES,
+        "nlpgnn/layers/embedding.py",
+        "WDEmbedding.call",
+        "nlpgnn_full_proj",
+        1,
+        12,
+        Map.of(
+            3,
+            Set.of(
+                TensorType.of(INT_32, 8, 100),
+                TensorType.of(INT_32, 16, 100),
+                TensorType.of(INT_32, 8, 10),
+                TensorType.of(INT_32, 1, 512),
+                TensorType.of(INT_32, 6, 128),
+                TensorType.of(INT_32, 2, 4),
+                TensorType.of(INT_32, 2, 10))));
+  }
+
+  /**
+   * The first definition of the redefined top-level function of <a
+   * href="https://github.com/wala/ML/issues/719">wala/ML#719</a>: the script defines {@code
+   * compute} twice and calls each definition. Definition-site-distinct synthetic classes keep both
+   * bodies, the module binding rebinds at the second {@code def}, and straight-line SSA binds each
+   * call to the definition in scope, so this definition's parameter carries exactly its own call's
+   * {@code (2, 2)} — where the pre-fix collapse lost this body entirely and bound its call to the
+   * second definition.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testRedefinedFunction()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_redefined_function.py",
+        "compute",
+        1,
+        2,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 2))));
+  }
+
+  /**
+   * The second definition of {@link #testRedefinedFunction()}'s redefined function (wala/ML#719):
+   * the definition at line 11 composes the position-disambiguated synthetic class {@code
+   * compute$11}, and its parameter carries exactly the second call's {@code (3, 3)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testRedefinedFunction2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_redefined_function.py",
+        "compute$11",
+        1,
+        2,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 3, 3))));
   }
 
   /**
@@ -2231,7 +2400,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "nlpgnn_full_proj",
         1,
         1,
-        Map.of(3, Set.of(new TensorType(UNKNOWN, asList(DynamicDim.INSTANCE, new NumericDim(1))))));
+        Map.of(
+            3, Set.of(new TensorType(UNKNOWN, asList(UnresolvedDim.INSTANCE, new NumericDim(1))))));
   }
 
   /**
@@ -2819,7 +2989,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testTopPLogits()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_top_p_logits.py", "top_p_logits", 1, 11, Map.of(2, Set.of(TENSOR_1_5_FLOAT32)));
+    test("tf2_test_top_p_logits.py", "top_p_logits", 1, 12, Map.of(2, Set.of(TENSOR_1_5_FLOAT32)));
   }
 
   /**
@@ -2846,7 +3016,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_take_along_axis.py",
         "_take_long_axis",
         2,
-        9,
+        10,
         Map.of(2, Set.of(TENSOR_2_3_FLOAT32), 3, Set.of(TENSOR_2_2_INT32)));
   }
 
@@ -3003,7 +3173,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_masked_sparse_ce.py",
         "MaskSparseCategoricalCrossentropy.__call__",
         3,
-        6,
+        7,
         Map.of(
             3, Set.of(TENSOR_4_INT32),
             4, Set.of(TENSOR_4_10_FLOAT32),
@@ -3065,7 +3235,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * that result does not propagate to the caller's {@code self.gc1(...)} local &mdash; the
    * user-subclass forward-result-typing gap (wala/ML#570, akin to <a
    * href="https://github.com/wala/ML/issues/595">wala/ML#595</a>). The decorated function's input
-   * signature, the analysis goal, is nonetheless exact.
+   * signature, the analysis goal, is nonetheless exact. The returned {@code tf.math.softmax} result
+   * counts as one more tracked variable since the {@code math.softmax} alias was wired
+   * (wala/ML#711).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -3090,7 +3262,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "GCNLayer.call",
         "gcn_proj",
         1,
-        6,
+        7,
         Map.of(3, Set.of(TENSOR_4_8_FLOAT32)));
   }
 
@@ -3109,14 +3281,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * across the {@code driver→GAT→GATConv→MessagePassing} module boundaries. ({@code
    * adjacency_lists} is a Python list of edge tensors, not a tensor itself, so it is not a tensor
    * parameter.) As with {@link #testGcnCall()}, the decorated function's input signature &mdash;
-   * the analysis goal &mdash; is exact, while the internal layer-output locals stay ⊤. The four
+   * the analysis goal &mdash; is exact, while the internal layer-output locals stay ⊤. The five
    * tracked tensor variables are {@code node_embeddings} (vn=3) and the {@code dropout1} output
-   * (vn=11), both concrete {@code (4, 8) float32} (dropout preserves shape and dtype), plus the
-   * {@code gc1}/{@code gc2} attention-convolution outputs (vn=18, vn=38), both ⊤ on each axis. The
-   * layer outputs are ⊤ for the same reason as GCN: {@code GraphAttentionConvolution.call} unwraps
-   * its input from a {@code GNNInput} {@code NamedTuple} field, which is not tracked as a tensor
-   * (wala/ML#579), so the input arrives ⊤ and the attention aggregation through {@code
-   * tf.math.unsorted_segment_*} (wala/ML#570, wala/ML#582) inherits it.
+   * (vn=11), both concrete {@code (4, 8) float32} (dropout preserves shape and dtype), the {@code
+   * gc1}/{@code gc2} attention-convolution outputs (vn=18, vn=38), both ⊤ on each axis, plus the
+   * returned {@code tf.math.softmax} result, typed since the {@code math.softmax} alias was wired
+   * (wala/ML#711). The layer outputs are ⊤ for the same reason as GCN: {@code
+   * GraphAttentionConvolution.call} unwraps its input from a {@code GNNInput} {@code NamedTuple}
+   * field, which is not tracked as a tensor (wala/ML#579), so the input arrives ⊤ and the attention
+   * aggregation through {@code tf.math.unsorted_segment_*} (wala/ML#570, wala/ML#582) inherits it.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -3141,7 +3314,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "GATLayer.call",
         "gat_proj",
         1,
-        4,
+        5,
         Map.of(3, Set.of(TENSOR_4_8_FLOAT32)));
   }
 
@@ -3481,7 +3654,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_crf.py",
         "crf_unary_score",
         3,
-        18,
+        20,
         Map.of(
             2, Set.of(TENSOR_2_3_INT32),
             3, Set.of(TENSOR_2_INT32),
@@ -3492,6 +3665,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Pins {@code crf_binary_score(tag_indices, sequence_lengths, transition_params)}'s parameter
    * types. Function body mirrors {@code crf_binary_score} from {@code
    * kyzhouhzau/NLPGNN/nlpgnn/metrics/crf.py} for tensor-type inference coverage.
+   *
+   * <p>The local count captures one {@code tf.shape}-scalar arithmetic intermediate at ⊥; its
+   * gather-fixture siblings recovered with the {@code tf.range} remodel, but this one did not, and
+   * its cause is unidentified—TODO: <a
+   * href="https://github.com/wala/ML/issues/723">wala/ML#723</a>.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -3505,7 +3683,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_crf.py",
         "crf_binary_score",
         3,
-        14,
+        13,
         Map.of(
             2, Set.of(TENSOR_2_3_INT32),
             3, Set.of(TENSOR_2_INT32),
@@ -3624,7 +3802,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_crf.py",
         "crf_forward",
         4,
-        15,
+        16,
         Map.of(
             2, Set.of(TENSOR_2_2_4_FLOAT32),
             3, Set.of(TENSOR_2_4_FLOAT32),
@@ -3645,6 +3823,116 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testSqueezeAxis()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_squeeze.py", "consume_axis", 1, 1, Map.of(2, Set.of(TENSOR_2_3_1_FLOAT32)));
+  }
+
+  /**
+   * Pins the output shape of {@code tf.split} with an integer count (wala/ML#717): {@code
+   * tf.split(x, 3, 0)} over a {@code (3, 8, 100)} tensor unpacks to pieces of the quotient shape
+   * {@code (1, 8, 100)}, NLPGNN's ALBERT entry idiom in miniature.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSplit()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_split.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32, asList(new NumericDim(1), new NumericDim(8), new NumericDim(100))))));
+  }
+
+  /**
+   * The absent-axis default of {@code tf.split} (wala/ML#717): {@code tf.split(x, 2)} over {@code
+   * (4, 6)} splits on axis 0, giving pieces of {@code (2, 6)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSplitDefaultAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_split.py",
+        "consume_default_axis",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 6))));
+  }
+
+  /**
+   * The size-list arm of {@code tf.split} (wala/ML#717): {@code tf.split(x, [1, 3], 0)} produces
+   * differently-shaped pieces, which the single-piece model soundly represents with a dynamic
+   * dimension at the axis; the other dimension still transfers.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSplitSizeList()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_split.py",
+        "consume_size_list",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(6))))));
+  }
+
+  /**
+   * The non-constant-axis guard of {@code tf.split} (wala/ML#717): an opaque {@code axis} leaves
+   * the output shape soundly unknown while the dtype still inherits from {@code value}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSplitOpaqueAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_split.py",
+        "consume_opaque_axis",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The explicit {@code model.build(input_shape=...)} contract seed (wala/ML#717), NLPGNN's ALBERT
+   * entry idiom in miniature: the runtime inputs are opaque, so the declared {@code (3, 8, 100)}
+   * contract seeds the {@code call} input, and the {@code split}/{@code squeeze}/{@code cast} chain
+   * carries it to the returned piece: {@code (8, 100) int32}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testBuildContract()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_build_contract.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 8, 100))));
   }
 
   /**
@@ -3811,10 +4099,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * runtime-dimensioned final {@code tf.reshape} leaves the local <em>result</em> symbolic, but the
    * parameters themselves are exact.)
    *
-   * <p>The local tensor-variable count is {@code 9}: the {@code tf.tile} call now allocates a
-   * distinct tensor rather than aliasing its input as first-argument {@code pass_through} did
-   * (wala/ML#513 bucket 2a), so {@code row_indices} and a downstream use are additionally counted
-   * as tensor locals.
+   * <p>The local tensor-variable count is {@code 10}. The {@code tf.shape} shape-vector arm
+   * (wala/ML#722) types the final reshape to its exact runtime {@code (2, 3)}, and the {@code
+   * tf.range} remodel (wala/ML#723) types the {@code range}/{@code expand_dims} chain soundly
+   * ({@code (Unresolved,)} and {@code (Unresolved, 1)}); the tile and the flat-index arithmetic
+   * stay at sound unknowns, since a fold over an {@code Unresolved} axis has no numeric value.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -3828,7 +4117,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_gather_elements_along_row.py",
         "_gather_elements_along_row",
         2,
-        9,
+        10,
         Map.of(
             2, Set.of(TENSOR_2_4_FLOAT32),
             3, Set.of(TENSOR_2_3_INT32)));
@@ -4214,7 +4503,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testAutoencoder3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("autoencoder.py", "run_optimization", 1, 5, Map.of(2, Set.of(TENSOR_256_784_FLOAT32)));
+    test("autoencoder.py", "run_optimization", 1, 6, Map.of(2, Set.of(TENSOR_256_784_FLOAT32)));
   }
 
   /**
@@ -5366,10 +5655,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             // argument. The (2, 2) int32 member is the call-site union with the label tensor.
             Set.of(
                 new TensorType(
-                    UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(100))),
-                new TensorType(
                     UNKNOWN,
-                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(100))),
                 TensorType.of(INT_32, 2, 2))));
   }
 
@@ -5433,11 +5720,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             4,
             Set.of(
                 new TensorType(
-                    UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(10))),
-                TENSOR_UNKNOWN_SHAPE_FLOAT32,
-                new TensorType(
                     UNKNOWN,
-                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))))));
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))),
+                TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
@@ -5712,10 +5997,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             // argument. The (2, 2) int32 member is the call-site union with the label tensor.
             Set.of(
                 new TensorType(
-                    UNKNOWN, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(100))),
-                new TensorType(
                     UNKNOWN,
-                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(100))),
                 TensorType.of(INT_32, 2, 2))));
   }
 
@@ -5807,8 +6090,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Companion to {@link #testNpArrayBareParam()} for the non-literal-source floor of <a
    * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>: when {@code x} is itself an
    * {@code np.ndarray} rather than a Python literal, numpy preserves the source's dtype, which the
-   * walk does not model, so it floors to ⊤. The nested-array shape does not propagate through the
-   * outer {@code np.array} either, so both axes are ⊤.
+   * walk does not model, so the dtype floors to ⊤. The nested-array {@code (2,)} shape now
+   * propagates through the outer {@code np.array} via the producer registration (wala/ML#625); the
+   * dtype residue stays with wala/ML#626.
    */
   @Test
   public void testNpArrayArraySource()
@@ -5818,7 +6102,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "f",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+        Map.of(2, Set.of(new TensorType(UNKNOWN, asList(new NumericDim(2))))));
   }
 
   /**
@@ -5827,11 +6111,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * It currently types to {@code ⊤} unknown, coarser than the bare form's {@code (3,)} because
    * {@code tf.constant} drops the array shape.
    *
-   * <p>TODO: This pins the current imprecise shape. Once <a
-   * href="https://github.com/wala/ML/issues/625">wala/ML#625</a> lands, the parameter should type
-   * to {@code (3,)} {@code float64} (the bare form's result now that <a
-   * href="https://github.com/wala/ML/issues/626">wala/ML#626</a> models numpy dtype promotion), and
-   * this assertion should be updated accordingly.
+   * <p>The {@code numpy.array} producer registration (wala/ML#625) delivers the concrete type: the
+   * wrapped array's {@code (3,)} shape survives {@code tf.constant}, and the dtype is numpy's
+   * {@code float64} default for float literals.
    */
   @Test
   public void testNpArrayWrappedParam()
@@ -5841,7 +6123,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "f",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 3))));
   }
 
   /**
@@ -10882,7 +11164,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(
-            2, Set.of(new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(8))))));
+            2,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(8))))));
   }
 
   @Test
@@ -10918,7 +11201,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Pins the gpt-2 decoder-stack shape in miniature (wala/ML#618): layers built by a list
    * comprehension, iterated with {@code zip} against a {@code [None] * n} list, each call's tuple
-   * result destructured and the hidden state carried through the loop.
+   * result destructured and the hidden state carried through the loop. The runtime {@code (4, 4)}
+   * resolves; the ⊤-shape member is the loop-carried hidden state's unknown remainder, which the
+   * exact operand reads surface instead of silently dropping (wala/ML#716, wala/ML#718) — the
+   * loop's later iterations consume the stack's own unresolved output, so a fully resolved union
+   * cannot be claimed.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -10933,7 +11220,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_4_4_FLOAT32, TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
@@ -11048,11 +11335,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             2,
             Set.of(
                 TensorType.of(FLOAT_32, 2, 3, 8),
-                new TensorType(
-                    INT_32, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(10))),
-                new TensorType(
-                    INT_32,
-                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))))));
+                // The one-hot member's leading dims fold to the runtime-true (2, 3) through the
+                // tf.shape shape-vector arm (wala/ML#722).
+                TensorType.of(INT_32, 2, 3, 10))));
   }
 
   /**
@@ -11240,10 +11525,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
                 TENSOR_UNKNOWN_SHAPE_FLOAT32,
                 new TensorType(
                     UNKNOWN,
-                    asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))),
-                new TensorType(
-                    UNKNOWN,
-                    asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(10))))));
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))))));
   }
 
   /**
@@ -12934,9 +13216,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * NLPGNN's {@code einsum_via_matmul} matmul path in miniature, end to end (wala/ML#704): the
    * {@code get_shape_list} hop, the negated-parameter slice bounds, the {@code np.prod} folds, and
    * the {@code batch_dims + outer_dims} concatenation (wala/ML#708) all resolve, so the reshape arm
-   * types as the precise runtime {@code (2, 4, 3, 5)}. The {@code (4, 5)} member is the other arm
-   * of the {@code len(outer_dims) > 1} guard's φ (the raw rank-2 matmul), which flows statically
-   * even though the runtime always takes the reshape arm here.
+   * types as the precise runtime {@code (2, 4, 3, 5)}. The {@code (2, 4, 15)} member is the other
+   * arm of the {@code len(outer_dims) > 1} guard's φ: the raw matmul result, which flows statically
+   * even though the runtime always takes the reshape arm here, and which the batched {@code
+   * tf.matmul} semantics type as the runtime-true intermediate {@code matmul((2, 4, 6), (6, 15))}
+   * (wala/ML#718; previously the rank-collapsed artifact {@code (4, 5)}). The {@code (2, 4, 5)}
+   * member is the same φ's other pairing: {@code w}'s points-to set carries both its defs (the
+   * original {@code (6, 3, 5)} and the {@code len(w_shape) > 2} arm's reshape to {@code (6, 15)}),
+   * so the batched product also composes against the un-reshaped def, taking its trailing {@code
+   * 5}. Both extras are path-insensitive unions, not miscomputations.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -12951,16 +13239,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 3, 5), TensorType.of(FLOAT_32, 4, 5))));
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 4, 3, 5),
+                TensorType.of(FLOAT_32, 2, 4, 15),
+                TensorType.of(FLOAT_32, 2, 4, 5))));
   }
 
   /**
    * The two-inner-dims variant of {@link #testEinsumViaMatmul()} (NLPGNN's {@code DenseLayer3dProj}
    * shape, {@code einsum_via_matmul(input_tensor, w, 2)}): exercises the {@code batch_dims +
    * [inner_dim]} concatenation of a shape vector with a literal list whose element is an {@code
-   * np.prod} fold (wala/ML#708). The reshape-then-matmul arm types as the precise runtime {@code
-   * (2, 4, 6)}; the {@code (3, 6)} member is the untaken arm of the {@code num_inner_dims > 1}
-   * guard's φ (the rank-2 matmul of the unreshaped input), which flows statically.
+   * np.prod} fold (wala/ML#708). The result types the precise runtime {@code (2, 4, 6)} (the
+   * batched {@code tf.matmul} semantics, wala/ML#718, eliminated the rank-collapsed {@code (3, 6)}
+   * artifact this test previously pinned) plus the {@code (2, 4, 3, 6)} phantom: {@code
+   * input_tensor}'s points-to set carries both its defs (the original {@code (2, 4, 3, 5)} and the
+   * {@code num_inner_dims > 1} arm's reshape to {@code (2, 4, 15)}), so the batched product also
+   * composes against the un-reshaped def — a path-insensitive union, not a miscomputation.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -12975,7 +13271,529 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 6), TensorType.of(FLOAT_32, 3, 6))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 6), TensorType.of(FLOAT_32, 2, 4, 3, 6))));
+  }
+
+  /**
+   * Distilled regression guard for the scalar-expression broadcast (wala/ML#718): a tensor scaled
+   * by a statically opaque scalar expression ({@code 1.0 / math.sqrt(4.0)}) keeps its shape, since
+   * the expression's scalarness is structural even though its value never resolves. The analysis
+   * previously erased the result to ⊥. Mirrors NLPGNN's attention-logit scaling.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testScalarExpressionScale()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_scalar_scale.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
+  }
+
+  /**
+   * Distilled guard for the dimension-provenance split (wala/ML#721): a configuration-sourced size
+   * — here an environment read the analysis cannot fold — types as {@link UnresolvedDim}, a fixed
+   * runtime size of unknown value, not {@link DynamicDim}, which is reserved for axes the runtime
+   * {@code TensorShape} reports as {@code None}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testUnresolvedDim()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_unresolved_dim.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(100))))));
+  }
+
+  /**
+   * Distilled guard for the {@code tf.shape} arm of the shape-vector walk (wala/ML#722): a reshape
+   * target built from {@code tf.shape(x)[i]} extractions classifies each element by {@code x}'s own
+   * axis {@code i} — the {@code None} batch axis contributes its {@link DynamicDim} (the dynamic
+   * evidence the wala/ML#721 degradation over-captured as {@link UnresolvedDim}), and the
+   * statically known sequence axis folds to its constant, as TensorFlow itself does over static
+   * axes.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testReshapeTfShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_tf_shape.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(4), new NumericDim(3))))));
+  }
+
+  /**
+   * Evidence-free twin of {@link #testReshapeTfShape()} (wala/ML#722): when the input's leading
+   * axes are fixed runtime sizes the analysis cannot compute, {@code tf.shape(x)[i]} carries no
+   * {@code None}-evidence and the reshape target's leading elements classify {@link UnresolvedDim}
+   * per the wala/ML#721 criterion, with the trailing constant exact. The pair pins the arm's
+   * discriminating variable: the input's own axis evidence, not the target's syntactic pattern.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testReshapeTfShapeUnresolved()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_tf_shape_unresolved.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))))));
+  }
+
+  /**
+   * Pins the fold taint of the dimension-provenance split (wala/ML#721): {@code np.prod} over a
+   * shape list whose leading axis is {@code None} stays {@link DynamicDim} — arithmetic over a
+   * {@code None} axis is itself {@code None} at run time — rather than degrading to {@link
+   * UnresolvedDim}. The runtime guards the {@code None} away before folding (the BERT {@code
+   * get_shape_list} idiom), but the static walk sees the unguarded shape. The {@code (24)} member
+   * is the guarded arm — the runtime-true fold over the patched {@code [1, 4, 6]} — flowing
+   * alongside per the guard-φ.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testProdOverDynamic()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_prod_over_dynamic.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE)),
+                TensorType.of(FLOAT_32, 24))));
+  }
+
+  /**
+   * Pins the {@code tf.range} arm of the dimension-provenance split (wala/ML#721): a
+   * configuration-sourced limit (an environment read the analysis cannot fold) types the rank-1
+   * length as {@link UnresolvedDim} — a fixed runtime size of unknown value — not {@link
+   * DynamicDim}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testRangeUnresolved()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_range_unresolved.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_32, asList(UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * Distilled regression guard for {@code tf.matmul}'s batched form (wala/ML#718): the leading
+   * (batch) dimensions carry through and the trailing two dimensions compose as the matrix product,
+   * so the rank is preserved. The analysis previously collapsed every product to rank two.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testBatchedMatMul()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_batched_matmul.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 5))));
+  }
+
+  /**
+   * Composition of {@link #testDense3dEinsum()} and {@link #testEinsumViaMatmul()} (wala/ML#704):
+   * NLPGNN's {@code DenseLayer3d.call} delegates to the module-level {@code einsum_via_matmul}
+   * helper. The {@code input_tensor} parameter carries the precise type across the layer-call
+   * boundary, and the {@code w} parameter is fully static: the trailing dimensions are the folded
+   * configuration fields, the leading (hidden) dimension resolves through {@code build}'s {@code
+   * input_shape} subscript ({@code self.hidden_size = input_shape[2]}, wala/ML#712), and the
+   * literal-shape pin agrees with the generator-side result (wala/ML#713), so the union is a single
+   * member.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dMatmul()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_matmul.py",
+        "einsum_via_matmul",
+        2,
+        14,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
+            3,
+            Set.of(TensorType.of(FLOAT_32, 6, 3, 5))));
+  }
+
+  /**
+   * Escalation of {@link #testDense3dMatmul()} to NLPGNN's real dispatch shape (wala/ML#704): the
+   * {@code DenseLayer3d} is created in an outer attention layer's {@code build}, stored as an
+   * attribute, and invoked through it in the outer {@code call} — two trampoline hops before {@code
+   * einsum_via_matmul} sees the input tensor. The {@code input_tensor} parameter carries the
+   * precise type through both hops, and the {@code w} parameter resolves exactly as in the one-hop
+   * composition, including the hidden dimension through {@code build}'s {@code input_shape}
+   * subscript (wala/ML#712).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dMatmul2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_matmul2.py",
+        "einsum_via_matmul",
+        2,
+        14,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
+            3,
+            Set.of(TensorType.of(FLOAT_32, 6, 3, 5))));
+  }
+
+  /**
+   * Negative-index companion of {@link #testDense3dMatmul()} (wala/ML#712): {@code build} stores
+   * {@code input_shape[-1]}, exercising the Python negative-index arm of the shape-vector subscript
+   * resolution.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dMatmul3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_matmul3.py",
+        "einsum_via_matmul",
+        2,
+        14,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
+            3,
+            Set.of(TensorType.of(FLOAT_32, 6, 3, 5))));
+  }
+
+  /**
+   * Explicit-{@code build} companion of {@link #testDense3dMatmul()} (wala/ML#712): the script
+   * calls {@code layer.build(x.shape)} before the layer call, so the {@code input_shape} parameter
+   * also receives a real argument, exercising the explicit-caller arm of the walk alongside the
+   * lazy-build trampoline hop.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dMatmul4()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_matmul4.py",
+        "einsum_via_matmul",
+        2,
+        14,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
+            3,
+            Set.of(TensorType.of(FLOAT_32, 6, 3, 5))));
+  }
+
+  /**
+   * Two-instance guard for the {@code build} subscript resolution (wala/ML#712): the class is
+   * instantiated on inputs with different hidden sizes, so the per-class attribute chase sees
+   * conflicting {@code hidden_size} stores and must bail; the weight's leading dimension stays
+   * dynamic (a sound conservative result) while the folded configuration fields keep their
+   * constants.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dMatmul5()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_matmul5.py",
+        "einsum_via_matmul",
+        2,
+        14,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 4, 6), TensorType.of(FLOAT_32, 2, 4, 8)),
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, new NumericDim(3), new NumericDim(5))))));
+  }
+
+  /**
+   * Arithmetic-over-subscript companion of {@link #testDense3dMatmul()} (wala/ML#714): {@code
+   * build} derives the head size the way NLPGNN's {@code ALBERTAttention.build} does, dividing a
+   * shape subscript by a configuration field under an {@code int(...)} wrapper ({@code
+   * self.head_size = int(input_shape[2]/self.num_attention_heads)}), so the reshaped weight's
+   * dimensions all fold.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dMatmul6()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_matmul6.py",
+        "einsum_via_matmul",
+        2,
+        14,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
+            3,
+            Set.of(TensorType.of(FLOAT_32, 6, 3, 2))));
+  }
+
+  /**
+   * Bare-division guard companion of {@link #testDense3dMatmul6()} (wala/ML#714): a branch the
+   * runtime never takes stores {@code input_shape[2] / 4}, a bare float division the fold must
+   * refuse (its non-exact truncation is undefined without the {@code int(...)} wrapper), so the
+   * attribute is unresolvable and the weight's trailing dimension soundly stays dynamic.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dMatmul7()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_matmul7.py",
+        "einsum_via_matmul",
+        2,
+        14,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(new NumericDim(6), new NumericDim(3), UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * Nested-arithmetic companion of {@link #testDense3dMatmul6()} (wala/ML#714): the divisor is
+   * itself an arithmetic expression over a configuration field ({@code
+   * int(input_shape[2]/(self.num_attention_heads - 1))}), so the operand resolution recurses.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dMatmul8()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_matmul8.py",
+        "einsum_via_matmul",
+        2,
+        14,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 4, 6)),
+            3,
+            Set.of(TensorType.of(FLOAT_32, 6, 3, 3))));
+  }
+
+  /**
+   * A configuration attribute as a literal concat element (wala/ML#712): the reshape target
+   * concatenates a shape-vector slice with {@code [self.units]}, whose stored value is the
+   * constructor argument, exercising the constant fallback of the attribute chase.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapeConcatAttr()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_shape_concat_attr.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 6))));
+  }
+
+  /**
+   * A reshape whose target is a shape-vector slice with an opaque bound (wala/ML#711): the walk
+   * cannot resolve {@code k}, so the output shape is soundly unknown, but the input's {@code
+   * float32} dtype must survive rather than degrading to full ⊤.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testReshapeOpaqueBound()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_opaque_bound.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * NLPGNN's {@code WDEmbedding} in miniature (wala/ML#711, wala/ML#717): the output reshape's
+   * target slices the rank-conditional {@code tf.expand_dims} guard's φ, so the composition
+   * cross-products the two source shapes per position: four members, including the runtime {@code
+   * (2, 2, 8)}, with the trailing dimension static in every member. The mixed-pairing members are
+   * the cross-product's sound over-approximation; pairing the evaluation per φ member would drop
+   * them. The embedding table's {@code float32} survives through both the {@code gather} arm and
+   * the {@code one_hot}/{@code matmul} arm.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEmbeddingOutput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_embedding_output.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 16),
+                TensorType.of(FLOAT_32, 2, 8),
+                TensorType.of(FLOAT_32, 2, 2, 16),
+                TensorType.of(FLOAT_32, 2, 2, 8))));
+  }
+
+  /**
+   * Opaque-size variant of {@link #testEmbeddingOutput()} (wala/ML#717), mirroring the vendored
+   * NLPGNN embedding, whose table size comes from a checkpoint config the analysis cannot read. The
+   * output reshape's trailing element {@code input_shape[-1] * self.embedding_size} then has an
+   * unresolvable factor, but arithmetic over a shape-vector subscript is one scalar dimension, so
+   * the value degrades to dynamic while the rank and the leading dimensions survive, per guard-φ
+   * member.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEmbeddingDynamicSize()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_embedding_dynamic_size.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(FLOAT_32, asList(new NumericDim(2), UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new NumericDim(2), new NumericDim(2), UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * Single-member counterpart of {@link #testEmbeddingDynamicSize()} (wala/ML#717): dimension
+   * arithmetic over a plain (non-φ) shape-vector subscript with a config-sourced factor exercises
+   * the singleton fold's degradation, so that element's value is dynamic while the rank and the
+   * literal element survive.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testReshapeDynamicFactor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_dynamic_factor.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(6))))));
   }
 
   /**
@@ -12999,7 +13817,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(
-            2, Set.of(TENSOR_30_FLOAT32, new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE)))));
+            2,
+            Set.of(TENSOR_30_FLOAT32, new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE)))));
   }
 
   /**
@@ -13018,9 +13837,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Guard companion of {@link #testShapeAsListSlice()} (wala/ML#703): a non-unit step over a shape
-   * list ({@code [::2]}) is unmodeled, so the walk soundly reports an unknown ({@code ⊤}) shape
-   * while keeping the dtype precise. The Python runtime shape is {@code (4, 6)}.
+   * Strided companion of {@link #testShapeAsListSlice()} (wala/ML#703, wala/ML#709): a constant
+   * positive step over a shape list ({@code [::2]}) strides the resolved dimensions, composing the
+   * precise {@code (4, 6)}. Negative steps keep the ⊤ fallback.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -13030,8 +13849,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   @Test
   public void testShapeSliceStep()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_shape_slice_step.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test("tf2_test_shape_slice_step.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_6_FLOAT32)));
   }
 
   /**
@@ -13040,6 +13858,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * assert either slicing; the walk soundly reports an unknown ({@code ⊤}) shape. A bound that is a
    * distinct constant per calling context stays precise (context sensitivity disambiguates it); the
    * φ forces the ambiguity into a single context.
+   *
+   * <p>TODO(<a href="https://github.com/wala/ML/issues/710">wala/ML#710</a>): tighten to the union
+   * of the candidate slicings ({@code {(1, 30), (30)}}) once ambiguous constant bounds enumerate.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -14655,22 +15476,24 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_DYNAMIC_DYNAMIC_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_UNRESOLVED_UNRESOLVED_FLOAT32)));
   }
 
   /**
    * Complements {@link #testEyeUnresolvableBatchShape()}: when {@code batch_shape} is a list
    * literal whose length (and hence the output rank) is statically known but whose element is
    * unresolvable (here from {@code json.loads}), precision is preserved rather than floored to ⊤.
-   * The single leading batch dimension is dynamic and the {@code (num_rows, num_columns)} suffix
-   * stays exact, so {@code tf.eye(3, batch_shape=[<unknown>])} types to {@code (Dynamic, 3, 3)}
-   * float32. See <a href="https://github.com/wala/ML/issues/611">wala/ML#611</a>.
+   * The single leading batch dimension is a fixed runtime size the analysis cannot compute ({@link
+   * UnresolvedDim}, wala/ML#721) and the {@code (num_rows, num_columns)} suffix stays exact, so
+   * {@code tf.eye(3, batch_shape=[<unknown>])} types to {@code (Unresolved, 3, 3)} float32. See <a
+   * href="https://github.com/wala/ML/issues/611">wala/ML#611</a>.
    */
   @Test
   public void testEyeDynamicBatch()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     TensorType t =
-        new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(3), new NumericDim(3)));
+        new TensorType(
+            FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(3), new NumericDim(3)));
     test("tf2_test_eye_dynamic_batch.py", "consume", 1, 1, Map.of(2, Set.of(t)));
   }
 
@@ -14867,6 +15690,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * floors to ⊤ over the {@code np.ndarray} row (the unmodeled ragged rank over a tensor element).
    * Delegating the element to its producer generator would recover the shape (<a
    * href="https://github.com/wala/ML/issues/652">wala/ML#652</a>).
+   *
+   * <p>The {@code numpy.array} producer registration (wala/ML#625) adds the ⊤ {@code int64} member:
+   * the {@code np.ndarray} row's own type (numpy's integer default) joins the union through the
+   * flow-insensitive points-to substrate, alongside the ragged result's runtime {@code int32}.
    */
   @Test
   public void testRaggedConstantUnresolvableDepth()
@@ -14876,7 +15703,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE)));
+        Map.of(2, Set.of(TENSOR_INT32_UNKNOWN_SHAPE, new TensorType(INT_64, null))));
   }
 
   /**
@@ -15251,7 +16078,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
                             "vn="
                                 + pk.getValueNumber()
                                 + " -> "
-                                + pointerKeyToTensorVariable.get(pk))
+                                + pointerKeyToTensorVariable.get(pk)
+                                + " [ctx: "
+                                + summarizeContext(pk.getNode())
+                                + "]")
                     .collect(Collectors.joining("\n\t")));
 
     // Count tensor variables at the source level: one per distinct value number, deduplicated
@@ -15340,6 +16170,27 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
           expectedTypes,
           actualUnion);
     }
+  }
+
+  /** Matches the script-relative method identifiers a Python {@link Context} chain mentions. */
+  private static final Pattern CONTEXT_METHOD_PATTERN =
+      Pattern.compile("(?:tests|nlpgnn|src|proj[0-9]*)/[A-Za-z0-9_/.-]+\\.py/[A-Za-z0-9_]+");
+
+  /**
+   * Summarizes a node's calling context as the distinct script-relative method identifiers its
+   * context chain mentions, so the per-context tensor-variable dump identifies which caller
+   * pipeline contributed each value without printing the full recursive context.
+   *
+   * @param node The {@link CGNode} whose context is summarized.
+   * @return A comma-separated summary of the context's method identifiers.
+   */
+  private static String summarizeContext(CGNode node) {
+    return CONTEXT_METHOD_PATTERN
+        .matcher(node.getContext().toString())
+        .results()
+        .map(MatchResult::group)
+        .distinct()
+        .collect(Collectors.joining(", "));
   }
 
   /**

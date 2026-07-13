@@ -30,23 +30,53 @@ public class MatMul extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    Set<List<Dimension<?>>> aShapes = shapesOfArg(builder, 0, "a");
-    Set<List<Dimension<?>>> bShapes = shapesOfArg(builder, 1, "b");
+    return this.getDefaultShapeResult(builder).toLegacy();
+  }
 
-    if (aShapes == null || aShapes.isEmpty() || bShapes == null || bShapes.isEmpty()) return null;
+  /**
+   * Member-wise record view (wala/ML#718): the product shape composes per operand-member pair, and
+   * either operand's unknown remainder rides through.
+   *
+   * @param builder The propagation call graph builder.
+   * @return The composed result.
+   */
+  @Override
+  protected ShapeResult getDefaultShapeResult(PropagationCallGraphBuilder builder) {
+    ShapeResult aShapes = shapeResultOfArg(builder, 0, "a");
+    ShapeResult bShapes = shapeResultOfArg(builder, 1, "b");
+    if (aShapes.members().isEmpty() || bShapes.members().isEmpty()) return ShapeResult.unknown();
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
-    for (List<Dimension<?>> aShape : aShapes) {
-      for (List<Dimension<?>> bShape : bShapes) {
+    for (List<Dimension<?>> aShape : aShapes.members()) {
+      for (List<Dimension<?>> bShape : bShapes.members()) {
         if (aShape.size() >= 2 && bShape.size() >= 2) {
-          List<Dimension<?>> newShape = new ArrayList<>();
+          // Batched semantics: the leading (batch) dimensions carry through and the trailing two
+          // compose as the matrix product, so the rank is preserved rather than collapsing to two
+          // (wala/ML#718). The batch dimensions are taken from the higher-rank operand, a sound
+          // simplification of TensorFlow's batch broadcasting for the common equal-rank case.
+          List<Dimension<?>> batched = aShape.size() >= bShape.size() ? aShape : bShape;
+          List<Dimension<?>> newShape = new ArrayList<>(batched.subList(0, batched.size() - 2));
           newShape.add(aShape.get(aShape.size() - 2));
           newShape.add(bShape.get(bShape.size() - 1));
           ret.add(newShape);
         }
       }
     }
-    return ret.isEmpty() ? null : ret;
+    return ret.isEmpty()
+        ? ShapeResult.unknown()
+        : new ShapeResult(ret, aShapes.hasUnknown() || bShapes.hasUnknown());
+  }
+
+  /**
+   * Routes the output-shape resolution through {@link #getDefaultShapeResult} (this generator has
+   * no {@code shape} parameter), so partial results cross the generator boundary (wala/ML#718).
+   *
+   * @param builder The propagation call graph builder.
+   * @return The resolution result.
+   */
+  @Override
+  protected ShapeResult getShapeResult(PropagationCallGraphBuilder builder) {
+    return this.getDefaultShapeResult(builder);
   }
 
   @Override
@@ -67,14 +97,20 @@ public class MatMul extends TensorGenerator {
    * @param paramName The keyword parameter name.
    * @return The resolved shapes, or {@code null} if neither path recovers a concrete shape.
    */
-  private Set<List<Dimension<?>>> shapesOfArg(
+  private ShapeResult shapeResultOfArg(
       PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    ShapeResult fromValue = ShapeResult.unknown();
     OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPos, paramName);
     if (pts != null && !pts.isEmpty()) {
-      Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, pts);
-      if (shapes != null && !shapes.isEmpty()) return shapes;
+      fromValue = this.getShapeResultOfValue(builder, pts, true);
+      if (!fromValue.members().isEmpty() && !fromValue.hasUnknown()) return fromValue;
     }
-    return this.getArgumentShapesViaCallers(builder, paramPos, paramName);
+    // An incomplete points-to union commonly reflects context collapse, so the per-context
+    // caller walk is preferred; the union's resolvable members are the floor when the walk
+    // fails (wala/ML#716, wala/ML#718).
+    ShapeResult viaCallers = this.getArgumentShapeResultViaCallers(builder, paramPos, paramName);
+    if (!viaCallers.members().isEmpty()) return viaCallers;
+    return fromValue.members().isEmpty() ? viaCallers : fromValue;
   }
 
   /**

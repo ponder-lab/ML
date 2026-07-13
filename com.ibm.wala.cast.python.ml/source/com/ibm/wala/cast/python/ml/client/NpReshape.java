@@ -41,17 +41,17 @@ public class NpReshape extends Reshape {
   /**
    * Resolves the output shapes. Handles the scalar-integer form of the {@code shape} argument
    * ({@code np.reshape(x, n)} or {@code np.reshape(x, -1)}) by synthesising a one-element shape;
-   * for list/tuple {@code shape} args, delegates to {@link Reshape#getShapes}.
+   * for list/tuple {@code shape} args, delegates to {@link Reshape}'s resolution.
    *
    * @param builder The propagation call graph builder.
-   * @return The set of possible output shapes, refined for {@code -1} against the input tensor's
-   *     total element count where possible.
+   * @return The resolution result, refined for {@code -1} against the input tensor's total element
+   *     count where possible.
    */
   @Override
-  public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
+  protected ShapeResult getShapeResult(PropagationCallGraphBuilder builder) {
     Set<List<Dimension<?>>> scalar = shapesFromScalarArgument(builder);
-    if (scalar != null) return scalar;
-    return super.getShapes(builder);
+    if (scalar != null) return ShapeResult.of(scalar);
+    return super.getShapeResult(builder);
   }
 
   /**

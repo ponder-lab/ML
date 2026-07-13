@@ -212,6 +212,8 @@
         <putfield class="LRoot" field="conv3d" fieldType="LRoot" ref="nn" value="conv3d"/>
         <new def="softmax" class="Ltensorflow/functions/softmax"/>
         <putfield class="LRoot" field="softmax" fieldType="LRoot" ref="nn" value="softmax"/>
+        <!-- `tf.math.softmax` is the same op under the `math` namespace (wala/ML#711). -->
+        <putfield class="LRoot" field="softmax" fieldType="LRoot" ref="math" value="softmax"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/relu -->
         <putfield class="LRoot" field="relu" fieldType="LRoot" ref="nn" value="pass_through"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/dropout. Typing-wise an identity: the output tensor has the input's shape and dtype (elements are zeroed or scaled, never reshaped or cast), so the shared `pass_through` model applies, as with `tf.nn.relu` above. Surfaced by the wala/ML#618 forward-path op audit. -->
@@ -439,6 +441,8 @@
         <putfield class="LRoot" field="Embedding" fieldType="LRoot" ref="layers" value="EmbeddingCls"/>
         <new def="DropoutLayerCls" class="Ltensorflow/keras/layers/class/Dropout"/>
         <putfield class="LRoot" field="Dropout" fieldType="LRoot" ref="layers" value="DropoutLayerCls"/>
+        <new def="LayerNormalizationLayerCls" class="Ltensorflow/keras/layers/class/LayerNormalization"/>
+        <putfield class="LRoot" field="LayerNormalization" fieldType="LRoot" ref="layers" value="LayerNormalizationLayerCls"/>
         <new def="Model" class="Ltensorflow/keras/models/class/Model"/>
         <putfield class="LRoot" field="Model" fieldType="LRoot" ref="keras" value="Model"/>
         <putfield class="LRoot" field="Model" fieldType="LRoot" ref="models" value="Model"/>
@@ -832,11 +836,12 @@
         <new def="cast" class="Ltensorflow/functions/cast"/>
         <putfield class="LRoot" field="cast" fieldType="LRoot" ref="x" value="cast"/>
         <putfield class="LRoot" field="cast" fieldType="LRoot" ref="dtypes" value="cast"/>
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/backend. The `tf.keras.backend` module object, reached through aliases such as `import tensorflow.keras.backend as K` (wala/ML#666). The functions real subjects hit are wired to existing models: `cast` shares `tf.cast`; `equal` shares `tf.equal`; `gather` and `dropout` are typing-wise pass-throughs, mirroring `tf.gather` and `tf.nn.dropout`. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/backend. The `tf.keras.backend` module object, reached through aliases such as `import tensorflow.keras.backend as K` (wala/ML#666). The functions real subjects hit are wired to existing models: `cast` shares `tf.cast`; `equal` shares `tf.equal`; `one_hot` shares `tf.one_hot` (wala/ML#711); `gather` and `dropout` are typing-wise pass-throughs, mirroring `tf.gather` and `tf.nn.dropout`. -->
         <new def="backend" class="Lobject"/>
         <putfield class="LRoot" field="backend" fieldType="LRoot" ref="keras" value="backend"/>
         <putfield class="LRoot" field="cast" fieldType="LRoot" ref="backend" value="cast"/>
         <putfield class="LRoot" field="equal" fieldType="LRoot" ref="backend" value="equal"/>
+        <putfield class="LRoot" field="one_hot" fieldType="LRoot" ref="backend" value="one_hot"/>
         <putfield class="LRoot" field="gather" fieldType="LRoot" ref="backend" value="pass_through"/>
         <putfield class="LRoot" field="dropout" fieldType="LRoot" ref="backend" value="pass_through"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/expand_dims -->
@@ -1917,13 +1922,14 @@
         </method>
       </class>
       <class name="split" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/split. Inlined per wala/ML#380 (was a `read_data` materialization chain). Returns a list whose first element is a constant-materialized tensor. -->
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self *args **kwargs">
-          <new def="x" class="Llist"/>
-          <new def="z" class="Ltensorflow/functions/constant"/>
-          <call class="Ltensorflow/functions/constant" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="1" numArgs="2" def="y"/>
-          <putfield class="LRoot" field="0" fieldType="LRoot" ref="x" value="y"/>
-          <return value="x"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/split. Returns a list of same-shaped pieces for an integer `num_or_size_splits`, so one fresh tensor stands for every piece; the `Split` generator computes the quotient shape and inherits the dtype from `value` (wala/ML#717). The piece is written to the first three indices to cover the common unpacking arities (NLPGNN's `a, b, c = tf.split(x, 3, 0)`). -->
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self value num_or_size_splits axis num name">
+          <new def="lst" class="Llist"/>
+          <new def="piece" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="lst" value="piece"/>
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="lst" value="piece"/>
+          <putfield class="LRoot" field="2" fieldType="LRoot" ref="lst" value="piece"/>
+          <return value="lst"/>
         </method>
       </class>
       <class name="rank" allocatable="true">
@@ -1949,13 +1955,10 @@
         </method>
       </class>
       <class name="range" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/range returns a 1-D tensor. Modeled as `<new>+<return>` (fresh allocation) paired with the `Range` generator, which computes the length from the bounds; the previous stub returned a one-element `Llist` whose catalog fabricated a phantom `(1,)` shape for every consumer of the result (wala/ML#723). -->
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self start limit delta dtype name">
-          <new def="x" class="Llist"/>
-          <new def="z" class="Ltensorflow/functions/constant"/>
-          <constant name="p" type="int" value="1"/> <!-- FIXME: The type may actually depend on the arguments passed to `tf.range()`. It may not necessarily be `int`. -->
-          <call class="Ltensorflow/functions/constant" name="do" descriptor="()LRoot;" type="virtual" arg0="z" arg1="p" numArgs="2" def="y"/>
-          <putfield class="LRoot" field="0" fieldType="LRoot" ref="x" value="y"/>
-          <return value="x"/>
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
         </method>
       </class>
       <class name="Tensor" allocatable="true">
@@ -2495,6 +2498,13 @@
           <return value="res"/>
         </method>
       </class>
+      <class name="LayerNormalization" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/LayerNormalization -->
+        <method name="do" descriptor="()LRoot;" numArgs="11" paramNames="self axis epsilon center scale beta_initializer gamma_initializer beta_regularizer gamma_regularizer beta_constraint gamma_constraint">
+          <new def="res" class="Ltensorflow/keras/layers/LayerNormalization"/>
+          <return value="res"/>
+        </method>
+      </class>
     </package>
     <package name="tensorflow/keras/layers">
       <!-- Declaring a `super` opts `Layer` in to being materialized as a class shell before the class hierarchy is built (wala/WALA#1957), so a source subclass such as `class MyLayer(tf.keras.layers.Layer)` resolves its base to this type instead of falling back to `object` (wala/ML#118). Shell-only: the class deliberately declares no methods, since a shell shadows same-named bypass method bodies (see the CAUTION on `tensorflow/keras/models/Model`), and no `<new>` targets it, so it is not `allocatable`. -->
@@ -2558,6 +2568,15 @@
         </method>
       </class>
       <class name="Dropout" allocatable="true">
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <return value="inputs"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <return value="inputs"/>
+        </method>
+      </class>
+      <class name="LayerNormalization" allocatable="true">
+        <!-- Typing-wise identity: normalization preserves both shape and dtype, so the call is a genuine pass-through, mirroring `Dropout` (wala/ML#711). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <return value="inputs"/>
         </method>

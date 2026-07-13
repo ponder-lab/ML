@@ -9,6 +9,7 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.cast.python.types.PythonTypes;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
@@ -599,8 +600,9 @@ public class SliceBuiltinOperation extends TensorGenerator {
    * Computes the output extent of one axis under a slice dimension, per Python slice semantics with
    * a unit (or absent) step. A full slice ({@code :}) preserves the axis. Constant bounds against a
    * numeric axis compute the extent numerically (negative bounds index from the end); a {@code :k}
-   * slice against an unknown axis still yields {@code k}. Anything else degrades to a {@link
-   * DynamicDim} (the axis stays present but its extent is unknown), never to ⊤.
+   * slice against an unknown axis still yields {@code k}. Anything else degrades — to {@link
+   * DynamicDim} when the receiver's axis is itself {@code None}-evidenced, else to {@link
+   * UnresolvedDim} (wala/ML#721) — never to ⊤; the axis stays present but its extent is unknown.
    *
    * @param recv The receiver's dimension for this axis.
    * @param d The slice dimension.
@@ -609,17 +611,22 @@ public class SliceBuiltinOperation extends TensorGenerator {
   private static Dimension<?> sliceExtent(Dimension<?> recv, SubscriptDim d) {
     Bound lower = d.lower(), upper = d.upper(), step = d.step();
     if (lower.isNone() && upper.isNone() && step.isNone()) return recv; // `:`
+    // Slice bounds and steps are Python scalars, so an uncomputable extent over a fixed axis is a
+    // fixed runtime size the analysis could not compute; only slicing a `None` axis yields a
+    // `None` extent (wala/ML#721).
+    Dimension<?> degraded =
+        recv instanceof DynamicDim ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE;
     int s = step.isNone() ? 1 : (step.isInt() ? step.value() : 0);
-    if (s != 1) return DynamicDim.INSTANCE; // non-unit/non-constant/negative step.
+    if (s != 1) return degraded; // non-unit/non-constant/negative step.
     Integer n = (recv instanceof NumericDim) ? ((NumericDim) recv).value() : null;
     if (n == null) {
       // Unknown axis: only `:k` (lower None, constant non-negative upper) is computable.
       if (lower.isNone() && upper.isInt() && upper.value() >= 0)
         return new NumericDim(upper.value());
-      return DynamicDim.INSTANCE;
+      return degraded;
     }
     if ((!lower.isNone() && !lower.isInt()) || (!upper.isNone() && !upper.isInt()))
-      return DynamicDim.INSTANCE; // non-constant bound against a known axis.
+      return degraded; // non-constant bound against a known axis.
     int lo = lower.isNone() ? 0 : lower.value();
     int hi = upper.isNone() ? n : upper.value();
     if (lo < 0) lo = Math.max(0, n + lo);

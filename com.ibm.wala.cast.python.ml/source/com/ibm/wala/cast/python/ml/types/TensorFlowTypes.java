@@ -481,6 +481,12 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/fill")),
           AstMethodReference.fnSelector);
 
+  public static final MethodReference SHAPE_OF =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/math/shape")),
+          AstMethodReference.fnSelector);
+
   private static final String FILL_SIGNATURE = "tf.fill()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/linspace. */
@@ -1248,6 +1254,15 @@ public class TensorFlowTypes extends PythonTypes {
           AstMethodReference.fnSelector);
 
   private static final String SQUEEZE_SIGNATURE = "tf.squeeze()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/split. */
+  public static final MethodReference SPLIT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/split")),
+          AstMethodReference.fnSelector);
+
+  private static final String SPLIT_SIGNATURE = "tf.split()";
 
   /** https://www.tensorflow.org/api_docs/python/tf/image/extract_patches. */
   public static final MethodReference EXTRACT_PATCHES =
@@ -2095,6 +2110,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(BOOLEAN_MASK.getDeclaringClass(), BOOLEAN_MASK_SIGNATURE),
           Map.entry(SLICE.getDeclaringClass(), SLICE_SIGNATURE),
           Map.entry(SQUEEZE.getDeclaringClass(), SQUEEZE_SIGNATURE),
+          Map.entry(SPLIT.getDeclaringClass(), SPLIT_SIGNATURE),
           Map.entry(EXTRACT_PATCHES.getDeclaringClass(), EXTRACT_PATCHES_SIGNATURE),
           Map.entry(TAN.getDeclaringClass(), TAN_SIGNATURE),
           Map.entry(ASIN.getDeclaringClass(), ASIN_SIGNATURE),

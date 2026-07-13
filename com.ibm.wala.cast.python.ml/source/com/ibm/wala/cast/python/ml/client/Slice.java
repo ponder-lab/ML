@@ -5,6 +5,7 @@ import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
@@ -150,11 +151,27 @@ public class Slice extends PassThroughUnaryTensorGenerator {
           // A `begin` past the axis would yield a negative (invalid) extent; degrade to ⊤.
           if (extent < 0) return null;
           out.add(new NumericDim(extent));
-        } else out.add(DynamicDim.INSTANCE); // keep the rank; this axis is dynamic.
+        } else
+          // Keep the rank. The remaining extent of a `None` axis is itself `None` at run time;
+          // otherwise it is a fixed size the analysis could not compute (wala/ML#721).
+          out.add(inDim instanceof DynamicDim ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE);
       } else {
         return null; // size < -1 is invalid for tf.slice.
       }
     }
     return out;
+  }
+
+  /**
+   * Collapse-safe record view (wala/ML#718): this generator transforms its input shapes in {@link
+   * #getDefaultShapes}, which the pass-through identity record path would bypass, so the record
+   * view routes through the legacy transform until a member-wise upgrade.
+   *
+   * @param builder The propagation call graph builder.
+   * @return The transformed result, with any partial input collapsed by the legacy view.
+   */
+  @Override
+  protected ShapeResult getDefaultShapeResult(PropagationCallGraphBuilder builder) {
+    return ShapeResult.fromLegacy(this.getDefaultShapes(builder));
   }
 }

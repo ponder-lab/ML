@@ -151,4 +151,17 @@ public class Tile extends PassThroughUnaryTensorGenerator {
     // Exactly one distinct candidate is the resolved list; zero or several is ⊤.
     return candidates.size() == 1 ? candidates.iterator().next() : null;
   }
+
+  /**
+   * Collapse-safe record view (wala/ML#718): this generator transforms its input shapes in {@link
+   * #getDefaultShapes}, which the pass-through identity record path would bypass, so the record
+   * view routes through the legacy transform until a member-wise upgrade.
+   *
+   * @param builder The propagation call graph builder.
+   * @return The transformed result, with any partial input collapsed by the legacy view.
+   */
+  @Override
+  protected ShapeResult getDefaultShapeResult(PropagationCallGraphBuilder builder) {
+    return ShapeResult.fromLegacy(this.getDefaultShapes(builder));
+  }
 }
