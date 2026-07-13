@@ -466,23 +466,25 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               new UnaryOperator<TensorVariable>() {
                 @Override
                 public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
-                  if (rhs != null && rhs.state != null) {
-                    if (lhs == null || lhs.state == null) {
+                  // The solver constructs every node variable, so a null endpoint has nothing to
+                  // update; the guard also keeps the null tests below honest (the previous
+                  // `lhs == null || lhs.state == null` guard dereferenced `lhs` in its own arm).
+                  if (lhs == null || rhs == null) return NOT_CHANGED;
+
+                  if (rhs.state != null) {
+                    if (lhs.state == null) {
                       lhs.copyState(rhs);
                       return CHANGED;
-                    } else {
-                      boolean changed = lhs.state.addAll(rhs.state);
-                      changed |= lhs.origins.addAll(rhs.origins);
-                      return changed ? CHANGED : NOT_CHANGED;
                     }
-                  } else if (rhs != null && lhs != null) {
-                    // A null-state (unknown tensor, ⊤) predecessor contributes no types, but its
-                    // producing library is still evidence and must flow: provenance matters most
-                    // exactly when the shape is unknown (wala/ML#724).
-                    return lhs.origins.addAll(rhs.origins) ? CHANGED : NOT_CHANGED;
-                  } else {
-                    return NOT_CHANGED;
+                    boolean changed = lhs.state.addAll(rhs.state);
+                    changed |= lhs.origins.addAll(rhs.origins);
+                    return changed ? CHANGED : NOT_CHANGED;
                   }
+
+                  // A null-state (unknown tensor, ⊤) predecessor contributes no types, but its
+                  // producing library is still evidence and must flow: provenance matters most
+                  // exactly when the shape is unknown (wala/ML#724).
+                  return lhs.origins.addAll(rhs.origins) ? CHANGED : NOT_CHANGED;
                 }
 
                 @Override
