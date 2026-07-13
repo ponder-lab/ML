@@ -270,10 +270,17 @@ public abstract class TensorGenerator {
             builder, b -> Collections.synchronizedMap(new HashMap<>()));
     synchronized (cache) {
       Object key = evaluationKey(generator);
+      QueryDependencyGraph graph = QueryDependencyGraph.of(builder);
+      graph.access(key);
       if (cache.containsKey(key)) return cache.get(key);
-      ShapeResult result = generator.getShapeResult(builder);
-      cache.put(key, result);
-      return result;
+      try {
+        graph.enter(key);
+        ShapeResult result = generator.getShapeResult(builder);
+        cache.put(key, result);
+        return result;
+      } finally {
+        graph.exit(key);
+      }
     }
   }
 
@@ -292,10 +299,17 @@ public abstract class TensorGenerator {
             builder, b -> Collections.synchronizedMap(new HashMap<>()));
     synchronized (cache) {
       Object key = evaluationKey(generator);
+      QueryDependencyGraph graph = QueryDependencyGraph.of(builder);
+      graph.access(key);
       if (cache.containsKey(key)) return cache.get(key);
-      Set<DType> result = generator.getDTypes(builder);
-      cache.put(key, result);
-      return result;
+      try {
+        graph.enter(key);
+        Set<DType> result = generator.getDTypes(builder);
+        cache.put(key, result);
+        return result;
+      } finally {
+        graph.exit(key);
+      }
     }
   }
 
@@ -366,6 +380,7 @@ public abstract class TensorGenerator {
     GENERATOR_DTYPE_EVALS.remove(builder);
     STORED_ATTRIBUTE_CACHE.remove(builder);
     BUILD_CONTRACT_CACHE.remove(builder);
+    QueryDependencyGraph.clear(builder);
   }
 
   /** The source of the tensor, represented by a points-to set variable. */
@@ -1776,6 +1791,7 @@ public abstract class TensorGenerator {
     // Reentrant synchronization: `SynchronizedMap`'s own methods acquire the same mutex, so the
     // inner `containsKey` / `get` / `put` calls are no-op re-entries.
     synchronized (cache) {
+      QueryDependencyGraph.of(builder).access(key);
       if (cache.containsKey(key)) return cache.get(key);
       // A same-key re-entry is a cycle in the value's producer graph (e.g. a loop-carried
       // variable). Return the previous round's approximation instead of recursing — flooring
@@ -1798,10 +1814,12 @@ public abstract class TensorGenerator {
         return approximation;
       }
       try {
+        QueryDependencyGraph.of(builder).enter(key);
         ShapeResult result = computeShapes(builder, node, valueNumber, exact);
         cache.put(key, result);
         return result;
       } finally {
+        QueryDependencyGraph.of(builder).exit(key);
         inProgress.remove(key);
       }
     }
@@ -2566,13 +2584,16 @@ public abstract class TensorGenerator {
     // recursing without bound or inheriting a whole-read ⊤ (wala/ML#718).
     Set<InstanceKey> delegationsInProgress =
         SHAPE_DELEGATIONS_IN_PROGRESS.computeIfAbsent(builder, b -> HashSetFactory.make());
+    QueryDependencyGraph.of(builder).access(Pair.make("shape-delegation", asin));
     if (!delegationsInProgress.add(asin)) {
       LOGGER.fine(() -> "Producer-cycle re-entry on allocation: " + describe(asin) + "; masking.");
       return ShapeResult.unknown();
     }
     try {
+      QueryDependencyGraph.of(builder).enter(Pair.make("shape-delegation", asin));
       return this.doGetShapeResultFromTensor(builder, asin, exact);
     } finally {
+      QueryDependencyGraph.of(builder).exit(Pair.make("shape-delegation", asin));
       delegationsInProgress.remove(asin);
     }
   }
@@ -3006,10 +3027,12 @@ public abstract class TensorGenerator {
         return approximation;
       }
       try {
+        QueryDependencyGraph.of(builder).enter(key);
         Set<DType> result = computeDTypes(builder, node, valueNumber);
         cache.put(key, result);
         return result;
       } finally {
+        QueryDependencyGraph.of(builder).exit(key);
         inProgress.remove(key);
       }
     }
@@ -3353,8 +3376,10 @@ public abstract class TensorGenerator {
       return EnumSet.noneOf(DType.class);
     }
     try {
+      QueryDependencyGraph.of(builder).enter(Pair.make("dtype-delegation", asin));
       return this.doGetDTypesFromTensor(builder, asin);
     } finally {
+      QueryDependencyGraph.of(builder).exit(Pair.make("dtype-delegation", asin));
       delegationsInProgress.remove(asin);
     }
   }
