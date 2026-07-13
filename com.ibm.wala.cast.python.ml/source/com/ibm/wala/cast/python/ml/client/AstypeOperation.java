@@ -3,11 +3,13 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ssa.SSAInstruction;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
@@ -53,7 +55,8 @@ public class AstypeOperation extends TensorGenerator {
         // branch for implicit keys and falls through to IAE. Catch and return `null` (⊤ unknown
         // shape) so dtype inference still proceeds and the result flows downstream as a tensor
         // instead of being dropped entirely. For the non-chained mnist case, the factory
-        // recursion fires successfully via `MnistInputData`, so the shape is recovered and this
+        // recursion fires successfully via `MnistInputData{@code , so the shape is recovered and
+        // this
         // catch doesn't fire. See wala/ML#356, wala/WALA#1889.
         LOGGER.log(
             Level.FINE,
@@ -107,5 +110,17 @@ public class AstypeOperation extends TensorGenerator {
   @Override
   protected String getDTypeParameterName() {
     return null;
+  }
+
+  /**
+   * Returns the producing library of the modeled value: an }ndarray.astype(...)` call, so the value
+   * is an ndarray (wala/ML#724).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return {@link TensorOrigin#NUMPY}, singleton.
+   */
+  @Override
+  protected Set<TensorOrigin> getOrigins(PropagationCallGraphBuilder builder) {
+    return EnumSet.of(TensorOrigin.NUMPY);
   }
 }

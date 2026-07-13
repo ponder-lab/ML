@@ -9,6 +9,7 @@ import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -155,7 +156,7 @@ public class NpArray extends TensorGenerator {
         else if (value instanceof Integer || value instanceof Long) leaves.add(DType.INT64);
         else if (value instanceof String) leaves.add(DType.STRING);
         else if (value != null && "org.python.core.PyComplex".equals(value.getClass().getName()))
-          // A Python complex literal, which the Jython front-end represents as a `PyComplex`.
+          // A Python complex literal, which the Jython front-end represents as a `PyComplex{@code .
           // Matched by class name to avoid a compile-time dependency on the Jython runtime.
           leaves.add(DType.COMPLEX128);
         else return false; // Unrecognized scalar.
@@ -211,5 +212,17 @@ public class NpArray extends TensorGenerator {
   @Override
   protected String getDTypeParameterName() {
     return "dtype";
+  }
+
+  /**
+   * Returns the producing library of the modeled value: an }np.array(...)` call, so the value is an
+   * ndarray (wala/ML#724).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return {@link TensorOrigin#NUMPY}, singleton.
+   */
+  @Override
+  protected Set<TensorOrigin> getOrigins(PropagationCallGraphBuilder builder) {
+    return EnumSet.of(TensorOrigin.NUMPY);
   }
 }

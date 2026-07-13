@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
@@ -13,6 +14,7 @@ import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -201,7 +203,7 @@ public class NdarrayReshape extends TensorGenerator {
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    // `reshape` preserves the receiver's dtype.
+    // `reshape{@code  preserves the receiver's dtype.
     int receiverVn = getReceiverVn();
     if (receiverVn > 0) {
       Set<DType> dtypes = getDTypes(builder, receiverVn);
@@ -228,5 +230,17 @@ public class NdarrayReshape extends TensorGenerator {
   @Override
   protected String getDTypeParameterName() {
     return null;
+  }
+
+  /**
+   * Returns the producing library of the modeled value: an }ndarray.reshape(...)` call, so the
+   * value is an ndarray (wala/ML#724).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return {@link TensorOrigin#NUMPY}, singleton.
+   */
+  @Override
+  protected Set<TensorOrigin> getOrigins(PropagationCallGraphBuilder builder) {
+    return EnumSet.of(TensorOrigin.NUMPY);
   }
 }
