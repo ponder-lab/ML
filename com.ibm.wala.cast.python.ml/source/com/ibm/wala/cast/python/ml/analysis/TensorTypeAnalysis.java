@@ -219,6 +219,45 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
     }
   }
 
+  /**
+   * A transfer function for parameter destinations (wala/ML#726): tensor types flow through
+   * unchanged, but the origins union is skipped, so a parameter keeps its seeded {@link
+   * TensorOrigin#PARAMETER} instead of inheriting its call sites' origins. Mirrors the plain node
+   * transfer's state handling minus the provenance; in particular a ⊤-state (unknown tensor)
+   * predecessor contributes nothing here, since its only contribution in the plain transfer is its
+   * origins.
+   */
+  static final class ParameterBarrierOp extends UnaryOperator<TensorVariable> {
+    static final ParameterBarrierOp INSTANCE = new ParameterBarrierOp();
+
+    private ParameterBarrierOp() {}
+
+    @Override
+    public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
+      if (lhs == null || rhs == null || rhs.state == null) return NOT_CHANGED;
+      if (lhs.state == null) {
+        lhs.state = HashSetFactory.make(rhs.state);
+        return CHANGED;
+      }
+      return lhs.state.addAll(rhs.state) ? CHANGED : NOT_CHANGED;
+    }
+
+    @Override
+    public int hashCode() {
+      return 0x726BA44E; // arbitrary constant; this is a singleton
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof ParameterBarrierOp;
+    }
+
+    @Override
+    public String toString() {
+      return "propagate tensor types, block origin inflow (parameter boundary)";
+    }
+  }
+
   private static IKilldallFramework<PointsToSetVariable, TensorVariable> createProblem(
       Graph<PointsToSetVariable> G,
       Map<PointsToSetVariable, TensorType> reshapeNodes,
@@ -226,6 +265,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> conv2ds,
       Set<PointsToSetVariable> conv3ds,
       Set<PointsToSetVariable> drops,
+      Set<PointsToSetVariable> parameters,
       Map<PointerKey, AnalysisError> errorLog) {
     return new IKilldallFramework<PointsToSetVariable, TensorVariable>() {
 
@@ -513,6 +553,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               return new ConvOp(2, node);
             } else if (conv3ds.contains(node)) {
               return new ConvOp(3, node);
+            } else if (parameters.contains(node)) {
+              return ParameterBarrierOp.INSTANCE;
             } else {
               return nodeOp;
             }
@@ -530,6 +572,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               return DropOp.INSTANCE;
             } else if (set_shapes.containsKey(dst)) {
               return new SetShapeOp(set_shapes.get(dst));
+            } else if (parameters.contains(dst)) {
+              return ParameterBarrierOp.INSTANCE;
             } else {
               return nodeOp;
             }
@@ -591,6 +635,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * @param conv2ds Destinations of 2D convolutions, rank-checked by {@code ConvOp}.
    * @param conv3ds Destinations of 3D convolutions, rank-checked by {@code ConvOp}.
    * @param drops Destinations pinned to empty-and-fixed (wala/ML#409).
+   * @param parameters Parameter destinations, whose types flow normally but whose origins are
+   *     pinned to their {@link TensorOrigin#PARAMETER} seed by blocking caller-side origin inflow
+   *     (wala/ML#726).
    * @param errorLog The sink for shape-mismatch diagnostics.
    */
   public TensorTypeAnalysis(
@@ -602,8 +649,10 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> conv2ds,
       Set<PointsToSetVariable> conv3ds,
       Set<PointsToSetVariable> drops,
+      Set<PointsToSetVariable> parameters,
       Map<PointerKey, AnalysisError> errorLog) {
-    super(createProblem(G, reshapeTypes, set_shapes, conv2ds, conv3ds, drops, errorLog));
+    super(
+        createProblem(G, reshapeTypes, set_shapes, conv2ds, conv3ds, drops, parameters, errorLog));
     this.init = init;
     this.initOrigins = initOrigins;
   }
