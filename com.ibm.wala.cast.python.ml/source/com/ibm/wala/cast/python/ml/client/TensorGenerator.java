@@ -5541,6 +5541,8 @@ public abstract class TensorGenerator {
       return new ReduceMean(node);
     } else if (type.equals(TensorFlowTypes.CONVERT_TO_TENSOR.getDeclaringClass())) {
       return new ConvertToTensor(node);
+    } else if (type.equals(TensorFlowTypes.RANGE.getDeclaringClass())) {
+      return new Range(node);
     } else if (type.equals(TensorFlowTypes.SIGMOID.getDeclaringClass())) {
       return new Sigmoid(node);
     } else if (type.equals(TensorFlowTypes.SOFTMAX.getDeclaringClass())) {

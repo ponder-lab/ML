@@ -3666,8 +3666,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * types. Function body mirrors {@code crf_binary_score} from {@code
    * kyzhouhzau/NLPGNN/nlpgnn/metrics/crf.py} for tensor-type inference coverage.
    *
-   * <p>The local count captures one {@code tf.shape}-scalar arithmetic intermediate regressing to ⊥
-   * when the wala/ML#722 arm made its chain live — TODO: <a
+   * <p>The local count captures one {@code tf.shape}-scalar arithmetic intermediate at ⊥; its
+   * gather-fixture siblings recovered with the {@code tf.range} remodel, but this one did not, and
+   * its cause is unidentified—TODO: <a
    * href="https://github.com/wala/ML/issues/723">wala/ML#723</a>.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
@@ -4098,14 +4099,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * runtime-dimensioned final {@code tf.reshape} leaves the local <em>result</em> symbolic, but the
    * parameters themselves are exact.)
    *
-   * <p>The local tensor-variable count is {@code 8}: the {@code tf.shape} shape-vector arm
-   * (wala/ML#722) made the previously-⊤ {@code range}/{@code expand_dims}/{@code tile} chain live,
-   * and it currently misresolves — {@code tf.range(num_row)} folds a leaked constant as its bound
-   * (typing {@code (1,)} where the runtime is {@code (2,)}), and the {@code row_indices *
-   * num_column + column_indices} arithmetic and its {@code [-1]} reshape regressed to ⊥ (both are
-   * genuine runtime tensors) — TODO: <a
-   * href="https://github.com/wala/ML/issues/723">wala/ML#723</a>. The function's final reshape, by
-   * contrast, now types its exact runtime {@code (2, 3)} through the same arm.
+   * <p>The local tensor-variable count is {@code 10}. The {@code tf.shape} shape-vector arm
+   * (wala/ML#722) types the final reshape to its exact runtime {@code (2, 3)}, and the {@code
+   * tf.range} remodel (wala/ML#723) types the {@code range}/{@code expand_dims} chain soundly
+   * ({@code (Unresolved,)} and {@code (Unresolved, 1)}); the tile and the flat-index arithmetic
+   * stay at sound unknowns, since a fold over an {@code Unresolved} axis has no numeric value.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -4119,7 +4117,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_gather_elements_along_row.py",
         "_gather_elements_along_row",
         2,
-        8,
+        10,
         Map.of(
             2, Set.of(TENSOR_2_4_FLOAT32),
             3, Set.of(TENSOR_2_3_INT32)));

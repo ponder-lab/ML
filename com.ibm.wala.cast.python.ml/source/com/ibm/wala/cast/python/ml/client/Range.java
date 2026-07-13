@@ -64,6 +64,15 @@ public class Range extends TensorGenerator {
     super(source);
   }
 
+  /**
+   * Constructs anchored to a manual node.
+   *
+   * @param node The {@link CGNode} for the synthetic {@code do()} method.
+   */
+  public Range(CGNode node) {
+    super(node);
+  }
+
   @Override
   protected Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
