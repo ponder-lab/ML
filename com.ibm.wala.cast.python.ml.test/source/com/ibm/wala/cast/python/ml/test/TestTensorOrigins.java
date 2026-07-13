@@ -87,7 +87,8 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
           String signature = localPointerKey.getNode().getMethod().getSignature();
 
           for (String sink : sinkFunctionNames)
-            if (signature.contains("/" + sink + ".do("))
+            // Signatures render scope separators as dots: `script f.py.consume_np.do()LRoot;`.
+            if (signature.contains("." + sink + ".do("))
               ret.computeIfAbsent(sink, k -> EnumSet.noneOf(TensorOrigin.class))
                   .addAll(pt.snd.getOrigins());
         });
