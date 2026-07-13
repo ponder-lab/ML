@@ -13670,6 +13670,189 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Attribute-read arm of the {@code build} stored-attribute resolution (wala/ML#725): the stored
+   * value is an attribute read off a same-body holder object whose attribute holds an {@code
+   * input_shape} subscript (an empty-points-to-set chain), so the subscript resolver must classify
+   * the non-numeric string member as an attribute read rather than an index. The chase is depth-one
+   * by construction, so the holder's attribute does not resolve and the weight's leading dimension
+   * soundly degrades.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testBuildStoredAttrRead()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_build_stored_attr.py",
+        "apply_attr_read",
+        2,
+        3,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 6)),
+            3,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(5))))));
+  }
+
+  /**
+   * Numeric-string subscript arm of the {@code build} stored-attribute resolution (wala/ML#725):
+   * the stored value is a dict subscript whose key is the numeric string {@code "2"} and whose held
+   * value is an {@code input_shape} subscript (an empty-points-to-set chain), so the subscript
+   * resolver's string-index parse succeeds and the dict is rejected as a shape vector (its rank
+   * never resolves). The depth-one chase then leaves the attribute unresolved and the weight's
+   * leading dimension soundly degrades.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testBuildStoredDictKey()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_build_stored_attr.py",
+        "apply_dict_key",
+        2,
+        3,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 6)),
+            3,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(5))))));
+  }
+
+  /**
+   * Nested-class config idiom for the {@code build} stored-attribute resolution (wala/ML#725): a
+   * class declared in the method body writes its member as a field-put on the class object's local,
+   * so the receiver-class write scan must recognize the put's non-{@code self} receiver and skip it
+   * rather than misattributing it; the depth-one chase then leaves the attribute unresolved and the
+   * weight's leading dimension soundly degrades.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testBuildStoredNestedCfg()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_build_stored_attr.py",
+        "apply_nested_cfg",
+        2,
+        3,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 6)),
+            3,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(5))))));
+  }
+
+  /**
+   * Direct companion of {@link #testBuildStoredNestedCfg()} (wala/ML#725): the nested config
+   * class's member is read directly in the weight-shape literal, with no intermediate stored
+   * attribute, exercising the read-side handling of the class-object member access.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testBuildStoredDirectNestedCfg()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_build_stored_attr.py",
+        "apply_direct_nested_cfg",
+        2,
+        3,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 6)),
+            3,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(5))))));
+  }
+
+  /**
+   * Unresolvable-index arm of the {@code build} stored-attribute resolution (wala/ML#725): the
+   * subscript index is a runtime int the analysis cannot resolve, so the constant-index sentinel
+   * guard rejects the subscript and the weight's leading dimension degrades.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testBuildStoredOpaqueIndex()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_build_stored_attr.py",
+        "apply_opaque_index",
+        2,
+        3,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 6)),
+            3,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(5))))));
+  }
+
+  /**
+   * Out-of-bounds subscript arm of the {@code build} stored-attribute resolution (wala/ML#725): the
+   * first write's index is beyond the resolved rank (a runtime-guarded {@code try}/{@code except}
+   * read), so the bounds check rejects it and the unresolvable write makes the attribute
+   * unresolvable, degrading the weight's leading dimension.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testBuildStoredOobIndex()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_build_stored_attr.py",
+        "apply_oob_index",
+        2,
+        3,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 6)),
+            3,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(5))))));
+  }
+
+  /**
+   * Negative out-of-bounds companion of {@link #testBuildStoredOobIndex()} (wala/ML#725): the
+   * normalized index falls below zero.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testBuildStoredNegativeOobIndex()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_build_stored_attr.py",
+        "apply_negative_oob_index",
+        2,
+        3,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 2, 6)),
+            3,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(5))))));
+  }
+
+  /**
    * A configuration attribute as a literal concat element (wala/ML#712): the reshape target
    * concatenates a shape-vector slice with {@code [self.units]}, whose stored value is the
    * constructor argument, exercising the constant fallback of the attribute chase.
