@@ -14,10 +14,12 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.fixpoint.IVariable;
 import com.ibm.wala.util.collections.HashSetFactory;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -25,6 +27,15 @@ public class TensorVariable implements IVariable<TensorVariable> {
   private int graphNodeId = -1;
   private int orderNumber = -1;
   Set<TensorType> state = HashSetFactory.make();
+
+  /**
+   * The libraries whose operations produced this variable's value (wala/ML#724). Seeded from the
+   * dispatched generator per dataflow source and unioned along the same edges as {@link #state}; a
+   * merge of numpy-origin and TensorFlow-origin flows carries both constants. Unlike {@link
+   * #state}, this set is never {@code null}: an empty set means no origin evidence reached the
+   * variable.
+   */
+  Set<TensorOrigin> origins = EnumSet.noneOf(TensorOrigin.class);
 
   public String toFormattedString(TensorType.Format fmt) {
     switch (fmt) {
@@ -90,6 +101,16 @@ public class TensorVariable implements IVariable<TensorVariable> {
     return Collections.unmodifiableSet(state);
   }
 
+  /**
+   * Returns the libraries whose operations produced this variable's value (wala/ML#724).
+   *
+   * @return The producing libraries; empty when no origin evidence reached the variable, both
+   *     constants when numpy-origin and TensorFlow-origin flows merged.
+   */
+  public Set<TensorOrigin> getOrigins() {
+    return Collections.unmodifiableSet(origins);
+  }
+
   @Override
   public int getGraphNodeId() {
     return graphNodeId;
@@ -113,6 +134,8 @@ public class TensorVariable implements IVariable<TensorVariable> {
   @Override
   public void copyState(TensorVariable v) {
     this.state = v.state == null ? null : HashSetFactory.make(v.state);
+    this.origins = EnumSet.noneOf(TensorOrigin.class);
+    this.origins.addAll(v.origins);
   }
 
   @Override
