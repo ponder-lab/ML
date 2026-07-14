@@ -151,9 +151,12 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
    * preparation) and every tensor-typed parameter reads {@code {PARAMETER}}; {@code
    * encode_labels}'s enumerate over its string-list attribute stopped surfacing a spurious unknown
    * tensor once an unresolved iterable became ⊥ on every axis (wala/ML#730). {@code build_graph}
-   * captures the remaining deviations: {@code PARAMETER} provenance in its operator products (the
-   * confirmed wala/ML#726 semantics) alongside the elementwise no-evidence default on its unmodeled
-   * scipy operators, plus one evidence-free local from its enumerate chain (wala/ML#729).
+   * captures the remaining deviations, all type-level over-typing of semantically non-tensor values
+   * rather than origin defects (wala/ML#731): two {@code slice(None, None, None)} constructor
+   * objects reading the cross-caller TensorFlow union through the shared slice builtin, and the
+   * evidence-free enumerate iterator object. Its subscripts classify {@code {NUMPY}} through the
+   * wala/ML#731 receiver delegation, and no def carries {@code PARAMETER}, since only user code
+   * bodies seed the hybridization-frame origin.
    *
    * <p>Assertions are per-method censuses (how many locals read each origin set) rather than
    * per-value-number, so front-end numbering drift does not break the anchor.
@@ -196,11 +199,11 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
     assertEquals(
         Map.of(
             EnumSet.of(TensorOrigin.NUMPY),
-            4L,
+            6L,
             EnumSet.noneOf(TensorOrigin.class),
             1L,
-            EnumSet.of(TensorOrigin.TENSORFLOW, TensorOrigin.PARAMETER),
-            4L),
+            EnumSet.of(TensorOrigin.TENSORFLOW),
+            2L),
         census(buildGraph.locals()));
   }
 
@@ -231,6 +234,34 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
       assertEquals(Map.of(EnumSet.of(TensorOrigin.PARAMETER), 1L), census(contrast.parameters()));
       assertEquals(Map.of(), census(contrast.locals()));
     }
+  }
+
+  /** Temporary probe for wala/ML#731: dump build_graph's typed locals with their defs. */
+  @Test
+  public void observeBuildGraphDefs() throws ClassHierarchyException, CancelException, IOException {
+    List<File> pathFiles =
+        List.of(new File(TestTensorOrigins.class.getResource("/tr_proj").getPath()));
+    PythonTensorAnalysisEngine engine =
+        makeEngine(
+            pathFiles,
+            "tr_proj/deep_recommenders/__init__.py",
+            "tr_proj/deep_recommenders/datasets/__init__.py",
+            "tr_proj/deep_recommenders/datasets/cora.py",
+            "tr_proj/tf2_test_cora_origins.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+    assertNotNull(CG);
+    TensorTypeAnalysis analysis = engine.performAnalysis(builder);
+    analysis.forEach(
+        pt -> {
+          if (!(pt.fst instanceof LocalPointerKey)) return;
+          LocalPointerKey k = (LocalPointerKey) pt.fst;
+          if (!k.getNode().getMethod().getSignature().contains(".Cora.build_graph.do(")) return;
+          SSAInstruction def =
+              k.getNode().getDU() == null ? null : k.getNode().getDU().getDef(k.getValueNumber());
+          System.err.println(
+              "BG vn=" + k.getValueNumber() + " origins=" + pt.snd.getOrigins() + " def=" + def);
+        });
   }
 
   /**

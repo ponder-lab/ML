@@ -6,6 +6,7 @@ import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -60,6 +61,36 @@ public class SliceBuiltinOperation extends TensorGenerator {
 
   public SliceBuiltinOperation(CGNode node) {
     super(node);
+  }
+
+  /**
+   * Returns the origin of the slice result by classifying its receiver (wala/ML#731): slicing
+   * preserves the producing library under the runtime-type rule (wala/ML#724), since an ndarray
+   * slice is an ndarray and a {@code Tensor} slice a {@code Tensor}. A receiver that does not
+   * resolve keeps the TensorFlow default, preserving the pre-wala/ML#724 reading.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The origin of the slice result.
+   */
+  @Override
+  protected Set<TensorOrigin> getOrigins(PropagationCallGraphBuilder builder) {
+    CallSiteView view = findCallSite(builder);
+    if (view == null) return super.getOrigins(builder);
+    PointerKey pk =
+        builder
+            .getPointerAnalysis()
+            .getHeapModel()
+            .getPointerKeyForLocal(view.callerNode(), view.receiverVn);
+    if (builder.getPropagationSystem().isImplicit(pk)) return super.getOrigins(builder);
+    PointsToSetVariable receiver = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
+    if (receiver == null) return super.getOrigins(builder);
+    TensorGenerator generator;
+    try {
+      generator = TensorGeneratorFactory.getGenerator(receiver, builder);
+    } catch (IllegalArgumentException e) {
+      return super.getOrigins(builder);
+    }
+    return generator == null ? super.getOrigins(builder) : generator.getOrigins(builder);
   }
 
   @Override

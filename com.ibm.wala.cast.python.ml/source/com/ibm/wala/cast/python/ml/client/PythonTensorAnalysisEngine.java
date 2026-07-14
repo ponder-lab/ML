@@ -13,6 +13,7 @@ import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
+import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.lsp.AnalysisError;
 import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
@@ -1376,17 +1377,23 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       for (PointsToSetVariable d : drops)
         LOGGER.fine(() -> "  drop: " + describe(d.getPointerKey()));
 
-      // Parameter destinations get the hybridization-frame origin and a barrier against
+      // User-code parameter destinations get the hybridization-frame origin and a barrier against
       // caller-side origin inflow (wala/ML#726): under `tf.function` tracing a tensor parameter is
       // a symbolic tensor regardless of the library that produced its eager feeds, so its
       // provenance is first-class rather than inherited. Types still flow into parameters; only
-      // provenance stops at the boundary. Seeding every parameter unconditionally is safe:
+      // provenance stops at the boundary. Seeding every user parameter unconditionally is safe:
       // non-tensor parameters never surface, since the solution iterator filters empty-state
-      // variables.
+      // variables. Only user code bodies (AstMethods) are hybridization frames, so synthetic
+      // parameters (builtin summaries, XML API summaries, trampolines) neither seed nor barrier:
+      // seeding them exported the parameter constant through shared builtin frames onto every
+      // caller's derived values (the slice builtin under `edges[:, 0]` was the wala/ML#731
+      // witness), and values crossing pass-through API summaries lost their true provenance.
       Set<PointsToSetVariable> parameters = HashSetFactory.make();
       for (PointsToSetVariable v : dataflow)
         if (v.getPointerKey() instanceof LocalPointerKey
-            && ((LocalPointerKey) v.getPointerKey()).isParameter()) parameters.add(v);
+            && ((LocalPointerKey) v.getPointerKey()).isParameter()
+            && ((LocalPointerKey) v.getPointerKey()).getNode().getMethod() instanceof AstMethod)
+          parameters.add(v);
       LOGGER.fine(() -> "wala/ML#726 parameter destinations: " + parameters.size());
       for (PointsToSetVariable p : parameters)
         initOrigins.put(p, EnumSet.of(TensorOrigin.PARAMETER));
