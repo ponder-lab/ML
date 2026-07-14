@@ -1168,6 +1168,28 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * Returns whether the given invoke is a slice <em>constructor</em>: it resolves to the {@code
+   * slice} builtin and every argument is a compile-time constant (the {@code slice(None, None,
+   * None)} form that subscripts like {@code x[:, 0]} compile to). The subscript-application form
+   * never matches, since its first argument is the sliced tensor. See wala/ML#732.
+   *
+   * @param node The {@link CGNode} containing the invoke.
+   * @param invoke The invoke instruction to test.
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the targets.
+   * @return {@code true} iff the invoke constructs a slice object from constants.
+   */
+  private static boolean isConstantSliceConstructor(
+      CGNode node, SSAAbstractInvokeInstruction invoke, PropagationCallGraphBuilder builder) {
+    SymbolTable st = node.getIR().getSymbolTable();
+    for (int i = 1; i < invoke.getNumberOfUses(); i++)
+      if (!st.isConstant(invoke.getUse(i))) return false;
+    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite()))
+      if (callee.getMethod().getReference().getDeclaringClass().equals(PythonTypes.SLICE_BUILTIN))
+        return true;
+    return false;
+  }
+
+  /**
    * Returns whether the given invoke resolves to the {@code enumerate} builtin. The declared target
    * is a generic trampoline ({@code LCodeBody}), so resolution goes through {@code
    * getPossibleTargets}, matching {@code isEnumerateFirstFieldRead}.
@@ -1373,6 +1395,23 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       for (PointsToSetVariable v : dataflow) {
         if (isEnumerateFirstFieldRead(v, builder)) drops.add(v);
       }
+      // Semantically non-tensor iteration machinery pins to empty-and-fixed too (wala/ML#732):
+      // an all-constant-bounds slice constructor (`slice(None, None, None)` under `x[:, 0]`) is a
+      // runtime slice object, and an enumerate result is an iterator object whose element typing
+      // the element generators serve; both otherwise read cross-caller tensor state through
+      // shared builtin frames and count as tensor defs downstream. The subscript-application form
+      // is untouched: its first argument is a tensor receiver, not a constant.
+      for (PointsToSetVariable v : dataflow) {
+        if (!(v.getPointerKey() instanceof LocalPointerKey)) continue;
+        LocalPointerKey lpk = (LocalPointerKey) v.getPointerKey();
+        if (lpk.getNode().getDU() == null || lpk.getNode().getIR() == null) continue;
+        SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
+        if (!(def instanceof SSAAbstractInvokeInstruction)) continue;
+        SSAAbstractInvokeInstruction invoke = (SSAAbstractInvokeInstruction) def;
+        if (isEnumerateCall(lpk.getNode(), invoke, builder)
+            || isConstantSliceConstructor(lpk.getNode(), invoke, builder)) drops.add(v);
+      }
+
       LOGGER.fine(() -> "wala/ML#409 drops (enumerate-first-field): " + drops.size());
       for (PointsToSetVariable d : drops)
         LOGGER.fine(() -> "  drop: " + describe(d.getPointerKey()));
