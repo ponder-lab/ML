@@ -3991,24 +3991,38 @@ public abstract class TensorGenerator {
         for (int u = 2; u < invoke.getNumberOfUses(); u++)
           if (isSliceObjectDef(node, invoke.getUse(u))) return ShapeResult.unknown();
 
-        Integer lower = sliceBoundOrNull(builder, node, st, invoke, 2);
-        Integer upper = sliceBoundOrNull(builder, node, st, invoke, 3);
-        Integer step = sliceBoundOrNull(builder, node, st, invoke, 4);
-        if (Objects.equals(lower, UNRESOLVED_BOUND)
-            || Objects.equals(upper, UNRESOLVED_BOUND)
-            || Objects.equals(step, UNRESOLVED_BOUND))
+        // A bound whose points-to set holds several constants (e.g. a φ of 1 and 2) enumerates
+        // its candidates, and the result unions the slicings under each: the type lattice carries
+        // sets of shapes, so the union is both sound and more precise than the ⊤ the ambiguity
+        // previously forced (wala/ML#710). Bounds mixing constants with non-constants keep the ⊤
+        // fallback, as does a combination blowup past the cap.
+        List<Integer> lowers = sliceBoundCandidates(builder, node, st, invoke, 2);
+        List<Integer> uppers = sliceBoundCandidates(builder, node, st, invoke, 3);
+        List<Integer> steps = sliceBoundCandidates(builder, node, st, invoke, 4);
+        if (lowers == null || uppers == null || steps == null)
           return ShapeResult.unknown(); // Non-constant bound: the sub-list's rank is unknown.
-        // A constant step strides the bounded range, and a negative one also reverses
-        // (wala/ML#709); only the invalid zero keeps the ⊤ fallback.
-        int stride = step == null ? 1 : step;
-        if (stride == 0) return ShapeResult.unknown();
-
-        // Slice per member with Python's adjusted-indices semantics; the base's unknown
-        // remainder rides through (wala/ML#718).
-        Set<List<Dimension<?>>> sliced = HashSetFactory.make();
-        for (List<Dimension<?>> dims : base.members()) {
-          sliced.add(sliceDims(dims, lower, upper, stride));
+        int combinations = lowers.size() * uppers.size() * steps.size();
+        if (combinations > SLICE_CANDIDATE_COMBINATION_CAP) {
+          LOGGER.fine(
+              () ->
+                  "Ambiguous slice bounds exceed the candidate cap ("
+                      + combinations
+                      + " combinations); reporting an unknown shape.");
+          return ShapeResult.unknown();
         }
+
+        // Slice per member and candidate combination with Python's adjusted-indices semantics
+        // (wala/ML#709); the base's unknown remainder rides through (wala/ML#718). Only the
+        // invalid zero step keeps the ⊤ fallback.
+        Set<List<Dimension<?>>> sliced = HashSetFactory.make();
+        for (Integer lower : lowers)
+          for (Integer upper : uppers)
+            for (Integer step : steps) {
+              int stride = step == null ? 1 : step;
+              if (stride == 0) return ShapeResult.unknown();
+              for (List<Dimension<?>> dims : base.members())
+                sliced.add(sliceDims(dims, lower, upper, stride));
+            }
         return new ShapeResult(sliced, base.hasUnknown());
       }
 
@@ -4669,6 +4683,58 @@ public abstract class TensorGenerator {
    * unresolved bounds.
    */
   protected static final Integer UNRESOLVED_BOUND = Integer.MIN_VALUE;
+
+  /**
+   * Cap on enumerated slice-bound combinations (wala/ML#710): past it, an ambiguous slicing reports
+   * ⊤ rather than unioning, bounding blowup. The realistic ambiguity is a φ of two constants on one
+   * bound.
+   */
+  private static final int SLICE_CANDIDATE_COMBINATION_CAP = 8;
+
+  /**
+   * Resolves a slice bound to its candidate constant values (wala/ML#710). The single-constant fast
+   * path yields a singleton (a {@code null} element denotes the Python default); an unresolved
+   * bound whose points-to set holds only constants enumerates them, including a propagated {@code
+   * None} alongside numeric candidates, capped at {@link #SLICE_CANDIDATE_COMBINATION_CAP} distinct
+   * values.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} providing the pointer analysis.
+   * @param node The {@link CGNode} whose IR contains the invoke.
+   * @param st The node's symbol table.
+   * @param invoke The slice-builtin invoke.
+   * @param useIndex The use index of the bound ({@code 2}=lower, {@code 3}=upper, {@code 4}=step).
+   * @return The candidate values, or {@code null} when the bound does not resolve to constants.
+   */
+  private static List<Integer> sliceBoundCandidates(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      SymbolTable st,
+      PythonInvokeInstruction invoke,
+      int useIndex) {
+    Integer single = sliceBoundOrNull(builder, node, st, invoke, useIndex);
+    if (!Objects.equals(single, UNRESOLVED_BOUND)) return Collections.singletonList(single);
+
+    PointerKey pk =
+        builder
+            .getPointerAnalysis()
+            .getHeapModel()
+            .getPointerKeyForLocal(node, invoke.getUse(useIndex));
+    if (pk == null || builder.getPropagationSystem().isImplicit(pk)) return null;
+    OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
+    if (pts == null || pts.isEmpty()) return null;
+    List<Integer> candidates = new ArrayList<>();
+    for (InstanceKey ik : pts) {
+      if (!(ik instanceof ConstantKey)) return null;
+      Object value = ((ConstantKey<?>) ik).getValue();
+      Integer candidate;
+      if (value == null) candidate = null; // Propagated None: the Python default.
+      else if (value instanceof Number) candidate = ((Number) value).intValue();
+      else return null;
+      if (!candidates.contains(candidate)) candidates.add(candidate);
+      if (candidates.size() > SLICE_CANDIDATE_COMBINATION_CAP) return null;
+    }
+    return candidates;
+  }
 
   /**
    * Resolves a slice bound at the given use index to a constant integer, {@code null} for an
