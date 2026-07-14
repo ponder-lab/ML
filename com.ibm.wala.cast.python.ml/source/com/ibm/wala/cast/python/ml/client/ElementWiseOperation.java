@@ -249,7 +249,7 @@ public class ElementWiseOperation extends TensorGenerator {
     LOGGER.fine(
         () ->
             "EWO record broadcast for source "
-                + describe(this.source)
+                + describe(this.getSource())
                 + ": xVn "
                 + xVn
                 + " shapes "
@@ -492,7 +492,7 @@ public class ElementWiseOperation extends TensorGenerator {
     // the resolved side's shapes. Covers a tf.shape-element co-operand, a rank-0 tensor at
     // runtime (wala/ML#723). Manual anchors resolve arguments caller-side and keep their own
     // scalar rule, so this applies to source-anchored instances only.
-    if (this.source != null && xShapes.isEmpty() != yShapes.isEmpty()) {
+    if (this.getSource() != null && xShapes.isEmpty() != yShapes.isEmpty()) {
       Set<List<Dimension<?>>> resolved = xShapes.isEmpty() ? yShapes : xShapes;
       int opaqueVn = xShapes.isEmpty() ? xVn : yVn;
       if (resolved.stream().anyMatch(dims -> !dims.isEmpty())
