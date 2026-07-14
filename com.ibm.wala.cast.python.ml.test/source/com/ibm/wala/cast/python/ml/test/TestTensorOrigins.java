@@ -146,15 +146,14 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
    * The wala/ML#726 consumer contract on the vendored {@code deep_recommenders} Cora subject (the
    * Hybridize-Functions-Refactoring#774 methods), anchored in-repo so the consumer's re-measure is
    * corroboration rather than the gate. The nested helpers ({@code _sample_mask}, {@code
-   * _get_labels}) satisfy the contract cleanly: every tensor-typed local reads exactly {@code
-   * {NUMPY}} (an origin-keyed consumer declines them as convertible data preparation) and every
-   * tensor-typed parameter reads {@code {PARAMETER}}. The other two capture observed deviations:
-   * {@code encode_labels}'s enumerate-element read leaks the TensorFlow default through its
-   * unresolved container (TODO: <a href="https://github.com/wala/ML/issues/728">wala/ML#728</a>),
-   * and {@code build_graph} additionally carries the elementwise no-evidence default on its
-   * unmodeled scipy operators plus {@code PARAMETER} provenance in its operator products, the
-   * confirmed wala/ML#726 semantics; its enumerate product reads the evidence-free empty set now
-   * that the iteration filter blocks the parameter constant (wala/ML#729).
+   * _get_labels}) and {@code encode_labels} satisfy the contract cleanly: every tensor-typed local
+   * reads exactly {@code {NUMPY}} (an origin-keyed consumer declines them as convertible data
+   * preparation) and every tensor-typed parameter reads {@code {PARAMETER}}; {@code
+   * encode_labels}'s enumerate over its string-list attribute stopped surfacing a spurious unknown
+   * tensor once an unresolved iterable became ⊥ on every axis (wala/ML#730). {@code build_graph}
+   * captures the remaining deviations: {@code PARAMETER} provenance in its operator products (the
+   * confirmed wala/ML#726 semantics) alongside the elementwise no-evidence default on its unmodeled
+   * scipy operators, plus one evidence-free local from its enumerate chain (wala/ML#729).
    *
    * <p>Assertions are per-method censuses (how many locals read each origin set) rather than
    * per-value-number, so front-end numbering drift does not break the anchor.
@@ -190,9 +189,7 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
 
     MethodOrigins encodeLabels = methodOrigins.get(".Cora.encode_labels.do(");
     assertEquals(Map.of(EnumSet.of(TensorOrigin.PARAMETER), 1L), census(encodeLabels.parameters()));
-    assertEquals(
-        Map.of(EnumSet.of(TensorOrigin.NUMPY), 2L, EnumSet.of(TensorOrigin.TENSORFLOW), 1L),
-        census(encodeLabels.locals()));
+    assertEquals(Map.of(EnumSet.of(TensorOrigin.NUMPY), 2L), census(encodeLabels.locals()));
 
     MethodOrigins buildGraph = methodOrigins.get(".Cora.build_graph.do(");
     assertEquals(Map.of(EnumSet.of(TensorOrigin.PARAMETER), 1L), census(buildGraph.parameters()));
@@ -201,8 +198,6 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
             EnumSet.of(TensorOrigin.NUMPY),
             4L,
             EnumSet.noneOf(TensorOrigin.class),
-            1L,
-            EnumSet.of(TensorOrigin.TENSORFLOW),
             1L,
             EnumSet.of(TensorOrigin.TENSORFLOW, TensorOrigin.PARAMETER),
             4L),

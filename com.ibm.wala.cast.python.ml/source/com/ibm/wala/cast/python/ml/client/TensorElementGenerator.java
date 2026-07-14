@@ -35,7 +35,12 @@ public class TensorElementGenerator extends TensorGenerator implements Delegatin
 
   @Override
   public String toString() {
-    return "TensorElementGenerator(" + containerGenerator + ")";
+    return "TensorElementGenerator("
+        + containerGenerator
+        + (containerGenerator == null
+            ? ""
+            : " [" + containerGenerator.getClass().getSimpleName() + "]")
+        + ")";
   }
 
   /**
