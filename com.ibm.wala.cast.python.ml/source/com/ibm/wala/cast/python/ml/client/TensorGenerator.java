@@ -798,7 +798,7 @@ public abstract class TensorGenerator {
    * @return The subscripted {@link Dimension}, or {@code null} when the value isn't a
    *     constant-indexed subscript of a resolvable shape vector or the index is out of range.
    */
-  private Dimension<?> resolveShapeVectorElementDim(
+  Dimension<?> resolveShapeVectorElementDim(
       PropagationCallGraphBuilder builder, CGNode node, SymbolTable st, int vn) {
     if (vn <= 0) return null;
     SSAInstruction def = node.getDU().getDef(vn);

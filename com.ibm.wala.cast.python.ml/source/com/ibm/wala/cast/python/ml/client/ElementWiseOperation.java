@@ -246,6 +246,19 @@ public class ElementWiseOperation extends TensorGenerator {
 
     boolean xHas = xShapes != null && !xShapes.isEmpty();
     boolean yHas = yShapes != null && !yShapes.isEmpty();
+    LOGGER.fine(
+        () ->
+            "EWO record broadcast for source "
+                + describe(this.getSource())
+                + ": xVn "
+                + xVn
+                + " shapes "
+                + xShapes
+                + ", yVn "
+                + yVn
+                + " shapes "
+                + yShapes
+                + ".");
     if (xHas != yHas) {
       Set<List<Dimension<?>>> resolved = xHas ? xShapes : yShapes;
       int opaqueVn = xHas ? yVn : xVn;
@@ -373,6 +386,17 @@ public class ElementWiseOperation extends TensorGenerator {
           && isScalarExpression(builder, node, def.getUse(1));
     if (def instanceof SSAUnaryOpInstruction)
       return isScalarExpression(builder, node, def.getUse(0));
+    // A shape-vector element (e.g. `tf.shape(x)[k]`) is a rank-0 int32 tensor: structurally
+    // scalar for broadcast purposes even though it is a runtime tensor, so a broadcast against it
+    // preserves the tensor operand's shape. Only the singular element qualifies; a shape-vector
+    // slice is rank-1 and must not classify as scalar. See wala/ML#723.
+    if (def instanceof PythonPropertyRead) {
+      Dimension<?> element =
+          this.resolveShapeVectorElementDim(builder, node, node.getIR().getSymbolTable(), vn);
+      LOGGER.fine(
+          () -> "Shape-vector element check for operand vn " + vn + " resolved: " + element + ".");
+      if (element != null) return true;
+    }
     if (def instanceof PythonInvokeInstruction) {
       SSAInstruction funcDef = node.getDU().getDef(def.getUse(0));
       if (funcDef instanceof PythonPropertyRead) {
@@ -462,6 +486,18 @@ public class ElementWiseOperation extends TensorGenerator {
     Set<List<Dimension<?>>> yShapes = this.getOperandShapes(builder, yVn);
     LOGGER.fine(() -> "EWO.getDefaultShapes yShapes: " + yShapes);
     if (yShapes == null) return null;
+
+    // One-sided broadcast, mirroring the wala/ML#718 record rule at this layer, which the
+    // nested-operand resolution routes through: a statically opaque scalar co-operand preserves
+    // the resolved side's shapes. Covers a tf.shape-element co-operand, a rank-0 tensor at
+    // runtime (wala/ML#723). Manual anchors resolve arguments caller-side and keep their own
+    // scalar rule, so this applies to source-anchored instances only.
+    if (this.getSource() != null && xShapes.isEmpty() != yShapes.isEmpty()) {
+      Set<List<Dimension<?>>> resolved = xShapes.isEmpty() ? yShapes : xShapes;
+      int opaqueVn = xShapes.isEmpty() ? xVn : yVn;
+      if (resolved.stream().anyMatch(dims -> !dims.isEmpty())
+          && this.isScalarExpression(builder, opaqueVn)) return resolved;
+    }
 
     // wala/ML#462: when the operands carry per-context shape unions (e.g., `y_true ∈ {[256],
     // [10000]}` for train vs. test), the cartesian product surfaces cross-context pairs (e.g.,
