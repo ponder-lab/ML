@@ -258,6 +258,51 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
     }
   }
 
+  /**
+   * A transfer function for iteration-product destinations (wala/ML#729): tensor types flow through
+   * unchanged and non-parameter origin evidence flows with them, but {@link TensorOrigin#PARAMETER}
+   * is filtered from the inflow. Iterating a symbolic tensor raises under {@code tf.function}
+   * tracing (the iteration protocol is Python-level, not a traceable op), so a value iterated out
+   * of a parameter is an eager-only product of the fed data: its provenance comes from its own
+   * seed's creator walk, which reaches the caller-side producer, and the PA's aliasing of iteration
+   * results with their iterables must not pull the parameter constant across.
+   */
+  static final class ParameterOriginFilterOp extends UnaryOperator<TensorVariable> {
+    static final ParameterOriginFilterOp INSTANCE = new ParameterOriginFilterOp();
+
+    private ParameterOriginFilterOp() {}
+
+    @Override
+    public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
+      if (lhs == null || rhs == null) return NOT_CHANGED;
+      boolean changed = false;
+      if (rhs.state != null) {
+        if (lhs.state == null) {
+          lhs.state = HashSetFactory.make(rhs.state);
+          changed = true;
+        } else changed |= lhs.state.addAll(rhs.state);
+      }
+      for (TensorOrigin origin : rhs.origins)
+        if (origin != TensorOrigin.PARAMETER) changed |= lhs.origins.add(origin);
+      return changed ? CHANGED : NOT_CHANGED;
+    }
+
+    @Override
+    public int hashCode() {
+      return 0x729F117E; // arbitrary constant; this is a singleton
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof ParameterOriginFilterOp;
+    }
+
+    @Override
+    public String toString() {
+      return "propagate tensor types, filter the parameter origin (iteration product)";
+    }
+  }
+
   private static IKilldallFramework<PointsToSetVariable, TensorVariable> createProblem(
       Graph<PointsToSetVariable> G,
       Map<PointsToSetVariable, TensorType> reshapeNodes,
@@ -266,6 +311,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> conv3ds,
       Set<PointsToSetVariable> drops,
       Set<PointsToSetVariable> parameters,
+      Set<PointsToSetVariable> iterationProducts,
       Map<PointerKey, AnalysisError> errorLog) {
     return new IKilldallFramework<PointsToSetVariable, TensorVariable>() {
 
@@ -555,6 +601,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               return new ConvOp(3, node);
             } else if (parameters.contains(node)) {
               return ParameterBarrierOp.INSTANCE;
+            } else if (iterationProducts.contains(node)) {
+              return ParameterOriginFilterOp.INSTANCE;
             } else {
               return nodeOp;
             }
@@ -574,6 +622,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               return new SetShapeOp(set_shapes.get(dst));
             } else if (parameters.contains(dst)) {
               return ParameterBarrierOp.INSTANCE;
+            } else if (iterationProducts.contains(dst)) {
+              return ParameterOriginFilterOp.INSTANCE;
             } else {
               return nodeOp;
             }
@@ -638,6 +688,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * @param parameters Parameter destinations, whose types flow normally but whose origins are
    *     pinned to their {@link TensorOrigin#PARAMETER} seed by blocking caller-side origin inflow
    *     (wala/ML#726).
+   * @param iterationProducts Iteration-product destinations, whose types flow normally but whose
+   *     origin inflow drops {@link TensorOrigin#PARAMETER} (wala/ML#729).
    * @param errorLog The sink for shape-mismatch diagnostics.
    */
   public TensorTypeAnalysis(
@@ -650,9 +702,19 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> conv3ds,
       Set<PointsToSetVariable> drops,
       Set<PointsToSetVariable> parameters,
+      Set<PointsToSetVariable> iterationProducts,
       Map<PointerKey, AnalysisError> errorLog) {
     super(
-        createProblem(G, reshapeTypes, set_shapes, conv2ds, conv3ds, drops, parameters, errorLog));
+        createProblem(
+            G,
+            reshapeTypes,
+            set_shapes,
+            conv2ds,
+            conv3ds,
+            drops,
+            parameters,
+            iterationProducts,
+            errorLog));
     this.init = init;
     this.initOrigins = initOrigins;
   }
