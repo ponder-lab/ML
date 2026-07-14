@@ -14066,14 +14066,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Guard companion of {@link #testShapeAsListSlice()} (wala/ML#703): the slice bound is a φ of two
-   * constants, so within one context its points-to set is ambiguous and the bound resolver must not
-   * assert either slicing; the walk soundly reports an unknown ({@code ⊤}) shape. A bound that is a
-   * distinct constant per calling context stays precise (context sensitivity disambiguates it); the
-   * φ forces the ambiguity into a single context.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/710">wala/ML#710</a>): tighten to the union
-   * of the candidate slicings ({@code {(1, 30), (30)}}) once ambiguous constant bounds enumerate.
+   * Guard companion of {@link #testShapeAsListSlice()} (wala/ML#703, wala/ML#710): the slice bound
+   * is a φ of two constants, so within one context its points-to set is ambiguous and the bound
+   * resolver must not assert either slicing alone. The candidate bounds enumerate and the result
+   * unions the slicings under each ({@code {(1, 30), (30)}}), which the set-carrying type lattice
+   * expresses soundly and more precisely than the ⊤ the ambiguity previously forced.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -14088,7 +14085,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "f",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 1, 30), TensorType.of(FLOAT_32, 30))));
   }
 
   /**
