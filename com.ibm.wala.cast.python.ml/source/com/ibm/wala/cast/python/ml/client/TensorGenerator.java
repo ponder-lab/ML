@@ -249,7 +249,6 @@ public abstract class TensorGenerator {
   public static void clearCaches(PropagationCallGraphBuilder builder) {
     STORED_ATTRIBUTE_CACHE.remove(builder);
     BUILD_CONTRACT_CACHE.remove(builder);
-    QueryDependencyGraph.clear(builder);
   }
 
   /** The source of the tensor, represented by a points-to set variable. */

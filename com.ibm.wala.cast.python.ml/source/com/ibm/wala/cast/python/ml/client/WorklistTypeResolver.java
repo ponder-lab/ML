@@ -131,12 +131,22 @@ final class WorklistTypeResolver {
   }
 
   /**
-   * Uninstalls the builder's engine.
+   * Uninstalls the builder's engine, logging its end-of-analysis census (the successor of the
+   * retired wala/ML#591 recorder's summary; see wala/ML#727). The census reads only map sizes, so
+   * it costs no key hashing.
    *
    * @param builder The builder whose engine to remove.
    */
   static void uninstall(PropagationCallGraphBuilder builder) {
-    ACTIVE.remove(builder);
+    WorklistTypeResolver engine = ACTIVE.remove(builder);
+    if (engine == null) return;
+    LOGGER.fine(
+        () ->
+            "Query census: "
+                + engine.state.size()
+                + " queries, "
+                + engine.reads.values().stream().mapToInt(Set::size).sum()
+                + " dependency edges.");
   }
 
   /**
