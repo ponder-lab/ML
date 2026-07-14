@@ -14031,7 +14031,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Strided companion of {@link #testShapeAsListSlice()} (wala/ML#703, wala/ML#709): a constant
    * positive step over a shape list ({@code [::2]}) strides the resolved dimensions, composing the
-   * precise {@code (4, 6)}. Negative steps keep the ⊤ fallback.
+   * precise {@code (4, 6)}.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -14042,6 +14042,27 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testShapeSliceStep()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_shape_slice_step.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_6_FLOAT32)));
+  }
+
+  /**
+   * Negative-step companion of {@link #testShapeSliceStep()} (wala/ML#709): a constant negative
+   * step reverses and strides the shape list under Python's adjusted-indices semantics ({@code
+   * [::-2]} of {@code (4, 5, 6)} composes {@code (6, 4)}).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapeSliceNegativeStep()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_shape_slice_step_negative.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 6, 4))));
   }
 
   /**
