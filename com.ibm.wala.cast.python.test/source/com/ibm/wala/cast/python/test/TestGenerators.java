@@ -1,6 +1,6 @@
 package com.ibm.wala.cast.python.test;
 
-import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import com.ibm.wala.cast.util.test.TestCallGraphShape.GraphAssertion;
 import com.ibm.wala.ipa.callgraph.CGNode;
@@ -18,8 +18,8 @@ import org.junit.Test;
  * gen2.py} (a generator <em>function</em> yielding functions) is the call-graph shape that <a
  * href="https://github.com/wala/ML/issues/696">wala/ML#696</a>'s modeling supports: iterating
  * {@code gen()} reaches the yielded {@code f1}/{@code f2}/{@code f3} and their returned lambdas.
- * {@code gen1.py} and {@code gen3.py} exercise generator <em>expressions</em>, whose yielded
- * functions are not reachable on this front-end, a distinct modeling gap pinned by the tests below.
+ * {@code gen1.py} and {@code gen3.py} exercise generator <em>expressions</em>, which lower through
+ * the comprehension machinery (wala/ML#701) and reach their yielded functions the same way.
  */
 public class TestGenerators extends TestJythonCallGraphShape {
 
@@ -47,26 +47,42 @@ public class TestGenerators extends TestJythonCallGraphShape {
 
   /**
    * {@code gen1.py}: a generator <em>expression</em> {@code (f(3) for f in fs)} iterated and
-   * called. Unlike the generator function of {@code gen2.py}, the expression's yielded functions
-   * {@code f1}/{@code f2}/{@code f3} are <em>not</em> reachable; only the script itself is. This
-   * pins the current behavior. TODO(<a
-   * href="https://github.com/wala/ML/issues/701">wala/ML#701</a>): extend to reach {@code
-   * f1}/{@code f2}/{@code f3} once generator expressions are modeled at the call-graph level.
+   * called. The expression lowers through the comprehension machinery (wala/ML#701), so the
+   * comprehension body reaches the yielded {@code f1}/{@code f2}/{@code f3} and the iterating
+   * script reaches their returned lambdas, matching the generator-function shape of {@code
+   * gen2.py}.
    */
   protected static final List<GraphAssertion> assertionsGen1 =
-      List.of(new GraphAssertion(ROOT, new String[] {"script gen1.py"}));
+      List.of(
+          new GraphAssertion(ROOT, new String[] {"script gen1.py"}),
+          // The script reaches the comprehension body through the synthetic trampoline (see
+          // PythonComprehensionTrampolines), so no direct script-to-comprehension edge is
+          // asserted; the body's outgoing edges and the node-presence checks below pin it.
+          new GraphAssertion(
+              "script gen1.py",
+              new String[] {
+                "script gen1.py/f1/lambda1",
+                "script gen1.py/f2/lambda1",
+                "script gen1.py/f3/lambda1"
+              }),
+          new GraphAssertion(
+              "script gen1.py/comprehension1",
+              new String[] {"script gen1.py/f1", "script gen1.py/f2", "script gen1.py/f3"}));
 
   /**
-   * {@code gen3.py}: a generator <em>expression</em> returned from {@code makeGenerator(fs)}.
-   * {@code makeGenerator} is reachable, but the expression's yielded functions {@code f1}/{@code
-   * f2}/{@code f3} are not reachable, the same generator-expression gap as {@code gen1.py}. TODO(<a
-   * href="https://github.com/wala/ML/issues/701">wala/ML#701</a>): extend to reach {@code
-   * f1}/{@code f2}/{@code f3} once generator expressions are modeled at the call-graph level.
+   * {@code gen3.py}: a generator <em>expression</em> returned from {@code makeGenerator(fs)}. The
+   * expression lowers through the comprehension machinery (wala/ML#701), so its body (declared
+   * under {@code makeGenerator}) reaches the yielded {@code f1}/{@code f2}/{@code f3} and the
+   * iterating script reaches their returned lambdas, the same shape as {@code gen1.py} across the
+   * function boundary.
    */
   protected static final List<GraphAssertion> assertionsGen3 =
       List.of(
           new GraphAssertion(ROOT, new String[] {"script gen3.py"}),
-          new GraphAssertion("script gen3.py", new String[] {"script gen3.py/makeGenerator"}));
+          new GraphAssertion("script gen3.py", new String[] {"script gen3.py/makeGenerator"}),
+          new GraphAssertion(
+              "script gen3.py/makeGenerator/comprehension1",
+              new String[] {"script gen3.py/f1", "script gen3.py/f2", "script gen3.py/f3"}));
 
   /**
    * Guards {@code gen2.py}'s call-graph shape; see {@link #assertionsGen2}.
@@ -95,10 +111,9 @@ public class TestGenerators extends TestJythonCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph cg = process("gen1.py");
     verifyGraphAssertions(cg, assertionsGen1);
-    // The generator expression's yielded functions and their returned lambdas are not reachable;
-    // assert their absence so the gap cannot silently regress. When wala/ML#701 is fixed these will
-    // start failing, cueing an update to positive reachability.
-    assertNodesAbsent(
+    // The generator expression's yielded functions and their returned lambdas are all reachable
+    // (wala/ML#701); assert their presence so the fix cannot silently regress.
+    assertNodesPresent(
         cg,
         "Lscript gen1.py/f1",
         "Lscript gen1.py/f2",
@@ -121,9 +136,9 @@ public class TestGenerators extends TestJythonCallGraphShape {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     CallGraph cg = process("gen3.py");
     verifyGraphAssertions(cg, assertionsGen3);
-    // As with gen1.py, the generator expression's yielded functions and their returned lambdas are
-    // not reachable; assert their absence so the gap cannot silently regress (wala/ML#701).
-    assertNodesAbsent(
+    // As with gen1.py, the generator expression's yielded functions and their returned lambdas
+    // are all reachable (wala/ML#701); assert their presence so the fix cannot silently regress.
+    assertNodesPresent(
         cg,
         "Lscript gen3.py/f1",
         "Lscript gen3.py/f2",
@@ -134,19 +149,19 @@ public class TestGenerators extends TestJythonCallGraphShape {
   }
 
   /**
-   * Asserts that no call-graph node is declared by any of the given classes.
+   * Asserts that some call-graph node is declared by each of the given classes.
    *
    * @param cg The call graph to check.
-   * @param absentClassNames The qualified declaring-class names expected to have no node.
+   * @param presentClassNames The qualified declaring-class names expected to have a node.
    */
-  private static void assertNodesAbsent(CallGraph cg, String... absentClassNames) {
+  private static void assertNodesPresent(CallGraph cg, String... presentClassNames) {
     Set<String> declaringClasses = new HashSet<>();
     for (CGNode node : cg) {
       declaringClasses.add(node.getMethod().getDeclaringClass().getName().toString());
     }
-    for (String absent : absentClassNames) {
-      assertFalse(
-          "Expected no call-graph node declared by " + absent, declaringClasses.contains(absent));
+    for (String present : presentClassNames) {
+      assertTrue(
+          "Expected a call-graph node declared by " + present, declaringClasses.contains(present));
     }
   }
 }
