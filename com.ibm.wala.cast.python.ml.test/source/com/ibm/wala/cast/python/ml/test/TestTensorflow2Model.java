@@ -14045,9 +14045,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Negative-step companion of {@link #testShapeSliceStep()} (wala/ML#709): a constant negative
-   * step reverses and strides the shape list under Python's adjusted-indices semantics ({@code
-   * [::-2]} of {@code (4, 5, 6)} composes {@code (6, 4)}).
+   * Negative-step companion of {@link #testShapeSliceStep()} (wala/ML#709): constant negative steps
+   * reverse and stride the shape list under Python's adjusted-indices semantics, with absent,
+   * explicit, negative, and out-of-range bounds all composing their exact sub-shapes (the asserted
+   * set is the union across the fixture's four slicings, including the out-of-range positive-step
+   * clamp case).
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -14062,7 +14064,13 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "f",
         1,
         1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 6, 4))));
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 6, 4),
+                TensorType.of(FLOAT_32, 6, 5),
+                TensorType.of(FLOAT_32, 5, 4),
+                TENSOR_4_5_6_FLOAT32)));
   }
 
   /**
