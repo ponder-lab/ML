@@ -13117,6 +13117,113 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Malformed and unsatisfiable einsum equations (wala/ML#705): a stray or truncated dot, a second
+   * ellipsis in one term, a non-letter label, a malformed output term, a repeated output label, a
+   * label/rank mismatch, non-broadcastable batch axes, broadcast axes with no output ellipsis, and
+   * the empty equation all compose no shape, keeping the sound ⊤ fallback with a precise dtype.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsumMalformed()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_einsum_malformed.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Ellipsis identity with leading letters ({@code "i...j->i...j"}, wala/ML#705): labels before the
+   * ellipsis bind leading axes and labels after it bind trailing ones.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsumEllipsisLeadingLetter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_einsum_mixed.py", "f", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 4))));
+  }
+
+  /**
+   * Implicit mode with an ellipsis ({@code "i...j"}, wala/ML#705): the broadcast group precedes the
+   * once-occurring labels, composing {@code (3, 2, 4)} from a {@code (2, 3, 4)} input.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsumImplicitEllipsis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_einsum_mixed.py", "g", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 3, 2, 4))));
+  }
+
+  /**
+   * The mirror of {@link #testEinsumBatchBroadcast()} (wala/ML#705): the size-1 axis sits in the
+   * second input's ellipsis group, so the {@code (5,)} and {@code (2, 1)} groups still broadcast to
+   * {@code (2, 5)}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsumBatchBroadcastReversed()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_einsum_mixed.py",
+        "h",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 5, 3, 2))));
+  }
+
+  /**
+   * A statically-unknown batch axis ({@code keras.Input}'s {@code None}) refines against a known
+   * one (wala/ML#705): the runtime requires the unknown to be 1 or equal, so the known non-1 size
+   * wins in either input order.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsumSymbolicBatchRefined()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_einsum_mixed.py", "k", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2))));
+  }
+
+  /**
+   * Two statically-unknown batch axes (wala/ML#705): the broadcast keeps the rank but not the size,
+   * composing a rank-1 shape whose axis stays dynamic.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsumSymbolicBatchPair()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_einsum_mixed.py",
+        "m",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE)))));
+  }
+
+  /**
    * Shape-vector provenance (wala/ML#703): {@code tf.reshape(x, t.shape.as_list()[-2:])} resolves
    * to the source tensor's trailing sub-shape. The shape argument's points-to set is empty (the
    * {@code shape} member, {@code as_list}, and the slice are unmodeled in the heap), so {@code
