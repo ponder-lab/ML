@@ -3515,13 +3515,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    *
    * <p>The tracked tensor variables are {@code inputs} (concrete {@code (2, 5) int32}), the
    * embedding output (concrete {@code (2, 5, 8)} float32 with {@code Embedding} modeled,
-   * wala/ML#676), the convolution intermediate (⊤ on both axes &mdash; {@code Conv1D}/{@code
-   * GlobalAvgPool1D} remain unmodeled), and the softmax {@code Dense} head's output (vn=72, {@code
-   * float32} dtype but ⊤ shape &mdash; {@code DenseCall} hard-codes {@code float32} but loses the
-   * shape through the chained-layer body, <a
-   * href="https://github.com/wala/ML/issues/358">wala/ML#358</a>/<a
-   * href="https://github.com/wala/ML/issues/530">wala/ML#530</a>). These residual-⊤ body locals are
-   * pre-existing shape gaps, not new findings, and are downstream of the (exact) input signature.
+   * wala/ML#676), and the softmax {@code Dense} head's output ({@code float32} dtype but ⊤ shape
+   * &mdash; {@code DenseCall} hard-codes {@code float32} but loses the shape through the
+   * chained-layer body, <a href="https://github.com/wala/ML/issues/358">wala/ML#358</a>/<a
+   * href="https://github.com/wala/ML/issues/530">wala/ML#530</a>). The convolution intermediate is
+   * ⊥: {@code Conv1D}/{@code GlobalAvgPool1D} remain unmodeled, and its former both-axes-⊤ rode the
+   * spurious unknown-tensor composition of the enumerate over the unresolved {@code kernel_sizes}
+   * list, which wala/ML#730 removed. These residual body locals are pre-existing modeling gaps, not
+   * new findings, and are downstream of the (exact) input signature.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -3542,7 +3543,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "TextCNN.call",
         "textcnn_proj",
         1,
-        4,
+        3,
         Map.of(3, Set.of(TENSOR_2_5_INT32)));
   }
 

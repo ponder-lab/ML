@@ -2799,7 +2799,11 @@ public abstract class TensorGenerator {
   protected Set<TensorOrigin> getOrigins(PropagationCallGraphBuilder builder) {
     if (this instanceof DelegatingTensorGenerator) {
       TensorGenerator underlying = ((DelegatingTensorGenerator) this).getUnderlying();
-      if (underlying != null && underlying != this) return underlying.getOrigins(builder);
+      if (underlying == null || underlying == this)
+        // The value this generator delegates to never resolved, so there is no producer to
+        // classify: no origin evidence, not the TensorFlow default (wala/ML#730).
+        return EnumSet.noneOf(TensorOrigin.class);
+      return underlying.getOrigins(builder);
     }
     return EnumSet.of(TensorOrigin.TENSORFLOW);
   }

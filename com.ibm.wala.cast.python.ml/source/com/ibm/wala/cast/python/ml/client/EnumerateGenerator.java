@@ -50,6 +50,10 @@ public class EnumerateGenerator extends TensorGenerator implements DelegatingTen
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    // An unresolved iterable is ⊥ on every axis, matching getTensorTypes' convention above: a ⊤
+    // here composed a spurious unknown-tensor member (and, with it, an origin seed) for values
+    // like an enumerate over a string list, which are not tensors at all (wala/ML#730).
+    if (underlying == null) return Collections.emptySet();
     return null;
   }
 
@@ -65,6 +69,8 @@ public class EnumerateGenerator extends TensorGenerator implements DelegatingTen
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    // See getDefaultShapes: ⊥ must pair on both axes (wala/ML#730).
+    if (underlying == null) return Collections.emptySet();
     return EnumSet.of(DType.UNKNOWN);
   }
 
