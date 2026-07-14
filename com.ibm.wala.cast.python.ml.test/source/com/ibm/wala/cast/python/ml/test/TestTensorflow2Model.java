@@ -13034,12 +13034,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * Broadcasting-ellipsis einsum: the parser doesn't model {@code ...}, so it soundly falls back to
-   * an unknown ({@code ⊤}) shape while keeping the dtype precise. The Python runtime shape is
-   * {@code (2, 2)}; the analysis reports {@code ⊤} until the ellipsis form is modeled.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/705">wala/ML#705</a>): tighten to the
-   * precise shape once ellipsis and diagonal einsum forms are handled.
+   * Broadcasting-ellipsis einsum (wala/ML#705): each input's {@code ...} binds the axes its letters
+   * don't consume (here none), the groups broadcast, and the output's {@code ...} receives the
+   * result, composing the same {@code (2, 2)} shape as {@code "ij,jk->ik"}.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -13047,19 +13044,15 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * @throws IOException if the input fixture cannot be read.
    */
   @Test
-  public void testEinsumEllipsisFallback()
+  public void testEinsumEllipsis()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_einsum_ellipsis.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test("tf2_test_einsum_ellipsis.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT32)));
   }
 
   /**
-   * Diagonal einsum (a repeated label within one term, {@code "ii->i"}): the parser doesn't model
-   * diagonal extraction, so it soundly falls back to an unknown ({@code ⊤}) shape while keeping the
-   * dtype precise. The Python runtime shape is {@code (2,)}; the analysis reports {@code ⊤} until
-   * the diagonal form is modeled.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/705">wala/ML#705</a>): tighten to the
-   * precise shape once ellipsis and diagonal einsum forms are handled.
+   * Broadcasting-ellipsis einsum with real batch axes (wala/ML#705): the ellipsis groups {@code (2,
+   * 1)} and {@code (5,)} broadcast right-aligned to {@code (2, 5)}, which the output's {@code ...}
+   * receives ahead of the {@code ik} letters.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -13067,9 +13060,60 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * @throws IOException if the input fixture cannot be read.
    */
   @Test
-  public void testEinsumDiagonalFallback()
+  public void testEinsumBatchBroadcast()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_einsum_diag.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+    test(
+        "tf2_test_einsum_batch.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 5, 3, 2))));
+  }
+
+  /**
+   * Diagonal einsum (a repeated label within one term, {@code "ii->i"}, wala/ML#705): the repeated
+   * label names axes the runtime requires equal, so its occurrences refine one another and the
+   * output label composes the single {@code (2,)} diagonal dimension.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsumDiagonal()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_einsum_diag.py", "f", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 2))));
+  }
+
+  /**
+   * Trace einsum ({@code "ii"} in implicit mode, wala/ML#705): the repeated label drops from the
+   * implicit output, contracting the diagonal to a scalar.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsumTrace()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_einsum_trace.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  /**
+   * Batch-diagonal einsum ({@code "...ii->...i"}, wala/ML#705): the ellipsis and the repeated label
+   * compose, keeping the batch axis and extracting the diagonal of each square slice.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsumBatchDiagonal()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_einsum_trace.py", "g", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_32, 3, 2))));
   }
 
   /**

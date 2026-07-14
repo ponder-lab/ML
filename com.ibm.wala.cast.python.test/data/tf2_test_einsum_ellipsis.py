@@ -5,11 +5,10 @@ def f(a):
     pass
 
 
-# Broadcasting-ellipsis einsum: the generator doesn't model `...`, so the
-# analysis soundly reports an unknown (⊤) shape while keeping the dtype
-# precise. The shape assert below documents the Python runtime truth, not the
-# analysis result; `testEinsumEllipsisFallback` pins the analysis-side ⊤ until
-# wala/ML#705 models the ellipsis form.
+# Broadcasting-ellipsis einsum (wala/ML#705): each `...` binds the axes its
+# letters don't consume (here none, so the groups are empty) and the output's
+# `...` receives the broadcast result, composing the same (2, 2) shape as
+# "ij,jk->ik".
 a = tf.constant([[1.0, 2.0], [3.0, 4.0]])
 b = tf.constant([[5.0, 6.0], [7.0, 8.0]])
 result = tf.einsum("...ij,...jk->...ik", a, b)
