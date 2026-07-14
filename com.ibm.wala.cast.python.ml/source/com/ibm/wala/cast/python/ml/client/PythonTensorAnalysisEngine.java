@@ -19,6 +19,7 @@ import com.ibm.wala.cast.python.client.PythonAnalysisEngine;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ipa.callgraph.TrampolineReceiverContextSelector;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
+import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType;
@@ -51,6 +52,8 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationSystem;
+import com.ibm.wala.ipa.callgraph.propagation.cfa.CallString;
+import com.ibm.wala.ipa.callgraph.propagation.cfa.CallStringContextSelector;
 import com.ibm.wala.ipa.callgraph.propagation.cfa.nCFAContextSelector;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ssa.DefUse;
@@ -67,6 +70,7 @@ import com.ibm.wala.util.CancelException;
 import com.ibm.wala.util.NullProgressMonitor;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.graph.Graph;
 import com.ibm.wala.util.graph.impl.SlowSparseNumberedGraph;
 import com.ibm.wala.util.intset.IntSet;
@@ -215,16 +219,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                   CallSiteReference site,
                   IMethod callee,
                   InstanceKey[] actualParameters) {
-                String calleeClass = callee.getDeclaringClass().getName().toString();
                 // Apply k-CFA for any methods in the target framework, which includes internal
                 // helpers, as well as methods declared on user-defined `tf.keras.Model` subclasses
                 // (e.g. `NeuralNet.call`). Without the latter, a user model called from multiple
                 // sites (train vs. test) merges into one context-insensitive node, collapsing its
                 // layer-output allocations across callers and losing per-context shape
                 // (wala/ML#530).
-                if (calleeClass.contains(targetFramework)
-                    || isModelSubclassMethod(callee, modelClass)
-                    || isUserModelForwardMethod(calleeClass)) {
+                if (receivesTargetedContext(callee, modelClass)) {
                   return targetedCFA.getCalleeTarget(caller, site, callee, actualParameters);
                 }
                 return base.getCalleeTarget(caller, site, callee, actualParameters);
@@ -257,6 +258,25 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     for (IClass c = callee.getDeclaringClass(); c != null; c = c.getSuperclass())
       if (c.equals(modelClass)) return true;
     return false;
+  }
+
+  /**
+   * Determines whether {@code method} receives deep ({@code targetedCfaDepth}) k-CFA context rather
+   * than the context-insensitive base. This is the routing decision the call-graph builder's
+   * context selector applies (framework-API methods and {@code tf.keras.Model} forward methods); it
+   * is also the eligibility gate for the depth-too-short signal (wala/ML#601), since only these
+   * methods' contexts are governed by {@code targetedCfaDepth} &mdash; a ⊤ elsewhere cannot be
+   * resolved by deepening it.
+   *
+   * @param method The method whose context routing is being decided.
+   * @param modelClass The resolved {@code tf.keras.Model} class, or {@code null} when absent.
+   * @return {@code true} if {@code method} is routed through the targeted k-CFA selector.
+   */
+  private boolean receivesTargetedContext(IMethod method, IClass modelClass) {
+    String declaringClass = method.getDeclaringClass().getName().toString();
+    return declaringClass.contains(targetFramework)
+        || isModelSubclassMethod(method, modelClass)
+        || isUserModelForwardMethod(declaringClass);
   }
 
   /**
@@ -336,6 +356,28 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       MethodReference.findOrCreate(PythonTypes.NEXT_BUILTIN, AstMethodReference.fnSelector);
 
   private final Map<PointerKey, AnalysisError> errorLog = HashMapFactory.make();
+
+  /**
+   * A tensor value that resolved to ⊤ (unknown) at a call-string context saturated to the
+   * configured {@code targetedCfaDepth} (wala/ML#601). Because the value's node is routed through
+   * the targeted k-CFA selector (see {@link #receivesTargetedContext}) and its call string was
+   * truncated at the depth budget, a deeper {@code targetedCfaDepth} might separate the merged
+   * caller contexts and resolve the value; a ⊤ at an unsaturated context (its call string reached
+   * the call-graph root within the budget) cannot be helped by more depth, so it is not recorded.
+   * The signal over-approximates: saturation is necessary but not sufficient for a depth-induced ⊤,
+   * matching the warning (not error) semantics of the Java 8 Stream Refactoring precedent (see <a
+   * href="https://github.com/wala/ML/issues/601">wala/ML#601</a>).
+   *
+   * @param pointerKey The local pointer key of the ⊤ value.
+   * @param node The call-graph node holding the value.
+   * @param valueNumber The value number within {@code node}.
+   * @param callStringLength The (saturated) call-string length of {@code node}'s context, equal to
+   *     the configured {@code targetedCfaDepth}.
+   */
+  public record DepthLimitedResult(
+      LocalPointerKey pointerKey, CGNode node, int valueNumber, int callStringLength) {}
+
+  private final List<DepthLimitedResult> depthLimitedResults = new ArrayList<>();
 
   /**
    * Identifies the dataflow sources for tensor analysis.
@@ -1481,6 +1523,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
       tt.solve(new NullProgressMonitor());
 
+      recordDepthLimitedResults(tt, builder.getClassHierarchy());
+
       return tt;
     } finally {
       // The engine (with its query state) is uninstalled and the remaining per-builder memos are
@@ -1621,6 +1665,90 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
   public Map<PointerKey, AnalysisError> getErrors() {
     return errorLog;
+  }
+
+  /**
+   * The tensor values that resolved to ⊤ at a call-string context saturated to the configured
+   * {@code targetedCfaDepth} (wala/ML#601). A non-empty result signals that the depth may be too
+   * short: increasing {@code targetedCfaDepth} and re-analyzing to the point where this result is
+   * empty tunes the depth to the subject's fixed point, past which every remaining ⊤ is a genuine
+   * unknown rather than a merged-context artifact. Cleared and recomputed by each {@link
+   * #performAnalysis} run.
+   *
+   * @return The depth-limited ⊤ values from the most recent analysis; empty when the depth reached
+   *     the subject's fixed point or is {@code 0} (context-insensitive, no call-string budget to
+   *     deepen).
+   */
+  public List<DepthLimitedResult> getDepthLimitedResults() {
+    return depthLimitedResults;
+  }
+
+  /**
+   * Records the ⊤ values whose nodes sit at a call-string context saturated to {@code
+   * targetedCfaDepth}, the wala/ML#601 depth-too-short signal. Scans the solved analysis for ⊤
+   * tensor variables at local pointer keys, keeps those whose node is routed through the targeted
+   * k-CFA selector (only those depths are governed by {@code targetedCfaDepth}) and whose call
+   * string is saturated at the depth budget, and logs a single summary warning when any are found.
+   *
+   * @param tt The solved tensor-type analysis.
+   * @param cha The class hierarchy, used to resolve the {@code tf.keras.Model} class for the
+   *     targeted-context test.
+   */
+  private void recordDepthLimitedResults(TensorTypeAnalysis tt, IClassHierarchy cha) {
+    depthLimitedResults.clear();
+    // Depth 0 is context-insensitive: there is no call-string budget to deepen, so no ⊤ is
+    // attributable to a truncated call string.
+    if (targetedCfaDepth < 1) return;
+
+    IClass modelClass = cha.lookupClass(TensorFlowTypes.MODEL.getDeclaringClass());
+    for (Iterator<Pair<PointerKey, TensorVariable>> it = tt.iterator(); it.hasNext(); ) {
+      Pair<PointerKey, TensorVariable> pair = it.next();
+      if (!(pair.fst instanceof LocalPointerKey)) continue;
+      if (!hasTopShape(pair.snd)) continue;
+      LocalPointerKey key = (LocalPointerKey) pair.fst;
+      CGNode node = key.getNode();
+      if (!receivesTargetedContext(node.getMethod(), modelClass)) continue;
+      int length = measureCallStringLength(node.getContext());
+      if (length == targetedCfaDepth)
+        depthLimitedResults.add(new DepthLimitedResult(key, node, key.getValueNumber(), length));
+    }
+
+    if (!depthLimitedResults.isEmpty())
+      LOGGER.warning(
+          () ->
+              depthLimitedResults.size()
+                  + " tensor value(s) resolved to an unknown shape at a call string saturated to"
+                  + " the targeted CFA depth of "
+                  + targetedCfaDepth
+                  + "; a deeper depth may resolve them. See wala/ML#601.");
+  }
+
+  /**
+   * Determines whether a tensor variable carries a ⊤ (unknown-rank) shape: a type whose dimension
+   * list is {@code null}. A ⊤ shape is distinct from ⊥ (not a tensor, an empty type set) and from a
+   * known-rank shape with unknown sizes.
+   *
+   * @param variable The tensor variable to test.
+   * @return {@code true} if any of {@code variable}'s types has a {@code null} dimension list.
+   */
+  private static boolean hasTopShape(TensorVariable variable) {
+    for (TensorType type : variable.getTypes()) if (type.getDims() == null) return true;
+    return false;
+  }
+
+  /**
+   * Returns the call-string length of a context, or {@code -1} when the context exposes no call
+   * string (e.g. a receiver-instance context, whose separation is not governed by {@code
+   * targetedCfaDepth}).
+   *
+   * @param context The context to inspect.
+   * @return The number of call sites in the context's call string, or {@code -1} when absent.
+   */
+  private static int measureCallStringLength(Context context) {
+    Object callString = context.get(CallStringContextSelector.CALL_STRING);
+    return callString instanceof CallString
+        ? ((CallString) callString).getCallSiteRefs().length
+        : -1;
   }
 
   protected void addBypassLogic(IClassHierarchy cha, AnalysisOptions options) {
