@@ -11,10 +11,10 @@ import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -25,9 +25,15 @@ import java.util.TreeMap;
  * input (TF promotes per-input dtypes upstream of einsum, so the first input's dtype is the
  * canonical source).
  *
+ * <p>Models broadcasting ellipsis ({@code ...}, wala/ML#705): each input's ellipsis binds the axes
+ * its letters don't consume, the per-input groups broadcast right-aligned, and the output's {@code
+ * ...} receives the broadcast result. In implicit (arrow-less) mode the broadcast group precedes
+ * the once-occurring labels. Repeated labels within one term (diagonal/trace forms such as {@code
+ * "ii->i"} and {@code "ii"}) constrain the named axes equal and contribute a single output
+ * dimension.
+ *
  * <p>Falls back to ⊤ (unknown shape) when the equation can't be resolved to a single constant
- * string, uses broadcasting ellipsis ({@code ...}) or a repeated (diagonal) label within one term,
- * or when any input's shape is itself ⊤ — the sound answer in those cases.
+ * string, is malformed, or when any input's shape is itself ⊤ — the sound answer in those cases.
  *
  * <p>Argument layout at the call site: the {@code *inputs} varargs are spread positionally after
  * the equation (the packing into a single {@code inputs} tuple is callee-side only), so:
@@ -99,8 +105,8 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
   /**
    * Composes the precise output shape by parsing the equation and indexing each output label into
    * the corresponding input dimension. Returns ⊤ (unknown shape, {@code null}) when the equation or
-   * any input shape can't be resolved statically, or when the equation uses a form this parser
-   * doesn't model (ellipsis, diagonal labels).
+   * any input shape can't be resolved statically, or when the equation is malformed or
+   * unsatisfiable.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @return The single composed output shape, or {@code null} (⊤) when it can't be resolved.
@@ -155,20 +161,25 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
     return found;
   }
 
+  /** The parsed-label token representing a broadcasting ellipsis ({@code ...}) in a term. */
+  private static final String ELLIPSIS = "...";
+
   /**
    * Parses an einsum equation into its per-input label lists and its output label list.
    *
    * <p>Supports explicit ({@code "ij,jk->ik"}) and implicit ({@code "ij,jk"}) output modes. In
    * implicit mode the output is the labels occurring exactly once, in alphabetical order (the
-   * NumPy/TensorFlow convention). Returns {@code null} for forms this parser doesn't model:
-   * broadcasting ellipsis ({@code ...}), a malformed equation, or a non-letter label.
+   * NumPy/TensorFlow convention), preceded by the broadcast group when any input term carries an
+   * ellipsis. A broadcasting ellipsis parses to the {@link #ELLIPSIS} token, at most one per term.
+   * Returns {@code null} for a malformed equation (a stray dot, a second ellipsis or arrow, or a
+   * non-letter label).
    *
    * @param equation The raw equation string.
-   * @return The parsed equation, or {@code null} if it uses an unsupported or malformed form.
+   * @return The parsed equation, or {@code null} if it is malformed.
    */
   private static ParsedEquation parseEquation(String equation) {
     String eq = equation.replace(" ", "");
-    if (eq.isEmpty() || eq.contains("...")) return null; // Broadcasting ellipsis: ⊤.
+    if (eq.isEmpty()) return null;
 
     String inputsPart;
     String outputPart;
@@ -184,36 +195,54 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
 
     List<List<String>> inputs = new ArrayList<>();
     for (String term : inputsPart.split(",", -1)) {
-      List<String> labels = new ArrayList<>();
-      for (int i = 0; i < term.length(); i++) {
-        char c = term.charAt(i);
-        if (!isAsciiLetter(c)) return null;
-        labels.add(String.valueOf(c));
-      }
+      List<String> labels = parseTerm(term);
+      if (labels == null) return null;
       inputs.add(labels);
     }
 
-    List<String> output = new ArrayList<>();
+    List<String> output;
     if (outputPart == null) {
-      // Implicit mode: labels occurring exactly once, alphabetical (TreeMap key order).
+      output = new ArrayList<>();
+      // Implicit mode: the broadcast group first, then labels occurring exactly once,
+      // alphabetical (TreeMap key order).
+      if (inputs.stream().anyMatch(term -> term.contains(ELLIPSIS))) output.add(ELLIPSIS);
       Map<String, Integer> counts = new TreeMap<>();
       for (List<String> term : inputs)
-        for (String label : term) counts.merge(label, 1, Integer::sum);
+        for (String label : term) if (!ELLIPSIS.equals(label)) counts.merge(label, 1, Integer::sum);
       for (Map.Entry<String, Integer> entry : counts.entrySet())
         if (entry.getValue() == 1) output.add(entry.getKey());
     } else {
-      for (int i = 0; i < outputPart.length(); i++) {
-        char c = outputPart.charAt(i);
-        if (!isAsciiLetter(c)) return null;
-        String label = String.valueOf(c);
-        // TensorFlow/NumPy require output subscripts to be unique; a repeated output label (e.g.
-        // "ij,jk->ii") is rejected at runtime, so don't infer a shape for it.
-        if (output.contains(label)) return null;
-        output.add(label);
-      }
+      output = parseTerm(outputPart);
+      if (output == null) return null;
+      // TensorFlow/NumPy require output subscripts to be unique; a repeated output label (e.g.
+      // "ij,jk->ii") is rejected at runtime, so don't infer a shape for it.
+      for (int i = 0; i < output.size(); i++) if (output.indexOf(output.get(i)) != i) return null;
     }
 
     return new ParsedEquation(inputs, output);
+  }
+
+  /**
+   * Tokenizes one equation term into its labels: single letters plus at most one {@link #ELLIPSIS}.
+   *
+   * @param term The term text, with spaces already stripped.
+   * @return The label tokens, or {@code null} when the term is malformed (a stray dot, a second
+   *     ellipsis, or a non-letter label).
+   */
+  private static List<String> parseTerm(String term) {
+    List<String> labels = new ArrayList<>();
+    for (int i = 0; i < term.length(); i++) {
+      char c = term.charAt(i);
+      if (c == '.') {
+        if (labels.contains(ELLIPSIS)) return null; // A second ellipsis is malformed.
+        if (i + 2 >= term.length() || term.charAt(i + 1) != '.' || term.charAt(i + 2) != '.')
+          return null; // A dot outside an ellipsis is malformed.
+        labels.add(ELLIPSIS);
+        i += 2;
+      } else if (isAsciiLetter(c)) labels.add(String.valueOf(c));
+      else return null;
+    }
+    return labels;
   }
 
   /**
@@ -228,27 +257,40 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
    * dimension and the runtime requires the sizes equal, so a statically-known occurrence refines an
    * unknown or dynamic one (wala/ML#704); two known occurrences that disagree fall back to ⊤.
    *
+   * <p>A repeated label within one term (diagonal/trace, wala/ML#705) names axes the runtime
+   * requires equal, so its occurrences flow through the same refinement and contribute one output
+   * dimension. Each term's ellipsis binds the axes its letters don't consume; the per-term groups
+   * broadcast right-aligned, and the output's ellipsis receives the broadcast result. A nonempty
+   * broadcast group with no ellipsis in the output is rejected at runtime, so no shape is inferred
+   * for it.
+   *
    * @param parsed The parsed equation.
    * @param inputShapes The resolved shape of each input, in input order.
    * @return The composed output shape (possibly containing {@code null} unknown-size entries), or
-   *     {@code null} (⊤) when a term's label count doesn't match its input's rank, a term repeats a
-   *     label (diagonal, unmodeled), a shared label maps to conflicting known dimensions, or an
-   *     output label names no input.
+   *     {@code null} (⊤) when a term's label count doesn't match its input's rank, a shared label
+   *     maps to conflicting known dimensions, the ellipsis groups don't broadcast, or an output
+   *     label names no input.
    */
   private static List<Dimension<?>> composeOutputShape(
       ParsedEquation parsed, List<List<Dimension<?>>> inputShapes) {
     Map<String, Dimension<?>> labelToDim = new HashMap<>();
+    List<Dimension<?>> broadcast = new ArrayList<>();
 
     for (int i = 0; i < parsed.inputs().size(); i++) {
       List<String> labels = parsed.inputs().get(i);
       List<Dimension<?>> shape = inputShapes.get(i);
-      if (labels.size() != shape.size()) return null; // Rank mismatch: labels vs. shape.
+      int ellipsis = labels.indexOf(ELLIPSIS);
+      int letters = ellipsis < 0 ? labels.size() : labels.size() - 1;
+      int groupRank = shape.size() - letters;
+      // Without an ellipsis the letters must consume the rank exactly; with one they may not
+      // exceed it.
+      if (ellipsis < 0 ? groupRank != 0 : groupRank < 0) return null;
 
-      Set<String> seenInTerm = new HashSet<>();
       for (int d = 0; d < labels.size(); d++) {
         String label = labels.get(d);
-        if (!seenInTerm.add(label)) return null; // Repeated label within a term (diagonal): ⊤.
-        Dimension<?> dim = shape.get(d);
+        if (ELLIPSIS.equals(label)) continue;
+        // Letters before the ellipsis bind leading axes; letters after it bind trailing ones.
+        Dimension<?> dim = shape.get(ellipsis >= 0 && d > ellipsis ? d - 1 + groupRank : d);
         if (!labelToDim.containsKey(label)) labelToDim.put(label, dim);
         else {
           Dimension<?> previous = labelToDim.get(label);
@@ -265,14 +307,62 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
           else if (!previousKnown && previous == null && dim != null) labelToDim.put(label, dim);
         }
       }
+
+      if (ellipsis >= 0) {
+        broadcast = mergeBroadcastGroups(broadcast, shape.subList(ellipsis, ellipsis + groupRank));
+        if (broadcast == null) return null; // Known sizes that don't broadcast.
+      }
     }
 
     List<Dimension<?>> output = new ArrayList<>(parsed.output().size());
     for (String label : parsed.output()) {
+      if (ELLIPSIS.equals(label)) {
+        output.addAll(broadcast);
+        continue;
+      }
       if (!labelToDim.containsKey(label)) return null; // Output label names no input.
       output.add(labelToDim.get(label)); // May be null: known rank, unknown size.
     }
+    // Broadcast axes with no ellipsis to receive them make the equation unsatisfiable (the
+    // runtime rejects it), so no shape is inferred.
+    if (!broadcast.isEmpty() && !parsed.output().contains(ELLIPSIS)) return null;
     return output;
+  }
+
+  /**
+   * Broadcasts two ellipsis dimension groups right-aligned, per the NumPy/TensorFlow rules: absent
+   * axes act as size 1, a known size-1 axis yields the other side, and equal sizes yield
+   * themselves. A known non-1 size against a statically-unknown axis yields the known size (the
+   * runtime requires the unknown to be 1 or equal); two unequal known non-1 sizes don't broadcast.
+   * Statically-unknown pairs yield a raw {@code null} unknown-size entry unless equal.
+   *
+   * @param a The accumulated broadcast group.
+   * @param b The next term's ellipsis group.
+   * @return The broadcast group, or {@code null} when two known sizes don't broadcast.
+   */
+  private static List<Dimension<?>> mergeBroadcastGroups(
+      List<Dimension<?>> a, List<Dimension<?>> b) {
+    int rank = Math.max(a.size(), b.size());
+    List<Dimension<?>> result = new ArrayList<>(Collections.nCopies(rank, null));
+    for (int i = 0; i < rank; i++) {
+      boolean inA = i < a.size();
+      boolean inB = i < b.size();
+      Dimension<?> da = inA ? a.get(a.size() - 1 - i) : null;
+      Dimension<?> db = inB ? b.get(b.size() - 1 - i) : null;
+      Dimension<?> merged;
+      if (!inA) merged = db; // Absent axes broadcast as size 1.
+      else if (!inB) merged = da;
+      else if (da instanceof NumericDim && db instanceof NumericDim) {
+        if (da.equals(db)) merged = da;
+        else if (Integer.valueOf(1).equals(da.value())) merged = db;
+        else if (Integer.valueOf(1).equals(db.value())) merged = da;
+        else return null; // Unequal known non-1 sizes don't broadcast.
+      } else if (da instanceof NumericDim) merged = Integer.valueOf(1).equals(da.value()) ? db : da;
+      else if (db instanceof NumericDim) merged = Integer.valueOf(1).equals(db.value()) ? da : db;
+      else merged = Objects.equals(da, db) ? da : null; // Unknown pair: unknown size.
+      result.set(rank - 1 - i, merged);
+    }
+    return result;
   }
 
   /**
