@@ -1395,7 +1395,6 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // counter is reset even when the analysis exits early via `CancelException`, so neither
       // leaks into the next run.
       WorklistTypeResolver.uninstall(builder);
-      QueryDependencyGraph.of(builder).summarize();
       TensorGenerator.clearCaches(builder);
       reportAndResetInterpreterUnavailableMisses();
     }
