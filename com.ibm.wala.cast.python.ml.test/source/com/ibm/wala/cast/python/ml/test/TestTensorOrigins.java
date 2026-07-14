@@ -152,8 +152,9 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
    * {@code encode_labels}'s enumerate-element read leaks the TensorFlow default through its
    * unresolved container (TODO: <a href="https://github.com/wala/ML/issues/728">wala/ML#728</a>),
    * and {@code build_graph} additionally carries the elementwise no-evidence default on its
-   * unmodeled scipy operators plus {@code PARAMETER} provenance from {@code enumerate(nodes)}, the
-   * confirmed wala/ML#726 semantics for parameter-derived defs.
+   * unmodeled scipy operators plus {@code PARAMETER} provenance in its operator products, the
+   * confirmed wala/ML#726 semantics; its enumerate product reads the evidence-free empty set now
+   * that the iteration filter blocks the parameter constant (wala/ML#729).
    *
    * <p>Assertions are per-method censuses (how many locals read each origin set) rather than
    * per-value-number, so front-end numbering drift does not break the anchor.
@@ -199,13 +200,42 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
         Map.of(
             EnumSet.of(TensorOrigin.NUMPY),
             4L,
-            EnumSet.of(TensorOrigin.PARAMETER),
+            EnumSet.noneOf(TensorOrigin.class),
             1L,
             EnumSet.of(TensorOrigin.TENSORFLOW),
             1L,
             EnumSet.of(TensorOrigin.TENSORFLOW, TensorOrigin.PARAMETER),
             4L),
         census(buildGraph.locals()));
+  }
+
+  /**
+   * The wala/ML#729 pin: a def derived by {@code enumerate}-iterating a numpy-fed tensor parameter
+   * reads numpy-only origins. Iterating a symbolic tensor raises under {@code tf.function} tracing,
+   * so an iteration product is an eager-only value of the fed data: the PA aliases it with its
+   * iterable, and without the iteration-product filter the parameter constant crossed onto it (the
+   * pre-fix reading was {@code {NUMPY, PARAMETER}}). The parameter itself keeps its {@code
+   * {PARAMETER}} seed, and the {@code map}/{@code for}-loop contrast functions carry no
+   * tensor-typed locals at all.
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testEnumerateOrigin() throws ClassHierarchyException, CancelException, IOException {
+    Map<String, MethodOrigins> methodOrigins =
+        getMethodOrigins("tf2_test_enumerate_origin.py", ".f.do(", ".g.do(", ".h.do(");
+
+    MethodOrigins f = methodOrigins.get(".f.do(");
+    assertEquals(Map.of(EnumSet.of(TensorOrigin.PARAMETER), 1L), census(f.parameters()));
+    assertEquals(Map.of(EnumSet.of(TensorOrigin.NUMPY), 2L), census(f.locals()));
+
+    for (String fragment : List.of(".g.do(", ".h.do(")) {
+      MethodOrigins contrast = methodOrigins.get(fragment);
+      assertEquals(Map.of(EnumSet.of(TensorOrigin.PARAMETER), 1L), census(contrast.parameters()));
+      assertEquals(Map.of(), census(contrast.locals()));
+    }
   }
 
   /**
@@ -247,7 +277,38 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
       throws ClassHierarchyException, CancelException, IOException {
     List<File> pathFiles =
         List.of(new File(TestTensorOrigins.class.getResource("/" + pythonPath).getPath()));
-    PythonTensorAnalysisEngine engine = makeEngine(pathFiles, projectFilenames);
+    return getMethodOrigins(makeEngine(pathFiles, projectFilenames), methodFragments);
+  }
+
+  /**
+   * Single-file variant of {@link #getMethodOrigins(String, String[], String...)}.
+   *
+   * @param filename The Python test file to analyze.
+   * @param methodFragments The signature fragments naming the methods under test.
+   * @return The observed origins, keyed by fragment.
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  private Map<String, MethodOrigins> getMethodOrigins(String filename, String... methodFragments)
+      throws ClassHierarchyException, CancelException, IOException {
+    return getMethodOrigins(makeEngine(emptyList(), filename), methodFragments);
+  }
+
+  /**
+   * Core of the {@code getMethodOrigins} variants: builds the call graph, runs the analysis, and
+   * collects the per-method origins.
+   *
+   * @param engine The analysis engine over the files under test.
+   * @param methodFragments The signature fragments naming the methods under test.
+   * @return The observed origins, keyed by fragment.
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test files cannot be read.
+   */
+  private Map<String, MethodOrigins> getMethodOrigins(
+      PythonTensorAnalysisEngine engine, String... methodFragments)
+      throws ClassHierarchyException, CancelException, IOException {
     PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
 
     CallGraph CG = builder.makeCallGraph(builder.getOptions());

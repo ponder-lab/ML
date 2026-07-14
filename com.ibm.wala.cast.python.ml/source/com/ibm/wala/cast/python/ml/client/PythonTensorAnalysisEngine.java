@@ -1167,6 +1167,27 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * Returns whether the given invoke resolves to the {@code enumerate} builtin. The declared target
+   * is a generic trampoline ({@code LCodeBody}), so resolution goes through {@code
+   * getPossibleTargets}, matching {@code isEnumerateFirstFieldRead}.
+   *
+   * @param node The {@link CGNode} containing the invoke.
+   * @param invoke The invoke instruction to test.
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the targets.
+   * @return {@code true} iff a resolved callee is the {@code enumerate} builtin.
+   */
+  private static boolean isEnumerateCall(
+      CGNode node, SSAAbstractInvokeInstruction invoke, PropagationCallGraphBuilder builder) {
+    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite()))
+      if (callee
+          .getMethod()
+          .getReference()
+          .getDeclaringClass()
+          .equals(PythonTypes.ENUMERATE_BUILTIN)) return true;
+    return false;
+  }
+
+  /**
    * Reports whether {@code v}'s defining instruction is the first-field read of the tuple yielded
    * by Python's {@code enumerate} builtin &mdash; i.e., the {@code step} slot in {@code for step, x
    * in enumerate(iterable)}. Such variables are integer indices, not tensors, even though the
@@ -1370,6 +1391,34 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       for (PointsToSetVariable p : parameters)
         initOrigins.put(p, EnumSet.of(TensorOrigin.PARAMETER));
 
+      // Iteration products do not inherit the hybridization-frame origin (wala/ML#729): iterating
+      // a symbolic tensor raises under tf.function tracing, so a value iterated out of a parameter
+      // is an eager-only product of the fed data, whose provenance comes from its own seed's
+      // creator walk. The PA aliases iteration results with their iterables, so without a filter
+      // the parameter constant crosses onto the products. Collected here are the aliased
+      // destinations: enumerate results, each-element reads, and their tuple-field unwraps.
+      Set<PointsToSetVariable> iterationProducts = HashSetFactory.make();
+      for (PointsToSetVariable v : dataflow) {
+        if (!(v.getPointerKey() instanceof LocalPointerKey)) continue;
+        LocalPointerKey lpk = (LocalPointerKey) v.getPointerKey();
+        if (lpk.getNode().getDU() == null || lpk.getNode().getIR() == null) continue;
+        SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
+        if (def instanceof EachElementGetInstruction) {
+          iterationProducts.add(v);
+          continue;
+        }
+        if (def instanceof PythonPropertyRead) {
+          SSAInstruction objDef =
+              lpk.getNode().getDU().getDef(((PythonPropertyRead) def).getObjectRef());
+          if (objDef instanceof EachElementGetInstruction) iterationProducts.add(v);
+          continue;
+        }
+        if (def instanceof SSAAbstractInvokeInstruction
+            && isEnumerateCall(lpk.getNode(), (SSAAbstractInvokeInstruction) def, builder))
+          iterationProducts.add(v);
+      }
+      LOGGER.fine(() -> "wala/ML#729 iteration-product destinations: " + iterationProducts.size());
+
       TensorTypeAnalysis tt =
           new TensorTypeAnalysis(
               dataflow,
@@ -1381,6 +1430,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               conv3ds,
               drops,
               parameters,
+              iterationProducts,
               errorLog);
 
       tt.solve(new NullProgressMonitor());
