@@ -18,6 +18,7 @@ import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.util.CancelException;
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -27,6 +28,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 import org.junit.Test;
 
 /**
@@ -138,6 +140,143 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
     assertEquals(
         List.of(EnumSet.of(TensorOrigin.TENSORFLOW)),
         sinkOrigins.argumentOrigins().get("consume_tf"));
+  }
+
+  /**
+   * The wala/ML#726 consumer contract on the vendored {@code deep_recommenders} Cora subject (the
+   * Hybridize-Functions-Refactoring#774 methods), anchored in-repo so the consumer's re-measure is
+   * corroboration rather than the gate. The nested helpers ({@code _sample_mask}, {@code
+   * _get_labels}) satisfy the contract cleanly: every tensor-typed local reads exactly {@code
+   * {NUMPY}} (an origin-keyed consumer declines them as convertible data preparation) and every
+   * tensor-typed parameter reads {@code {PARAMETER}}. The other two capture observed deviations:
+   * {@code encode_labels}'s enumerate-element read leaks the TensorFlow default through its
+   * unresolved container (TODO: <a href="https://github.com/wala/ML/issues/728">wala/ML#728</a>),
+   * and {@code build_graph} additionally carries the elementwise no-evidence default on its
+   * unmodeled scipy operators plus {@code PARAMETER} provenance from {@code enumerate(nodes)}, the
+   * confirmed wala/ML#726 semantics for parameter-derived defs.
+   *
+   * <p>Assertions are per-method censuses (how many locals read each origin set) rather than
+   * per-value-number, so front-end numbering drift does not break the anchor.
+   *
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test file cannot be read.
+   */
+  @Test
+  public void testCoraDataPrepOrigins()
+      throws ClassHierarchyException, CancelException, IOException {
+    Map<String, MethodOrigins> methodOrigins =
+        getMethodOrigins(
+            "tr_proj",
+            new String[] {
+              "tr_proj/deep_recommenders/__init__.py",
+              "tr_proj/deep_recommenders/datasets/__init__.py",
+              "tr_proj/deep_recommenders/datasets/cora.py",
+              "tr_proj/tf2_test_cora_origins.py"
+            },
+            ".Cora.build_graph.do(",
+            ".Cora.encode_labels.do(",
+            "._sample_mask",
+            "._get_labels");
+
+    MethodOrigins sampleMask = methodOrigins.get("._sample_mask");
+    assertEquals(Map.of(EnumSet.of(TensorOrigin.PARAMETER), 1L), census(sampleMask.parameters()));
+    assertEquals(Map.of(EnumSet.of(TensorOrigin.NUMPY), 2L), census(sampleMask.locals()));
+
+    MethodOrigins getLabels = methodOrigins.get("._get_labels");
+    assertEquals(Map.of(EnumSet.of(TensorOrigin.PARAMETER), 1L), census(getLabels.parameters()));
+    assertEquals(Map.of(EnumSet.of(TensorOrigin.NUMPY), 4L), census(getLabels.locals()));
+
+    MethodOrigins encodeLabels = methodOrigins.get(".Cora.encode_labels.do(");
+    assertEquals(Map.of(EnumSet.of(TensorOrigin.PARAMETER), 1L), census(encodeLabels.parameters()));
+    assertEquals(
+        Map.of(EnumSet.of(TensorOrigin.NUMPY), 2L, EnumSet.of(TensorOrigin.TENSORFLOW), 1L),
+        census(encodeLabels.locals()));
+
+    MethodOrigins buildGraph = methodOrigins.get(".Cora.build_graph.do(");
+    assertEquals(Map.of(EnumSet.of(TensorOrigin.PARAMETER), 1L), census(buildGraph.parameters()));
+    assertEquals(
+        Map.of(
+            EnumSet.of(TensorOrigin.NUMPY),
+            4L,
+            EnumSet.of(TensorOrigin.PARAMETER),
+            1L,
+            EnumSet.of(TensorOrigin.TENSORFLOW),
+            1L,
+            EnumSet.of(TensorOrigin.TENSORFLOW, TensorOrigin.PARAMETER),
+            4L),
+        census(buildGraph.locals()));
+  }
+
+  /**
+   * Counts how many value numbers read each origin set.
+   *
+   * @param side The per-value-number origins of one method side (parameters or locals).
+   * @return The census, keyed by origin set.
+   */
+  private static Map<Set<TensorOrigin>, Long> census(Map<Integer, Set<TensorOrigin>> side) {
+    return side.values().stream().collect(Collectors.groupingBy(s -> s, Collectors.counting()));
+  }
+
+  /**
+   * The origins observed in one method under test.
+   *
+   * @param parameters Per parameter value number, the origins union across contexts.
+   * @param locals Per non-parameter value number with tensor-typed state, the origins union across
+   *     contexts.
+   */
+  private record MethodOrigins(
+      Map<Integer, Set<TensorOrigin>> parameters, Map<Integer, Set<TensorOrigin>> locals) {}
+
+  /**
+   * Runs the tensor analysis over the given project files and collects, for each method whose
+   * signature contains one of the given fragments, the per-value-number origins of its tensor-typed
+   * parameters and locals (unioned across calling contexts).
+   *
+   * @param pythonPath The Python path root for module resolution (a test-resources directory).
+   * @param projectFilenames The script module file names making up the project.
+   * @param methodFragments The signature fragments naming the methods under test.
+   * @return The observed origins, keyed by fragment; a fragment absent from the map matched no
+   *     tensor-typed state at all.
+   * @throws ClassHierarchyException If the class hierarchy cannot be built.
+   * @throws CancelException If the analysis is canceled.
+   * @throws IOException If the test files cannot be read.
+   */
+  private Map<String, MethodOrigins> getMethodOrigins(
+      String pythonPath, String[] projectFilenames, String... methodFragments)
+      throws ClassHierarchyException, CancelException, IOException {
+    List<File> pathFiles =
+        List.of(new File(this.getClass().getResource("/" + pythonPath).getPath()));
+    PythonTensorAnalysisEngine engine = makeEngine(pathFiles, projectFilenames);
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+
+    CallGraph CG = builder.makeCallGraph(builder.getOptions());
+    assertNotNull(CG);
+
+    TensorTypeAnalysis analysis = engine.performAnalysis(builder);
+
+    Map<String, MethodOrigins> ret = new HashMap<>();
+
+    analysis.forEach(
+        pt -> {
+          if (!(pt.fst instanceof LocalPointerKey)) return;
+          LocalPointerKey localPointerKey = (LocalPointerKey) pt.fst;
+          String signature = localPointerKey.getNode().getMethod().getSignature();
+
+          for (String fragment : methodFragments) {
+            if (!signature.contains(fragment)) continue;
+            MethodOrigins origins =
+                ret.computeIfAbsent(
+                    fragment, k -> new MethodOrigins(new HashMap<>(), new HashMap<>()));
+            Map<Integer, Set<TensorOrigin>> side =
+                localPointerKey.isParameter() ? origins.parameters() : origins.locals();
+            side.computeIfAbsent(
+                    localPointerKey.getValueNumber(), k -> EnumSet.noneOf(TensorOrigin.class))
+                .addAll(pt.snd.getOrigins());
+          }
+        });
+
+    return ret;
   }
 
   /**
