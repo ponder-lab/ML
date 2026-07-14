@@ -3998,21 +3998,16 @@ public abstract class TensorGenerator {
             || Objects.equals(upper, UNRESOLVED_BOUND)
             || Objects.equals(step, UNRESOLVED_BOUND))
           return ShapeResult.unknown(); // Non-constant bound: the sub-list's rank is unknown.
-        // A constant positive step strides the bounded range; a non-positive one keeps the ⊤
-        // fallback, covering negative steps (which also reverse) and the invalid zero
-        // (wala/ML#709).
+        // A constant step strides the bounded range, and a negative one also reverses
+        // (wala/ML#709); only the invalid zero keeps the ⊤ fallback.
         int stride = step == null ? 1 : step;
-        if (stride < 1) return ShapeResult.unknown();
+        if (stride == 0) return ShapeResult.unknown();
 
-        // Slice per member; the base's unknown remainder rides through (wala/ML#718).
+        // Slice per member with Python's adjusted-indices semantics; the base's unknown
+        // remainder rides through (wala/ML#718).
         Set<List<Dimension<?>>> sliced = HashSetFactory.make();
         for (List<Dimension<?>> dims : base.members()) {
-          int n = dims.size();
-          int from = lower == null ? 0 : lower < 0 ? Math.max(0, n + lower) : Math.min(lower, n);
-          int to = upper == null ? n : upper < 0 ? Math.max(0, n + upper) : Math.min(upper, n);
-          List<Dimension<?>> taken = new ArrayList<>();
-          for (int i = from; i < to; i += stride) taken.add(dims.get(i));
-          sliced.add(taken);
+          sliced.add(sliceDims(dims, lower, upper, stride));
         }
         return new ShapeResult(sliced, base.hasUnknown());
       }
@@ -4379,6 +4374,40 @@ public abstract class TensorGenerator {
           .getReference()
           .equals(TensorFlowTypes.SHAPE_OF.getDeclaringClass())) return false;
     return true;
+  }
+
+  /**
+   * Takes the {@code [lower:upper:step]} slice of the given dimension list under Python's
+   * adjusted-indices semantics: absent bounds default by the step's sign, negative bounds count
+   * from the end, out-of-range bounds clamp, and a negative step reverses (wala/ML#709).
+   *
+   * @param dims The dimensions to slice.
+   * @param lower The lower bound, or {@code null} when absent.
+   * @param upper The upper bound, or {@code null} when absent.
+   * @param step The non-zero step.
+   * @return The sliced dimensions.
+   */
+  private static List<Dimension<?>> sliceDims(
+      List<Dimension<?>> dims, Integer lower, Integer upper, int step) {
+    int n = dims.size();
+    int start;
+    if (lower == null) start = step > 0 ? 0 : n - 1;
+    else {
+      start = lower < 0 ? lower + n : lower;
+      if (start < 0) start = step > 0 ? 0 : -1;
+      if (start >= n) start = step > 0 ? n : n - 1;
+    }
+    int stop;
+    if (upper == null) stop = step > 0 ? n : -1;
+    else {
+      stop = upper < 0 ? upper + n : upper;
+      if (stop < 0) stop = step > 0 ? 0 : -1;
+      if (stop >= n) stop = step > 0 ? n : n - 1;
+    }
+    List<Dimension<?>> taken = new ArrayList<>();
+    if (step > 0) for (int i = start; i < stop; i += step) taken.add(dims.get(i));
+    else for (int i = start; i > stop; i += step) taken.add(dims.get(i));
+    return taken;
   }
 
   /**
