@@ -146,17 +146,13 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
    * The wala/ML#726 consumer contract on the vendored {@code deep_recommenders} Cora subject (the
    * Hybridize-Functions-Refactoring#774 methods), anchored in-repo so the consumer's re-measure is
    * corroboration rather than the gate. The nested helpers ({@code _sample_mask}, {@code
-   * _get_labels}) and {@code encode_labels} satisfy the contract cleanly: every tensor-typed local
-   * reads exactly {@code {NUMPY}} (an origin-keyed consumer declines them as convertible data
-   * preparation) and every tensor-typed parameter reads {@code {PARAMETER}}; {@code
-   * encode_labels}'s enumerate over its string-list attribute stopped surfacing a spurious unknown
-   * tensor once an unresolved iterable became ⊥ on every axis (wala/ML#730). {@code build_graph}
-   * captures the remaining deviations, all type-level over-typing of semantically non-tensor values
-   * rather than origin defects (wala/ML#731): two {@code slice(None, None, None)} constructor
-   * objects reading the cross-caller TensorFlow union through the shared slice builtin, and the
-   * evidence-free enumerate iterator object. Its subscripts classify {@code {NUMPY}} through the
-   * wala/ML#731 receiver delegation, and no def carries {@code PARAMETER}, since only user code
-   * bodies seed the hybridization-frame origin.
+   * _get_labels}), {@code encode_labels}, and {@code build_graph} all satisfy the contract: every
+   * tensor-typed local reads exactly {@code {NUMPY}} (an origin-keyed consumer declines all four as
+   * convertible data preparation) and every tensor-typed parameter reads {@code {PARAMETER}}.
+   * Reaching this took the whole wala/ML#728&ndash;wala/ML#732 arc: an unresolved enumerate
+   * iterable became ⊥ on every axis (wala/ML#730), the hybridization-frame origin became
+   * user-code-only and slices classify through their receiver (wala/ML#731), and the non-tensor
+   * slice-constructor and iterator objects pin empty via {@code drops} (wala/ML#732).
    *
    * <p>Assertions are per-method censuses (how many locals read each origin set) rather than
    * per-value-number, so front-end numbering drift does not break the anchor.
@@ -196,15 +192,7 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
 
     MethodOrigins buildGraph = methodOrigins.get(".Cora.build_graph.do(");
     assertEquals(Map.of(EnumSet.of(TensorOrigin.PARAMETER), 1L), census(buildGraph.parameters()));
-    assertEquals(
-        Map.of(
-            EnumSet.of(TensorOrigin.NUMPY),
-            6L,
-            EnumSet.noneOf(TensorOrigin.class),
-            1L,
-            EnumSet.of(TensorOrigin.TENSORFLOW),
-            2L),
-        census(buildGraph.locals()));
+    assertEquals(Map.of(EnumSet.of(TensorOrigin.NUMPY), 6L), census(buildGraph.locals()));
   }
 
   /**
@@ -227,7 +215,9 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
 
     MethodOrigins f = methodOrigins.get(".f.do(");
     assertEquals(Map.of(EnumSet.of(TensorOrigin.PARAMETER), 1L), census(f.parameters()));
-    assertEquals(Map.of(EnumSet.of(TensorOrigin.NUMPY), 2L), census(f.locals()));
+    // One numpy-only local: the comprehension def. The enumerate result itself is an iterator
+    // object, pinned non-tensor since wala/ML#732.
+    assertEquals(Map.of(EnumSet.of(TensorOrigin.NUMPY), 1L), census(f.locals()));
 
     for (String fragment : List.of(".g.do(", ".h.do(")) {
       MethodOrigins contrast = methodOrigins.get(fragment);

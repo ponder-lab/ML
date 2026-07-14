@@ -1945,6 +1945,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
+   *     <p>The local count excludes the {@code enumerate(targets)} iterator object, pinned
+   *     non-tensor since wala/ML#732; the element and its TensorFlow uses stay typed.
    */
   @Test
   public void testTuckerTargetConvert()
@@ -1962,7 +1964,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "TuckERLoader.target_convert",
         "tucker_proj",
         1,
-        7,
+        6,
         Map.of(
             3,
             Set.of(
@@ -2537,6 +2539,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
+   *     <p>The local count excludes the two all-constant slice-constructor objects under the
+   *     multi-dim subscript, pinned non-tensor since wala/ML#732; the subscript result stays typed.
    */
   @Test
   public void testMusicTransformerPositionEmbedding()
@@ -2551,7 +2555,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "DynamicPositionEmbedding.call",
         "musictx_proj",
         1,
-        6,
+        4,
         Map.of(3, Set.of(TensorType.of(FLOAT_32, 2, 50, 64))));
   }
 
@@ -11454,6 +11458,8 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
+   *     <p>The local count excludes the two all-constant slice-constructor objects under the {@code
+   *     [:, :-1]} subscripts, pinned non-tensor since wala/ML#732.
    */
   @Test
   public void testMusicTransformerPrepareTrainData()
@@ -11464,7 +11470,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "MusicTransformer.__prepare_train_data",
         "musictransformer_proj",
         2,
-        7,
+        5,
         Map.of(
             2,
             Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE),
