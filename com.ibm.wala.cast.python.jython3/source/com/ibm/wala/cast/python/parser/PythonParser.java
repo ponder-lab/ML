@@ -1697,7 +1697,11 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
 
     @Override
     public CAstNode visitGeneratorExp(GeneratorExp arg0) throws Exception {
-      return fail(arg0);
+      // A generator expression lowers like a list comprehension (wala/ML#701): the analysis is
+      // flow-insensitive, so eagerly materializing the lazily-yielded elements into a list is a
+      // sound over-approximation, and iteration reaches the yielded values through the same
+      // comprehension machinery.
+      return visitComp(arg0.getInternalElt(), arg0.getInternalGenerators(), PythonTypes.list);
     }
 
     @Override
