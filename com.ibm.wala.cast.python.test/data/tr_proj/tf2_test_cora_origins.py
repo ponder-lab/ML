@@ -1,5 +1,3 @@
-import numpy as np
-
 from deep_recommenders.datasets.cora import Cora
 
 # Driver for the `Cora` data-preparation methods from
@@ -13,6 +11,4 @@ cora = Cora()
 ids, features, labels = cora.load_content()
 graph = cora.build_graph(ids)
 encoded = cora.encode_labels(labels)
-(train_labels, train_mask), (valid_labels, valid_mask), (test_labels, test_mask) = (
-    cora.split_labels(labels)
-)
+(_, _), (_, _), (_, _) = cora.split_labels(labels)

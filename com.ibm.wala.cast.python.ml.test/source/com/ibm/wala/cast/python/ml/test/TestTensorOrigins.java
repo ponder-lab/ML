@@ -246,7 +246,7 @@ public class TestTensorOrigins extends TestPythonMLCallGraphShape {
       String pythonPath, String[] projectFilenames, String... methodFragments)
       throws ClassHierarchyException, CancelException, IOException {
     List<File> pathFiles =
-        List.of(new File(this.getClass().getResource("/" + pythonPath).getPath()));
+        List.of(new File(TestTensorOrigins.class.getResource("/" + pythonPath).getPath()));
     PythonTensorAnalysisEngine engine = makeEngine(pathFiles, projectFilenames);
     PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
 
