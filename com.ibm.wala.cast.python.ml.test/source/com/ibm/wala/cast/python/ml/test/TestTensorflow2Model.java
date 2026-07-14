@@ -14089,6 +14089,55 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Degradation arms of the candidate-bound enumeration (wala/ML#710): a combination count past the
+   * cap, a zero step candidate, a non-numeric constant candidate, more candidates on a single bound
+   * than the cap, and a non-constant bound in each of the three positions all keep the sound ⊤
+   * fallback rather than asserting any particular slicing.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapeSliceAmbiguousDegrade()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_shape_slice_ambiguous2.py",
+        "top",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Precision arms of the candidate-bound enumeration (wala/ML#710): a propagated {@code None}
+   * alongside a numeric candidate unions both slicings ({@code (4, 5, 1)} and {@code (4, 5)}), and
+   * numerically equal {@code int} and {@code float} candidates deduplicate to one slicing ({@code
+   * (5,)}).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapeSliceAmbiguousPrecise()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_shape_slice_ambiguous2.py",
+        "precise",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 4, 5, 1),
+                TensorType.of(FLOAT_32, 4, 5),
+                TensorType.of(FLOAT_32, 5))));
+  }
+
+  /**
    * Tier-5 generator (wala/ML#449): {@code tf.math.top_k(input, k)}. Returns a {@code (values,
    * indices)} 2-tuple. The dedicated {@link com.ibm.wala.cast.python.ml.client.TopK} generator
    * implements {@link com.ibm.wala.cast.python.ml.client.TupleElementProvider} with per-index dtype

@@ -85,6 +85,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -4703,7 +4704,8 @@ public abstract class TensorGenerator {
    * @param st The node's symbol table.
    * @param invoke The slice-builtin invoke.
    * @param useIndex The use index of the bound ({@code 2}=lower, {@code 3}=upper, {@code 4}=step).
-   * @return The candidate values, or {@code null} when the bound does not resolve to constants.
+   * @return The candidate values, or {@code null} when the bound does not resolve to constants with
+   *     exact {@code int} projections.
    */
   private static List<Integer> sliceBoundCandidates(
       PropagationCallGraphBuilder builder,
@@ -4722,18 +4724,35 @@ public abstract class TensorGenerator {
     if (pk == null || builder.getPropagationSystem().isImplicit(pk)) return null;
     OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
     if (pts == null || pts.isEmpty()) return null;
-    List<Integer> candidates = new ArrayList<>();
+    Set<Integer> candidates = new LinkedHashSet<>();
     for (InstanceKey ik : pts) {
       if (!(ik instanceof ConstantKey)) return null;
       Object value = ((ConstantKey<?>) ik).getValue();
       Integer candidate;
       if (value == null) candidate = null; // Propagated None: the Python default.
-      else if (value instanceof Number) candidate = ((Number) value).intValue();
-      else return null;
-      if (!candidates.contains(candidate)) candidates.add(candidate);
+      else if (value instanceof Number) {
+        candidate = intProjectionOrNull((Number) value);
+        if (candidate == null) return null;
+      } else return null;
+      candidates.add(candidate);
       if (candidates.size() > SLICE_CANDIDATE_COMBINATION_CAP) return null;
     }
-    return candidates;
+    return new ArrayList<>(candidates);
+  }
+
+  /**
+   * Projects a constant {@link Number} onto an {@code int} exactly. A value outside the {@code int}
+   * range or with a fractional part has no exact projection; truncating it would assert a bound or
+   * index the runtime value violates.
+   *
+   * @param value The constant numeric value to project.
+   * @return The exact {@code int} projection, or {@code null} when none exists.
+   */
+  private static Integer intProjectionOrNull(Number value) {
+    double doubleValue = value.doubleValue();
+    long longValue = value.longValue();
+    if (doubleValue != longValue || longValue != (int) longValue) return null;
+    return (int) longValue;
   }
 
   /**
@@ -4777,7 +4796,10 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, CGNode node, SymbolTable st, int vn) {
     if (vn <= 0) return null;
     if (st.isNullConstant(vn)) return null; // Explicit None.
-    if (st.isNumberConstant(vn)) return ((Number) st.getConstantValue(vn)).intValue();
+    if (st.isNumberConstant(vn)) {
+      Integer projection = intProjectionOrNull((Number) st.getConstantValue(vn));
+      return projection == null ? UNRESOLVED_BOUND : projection;
+    }
 
     // Constant-fold a unary minus of a resolvable operand.
     SSAInstruction def = node.getDU() != null ? node.getDU().getDef(vn) : null;
@@ -4801,8 +4823,9 @@ public abstract class TensorGenerator {
         continue;
       }
       if (!(value instanceof Number)) return UNRESOLVED_BOUND;
-      int intValue = ((Number) value).intValue();
-      if (found != null && found != intValue) return UNRESOLVED_BOUND; // Ambiguous.
+      Integer intValue = intProjectionOrNull((Number) value);
+      if (intValue == null) return UNRESOLVED_BOUND; // No exact int projection.
+      if (found != null && !found.equals(intValue)) return UNRESOLVED_BOUND; // Ambiguous.
       found = intValue;
     }
     // A points-to set holding both None and a numeric constant is ambiguous; collapsing it to
