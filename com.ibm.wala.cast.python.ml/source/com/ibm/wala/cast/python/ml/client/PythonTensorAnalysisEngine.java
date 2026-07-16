@@ -1417,6 +1417,38 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         setCalls.put(src, onlyType);
       }
 
+      // An einsum call site with a constant equation constrains each tensor operand: the
+      // operand's term fixes its rank, and shared labels take their extents from operands whose
+      // shapes are statically known (wala/ML#704). Refine — rather than pin — the operand
+      // destinations, so unknown-shape members recover the proven axes while concrete members
+      // pass through untouched. An operand whose call sites prove disagreeing constraints is
+      // left alone.
+      Map<PointsToSetVariable, List<Dimension<?>>> refinements = HashMapFactory.make();
+      Set<PointsToSetVariable> conflictingRefinements = HashSetFactory.make();
+      for (PointsToSetVariable src : sources) {
+        TensorGenerator generator;
+        try {
+          generator = getGenerator(src, builder);
+        } catch (IllegalArgumentException e) {
+          continue;
+        }
+        if (!(generator instanceof Einsum)) continue;
+        for (Map.Entry<PointerKey, List<Dimension<?>>> entry :
+            ((Einsum) generator).getOperandShapeConstraints(builder).entrySet()) {
+          if (builder.getPropagationSystem().isImplicit(entry.getKey())) continue;
+          PointsToSetVariable operand =
+              builder.getPropagationSystem().findOrCreatePointsToSet(entry.getKey());
+          List<Dimension<?>> previous = refinements.putIfAbsent(operand, entry.getValue());
+          if (previous != null && !previous.equals(entry.getValue()))
+            conflictingRefinements.add(operand);
+        }
+      }
+      refinements.keySet().removeAll(conflictingRefinements);
+      LOGGER.fine(() -> "wala/ML#704 einsum operand refinements: " + refinements.size());
+      for (Map.Entry<PointsToSetVariable, List<Dimension<?>>> r : refinements.entrySet())
+        LOGGER.fine(
+            () -> "  refine: " + describe(r.getKey().getPointerKey()) + " -> " + r.getValue());
+
       Map<PointsToSetVariable, TensorType> shapeOps = HashMapFactory.make();
       shapeOps.putAll(handleShapeSourceOp(builder, dataflow, reshape, 2));
 
@@ -1514,6 +1546,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               initOrigins,
               shapeOps,
               setCalls,
+              refinements,
               conv2ds,
               conv3ds,
               drops,

@@ -1,22 +1,33 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.logging.Logger;
 
 /**
  * Generator for {@code tf.einsum(equation, *inputs, **kwargs)}. Parses the equation string (e.g.
@@ -50,6 +61,8 @@ import java.util.TreeMap;
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
 public class Einsum extends PassThroughUnaryTensorGenerator {
+
+  private static final Logger LOGGER = Logger.getLogger(Einsum.class.getName());
 
   /**
    * Parameter positions and keyword names for {@code tf.einsum(equation, *inputs, **kwargs)}.
@@ -291,21 +304,7 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
         if (ELLIPSIS.equals(label)) continue;
         // Letters before the ellipsis bind leading axes; letters after it bind trailing ones.
         Dimension<?> dim = shape.get(ellipsis >= 0 && d > ellipsis ? d - 1 + groupRank : d);
-        if (!labelToDim.containsKey(label)) labelToDim.put(label, dim);
-        else {
-          Dimension<?> previous = labelToDim.get(label);
-          // A shared label names the same dimension, and einsum requires the sizes equal at
-          // runtime, so a statically-known occurrence refines an unknown or dynamic one
-          // (wala/ML#704: the contracted hidden dim is known on the input but dynamic on the
-          // reshaped weight). Two known occurrences that disagree mean the constraint isn't
-          // satisfiable, so fall back to ⊤.
-          boolean previousKnown = previous instanceof NumericDim;
-          boolean dimKnown = dim instanceof NumericDim;
-          if (previousKnown && dimKnown) {
-            if (!previous.equals(dim)) return null;
-          } else if (dimKnown) labelToDim.put(label, dim);
-          else if (!previousKnown && previous == null && dim != null) labelToDim.put(label, dim);
-        }
+        if (!bindLabelOccurrence(labelToDim, label, dim)) return null;
       }
 
       if (ellipsis >= 0) {
@@ -327,6 +326,130 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
     // runtime rejects it), so no shape is inferred.
     if (!broadcast.isEmpty() && !parsed.output().contains(ELLIPSIS)) return null;
     return output;
+  }
+
+  /**
+   * Binds one occurrence of a subscript label to the dimension it names. A shared label names the
+   * same dimension, and einsum requires the sizes equal at runtime, so a statically-known
+   * occurrence refines an unknown or dynamic one (wala/ML#704: the contracted hidden dim is known
+   * on the input but dynamic on the reshaped weight). Two known occurrences that disagree mean the
+   * constraint isn't satisfiable.
+   *
+   * @param labelToDim The bindings accumulated so far; updated in place.
+   * @param label The subscript label.
+   * @param dim The dimension this occurrence names; may be {@code null} (known rank, unknown size).
+   * @return {@code false} iff this occurrence conflicts with a known binding (two unequal known
+   *     sizes).
+   */
+  private static boolean bindLabelOccurrence(
+      Map<String, Dimension<?>> labelToDim, String label, Dimension<?> dim) {
+    if (!labelToDim.containsKey(label)) {
+      labelToDim.put(label, dim);
+      return true;
+    }
+    Dimension<?> previous = labelToDim.get(label);
+    boolean previousKnown = previous instanceof NumericDim;
+    boolean dimKnown = dim instanceof NumericDim;
+    if (previousKnown && dimKnown) return previous.equals(dim);
+    if (dimKnown) labelToDim.put(label, dim);
+    else if (!previousKnown && previous == null && dim != null) labelToDim.put(label, dim);
+    return true;
+  }
+
+  /**
+   * Derives, for each tensor operand whose own shape does not resolve, the shape the equation
+   * proves for it: the operand's term fixes its rank (when the term carries no ellipsis), and each
+   * label shared with an operand whose shape is statically known fixes that axis's extent, since
+   * einsum requires same-label sizes equal at runtime (wala/ML#704). An axis the equation leaves
+   * unconstrained carries {@link UnresolvedDim}: its size is a fixed runtime value the analysis
+   * could not compute, with no {@code None} evidence (wala/ML#721); an axis bound to another
+   * operand's {@link DynamicDim} or {@link TensorType.RaggedDim} keeps that evidence.
+   *
+   * <p>The einsum source is the synthetic summary's return value, so the operands live caller-side:
+   * each caller's invoke supplies its own operand value numbers, resolved in that caller's frame
+   * (the {@code getArgumentShapesViaCallers} walk). Operand shapes are read in exact mode
+   * (wala/ML#716): a label binding asserts an equality on another operand, so a partially resolved
+   * shape set is not proof.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return A map from each caller-side operand's {@link PointerKey} to the shape the equation
+   *     proves for it; empty when the equation does not resolve, every operand resolves on its own,
+   *     or a resolved operand contradicts the equation. An operand whose call sites prove
+   *     disagreeing constraints is omitted.
+   */
+  public Map<PointerKey, List<Dimension<?>>> getOperandShapeConstraints(
+      PropagationCallGraphBuilder builder) {
+    String equation = this.getEquation(builder);
+    LOGGER.fine(() -> "getOperandShapeConstraints: equation=" + equation);
+    if (equation == null) return Collections.emptyMap();
+
+    ParsedEquation parsed = parseEquation(equation);
+    if (parsed == null) return Collections.emptyMap();
+    int inputCount = parsed.inputs().size();
+
+    Map<PointerKey, List<Dimension<?>>> ret = new LinkedHashMap<>();
+    Set<PointerKey> conflicting = new HashSet<>();
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      CGNode caller = callerInvoke.fst;
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction)) continue;
+      PythonInvokeInstruction invoke = (PythonInvokeInstruction) callerInvoke.snd;
+      // The *inputs varargs are spread positionally after the equation (input i sits at
+      // positional index i + 1, i.e., use i + 2); a call site with fewer positional arguments
+      // than the equation's terms is left alone.
+      if (invoke.getNumberOfPositionalParameters() < inputCount + 2) continue;
+
+      List<Set<List<Dimension<?>>>> operandShapes = new ArrayList<>(inputCount);
+      for (int i = 0; i < inputCount; i++) {
+        int argVn = invoke.getUse(Parameters.INPUTS.getIndex() + i + 1);
+        Set<List<Dimension<?>>> shapes = this.getShapes(builder, caller, argVn, true);
+        final int index = i;
+        LOGGER.fine(() -> "getOperandShapeConstraints: input " + index + " shapes=" + shapes);
+        operandShapes.add(shapes);
+      }
+
+      // Bind the labels of the operands whose own shape resolves to a single known form. A
+      // resolved operand whose rank contradicts its term means the call fails at runtime; so
+      // does a shared label with two unequal known sizes. No constraint is proven either way.
+      Map<String, Dimension<?>> labelToDim = new HashMap<>();
+      boolean contradicted = false;
+      for (int i = 0; i < inputCount && !contradicted; i++) {
+        Set<List<Dimension<?>>> shapes = operandShapes.get(i);
+        if (shapes == null || shapes.size() != 1) continue;
+        List<String> labels = parsed.inputs().get(i);
+        if (labels.contains(ELLIPSIS)) continue;
+        List<Dimension<?>> shape = shapes.iterator().next();
+        if (shape.size() != labels.size()) contradicted = true;
+        for (int d = 0; d < labels.size() && !contradicted; d++)
+          contradicted = !bindLabelOccurrence(labelToDim, labels.get(d), shape.get(d));
+      }
+      if (contradicted) continue;
+
+      for (int i = 0; i < inputCount; i++) {
+        Set<List<Dimension<?>>> shapes = operandShapes.get(i);
+        if (shapes != null && shapes.size() == 1)
+          continue; // Resolves on its own; nothing to prove.
+        List<String> labels = parsed.inputs().get(i);
+        if (labels.contains(ELLIPSIS)) continue; // The term does not fix the operand's rank.
+        List<Dimension<?>> constraint = new ArrayList<>(labels.size());
+        for (String label : labels) {
+          Dimension<?> dim = labelToDim.get(label);
+          constraint.add(
+              dim instanceof NumericDim || dim instanceof DynamicDim || dim instanceof RaggedDim
+                  ? dim
+                  : UnresolvedDim.INSTANCE);
+        }
+        PointerKey operandKey =
+            builder
+                .getPointerAnalysis()
+                .getHeapModel()
+                .getPointerKeyForLocal(caller, invoke.getUse(Parameters.INPUTS.getIndex() + i + 1));
+        List<Dimension<?>> previous = ret.putIfAbsent(operandKey, constraint);
+        if (previous != null && !previous.equals(constraint)) conflicting.add(operandKey);
+      }
+    }
+    ret.keySet().removeAll(conflicting);
+    return ret;
   }
 
   /**

@@ -2235,10 +2235,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * {@code (8, 100, U, U)}/{@code (8, 10, U, U)} members are the {@code DenseLayer3dProj} contexts'
    * inputs (the attention's return value): the worklist engine converges the loop-carried union
    * from its non-cyclic base and all four proj contexts carry them (wala/ML#365 Phase 3 resolved
-   * the fourth, the wala/ML#718 residual under the retired round-based resolution). The remaining
-   * pure-⊤/shape-⊤ members come from the guard-φ phantom and non-entry contexts. The {@code w}
-   * parameter keeps rank 3 and {@code float32} (its chain is layer-local) but no numeric
-   * dimensions, since the {@code build}-computed head sizes also derive from the config.
+   * the fourth, the wala/ML#718 residual under the retired round-based resolution). The formerly
+   * shape-⊤ members carry equation-proven ranks since the einsum-operand refinement (wala/ML#704):
+   * {@code DenseLayer3d.call}'s {@code use_einsum} arm makes its input an operand of the rank-3
+   * {@code "BFH"} term and {@code DenseLayer3dProj.call}'s of the rank-4 {@code "BFND"} term, and
+   * the refined parameter states transport through the call boundary into this helper. Every proven
+   * axis stays {@link UnresolvedDim} in vivo, since {@code w}'s extents are config-derived; the
+   * rank-3 unknown-dtype member is the {@code DenseLayer3d}-path input that resolves no dtype
+   * (wala/ML#736). The {@code w} parameter keeps rank 3 and {@code float32} (its chain is
+   * layer-local) but no numeric dimensions, since the {@code build}-computed head sizes also derive
+   * from the config.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2258,8 +2264,16 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(
             2,
             Set.of(
-                TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE,
-                TENSOR_UNKNOWN_SHAPE_FLOAT32,
+                new TensorType(
+                    UNKNOWN,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)),
                 new TensorType(FLOAT_32, asList(new NumericDim(8), UnresolvedDim.INSTANCE)),
                 new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
                 new TensorType(
@@ -2296,6 +2310,57 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
                 new TensorType(
                     FLOAT_32,
                     asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))))));
+  }
+
+  /**
+   * In-vivo anchor for the wala/ML#704 einsum-operand refinement at its reopen measurement point:
+   * the vendored NLPGNN {@code DenseLayer3dProj.call}'s {@code input_tensor}, formerly {@code ? of
+   * float32} (shape ⊤) in every context. The {@code use_einsum} arm's {@code
+   * einsum("BFND,NDH->BFH", input_tensor, w)} proves the input rank 4; the shared {@code N}/{@code
+   * D} extents stay {@link UnresolvedDim} in vivo because {@code w}'s dimensions are config-derived
+   * (contrast {@link #testDense3dProj()}, where the weight's static extents transfer). The {@code
+   * (8, 100, U, U)}/{@code (8, 10, U, U)} members arrive already rank-4 from the entry contracts
+   * (wala/ML#717) and pass through the refinement with their concrete leading dims intact.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNlpgnnFullDenseProjInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        NLPGNN_FULL_PROJECT_FILES,
+        "nlpgnn/layers/dense.py",
+        "DenseLayer3dProj.call",
+        "nlpgnn_full_proj",
+        1,
+        8,
+        Map.of(
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(8),
+                        new NumericDim(100),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(8),
+                        new NumericDim(10),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)))));
   }
 
   /**
@@ -13348,6 +13413,38 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 3, 5))));
+  }
+
+  /**
+   * NLPGNN's {@code DenseLayer3dProj} (wala/ML#704): the input arrives with an unresolvable shape
+   * (the wala/ML#711 opaque-bound reshape), but {@code einsum("BFND,NDH->BFH", input_tensor, w)}
+   * proves the input is rank 4, and the shared {@code N}/{@code D} labels take their extents from
+   * the reshaped weight's statically-known {@code (3, 5, 6)}. The {@code B}/{@code F} axes carry no
+   * {@code None} evidence, so they are {@code Unresolved} (wala/ML#721), not {@code Dynamic}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDense3dProj()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dense3d_proj.py",
+        "DenseLayer3dProj.call",
+        1,
+        4,
+        Map.of(
+            3,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        new NumericDim(3),
+                        new NumericDim(5))))));
   }
 
   /**

@@ -307,6 +307,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Graph<PointsToSetVariable> G,
       Map<PointsToSetVariable, TensorType> reshapeNodes,
       Map<PointsToSetVariable, TensorType> set_shapes,
+      Map<PointsToSetVariable, List<Dimension<?>>> refinements,
       Set<PointsToSetVariable> conv2ds,
       Set<PointsToSetVariable> conv3ds,
       Set<PointsToSetVariable> drops,
@@ -404,6 +405,92 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
             @Override
             public String toString() {
               return "set shape to " + setShapeTo;
+            }
+          }
+
+          /**
+           * A transfer function for einsum-operand destinations (wala/ML#704): each incoming tensor
+           * type is refined against the shape the einsum equation proves for the operand. An
+           * unknown-rank (⊤-shape) member takes the proven shape outright, keeping its dtype and
+           * layout; a member of the proven rank fills each non-numeric axis from the constraint's
+           * known one. A member that contradicts the constraint (a different rank) passes through
+           * unchanged: such a value fails at the einsum call at runtime, and the analysis reports
+           * what flows rather than fabricating agreement. Unlike {@code SetShapeOp} this is a
+           * monotone per-member refinement, not a pin: predecessors keep contributing, and concrete
+           * incoming state is never discarded.
+           *
+           * <p>Origin handling matches the transfer this op displaces on its destination: a
+           * parameter destination blocks origin inflow ({@code ParameterBarrierOp}, wala/ML#726),
+           * an iteration-product destination filters {@link TensorOrigin#PARAMETER} ({@code
+           * ParameterOriginFilterOp}, wala/ML#729), and any other destination unions origins as the
+           * plain transfer does.
+           */
+          final class RefineShapeOp extends UnaryOperator<TensorVariable> {
+            private final List<Dimension<?>> constraint;
+            private final PointsToSetVariable destination;
+
+            public RefineShapeOp(List<Dimension<?>> constraint, PointsToSetVariable destination) {
+              this.constraint = constraint;
+              this.destination = destination;
+            }
+
+            @Override
+            public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
+              if (lhs == null || rhs == null) return NOT_CHANGED;
+              boolean changed = false;
+              if (rhs.state != null) {
+                if (lhs.state == null) lhs.state = HashSetFactory.make();
+                for (TensorType t : rhs.state) changed |= lhs.state.add(this.refine(t));
+              }
+              if (!parameters.contains(this.destination)) {
+                for (TensorOrigin origin : rhs.origins)
+                  if (origin != TensorOrigin.PARAMETER
+                      || !iterationProducts.contains(this.destination))
+                    changed |= lhs.origins.add(origin);
+              }
+              return changed ? CHANGED : NOT_CHANGED;
+            }
+
+            /**
+             * Refines one incoming member against the proven operand shape.
+             *
+             * @param t The incoming tensor type.
+             * @return The refined type: the proven shape (with {@code t}'s dtype and layout) when
+             *     {@code t}'s rank is unknown, {@code t} with each non-numeric axis filled from the
+             *     constraint's known one when the ranks agree, and {@code t} itself otherwise.
+             */
+            private TensorType refine(TensorType t) {
+              List<Dimension<?>> dims = t.getDims();
+              if (dims == null) return TensorType.of(t.getDType(), this.constraint, t.layout());
+              if (dims.size() != this.constraint.size()) return t;
+              List<Dimension<?>> merged = new ArrayList<>(dims.size());
+              boolean refined = false;
+              for (int i = 0; i < dims.size(); i++) {
+                Dimension<?> have = dims.get(i);
+                Dimension<?> want = this.constraint.get(i);
+                if (!(have instanceof NumericDim) && want instanceof NumericDim) {
+                  merged.add(want);
+                  refined = true;
+                } else merged.add(have);
+              }
+              return refined ? TensorType.of(t.getDType(), merged, t.layout()) : t;
+            }
+
+            @Override
+            public int hashCode() {
+              return this.constraint.hashCode() * 31 + this.destination.hashCode();
+            }
+
+            @Override
+            public boolean equals(Object o) {
+              return o instanceof RefineShapeOp
+                  && this.constraint.equals(((RefineShapeOp) o).constraint)
+                  && this.destination.equals(((RefineShapeOp) o).destination);
+            }
+
+            @Override
+            public String toString() {
+              return "refine shape against einsum operand constraint " + this.constraint;
             }
           }
 
@@ -620,6 +707,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               return DropOp.INSTANCE;
             } else if (set_shapes.containsKey(dst)) {
               return new SetShapeOp(set_shapes.get(dst));
+            } else if (refinements.containsKey(dst)) {
+              return new RefineShapeOp(refinements.get(dst), dst);
             } else if (parameters.contains(dst)) {
               return ParameterBarrierOp.INSTANCE;
             } else if (iterationProducts.contains(dst)) {
@@ -682,6 +771,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    *     same edges as the types.
    * @param reshapeTypes Destinations pinned by an explicit reshape target shape.
    * @param set_shapes Destinations pinned by an {@code x.set_shape(s)} assertion (wala/ML#509).
+   * @param refinements Einsum-operand destinations refined against the shape the einsum equation
+   *     proves for them (wala/ML#704); incoming members are refined, never discarded.
    * @param conv2ds Destinations of 2D convolutions, rank-checked by {@code ConvOp}.
    * @param conv3ds Destinations of 3D convolutions, rank-checked by {@code ConvOp}.
    * @param drops Destinations pinned to empty-and-fixed (wala/ML#409).
@@ -698,6 +789,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Map<PointsToSetVariable, Set<TensorOrigin>> initOrigins,
       Map<PointsToSetVariable, TensorType> reshapeTypes,
       Map<PointsToSetVariable, TensorType> set_shapes,
+      Map<PointsToSetVariable, List<Dimension<?>>> refinements,
       Set<PointsToSetVariable> conv2ds,
       Set<PointsToSetVariable> conv3ds,
       Set<PointsToSetVariable> drops,
@@ -709,6 +801,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
             G,
             reshapeTypes,
             set_shapes,
+            refinements,
             conv2ds,
             conv3ds,
             drops,
