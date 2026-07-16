@@ -529,7 +529,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
 
             @Override
             public String toString() {
-              return "feed dtypes from the einsum dtype-source operand";
+              return "feed dtypes from the dtype-source operand";
             }
           }
 
