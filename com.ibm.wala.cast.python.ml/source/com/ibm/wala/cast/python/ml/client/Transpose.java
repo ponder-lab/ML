@@ -193,4 +193,17 @@ public class Transpose extends PassThroughUnaryTensorGenerator {
     // Exactly one distinct candidate is the resolved permutation; zero or several is ⊤.
     return candidates.size() == 1 ? candidates.iterator().next() : null;
   }
+
+  /**
+   * This generator transforms its input's shape, so forwarding operand shapes would overclaim; the
+   * feed carries dtype only (wala/ML#682).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The dtype-only feed over the caller-side input keys, or {@code null} when none is
+   *     located.
+   */
+  @Override
+  protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
+    return this.getTypeFeed(builder, TypeFeedKind.DTYPE_ONLY);
+  }
 }

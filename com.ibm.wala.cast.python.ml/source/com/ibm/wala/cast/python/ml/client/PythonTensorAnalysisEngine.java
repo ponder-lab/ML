@@ -1450,19 +1450,23 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         LOGGER.fine(
             () -> "  refine: " + describe(r.getKey().getPointerKey()) + " -> " + r.getValue());
 
-      // A generator whose dtype walk fails seeds an unknown-dtype member that no later evidence
-      // can remove, although the dtype-source operand's dtype often exists in dataflow state the
-      // PTS-based walk cannot see (wala/ML#736; the wala/ML#661/wala/ML#570 substrate). Replace
-      // such a pure-⊤ seed with a synthetic dataflow edge from each dtype-source operand the
-      // generator declares: the result then takes the operand's converged dtypes, and the
-      // unknown-dtype member is never born.
-      Map<PointsToSetVariable, Set<PointsToSetVariable>> dtypeFeeds = HashMapFactory.make();
+      // A generator whose shape walk fails seeds an unresolved-shape member that no later
+      // evidence can remove, although the operands' types often exist in dataflow state the
+      // PTS-based walks cannot see (wala/ML#736, wala/ML#682; the wala/ML#661/wala/ML#570
+      // substrate). Replace such a seed with synthetic dataflow edges from the operands the
+      // generator declares: the result composes from the operands' converged members per the
+      // feed's kind, and the unresolved seed member is never born.
+      Map<PointsToSetVariable, TensorTypeAnalysis.FeedPlan> typeFeeds = HashMapFactory.make();
       Map<PointsToSetVariable, Set<TensorType>> suppressedSeeds = HashMapFactory.make();
       Map<PointsToSetVariable, Set<TensorOrigin>> suppressedOrigins = HashMapFactory.make();
       for (PointsToSetVariable src : sources) {
         Set<TensorType> types = init.get(src);
         if (types == null || types.size() != 1) continue;
         TensorType only = types.iterator().next();
+        // Only a pure-⊤ seed is replaced: suppressing a seed whose dtype the generator proved
+        // couples into the engine-side pin computations that read seeded state (the vendored
+        // Conv1d and gather probes are the witnesses), so the known-dtype widening stays with
+        // wala/ML#682's residual.
         if (only.getDims() != null || only.getDType() != DType.UNKNOWN) continue;
         TensorGenerator generator;
         try {
@@ -1470,27 +1474,37 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         } catch (IllegalArgumentException e) {
           continue;
         }
-        Set<PointsToSetVariable> feedSources = HashSetFactory.make();
-        for (PointerKey operandKey : generator.getDTypeFeedSourceKeys(builder)) {
+        TensorGenerator.TypeFeed feed = generator.getTypeFeed(builder);
+        if (feed == null) continue;
+        List<PointsToSetVariable> feedSources = new ArrayList<>();
+        for (PointerKey operandKey : feed.operands()) {
           if (builder.getPropagationSystem().isImplicit(operandKey)) continue;
           PointsToSetVariable operand =
               builder.getPropagationSystem().findOrCreatePointsToSet(operandKey);
           if (operand.equals(src)) continue; // A self-loop feeds nothing.
-          if (!dataflow.containsNode(operand)) dataflow.addNode(operand);
-          if (!dataflow.hasEdge(operand, src)) dataflow.addEdge(operand, src);
           feedSources.add(operand);
         }
-        if (feedSources.isEmpty()) continue; // No located operand: keep the seed.
-        dtypeFeeds.put(src, feedSources);
+        // A broadcast composes pairs, so it needs both operands; the other kinds need at least
+        // one located operand. Otherwise keep the seed.
+        if (feedSources.isEmpty()
+            || (feed.kind() == TensorGenerator.TypeFeedKind.BROADCAST && feedSources.size() != 2))
+          continue;
+        for (PointsToSetVariable operand : feedSources) {
+          if (!dataflow.containsNode(operand)) dataflow.addNode(operand);
+          if (!dataflow.hasEdge(operand, src)) dataflow.addEdge(operand, src);
+        }
+        typeFeeds.put(
+            src, new TensorTypeAnalysis.FeedPlan(feed.kind(), feedSources, only.getDType()));
         suppressedSeeds.put(src, types);
         Set<TensorOrigin> origins = initOrigins.get(src);
         if (origins != null) suppressedOrigins.put(src, origins);
         init.remove(src);
         initOrigins.remove(src);
       }
-      LOGGER.fine(() -> "wala/ML#736 dtype feeds: " + dtypeFeeds.size());
-      for (PointsToSetVariable fed : dtypeFeeds.keySet())
-        LOGGER.fine(() -> "  feed: " + describe(fed.getPointerKey()));
+      LOGGER.fine(() -> "wala/ML#736 type feeds: " + typeFeeds.size());
+      for (Map.Entry<PointsToSetVariable, TensorTypeAnalysis.FeedPlan> f : typeFeeds.entrySet())
+        LOGGER.fine(
+            () -> "  feed " + f.getValue().kind() + ": " + describe(f.getKey().getPointerKey()));
 
       Map<PointsToSetVariable, TensorType> shapeOps = HashMapFactory.make();
       shapeOps.putAll(handleShapeSourceOp(builder, dataflow, reshape, 2));
@@ -1590,7 +1604,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               shapeOps,
               setCalls,
               refinements,
-              dtypeFeeds,
+              typeFeeds,
               conv2ds,
               conv3ds,
               drops,
@@ -1605,6 +1619,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // and continue the (monotone) fixpoint so the restored members propagate (wala/ML#736).
       if (tt.restoreUnfedSeeds(suppressedSeeds, suppressedOrigins))
         tt.solve(new NullProgressMonitor());
+      for (PointsToSetVariable fed : typeFeeds.keySet())
+        LOGGER.fine(
+            () ->
+                "post-feed state for "
+                    + describe(fed.getPointerKey())
+                    + ": "
+                    + tt.getOutState(fed));
 
       recordDepthLimitedResults(tt, builder.getClassHierarchy());
 

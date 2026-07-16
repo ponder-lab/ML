@@ -11,7 +11,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -135,18 +135,36 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
   }
 
   /**
-   * The dtype-determining operand is the input argument, located caller-side: the source is the
+   * The type-determining operand is the input argument, located caller-side: the source is the
    * synthetic summary's return value, so each caller's invoke supplies its own operand value number
-   * in that caller's frame (wala/ML#736).
+   * in that caller's frame (wala/ML#736). This family's base shape composition forwards the input's
+   * shapes unchanged, so the feed is {@link TypeFeedKind#PASS_THROUGH}; a subclass that overrides
+   * the shape composition (its result shape differs from its input's) must override this to {@link
+   * #getTypeFeed(PropagationCallGraphBuilder, TypeFeedKind)} with {@link TypeFeedKind#DTYPE_ONLY}
+   * (wala/ML#682).
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @return The caller-side pointer keys of the input argument, one per caller invoke that passes
-   *     it positionally; empty when none does or the input position is undefined.
+   * @return The pass-through feed over the caller-side input keys, or {@code null} when none is
+   *     located or the input position is undefined.
    */
   @Override
-  protected Set<PointerKey> getDTypeFeedSourceKeys(PropagationCallGraphBuilder builder) {
+  protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
+    return this.getTypeFeed(builder, TypeFeedKind.PASS_THROUGH);
+  }
+
+  /**
+   * Kind-parameterized core of {@link #getTypeFeed(PropagationCallGraphBuilder)}, for the
+   * shape-transforming subclasses that keep the operand walk but demote the feed to {@link
+   * TypeFeedKind#DTYPE_ONLY} (wala/ML#682).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param kind The composition kind to declare.
+   * @return The feed over the caller-side input keys, or {@code null} when none is located or the
+   *     input position is undefined.
+   */
+  protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder, TypeFeedKind kind) {
     int position = getInputParameterPosition();
-    if (position == UNDEFINED_PARAMETER_POSITION) return Collections.emptySet();
+    if (position == UNDEFINED_PARAMETER_POSITION) return null;
     Set<PointerKey> ret = new LinkedHashSet<>();
     for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
         getCallerInvokes(builder, this.getNode())) {
@@ -159,7 +177,7 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
               .getHeapModel()
               .getPointerKeyForLocal(callerInvoke.fst, invoke.getUse(position + 1)));
     }
-    return ret;
+    return ret.isEmpty() ? null : new TypeFeed(kind, new ArrayList<>(ret));
   }
 
   /**
