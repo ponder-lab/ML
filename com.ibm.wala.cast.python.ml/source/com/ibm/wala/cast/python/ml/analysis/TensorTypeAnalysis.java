@@ -308,6 +308,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Map<PointsToSetVariable, TensorType> reshapeNodes,
       Map<PointsToSetVariable, TensorType> set_shapes,
       Map<PointsToSetVariable, List<Dimension<?>>> refinements,
+      Map<PointsToSetVariable, Set<PointsToSetVariable>> dtypeFeeds,
       Set<PointsToSetVariable> conv2ds,
       Set<PointsToSetVariable> conv3ds,
       Set<PointsToSetVariable> drops,
@@ -491,6 +492,44 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
             @Override
             public String toString() {
               return "refine shape against einsum operand constraint " + this.constraint;
+            }
+          }
+
+          /**
+           * A transfer function for the synthetic dtype-feed edge from a generator's dtype-source
+           * operand to its result (wala/ML#736): the result variable, whose generator seed would
+           * have been a single unknown-dtype member (its PTS-based dtype walk failed), instead
+           * takes each operand member's dtype as an unknown-shape member. Feeding from converged
+           * dataflow state is what the PTS-based walk cannot do; an operand member whose dtype is
+           * itself unknown reproduces the suppressed seed, so the feed never loses information.
+           */
+          final class DtypeFeedOp extends UnaryOperator<TensorVariable> {
+            @Override
+            public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
+              if (lhs == null || rhs == null || rhs.state == null) return NOT_CHANGED;
+              boolean changed = false;
+              if (lhs.state == null) lhs.state = HashSetFactory.make();
+              for (TensorType t : rhs.state)
+                changed |= lhs.state.add(new TensorType(t.getDType(), null));
+              // The fed result is a TensorFlow op's product regardless of what produced the
+              // operand (wala/ML#724).
+              if (!rhs.state.isEmpty()) changed |= lhs.origins.add(TensorOrigin.TENSORFLOW);
+              return changed ? CHANGED : NOT_CHANGED;
+            }
+
+            @Override
+            public int hashCode() {
+              return 0x736FEED0; // arbitrary constant; all instances are equal
+            }
+
+            @Override
+            public boolean equals(Object o) {
+              return o instanceof DtypeFeedOp;
+            }
+
+            @Override
+            public String toString() {
+              return "feed dtypes from the einsum dtype-source operand";
             }
           }
 
@@ -705,6 +744,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               PointsToSetVariable src, PointsToSetVariable dst) {
             if (drops.contains(dst)) {
               return DropOp.INSTANCE;
+            } else if (dtypeFeeds.getOrDefault(dst, Collections.emptySet()).contains(src)) {
+              return new DtypeFeedOp();
             } else if (set_shapes.containsKey(dst)) {
               return new SetShapeOp(set_shapes.get(dst));
             } else if (refinements.containsKey(dst)) {
@@ -773,6 +814,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * @param set_shapes Destinations pinned by an {@code x.set_shape(s)} assertion (wala/ML#509).
    * @param refinements Einsum-operand destinations refined against the shape the einsum equation
    *     proves for them (wala/ML#704); incoming members are refined, never discarded.
+   * @param dtypeFeeds Einsum-result destinations fed their dtype from the dtype-source operand's
+   *     dataflow state over a synthetic edge (wala/ML#736), keyed to the feeding sources; each
+   *     replaces a suppressed unknown-dtype generator seed.
    * @param conv2ds Destinations of 2D convolutions, rank-checked by {@code ConvOp}.
    * @param conv3ds Destinations of 3D convolutions, rank-checked by {@code ConvOp}.
    * @param drops Destinations pinned to empty-and-fixed (wala/ML#409).
@@ -790,6 +834,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Map<PointsToSetVariable, TensorType> reshapeTypes,
       Map<PointsToSetVariable, TensorType> set_shapes,
       Map<PointsToSetVariable, List<Dimension<?>>> refinements,
+      Map<PointsToSetVariable, Set<PointsToSetVariable>> dtypeFeeds,
       Set<PointsToSetVariable> conv2ds,
       Set<PointsToSetVariable> conv3ds,
       Set<PointsToSetVariable> drops,
@@ -802,6 +847,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
             reshapeTypes,
             set_shapes,
             refinements,
+            dtypeFeeds,
             conv2ds,
             conv3ds,
             drops,
@@ -810,6 +856,36 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
             errorLog));
     this.init = init;
     this.initOrigins = initOrigins;
+  }
+
+  /**
+   * Restores suppressed seeds on fed destinations whose dtype feed delivered no state
+   * (wala/ML#736). A dtype feed replaces a pure-⊤ seed profitably only when some operand state
+   * arrives; when none ever does, the destination would otherwise lose its tensor identity entirely
+   * (the seed at least asserted an unknown tensor). Destinations whose feed delivered members are
+   * left alone. Callers re-run {@link #solve} afterward so the restored members propagate.
+   *
+   * @param seeds The suppressed seeds, keyed by their fed destination.
+   * @param origins The suppressed origin seeds, keyed the same way.
+   * @return Whether any destination was restored.
+   */
+  public boolean restoreUnfedSeeds(
+      Map<PointsToSetVariable, Set<TensorType>> seeds,
+      Map<PointsToSetVariable, Set<TensorOrigin>> origins) {
+    boolean changed = false;
+    for (Map.Entry<PointsToSetVariable, Set<TensorType>> entry : seeds.entrySet()) {
+      TensorVariable out = getOut(entry.getKey());
+      if (out == null || (out.state != null && !out.state.isEmpty())) continue;
+      if (out.state == null) out.state = HashSetFactory.make();
+      boolean restored = out.state.addAll(entry.getValue());
+      Set<TensorOrigin> seedOrigins = origins.get(entry.getKey());
+      if (seedOrigins != null) restored |= out.origins.addAll(seedOrigins);
+      if (restored) {
+        changedVariable(out);
+        changed = true;
+      }
+    }
+    return changed;
   }
 
   @Override

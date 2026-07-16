@@ -3472,6 +3472,24 @@ public abstract class TensorGenerator {
     return resolved;
   }
 
+  /**
+   * Locates the dataflow variables that determine this generator's result dtype when its own dtype
+   * walk fails. A pure-⊤ seed (unknown shape and dtype) cannot be improved by later evidence,
+   * although the dtype-source operand's dtype often exists in {@code TensorTypeAnalysis} dataflow
+   * state that PTS-based resolution cannot see (wala/ML#736, the wala/ML#661/wala/ML#570
+   * substrate); the engine replaces such a seed with a synthetic dataflow edge from each of these
+   * variables, so the result takes the operand's converged dtypes and the unknown-dtype member is
+   * never born. Overridden by generators whose result dtype is determined by an operand; the
+   * default declares none.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The pointer keys of the dtype-determining operands; empty when this generator has none
+   *     or they cannot be located.
+   */
+  protected Set<PointerKey> getDTypeFeedSourceKeys(PropagationCallGraphBuilder builder) {
+    return Collections.emptySet();
+  }
+
   protected PythonInvokeInstruction getInvokeInstruction() {
     if (this.source == null) {
       return null;
