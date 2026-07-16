@@ -2,12 +2,18 @@ package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.Collections;
 import java.util.EnumSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -126,6 +132,34 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     Set<DType> dtypes = dtypesOfArg(builder, getInputParameterPosition(), getInputParameterName());
     return dtypes == null || dtypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : dtypes;
+  }
+
+  /**
+   * The dtype-determining operand is the input argument, located caller-side: the source is the
+   * synthetic summary's return value, so each caller's invoke supplies its own operand value number
+   * in that caller's frame (wala/ML#736).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The caller-side pointer keys of the input argument, one per caller invoke that passes
+   *     it positionally; empty when none does or the input position is undefined.
+   */
+  @Override
+  protected Set<PointerKey> getDTypeFeedSourceKeys(PropagationCallGraphBuilder builder) {
+    int position = getInputParameterPosition();
+    if (position == UNDEFINED_PARAMETER_POSITION) return Collections.emptySet();
+    Set<PointerKey> ret = new LinkedHashSet<>();
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction)) continue;
+      PythonInvokeInstruction invoke = (PythonInvokeInstruction) callerInvoke.snd;
+      if (invoke.getNumberOfPositionalParameters() < position + 2) continue;
+      ret.add(
+          builder
+              .getPointerAnalysis()
+              .getHeapModel()
+              .getPointerKeyForLocal(callerInvoke.fst, invoke.getUse(position + 1)));
+    }
+    return ret;
   }
 
   /**

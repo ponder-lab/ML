@@ -2241,10 +2241,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * {@code "BFH"} term and {@code DenseLayer3dProj.call}'s of the rank-4 {@code "BFND"} term, and
    * the refined parameter states transport through the call boundary into this helper. Every proven
    * axis stays {@link UnresolvedDim} in vivo, since {@code w}'s extents are config-derived; the
-   * rank-3 unknown-dtype member is the {@code DenseLayer3d}-path input that resolves no dtype
-   * (wala/ML#736). The {@code w} parameter keeps rank 3 and {@code float32} (its chain is
-   * layer-local) but no numeric dimensions, since the {@code build}-computed head sizes also derive
-   * from the config.
+   * union is dtype-homogeneous {@code float32} since the dtype feed (wala/ML#736) replaced the
+   * attention path's pure-⊤ seeds. The {@code w} parameter keeps rank 3 and {@code float32} (its
+   * chain is layer-local) but no numeric dimensions, since the {@code build}-computed head sizes
+   * also derive from the config.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2264,9 +2264,6 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(
             2,
             Set.of(
-                new TensorType(
-                    UNKNOWN,
-                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
                 new TensorType(
                     FLOAT_32,
                     asList(
@@ -2310,6 +2307,50 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
                 new TensorType(
                     FLOAT_32,
                     asList(new SymbolicDim("?"), new SymbolicDim("?"), new SymbolicDim("?"))))));
+  }
+
+  /**
+   * In-vivo anchor for wala/ML#736 at its measurement point: the vendored NLPGNN {@code
+   * DenseLayer3d.call}'s {@code input_tensor}, formerly carrying an {@code unknown}-dtype member
+   * alongside its {@code float32} ones (the heterogeneous union the issue reported). The dtype feed
+   * replaces pure-⊤ generator seeds with synthetic edges from their dtype-source operands, so the
+   * attention path's element-wise and pass-through results take the converged {@code float32}
+   * instead of seeding {@code unknown}, and the union is dtype-homogeneous in every context. The
+   * {@code (8, 100)}/{@code (8, 10)} leading pairs are the entry contracts (wala/ML#717); the ranks
+   * are the einsum operand refinement's (wala/ML#704).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNlpgnnFullDense3dInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        NLPGNN_FULL_PROJECT_FILES,
+        "nlpgnn/layers/dense.py",
+        "DenseLayer3d.call",
+        "nlpgnn_full_proj",
+        1,
+        9,
+        Map.of(
+            3,
+            Set.of(
+                new TensorType(FLOAT_32, asList(new NumericDim(8), UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new NumericDim(8), new NumericDim(100), UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new NumericDim(8), new NumericDim(10), UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
+                new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new NumericDim(8), UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
   }
 
   /**

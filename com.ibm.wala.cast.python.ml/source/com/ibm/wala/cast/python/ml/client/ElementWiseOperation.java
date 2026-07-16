@@ -26,6 +26,7 @@ import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -582,6 +583,27 @@ public class ElementWiseOperation extends TensorGenerator {
     // identification across the chain even though every step is demonstrably a tensor producer.
     if (xDTypes == null || xDTypes.isEmpty()) return EnumSet.of(DType.UNKNOWN);
     return xDTypes;
+  }
+
+  /**
+   * The dtype-determining operands are both sides of the element-wise operation, resolved in this
+   * generator's own frame: the runtime requires the operand dtypes to agree (scalar-literal
+   * promotion aside), so either operand's converged dataflow dtype determines the result when the
+   * PTS-based walk fails (wala/ML#736).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The pointer keys of the resolvable operands; empty when neither value number resolves.
+   */
+  @Override
+  protected Set<PointerKey> getDTypeFeedSourceKeys(PropagationCallGraphBuilder builder) {
+    Set<PointerKey> ret = new LinkedHashSet<>();
+    CGNode node = this.getNode();
+    int xVn = this.getXArgumentValueNumber(builder);
+    int yVn = this.getYArgumentValueNumber(builder);
+    for (int vn : new int[] {xVn, yVn})
+      if (vn > 0)
+        ret.add(builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn));
+    return ret;
   }
 
   /**

@@ -21,6 +21,7 @@ import com.ibm.wala.cast.python.ipa.callgraph.TrampolineReceiverContextSelector;
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -1449,6 +1450,48 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         LOGGER.fine(
             () -> "  refine: " + describe(r.getKey().getPointerKey()) + " -> " + r.getValue());
 
+      // A generator whose dtype walk fails seeds an unknown-dtype member that no later evidence
+      // can remove, although the dtype-source operand's dtype often exists in dataflow state the
+      // PTS-based walk cannot see (wala/ML#736; the wala/ML#661/wala/ML#570 substrate). Replace
+      // such a pure-⊤ seed with a synthetic dataflow edge from each dtype-source operand the
+      // generator declares: the result then takes the operand's converged dtypes, and the
+      // unknown-dtype member is never born.
+      Map<PointsToSetVariable, Set<PointsToSetVariable>> dtypeFeeds = HashMapFactory.make();
+      Map<PointsToSetVariable, Set<TensorType>> suppressedSeeds = HashMapFactory.make();
+      Map<PointsToSetVariable, Set<TensorOrigin>> suppressedOrigins = HashMapFactory.make();
+      for (PointsToSetVariable src : sources) {
+        Set<TensorType> types = init.get(src);
+        if (types == null || types.size() != 1) continue;
+        TensorType only = types.iterator().next();
+        if (only.getDims() != null || only.getDType() != DType.UNKNOWN) continue;
+        TensorGenerator generator;
+        try {
+          generator = getGenerator(src, builder);
+        } catch (IllegalArgumentException e) {
+          continue;
+        }
+        Set<PointsToSetVariable> feedSources = HashSetFactory.make();
+        for (PointerKey operandKey : generator.getDTypeFeedSourceKeys(builder)) {
+          if (builder.getPropagationSystem().isImplicit(operandKey)) continue;
+          PointsToSetVariable operand =
+              builder.getPropagationSystem().findOrCreatePointsToSet(operandKey);
+          if (operand.equals(src)) continue; // A self-loop feeds nothing.
+          if (!dataflow.containsNode(operand)) dataflow.addNode(operand);
+          if (!dataflow.hasEdge(operand, src)) dataflow.addEdge(operand, src);
+          feedSources.add(operand);
+        }
+        if (feedSources.isEmpty()) continue; // No located operand: keep the seed.
+        dtypeFeeds.put(src, feedSources);
+        suppressedSeeds.put(src, types);
+        Set<TensorOrigin> origins = initOrigins.get(src);
+        if (origins != null) suppressedOrigins.put(src, origins);
+        init.remove(src);
+        initOrigins.remove(src);
+      }
+      LOGGER.fine(() -> "wala/ML#736 dtype feeds: " + dtypeFeeds.size());
+      for (PointsToSetVariable fed : dtypeFeeds.keySet())
+        LOGGER.fine(() -> "  feed: " + describe(fed.getPointerKey()));
+
       Map<PointsToSetVariable, TensorType> shapeOps = HashMapFactory.make();
       shapeOps.putAll(handleShapeSourceOp(builder, dataflow, reshape, 2));
 
@@ -1547,6 +1590,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               shapeOps,
               setCalls,
               refinements,
+              dtypeFeeds,
               conv2ds,
               conv3ds,
               drops,
@@ -1555,6 +1599,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               errorLog);
 
       tt.solve(new NullProgressMonitor());
+
+      // A dtype feed that never delivered any operand state left its destination stateless,
+      // although the suppressed seed at least asserted an unknown tensor; restore those seeds
+      // and continue the (monotone) fixpoint so the restored members propagate (wala/ML#736).
+      if (tt.restoreUnfedSeeds(suppressedSeeds, suppressedOrigins))
+        tt.solve(new NullProgressMonitor());
 
       recordDepthLimitedResults(tt, builder.getClassHierarchy());
 
