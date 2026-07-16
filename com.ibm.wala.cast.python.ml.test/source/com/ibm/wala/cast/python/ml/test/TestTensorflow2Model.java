@@ -5760,14 +5760,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * vocab dimension is concrete ({@code (?, ?, 10)}). Receiver-keyed trampoline contexts
    * (wala/ML#679) removed the spurious {@code (?, ?, 4)} constructor-collapse member, but the
    * flat-logits matmul member that carried the embedding dimension ({@code (?, 8)} float32)
-   * degrades to {@code ? of float32} in decoder-stack propagation. The union is the
-   * order-independent fixed point (wala/ML#674): identical across runs and across suite/single-test
-   * modes. Analyzed statically here, like the consumer's vendoring; it runs in the perf-eval with
-   * its tfrecord/data setup.
+   * degrades to {@code ? of float32} in decoder-stack propagation. The runtime-true logits form
+   * carries {@code float32} through the matmul operands' dtype-equality constraint (wala/ML#677):
+   * {@code OutputLayer.call}'s live arm multiplies by {@code self.layer_weights}, whose {@code
+   * add_weight} allocation types {@code float32}, and the reshape passes it through. The {@code
+   * unknown}-dtype twin is the same φ's other arm, a path-insensitive phantom: the {@code
+   * self.porj_weights} site (a subject-side typo, never assigned, dead at runtime) resolves neither
+   * operand, its first being the decoder-stack output whose producer walk wala/ML#680 tracks. The
+   * union is the order-independent fixed point (wala/ML#674): identical across runs and across
+   * suite/single-test modes. Analyzed statically here, like the consumer's vendoring; it runs in
+   * the perf-eval with its tfrecord/data setup.
    *
    * <p>TODO: Expect the float32 member's concrete shape back once <a
    * href="https://github.com/wala/ML/issues/682">wala/ML#682</a> recovers concrete shapes through
-   * the decoder stack under receiver-keyed contexts.
+   * the decoder stack under receiver-keyed contexts, and the phantom arm's dtype once <a
+   * href="https://github.com/wala/ML/issues/680">wala/ML#680</a> resolves the loop-carried producer
+   * cycle.
    */
   @Test
   public void testGpt2GetLossVendored()
@@ -5791,6 +5799,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             Set.of(new TensorType(INT_32, asList(DynamicDim.INSTANCE))),
             4,
             Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))),
                 new TensorType(
                     UNKNOWN,
                     asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))),
@@ -11566,6 +11577,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * runtime-true vocab member {@code (?, ?, 10)}, but the previously concrete {@code (2, 3, 8)
    * float32} member degrades to {@code ? of float32} in decoder-stack propagation ({@link
    * #testCollectionProbeVendoredEmbedding()} still recovers it concretely at the embedding output).
+   * The vocab member appears twice, once per {@code OutputLayer.call} matmul arm (wala/ML#677): the
+   * live {@code self.layer_weights} arm carries {@code float32} through the operands'
+   * dtype-equality constraint, and the dead {@code self.porj_weights} arm (a subject-side typo,
+   * never assigned) resolves neither operand, so its phantom keeps the {@code unknown} dtype
+   * wala/ML#680 tracks.
    *
    * <p>TODO: Expect the float32 member's concrete shape back once <a
    * href="https://github.com/wala/ML/issues/682">wala/ML#682</a> recovers concrete shapes through
@@ -11597,6 +11613,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             2,
             Set.of(
                 TENSOR_UNKNOWN_SHAPE_FLOAT32,
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))),
                 new TensorType(
                     UNKNOWN,
                     asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))))));
