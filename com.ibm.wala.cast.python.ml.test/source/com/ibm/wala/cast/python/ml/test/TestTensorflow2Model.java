@@ -13448,6 +13448,107 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Three-term einsum operand refinement (wala/ML#704): the first operand binds {@code h} dynamic
+   * ({@code keras.Input}'s {@code None}) and {@code n} to 3, the second operand's known {@code h =
+   * 6} refines the dynamic binding, and the unresolved third operand's {@code "nq"} term proves
+   * rank 2 with the shared {@code n = 3} and an {@link UnresolvedDim} {@code q}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsumOperandRefinement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_einsum_operand_refinement.py",
+        "project",
+        3,
+        4,
+        Map.of(
+            2,
+            Set.of(new TensorType(FLOAT_32, asList(new NumericDim(3), UnresolvedDim.INSTANCE))),
+            3,
+            Set.of(TENSOR_NONE_3_FLOAT32),
+            4,
+            Set.of(TensorType.of(FLOAT_32, 2, 6))));
+  }
+
+  /**
+   * A multi-shape einsum operand is constrained too (wala/ML#704): the guard-φ argument carries
+   * both {@code keras.Input} members, and each fills its non-numeric leading axis from the
+   * constraint's known {@code n = 3} while keeping its own trailing size.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsumOperandRefinement2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_einsum_operand_refinement.py",
+        "fill",
+        2,
+        3,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_32, 3, 5), TensorType.of(FLOAT_32, 3, 7)),
+            3,
+            Set.of(TensorType.of(FLOAT_32, 3, 2))));
+  }
+
+  /**
+   * An unresolved einsum operand whose term carries an ellipsis proves no rank (wala/ML#704), so
+   * the equation constrains nothing about it and the parameter keeps its unknown shape: the sound
+   * bail.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsumOperandRefinement3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_einsum_operand_refinement.py",
+        "blur",
+        2,
+        3,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32), 3, Set.of(TensorType.of(FLOAT_32, 3, 5))));
+  }
+
+  /**
+   * Two einsum call sites prove disagreeing constraints for the same operand (wala/ML#704) — rank 2
+   * with a trailing 3 versus rank 3 with a trailing 5 — so neither is asserted and the parameter
+   * keeps its unknown shape: the conflicting refinement drops.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsumOperandRefinement4()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_einsum_operand_refinement.py",
+        "choose",
+        3,
+        5,
+        Map.of(
+            2,
+            Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32),
+            3,
+            Set.of(TensorType.of(FLOAT_32, 3, 4)),
+            4,
+            Set.of(TensorType.of(FLOAT_32, 5, 6))));
+  }
+
+  /**
    * Operand-order companion of {@link #testDense3dEinsum()} (wala/ML#704): the weight, whose
    * contracted dim is dynamic, comes first in the equation ({@code "HND,BFH->BFND"}), so the
    * input's statically-known occurrence of the shared {@code H} label arrives second and refines
