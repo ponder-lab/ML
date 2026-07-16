@@ -3472,22 +3472,43 @@ public abstract class TensorGenerator {
     return resolved;
   }
 
+  /** How a type feed composes the fed members from its operand state (wala/ML#736, wala/ML#682). */
+  public enum TypeFeedKind {
+    /** Each operand member's dtype is lifted as an unknown-shape member. */
+    DTYPE_ONLY,
+
+    /** Each operand member forwards unchanged (the operation preserves its input's type). */
+    PASS_THROUGH,
+
+    /** The two operands' member shapes broadcast pairwise (element-wise semantics). */
+    BROADCAST
+  }
+
   /**
-   * Locates the dataflow variables that determine this generator's result dtype when its own dtype
-   * walk fails. A pure-⊤ seed (unknown shape and dtype) cannot be improved by later evidence,
-   * although the dtype-source operand's dtype often exists in {@code TensorTypeAnalysis} dataflow
-   * state that PTS-based resolution cannot see (wala/ML#736, the wala/ML#661/wala/ML#570
-   * substrate); the engine replaces such a seed with a synthetic dataflow edge from each of these
-   * variables, so the result takes the operand's converged dtypes and the unknown-dtype member is
-   * never born. Overridden by generators whose result dtype is determined by an operand; the
-   * default declares none.
+   * A type-feed declaration (wala/ML#736, wala/ML#682): how the result composes from its operands
+   * and where the operands live.
+   *
+   * @param kind The composition kind.
+   * @param operands The operand pointer keys, in operand order; {@link TypeFeedKind#BROADCAST}
+   *     requires exactly two.
+   */
+  public record TypeFeed(TypeFeedKind kind, List<PointerKey> operands) {}
+
+  /**
+   * Declares the type feed that can replace this generator's unresolved seed. An unknown-shape seed
+   * cannot be improved by later evidence, although the operands' types often exist in {@code
+   * TensorTypeAnalysis} dataflow state that PTS-based resolution cannot see (wala/ML#736,
+   * wala/ML#682; the wala/ML#661/wala/ML#570 substrate); the engine replaces such a seed with a
+   * synthetic dataflow edge from each declared operand, composing the result per the feed's kind,
+   * so the unresolved seed member is never born. Overridden by generators whose result type is
+   * determined by their operands; the default declares none.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @return The pointer keys of the dtype-determining operands; empty when this generator has none
-   *     or they cannot be located.
+   * @return The type feed, or {@code null} when this generator declares none or its operands cannot
+   *     be located.
    */
-  protected Set<PointerKey> getDTypeFeedSourceKeys(PropagationCallGraphBuilder builder) {
-    return Collections.emptySet();
+  protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
+    return null;
   }
 
   protected PythonInvokeInstruction getInvokeInstruction() {

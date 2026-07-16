@@ -26,7 +26,6 @@ import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -586,24 +585,38 @@ public class ElementWiseOperation extends TensorGenerator {
   }
 
   /**
-   * The dtype-determining operands are both sides of the element-wise operation, resolved in this
-   * generator's own frame: the runtime requires the operand dtypes to agree (scalar-literal
-   * promotion aside), so either operand's converged dataflow dtype determines the result when the
-   * PTS-based walk fails (wala/ML#736).
+   * The type-determining operands are both sides of the element-wise operation, resolved in this
+   * generator's own frame (wala/ML#736): the result's member types compose as the pairwise
+   * broadcast of the operands' converged dataflow members (wala/ML#682). A scalar-constant operand
+   * broadcasts as the identity, so the other operand's members pass through unchanged; two scalar
+   * constants declare no feed.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @return The pointer keys of the resolvable operands; empty when neither value number resolves.
+   * @return The broadcast feed over both operands, the pass-through feed over the tensor operand
+   *     when the other is a scalar constant, or {@code null} when neither operand resolves.
    */
   @Override
-  protected Set<PointerKey> getDTypeFeedSourceKeys(PropagationCallGraphBuilder builder) {
-    Set<PointerKey> ret = new LinkedHashSet<>();
+  protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
     CGNode node = this.getNode();
     int xVn = this.getXArgumentValueNumber(builder);
     int yVn = this.getYArgumentValueNumber(builder);
-    for (int vn : new int[] {xVn, yVn})
-      if (vn > 0)
-        ret.add(builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn));
-    return ret;
+    if (node.getIR() == null) return null;
+    SymbolTable st = node.getIR().getSymbolTable();
+    boolean xScalar = xVn <= 0 || st.isConstant(xVn);
+    boolean yScalar = yVn <= 0 || st.isConstant(yVn);
+    if (xScalar && yScalar) return null;
+    if (xScalar || yScalar) {
+      int tensorVn = xScalar ? yVn : xVn;
+      return new TypeFeed(
+          TypeFeedKind.PASS_THROUGH,
+          List.of(
+              builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, tensorVn)));
+    }
+    return new TypeFeed(
+        TypeFeedKind.BROADCAST,
+        List.of(
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, xVn),
+            builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, yVn)));
   }
 
   /**

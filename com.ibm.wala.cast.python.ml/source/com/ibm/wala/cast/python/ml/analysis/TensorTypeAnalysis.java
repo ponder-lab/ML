@@ -12,12 +12,15 @@ package com.ibm.wala.cast.python.ml.analysis;
 
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.lsp.AnalysisError;
+import com.ibm.wala.cast.python.ml.client.TensorGenerator;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.CompoundDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
+import com.ibm.wala.cast.python.ml.util.TensorShapeUtil;
 import com.ibm.wala.cast.tree.CAstSourcePositionMap.Position;
 import com.ibm.wala.cast.util.SourceBuffer;
 import com.ibm.wala.dataflow.graph.AbstractMeetOperator;
@@ -40,6 +43,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import org.eclipse.lsp4j.DiagnosticSeverity;
 
 public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, TensorVariable>
@@ -303,17 +308,31 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
     }
   }
 
+  /**
+   * A type feed installed on a destination (wala/ML#736, wala/ML#682): the composition kind, the
+   * feeding operand variables in operand order, and the dtype the suppressed seed had resolved
+   * (kept when known, since the operands' dataflow dtype can be weaker than what the generator
+   * proved).
+   *
+   * @param kind The composition kind.
+   * @param operands The feeding operand variables, in operand order.
+   * @param seedDType The suppressed seed's dtype; {@link DType#UNKNOWN} when it had none.
+   */
+  public record FeedPlan(
+      TensorGenerator.TypeFeedKind kind, List<PointsToSetVariable> operands, DType seedDType) {}
+
   private static IKilldallFramework<PointsToSetVariable, TensorVariable> createProblem(
       Graph<PointsToSetVariable> G,
       Map<PointsToSetVariable, TensorType> reshapeNodes,
       Map<PointsToSetVariable, TensorType> set_shapes,
       Map<PointsToSetVariable, List<Dimension<?>>> refinements,
-      Map<PointsToSetVariable, Set<PointsToSetVariable>> dtypeFeeds,
+      Map<PointsToSetVariable, FeedPlan> typeFeeds,
       Set<PointsToSetVariable> conv2ds,
       Set<PointsToSetVariable> conv3ds,
       Set<PointsToSetVariable> drops,
       Set<PointsToSetVariable> parameters,
       Set<PointsToSetVariable> iterationProducts,
+      AtomicReference<Function<PointsToSetVariable, TensorVariable>> outAccessor,
       Map<PointerKey, AnalysisError> errorLog) {
     return new IKilldallFramework<PointsToSetVariable, TensorVariable>() {
 
@@ -496,40 +515,107 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
           }
 
           /**
-           * A transfer function for the synthetic dtype-feed edge from a generator's dtype-source
-           * operand to its result (wala/ML#736): the result variable, whose generator seed would
-           * have been a single unknown-dtype member (its PTS-based dtype walk failed), instead
-           * takes each operand member's dtype as an unknown-shape member. Feeding from converged
-           * dataflow state is what the PTS-based walk cannot do; an operand member whose dtype is
-           * itself unknown reproduces the suppressed seed, so the feed never loses information.
+           * A transfer function for the synthetic type-feed edge from a generator's operand to its
+           * result (wala/ML#736, wala/ML#682): the result variable, whose generator seed did not
+           * resolve its shape (and possibly not its dtype), instead composes members from the
+           * operands' converged dataflow state, which the PTS-based walks cannot see. Composition
+           * follows the plan's kind: {@code DTYPE_ONLY} lifts each operand member's dtype as an
+           * unknown-shape member; {@code PASS_THROUGH} forwards each member unchanged; {@code
+           * BROADCAST} pairs each incoming member with the other operand's current members and
+           * broadcasts their shapes (a pair whose shapes don't broadcast statically degrades to an
+           * unknown shape, and no member composes until both operands carry state, so the result is
+           * order-independent). A seed dtype the generator had proven wins over the operand
+           * members' dtype, which can be weaker.
            */
-          final class DtypeFeedOp extends UnaryOperator<TensorVariable> {
+          final class TypeFeedOp extends UnaryOperator<TensorVariable> {
+            private final FeedPlan plan;
+            private final PointsToSetVariable source;
+
+            public TypeFeedOp(FeedPlan plan, PointsToSetVariable source) {
+              this.plan = plan;
+              this.source = source;
+            }
+
             @Override
             public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
-              if (lhs == null || rhs == null || rhs.state == null) return NOT_CHANGED;
+              if (lhs == null || rhs == null || rhs.state == null || rhs.state.isEmpty())
+                return NOT_CHANGED;
               boolean changed = false;
               if (lhs.state == null) lhs.state = HashSetFactory.make();
-              for (TensorType t : rhs.state)
-                changed |= lhs.state.add(new TensorType(t.getDType(), null));
+              switch (this.plan.kind()) {
+                case DTYPE_ONLY:
+                  for (TensorType t : rhs.state)
+                    changed |= lhs.state.add(new TensorType(this.pickDType(t), null));
+                  break;
+                case PASS_THROUGH:
+                  for (TensorType t : rhs.state)
+                    changed |=
+                        lhs.state.add(TensorType.of(this.pickDType(t), t.getDims(), t.layout()));
+                  break;
+                case BROADCAST:
+                  PointsToSetVariable other =
+                      this.plan.operands().get(0).equals(this.source)
+                          ? this.plan.operands().get(1)
+                          : this.plan.operands().get(0);
+                  TensorVariable otherOut = outAccessor.get().apply(other);
+                  if (otherOut == null || otherOut.state == null) return NOT_CHANGED;
+                  for (TensorType t : rhs.state)
+                    for (TensorType u : otherOut.state)
+                      changed |= lhs.state.add(this.broadcastMembers(t, u));
+                  break;
+              }
               // The fed result is a TensorFlow op's product regardless of what produced the
               // operand (wala/ML#724).
-              if (!rhs.state.isEmpty()) changed |= lhs.origins.add(TensorOrigin.TENSORFLOW);
+              if (changed) changed |= lhs.origins.add(TensorOrigin.TENSORFLOW);
               return changed ? CHANGED : NOT_CHANGED;
+            }
+
+            /**
+             * Broadcasts one member pair: the shapes broadcast right-aligned when both are known
+             * and compatible, and degrade to unknown otherwise (an unmarked non-numeric dimension
+             * or statically incompatible sizes).
+             *
+             * @param t The incoming operand's member.
+             * @param u The other operand's member.
+             * @return The composed member.
+             */
+            private TensorType broadcastMembers(TensorType t, TensorType u) {
+              DType dtype = this.pickDType(t.getDType() != DType.UNKNOWN ? t : u);
+              if (t.getDims() == null || u.getDims() == null) return new TensorType(dtype, null);
+              try {
+                return new TensorType(
+                    dtype, TensorShapeUtil.getBroadcastedShapes(t.getDims(), u.getDims()));
+              } catch (IllegalArgumentException e) {
+                return new TensorType(dtype, null);
+              }
+            }
+
+            /**
+             * Picks the composed member's dtype: the suppressed seed's when the generator had
+             * proven one, else the operand member's.
+             *
+             * @param t The operand member.
+             * @return The dtype for the composed member.
+             */
+            private DType pickDType(TensorType t) {
+              return this.plan.seedDType() != DType.UNKNOWN ? this.plan.seedDType() : t.getDType();
             }
 
             @Override
             public int hashCode() {
-              return 0x736FEED0; // arbitrary constant; all instances are equal
+              return this.plan.hashCode() * 31 + this.source.hashCode();
             }
 
             @Override
             public boolean equals(Object o) {
-              return o instanceof DtypeFeedOp;
+              return o instanceof TypeFeedOp
+                  && this.plan.equals(((TypeFeedOp) o).plan)
+                  && this.source.equals(((TypeFeedOp) o).source);
             }
 
             @Override
             public String toString() {
-              return "feed dtypes from the dtype-source operand";
+              return "feed " + this.plan.kind() + " types from the operand's dataflow state";
             }
           }
 
@@ -744,8 +830,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               PointsToSetVariable src, PointsToSetVariable dst) {
             if (drops.contains(dst)) {
               return DropOp.INSTANCE;
-            } else if (dtypeFeeds.getOrDefault(dst, Collections.emptySet()).contains(src)) {
-              return new DtypeFeedOp();
+            } else if (typeFeeds.containsKey(dst) && typeFeeds.get(dst).operands().contains(src)) {
+              return new TypeFeedOp(typeFeeds.get(dst), src);
             } else if (set_shapes.containsKey(dst)) {
               return new SetShapeOp(set_shapes.get(dst));
             } else if (refinements.containsKey(dst)) {
@@ -814,9 +900,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * @param set_shapes Destinations pinned by an {@code x.set_shape(s)} assertion (wala/ML#509).
    * @param refinements Einsum-operand destinations refined against the shape the einsum equation
    *     proves for them (wala/ML#704); incoming members are refined, never discarded.
-   * @param dtypeFeeds Einsum-result destinations fed their dtype from the dtype-source operand's
-   *     dataflow state over a synthetic edge (wala/ML#736), keyed to the feeding sources; each
-   *     replaces a suppressed unknown-dtype generator seed.
+   * @param typeFeeds Destinations fed from their operands' dataflow state over synthetic edges
+   *     (wala/ML#736, wala/ML#682), keyed to the composition plan; each replaces a suppressed
+   *     unresolved-shape generator seed.
    * @param conv2ds Destinations of 2D convolutions, rank-checked by {@code ConvOp}.
    * @param conv3ds Destinations of 3D convolutions, rank-checked by {@code ConvOp}.
    * @param drops Destinations pinned to empty-and-fixed (wala/ML#409).
@@ -834,28 +920,83 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Map<PointsToSetVariable, TensorType> reshapeTypes,
       Map<PointsToSetVariable, TensorType> set_shapes,
       Map<PointsToSetVariable, List<Dimension<?>>> refinements,
-      Map<PointsToSetVariable, Set<PointsToSetVariable>> dtypeFeeds,
+      Map<PointsToSetVariable, FeedPlan> typeFeeds,
       Set<PointsToSetVariable> conv2ds,
       Set<PointsToSetVariable> conv3ds,
       Set<PointsToSetVariable> drops,
       Set<PointsToSetVariable> parameters,
       Set<PointsToSetVariable> iterationProducts,
       Map<PointerKey, AnalysisError> errorLog) {
+    this(
+        G,
+        init,
+        initOrigins,
+        reshapeTypes,
+        set_shapes,
+        refinements,
+        typeFeeds,
+        conv2ds,
+        conv3ds,
+        drops,
+        parameters,
+        iterationProducts,
+        errorLog,
+        new AtomicReference<>());
+  }
+
+  /**
+   * Chained core constructor: the accessor holder must exist before the (static) problem is
+   * created, since the broadcast feed's transfer reads the other operand's solver state through it,
+   * and can only be bound to {@link #getOut} once construction completes.
+   *
+   * @param outAccessor The pre-created holder the transfer functions capture.
+   */
+  // The method reference escapes `this` by design: the holder is only dereferenced when the
+  // solver evaluates a broadcast feed inside solve(), long after construction completes.
+  @SuppressWarnings("this-escape")
+  private TensorTypeAnalysis(
+      Graph<PointsToSetVariable> G,
+      Map<PointsToSetVariable, Set<TensorType>> init,
+      Map<PointsToSetVariable, Set<TensorOrigin>> initOrigins,
+      Map<PointsToSetVariable, TensorType> reshapeTypes,
+      Map<PointsToSetVariable, TensorType> set_shapes,
+      Map<PointsToSetVariable, List<Dimension<?>>> refinements,
+      Map<PointsToSetVariable, FeedPlan> typeFeeds,
+      Set<PointsToSetVariable> conv2ds,
+      Set<PointsToSetVariable> conv3ds,
+      Set<PointsToSetVariable> drops,
+      Set<PointsToSetVariable> parameters,
+      Set<PointsToSetVariable> iterationProducts,
+      Map<PointerKey, AnalysisError> errorLog,
+      AtomicReference<Function<PointsToSetVariable, TensorVariable>> outAccessor) {
     super(
         createProblem(
             G,
             reshapeTypes,
             set_shapes,
             refinements,
-            dtypeFeeds,
+            typeFeeds,
             conv2ds,
             conv3ds,
             drops,
             parameters,
             iterationProducts,
+            outAccessor,
             errorLog));
+    outAccessor.set(this::getOut);
     this.init = init;
     this.initOrigins = initOrigins;
+  }
+
+  /**
+   * Read-only view of a variable's solved state, for post-solve diagnostics.
+   *
+   * @param variable The flow-graph variable.
+   * @return The solved state, or {@code null} when the variable is unknown to the solver.
+   */
+  public Set<TensorType> getOutState(PointsToSetVariable variable) {
+    TensorVariable out = getOut(variable);
+    return out == null ? null : out.state;
   }
 
   /**
