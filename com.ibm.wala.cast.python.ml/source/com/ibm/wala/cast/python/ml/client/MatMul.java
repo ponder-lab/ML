@@ -79,9 +79,25 @@ public class MatMul extends TensorGenerator {
     return this.getDefaultShapeResult(builder);
   }
 
+  /**
+   * Resolves the result dtype from either operand: the runtime requires {@code a} and {@code b} to
+   * agree on dtype, so a resolved second operand proves the result dtype when the first operand's
+   * walk does not (wala/ML#677; the equality constraint mirrors the einsum operand refinement,
+   * wala/ML#704). The gpt-2 witness is {@code tf.matmul(h_flat, self.layer_weights)}: {@code
+   * h_flat} flattens the decoder-stack output, whose producer walk does not resolve, while the
+   * weight types {@code float32}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The dtypes of the first operand when any resolves beyond ⊤, else the second operand's,
+   *     else {@code UNKNOWN}.
+   */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     Set<DType> aDTypes = dtypesOfArg(builder, 0, "a");
+    if (aDTypes != null && !aDTypes.isEmpty() && !aDTypes.equals(EnumSet.of(DType.UNKNOWN)))
+      return aDTypes;
+    Set<DType> bDTypes = dtypesOfArg(builder, 1, "b");
+    if (bDTypes != null && !bDTypes.isEmpty()) return bDTypes;
     return aDTypes == null || aDTypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : aDTypes;
   }
 
