@@ -12952,6 +12952,35 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Pins <a href="https://github.com/wala/ML/issues/741">wala/ML#741</a>: a reshape target mixing
+   * an {@code Unresolved} leading element with the literal {@code -1} placeholder surfaces the
+   * placeholder as the symbolic unknown-size dimension rather than a fixed size of {@code -1}, so
+   * the follow-on broadcast against a fully concrete operand composes instead of flooring to ⊤ on
+   * the impossible {@code -1} extent. The markers dominate the concrete sides in the broadcast
+   * join, so the sum carries the reshape's {@code (Unresolved, ?, 8)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testReshapeMixedPlaceholder()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_mixed_placeholder.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, new SymbolicDim("?"), new NumericDim(8))))));
+  }
+
+  /**
    * Regression guard for {@code tf.reshape(x, tf.shape(y))} shape inference. Runtime answer is
    * {@code (2, 3)} of {@code float32}. Post wala/ML#538's graceful-degradation fix in {@link
    * com.ibm.wala.cast.python.ml.client.Reshape} (mirroring {@link

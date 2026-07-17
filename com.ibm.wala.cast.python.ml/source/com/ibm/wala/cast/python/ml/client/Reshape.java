@@ -137,22 +137,22 @@ public class Reshape extends TensorGenerator {
         long productKnown = 1;
         boolean canInfer = true;
 
+        // Scan the whole member: breaking out early on a non-numeric dimension skipped the
+        // `-1`-placeholder detection for mixed vectors (e.g. an unresolved leading fold alongside
+        // a literal `-1`), letting the raw `-1` escape as a fixed size into downstream broadcast
+        // and compatibility checks (wala/ML#741).
         for (int i = 0; i < shape.size(); i++) {
           Dimension<?> dim = shape.get(i);
           if (dim instanceof NumericDim) {
             int val = ((NumericDim) dim).value();
             if (val == -1) {
-              if (unknownIndex != -1) {
-                canInfer = false; // More than one -1
-                break;
-              }
-              unknownIndex = i;
+              if (unknownIndex != -1) canInfer = false; // More than one -1
+              else unknownIndex = i;
             } else {
               productKnown *= val;
             }
           } else {
-            canInfer = false; // Non-numeric dimension
-            break;
+            canInfer = false; // Non-numeric dimension; keep scanning for placeholders.
           }
         }
 
