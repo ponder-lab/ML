@@ -19,12 +19,12 @@ public class TestLambda extends TestJythonCallGraphShape {
               "script lambda1.py",
               new String[] {
                 "script lambda1.py/Foo",
-                "$script lambda1.py/Foo/foo:trampoline3",
+                "$script lambda1.py/Foo/foo:trampoline2$b",
                 "script lambda1.py/lambda1",
                 "script lambda1.py/lambda2"
               }),
           new GraphAssertion(
-              "$script lambda1.py/Foo/foo:trampoline3",
+              "$script lambda1.py/Foo/foo:trampoline2$b",
               new String[] {"script lambda1.py/Foo/foo"}));
 
   @Test
@@ -41,12 +41,13 @@ public class TestLambda extends TestJythonCallGraphShape {
               "script lambda2.py",
               new String[] {
                 "script lambda2.py/Foo",
-                "$script lambda2.py/Foo/foo:trampoline3",
+                "$script lambda2.py/Foo/foo:trampoline2$b",
                 "script lambda2.py/lambda2",
                 "script lambda2.py/lambda3"
               }),
           new GraphAssertion(
-              "$script lambda2.py/Foo/foo:trampoline3", new String[] {"script lambda2.py/Foo/foo"}),
+              "$script lambda2.py/Foo/foo:trampoline2$b",
+              new String[] {"script lambda2.py/Foo/foo"}),
           new GraphAssertion(
               "script lambda2.py/lambda2", new String[] {"script lambda2.py/lambda1"}),
           new GraphAssertion(
@@ -64,9 +65,10 @@ public class TestLambda extends TestJythonCallGraphShape {
           new GraphAssertion(ROOT, new String[] {"script lambda3.py"}),
           new GraphAssertion(
               "script lambda3.py",
-              new String[] {"script lambda3.py/Foo", "$script lambda3.py/Foo/foo:trampoline3"}),
+              new String[] {"script lambda3.py/Foo", "$script lambda3.py/Foo/foo:trampoline1$a$b"}),
           new GraphAssertion(
-              "$script lambda3.py/Foo/foo:trampoline3", new String[] {"script lambda3.py/Foo/foo"}),
+              "$script lambda3.py/Foo/foo:trampoline1$a$b",
+              new String[] {"script lambda3.py/Foo/foo"}),
           new GraphAssertion(
               "script lambda3.py/Foo/foo", new String[] {"script lambda3.py/lambda3"}),
           new GraphAssertion(

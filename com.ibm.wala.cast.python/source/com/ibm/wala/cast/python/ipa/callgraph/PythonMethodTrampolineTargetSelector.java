@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ipa.callgraph;
 
 import static com.ibm.wala.cast.python.types.PythonTypes.TRAMPOLINE_METHOD_NAME;
+import static java.util.stream.Collectors.joining;
 
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummarizedFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonSummary;
@@ -15,15 +16,30 @@ import com.ibm.wala.ipa.callgraph.MethodTargetSelector;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.util.collections.HashMapFactory;
-import com.ibm.wala.util.collections.Pair;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Logger;
 
 public abstract class PythonMethodTrampolineTargetSelector<T> implements MethodTargetSelector {
 
+  /**
+   * Identifies a trampoline code body by the receiver and the calling layout it was generated for.
+   * A body's instructions depend on the call's positional/keyword split and on the keyword names,
+   * not just the total argument count; keying on the total collides call sites with equal total
+   * arity but different splits (<a href="https://github.com/wala/ML/issues/740">wala/ML#740</a>).
+   * Keyword names are a set because binding is by name in both the caller-to-trampoline and
+   * trampoline-to-method directions, making bodies insensitive to keyword order.
+   *
+   * @param receiver The {@link IClass} being dispatched on.
+   * @param positionalParameterCount The call's number of positional parameters.
+   * @param keywordNames The call's keyword argument names.
+   */
+  protected record TrampolineKey(
+      IClass receiver, int positionalParameterCount, Set<String> keywordNames) {}
+
   protected final MethodTargetSelector base;
 
-  protected final Map<Pair<IClass, Integer>, IMethod> codeBodies = HashMapFactory.make();
+  protected final Map<TrampolineKey, IMethod> codeBodies = HashMapFactory.make();
 
   public PythonMethodTrampolineTargetSelector(MethodTargetSelector base) {
     this.base = base;
@@ -40,14 +56,13 @@ public abstract class PythonMethodTrampolineTargetSelector<T> implements MethodT
       if (this.shouldProcess(caller, site, receiver)) {
         PythonInvokeInstruction call = this.getCall(caller, site);
         if (call == null) return null;
-        Pair<IClass, Integer> key = this.makeKey(receiver, call);
+        TrampolineKey key = this.makeKey(receiver, call);
 
         if (!codeBodies.containsKey(key)) {
           MethodReference tr =
               MethodReference.findOrCreate(
                   receiver.getReference(),
-                  Atom.findOrCreateUnicodeAtom(
-                      TRAMPOLINE_METHOD_NAME + call.getNumberOfTotalParameters()),
+                  Atom.findOrCreateUnicodeAtom(this.getTrampolineName(call)),
                   AstMethodReference.fnDesc);
           PythonSummary x = new PythonSummary(tr, call.getNumberOfTotalParameters());
           int v = call.getNumberOfTotalParameters() + 1;
@@ -82,14 +97,33 @@ public abstract class PythonMethodTrampolineTargetSelector<T> implements MethodT
   }
 
   /**
-   * Returns a unique {@link Pair} for the given {@link Receiver} and {@link
-   * PythonInvokeInstruction}.
+   * Returns the {@link TrampolineKey} identifying the trampoline code body for the given receiver
+   * and the given call's positional/keyword layout.
    *
-   * @return A unique {@link Pair} for the given {@link Receiver} and {@link
-   *     PythonInvokeInstruction}.
+   * @param receiver The {@link IClass} being dispatched on.
+   * @param call The {@link PythonInvokeInstruction} whose layout the trampoline is generated for.
+   * @return The {@link TrampolineKey} identifying the trampoline code body for the given receiver
+   *     and the given call's positional/keyword layout.
    */
-  private Pair<IClass, Integer> makeKey(IClass receiver, PythonInvokeInstruction call) {
-    return Pair.make(receiver, call.getNumberOfTotalParameters());
+  private TrampolineKey makeKey(IClass receiver, PythonInvokeInstruction call) {
+    return new TrampolineKey(
+        receiver, call.getNumberOfPositionalParameters(), Set.copyOf(call.getKeywords()));
+  }
+
+  /**
+   * Returns the name of the trampoline method for the given call's positional/keyword layout.
+   * Distinct layouts must yield distinct names; otherwise, {@link MethodReference#findOrCreate}
+   * canonicalizes distinct code bodies onto one reference (<a
+   * href="https://github.com/wala/ML/issues/740">wala/ML#740</a>). Keyword names are sorted so call
+   * sites differing only in keyword order share a name, matching {@link TrampolineKey}.
+   *
+   * @param call The {@link PythonInvokeInstruction} whose layout the trampoline is generated for.
+   * @return The name of the trampoline method for the given call's positional/keyword layout.
+   */
+  private String getTrampolineName(PythonInvokeInstruction call) {
+    return TRAMPOLINE_METHOD_NAME
+        + call.getNumberOfPositionalParameters()
+        + call.getKeywords().stream().sorted().map(k -> "$" + k).collect(joining());
   }
 
   /**
