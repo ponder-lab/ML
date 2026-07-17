@@ -119,14 +119,20 @@ public abstract class TensorTypeAllocator extends TensorGenerator {
       return fromShapeAttribute;
     }
 
-    // Emit a discoverable marker so the ⊤ here is distinguishable from a "true" ⊤ elsewhere: this
-    // is exactly the set of sites where a user-supplied shape annotation would help. The set is
-    // grep-able as the wala/ML#370 annotation worklist without aborting the rest of the analysis
+    // Triage the ⊤ so the wala/ML#370 worklist stays honest: suggest an annotation only for a
+    // genuinely content-dependent shape, and mark a statically-recoverable-but-missed shape as a
+    // precision gap instead (wala/ML#735). The set stays grep-able and the analysis does not abort
     // (which is what throwing here did, wala/ML#604).
+    ShapeUnresolutionCause cause =
+        this.classifyUnresolvedShapeArgument(
+            builder, this.getShapeParameterPosition(), this.getShapeParameterName());
+    recordShapeAnnotationCandidate(builder, source == null ? null : source.getPointerKey(), cause);
     LOGGER.fine(
-        "Unresolved allocator shape for source: "
-            + describe(source)
-            + "; returning ⊤ (unknown shape). Candidate for a wala/ML#370 shape annotation.");
+        () ->
+            "Unresolved allocator shape for source: "
+                + describe(source)
+                + "; returning ⊤ (unknown shape). "
+                + shapeAnnotationTriageMessage(cause));
     return null;
   }
 

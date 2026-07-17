@@ -276,6 +276,69 @@ public abstract class TensorGenerator {
       BUILD_CONTRACT_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
 
   /**
+   * Why an allocator's shape argument did not resolve, triaging the wala/ML#370 annotation worklist
+   * (wala/ML#735). The "candidate for a wala/ML#370 shape annotation" suggestion is honest only for
+   * {@link #CONTENT_DEPENDENT}: #370 recovers shapes that depend on runtime content (file loaders,
+   * unmodeled user-function returns), which no static reasoning can derive. A shape whose value is
+   * present in the program but currently missed is a {@link #RECOVERABLE_GAP} &mdash; an analyzer
+   * precision fix, not an annotation request.
+   */
+  public enum ShapeUnresolutionCause {
+    /**
+     * The shape argument roots in a genuinely opaque source (a content-dependent file loader or an
+     * unmodeled user-function return): a true wala/ML#370 annotation candidate.
+     */
+    CONTENT_DEPENDENT,
+    /**
+     * The shape argument roots in an internal computation whose shape is statically present but the
+     * analyzer currently misses (a modeled op whose shape did not resolve, a consumer-constrained
+     * tensor): a precision gap, not a wala/ML#370 candidate.
+     */
+    RECOVERABLE_GAP,
+    /** The argument's provenance could not be classified either way. */
+    UNDETERMINED
+  }
+
+  /**
+   * The shape-annotation triage records accumulated during an analysis, per builder (wala/ML#735).
+   * An allocator whose shape argument does not resolve appends its source's pointer key and the
+   * classified {@link ShapeUnresolutionCause} here; the engine reads the list at the end of the run
+   * (before {@link #clearCaches}) to expose the triaged wala/ML#370 worklist. Recorded eagerly at
+   * the (memoized) shape read, so the same source may appear once; the engine dedups and intersects
+   * with the final ⊤-shape set.
+   */
+  private static final Map<
+          PropagationCallGraphBuilder, List<Pair<PointerKey, ShapeUnresolutionCause>>>
+      SHAPE_ANNOTATION_CANDIDATES = Collections.synchronizedMap(new WeakHashMap<>());
+
+  /**
+   * Records a shape-annotation triage entry for the given builder (wala/ML#735).
+   *
+   * @param builder The builder whose analysis produced the unresolved allocator shape.
+   * @param source The pointer key of the allocator's result, or {@code null} for a manual anchor.
+   * @param cause The classified reason the shape argument did not resolve.
+   */
+  static void recordShapeAnnotationCandidate(
+      PropagationCallGraphBuilder builder, PointerKey source, ShapeUnresolutionCause cause) {
+    if (source == null) return;
+    SHAPE_ANNOTATION_CANDIDATES
+        .computeIfAbsent(builder, b -> Collections.synchronizedList(new java.util.ArrayList<>()))
+        .add(Pair.make(source, cause));
+  }
+
+  /**
+   * Returns the shape-annotation triage records accumulated for the given builder (wala/ML#735).
+   *
+   * @param builder The builder whose records to read.
+   * @return The recorded {@code (source, cause)} pairs; empty when none were recorded.
+   */
+  static List<Pair<PointerKey, ShapeUnresolutionCause>> getShapeAnnotationCandidates(
+      PropagationCallGraphBuilder builder) {
+    List<Pair<PointerKey, ShapeUnresolutionCause>> ret = SHAPE_ANNOTATION_CANDIDATES.get(builder);
+    return ret == null ? Collections.emptyList() : ret;
+  }
+
+  /**
    * Drops the shape/dtype caches for the given builder. Intended to be called at the end of an
    * analysis to release cache memory deterministically, rather than waiting for the builder to be
    * garbage-collected. Safe to call more than once.
@@ -289,6 +352,7 @@ public abstract class TensorGenerator {
   public static void clearCaches(PropagationCallGraphBuilder builder) {
     STORED_ATTRIBUTE_CACHE.remove(builder);
     BUILD_CONTRACT_CACHE.remove(builder);
+    SHAPE_ANNOTATION_CANDIDATES.remove(builder);
   }
 
   /** The source of the tensor, represented by a points-to set variable. */
@@ -5175,6 +5239,342 @@ public abstract class TensorGenerator {
       return true;
     }
     return false;
+  }
+
+  /**
+   * Callee declaring-class name fragments of the content-dependent loaders wala/ML#370 enumerates:
+   * their result's shape is whatever was on disk or in the input, so no static reasoning recovers
+   * it. Matched as substrings of the invoke target's declaring-class name (wala/ML#735).
+   */
+  private static final String[] CONTENT_DEPENDENT_LOADER_FRAGMENTS = {
+    "numpy/load",
+    "numpy/loadtxt",
+    "numpy/genfromtxt",
+    "numpy/fromfile",
+    "read_csv",
+    "read_parquet",
+    "read_json",
+    "read_pickle",
+    "read_table",
+    "io/read_file",
+    "io/decode",
+    "read_file",
+    "parse_tensor",
+    "pickle/load",
+    "json/load",
+    "loads"
+  };
+
+  /**
+   * The triage clause for an unresolved-allocator-shape diagnostic, phrased by cause (wala/ML#735):
+   * a wala/ML#370 annotation suggestion only for a content-dependent shape, a precision-gap note
+   * for a statically-recoverable one, and a neutral undetermined clause otherwise.
+   *
+   * @param cause The classified reason the shape argument did not resolve.
+   * @return The human-readable triage clause.
+   */
+  protected static String shapeAnnotationTriageMessage(ShapeUnresolutionCause cause) {
+    switch (cause) {
+      case CONTENT_DEPENDENT:
+        return "Content-dependent source; candidate for a wala/ML#370 shape annotation.";
+      case RECOVERABLE_GAP:
+        return "Statically recoverable but currently missed; an analyzer precision gap, not a"
+            + " wala/ML#370 annotation candidate.";
+      default:
+        return "Cause undetermined; not classified as a wala/ML#370 annotation candidate.";
+    }
+  }
+
+  /**
+   * Classifies why this allocator's shape argument did not resolve, to triage the wala/ML#370
+   * annotation worklist (wala/ML#735). The "candidate for a wala/ML#370 shape annotation"
+   * suggestion is honest only when the shape roots in a genuinely opaque source; a shape whose
+   * value is present in the program but currently missed is a precision gap, not an annotation
+   * request.
+   *
+   * <p>The shape argument reaches an allocator's ⊤ floor only with an empty points-to set and after
+   * the {@code .shape}-recovery path failed, so the argument is a runtime-computed value (a shape
+   * vector, a loader result, an unmodeled call). This peels a shape-vector argument to its root
+   * tensor and classifies that root: a root that dispatches to a modeled generator is a {@link
+   * ShapeUnresolutionCause#RECOVERABLE_GAP} (an internal op whose shape the analyzer missed), a
+   * root produced by a content-dependent loader or an unmodeled user function is {@link
+   * ShapeUnresolutionCause#CONTENT_DEPENDENT}, and anything else is {@link
+   * ShapeUnresolutionCause#UNDETERMINED}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param shapeParamPos The positional index of the shape parameter.
+   * @param shapeParamName The keyword name of the shape parameter, or {@code null}.
+   * @return The classified cause; never {@code null}.
+   */
+  protected ShapeUnresolutionCause classifyUnresolvedShapeArgument(
+      PropagationCallGraphBuilder builder, int shapeParamPos, String shapeParamName) {
+    // Source-anchored with a direct invoke (a binary-op or caller-site source): the shape argument
+    // is in this frame.
+    PythonInvokeInstruction call = this.getInvokeInstruction();
+    if (call != null && this.getNode().getIR() != null && this.getNode().getDU() != null) {
+      int argVn;
+      try {
+        argVn = this.getArgumentValueNumber(builder, shapeParamPos, shapeParamName, true);
+      } catch (IllegalStateException e) {
+        argVn = -1;
+      }
+      if (argVn > 0) return this.classifyShapeArgumentInFrame(builder, this.getNode(), argVn);
+      return ShapeUnresolutionCause.UNDETERMINED;
+    }
+
+    // Manual / synthetic-do() anchor (the common allocator case, e.g. the `tf.zeros.do()` result):
+    // the shape argument is written at each caller's call site, not in the synthetic node's frame,
+    // so classify it per caller and keep the strongest finding (wala/ML#735; the manual-anchor
+    // argument path mirrors wala/ML#718's caller-aware resolution).
+    ShapeUnresolutionCause best = ShapeUnresolutionCause.UNDETERMINED;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      CGNode caller = callerInvoke.fst;
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction)
+          || caller.getIR() == null
+          || caller.getDU() == null) continue;
+      PythonInvokeInstruction pyCall = (PythonInvokeInstruction) callerInvoke.snd;
+      int argVn = -1;
+      if (shapeParamName != null) argVn = pyCall.getUse(shapeParamName);
+      if (argVn == -1 && shapeParamPos >= 0) {
+        int numPosParams = pyCall.getNumberOfPositionalParameters() - 1;
+        if (shapeParamPos < numPosParams) argVn = pyCall.getUse(shapeParamPos + 1);
+      }
+      if (argVn <= 0) continue;
+      best = strongerCause(best, this.classifyShapeArgumentInFrame(builder, caller, argVn));
+      if (best == ShapeUnresolutionCause.CONTENT_DEPENDENT) break;
+    }
+    return best;
+  }
+
+  /**
+   * Classifies a shape argument resolved to {@code argVn} in {@code node}'s frame (wala/ML#735):
+   * peels a shape-vector argument to its root tensor and classifies that root.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param node The {@link CGNode} whose IR defines {@code argVn}.
+   * @param argVn The shape-argument value number.
+   * @return The classified cause.
+   */
+  private ShapeUnresolutionCause classifyShapeArgumentInFrame(
+      PropagationCallGraphBuilder builder, CGNode node, int argVn) {
+    if (argVn <= 0 || node.getIR() == null || node.getDU() == null)
+      return ShapeUnresolutionCause.UNDETERMINED;
+    int rootVn = this.peelShapeVectorRoot(builder, node, argVn, HashSetFactory.make());
+    return this.classifyRootValue(builder, node, rootVn);
+  }
+
+  /**
+   * Returns the stronger of two classifications under the dominance order {@link
+   * ShapeUnresolutionCause#CONTENT_DEPENDENT} &gt; {@link ShapeUnresolutionCause#RECOVERABLE_GAP}
+   * &gt; {@link ShapeUnresolutionCause#UNDETERMINED} (wala/ML#735): a content-dependent finding at
+   * any caller makes the source a genuine wala/ML#370 candidate.
+   *
+   * @param a One cause.
+   * @param b The other cause.
+   * @return The dominant cause.
+   */
+  private static ShapeUnresolutionCause strongerCause(
+      ShapeUnresolutionCause a, ShapeUnresolutionCause b) {
+    if (a == ShapeUnresolutionCause.CONTENT_DEPENDENT
+        || b == ShapeUnresolutionCause.CONTENT_DEPENDENT)
+      return ShapeUnresolutionCause.CONTENT_DEPENDENT;
+    if (a == ShapeUnresolutionCause.RECOVERABLE_GAP || b == ShapeUnresolutionCause.RECOVERABLE_GAP)
+      return ShapeUnresolutionCause.RECOVERABLE_GAP;
+    return ShapeUnresolutionCause.UNDETERMINED;
+  }
+
+  /**
+   * Peels a shape-vector argument ({@code t.shape}, {@code t.shape.as_list()}, a slice of one) to
+   * the value number of its root tensor {@code t}, so the classification reasons about the tensor
+   * whose shape the vector reports rather than the vector itself (wala/ML#735). Returns {@code vn}
+   * unchanged when it is not a shape-vector chain.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param vn The shape-argument value number.
+   * @param visited The value numbers already peeled, guarding cyclic def-use chains.
+   * @return The root tensor's value number, or {@code vn} when it is not a shape vector.
+   */
+  private int peelShapeVectorRoot(
+      PropagationCallGraphBuilder builder, CGNode node, int vn, Set<Integer> visited) {
+    if (vn <= 0 || !visited.add(vn) || node.getDU() == null || node.getIR() == null) return vn;
+    SSAInstruction def = node.getDU().getDef(vn);
+    SymbolTable st = node.getIR().getSymbolTable();
+    if (def instanceof PythonPropertyRead) {
+      int memberVn = ((PythonPropertyRead) def).getMemberRef();
+      if (st.isStringConstant(memberVn) && "shape".equals(st.getStringValue(memberVn)))
+        return this.peelShapeVectorRoot(
+            builder, node, ((PythonPropertyRead) def).getObjectRef(), visited);
+      return vn;
+    }
+    if (def instanceof PythonInvokeInstruction) {
+      PythonInvokeInstruction invoke = (PythonInvokeInstruction) def;
+      if (invoke.getNumberOfUses() < 1) return vn;
+      SSAInstruction funcDef = node.getDU().getDef(invoke.getUse(0));
+      if (funcDef instanceof PythonPropertyRead) {
+        int memberVn = ((PythonPropertyRead) funcDef).getMemberRef();
+        if (st.isStringConstant(memberVn) && "as_list".equals(st.getStringValue(memberVn)))
+          return this.peelShapeVectorRoot(
+              builder, node, ((PythonPropertyRead) funcDef).getObjectRef(), visited);
+      }
+      if (dispatchesToSliceBuiltin(builder, node, invoke) && invoke.getNumberOfUses() >= 2)
+        return this.peelShapeVectorRoot(builder, node, invoke.getUse(1), visited);
+      if (dispatchesToTfShape(builder, node, invoke) && invoke.getNumberOfUses() >= 2)
+        return this.peelShapeVectorRoot(builder, node, invoke.getUse(1), visited);
+    }
+    return vn;
+  }
+
+  /**
+   * Classifies a shape argument's root value as content-dependent, a recoverable gap, or
+   * undetermined (wala/ML#735).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param node The {@link CGNode} whose IR defines {@code rootVn}.
+   * @param rootVn The root value number.
+   * @return The classified cause.
+   */
+  private ShapeUnresolutionCause classifyRootValue(
+      PropagationCallGraphBuilder builder, CGNode node, int rootVn) {
+    if (rootVn <= 0) return ShapeUnresolutionCause.UNDETERMINED;
+    SSAInstruction def = node.getDU().getDef(rootVn);
+
+    // A recognized content-dependent loader: the shape is whatever was on disk / in the input.
+    if (def instanceof SSAAbstractInvokeInstruction
+        && this.dispatchesToContentDependentLoader(
+            builder, node, (SSAAbstractInvokeInstruction) def))
+      return ShapeUnresolutionCause.CONTENT_DEPENDENT;
+
+    // A root that dispatches to a modeled generator is an internal computation whose shape the
+    // analyzer missed: a precision gap, recoverable in principle from the op's semantics.
+    if (this.rootDispatchesToModeledGenerator(builder, node, rootVn))
+      return ShapeUnresolutionCause.RECOVERABLE_GAP;
+
+    // An unmodeled user-function return (a script function that resolved to no generator) is the
+    // other wala/ML#370 category: the analyzer has no contract for its shape.
+    if (def instanceof SSAAbstractInvokeInstruction
+        && this.dispatchesToUnmodeledUserFunction(
+            builder, node, (SSAAbstractInvokeInstruction) def))
+      return ShapeUnresolutionCause.CONTENT_DEPENDENT;
+
+    return ShapeUnresolutionCause.UNDETERMINED;
+  }
+
+  /**
+   * Returns whether every resolved target of the invoke is one of the content-dependent loaders
+   * wala/ML#370 enumerates (wala/ML#735).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the targets.
+   * @param node The calling {@link CGNode}.
+   * @param invoke The invoke instruction to test.
+   * @return {@code true} iff a resolved target is a recognized content-dependent loader.
+   */
+  private boolean dispatchesToContentDependentLoader(
+      PropagationCallGraphBuilder builder, CGNode node, SSAAbstractInvokeInstruction invoke) {
+    Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite());
+    if (targets != null)
+      for (CGNode target : targets) {
+        String name = target.getMethod().getDeclaringClass().getReference().getName().toString();
+        for (String fragment : CONTENT_DEPENDENT_LOADER_FRAGMENTS)
+          if (name.contains(fragment)) return true;
+      }
+    // A content-dependent loader is often entirely unmodeled, so the call graph resolves no
+    // target and the declaring-class check above sees nothing. Fall back to the invoked
+    // function's member name (`np.loadtxt`, `pd.read_csv`, `tf.io.read_file`): a property read
+    // whose member matches a recognized loader (wala/ML#735).
+    if (invoke instanceof PythonInvokeInstruction && node.getDU() != null && node.getIR() != null) {
+      SSAInstruction funcDef = node.getDU().getDef(invoke.getUse(0));
+      if (funcDef instanceof PythonPropertyRead) {
+        SymbolTable st = node.getIR().getSymbolTable();
+        int memberVn = ((PythonPropertyRead) funcDef).getMemberRef();
+        if (st.isStringConstant(memberVn)
+            && isContentDependentLoaderMember(st.getStringValue(memberVn))) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Whether the given invoked-function member name is one of the content-dependent loaders
+   * wala/ML#370 enumerates (wala/ML#735). Kept specific so a benign member (e.g. {@code
+   * model.load_weights}) does not match: the bare {@code load}/{@code loads} names are the {@code
+   * numpy}/{@code pickle}/{@code json} loaders.
+   *
+   * @param member The member name read off the call's receiver.
+   * @return {@code true} for a recognized loader member.
+   */
+  private static boolean isContentDependentLoaderMember(String member) {
+    switch (member) {
+      case "load":
+      case "loads":
+      case "loadtxt":
+      case "genfromtxt":
+      case "fromfile":
+      case "read_csv":
+      case "read_parquet":
+      case "read_json":
+      case "read_pickle":
+      case "read_table":
+      case "read_file":
+      case "decode_csv":
+      case "decode_image":
+      case "decode_jpeg":
+      case "decode_png":
+      case "parse_tensor":
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Returns whether the root value dispatches to a modeled {@link TensorGenerator} &mdash; i.e. it
+   * is produced by an op the analyzer models, so its shape is recoverable in principle even when
+   * the current analysis missed it (wala/ML#735).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param node The {@link CGNode} whose IR defines {@code rootVn}.
+   * @param rootVn The root value number.
+   * @return {@code true} iff the root's points-to producer resolves to a generator.
+   */
+  private boolean rootDispatchesToModeledGenerator(
+      PropagationCallGraphBuilder builder, CGNode node, int rootVn) {
+    PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, rootVn);
+    if (builder.getPropagationSystem().isImplicit(pk)) return false;
+    PointsToSetVariable var = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
+    if (var == null) return false;
+    try {
+      TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+      return generator != null && !this.isSameOperation(generator);
+    } catch (IllegalArgumentException e) {
+      return false;
+    }
+  }
+
+  /**
+   * Returns whether every resolved target of the invoke is an unmodeled user-defined function: a
+   * script-level function (not a synthetic op summary) that dispatched to no generator, the
+   * wala/ML#370 "unmodeled user-function return" category (wala/ML#735).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the targets.
+   * @param node The calling {@link CGNode}.
+   * @param invoke The invoke instruction to test.
+   * @return {@code true} iff a resolved target is an unmodeled script function.
+   */
+  private boolean dispatchesToUnmodeledUserFunction(
+      PropagationCallGraphBuilder builder, CGNode node, SSAAbstractInvokeInstruction invoke) {
+    Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite());
+    if (targets == null || targets.isEmpty()) return false;
+    boolean sawScriptFunction = false;
+    for (CGNode target : targets) {
+      String name = target.getMethod().getDeclaringClass().getReference().getName().toString();
+      // A synthetic op summary (`Ltensorflow/...`, `Lnumpy/...`) is modeled, not a user function;
+      // its unresolved shape is a modeling gap the loader/generator arms already ruled on.
+      if (name.startsWith("Lscript ") || name.contains("/script ")) sawScriptFunction = true;
+      else return false;
+    }
+    return sawScriptFunction;
   }
 
   /**
