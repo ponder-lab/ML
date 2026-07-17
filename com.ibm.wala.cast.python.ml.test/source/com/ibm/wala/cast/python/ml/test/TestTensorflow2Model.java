@@ -1614,10 +1614,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
             Set.of(TENSOR_1_2_FLOAT32, TENSOR_2_2_FLOAT32)));
   }
 
+  /**
+   * {@code add(a, b)} is called only as {@code add(list, list)} where {@code list = [tf.ones([1,
+   * 2]), tf.ones([2, 2])]}, so {@code a} and {@code b} are Python lists. {@code a + b} is therefore
+   * list concatenation, not a tensor add, so {@code add} has no tensor variables. Before
+   * wala/ML#750 the {@code list} operands' allocations were counted as tensor evidence and {@code a
+   * + b} was falsely typed as a tensor (the local count was 1); the concatenation is now correctly
+   * not a tensor.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
   @Test
   public void testTensorList2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_tensor_list2.py", "add", 0, 1);
+    test("tf2_test_tensor_list2.py", "add", 0, 0);
   }
 
   @Test
@@ -4627,19 +4640,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * {@code (256, 784)} dtype {@code float32} (verified by Python assert statements in {@code
    * autoencoder.py}).
    *
-   * <p>Expected tensor variable count: 4. Rule-based would be 6 (1 parameter + 5 intermediate ops
-   * {@code encoder(x)} result, {@code decoder(...) = reconstructed_image}, {@code mean_square(...)
-   * = loss}, {@code trainable_variables}, {@code gradients}), dropping to 4 if list-of-tensors
-   * values don't register. After wala/ML#430's {@code Gradient} generator, {@code gradients} now
-   * registers as one fresh tensor variable; combined with the previously-registered tensors the
-   * count reaches 4 — matching the rule-based-minus-{@code trainable_variables} ceiling. (Pre-#430
-   * the count was 1, so the master baseline of 3 had been deliberately preserved as a regression
-   * canary; that role is now superseded by reaching the rule-based ceiling.)
+   * <p>Expected local tensor variable count: 5, the tensor-producing values {@code encoder(x)}
+   * result, {@code decoder(...) = reconstructed_image}, {@code mean_square(...) = loss}, {@code
+   * gradients} (a fresh tensor variable since wala/ML#430's {@code Gradient} generator), and the
+   * returned {@code loss} alias. The count dropped from 6 to 5 with wala/ML#750: {@code
+   * trainable_variables = list(weights.values()) + list(biases.values())} is a Python list
+   * concatenation, not a tensor, so it no longer falsely registers as a tensor variable.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
    */
   @Test
   public void testAutoencoder3()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("autoencoder.py", "run_optimization", 1, 6, Map.of(2, Set.of(TENSOR_256_784_FLOAT32)));
+    test("autoencoder.py", "run_optimization", 1, 5, Map.of(2, Set.of(TENSOR_256_784_FLOAT32)));
   }
 
   /**
@@ -4919,6 +4935,34 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   public void testSliceOpaqueIter()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_slice_opaque_iter.py", "consume", 0, 0);
+  }
+
+  /**
+   * Regression test for <a href="https://github.com/wala/ML/issues/750">wala/ML#750</a>: a Python
+   * list concatenation accumulated in a loop ({@code result_array += [on, off]}) is not a tensor.
+   * The pattern is vendored from {@code MusicTransformer-tensorflow2.0}'s {@code
+   * midi_processor/processor.py} {@code _divide_note}, where {@code on}/{@code off} are plain
+   * {@code SplitNote} objects and {@code result_array} is a list. The concatenation's {@code +}
+   * binop lands in {@link
+   * com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine#getDataflowSources}'s {@code
+   * SSABinaryOpInstruction} branch, so it is gated by operand tensor evidence. The loop-carried
+   * {@code result_array} is a phi over the initial {@code []} allocation and the previous
+   * concatenation, so its {@code list} allocation is reached only through its points-to set, not
+   * its own def. Before the fix, the points-to-set tensor-evidence check counted that {@code list}
+   * allocation as evidence, so the binop dispatched to {@code ElementWiseOperation} and typed the
+   * result as a tensor; that type then fed back through the loop into {@code result_array}, a
+   * self-reinforcing false tensor with a {@code TENSORFLOW} origin. {@code _divide_note} must have
+   * no tensor variables.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testListConcatNotTensor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf750_list_concat.py", "_divide_note", 0, 0);
   }
 
   /**
