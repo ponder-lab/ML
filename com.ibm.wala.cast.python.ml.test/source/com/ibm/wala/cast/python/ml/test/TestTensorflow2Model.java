@@ -5817,27 +5817,22 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * unioned with the standard partial-batch sibling {@code (?, ?)}.
    *
    * <p>{@code pred} types too (wala/ML#665): the model forward output is a tensor union. With
-   * {@code add_weight} consuming its {@code shape}/{@code dtype} arguments (wala/ML#667) and
-   * constructor keyword arguments forwarded to {@code __init__} (wala/ML#664), the runtime-true
-   * vocab dimension is concrete ({@code (?, ?, 10)}). Receiver-keyed trampoline contexts
-   * (wala/ML#679) removed the spurious {@code (?, ?, 4)} constructor-collapse member, but the
-   * flat-logits matmul member that carried the embedding dimension ({@code (?, 8)} float32)
-   * degrades to {@code ? of float32} in decoder-stack propagation. The runtime-true logits form
-   * carries {@code float32} through the matmul operands' dtype-equality constraint (wala/ML#677):
-   * {@code OutputLayer.call}'s live arm multiplies by {@code self.layer_weights}, whose {@code
-   * add_weight} allocation types {@code float32}, and the reshape passes it through. The {@code
-   * unknown}-dtype twin is the same φ's other arm, a path-insensitive phantom: the {@code
-   * self.porj_weights} site (a subject-side typo, never assigned, dead at runtime) resolves neither
-   * operand, its first being the decoder-stack output whose producer walk wala/ML#680 tracks. The
+   * {@code add_weight} consuming its {@code shape}/{@code dtype} arguments (wala/ML#667),
+   * constructor keyword arguments forwarded to {@code __init__} (wala/ML#664), the wala/ML#739
+   * operand-walk repairs, and parameter defaults materializing in the pointer analysis
+   * (wala/ML#743), the decoder stack resolves end to end under the fit-path contexts: the
+   * runtime-true logits form is {@code (Dynamic, Dynamic, 10)} float32 (the batch and sequence axes
+   * ride the dataset's dynamic dims), alongside the {@code (?, ?, 10)} partial. The wala/ML#680
+   * {@code unknown}-dtype phantom is gone: with the decoder-stack output resolving, {@code
+   * OutputLayer.call}'s dead {@code self.porj_weights} arm no longer contributes a member. The
    * union is the order-independent fixed point (wala/ML#674): identical across runs and across
    * suite/single-test modes. Analyzed statically here, like the consumer's vendoring; it runs in
    * the perf-eval with its tfrecord/data setup.
    *
-   * <p>TODO: Expect the float32 member's concrete shape back once <a
-   * href="https://github.com/wala/ML/issues/682">wala/ML#682</a> recovers concrete shapes through
-   * the decoder stack under receiver-keyed contexts, and the phantom arm's dtype once <a
-   * href="https://github.com/wala/ML/issues/680">wala/ML#680</a> resolves the loop-carried producer
-   * cycle.
+   * <p>TODO: Drop the {@code (Dynamic, Dynamic, 8, 8)} member once <a
+   * href="https://github.com/wala/ML/issues/746">wala/ML#746</a> filters constant-decidable branch
+   * arms per call site; it is the {@code mode="projection"} call's rank-3 input crossing into the
+   * embedding-mode lookup, runtime-infeasible at that site.
    */
   @Test
   public void testGpt2GetLossVendored()
@@ -5865,9 +5860,14 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
                     FLOAT_32,
                     asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))),
                 new TensorType(
-                    UNKNOWN,
-                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))),
-                TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+                    FLOAT_32, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(10))),
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        DynamicDim.INSTANCE,
+                        DynamicDim.INSTANCE,
+                        new NumericDim(8),
+                        new NumericDim(8))))));
   }
 
   /**
@@ -11638,19 +11638,17 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Pins the vendored gpt-2 forward output (the wala/ML#618 {@code pred} source): with wala/ML#665
    * forwarding wildcard import bindings, the full decoder stack types and the model output is a
    * rank-3-dominated tensor union. Receiver-keyed trampoline contexts (wala/ML#679) removed the
-   * spurious {@code (?, ?, 4)}/{@code (?, ?, 12)} constructor-collapse members and kept the
-   * runtime-true vocab member {@code (?, ?, 10)}, but the previously concrete {@code (2, 3, 8)
-   * float32} member degrades to {@code ? of float32} in decoder-stack propagation ({@link
-   * #testCollectionProbeVendoredEmbedding()} still recovers it concretely at the embedding output).
-   * The vocab member appears twice, once per {@code OutputLayer.call} matmul arm (wala/ML#677): the
-   * live {@code self.layer_weights} arm carries {@code float32} through the operands'
-   * dtype-equality constraint, and the dead {@code self.porj_weights} arm (a subject-side typo,
-   * never assigned) resolves neither operand, so its phantom keeps the {@code unknown} dtype
-   * wala/ML#680 tracks.
+   * spurious {@code (?, ?, 4)}/{@code (?, ?, 12)} constructor-collapse members, and the wala/ML#739
+   * operand-walk repairs with parameter defaults materializing (wala/ML#743) recover the
+   * runtime-true logits member fully concrete: {@code (2, 3, 10)} float32, alongside the {@code (?,
+   * ?, 10)} partial from the fit-path contexts. The wala/ML#680 {@code unknown}-dtype phantom is
+   * gone: with the decoder-stack output resolving, {@code OutputLayer.call}'s dead {@code
+   * self.porj_weights} arm no longer contributes a member.
    *
-   * <p>TODO: Expect the float32 member's concrete shape back once <a
-   * href="https://github.com/wala/ML/issues/682">wala/ML#682</a> recovers concrete shapes through
-   * the decoder stack under receiver-keyed contexts.
+   * <p>TODO: Drop the {@code (2, 3, 8, 8)} member once <a
+   * href="https://github.com/wala/ML/issues/746">wala/ML#746</a> filters constant-decidable branch
+   * arms per call site; it is the {@code mode="projection"} call's rank-3 input crossing into the
+   * embedding-mode lookup, runtime-infeasible at that site.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -11677,12 +11675,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(
             2,
             Set.of(
-                TENSOR_UNKNOWN_SHAPE_FLOAT32,
+                TensorType.of(FLOAT_32, 2, 3, 10),
+                TensorType.of(FLOAT_32, 2, 3, 8, 8),
                 new TensorType(
                     FLOAT_32,
-                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))),
-                new TensorType(
-                    UNKNOWN,
                     asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))))));
   }
 
@@ -12049,8 +12045,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   /**
    * Pins the vendored {@code LayerNormalization} forward result: {@code add_weight}-created {@code
    * gamma}/{@code beta} dispatch (wala/ML#595, wala/ML#618) and the normalization body types.
-   * Receiver-keyed contexts (wala/ML#679) dropped the shapeless-and-dtypeless union member, so the
-   * result is exactly {@code ? of float32}.
+   * Receiver-keyed contexts (wala/ML#679) dropped the shapeless-and-dtypeless union member, and
+   * with parameter defaults materializing in the pointer analysis (wala/ML#743), the {@code
+   * epsilon=1e-6} co-operand classifies as a runtime scalar, so the {@code variance + epsilon}
+   * broadcast preserves the operand shape and the result is the runtime-true concrete {@code (2, 3,
+   * 8)} float32.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -12074,7 +12073,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "gpt2_vendored",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 8))));
   }
 
   /**

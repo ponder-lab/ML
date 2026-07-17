@@ -1021,15 +1021,29 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
           };
 
       CAstVisitor v = new CAstVisitor(child, parser);
+      // A method definition's visit returns its parameter-default initialization block (the
+      // assignments to the `<class>_<method>_default_<k>` globals) when the method has defaults.
+      // Those must execute in the scope that executes the class definition, matching Python's
+      // def-time default evaluation; discarding them left every method-default global empty
+      // (wala/ML#743). Only function-definition returns are collected: other members' returned
+      // nodes are class-body forms this statement never executed in the enclosing scope.
+      java.util.List<CAstNode> methodDefaultInits = new ArrayList<>();
       for (stmt e : arg0.getInternalBody()) {
         if (!(e instanceof Pass)) {
-          e.accept(v);
+          CAstNode r = e.accept(v);
+          if (r != null && (e instanceof FunctionDef || e instanceof AsyncFunctionDef)) {
+            methodDefaultInits.add(r);
+          }
         }
       }
 
       CAstNode x = Ast.makeNode(CAstNode.CLASS_STMT, Ast.makeConstant(clse));
       context.addScopedEntity(x, clse);
-      return x;
+      if (methodDefaultInits.isEmpty()) {
+        return x;
+      }
+      methodDefaultInits.add(x);
+      return Ast.makeNode(CAstNode.BLOCK_EXPR, methodDefaultInits.toArray(new CAstNode[0]));
     }
 
     private int compareTmp = 0;
@@ -1320,8 +1334,15 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
         int arg = 0;
         defaultVars = new CAstNode[defaults.size()];
         defaultCode = new CAstNode[defaults.size()];
+        // A method's default globals carry the declaring class's name: every Keras layer defines
+        // `call`, so the unqualified `call_default_<k>` would union all classes' defaults into one
+        // global (wala/ML#743).
+        String defaultsPrefix =
+            context.entity() != null && context.entity().getKind() == CAstEntity.TYPE_ENTITY
+                ? context.entity().getName() + "_"
+                : "";
         for (expr dflt : defaults) {
-          String name = functionName + "_default_" + arg;
+          String name = defaultsPrefix + functionName + "_default_" + arg;
           context.root().addGlobal(name);
           defaultCode[arg] =
               Ast.makeNode(
