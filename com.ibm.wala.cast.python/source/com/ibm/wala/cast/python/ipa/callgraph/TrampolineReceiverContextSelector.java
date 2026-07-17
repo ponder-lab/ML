@@ -47,16 +47,18 @@ import java.util.logging.Logger;
  *       href="https://github.com/wala/ML/issues/530">wala/ML#530</a>);
  *   <li>the real method body dispatched from a per-receiver trampoline node inherits the
  *       trampoline's context, since a call string would re-collapse it;
- *   <li>any other call made from a receiver-keyed node is keyed on the calling node and site, so
- *       per-receiver state survives one hop beyond the receiver context — in particular the
- *       constructors (synthesized or XML-summary) allocating sublayers in the Keras lazy {@code
- *       build}, and the summary methods those sublayers dispatch.
+ *   <li>any other call made from a receiver-keyed node, or from a node whose own context is a
+ *       caller-site pair, is keyed on the calling node and site, so per-caller-node separation
+ *       propagates down the helper chains under a receiver context (wala/ML#742) — in particular
+ *       the constructors (synthesized or XML-summary) allocating sublayers in the Keras lazy {@code
+ *       build}, the summary methods those sublayers dispatch, and the module-level helper functions
+ *       sibling layer methods share.
  * </ol>
  *
  * <p>Termination: receiver contexts do not chain unboundedly. Dispatching on a receiver already
  * recorded in the caller's context reuses the caller's context, and {@link #MAX_RECEIVER_DEPTH}
- * caps the caller-pair chain as a backstop against mutually recursive dispatch across distinct
- * instances. Rule 4 fires only for receiver-keyed callers, whose contexts rule 2's guards bound.
+ * caps the caller-pair chain in both rule 2 and rule 4; the cap is load-bearing for rule 4's
+ * propagation, which would otherwise grow one pair per call through recursive helpers.
  *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
@@ -120,15 +122,33 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
     if (caller.getMethod().getDeclaringClass() instanceof PythonInstanceMethodTrampoline)
       return caller.getContext();
 
-    // Calls made from a receiver-keyed method body are keyed on the calling node and site, so
-    // per-receiver state (e.g., sublayers constructed in the Keras lazy build, whether by a
-    // synthesized source-class constructor or an XML-summary one) stays separate one hop beyond
-    // the receiver context. The caller-site keying is PAIRED with the base selector's context so
-    // the call-string machinery keeps extending below this hop — a bare caller-site context
-    // carries no call string, and the sub-layer helpers underneath would collapse harder than
-    // under plain call strings. The pair's own key carries no receiver, so this deepens the
-    // receiver distinction by exactly one hop and cannot chain.
-    if (caller.getContext().get(ContextKey.RECEIVER) != null) {
+    // Calls made from a receiver-keyed method body, or from any node whose own context is a
+    // caller-site pair, are keyed on the calling node and site, so per-caller-node separation
+    // propagates down the helper chains below a receiver context instead of stopping one hop
+    // beneath it (wala/ML#742): a shared module-level helper called by sibling layer methods
+    // otherwise collapses onto method-keyed call strings, and every read through it unions the
+    // callers' operands (the vendored einsum-via-matmul shim was the witness, minting mixed-rank
+    // matmul results from the unioned operands). The caller-site keying stays PAIRED with the
+    // base selector's context so the call-string machinery extends wherever the chain ends.
+    // {@link #MAX_RECEIVER_DEPTH} bounds the chain, degrading to the base selector past it; the
+    // cap is load-bearing here, since recursive helpers would otherwise grow one pair per
+    // recursive call.
+    if (caller.getContext().get(ContextKey.RECEIVER) != null
+        || caller.getContext() instanceof CallerSiteContext) {
+      // The guard is recursion, not depth: a deep-but-acyclic layer stack (a BERT encoder tower)
+      // legitimately chains many pairs, while a callee already on the caller chain would grow one
+      // pair per recursive call. Degrade to the base selector on a method repeat, with an
+      // absolute backstop against pathological acyclic towers.
+      if (chainsThroughMethod(caller, callee)) {
+        LOGGER.fine(
+            () ->
+                "Caller-pair recursion (or backstop) at caller: "
+                    + caller
+                    + "; delegating to the base selector for callee: "
+                    + callee
+                    + ".");
+        return base.getCalleeTarget(caller, site, callee, actualParameters);
+      }
       Context baseContext = base.getCalleeTarget(caller, site, callee, actualParameters);
       return baseContext == null
           ? new CallerSiteContext(caller, site)
@@ -159,5 +179,33 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
       depth++;
     }
     return depth;
+  }
+
+  /**
+   * The absolute bound on rule 4's caller-pair chain length: a backstop against pathological
+   * acyclic call towers, far above any real layer stack's nesting.
+   */
+  private static final int MAX_CALLER_PAIR_DEPTH = 64;
+
+  /**
+   * Returns whether keying the given callee on the given caller would recurse: the callee's method
+   * already appears on the caller-pair chain (so each recursive call would add a pair), or the
+   * chain has reached {@link #MAX_CALLER_PAIR_DEPTH}.
+   *
+   * @param caller The calling {@link CGNode}.
+   * @param callee The dispatched callee.
+   * @return {@code true} iff pairing would chain through a repeated method or exceed the backstop.
+   */
+  private static boolean chainsThroughMethod(CGNode caller, IMethod callee) {
+    if (caller.getMethod().equals(callee)) return true; // Direct self-recursion.
+    int depth = 0;
+    Context c = caller.getContext();
+    while (c instanceof CallerSiteContext) {
+      if (++depth >= MAX_CALLER_PAIR_DEPTH) return true; // Fail closed at the backstop.
+      CGNode up = ((CallerSiteContext) c).getCaller();
+      if (up.getMethod().equals(callee)) return true; // The callee is already on the chain.
+      c = up.getContext();
+    }
+    return false;
   }
 }
