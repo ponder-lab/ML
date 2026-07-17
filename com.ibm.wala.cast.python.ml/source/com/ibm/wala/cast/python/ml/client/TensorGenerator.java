@@ -70,6 +70,7 @@ import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
+import com.ibm.wala.ssa.SSAPhiInstruction;
 import com.ibm.wala.ssa.SSAPutInstruction;
 import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SSAUnaryOpInstruction;
@@ -168,6 +169,36 @@ public abstract class TensorGenerator {
             ? generator.getSource().getPointerKey()
             : generator.manualNode;
     return Pair.make(generator.getClass(), anchorId);
+  }
+
+  /**
+   * Returns whether the given generator models the same operation as this one: the same concrete
+   * class anchored in the same method, compared context-insensitively. The shape walk's
+   * factory-dispatch recursion guards block same-operation dispatch, since a value read that
+   * resolves to its own operation's generator answers with the operation's <em>output</em> where
+   * its input was asked (e.g., a {@code Dense} layer's {@code inputs} parameter dispatching back to
+   * the same {@code Dense.__call__}'s generator turns the {@code (64, 5)} kernel into {@code (5,
+   * 5)}), while a generator can recurse into a different operation of its own class &mdash; e.g.,
+   * an {@link ElementWiseOperation} reading an operand produced by another method's binary operator
+   * (wala/ML#739). Evaluation cycles among distinct operations converge in the worklist engine
+   * (wala/ML#365).
+   *
+   * @param generator The generator dispatched for a value this generator is reading.
+   * @return {@code true} iff the two model the same operation.
+   */
+  private boolean isSameOperation(TensorGenerator generator) {
+    if (!generator.getClass().equals(this.getClass())) return false;
+    CGNode thisNode;
+    CGNode otherNode;
+    try {
+      thisNode = this.getNode();
+      otherNode = generator.getNode();
+    } catch (IllegalArgumentException e) {
+      // An anchor whose node cannot be resolved keeps the class-guard behavior.
+      return true;
+    }
+    if (thisNode == null || otherNode == null) return true;
+    return thisNode.getMethod().getReference().equals(otherNode.getMethod().getReference());
   }
 
   /**
@@ -1675,7 +1706,25 @@ public abstract class TensorGenerator {
     if (!valuePointsToSet.isEmpty()) {
       ShapeResult fromValue = this.getShapeResultOfValue(builder, valuePointsToSet, exact);
       if (!fromValue.isBottom()) {
-        if (!fromValue.hasUnknown()) return fromValue;
+        if (!fromValue.hasUnknown()) {
+          // A cleanly-resolved points-to union for a call result can still be arm-incomplete: a
+          // callee return produced by a binary operator has no allocation site, so the PA cannot
+          // represent that member in the union at all. Union the per-context callee-return
+          // descent's members when they add anything, so the operator-produced arms surface
+          // (wala/ML#739). A descent that adds no members leaves the resolved union untouched.
+          SSAInstruction valueDef = node.getDU().getDef(valueNumber);
+          if (valueDef instanceof SSAAbstractInvokeInstruction) {
+            ShapeResult fromCallees =
+                this.shapeResultOfCalleeReturnValues(
+                    builder, node, (SSAAbstractInvokeInstruction) valueDef, exact);
+            if (!fromValue.members().containsAll(fromCallees.members())) {
+              Set<List<Dimension<?>>> merged = HashSetFactory.make(fromValue.members());
+              merged.addAll(fromCallees.members());
+              return new ShapeResult(merged, fromCallees.hasUnknown());
+            }
+          }
+          return fromValue;
+        }
         // An unresolvable (⊤) result for a Keras call input can still be seeded from an explicit
         // `model.build(input_shape=...)` contract: the runtime value exists (non-empty PTS) but
         // its shape does not resolve, exactly the case the declared contract covers
@@ -1703,11 +1752,12 @@ public abstract class TensorGenerator {
     if (var != null) {
       try {
         TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
-        // Recurse into the generator as long as it's not the *same* generator (identical source)
-        // as `this`. Previously this check compared classes, which prevented an
-        // `ElementWiseOperation` from recursing into a nested `ElementWiseOperation` on a
-        // different operand value number — exactly the case for `(x - k1) / k2` chains.
-        if (generator != null && !generator.getClass().equals(this.getClass())) {
+        // Recurse into the generator as long as it does not model the *same operation* as `this`
+        // (same class in the same method). Comparing classes alone blocked an
+        // `ElementWiseOperation` from recursing into a different method's `ElementWiseOperation`
+        // — exactly the read a layer-call descent needs when the callee returns a binary-operator
+        // result (wala/ML#739).
+        if (generator != null && !this.isSameOperation(generator)) {
           LOGGER.fine(
               () ->
                   "getShapes(node, vn): recovering via factory generator "
@@ -1741,6 +1791,34 @@ public abstract class TensorGenerator {
               builder, node, (SSAAbstractInvokeInstruction) def, exact);
       if (!fromCallees.members().isEmpty()) return fromCallees;
       if (fromCallees.hasUnknown() && partial == null) partial = ShapeResult.unknown();
+    }
+
+    // A φ merges its arms' values (e.g. a return variable assigned on two branches, or a
+    // loop-carried tensor), and the PA's assignment graph cannot see an operator-produced arm at
+    // all (a binary-operator result has no allocation site), so read each arm directly and union
+    // the results (wala/ML#739). The worklist engine bounds the loop-carried case, converging the
+    // cycle from its non-cyclic arms.
+    if (def instanceof SSAPhiInstruction) {
+      boolean armUnknown = false;
+      Set<List<Dimension<?>>> armMembers = HashSetFactory.make();
+      for (int i = 0; i < def.getNumberOfUses(); i++) {
+        int useVn = def.getUse(i);
+        if (useVn <= 0) {
+          armUnknown = true;
+          continue;
+        }
+        ShapeResult armResult;
+        try {
+          armResult = this.getShapeResult(builder, node, useVn, exact);
+        } catch (IllegalArgumentException e) {
+          armUnknown = true;
+          continue;
+        }
+        if (armResult.hasUnknown() || armResult.isBottom()) armUnknown = true;
+        armMembers.addAll(armResult.members());
+      }
+      if (!armMembers.isEmpty()) return new ShapeResult(armMembers, armUnknown);
+      if (armUnknown && partial == null) partial = ShapeResult.unknown();
     }
 
     if (def == null) {
@@ -2365,7 +2443,7 @@ public abstract class TensorGenerator {
         }
         try {
           TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
-          if (generator != null && !generator.getClass().equals(this.getClass())) {
+          if (generator != null && !this.isSameOperation(generator)) {
             ShapeResult generatorShapes = memoizedShapeResult(builder, generator);
             ret.addAll(generatorShapes.members());
             if (exact && generatorShapes.hasUnknown())
@@ -2910,9 +2988,11 @@ public abstract class TensorGenerator {
     if (var != null) {
       try {
         TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
-        // See `getShapes(builder, CGNode, int)` — we compare by source, not class, so two
-        // different `ElementWiseOperation` generators for different operand value numbers can
-        // still recurse into each other.
+        // Unlike the shape path's evaluation-identity guard (wala/ML#739), this guard stays
+        // class-based: the dtype axis's legacy ⊥ convention makes a cyclically-converged or
+        // mid-cycle evaluation read as "not a tensor" at seeding, so widening the recursion here
+        // demotes reachable {UNKNOWN} results to ⊥ (observed on the vendored gpt-2 `get_loss`
+        // reduction chain).
         if (generator != null && !generator.getClass().equals(this.getClass())) {
           return memoizedDTypes(builder, generator);
         }
@@ -3176,6 +3256,8 @@ public abstract class TensorGenerator {
         }
         try {
           TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
+          // Class-based like the other dtype-path guard; see `computeDTypes` on why the
+          // evaluation-identity comparison (wala/ML#739) stays shape-only.
           if (generator != null && !generator.getClass().equals(this.getClass())) {
             ret.addAll(memoizedDTypes(builder, generator));
           }

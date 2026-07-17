@@ -2319,6 +2319,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * {@code (8, 100)}/{@code (8, 10)} leading pairs are the entry contracts (wala/ML#717); the ranks
    * are the einsum operand refinement's (wala/ML#704).
    *
+   * <p>TODO: Drop the rank-4 {@code (8, 100, ?, ?)}/{@code (8, 10, ?, ?)} members once <a
+   * href="https://github.com/wala/ML/issues/742">wala/ML#742</a> separates the widened arm reads
+   * per context; they are {@code DenseLayer3dProj.call}'s entry-contract forms crossing over
+   * through shared helpers, infeasible for this rank-3 layer at runtime.
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
@@ -2350,7 +2355,21 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
                 new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
                 new TensorType(
                     FLOAT_32,
-                    asList(new NumericDim(8), UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
+                    asList(new NumericDim(8), UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(8),
+                        new NumericDim(100),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(8),
+                        new NumericDim(10),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)))));
   }
 
   /**
@@ -3901,7 +3920,9 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * <p>The local tensor-variable count is {@code 15}: the two {@code tf.transpose} calls now
    * allocate distinct tensors rather than aliasing their inputs as first-argument {@code
    * pass_through} did (wala/ML#513 bucket 2a), so one additional reassignment is counted as a
-   * tensor local.
+   * tensor local. The widened operand walks (wala/ML#739) add one more: {@code sequence_lengths -
+   * 1}'s operator result passes the operand-tensor-evidence gate (wala/ML#451) through the {@code
+   * tf.cast} chain and types the runtime-true {@code (2,)} int32.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -3915,7 +3936,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_crf.py",
         "crf_forward",
         4,
-        16,
+        17,
         Map.of(
             2, Set.of(TENSOR_2_2_4_FLOAT32),
             3, Set.of(TENSOR_2_4_FLOAT32),
@@ -6254,7 +6275,10 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * Regression guard for <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>: a tensor
    * passed interprocedurally to a callee types the callee's parameter. {@code Model.get_loss}'s
    * {@code real} and {@code pred} receive {@code tf.constant} tensors via {@code train_step}, so
-   * both type to {@code (3,)} float32 rather than being missed.
+   * both type to {@code (3,)} float32 rather than being missed. With the widened operand walks
+   * (wala/ML#739), all three body producers count as tensor locals with their runtime-true shapes:
+   * {@code pred - real} and {@code tf.square} at {@code (3,)} and the {@code tf.reduce_mean} result
+   * at scalar rank 0.
    */
   @Test
   public void testInterprocTensorParam()
@@ -6265,7 +6289,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "tf2_test_interproc_tensor_param.py",
         "Model.get_loss",
         2,
-        4,
+        5,
         Map.of(3, Set.of(t), 4, Set.of(t)));
   }
 
