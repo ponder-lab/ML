@@ -30,6 +30,7 @@ import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.util.Collections.emptyList;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
+import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
 import com.ibm.wala.cast.ir.ssa.CAstUnaryOp;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
@@ -65,9 +66,14 @@ import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey;
 import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
+import com.ibm.wala.shrike.shrikeBT.IConditionalBranchInstruction;
 import com.ibm.wala.ssa.DefUse;
+import com.ibm.wala.ssa.IR;
+import com.ibm.wala.ssa.ISSABasicBlock;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
+import com.ibm.wala.ssa.SSACFG;
+import com.ibm.wala.ssa.SSAConditionalBranchInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPhiInstruction;
@@ -81,6 +87,7 @@ import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -1703,6 +1710,17 @@ public abstract class TensorGenerator {
                 + ", ptsEmpty="
                 + valuePointsToSet.isEmpty());
 
+    // A φ-defined value's points-to set is the union over ALL arms, so arm feasibility must
+    // decide BEFORE the points-to stage: when some arm's governing branch is constant-decidable
+    // against its edge (wala/ML#746), only the feasible arms are read, and the both-arms union is
+    // never consulted. When no arm prunes, the ordinary pipeline below is unchanged.
+    SSAInstruction phiDef = node.getDU().getDef(valueNumber);
+    if (phiDef instanceof SSAPhiInstruction) {
+      ShapeResult feasibleArms =
+          this.shapeResultOfFeasibleArms(builder, node, (SSAPhiInstruction) phiDef, exact);
+      if (feasibleArms != null) return feasibleArms;
+    }
+
     ShapeResult partial = null;
     if (!valuePointsToSet.isEmpty()) {
       ShapeResult fromValue = this.getShapeResultOfValue(builder, valuePointsToSet, exact);
@@ -1798,7 +1816,11 @@ public abstract class TensorGenerator {
     // loop-carried tensor), and the PA's assignment graph cannot see an operator-produced arm at
     // all (a binary-operator result has no allocation site), so read each arm directly and union
     // the results (wala/ML#739). The worklist engine bounds the loop-carried case, converging the
-    // cycle from its non-cyclic arms.
+    // cycle from its non-cyclic arms. An arm whose governing branch condition is
+    // constant-decidable in this node's context prunes when the runtime cannot take its edge
+    // (wala/ML#746): with caller-node contexts propagating down helper chains, a flag like the
+    // vendored einsum-via-matmul's inner-dimension count is a single constant per context, so
+    // the conditional-reshape φ keeps only its runtime arm.
     if (def instanceof SSAPhiInstruction) {
       boolean armUnknown = false;
       Set<List<Dimension<?>>> armMembers = HashSetFactory.make();
@@ -1806,6 +1828,22 @@ public abstract class TensorGenerator {
         int useVn = def.getUse(i);
         if (useVn <= 0) {
           armUnknown = true;
+          continue;
+        }
+        if (Boolean.FALSE.equals(
+            computePhiArmFeasibility(builder, node, (SSAPhiInstruction) def, i))) {
+          final int arm = i;
+          LOGGER.fine(
+              () ->
+                  "Pruning infeasible arm "
+                      + arm
+                      + " (vn "
+                      + useVn
+                      + ") of the phi for vn "
+                      + valueNumber
+                      + " in "
+                      + describe(node)
+                      + " (wala/ML#746).");
           continue;
         }
         ShapeResult armResult;
@@ -1888,6 +1926,303 @@ public abstract class TensorGenerator {
                 + describe(node)
                 + "; flooring to ⊥ (not a tensor). wala/ML#620.");
     return ShapeResult.bottom();
+  }
+
+  /**
+   * Reads a φ's feasible arms when at least one arm prunes (wala/ML#746): each arm whose governing
+   * branch is constant-decidable against its edge drops, and the remaining arms' shape reads union.
+   * Returns {@code null} when no arm prunes, so the caller's ordinary pipeline (whose points-to
+   * stage sees the both-arms union) applies unchanged.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR contains the φ.
+   * @param phi The φ instruction.
+   * @param exact Whether an unresolvable arm marks the unknown remainder.
+   * @return The feasible arms' union, or {@code null} when no arm prunes.
+   */
+  private ShapeResult shapeResultOfFeasibleArms(
+      PropagationCallGraphBuilder builder, CGNode node, SSAPhiInstruction phi, boolean exact) {
+    boolean pruned = false;
+    boolean armUnknown = false;
+    Set<List<Dimension<?>>> armMembers = HashSetFactory.make();
+    for (int i = 0; i < phi.getNumberOfUses(); i++) {
+      int useVn = phi.getUse(i);
+      if (useVn <= 0) {
+        armUnknown = true;
+        continue;
+      }
+      if (Boolean.FALSE.equals(computePhiArmFeasibility(builder, node, phi, i))) {
+        final int arm = i;
+        LOGGER.fine(
+            () ->
+                "Pruning infeasible arm "
+                    + arm
+                    + " (vn "
+                    + useVn
+                    + ") of the phi defining vn "
+                    + phi.getDef()
+                    + " in "
+                    + describe(node)
+                    + " (wala/ML#746).");
+        pruned = true;
+        continue;
+      }
+      ShapeResult armResult;
+      try {
+        armResult = this.getShapeResult(builder, node, useVn, exact);
+      } catch (IllegalArgumentException e) {
+        armUnknown = true;
+        continue;
+      }
+      if (armResult.hasUnknown() || armResult.isBottom()) armUnknown = true;
+      armMembers.addAll(armResult.members());
+    }
+    if (!pruned) return null;
+    return armMembers.isEmpty() ? ShapeResult.unknown() : new ShapeResult(armMembers, armUnknown);
+  }
+
+  /**
+   * Decides a φ arm's feasibility from its governing branch condition (wala/ML#746): when the arm's
+   * incoming edge is controlled by a conditional branch whose comparison folds to a constant in
+   * this node's context, the runtime takes exactly one edge, and the other arm prunes. Recognizes
+   * the triangle and diamond forms: the arm's predecessor block either ends with the governing
+   * branch itself or is the sole successor of a block that does.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for points-to constant lookup.
+   * @param node The {@link CGNode} whose IR contains the φ.
+   * @param phi The φ instruction.
+   * @param armIndex The arm's use index, positionally matching the merge block's predecessor order.
+   * @return {@link Boolean#FALSE} iff the arm is decidably infeasible; {@link Boolean#TRUE} when
+   *     decidably taken; {@code null} when undecidable (the arm is kept).
+   */
+  private Boolean computePhiArmFeasibility(
+      PropagationCallGraphBuilder builder, CGNode node, SSAPhiInstruction phi, int armIndex) {
+    IR ir = node.getIR();
+    if (ir == null) return null;
+    SSACFG cfg = ir.getControlFlowGraph();
+
+    // Locate the φ's merge block.
+    ISSABasicBlock merge = null;
+    for (ISSABasicBlock block : cfg) {
+      for (Iterator<SSAPhiInstruction> it = block.iteratePhis(); it.hasNext(); )
+        if (it.next() == phi) {
+          merge = block;
+          break;
+        }
+      if (merge != null) break;
+    }
+    if (merge == null) return null;
+
+    // The i-th φ use corresponds to the i-th predecessor in iteration order.
+    List<ISSABasicBlock> preds = new ArrayList<>();
+    for (Iterator<ISSABasicBlock> it = cfg.getPredNodes(merge); it.hasNext(); )
+      preds.add(it.next());
+    if (armIndex >= preds.size()) return null;
+    ISSABasicBlock armPred = preds.get(armIndex);
+
+    // The governing branch either ends the arm's predecessor (the skip edge of a triangle) or
+    // ends that block's sole predecessor (the then/else blocks of a triangle or diamond).
+    Boolean viaOwn = decideEdgeFromBranchBlock(builder, node, cfg, armPred, merge);
+    if (viaOwn != null) return viaOwn;
+    List<ISSABasicBlock> armPredPreds = new ArrayList<>();
+    for (Iterator<ISSABasicBlock> it = cfg.getPredNodes(armPred); it.hasNext(); )
+      armPredPreds.add(it.next());
+    if (armPredPreds.size() != 1) return null;
+    return decideEdgeFromBranchBlock(builder, node, cfg, armPredPreds.get(0), armPred);
+  }
+
+  /**
+   * Decides whether the edge from the given block to the given successor is taken at runtime, when
+   * the block ends with a conditional branch whose comparison folds to a constant.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for points-to constant lookup.
+   * @param node The {@link CGNode} whose IR contains the blocks.
+   * @param cfg The control-flow graph.
+   * @param block The candidate branch block.
+   * @param successor The edge's target block.
+   * @return Whether the runtime takes the edge, or {@code null} when the block does not end with a
+   *     decidable two-way conditional branch over the successor.
+   */
+  private Boolean decideEdgeFromBranchBlock(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      SSACFG cfg,
+      ISSABasicBlock block,
+      ISSABasicBlock successor) {
+    // An empty block (entry, exit, or a synthesized pass-through) has no last instruction, and
+    // SSACFG's accessor indexes out of bounds rather than answering null.
+    if (block.getLastInstructionIndex() < 0
+        || block.getLastInstructionIndex() < block.getFirstInstructionIndex()) return null;
+    SSAInstruction last = block.getLastInstruction();
+    if (!(last instanceof SSAConditionalBranchInstruction)) return null;
+    SSAConditionalBranchInstruction branch = (SSAConditionalBranchInstruction) last;
+
+    Collection<ISSABasicBlock> successors = cfg.getNormalSuccessors(block);
+    if (successors.size() != 2 || !successors.contains(successor)) return null;
+
+    Boolean condition = evaluateBranchComparison(builder, node, branch);
+    if (condition == null) return null;
+
+    // The branch jumps to its target when the comparison holds; otherwise it falls through.
+    ISSABasicBlock target = cfg.getBlockForInstruction(branch.getTarget());
+    if (target == null) return null;
+    boolean edgeIsTarget = target.equals(successor);
+    return condition == edgeIsTarget;
+  }
+
+  /**
+   * Folds a conditional branch's comparison to a constant when both sides resolve: the branch
+   * compares its condition value against a constant (typically {@code 0}), and the condition value
+   * is either itself a resolvable constant or a comparison binop over resolvable constants.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for points-to constant lookup.
+   * @param node The {@link CGNode} whose IR contains the branch.
+   * @param branch The conditional branch.
+   * @return The comparison's outcome, or {@code null} when either side does not fold.
+   */
+  private Boolean evaluateBranchComparison(
+      PropagationCallGraphBuilder builder, CGNode node, SSAConditionalBranchInstruction branch) {
+    Object left = resolveComparableConstant(builder, node, branch.getUse(0));
+    Object right = resolveComparableConstant(builder, node, branch.getUse(1));
+    if (left == null || right == null) {
+      LOGGER.finer(
+          () ->
+              "Branch comparison undecided in "
+                  + describe(node)
+                  + ": uses "
+                  + branch.getUse(0)
+                  + " -> "
+                  + left
+                  + ", "
+                  + branch.getUse(1)
+                  + " -> "
+                  + right
+                  + ".");
+      return null;
+    }
+    if (!(branch.getOperator() instanceof IConditionalBranchInstruction.Operator)) return null;
+    switch ((IConditionalBranchInstruction.Operator) branch.getOperator()) {
+      case EQ:
+        return constantsEqual(left, right);
+      case NE:
+        return !constantsEqual(left, right);
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Resolves a value number to a comparable constant: a symbol-table constant, a points-to set
+   * holding a single {@link ConstantKey}, or a comparison binop over resolvable constants (folded
+   * to {@code 1} or {@code 0}, matching the branch encoding of Python booleans).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for points-to constant lookup.
+   * @param node The {@link CGNode} whose IR defines the value.
+   * @param vn The value number.
+   * @return The constant, or {@code null} when the value does not fold.
+   */
+  private Object resolveComparableConstant(
+      PropagationCallGraphBuilder builder, CGNode node, int vn) {
+    if (vn <= 0 || node.getIR() == null) return null;
+    SymbolTable st = node.getIR().getSymbolTable();
+    if (st.isConstant(vn)) return st.getConstantValue(vn);
+
+    SSAInstruction def = node.getDU().getDef(vn);
+    if (def instanceof SSABinaryOpInstruction) {
+      SSABinaryOpInstruction binop = (SSABinaryOpInstruction) def;
+      if (!(binop.getOperator() instanceof CAstBinaryOp)) return null;
+      Object left = resolveComparableConstant(builder, node, binop.getUse(0));
+      Object right = resolveComparableConstant(builder, node, binop.getUse(1));
+      if (left == null || right == null) return null;
+      Boolean outcome;
+      switch ((CAstBinaryOp) binop.getOperator()) {
+        case EQ:
+        case STRICT_EQ:
+          outcome = constantsEqual(left, right);
+          break;
+        case NE:
+        case STRICT_NE:
+          outcome = !constantsEqual(left, right);
+          break;
+        case LT:
+          outcome = compareNumbers(left, right, -1);
+          break;
+        case GT:
+          outcome = compareNumbers(left, right, 1);
+          break;
+        case LE:
+          outcome = negate(compareNumbers(left, right, 1));
+          break;
+        case GE:
+          outcome = negate(compareNumbers(left, right, -1));
+          break;
+        default:
+          return null;
+      }
+      return outcome == null ? null : (outcome ? 1 : 0);
+    }
+
+    PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+    OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
+    if (pts == null || pts.size() != 1) return null;
+    InstanceKey only = pts.iterator().next();
+    return only instanceof ConstantKey ? ((ConstantKey<?>) only).getValue() : null;
+  }
+
+  /**
+   * Compares two folded constants for equality under Python semantics: numbers numerically, other
+   * kinds by {@link Object#equals}.
+   *
+   * @param left One constant.
+   * @param right The other constant.
+   * @return Whether the two are equal.
+   */
+  private static boolean constantsEqual(Object left, Object right) {
+    // Python booleans are integers: `False == 0` and `True == 1` hold, and the lowered branch
+    // tests the guard value against the integer zero, so the boolean normalizes before comparing
+    // (getting this wrong inverts the branch polarity and prunes the runtime arm).
+    Object l = normalizeBoolean(left);
+    Object r = normalizeBoolean(right);
+    if (l instanceof Number && r instanceof Number)
+      return ((Number) l).doubleValue() == ((Number) r).doubleValue();
+    return l.equals(r);
+  }
+
+  /**
+   * Normalizes a Python boolean constant to its integer value.
+   *
+   * @param value The constant.
+   * @return {@code 1} or {@code 0} for a boolean; the value itself otherwise.
+   */
+  private static Object normalizeBoolean(Object value) {
+    if (value instanceof Boolean) return ((Boolean) value) ? 1 : 0;
+    return value;
+  }
+
+  /**
+   * Compares two numeric constants, expecting the given sign.
+   *
+   * @param left One constant.
+   * @param right The other constant.
+   * @param expectedSign {@code -1} for less-than, {@code 1} for greater-than.
+   * @return The comparison outcome, or {@code null} when either side is not a number.
+   */
+  private static Boolean compareNumbers(Object left, Object right, int expectedSign) {
+    Object l = normalizeBoolean(left);
+    Object r = normalizeBoolean(right);
+    if (!(l instanceof Number) || !(r instanceof Number)) return null;
+    int sign = Double.compare(((Number) l).doubleValue(), ((Number) r).doubleValue());
+    return Integer.signum(sign) == expectedSign;
+  }
+
+  /**
+   * Negates a nullable boolean.
+   *
+   * @param value The value to negate, or {@code null}.
+   * @return The negation, or {@code null}.
+   */
+  private static Boolean negate(Boolean value) {
+    return value == null ? null : !value;
   }
 
   /**

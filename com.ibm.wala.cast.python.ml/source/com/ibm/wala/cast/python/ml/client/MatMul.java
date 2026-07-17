@@ -115,18 +115,18 @@ public class MatMul extends TensorGenerator {
    */
   private ShapeResult shapeResultOfArg(
       PropagationCallGraphBuilder builder, int paramPos, String paramName) {
-    ShapeResult fromValue = ShapeResult.unknown();
-    OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPos, paramName);
-    if (pts != null && !pts.isEmpty()) {
-      fromValue = this.getShapeResultOfValue(builder, pts, true);
-      if (!fromValue.members().isEmpty() && !fromValue.hasUnknown()) return fromValue;
-    }
-    // An incomplete points-to union commonly reflects context collapse, so the per-context
-    // caller walk is preferred; the union's resolvable members are the floor when the walk
-    // fails (wala/ML#716, wala/ML#718).
+    // The per-context caller walk resolves the argument at its call site, where a φ-defined
+    // argument's arm feasibility prunes (wala/ML#746); the argument's points-to union cannot
+    // distinguish arms (it is the union over all of them), so it serves as the floor rather than
+    // the short-circuit (wala/ML#716, wala/ML#718).
     ShapeResult viaCallers = this.getArgumentShapeResultViaCallers(builder, paramPos, paramName);
     if (!viaCallers.members().isEmpty()) return viaCallers;
-    return fromValue.members().isEmpty() ? viaCallers : fromValue;
+    OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPos, paramName);
+    if (pts != null && !pts.isEmpty()) {
+      ShapeResult fromValue = this.getShapeResultOfValue(builder, pts, true);
+      if (!fromValue.members().isEmpty()) return fromValue;
+    }
+    return viaCallers;
   }
 
   /**

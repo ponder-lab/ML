@@ -2320,9 +2320,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * are the einsum operand refinement's (wala/ML#704).
    *
    * <p>TODO: Drop the rank-4 {@code (8, 100, ?, ?)}/{@code (8, 10, ?, ?)} members once <a
-   * href="https://github.com/wala/ML/issues/742">wala/ML#742</a> separates the widened arm reads
-   * per context; they are {@code DenseLayer3dProj.call}'s entry-contract forms crossing over
-   * through shared helpers, infeasible for this rank-3 layer at runtime.
+   * href="https://github.com/wala/ML/issues/746">wala/ML#746</a>'s arm filtering reaches the
+   * argument reads' points-to stage; the members ride the sibling {@code DenseLayer3dProj}'s
+   * einsum-refined operands through the shared helper's conditional-reshape φ, whose infeasible arm
+   * the points-to union cannot distinguish (the cross-context half was separated by the caller-node
+   * context propagation).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -13738,12 +13740,11 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
    * The two-inner-dims variant of {@link #testEinsumViaMatmul()} (NLPGNN's {@code DenseLayer3dProj}
    * shape, {@code einsum_via_matmul(input_tensor, w, 2)}): exercises the {@code batch_dims +
    * [inner_dim]} concatenation of a shape vector with a literal list whose element is an {@code
-   * np.prod} fold (wala/ML#708). The result types the precise runtime {@code (2, 4, 6)} (the
-   * batched {@code tf.matmul} semantics, wala/ML#718, eliminated the rank-collapsed {@code (3, 6)}
-   * artifact this test previously pinned) plus the {@code (2, 4, 3, 6)} phantom: {@code
-   * input_tensor}'s points-to set carries both its defs (the original {@code (2, 4, 3, 5)} and the
-   * {@code num_inner_dims > 1} arm's reshape to {@code (2, 4, 15)}), so the batched product also
-   * composes against the un-reshaped def — a path-insensitive union, not a miscomputation.
+   * np.prod} fold (wala/ML#708). The result types exactly the precise runtime {@code (2, 4, 6)}:
+   * the batched {@code tf.matmul} semantics (wala/ML#718) eliminated the rank-collapsed {@code (3,
+   * 6)} artifact this test once pinned, and the constant-decidable arm pruning (wala/ML#746)
+   * eliminated the {@code (2, 4, 3, 6)} phantom that composed against the {@code num_inner_dims >
+   * 1} guard's runtime-untaken un-reshaped arm.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -13758,7 +13759,7 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 6), TensorType.of(FLOAT_32, 2, 4, 3, 6))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 6))));
   }
 
   /**
