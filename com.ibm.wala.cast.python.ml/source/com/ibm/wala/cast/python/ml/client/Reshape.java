@@ -212,10 +212,23 @@ public class Reshape extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    // Infer shape from 'tensor' argument.
+    // Infer shape from the 'tensor' argument: its points-to union first, then the per-context
+    // caller walk. A caller-side operator-produced argument (e.g. the matmul-plus-bias feeding the
+    // vendored Conv1d's output reshape) has no allocation site, so it is invisible to the
+    // argument's points-to set and resolves only through the caller's value-number read
+    // (wala/ML#739).
     OrdinalSet<InstanceKey> tensorPts =
         this.getArgumentPointsToSet(
             builder, this.getValueParameterPosition(), this.getValueParameterName());
+    if (tensorPts != null && !tensorPts.isEmpty()) {
+      Set<List<Dimension<?>>> fromValue = this.getShapesOfValue(builder, tensorPts);
+      if (fromValue != null && !fromValue.isEmpty()) return fromValue;
+    }
+    ShapeResult viaCallers =
+        this.getArgumentShapeResultViaCallers(
+            builder, this.getValueParameterPosition(), this.getValueParameterName());
+    // The default mode's contract is the resolvable subset (wala/ML#716).
+    if (!viaCallers.members().isEmpty()) return viaCallers.members();
     return this.getShapesOfValue(builder, tensorPts);
   }
 

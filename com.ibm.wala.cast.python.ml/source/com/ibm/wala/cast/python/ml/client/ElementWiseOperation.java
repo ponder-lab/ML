@@ -13,6 +13,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
@@ -380,6 +381,23 @@ public class ElementWiseOperation extends TensorGenerator {
     if (vn <= 0) return false;
     if (node.getDU() == null || node.getIR() == null) return false;
     if (node.getIR().getSymbolTable().isConstant(vn)) return true;
+
+    // A value whose every points-to member is a numeric constant is a runtime scalar whatever its
+    // syntactic form — e.g. a scalar-defaulted parameter like the vendored LayerNormalization's
+    // `epsilon=1e-6`, bound to the default's constant by the call trampoline (wala/ML#739).
+    PointerKey scalarPk =
+        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+    OrdinalSet<InstanceKey> scalarPts = builder.getPointerAnalysis().getPointsToSet(scalarPk);
+    if (scalarPts != null && !scalarPts.isEmpty()) {
+      boolean allNumericConstants = true;
+      for (InstanceKey ik : scalarPts)
+        if (!(ik instanceof ConstantKey) || !(((ConstantKey<?>) ik).getValue() instanceof Number)) {
+          allNumericConstants = false;
+          break;
+        }
+      if (allNumericConstants) return true;
+    }
+
     SSAInstruction def = node.getDU().getDef(vn);
     if (def instanceof SSABinaryOpInstruction)
       return isScalarExpression(builder, node, def.getUse(0))

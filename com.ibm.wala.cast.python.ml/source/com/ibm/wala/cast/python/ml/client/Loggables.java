@@ -103,6 +103,14 @@ final class Loggables {
   }
 
   private static String signature(CGNode node) {
-    return node == null ? "null" : node.getMethod().getSignature();
+    // The context tag is the context's identity hash: bounded and recursion-free (unlike the
+    // context's own toString, wala/ML#697), and stable within a run, so log lines for the same
+    // node in different receiver-keyed contexts are distinguishable (wala/ML#739).
+    return node == null
+        ? "null"
+        : node.getMethod().getSignature()
+            + " [ctx#"
+            + Integer.toHexString(System.identityHashCode(node.getContext()))
+            + "]";
   }
 }

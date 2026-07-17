@@ -97,6 +97,7 @@ import java.util.TreeMap;
 import java.util.WeakHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 /**
  * An abstract generator for {@link TensorType}s.
@@ -3906,8 +3907,16 @@ public abstract class TensorGenerator {
     // Synthetic/manual node: walk the call-graph callers to find the argument's value number.
     boolean callerUnknown = false;
     Set<List<Dimension<?>>> combined = null;
-    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
-        getCallerInvokes(builder, this.getNode())) {
+    List<Pair<CGNode, SSAAbstractInvokeInstruction>> callerInvokes =
+        getCallerInvokes(builder, this.getNode());
+    LOGGER.fine(
+        () ->
+            "getShapeResultFromShapeVectorArgument: caller walk for "
+                + describe(this.getNode())
+                + " found "
+                + callerInvokes.size()
+                + " caller invoke(s).");
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke : callerInvokes) {
       CGNode caller = callerInvoke.fst;
       if (!(callerInvoke.snd instanceof PythonInvokeInstruction)) continue;
       PythonInvokeInstruction pyCall = (PythonInvokeInstruction) callerInvoke.snd;
@@ -4163,9 +4172,27 @@ public abstract class TensorGenerator {
         && ((SSABinaryOpInstruction) def).getOperator() == IBinaryOpInstruction.Operator.ADD) {
       ShapeResult left =
           this.shapeResultOfShapeVectorOrLiteralList(builder, node, def.getUse(0), visited);
+      LOGGER.fine(
+          () ->
+              "Shape-vector concat in "
+                  + describe(node)
+                  + ": left operand vn "
+                  + def.getUse(0)
+                  + " resolved "
+                  + left.members().size()
+                  + " member(s).");
       if (left.members().isEmpty()) return ShapeResult.unknown();
       ShapeResult right =
           this.shapeResultOfShapeVectorOrLiteralList(builder, node, def.getUse(1), visited);
+      LOGGER.fine(
+          () ->
+              "Shape-vector concat in "
+                  + describe(node)
+                  + ": right operand vn "
+                  + def.getUse(1)
+                  + " resolved "
+                  + right.members().size()
+                  + " member(s).");
       if (right.members().isEmpty()) return ShapeResult.unknown();
       Set<List<Dimension<?>>> concatenated = HashSetFactory.make();
       for (List<Dimension<?>> l : left.members())
@@ -4255,7 +4282,24 @@ public abstract class TensorGenerator {
       if (index == null) continue;
       byIndex.put(index, elementDims(builder, node, st, writtenVal));
     }
-    if (byIndex.isEmpty() || byIndex.containsValue(null)) return ShapeResult.unknown();
+    if (byIndex.isEmpty() || byIndex.containsValue(null)) {
+      final TreeMap<Integer, Set<Dimension<?>>> resolved = byIndex;
+      LOGGER.fine(
+          () ->
+              "Literal-list walk for vn "
+                  + vn
+                  + " in "
+                  + describe(node)
+                  + " failed; unresolved element indices: "
+                  + resolved.entrySet().stream()
+                      .filter(e -> e.getValue() == null)
+                      .map(Map.Entry::getKey)
+                      .collect(Collectors.toList())
+                  + " of "
+                  + resolved.keySet()
+                  + ".");
+      return ShapeResult.unknown();
+    }
     // The indices must be contiguous from 0 or the element order can't be reconstructed.
     if (byIndex.firstKey() != 0 || byIndex.lastKey() != byIndex.size() - 1)
       return ShapeResult.unknown();
@@ -5741,6 +5785,26 @@ public abstract class TensorGenerator {
       return new ExpandDims(node);
     } else if (type.equals(TensorFlowTypes.CLIP_BY_VALUE.getDeclaringClass())) {
       return new ClipByValue(node);
+    } else if (type.equals(TensorFlowTypes.RSQRT.getDeclaringClass())) {
+      // The elementwise-math family below closes wala/ML#739's dispatch-table gap for producer
+      // delegation: each op was factory-dispatchable but unregistered here, so a generic Tensor
+      // allocation from its synthetic body dead-ended the walk (the vendored LayerNormalization's
+      // rsqrt/square chain is the witness).
+      return new Rsqrt(node);
+    } else if (type.equals(TensorFlowTypes.SQUARE.getDeclaringClass())) {
+      return new Square(node);
+    } else if (type.equals(TensorFlowTypes.SQRT.getDeclaringClass())) {
+      return new Sqrt(node);
+    } else if (type.equals(TensorFlowTypes.SIN.getDeclaringClass())) {
+      return new Sin(node);
+    } else if (type.equals(TensorFlowTypes.COS.getDeclaringClass())) {
+      return new Cos(node);
+    } else if (type.equals(TensorFlowTypes.EXP.getDeclaringClass())) {
+      return new Exp(node);
+    } else if (type.equals(TensorFlowTypes.TILE.getDeclaringClass())) {
+      return new Tile(node);
+    } else if (type.equals(TensorFlowTypes.EMBEDDING_LOOKUP.getDeclaringClass())) {
+      return new EmbeddingLookup(node);
     } else if (type.equals(CONSTANT.getDeclaringClass())) {
       return new TensorGenerator(node) {
         @Override
