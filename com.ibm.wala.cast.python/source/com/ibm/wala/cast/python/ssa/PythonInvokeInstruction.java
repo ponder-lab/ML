@@ -28,6 +28,16 @@ public class PythonInvokeInstruction extends SSAAbstractInvokeInstruction {
   private final int[] positionalParams;
   private final Pair<String, Integer>[] keywordParams;
 
+  /**
+   * Indices into {@link #positionalParams} whose call-site argument was a starred (unpacked)
+   * expression (e.g. the {@code *rest} in {@code f(a, *rest, b)}). A starred slot collapses an
+   * unpacked sequence of statically-unknown length into a single positional slot, so a consumer
+   * that aligns positional slots to callee parameters by index cannot trust the alignment of any
+   * slot at or after a starred one. Empty for calls with no unpack (the common case). See <a
+   * href="https://github.com/wala/ML/issues/751">wala/ML#751</a>.
+   */
+  private final int[] starredPositions;
+
   public PythonInvokeInstruction(
       int iindex,
       int result,
@@ -35,11 +45,25 @@ public class PythonInvokeInstruction extends SSAAbstractInvokeInstruction {
       CallSiteReference site,
       int[] positionalParams,
       Pair<String, Integer>[] keywordParams) {
+    this(iindex, result, exception, site, positionalParams, keywordParams, EMPTY_STARRED);
+  }
+
+  public PythonInvokeInstruction(
+      int iindex,
+      int result,
+      int exception,
+      CallSiteReference site,
+      int[] positionalParams,
+      Pair<String, Integer>[] keywordParams,
+      int[] starredPositions) {
     super(iindex, exception, site);
     this.positionalParams = positionalParams;
     this.keywordParams = keywordParams;
+    this.starredPositions = starredPositions;
     this.result = result;
   }
+
+  private static final int[] EMPTY_STARRED = new int[0];
 
   @Override
   public int getNumberOfPositionalParameters() {
@@ -48,6 +72,39 @@ public class PythonInvokeInstruction extends SSAAbstractInvokeInstruction {
 
   public int getNumberOfKeywordParameters() {
     return keywordParams.length;
+  }
+
+  /**
+   * The positional-slot indices whose call-site argument was a starred (unpacked) expression.
+   *
+   * @return the starred positional-slot indices, empty if the call has no unpack.
+   */
+  public int[] getStarredPositions() {
+    return starredPositions;
+  }
+
+  /**
+   * Whether the given positional slot's call-site argument was a starred (unpacked) expression.
+   *
+   * @param slot The positional-slot index to test.
+   * @return {@code true} iff the slot was a starred argument.
+   */
+  public boolean isPositionalSlotStarred(int slot) {
+    for (int s : starredPositions) if (s == slot) return true;
+    return false;
+  }
+
+  /**
+   * The smallest starred positional-slot index, at or after which positional-to-parameter alignment
+   * is unreliable (an unpack of statically-unknown length precedes those slots). See <a
+   * href="https://github.com/wala/ML/issues/751">wala/ML#751</a>.
+   *
+   * @return the first starred slot index, or {@code -1} if the call has no unpack.
+   */
+  public int firstStarredPosition() {
+    int min = -1;
+    for (int s : starredPositions) if (min == -1 || s < min) min = s;
+    return min;
   }
 
   public int getNumberOfTotalParameters() {
@@ -118,7 +175,7 @@ public class PythonInvokeInstruction extends SSAAbstractInvokeInstruction {
       }
     }
 
-    return new PythonInvokeInstruction(iIndex(), nr, ne, site, newpos, newkey);
+    return new PythonInvokeInstruction(iIndex(), nr, ne, site, newpos, newkey, starredPositions);
   }
 
   @Override
