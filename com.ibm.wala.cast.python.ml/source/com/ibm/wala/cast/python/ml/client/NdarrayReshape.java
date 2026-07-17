@@ -114,22 +114,20 @@ public class NdarrayReshape extends TensorGenerator {
       long productKnown = 1;
       boolean canInfer = true;
 
+      // Scan the whole member so a mixed vector's `-1` placeholder is always detected and mapped;
+      // breaking early let the raw `-1` escape as a fixed size (wala/ML#741, mirroring `Reshape`).
       for (int i = 0; i < shape.size(); i++) {
         Dimension<?> dim = shape.get(i);
         if (dim instanceof NumericDim) {
           int val = ((NumericDim) dim).value();
           if (val == -1) {
-            if (unknownIndex != -1) {
-              canInfer = false;
-              break;
-            }
-            unknownIndex = i;
+            if (unknownIndex != -1) canInfer = false;
+            else unknownIndex = i;
           } else {
             productKnown *= val;
           }
         } else {
-          canInfer = false;
-          break;
+          canInfer = false; // Non-numeric dimension; keep scanning for placeholders.
         }
       }
 
