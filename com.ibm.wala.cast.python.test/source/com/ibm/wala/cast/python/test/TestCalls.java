@@ -109,11 +109,12 @@ public class TestCalls extends TestJythonCallGraphShape {
               "script calls5.py",
               new String[] {
                 "script calls5.py/Foo",
-                "$script calls5.py/Foo/foo:trampoline3",
+                "$script calls5.py/Foo/foo:trampoline1$a$b",
                 "script calls5.py/bad"
               }),
           new GraphAssertion(
-              "$script calls5.py/Foo/foo:trampoline3", new String[] {"script calls5.py/Foo/foo"}),
+              "$script calls5.py/Foo/foo:trampoline1$a$b",
+              new String[] {"script calls5.py/Foo/foo"}),
           new GraphAssertion("script calls5.py/Foo/foo", new String[] {"script calls5.py/id"}));
 
   @Test
@@ -130,11 +131,11 @@ public class TestCalls extends TestJythonCallGraphShape {
               "script calls6.py",
               new String[] {
                 "script calls6.py/Foo",
-                "$script calls6.py/Foo/foo:trampoline3",
+                "$script calls6.py/Foo/foo:trampoline2$b",
                 "script calls6.py/bad"
               }),
           new GraphAssertion(
-              "$script calls6.py/Foo/foo:trampoline3", new String[] {"script calls6.py/Foo/foo"}),
+              "$script calls6.py/Foo/foo:trampoline2$b", new String[] {"script calls6.py/Foo/foo"}),
           new GraphAssertion("script calls6.py/Foo/foo", new String[] {"script calls6.py/id"}));
 
   @Test

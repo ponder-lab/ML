@@ -12482,6 +12482,23 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
         Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
 
+  /**
+   * Test two call sites of the same method with equal total arity but different positional/keyword
+   * splits. The trampoline cache must not collide them; see <a
+   * href="https://github.com/wala/ML/issues/740">wala/ML#740</a>. The parameter {@code x} receives
+   * a tensor positionally at one call site and by keyword at the other, so its type must be the
+   * union of both.
+   */
+  @Test
+  public void testTrampolineSplit() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_trampoline_split.py",
+        "C.f",
+        1,
+        1,
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32, TENSOR_1_3_FLOAT32)));
+  }
+
   @Test
   public void testStaticMethod4() throws ClassHierarchyException, CancelException, IOException {
     test(
