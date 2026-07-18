@@ -1647,7 +1647,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                     + tt.getOutState(fed));
 
       recordDepthLimitedResults(tt, builder.getClassHierarchy());
-      recordShapeAnnotationCandidates(tt, builder);
+      recordShapeAnnotationCandidates(builder);
 
       return tt;
     } finally {
@@ -1866,14 +1866,15 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * accumulate the raw {@code (source, cause)} pairs during the run (see {@link
    * TensorGenerator#recordShapeAnnotationCandidate}); this reads them before {@link
    * TensorGenerator#clearCaches} drops them, dedups per pointer key (a memoized shape read may
-   * record a source more than once), keeps the strongest classification per key, and intersects
-   * with the final ⊤-shape set so a value another path later resolved is not reported.
+   * record a source more than once), and keeps the strongest classification per key. Every recorded
+   * key is an allocator whose shape did not resolve at its ⊤ floor; the floor is taken as the
+   * signal rather than intersected with the solved ⊤ set, since a manually anchored allocator's
+   * synthetic-return key is absent from the analysis's seeded pointer keys and intersecting would
+   * drop exactly those.
    *
-   * @param tt The solved tensor-type analysis.
    * @param builder The builder whose per-run generator records to read.
    */
-  private void recordShapeAnnotationCandidates(
-      TensorTypeAnalysis tt, PropagationCallGraphBuilder builder) {
+  private void recordShapeAnnotationCandidates(PropagationCallGraphBuilder builder) {
     shapeAnnotationCandidates.clear();
 
     // Keep the strongest classification per source key: a content-dependent finding for any read of
