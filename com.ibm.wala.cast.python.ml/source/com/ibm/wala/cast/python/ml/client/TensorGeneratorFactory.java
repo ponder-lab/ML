@@ -797,7 +797,20 @@ public class TensorGeneratorFactory {
     PointsToSetVariable operandSrc = getPointsToSetVariable(pk, builder);
     if (operandSrc != null && tryGetGenerator(operandSrc, builder, visited) != null) return true;
     for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(pk)) {
-      if (!(ik instanceof ConstantKey)) return true;
+      if (ik instanceof ConstantKey) continue;
+      // A Python `list`/`tuple` allocation in the operand's PTS is not tensor evidence: a `+` binop
+      // over it is list/tuple concatenation and a `*` is repetition, neither a tensor op. The
+      // structural check above only catches an operand whose own def is the allocating `new`; a
+      // loop-carried container (a phi over the accumulator and the previous concatenation result)
+      // reaches its allocation only through its PTS, so without this a `result_array += [...]`
+      // accumulator is misread as a tensor, and the concatenation's result feeds back through the
+      // loop into a self-reinforcing tensor type. Mirrors the structural exclusion so both the
+      // direct and PTS-reached container operands gate identically. wala/ML#750.
+      if (ik instanceof AllocationSiteInNode) {
+        TypeReference allocated = ((AllocationSiteInNode) ik).getSite().getDeclaredType();
+        if (allocated.equals(PythonTypes.list) || allocated.equals(PythonTypes.tuple)) continue;
+      }
+      return true;
     }
     return false;
   }
