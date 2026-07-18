@@ -150,17 +150,29 @@ public class Fill extends Constant {
         this.isKeywordArgumentPresent(builder, Parameters.DIMS.getName())
             || this.getNumberOfPossiblePositionalArguments(builder).stream()
                 .anyMatch(n -> n >= Parameters.DIMS.getIndex() + 1);
+    if (!dimsSupplied) {
+      LOGGER.fine(
+          () ->
+              SIGNATURE
+                  + " reached without its mandatory dims argument for source: "
+                  + describe(source)
+                  + " (malformed call?); returning ⊤.");
+      return null;
+    }
+    // Triage the ⊤ so the wala/ML#370 worklist stays honest (wala/ML#735): the `dims` argument is
+    // this allocator's shape parameter.
+    ShapeUnresolutionCause cause =
+        this.classifyUnresolvedShapeArgument(
+            builder, Parameters.DIMS.getIndex(), Parameters.DIMS.getName());
+    recordShapeAnnotationCandidate(builder, source == null ? null : source.getPointerKey(), cause);
     LOGGER.fine(
-        dimsSupplied
-            ? "Could not resolve the dims argument of "
+        () ->
+            "Could not resolve the dims argument of "
                 + SIGNATURE
                 + " for source: "
                 + describe(source)
-                + "; returning ⊤. Candidate for a wala/ML#370 shape annotation."
-            : SIGNATURE
-                + " reached without its mandatory dims argument for source: "
-                + describe(source)
-                + " (malformed call?); returning ⊤.");
+                + "; returning ⊤. "
+                + shapeAnnotationTriageMessage(cause));
     return null;
   }
 }

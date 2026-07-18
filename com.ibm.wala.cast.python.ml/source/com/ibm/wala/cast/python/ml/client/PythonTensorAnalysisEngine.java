@@ -81,6 +81,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -379,6 +380,24 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       LocalPointerKey pointerKey, CGNode node, int valueNumber, int callStringLength) {}
 
   private final List<DepthLimitedResult> depthLimitedResults = new ArrayList<>();
+
+  /**
+   * An allocator whose shape argument did not resolve, with the classified reason (wala/ML#735).
+   * The reason triages the wala/ML#370 annotation worklist: {@link
+   * TensorGenerator.ShapeUnresolutionCause#CONTENT_DEPENDENT} is a genuine annotation candidate
+   * (the shape depends on runtime content), while {@link
+   * TensorGenerator.ShapeUnresolutionCause#RECOVERABLE_GAP} is an analyzer precision gap that a
+   * #370 annotation would wrongly paper over.
+   *
+   * @param pointerKey The pointer key of the allocator's ⊤-shape result (a synthetic {@code do()}
+   *     {@code ReturnValueKey} for a manually anchored allocator, or a local for a caller-site
+   *     one).
+   * @param cause The classified reason the shape argument did not resolve.
+   */
+  public record ShapeAnnotationCandidate(
+      PointerKey pointerKey, TensorGenerator.ShapeUnresolutionCause cause) {}
+
+  private final List<ShapeAnnotationCandidate> shapeAnnotationCandidates = new ArrayList<>();
 
   /**
    * Identifies the dataflow sources for tensor analysis.
@@ -1628,6 +1647,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                     + tt.getOutState(fed));
 
       recordDepthLimitedResults(tt, builder.getClassHierarchy());
+      recordShapeAnnotationCandidates(builder);
 
       return tt;
     } finally {
@@ -1788,6 +1808,19 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * Returns the triaged wala/ML#370 shape-annotation worklist from the most recent {@link
+   * #performAnalysis} run (wala/ML#735): each allocator whose shape argument did not resolve, with
+   * the classified reason. A consumer filters to {@link
+   * TensorGenerator.ShapeUnresolutionCause#CONTENT_DEPENDENT} for the genuine annotation
+   * candidates.
+   *
+   * @return The shape-annotation triage records; empty when no allocator shape went unresolved.
+   */
+  public List<ShapeAnnotationCandidate> getShapeAnnotationCandidates() {
+    return shapeAnnotationCandidates;
+  }
+
+  /**
    * Records the ⊤ values whose nodes sit at a call-string context saturated to {@code
    * targetedCfaDepth}, the wala/ML#601 depth-too-short signal. Scans the solved analysis for ⊤
    * tensor variables at local pointer keys, keeps those whose node is routed through the targeted
@@ -1825,6 +1858,60 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                   + " the targeted CFA depth of "
                   + targetedCfaDepth
                   + "; a deeper depth may resolve them. See wala/ML#601.");
+  }
+
+  /**
+   * Records the triaged wala/ML#370 shape-annotation worklist (wala/ML#735): the allocators whose
+   * shape argument did not resolve, classified content-dependent vs recoverable-gap. The generators
+   * accumulate the raw {@code (source, cause)} pairs during the run (see {@link
+   * TensorGenerator#recordShapeAnnotationCandidate}); this reads them before {@link
+   * TensorGenerator#clearCaches} drops them, dedups per pointer key (a memoized shape read may
+   * record a source more than once), and keeps the strongest classification per key. Every recorded
+   * key is an allocator whose shape did not resolve at its ⊤ floor; the floor is taken as the
+   * signal rather than intersected with the solved ⊤ set, since a manually anchored allocator's
+   * synthetic-return key is absent from the analysis's seeded pointer keys and intersecting would
+   * drop exactly those.
+   *
+   * @param builder The builder whose per-run generator records to read.
+   */
+  private void recordShapeAnnotationCandidates(PropagationCallGraphBuilder builder) {
+    shapeAnnotationCandidates.clear();
+
+    // Keep the strongest classification per source key: a content-dependent finding for any read of
+    // a source overrides a recoverable or undetermined finding for the same source. The generators
+    // record only at their ⊤ floor, so every recorded key is an allocator whose shape did not
+    // resolve; a manually anchored allocator's synthetic-return key is absent from the analysis's
+    // seeded pointer keys, so intersecting with the solved ⊤ set would drop exactly those, and the
+    // recorded floor is taken as the signal instead.
+    Map<PointerKey, TensorGenerator.ShapeUnresolutionCause> byKey = new HashMap<>();
+    for (Pair<PointerKey, TensorGenerator.ShapeUnresolutionCause> record :
+        TensorGenerator.getShapeAnnotationCandidates(builder)) {
+      PointerKey key = record.fst;
+      byKey.merge(
+          key,
+          record.snd,
+          (a, b) ->
+              a == TensorGenerator.ShapeUnresolutionCause.CONTENT_DEPENDENT
+                      || b == TensorGenerator.ShapeUnresolutionCause.CONTENT_DEPENDENT
+                  ? TensorGenerator.ShapeUnresolutionCause.CONTENT_DEPENDENT
+                  : a == TensorGenerator.ShapeUnresolutionCause.RECOVERABLE_GAP ? a : b);
+    }
+
+    byKey.forEach(
+        (key, cause) -> shapeAnnotationCandidates.add(new ShapeAnnotationCandidate(key, cause)));
+
+    long contentDependent =
+        shapeAnnotationCandidates.stream()
+            .filter(c -> c.cause() == TensorGenerator.ShapeUnresolutionCause.CONTENT_DEPENDENT)
+            .count();
+    if (contentDependent > 0)
+      LOGGER.fine(
+          () ->
+              contentDependent
+                  + " content-dependent allocator shape(s) are wala/ML#370 annotation candidates; "
+                  + (shapeAnnotationCandidates.size() - contentDependent)
+                  + " unresolved allocator shape(s) are recoverable/undetermined precision gaps"
+                  + " (wala/ML#735).");
   }
 
   /**
