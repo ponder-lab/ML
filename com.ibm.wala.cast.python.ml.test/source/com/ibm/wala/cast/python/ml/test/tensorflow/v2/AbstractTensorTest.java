@@ -1,4 +1,4 @@
-package com.ibm.wala.cast.python.ml.test.tensorflow;
+package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.COMPLEX64;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
@@ -22,7 +22,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
  * the feature-area test classes in this package. The {@code test(...)} harness overloads and
  * per-test helpers still live in {@link TestTensorflow2Model} and move here as the split proceeds.
  */
-public abstract class AbstractTensorFlowTest extends TestPythonMLCallGraphShape {
+public abstract class AbstractTensorTest extends TestPythonMLCallGraphShape {
 
   protected static final String FLOAT_32 = FLOAT32.name().toLowerCase();
 

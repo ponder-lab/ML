@@ -1,6 +1,6 @@
 package com.ibm.wala.cast.python.ml.test;
 
-import com.ibm.wala.cast.python.ml.test.tensorflow.TestTensorflow2Model;
+import com.ibm.wala.cast.python.ml.test.tensorflow.v2.TestTensorflow2Model;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;

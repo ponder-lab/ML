@@ -1,4 +1,4 @@
-package com.ibm.wala.cast.python.ml.test.tensorflow;
+package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.COMPLEX64;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
@@ -76,7 +76,7 @@ import java.util.stream.Stream;
 import org.junit.Test;
 
 /** Test TF2 APIs. */
-public class TestTensorflow2Model extends AbstractTensorFlowTest {
+public class TestTensorflow2Model extends AbstractTensorTest {
 
   private static final Logger LOGGER = Logger.getLogger(TestTensorflow2Model.class.getName());
 
