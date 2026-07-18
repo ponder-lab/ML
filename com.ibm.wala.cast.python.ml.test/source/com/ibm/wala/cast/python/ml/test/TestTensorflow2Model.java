@@ -4966,6 +4966,26 @@ public class TestTensorflow2Model extends TestPythonMLCallGraphShape {
   }
 
   /**
+   * Companion to {@link #testListConcatNotTensor()} for the {@code tuple} arm of the wala/ML#750
+   * fix. {@code _divide_note_tuple} accumulates a loop-carried {@code tuple} with {@code
+   * result_tuple += (on, off)}. Like the list case, the {@code +} binop is gated by operand tensor
+   * evidence, and the loop-carried {@code tuple}'s allocation is reached only through its points-to
+   * set. A {@code tuple} concatenation is not a tensor op, so the accumulator's {@code tuple}
+   * allocation must not count as tensor evidence and {@code _divide_note_tuple} must have no tensor
+   * variables.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error.
+   */
+  @Test
+  public void testTupleConcatNotTensor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf750_list_concat.py", "_divide_note_tuple", 0, 0);
+  }
+
+  /**
    * Regression test for <a href="https://github.com/wala/ML/issues/653">wala/ML#653</a>: Python
    * list repetition ({@code [0] * 3}) is not a tensor. The {@code *} binop has a {@code list}
    * operand and an {@code int} operand, so it is list repetition (producing a list), not tensor
