@@ -797,7 +797,23 @@ public abstract class PythonParser<T> extends AbstractParser implements Translat
           new CAstNode[arg0.getInternalArgs().size() + arg0.getInternalKeywords().size() + 1];
       args[i++] = Ast.makeNode(CAstNode.EMPTY);
       for (expr e : arg0.getInternalArgs()) {
-        args[i++] = notePosition(e.accept(this), e);
+        CAstNode argNode = notePosition(e.accept(this), e);
+        if (e instanceof Starred) {
+          // Wrap a starred (unpacked) positional argument (`*rest`) so the CAst-to-IR translator
+          // can tell it apart from an ordinary positional and degrade positional-to-parameter
+          // alignment past it. Without this the star is erased (visitStarred returns the inner
+          // value unchanged), leaving the unpack indistinguishable from one ordinary argument. The
+          // wrapper mirrors the keyword ARRAY_LITERAL form but carries the starred marker in place
+          // of a keyword name. See wala/ML#751.
+          argNode =
+              notePosition(
+                  Ast.makeNode(
+                      CAstNode.ARRAY_LITERAL,
+                      Ast.makeConstant(PythonCAstToIRTranslator.STARRED_ARGUMENT_MARKER),
+                      argNode),
+                  e);
+        }
+        args[i++] = argNode;
       }
       for (keyword k : arg0.getInternalKeywords()) {
         args[i++] =

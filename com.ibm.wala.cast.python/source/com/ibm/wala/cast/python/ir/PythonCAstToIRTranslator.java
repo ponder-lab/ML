@@ -86,6 +86,17 @@ public class PythonCAstToIRTranslator extends AstTranslator {
 
   private static final Logger LOGGER = Logger.getLogger(PythonCAstToIRTranslator.class.getName());
 
+  /**
+   * Marker stored as the name of the {@code ARRAY_LITERAL} wrapper the parser emits for a starred
+   * (unpacked) positional call argument (e.g. {@code *rest} in {@code f(a, *rest, b)}). A starred
+   * argument reuses the same {@code ARRAY_LITERAL} form as a keyword argument but carries this
+   * marker in place of a keyword name, so {@link #doCall} can route it to a positional slot rather
+   * than a keyword and record the slot as starred. The value is not a valid Python identifier, so
+   * it cannot collide with a real keyword name. See <a
+   * href="https://github.com/wala/ML/issues/751">wala/ML#751</a>.
+   */
+  public static final String STARRED_ARGUMENT_MARKER = "*starred*";
+
   private final Map<CAstType, TypeName> walaTypeNames = HashMapFactory.make();
 
   /**
@@ -1006,14 +1017,25 @@ public class PythonCAstToIRTranslator extends AstTranslator {
     List<Position> keypos = new ArrayList<Position>();
     List<Integer> posp = new ArrayList<Integer>();
     List<Pair<String, Integer>> keyp = new ArrayList<Pair<String, Integer>>();
+    List<Integer> starred = new ArrayList<Integer>();
     posp.add(receiver);
     pospos.add(context.getSourceMap().getPosition(call.getChild(0)));
     for (int i = 2; i < call.getChildCount(); i++) {
       CAstNode cl = call.getChild(i);
       if (cl.getKind() == CAstNode.ARRAY_LITERAL) {
-        keyp.add(
-            Pair.make(String.valueOf(cl.getChild(0).getValue()), context.getValue(cl.getChild(1))));
-        keypos.add(context.getSourceMap().getPosition(cl));
+        String tag = String.valueOf(cl.getChild(0).getValue());
+        if (STARRED_ARGUMENT_MARKER.equals(tag)) {
+          // A starred (unpacked) positional argument, `*rest`. The parser wraps it in the same
+          // ARRAY_LITERAL form as a keyword but tags it with the marker; route it to a positional
+          // slot and record that slot so downstream positional-to-parameter alignment can degrade
+          // past an unpack of statically-unknown length (wala/ML#751).
+          starred.add(posp.size());
+          posp.add(context.getValue(cl.getChild(1)));
+          pospos.add(context.getSourceMap().getPosition(cl));
+        } else {
+          keyp.add(Pair.make(tag, context.getValue(cl.getChild(1))));
+          keypos.add(context.getSourceMap().getPosition(cl));
+        }
       } else {
         posp.add(context.getValue(cl));
         pospos.add(context.getSourceMap().getPosition(cl));
@@ -1029,6 +1051,11 @@ public class PythonCAstToIRTranslator extends AstTranslator {
       hack[i] = posp.get(i);
     }
 
+    int[] starredArr = new int[starred.size()];
+    for (int i = 0; i < starredArr.length; i++) {
+      starredArr[i] = starred.get(i);
+    }
+
     int pos = context.cfg().getCurrentInstruction();
     CallSiteReference site = new DynamicCallSiteReference(PythonTypes.CodeBody, pos);
 
@@ -1036,7 +1063,13 @@ public class PythonCAstToIRTranslator extends AstTranslator {
         .cfg()
         .addInstruction(
             new PythonInvokeInstruction(
-                pos, result, exception, site, hack, keyp.toArray(new Pair[keyp.size()])));
+                pos,
+                result,
+                exception,
+                site,
+                hack,
+                keyp.toArray(new Pair[keyp.size()]),
+                starredArr));
 
     pospos.addAll(keypos);
     context.cfg().noteOperands(pos, pospos.toArray(new Position[pospos.size()]));
