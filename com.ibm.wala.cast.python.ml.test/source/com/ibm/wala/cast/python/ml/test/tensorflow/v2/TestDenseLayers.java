@@ -18,7 +18,7 @@ import org.junit.Test;
 
 /**
  * Tests of dense-layer shape and dtype inference ({@code Dense*}/{@code Dense3d*}), carved from the
- * {@link TestTensorflow2Model} monolith (wala/ML#635); the assertions are verbatim.
+ * {@code TestTensorflow2Model} monolith (wala/ML#635); the assertions are verbatim.
  */
 public class TestDenseLayers extends AbstractTensorTest {
 

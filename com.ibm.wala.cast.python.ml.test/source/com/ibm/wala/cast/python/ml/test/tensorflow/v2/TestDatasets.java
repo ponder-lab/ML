@@ -7,7 +7,17 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_INT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_STRING;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_10000_1_INT64;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_10000_28_28_UINT8;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_10000_32_32_3_UINT8;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_10000_UINT8;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_102_13_FLOAT64;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_102_FLOAT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_1_INT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2246_INT64;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2246_OBJECT;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_25000_INT64;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_25000_OBJECT;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_INT64;
@@ -15,15 +25,27 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_32_28_28_UINT8;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_32_UINT8;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_INT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_404_13_FLOAT64;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_404_FLOAT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_4_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_8_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_50000_1_INT64;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_50000_32_32_3_UINT8;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_60000_28_28_UINT8;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_60000_UINT8;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_8982_INT64;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_8982_OBJECT;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_DYNAMIC_INT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyMap;
 
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
@@ -34,7 +56,7 @@ import org.junit.Test;
 
 /**
  * Tests of {@code tf.data} datasets, Python-collection probes, and generator iteration, carved from
- * the {@link TestTensorflow2Model} monolith (wala/ML#635); the assertions are verbatim.
+ * the {@code TestTensorflow2Model} monolith (wala/ML#635); the assertions are verbatim.
  */
 public class TestDatasets extends AbstractTensorTest {
 
@@ -1413,5 +1435,352 @@ public class TestDatasets extends AbstractTensorTest {
   public void testDatasetReduce()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_dataset_reduce.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  /**
+   * Regression test for wala/ML#452: iterating a {@code tf.data.TextLineDataset} via {@code for
+   * element in dataset:} should classify each element as a 0-D string tensor. The receiving
+   * function {@code func}'s parameter at {@code vn=2} must therefore have type {@code
+   * SCALAR_TENSOR_OF_STRING}. Pre-fix, the analyzer's {@code TextLineDataset} model didn't preserve
+   * the per-element tensor type through the iteration substrate, leaving {@code func} with no
+   * tensor classification at all (downstream {@code Function.getHasTensorParameter()} reported
+   * false).
+   */
+  @Test
+  public void testTextLineDatasetIterationElementType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_textlinedataset_iter.py",
+        "func",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_STRING)));
+  }
+
+  /**
+   * Regression guard for wala/ML#655: a {@code tf.io.FixedLenFeature} value, parsed by {@code
+   * tf.io.parse_single_example} and read back through a dict subscript, types as a dense tensor
+   * whose shape comes from the feature's {@code dims} argument and whose dtype comes from its
+   * {@code type} argument. Previously {@code FixedLenFeature.do} allocated an {@code
+   * Ltensorflow/objects/ feature} that the manual tensor walker ignores, so the parsed value never
+   * typed.
+   */
+  @Test
+  public void testFixedLenFeature()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_fixed_len_feature.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 128))));
+  }
+
+  /**
+   * Regression guard for wala/ML#655, end to end: the NLPGNN {@code TFLoader.load_valid} input
+   * pipeline — a {@code TFRecordDataset} mapped by a {@code parse_single_example} decoder returning
+   * a 4-tuple of {@code FixedLenFeature} dict-subscripts, then {@code prefetch}ed, then iterated
+   * with a 4-way tuple unpack — types its first parsed field {@code X} ({@code input_ids}) to
+   * {@code (128,)} int64. Before the {@code FixedLenFeature} fix, the mapped element was
+   * non-tensor, so {@code X} (and any model parameter fed from it) came back non-tensor.
+   */
+  @Test
+  public void testTfrecordLoader()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tfrecord_loader.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 128))));
+  }
+
+  /**
+   * Probe for <a href="https://github.com/wala/ML/issues/688">wala/ML#688</a>: a {@code map} stage
+   * returning a tuple, batched with a tuple {@code padded_shapes}, iterated with destructuring —
+   * the vendored gpt-2 {@code input_fn} element shape in miniature. Both halves type the
+   * runtime-true {@code (4, 3) int64} (batch 4, padded to the longest sequence): the computed
+   * second member resolves through the wala/ML#688 SSA fallback and the batch stage applies.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPaddedBatchPair()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_padded_batch_pair.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(DType.INT64, 4, 3))));
+  }
+
+  /**
+   * Sibling half of {@link #testPaddedBatchPair()} (wala/ML#688): the second tuple member.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPaddedBatchPair2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_padded_batch_pair.py",
+        "consume2",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(DType.INT64, 4, 3))));
+  }
+
+  /**
+   * Pins the <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a> {@code
+   * TuckERLoader.target_convert} row on the vendored subject: the loader is vendored verbatim from
+   * {@code kyzhouhzau/NLPGNN} ({@code nlpgnn/datas/graphloader.py}); the driver, the tiny {@code
+   * data/} triple files, and the {@code nlpgnn/gnn/utils.py} reachable slice are bespoke. The
+   * {@code targets} parameter (a {@code padded_batch} dict-element field) types {@code (2, ?)}
+   * int32 — the declared {@code padded_shapes} dims under the batch dimension (<a
+   * href="https://github.com/wala/ML/issues/673">wala/ML#673</a>) — unioned with the standard
+   * partial-batch sibling {@code (?, ?)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   *     <p>The local count excludes the {@code enumerate(targets)} iterator object, pinned
+   *     non-tensor since wala/ML#732; the element and its TensorFlow uses stay typed.
+   */
+  @Test
+  public void testTuckerTargetConvert()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "tucker_proj/nlpgnn/__init__.py",
+          "tucker_proj/nlpgnn/gnn/__init__.py",
+          "tucker_proj/nlpgnn/gnn/utils.py",
+          "tucker_proj/nlpgnn/datas/__init__.py",
+          "tucker_proj/nlpgnn/datas/graphloader.py",
+          "tucker_proj/tf2_test_tucker_target_convert.py"
+        },
+        "nlpgnn/datas/graphloader.py",
+        "TuckERLoader.target_convert",
+        "tucker_proj",
+        1,
+        6,
+        Map.of(
+            3,
+            Set.of(
+                new TensorType(INT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)),
+                new TensorType(INT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE)))));
+  }
+
+  /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/623">wala/ML#623</a>: a {@code
+   * padded_batch} element threaded through a custom {@code fit} into {@code train_step} types the
+   * parameters. {@code padded_batch} was unmodeled, so the per-element tensor type was dropped
+   * before reaching the callee; modeling it like {@code batch} recovers it. The two parameters type
+   * to {@code (2, 2)} int32 (the batch dimension prepended to the {@code (2,)} element).
+   */
+  @Test
+  public void testPaddedBatchParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType t = TensorType.of(INT_32, 2, 2);
+
+    test(
+        "tf2_test_padded_batch_param.py",
+        "Model.train_step",
+        2,
+        3,
+        Map.of(3, Set.of(t), 4, Set.of(t)));
+  }
+
+  /**
+   * Regression guard for wala/ML#645: {@code tf.io.VarLenFeature(dtype)} models the SparseTensor a
+   * variable-length feature parses to, so {@code tf.sparse.to_dense} of it types from the feature's
+   * dtype ({@code int64}) and the API-contract shape (rank-1 with a dynamic length, {@code (?,)}).
+   * The {@code io}-registration fix makes {@code tf.io.*} resolve at all (they were registered
+   * under {@code tf}, not the {@code io} object). The rank-1 dynamic shape is the contract-model
+   * refinement of wala/ML#647 (formerly ⊤).
+   */
+  @Test
+  public void testVarLenFeature()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_var_len_feature.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_DYNAMIC_INT64)));
+  }
+
+  /**
+   * The realistic gpt-2 shape for wala/ML#645: a {@code VarLenFeature} in a feature dict, parsed by
+   * {@code tf.io.parse_single_example}, subscripted, and densified. {@code consume}'s parameter
+   * types to {@code (?,)} int64: the VarLenFeature SparseTensor now keeps a live points-to set
+   * through the dict {@code putfield}/{@code getfield} (wala/ML#646), and {@code
+   * tf.sparse.to_dense} resolves the dict-routed operand by dispatching the {@code VarLenFeature}
+   * generator at the SparseTensor's allocation site, recovering the feature's dtype and the rank-1
+   * dynamic (contract) shape. The static shape is {@code (?,)}, not the concrete {@code (2,)} the
+   * Python runtime produces, because the example's length is lost across the serialize/parse
+   * round-trip. This is the dict-routed companion to the direct {@link #testVarLenFeature()};
+   * together they un-strand {@code get_loss}'s {@code real} in {@link #testGpt2GetLossVendored()}.
+   */
+  @Test
+  public void testParseSingleExample()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_parse_single_example.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_DYNAMIC_INT64)));
+  }
+
+  /**
+   * Mirrors gpt-2's {@code parse_example} for wala/ML#618: a tuple return over two {@code
+   * tf.cast(tf.sparse.to_dense(parsed[k]), tf.int32)} values, each parsed from a {@code
+   * VarLenFeature} in a feature dict, but called directly (no {@code dataset.map}). The recovered
+   * {@code (?,)} int64 propagates through {@code to_dense}, the int32 cast, the tuple return, and
+   * the destructuring, so {@code consume}'s parameter ({@code targets}) types to {@code (?,)}
+   * int32. Together with {@link #testParseSingleExample()} this isolates the {@code dataset.map}
+   * element-type layer as the sole remaining gap for the full {@link #testGpt2GetLossVendored()}
+   * subject.
+   */
+  @Test
+  public void testParseExampleTuple()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_parse_example_tuple.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_32, asList(DynamicDim.INSTANCE)))));
+  }
+
+  /**
+   * Regression guard for wala/ML#618: {@code tf.data.TFRecordDataset(...)} is a chainable dataset,
+   * so {@code .map(parse_example)} resolves and the VarLenFeature-parsed {@code targets} types to
+   * {@code (?,)} int32. Previously {@code TFRecordDataset} was a bare {@code Dataset} field with no
+   * {@code do()}, so the chain did not resolve.
+   */
+  @Test
+  public void testTfrecordMap()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tfrecord_map.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_32, asList(DynamicDim.INSTANCE)))));
+  }
+
+  /**
+   * Generator test for {@code tf.keras.datasets.fashion_mnist.load_data()}. Shapes and dtype are
+   * identical to {@code mnist.load_data()}. The fixture passes all four unpacked arrays ({@code
+   * x_train}, {@code y_train}, {@code x_test}, {@code y_test}) into the 4-arg sink, so the
+   * assertion pins types at {@code vn=2..5}.
+   */
+  @Test
+  public void testFashionMnistLoadData()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_fashion_mnist_load_data.py",
+        "f",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_60000_28_28_UINT8),
+            3, Set.of(TENSOR_60000_UINT8),
+            4, Set.of(TENSOR_10000_28_28_UINT8),
+            5, Set.of(TENSOR_10000_UINT8)));
+  }
+
+  /**
+   * Generator test for {@code tf.keras.datasets.cifar100.load_data()}. Shapes are identical to
+   * {@code cifar10.load_data()}, but the {@code y_train} / {@code y_test} dtype is {@code int64}
+   * (cifar100's class indices) rather than {@code uint8} (cifar10's class indices). The dispatch
+   * routes through the dedicated {@link com.ibm.wala.cast.python.ml.client.Cifar100InputData}
+   * generator (closes wala/ML#487's mis-routing through {@code Cifar10InputData}). Asserts on all
+   * four unpacked arrays at {@code vn=2..5}.
+   */
+  @Test
+  public void testCifar100LoadData()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_cifar100_load_data.py",
+        "f",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_50000_32_32_3_UINT8),
+            3, Set.of(TENSOR_50000_1_INT64),
+            4, Set.of(TENSOR_10000_32_32_3_UINT8),
+            5, Set.of(TENSOR_10000_1_INT64)));
+  }
+
+  /**
+   * Generator test for {@code tf.keras.datasets.reuters.load_data()}. Asserts on all four unpacked
+   * arrays at {@code vn=2..5}: {@code x_train} ({@code (8982,)} {@code object} &mdash; newswires
+   * are variable-length integer-encoded sequences, so numpy stores them in an {@code object}
+   * array), {@code y_train} ({@code (8982,)} {@code int64}), {@code x_test} ({@code (2246,)} {@code
+   * object}), {@code y_test} ({@code (2246,)} {@code int64}). The {@code object} dtype matches the
+   * runtime truth the Python fixture asserts (wala/ML#488).
+   */
+  @Test
+  public void testReutersLoadData()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reuters_load_data.py",
+        "f",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_8982_OBJECT),
+            3, Set.of(TENSOR_8982_INT64),
+            4, Set.of(TENSOR_2246_OBJECT),
+            5, Set.of(TENSOR_2246_INT64)));
+  }
+
+  /**
+   * Generator test for {@code tf.keras.datasets.boston_housing.load_data()}. Asserts on all four
+   * unpacked arrays at {@code vn=2..5}: {@code x_train} ({@code (404, 13)} {@code float64}
+   * features), {@code y_train} ({@code (404,)} {@code float64} regression targets), {@code x_test}
+   * ({@code (102, 13)} {@code float64}), {@code y_test} ({@code (102,)} {@code float64}).
+   */
+  @Test
+  public void testBostonHousingLoadData()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_boston_housing_load_data.py",
+        "f",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_404_13_FLOAT64),
+            3, Set.of(TENSOR_404_FLOAT64),
+            4, Set.of(TENSOR_102_13_FLOAT64),
+            5, Set.of(TENSOR_102_FLOAT64)));
+  }
+
+  /**
+   * Generator test for {@code tf.keras.datasets.imdb.load_data()}. The four returned arrays each
+   * have shape {@code (25000,)}: the {@code x_train} / {@code x_test} arrays carry numpy {@code
+   * object} dtype (variable-length integer-encoded sequences, so numpy stores them in an {@code
+   * object} array); the {@code y_train} / {@code y_test} arrays have dtype {@code int64} (binary
+   * labels). Asserts on all four unpacked arrays at {@code vn=2..5}. The {@code object} dtype
+   * matches the runtime truth the Python fixture asserts (wala/ML#488).
+   */
+  @Test
+  public void testImdbLoadData()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_imdb_load_data.py",
+        "f",
+        4,
+        4,
+        Map.of(
+            2, Set.of(TENSOR_25000_OBJECT),
+            3, Set.of(TENSOR_25000_INT64),
+            4, Set.of(TENSOR_25000_OBJECT),
+            5, Set.of(TENSOR_25000_INT64)));
   }
 }

@@ -7,6 +7,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.FLOAT_64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.INT_32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.INT_64;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_BOOL;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.STRING;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_0_0_FLOAT32;
@@ -20,20 +21,25 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_3_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_5_3_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_FLOAT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_INT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_INT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_2_2_3_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_2_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_3_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_3_INT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_BOOL;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_INT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_FLOAT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_INT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_60000_28_28_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_INT32_UNKNOWN_SHAPE;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_NONE_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_NONE_32_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_NONE_NONE_STRING;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
@@ -42,6 +48,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static java.util.Arrays.asList;
 
 import com.ibm.wala.cast.python.ml.client.Constant;
+import com.ibm.wala.cast.python.ml.client.Linspace;
 import com.ibm.wala.cast.python.ml.client.NpArray;
 import com.ibm.wala.cast.python.ml.client.NpOnes;
 import com.ibm.wala.cast.python.ml.client.NpZeros;
@@ -59,7 +66,7 @@ import org.junit.Test;
 /**
  * Tests of tensor-constructor shape and dtype inference ({@code tf.ones}/{@code zeros}/{@code
  * eye}/{@code range}/{@code fill}/{@code one_hot}/{@code constant}/{@code convert_to_tensor}/{@code
- * tf.keras.Input}/{@code np.*}), carved from the {@link TestTensorflow2Model} monolith
+ * tf.keras.Input}/{@code np.*}), carved from the {@code TestTensorflow2Model} monolith
  * (wala/ML#635); the assertions are verbatim.
  */
 public class TestConstructors extends AbstractTensorTest {
@@ -1023,5 +1030,128 @@ public class TestConstructors extends AbstractTensorTest {
   public void testEyeBatchShape()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_eye_batch_shape.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_3_3_FLOAT32)));
+  }
+
+  /**
+   * Verifies that {@code tf.linspace(0.0, 10.0, 5)} routes through the dedicated {@link Linspace}
+   * generator and emits the precise rank-1 shape {@code (5,)} with {@code float32} dtype (derived
+   * from the float-typed {@code start} argument).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testLinspace()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_linspace.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testLinspace()} that exercises the integer-promotion branch in {@link
+   * com.ibm.wala.cast.python.ml.client.Linspace#getDefaultDTypes}. {@code tf.linspace} with integer
+   * {@code start}/{@code stop} promotes the output to {@code float64} (verified on TF 2.9), not
+   * {@code float32}. The float-input case is covered by {@link #testLinspace()}.
+   */
+  @Test
+  public void testLinspaceInt()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_linspace_int.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_FLOAT64)));
+  }
+
+  /**
+   * Drives the {@code axis}-passed branch in {@link
+   * com.ibm.wala.cast.python.ml.client.Linspace#getDefaultShapes}. With {@code axis=1} and vector
+   * {@code start}/{@code stop}, {@code tf.linspace} interpolates along axis 1, producing a
+   * higher-rank result whose runtime shape is {@code (2, 5)} with dtype {@code float32}.
+   *
+   * <p>The static analysis currently returns ⊤ (unknown shape) for any axis-passed call — combining
+   * {@code start}'s rank with {@code num} is not yet implemented; the generator trades precision
+   * for soundness. The assertion encodes the observed result with a TODO pointing at the precision
+   * improvement that would narrow it.
+   *
+   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/475">wala/ML#475</a> is fixed and
+   * {@code Linspace.getDefaultShapes} computes the precise output shape from {@code
+   * start.shape[:axis] + (num,) + start.shape[axis:]}, narrow the assertion to {@code
+   * Set.of(TENSOR_2_5_FLOAT32)} (a new constant).
+   *
+   * <p>Companion to {@link #testLinspace()} (covering the absent-axis branch).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testLinspaceAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_linspace_axis.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * Regression test for `wala/ML#447`: scalar `tf.constant(<bool>)` exercises the {@link
+   * java.lang.Boolean} arm of {@code TensorGenerator.getDTypesOfValue}. Without it, dtype inference
+   * threw {@code IllegalStateException: Unknown constant type: class java.lang.Boolean}.
+   */
+  @Test
+  public void testBoolConstant()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_bool_constant.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_BOOL)));
+  }
+
+  /**
+   * List-of-bool form of {@link #testBoolConstant} — exercises the recursive {@code
+   * getDTypesOfValue} call (line 1625) on a list whose elements are `Boolean` constants.
+   */
+  @Test
+  public void testBoolConstant2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_bool_constant.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_3_BOOL)));
+  }
+
+  @Test
+  public void testVariablePositional()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_variable_positional.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT32)));
+  }
+
+  @Test
+  public void testVariableKeyword()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_variable_keyword.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+    test("tf2_test_variable_keyword.py", "g", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+  }
+
+  @Test
+  public void testVariableMixed()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_variable_mixed.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_INT64)));
+  }
+
+  @Test
+  public void testVariablePositionalComplex()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+
+    test("tf2_test_variable_positional_complex.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+  }
+
+  @Test
+  public void testVariablePositionalShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+
+    test(
+        "tf2_test_variable_positional_shape.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_2_FLOAT32)));
+  }
+
+  @Test
+  public void testVariablePositionalDType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+
+    test("tf2_test_variable_positional_dtype.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT64)));
   }
 }

@@ -19,7 +19,7 @@ import org.junit.Test;
 
 /**
  * Tests of plain function dispatch and redefinition ({@code Function*}/{@code RedefinedFunction*}),
- * carved from the {@link TestTensorflow2Model} monolith (wala/ML#635); the assertions are verbatim.
+ * carved from the {@code TestTensorflow2Model} monolith (wala/ML#635); the assertions are verbatim.
  */
 public class TestFunctions extends AbstractTensorTest {
 

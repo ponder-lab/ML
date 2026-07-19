@@ -5,9 +5,12 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_1_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_3_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_4_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_INT32;
 
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
@@ -19,7 +22,7 @@ import org.junit.Test;
 
 /**
  * Tests of tensor-type inference through decorated, static, class, and same-named methods, carved
- * from the {@link TestTensorflow2Model} monolith (wala/ML#635); the assertions are verbatim.
+ * from the {@code TestTensorflow2Model} monolith (wala/ML#635); the assertions are verbatim.
  */
 public class TestDecoratedMethods extends AbstractTensorTest {
 
@@ -502,7 +505,7 @@ public class TestDecoratedMethods extends AbstractTensorTest {
    * Test a pytest without decorators that needs a PYTHONPATH. This is a "control" case. We'll add a
    * decorator in the next case.
    *
-   * @see TestTensorflow2Model#testModule11().
+   * @see TestModules#testModule11().
    */
   @Test
   public void testDecoratedFunctions3()
@@ -539,7 +542,7 @@ public class TestDecoratedMethods extends AbstractTensorTest {
   /**
    * Test a pytest with a decorator that needs a PYTHONPATH.
    *
-   * @see TestTensorflow2Model#testModule11().
+   * @see TestModules#testModule11().
    */
   @Test
   public void testDecoratedFunctions6()
@@ -569,7 +572,7 @@ public class TestDecoratedMethods extends AbstractTensorTest {
   /**
    * Test a Pytest with a decorator without parameters that needs a PYTHONPATH.
    *
-   * @see TestTensorflow2Model#testModule11().
+   * @see TestModules#testModule11().
    */
   @Test
   public void testDecoratedFunctions8()

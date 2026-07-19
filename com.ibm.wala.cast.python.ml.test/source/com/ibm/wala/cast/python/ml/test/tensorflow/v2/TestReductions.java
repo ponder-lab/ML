@@ -24,7 +24,7 @@ import org.junit.Test;
 
 /**
  * Tests of reduction and per-element rounding ops ({@code reduce_*}, {@code argmax}/{@code argmin},
- * {@code top_k}, {@code ceil}), carved from the {@link TestTensorflow2Model} monolith
+ * {@code top_k}, {@code ceil}), carved from the {@code TestTensorflow2Model} monolith
  * (wala/ML#635); the assertions are verbatim.
  */
 public class TestReductions extends AbstractTensorTest {
@@ -538,5 +538,101 @@ public class TestReductions extends AbstractTensorTest {
                 TENSOR_2_FLOAT32,
                 TENSOR_INT32_UNKNOWN_SHAPE,
                 TENSOR_2_INT32)));
+  }
+
+  /**
+   * Pins the output type of {@code tf.math.unsorted_segment_sum} (wala/ML#570). The output dtype
+   * inherits from the {@code data} input ({@code float32}); the shape is the concrete {@code (2,
+   * 3)} — {@code [num_segments] ++ data.shape[segment_ids.ndim:]} with the static {@code
+   * num_segments = 2}, rank-1 {@code segment_ids}, and {@code (3, 3)} {@code data} (wala/ML#582).
+   * Verified via a {@code consume_sum} sink on the aggregation result.
+   */
+  @Test
+  public void testUnsortedSegmentSum()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_unsorted_segment.py", "consume_sum", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
+   * Pins the output type of {@code tf.math.unsorted_segment_max} (wala/ML#570). Same dtype-from-
+   * {@code data} and static-{@code num_segments} {@code (2, 3)} shape recovery as {@link
+   * #testUnsortedSegmentSum} (wala/ML#582).
+   */
+  @Test
+  public void testUnsortedSegmentMax()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_unsorted_segment.py", "consume_max", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
+   * Pins the output type of {@code tf.math.unsorted_segment_mean} (wala/ML#570). Same dtype-from-
+   * {@code data} and static-{@code num_segments} {@code (2, 3)} shape recovery as {@link
+   * #testUnsortedSegmentSum} (wala/ML#582).
+   */
+  @Test
+  public void testUnsortedSegmentMean()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_unsorted_segment.py",
+        "consume_mean",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
+   * Tier-5 generator (wala/ML#449): {@code tf.math.top_k(input, k)}. Returns a {@code (values,
+   * indices)} 2-tuple. The dedicated {@link com.ibm.wala.cast.python.ml.client.TopK} generator
+   * implements {@link com.ibm.wala.cast.python.ml.client.TupleElementProvider} with per-index dtype
+   * precision ({@code values} inherits input dtype; {@code indices} is fixed at {@code int32}), but
+   * the wrap-on-property-read dispatch in {@link
+   * com.ibm.wala.cast.python.ml.client.TensorGeneratorFactory} doesn't fire for NamedTuple-style
+   * attribute access ({@code result.values} / {@code result.indices}). Until <a
+   * href="https://github.com/wala/ML/issues/480">wala/ML#480</a> is fixed, both destructured
+   * elements receive the aggregate union of per-element types.
+   *
+   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/480">wala/ML#480</a> lands, narrow the
+   * assertion to {@code Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)} (precise {@code values} dtype).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testTopKValues()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_top_k.py",
+        "f_values",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
+  }
+
+  /**
+   * Counterpart of {@link #testTopKValues()} for the {@code indices} element of {@code
+   * tf.math.top_k}'s tuple result. Same wala/ML#480-driven imprecision: the assertion captures the
+   * observed aggregate union with a TODO to narrow once the per-index dispatch is fixed.
+   *
+   * <p>TODO: Once <a href="https://github.com/wala/ML/issues/480">wala/ML#480</a> lands, narrow the
+   * assertion to {@code Set.of(TENSOR_INT32_UNKNOWN_SHAPE)} (precise {@code indices} dtype).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testTopKIndices()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_top_k.py",
+        "f_indices",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32, TENSOR_INT32_UNKNOWN_SHAPE)));
   }
 }

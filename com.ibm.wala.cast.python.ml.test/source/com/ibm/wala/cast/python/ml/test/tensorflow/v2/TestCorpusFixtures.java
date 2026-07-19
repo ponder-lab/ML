@@ -24,7 +24,7 @@ import org.junit.Test;
 
 /**
  * Whole-project corpus-fixture tests (the vendored NLPGNN, gpt-2, MusicTransformer, BiLSTM, and
- * TextCNN subjects), carved as one unit from the {@link TestTensorflow2Model} monolith
+ * TextCNN subjects), carved as one unit from the {@code TestTensorflow2Model} monolith
  * (wala/ML#635). Kept together deliberately: these are the suite's long pole (the wala/ML#755
  * parallel-split candidate), and their loop-carried expectations are sensitive to JVM test ordering
  * (wala/ML#753). The assertions are verbatim.

@@ -18,7 +18,7 @@ import org.junit.Test;
 
 /**
  * Tests of the {@code Model.getWeightShapes} weight-graph walk ({@code testModelAttributes*}),
- * carved from the {@link TestTensorflow2Model} monolith (wala/ML#635); the assertions are verbatim.
+ * carved from the {@code TestTensorflow2Model} monolith (wala/ML#635); the assertions are verbatim.
  */
 public class TestModelWeightGraph extends AbstractTensorTest {
 
