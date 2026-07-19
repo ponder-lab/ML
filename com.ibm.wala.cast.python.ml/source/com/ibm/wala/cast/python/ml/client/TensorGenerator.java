@@ -4348,6 +4348,13 @@ public abstract class TensorGenerator {
    *   <li>{@code v[a:b]} — an invoke of the {@code slice} builtin with constant (or {@code None})
    *       bounds and a unit step; recurses on the receiver and takes the corresponding sub-list of
    *       each shape, with Python negative-index semantics.
+   *   <li>{@code helper(...)} — an invoke of a user function (the BERT/ALBERT {@code
+   *       get_shape_list} pattern); recurses on each resolvable callee's returned values and unions
+   *       (wala/ML#706).
+   *   <li>a parameter — maps back to the corresponding argument at each caller's invoke and
+   *       continues in the caller's frame, unioning the callers (wala/ML#706).
+   *   <li>{@code a + b} — the concatenation of two shape vectors, either operand possibly a literal
+   *       list of resolvable elements (wala/ML#708).
    * </ul>
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
@@ -4379,13 +4386,13 @@ public abstract class TensorGenerator {
 
   /**
    * Core of {@link #getShapeResultOfShapeVector(PropagationCallGraphBuilder, CGNode, int)}
-   * threading the set of callee nodes already on the walk, guarding recursive helpers
-   * (wala/ML#706).
+   * threading the set of nodes already on the walk — callees entered through helper returns and
+   * callers entered through parameter arguments — guarding recursive chains (wala/ML#706).
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
    * @param node The {@link CGNode} whose IR defines {@code vn}.
    * @param vn The value number to resolve.
-   * @param visited The callee nodes already on the walk.
+   * @param visited The nodes already on the walk.
    * @return The resolution result; see the wrapper.
    */
   private ShapeResult getShapeResultOfShapeVector(
@@ -4456,6 +4463,57 @@ public abstract class TensorGenerator {
         }
       }
       return combined == null ? ShapeResult.unknown() : new ShapeResult(combined, callerUnknown);
+    }
+
+    // A shape-vector parameter (e.g. `orig_shape_list` of NLPGNN's `reshape_from_matrix`, fed
+    // `get_shape_list(input_tensor)` by its callers): map the parameter back to the corresponding
+    // argument at each caller's invoke and continue the walk in the caller's frame (wala/ML#706).
+    // The parameter unions all callers; a caller whose argument cannot be mapped (keyword-passed
+    // or defaulted) or walked marks the unknown remainder while the resolvable callers' members
+    // still stand (wala/ML#718).
+    if (def == null && !st.isConstant(vn)) {
+      int paramPos = Integer.MIN_VALUE;
+      for (int i = 0; i < node.getIR().getNumberOfParameters(); i++)
+        if (node.getIR().getParameter(i) == vn) {
+          paramPos = node.getMethod().isStatic() ? i : i - 1;
+          break;
+        }
+      if (paramPos >= 0) {
+        LOGGER.fine(
+            () ->
+                "getShapesOfShapeVector: resolving parameter vn "
+                    + vn
+                    + " of "
+                    + describe(node)
+                    + " via its callers.");
+        boolean callerUnknown = false;
+        Set<List<Dimension<?>>> combined = null;
+        for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+            getCallerInvokes(builder, node)) {
+          CGNode caller = callerInvoke.fst;
+          int argVn = -1;
+          if (callerInvoke.snd instanceof PythonInvokeInstruction) {
+            PythonInvokeInstruction pyCall = (PythonInvokeInstruction) callerInvoke.snd;
+            int numPosParams = pyCall.getNumberOfPositionalParameters() - 1;
+            if (paramPos < numPosParams) argVn = pyCall.getUse(paramPos + 1);
+          }
+          if (argVn <= 0 || !visited.add(caller)) {
+            callerUnknown = true; // Unmappable argument, or the walk is already in this caller.
+            continue;
+          }
+          try {
+            ShapeResult shapes = this.getShapeResultOfShapeVector(builder, caller, argVn, visited);
+            if (shapes.hasUnknown() || shapes.isBottom()) callerUnknown = true;
+            if (!shapes.members().isEmpty()) {
+              if (combined == null) combined = HashSetFactory.make();
+              combined.addAll(shapes.members());
+            }
+          } finally {
+            visited.remove(caller);
+          }
+        }
+        return combined == null ? ShapeResult.unknown() : new ShapeResult(combined, callerUnknown);
+      }
     }
 
     if (def instanceof PythonPropertyRead) {
@@ -5161,12 +5219,13 @@ public abstract class TensorGenerator {
 
   /**
    * Core of {@link #isShapeVectorChain(PropagationCallGraphBuilder, CGNode, int)} threading the set
-   * of callee nodes already on the walk, guarding recursive helpers (wala/ML#706).
+   * of nodes already on the walk — callees entered through helper returns and callers entered
+   * through parameter arguments — guarding recursive chains (wala/ML#706).
    *
    * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves helper calls.
    * @param node The {@link CGNode} whose IR defines {@code vn}.
    * @param vn The value number to test.
-   * @param visited The callee nodes already on the walk.
+   * @param visited The nodes already on the walk.
    * @return {@code true} iff the def-use chain matches a shape-vector form.
    */
   private static boolean isShapeVectorChain(
@@ -5178,6 +5237,35 @@ public abstract class TensorGenerator {
     if (def instanceof PythonPropertyRead) {
       int memberVn = ((PythonPropertyRead) def).getMemberRef();
       return st.isStringConstant(memberVn) && "shape".equals(st.getStringValue(memberVn));
+    }
+
+    // A parameter chains iff some caller's corresponding argument chains (wala/ML#706); the
+    // resolve-side walk unions the callers and marks the unmappable ones as the unknown
+    // remainder.
+    if (def == null && !st.isConstant(vn)) {
+      int paramPos = Integer.MIN_VALUE;
+      for (int i = 0; i < node.getIR().getNumberOfParameters(); i++)
+        if (node.getIR().getParameter(i) == vn) {
+          paramPos = node.getMethod().isStatic() ? i : i - 1;
+          break;
+        }
+      if (paramPos >= 0)
+        for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+            getCallerInvokes(builder, node)) {
+          CGNode caller = callerInvoke.fst;
+          if (!(callerInvoke.snd instanceof PythonInvokeInstruction)) continue;
+          PythonInvokeInstruction pyCall = (PythonInvokeInstruction) callerInvoke.snd;
+          int numPosParams = pyCall.getNumberOfPositionalParameters() - 1;
+          if (paramPos >= numPosParams) continue;
+          int argVn = pyCall.getUse(paramPos + 1);
+          if (argVn <= 0 || !visited.add(caller)) continue;
+          try {
+            if (isShapeVectorChain(builder, caller, argVn, visited)) return true;
+          } finally {
+            visited.remove(caller);
+          }
+        }
+      return false;
     }
 
     if (def instanceof PythonInvokeInstruction) {
