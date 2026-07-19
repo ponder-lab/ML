@@ -2,7 +2,7 @@ package com.ibm.wala.cast.python.ml.test;
 
 import static org.junit.Assert.assertTrue;
 
-import com.ibm.wala.cast.python.ml.test.tensorflow.v2.TestTensorflow2Model;
+import com.ibm.wala.cast.python.ml.test.tensorflow.v2.TestCorpusFixtures;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
@@ -13,8 +13,8 @@ import org.junit.Test;
 /**
  * Diagnostic-logging volume guard (<a
  * href="https://github.com/wala/ML/issues/702">wala/ML#702</a>): an infrastructure test, separate
- * from the tensor-model assertions in {@link TestTensorflow2Model}, that bounds the formatted
- * {@code FINEST} volume of a whole-project analysis.
+ * from the tensor-model assertions in {@link TestCorpusFixtures}, that bounds the formatted {@code
+ * FINEST} volume of a whole-project analysis.
  *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
@@ -65,7 +65,7 @@ public class DiagnosticLoggingVolumeTest {
     pkg.setUseParentHandlers(false);
     try {
       DiscardingFormattingHandler.reset();
-      new TestTensorflow2Model().runNlpgnnFullGeneration();
+      new TestCorpusFixtures().runNlpgnnFullGeneration();
       long volume = DiscardingFormattingHandler.totalChars();
       assertTrue(
           "Diagnostic FINEST volume "
