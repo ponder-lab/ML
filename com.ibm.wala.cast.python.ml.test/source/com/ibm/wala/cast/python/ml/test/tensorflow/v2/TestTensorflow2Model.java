@@ -13308,6 +13308,53 @@ public class TestTensorflow2Model extends AbstractTensorTest {
   }
 
   /**
+   * The real BERT/ALBERT {@code get_shape_list} vendored verbatim from NLPGNN's {@code
+   * nlpgnn/tools.py} (wala/ML#706): unlike {@link #testShapeHelperSliceVar()}'s simplified
+   * single-return helper, it patches {@code None} entries after the {@code as_list()} read
+   * (subscript writes on the returned list), returns on two paths, and takes default parameters.
+   * The def-use walk follows the helper invoke to its {@code .shape.as_list()} chain; the source
+   * tensor's static {@code (4, 5, 6)} has no {@code None} axes, so the unpatched chain is the
+   * runtime value and the {@code [-k:]} slice is the precise {@code (5, 6)}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapeHelperFull()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_shape_helper_full.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_5_6_FLOAT32)));
+  }
+
+  /**
+   * Parameter-rooted shape-vector provenance (wala/ML#706): the BERT matrix-reshape round trip
+   * ({@code reshape_to_matrix}/{@code reshape_from_matrix}, vendored from NLPGNN's {@code
+   * nlpgnn/tools.py}). {@code reshape_from_matrix}'s reshape target is {@code orig_dims + [width]},
+   * where {@code orig_dims} slices the {@code orig_shape_list} <em>parameter</em> — the def-use
+   * walk roots at a parameter and maps it back to the corresponding argument at the caller's invoke
+   * (the {@code get_shape_list(t)} chain), continuing in the caller's frame. The reshape resolves
+   * to the precise runtime {@code (4, 5, 6)}; the {@code (20, 6)} member is the rank-2 early-return
+   * arm's path-insensitive phantom (runtime skips it since {@code len(input_shape) == 3}), its
+   * {@code -1} target folded against the input's element count.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapeHelperParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_shape_helper_param.py",
+        "f",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 20, 6), TENSOR_4_5_6_FLOAT32)));
+  }
+
+  /**
    * {@code np.prod} over a shape-derived list (wala/ML#707): {@code [np.prod(get_shape(t)[-2:])]}
    * folds the product of the static trailing dimensions ({@code 5 * 6}) into the reshape target, so
    * the result is the precise {@code (30,)}. Mirrors NLPGNN's {@code einsum_via_matmul} ({@code
