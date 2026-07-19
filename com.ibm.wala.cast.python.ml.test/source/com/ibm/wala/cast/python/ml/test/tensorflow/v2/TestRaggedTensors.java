@@ -40,7 +40,7 @@ import java.util.Set;
 import org.junit.Test;
 
 /**
- * Tests of ragged-tensor shape and dtype inference, carved from the {@link TestTensorflow2Model}
+ * Tests of ragged-tensor shape and dtype inference, carved from the {@code TestTensorflow2Model}
  * monolith (wala/ML#635); the assertions are verbatim.
  */
 public class TestRaggedTensors extends AbstractTensorTest {

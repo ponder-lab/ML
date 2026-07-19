@@ -2,9 +2,12 @@ package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.FLOAT_32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.INT_32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.INT_64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.MNIST_INPUT;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_10000_784_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_10000_UINT8;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_1_10_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_1_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_1_3_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_20_10_FLOAT32;
@@ -17,8 +20,12 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_256_784_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_256_UINT8;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4096_32_32_3_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4096_UINT8;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_4_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_8_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_784_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
 import static com.ibm.wala.cast.python.util.Util.addPytestEntrypoints;
 import static java.util.Arrays.asList;
@@ -41,7 +48,7 @@ import org.junit.Test;
 
 /**
  * Tests of Keras model and layer call dataflow ({@code Model*}/{@code Neural*}/{@code Build*}),
- * carved from the {@link TestTensorflow2Model} monolith (wala/ML#635); the assertions are verbatim.
+ * carved from the {@code TestTensorflow2Model} monolith (wala/ML#635); the assertions are verbatim.
  */
 public class TestModelCall extends AbstractTensorTest {
 
@@ -767,5 +774,542 @@ public class TestModelCall extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TENSOR_20_64_FLOAT32)));
+  }
+
+  /**
+   * {@code replica_fn(input)} body: {@code return input * 2.0}. Both {@code input} (parameter) and
+   * the binop result are tensors, so the expected count is 2 (1 param + 1 binop-result SSA value).
+   * Prior to wala/ML#395's scalar-literal-broadcast fix, the binop result was under-classified
+   * (null shape) and didn't register, producing a count of 1. The updated count reflects the
+   * corrected identification.
+   */
+  @Test
+  public void testCallbacks()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_callbacks.py", "replica_fn", 1, 2, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  /** See {@link #testCallbacks()} for the count rationale. */
+  @Test
+  public void testCallbacks2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_callbacks2.py", "replica_fn", 1, 2, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  /**
+   * Regression guard for {@code tf.distribute.MirroredStrategy.distribute_datasets_from_function}'s
+   * callback registration (wala/ML#113). The fixture registers {@code dataset_fn} only via {@code
+   * strategy.distribute_datasets_from_function(dataset_fn)} &mdash; no other call site. The {@code
+   * test(...)} helper's "function must exist in call graph" assertion fails pre-fix because {@code
+   * dataset_fn} never gets traced. After this PR's `tensorflow.xml` fix (synthetic-method body on
+   * {@code tensorflow/distribute/run/distribute_datasets_from_function} that allocates a stub
+   * {@code InputContext} and invokes {@code dataset_fn(ctx)}), the callback enters the call graph
+   * and the helper finds it. {@code input_context} is non-tensor, hence 0 tensor parameters; the 6
+   * tensor variables in the body come from the chained {@code tf.data.Dataset} calls.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCallbacks3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_callbacks3.py", "dataset_fn", 0, 6, Map.of());
+  }
+
+  /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>: a custom
+   * {@code fit} iterates an {@code experimental_distribute_dataset}-wrapped {@code tf.data} dataset
+   * and threads the yielded {@code (inputs, targets)} tuple into {@code train_step}. The strategy's
+   * {@code experimental_distribute_dataset} is a pass-through of its dataset argument, so the
+   * distributed dataset stays a recognized tensor iterable and {@code train_step}'s {@code inputs}
+   * and {@code targets} parameters type to {@code (2,)} float32 rather than being dropped (which
+   * cascaded to every downstream consumer).
+   */
+  @Test
+  public void testDistributeFitTupleParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_distribute_fit_tuple_param.py",
+        "Model.train_step",
+        2,
+        3,
+        Map.of(3, Set.of(TensorType.of(FLOAT_32, 2)), 4, Set.of(TensorType.of(FLOAT_32, 2))));
+  }
+
+  /**
+   * The gpt-2 {@code fit}-side shape for wala/ML#618, end to end: a mapped dataset passed in a list
+   * ({@code fit([ds, ds])}), list-unpacked, iterated with {@code enumerate} and nested unpacking,
+   * then forwarded through an indirected callback into {@code get_loss}. {@code real} (the second
+   * mapped tuple component) types to {@code (4,)} int64, exercising wala/ML#648 (dataset through a
+   * list) together with wala/ML#506 (the {@code map} tuple element). The full vendored subject
+   * ({@link #testGpt2GetLossVendored()}) additionally chains {@code padded_batch}/{@code repeat}/
+   * {@code prefetch} behind an {@code input_fn} return, which still loses the transformation chain.
+   */
+  @Test
+  public void testFitLoop()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_fit_loop.py", "consume", 1, 1, Map.of(2, Set.of(TensorType.of(INT_64, 4))));
+  }
+
+  /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>: {@code
+   * strategy.run(fn, (a, b))} forwards both elements of the positional {@code args} tuple into the
+   * two-parameter callback {@code step_fn(inp, tar)}, not just the first. Both {@code
+   * consume_inp}'s and {@code consume_tar}'s parameters type to {@code (2,)} int32; previously the
+   * {@code tensorflow/distribute/run/run} model forwarded only {@code args[0]}, so {@code tar} (and
+   * {@code consume_tar}'s parameter) stayed untyped.
+   */
+  @Test
+  public void testStrategyRunTwoArgsInp()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_strategy_run_two_args.py",
+        "consume_inp",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 2))));
+  }
+
+  /**
+   * Companion to {@link #testStrategyRunTwoArgsInp()} pinning the <em>second</em> forwarded
+   * element: {@code consume_tar}'s parameter types to {@code (2,)} int32, confirming {@code
+   * strategy.run} forwards {@code args[1]}. See <a
+   * href="https://github.com/wala/ML/issues/618">wala/ML#618</a>.
+   */
+  @Test
+  public void testStrategyRunTwoArgsTar()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_strategy_run_two_args.py",
+        "consume_tar",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 2))));
+  }
+
+  /**
+   * Regression guard for <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a>: a tensor
+   * passed to a Keras {@code call} method types its parameter. {@code BiLSTM.call}'s {@code inputs}
+   * receives a token-id tensor (which then feeds an {@code Embedding}), so it types to {@code (1,
+   * 3)} int32 rather than being missed.
+   */
+  @Test
+  public void testKerasCallEmbeddingParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_keras_call_embedding_param.py",
+        "BiLSTM.call",
+        1,
+        2,
+        Map.of(3, Set.of(TensorType.of(INT_32, 1, 3))));
+  }
+
+  /**
+   * {@code run_optimization(x, y)} receives batched CIFAR-10 data (not MNIST despite the file's
+   * docstring). At runtime {@code x} has shape {@code (4096, 32, 32, 3)} dtype {@code float32} and
+   * {@code y} has shape {@code (4096,)} dtype {@code uint8} (verified by Python assert statements
+   * in {@code multigpu_training.py}).
+   *
+   * <p>Master's types for values 2 and 3 are {@code MNIST_INPUT} &mdash; the MNIST shape {@code (n,
+   * 28, 28)} &mdash; which is <em>confidently wrong</em> for CIFAR-10 data (wala/ML#393: {@code
+   * keras.datasets.X.load_data()} is seeded uniformly as MNIST-shaped regardless of which dataset
+   * module {@code X} is). Branch now hardcodes {@code tf.keras.datasets.cifar10.load_data()} as an
+   * intrinsic (paralleling the MNIST modeling), so value 2 correctly reports {@code (4096, 32, 32,
+   * 3) float32}. Value 3 (labels) now correctly reports {@code (4096,) uint8} after wala/ML#410
+   * landed the top-level {@code np.reshape(x, shape)} modeling: {@code y_train =
+   * np.reshape(y_train, (-1))} at line 66 of the source is the function form of reshape (as opposed
+   * to the method form {@code x.reshape(...)} which was already handled by {@link NdarrayReshape}).
+   * The fix added a {@code numpy/reshape} class to {@code numpy.xml} paired with an {@link
+   * NpReshape} generator that reuses {@link Reshape}'s {@code -1}-inference logic and also accepts
+   * a bare integer as the shape argument (the parenthesised {@code (-1)} parses as {@code -1}, not
+   * a 1-tuple).
+   *
+   * <p>Expected tensor variable count: 5. The historical trajectory is: pre-wala/ML#451 the count
+   * was 5 because of a spurious classification at {@code vn=44} ({@code gpu_batch_size =
+   * int(batch_size / num_gpus)} at line 222) where {@code batch_size / num_gpus} is a binop on
+   * Python ints, dispatched to {@link ElementWiseOperation} and typed {@code [] of int32} via
+   * {@link TensorGenerator#getDTypesOfValue}'s Integer-constant → INT32 path. wala/ML#451's binop
+   * operand-tensor gate rejected that classification, dropping the count to the master baseline of
+   * 4. wala/ML#430's {@code Gradient} generator then added one fresh tensor per {@code
+   * tape.gradient(...)} call (one such call here), bringing the count back to 5 — but now backed by
+   * the legitimate registration of the gradient result rather than the spurious binop pickup. See
+   * also wala/ML#361 (MNIST modeling) and wala/ML#393 (CIFAR-10 modeling, closed by the commit that
+   * landed this test's partial pass).
+   */
+  @Test
+  public void testMultiGPUTraining()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "multigpu_training.py",
+        "run_optimization",
+        2,
+        5,
+        Map.of(2, Set.of(TENSOR_4096_32_32_3_FLOAT32), 3, Set.of(TENSOR_4096_UINT8)));
+  }
+
+  /**
+   * Companion to {@link #testMultiGPUTraining()} on the {@code average_gradients} function in the
+   * same fixture. Exercises tensor classification through a per-tower gradient-averaging loop: for
+   * each gradient {@code g} in the input tower-gradient list, the body computes {@code
+   * tf.expand_dims(g, 0)}, collects the results into a list, and reduces them with {@code
+   * tf.concat(axis=0, values=grads)}. Verifies the analyzer detects the 3 internal tensor variables
+   * this loop produces: {@code tf.expand_dims(g, 0)}'s dedicated {@code <new>} allocation, the
+   * post-allocation receiver, and {@code tf.concat(...)} flowing through <a
+   * href="https://github.com/wala/ML/issues/196">wala/ML#196</a>'s {@link
+   * com.ibm.wala.cast.python.ml.client.ReadDataFallback}.
+   *
+   * <p>With `list.append` modeled (<a
+   * href="https://github.com/wala/ML/issues/136">wala/ML#136</a>), the loop's element values reach
+   * classification and the local-tensor count is 8 (the loop variable {@code g}, the per-iteration
+   * {@code expand_dims} results, and the {@code concat} chain). The parameter count stays 0: {@code
+   * tower_grads} is the list <em>container</em>, which is not itself a tensor; its elements are
+   * classified where they are read.
+   */
+  @Test
+  public void testMultiGPUTraining2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("multigpu_training.py", "average_gradients", 0, 8);
+  }
+
+  /**
+   * Verifies that {@code tf.estimator.EstimatorSpec(...)} produces a fresh allocation with each
+   * named parameter stored as a field on the result. The test reads {@code spec.loss} and asserts
+   * that it round-trips back to the original {@code loss_tensor} (a scalar float32). If
+   * EstimatorSpec is mis-modeled as "return one of the inputs" instead of "fresh allocation with
+   * field sets," the read would either return the wrong dtype or fail to resolve. Exercises the
+   * binding + body fix from wala/ML#429.
+   */
+  @Test
+  public void testEstimatorSpec()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_estimator_spec.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
+  }
+
+  /**
+   * Regression test for <a href="https://github.com/wala/ML/issues/523">wala/ML#523</a>: the {@code
+   * EstimatorSpec.do()} constructor's fresh allocation must be a {@code
+   * Ltensorflow/estimator/EstimatorSpec} (a namedtuple-like spec object) rather than a {@code
+   * Ltensorflow/python/framework/ops/Tensor}. The fixture passes the {@code spec} directly to
+   * {@code f}; if {@code spec} is misclassified as a tensor allocation, {@code f}'s parameter would
+   * be a tensor (and the expected count would be 1 / 1). With the correct non-tensor class, {@code
+   * f} has 0 tensor parameters and 0 tensor variables.
+   */
+  @Test
+  public void testEstimatorSpecNotTensor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_estimator_spec_not_tensor.py", "f", 0, 0, Map.of());
+  }
+
+  /**
+   * Pins <a href="https://github.com/wala/ML/issues/683">wala/ML#683</a>: {@code
+   * self._distribution_strategy} is Keras-internal state assigned by {@code Model.__init__}, never
+   * in user code. With the shell {@code Model.__init__} modeling the attribute, the receiver of
+   * {@code self._distribution_strategy.run(self.__train_step, args=(x, y))} resolves to the
+   * strategy instance and the {@code run} summary materializes the invoke edge, typing both
+   * callback parameters through the args-tuple forwarding (wala/ML#618).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDistTrainStep()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dist_train_step.py",
+        "MyModel.__train_step",
+        2,
+        3,
+        Map.of(3, Set.of(TensorType.of(FLOAT_32, 2, 3)), 4, Set.of(TensorType.of(FLOAT_32, 2, 3))));
+  }
+
+  /**
+   * Pins <a href="https://github.com/wala/ML/issues/683">wala/ML#683</a> at subject shape
+   * (MusicTransformer-tensorflow2.0): the model base is {@code keras.Model} bound by {@code from
+   * tensorflow.python import keras}, so the summary {@code Model} must be reachable through the
+   * {@code tensorflow.python} module object for the class shell to carry {@code Model.__init__}'s
+   * {@code _distribution_strategy} assignment; and the callback args tuple has four elements, so
+   * the strategy {@code run} summary must forward past the first two.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDistTrainStep2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dist_train_step2.py",
+        "MyModel.__train_step",
+        3,
+        4,
+        Map.of(
+            3,
+            Set.of(TensorType.of(FLOAT_32, 2, 3)),
+            4,
+            Set.of(TensorType.of(FLOAT_32, 2, 3)),
+            5,
+            Set.of(TensorType.of(FLOAT_32, 2, 3))));
+  }
+
+  /**
+   * Pins <a href="https://github.com/wala/ML/issues/683">wala/ML#683</a> at the
+   * MusicTransformer-tensorflow2.0 encoder-decoder shape: the callback args tuple has seven
+   * elements, the widest the subject passes to the strategy, so the {@code run} summary's tuple
+   * forwarding must reach fields 2 through 6. The fixture's callback computes from the tuple's
+   * fifth and sixth elements specifically, so the pinned result only types if the later fields
+   * flow.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDistTrainStep3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dist_train_step3.py",
+        "MyModel.__train_step",
+        6,
+        7,
+        Map.of(
+            3,
+            Set.of(TensorType.of(FLOAT_32, 2, 3)),
+            4,
+            Set.of(TensorType.of(FLOAT_32, 2, 3)),
+            5,
+            Set.of(TensorType.of(FLOAT_32, 2, 3)),
+            6,
+            Set.of(TensorType.of(FLOAT_32, 2, 3)),
+            7,
+            Set.of(TensorType.of(FLOAT_32, 2, 3)),
+            8,
+            Set.of(TensorType.of(FLOAT_32, 2, 3))));
+  }
+
+  /**
+   * Pins the forward result of a nested layer call ({@code self.inner(...)} inside another layer's
+   * {@code call}): the inner layer's return is tensor-typed at the nested call site and flows into
+   * a sink (<a href="https://github.com/wala/ML/issues/570">wala/ML#570</a>; enabled by the
+   * wala/ML#595 forward-result machinery).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNestedLayerCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_nested_layer_call.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
+  /**
+   * Pins the forward result of a nested layer call whose argument is a {@code NamedTuple} and whose
+   * inner {@code call} computes through a field read, a matmul, and an {@code unsorted_segment_sum}
+   * (<a href="https://github.com/wala/ML/issues/570">wala/ML#570</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNestedLayerCallNamedTuple()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_nested_layer_call2.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
+  /**
+   * Pins the forward result of a nested layer call whose inner {@code call} returns through a
+   * second method hop ({@code self.propagate(...)} on the same class), the single-class form of
+   * {@code gcn_proj}'s return chain (<a href="https://github.com/wala/ML/issues/570">
+   * wala/ML#570</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNestedLayerCallPropagate()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_nested_layer_call3.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
+  /**
+   * Pins the forward result of a nested layer call whose inner {@code call} returns through an
+   * <em>inherited</em> method ({@code self.propagate(...)} defined on a same-module base class),
+   * mirroring {@code gcn_proj}'s {@code GraphConvolution(MessagePassing)} shape (<a
+   * href="https://github.com/wala/ML/issues/570">wala/ML#570</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNestedLayerCallInheritedPropagate()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_nested_layer_call4.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
+  /**
+   * Pins the forward result of a nested layer call whose inner {@code call} returns through a
+   * method inherited from a <em>cross-module</em> base ({@code Inner(MessagePassing)} with {@code
+   * MessagePassing} in another file), the deepest structural form of the {@code gcn_proj} chain (<a
+   * href="https://github.com/wala/ML/issues/570">wala/ML#570</a>). {@code consume(x)} inside {@code
+   * Outer.call} recovers the concrete {@code (4, 8) float32}, so the frame/inheritance mechanism is
+   * not the {@code gcn_proj} residual; the remaining gap is the list-mediated aggregation inside
+   * the vendored {@code propagate} (gathers/slices/appends over the adjacency-list collection).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNestedLayerCallCrossModule()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "nested_proj/messagepassing.py",
+          "nested_proj/inner.py",
+          "nested_proj/tf2_test_nested_cross_module.py"
+        },
+        "tf2_test_nested_cross_module.py",
+        "consume",
+        "nested_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_8_FLOAT32)));
+  }
+
+  /**
+   * Pins the {@code add_weight} result itself (wala/ML#667): the weight's shape comes from the
+   * {@code shape} list argument and its dtype from a {@code tf.float32} module-constant argument
+   * (the string form is covered by {@link #testCollectionProbeAddWeight()}).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightArguments()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_add_weight2.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
+  /**
+   * Pins <a href="https://github.com/wala/ML/issues/672">wala/ML#672</a>: {@code add_weight}
+   * without a {@code dtype} argument follows Keras's documented default and types float32 (the
+   * layer variable dtype under the default global policy), via the allocator's float32 default.
+   * Completes the dtype-form trio with {@link #testCollectionProbeAddWeight()} (string) and {@link
+   * #testAddWeightArguments()} (module constant).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAddWeightDefaultDtype()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_add_weight3.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
+  }
+
+  /**
+   * Pins wala/ML#670's fixes directly: {@code GlobalAveragePooling1D} is modeled (rank-3 input,
+   * temporal axis dropped), so the functional model's weight walk resolves the downstream {@code
+   * Dense} kernel {@code (8, 5)} and bias {@code (5,)} concretely.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGap1dWeights()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gap1d_weights.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 5), TENSOR_5_FLOAT32)));
+  }
+
+  /**
+   * Probes wala/ML#666's dotted-alias case ({@code import tensorflow.keras.backend as K} read
+   * inside a method).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testBackendAliasCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_backend_alias.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
+  /**
+   * Test two call sites of the same method with equal total arity but different positional/keyword
+   * splits. The trampoline cache must not collide them; see <a
+   * href="https://github.com/wala/ML/issues/740">wala/ML#740</a>. The parameter {@code x} receives
+   * a tensor positionally at one call site and by keyword at the other, so its type must be the
+   * union of both.
+   */
+  @Test
+  public void testTrampolineSplit() throws ClassHierarchyException, CancelException, IOException {
+    test(
+        "tf2_test_trampoline_split.py",
+        "C.f",
+        1,
+        1,
+        Map.of(3, Set.of(TENSOR_1_2_FLOAT32, TENSOR_1_3_FLOAT32)));
+  }
+
+  /**
+   * Regression guard for the "layer-output flows into script-level consumer" pattern: a downstream
+   * function whose tensor parameter comes from a layer call's output. Companion to {@link
+   * #testModelCallConsume()}, which calls {@code consume(x)} <em>inside</em> {@code
+   * SequentialModel.__call__}; this fixture calls {@code consume(pred)} at script-level after the
+   * layer call — the same surface shape, but a different caller. The existing {@code
+   * DenseCall.getDefaultShapes} SSA-chain fallback recovers the result type when the direct PTS
+   * walk doesn't carry the synthetic {@code <new>} alloc through.
+   */
+  @Test
+  public void testLayerOutputParam()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_layer_output_param.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_1_10_FLOAT32)));
+  }
+
+  /**
+   * Variant of {@link #testLayerOutputParam()} that interposes a user-defined {@code
+   * tf.keras.Model} subclass between the {@code Dense} layers and the script-level consumer —
+   * exercises the same fallback through one extra level of call indirection.
+   */
+  @Test
+  public void testLayerOutputParamViaModel()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_layer_output_param_via_model.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_1_10_FLOAT32)));
   }
 }

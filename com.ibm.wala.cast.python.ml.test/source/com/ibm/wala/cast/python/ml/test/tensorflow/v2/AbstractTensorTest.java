@@ -72,7 +72,7 @@ import java.util.stream.Stream;
 /**
  * Shared base for the TensorFlow tensor-type tests (wala/ML#635): the tensor-type constants used by
  * the feature-area test classes in this package. The {@code test(...)} harness overloads and
- * per-test helpers still live in {@link TestTensorflow2Model} and move here as the split proceeds.
+ * per-test helpers still live in {@code TestTensorflow2Model} and move here as the split proceeds.
  */
 public abstract class AbstractTensorTest extends TestPythonMLCallGraphShape {
 

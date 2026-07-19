@@ -14,16 +14,16 @@ mvn clean install -DskipTests
 mvn test
 
 # Run a single test class
-mvn -pl com.ibm.wala.cast.python.ml.test -Dtest=TestTensorflow2Model test
+mvn -pl com.ibm.wala.cast.python.ml.test -Dtest=TestConstructors test
 
 # Run a single test method
 mvn -pl com.ibm.wala.cast.python.ml.test \
-	-Dtest='TestTensorflow2Model#testDenseChain' \
+	-Dtest='TestDenseLayers#testDenseChain' \
 	-Dsurefire.failIfNoSpecifiedTests=false test
 
 # Run multiple specific test methods
 mvn -pl com.ibm.wala.cast.python.ml.test \
-	-Dtest='TestTensorflow2Model#testDenseChain+testDenseChain2' \
+	-Dtest='TestDenseLayers#testDenseChain+testDenseChain2' \
 	-Dsurefire.failIfNoSpecifiedTests=false test
 
 # Format code (pre-commit hook also runs these automatically)
@@ -133,7 +133,7 @@ Chained layer calls (e.g., `x = self.layer1(x); x = self.layer2(x)`) are analyse
 
 ## Test suite
 
-`TestTensorflow2Model` (in `com.ibm.wala.cast.python.ml.test`) is the main test class (~7400 lines, ~590 `@Test` methods). Each test calls a `test(...)` helper with four-to-five parameters:
+The TF2 tests live in `com.ibm.wala.cast.python.ml.test.tensorflow.v2` as feature-area classes (`TestConstructors`, `TestShapeOps`, `TestDatasets`, `TestElementwiseOps`, `TestMathOps`, `TestRaggedTensors`, `TestModelCall`, `TestCorpusFixtures`, ...), all extending `AbstractTensorTest`, which holds the tensor-type constants and the shared `test(...)` harness (wala/ML#635 split the former `TestTensorflow2Model` monolith). Each test calls a `test(...)` helper with four-to-five parameters:
 
 ```java
 test(
@@ -146,7 +146,7 @@ test(
 
 The `Map` only checks **parameter** types, not all local tensor variables. To pin down a specific local tensor's type, refactor the Python file to call a sink function (`consume(x)`) on that value and assert on `consume`'s parameter.
 
-**Tensor type constants** (`TENSOR_20_28_28_FLOAT32`, `TENSOR_NONE_4_FLOAT32`, etc.) are defined at the top of `TestTensorflow2Model`. Add new ones as needed when writing a test that expects a not-yet-represented shape.
+**Tensor type constants** (`TENSOR_20_28_28_FLOAT32`, `TENSOR_NONE_4_FLOAT32`, etc.) are defined in `AbstractTensorTest`. Add new ones as needed when writing a test that expects a not-yet-represented shape.
 
 ### Python test files
 

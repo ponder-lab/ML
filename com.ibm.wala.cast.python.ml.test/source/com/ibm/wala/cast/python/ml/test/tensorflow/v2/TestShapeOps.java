@@ -1072,4 +1072,79 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TENSOR_5_28_28_UINT8)));
   }
+
+  /**
+   * Distilled regression guard for the scalar-expression broadcast (wala/ML#718): a tensor scaled
+   * by a statically opaque scalar expression ({@code 1.0 / math.sqrt(4.0)}) keeps its shape, since
+   * the expression's scalarness is structural even though its value never resolves. The analysis
+   * previously erased the result to ⊥. Mirrors NLPGNN's attention-logit scaling.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testScalarExpressionScale()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_scalar_scale.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4))));
+  }
+
+  /**
+   * Distilled guard for the dimension-provenance split (wala/ML#721): a configuration-sourced size
+   * — here an environment read the analysis cannot fold — types as {@link UnresolvedDim}, a fixed
+   * runtime size of unknown value, not {@link DynamicDim}, which is reserved for axes the runtime
+   * {@code TensorShape} reports as {@code None}.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testUnresolvedDim()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_unresolved_dim.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(100))))));
+  }
+
+  /**
+   * Pins the fold taint of the dimension-provenance split (wala/ML#721): {@code np.prod} over a
+   * shape list whose leading axis is {@code None} stays {@link DynamicDim} — arithmetic over a
+   * {@code None} axis is itself {@code None} at run time — rather than degrading to {@link
+   * UnresolvedDim}. The runtime guards the {@code None} away before folding (the BERT {@code
+   * get_shape_list} idiom), but the static walk sees the unguarded shape. The {@code (24)} member
+   * is the guarded arm — the runtime-true fold over the patched {@code [1, 4, 6]} — flowing
+   * alongside per the guard-φ.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testProdOverDynamic()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_prod_over_dynamic.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE)),
+                TensorType.of(FLOAT_32, 24))));
+  }
 }

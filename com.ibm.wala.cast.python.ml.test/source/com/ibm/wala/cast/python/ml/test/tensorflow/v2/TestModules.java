@@ -1,8 +1,10 @@
 package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.FLOAT_32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.INT_32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_1_2_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_4_FLOAT32;
 import static java.util.Arrays.asList;
 
 import com.ibm.wala.cast.python.ml.types.TensorType;
@@ -17,7 +19,7 @@ import org.junit.Test;
 
 /**
  * Tests of module and import binding mechanics ({@code Module*}/{@code Import*}), carved from the
- * {@link TestTensorflow2Model} monolith (wala/ML#635); the assertions are verbatim.
+ * {@code TestTensorflow2Model} monolith (wala/ML#635); the assertions are verbatim.
  */
 public class TestModules extends AbstractTensorTest {
 
@@ -1724,5 +1726,87 @@ public class TestModules extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  /**
+   * Probe for <a href="https://github.com/wala/ML/issues/684">wala/ML#684</a>: {@code tf} arrives
+   * through {@code from helpers import *} in a script with no direct tensorflow import, and is read
+   * inside a name-mangled {@code @staticmethod} of a {@code tf.keras.Model} subclass invoked
+   * self-qualified — the subject's {@code MusicTransformer.__prepare_train_data} shape, several
+   * levels deeper than {@link #testCollectionProbeWildcardTf()}'s script-level read. The wildcard
+   * binding resolves, the shape is concrete, and the {@code dtype=y.dtype} attribute argument is
+   * consumed (wala/ML#686), so the result is the runtime-true {@code (2, 1) int32}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testWildcardMethodTf()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"wildcard_proj/helpers.py", "wildcard_proj/tf2_test_wildcard_method_tf.py"},
+        "tf2_test_wildcard_method_tf.py",
+        "consume",
+        "wildcard_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 2, 1))));
+  }
+
+  /**
+   * Pins <a href="https://github.com/wala/ML/issues/684">wala/ML#684</a> at fixture scale: {@code
+   * tf} reached through {@code from helpers_used import *} where the exporting module also reads
+   * {@code tf} inside one of its own functions. The intra-module use lexically exposes the binding,
+   * which drops it from the script body's SSA local names, so the wildcard scan's named-binding
+   * match (wala/ML#665) must consult the exposed-name information as well. The subject's {@code
+   * custom/layers.py} has this shape; the untouched-binding {@code helpers.py} probes do not.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testWildcardUsedTf()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "wildcard_proj/helpers_used.py", "wildcard_proj/tf2_test_wildcard_used_tf.py"
+        },
+        "tf2_test_wildcard_used_tf.py",
+        "consume",
+        "wildcard_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
+  /**
+   * Pins <a href="https://github.com/wala/ML/issues/684">wala/ML#684</a> at fixture scale for the
+   * package-qualified form: {@code tf} reached through {@code from pkgnoinit.helpers3 import *},
+   * where the package has no {@code __init__.py} (a namespace package, like the subject's {@code
+   * custom/}) and the exporting module also reads {@code tf} in one of its own functions — the
+   * exact {@code from custom.layers import *} shape of MusicTransformer-tensorflow2.0.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testWildcardPkgNoInitTf()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {
+          "wildcard_proj/pkgnoinit/helpers3.py", "wildcard_proj/tf2_test_wildcard_pkgnoinit_tf.py"
+        },
+        "tf2_test_wildcard_pkgnoinit_tf.py",
+        "consume",
+        "wildcard_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
   }
 }
