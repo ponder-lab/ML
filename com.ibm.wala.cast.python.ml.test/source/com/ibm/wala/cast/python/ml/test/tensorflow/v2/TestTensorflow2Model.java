@@ -16572,7 +16572,10 @@ public class TestTensorflow2Model extends AbstractTensorTest {
     }
 
     TensorTypeAnalysis analysis = engine.performAnalysis(builder);
-    LOGGER.info("Tensor analysis: " + analysis);
+    // A lazy FINE supplier: the whole-lattice dump is a multi-hundred-MB string on the
+    // whole-project fixtures, and an eager INFO concatenation builds it even when the CI logging
+    // config discards the message (the release runner's heap exhaustion).
+    LOGGER.fine(() -> "Tensor analysis: " + analysis);
 
     Map<PointerKey, AnalysisError> errors = engine.getErrors();
 
