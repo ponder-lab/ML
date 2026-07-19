@@ -10,6 +10,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.UNKNOWN;
 import static java.util.Arrays.asList;
 
+import com.ibm.wala.cast.python.ml.test.categories.WholeProjectFixtures;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -21,6 +22,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 
 /**
  * Whole-project corpus-fixture tests (the vendored NLPGNN, gpt-2, MusicTransformer, BiLSTM, and
@@ -29,6 +31,7 @@ import org.junit.Test;
  * parallel-split candidate), and their loop-carried expectations are sensitive to JVM test ordering
  * (wala/ML#753). The assertions are verbatim.
  */
+@Category(WholeProjectFixtures.class)
 public class TestCorpusFixtures extends AbstractTensorTest {
 
   /**

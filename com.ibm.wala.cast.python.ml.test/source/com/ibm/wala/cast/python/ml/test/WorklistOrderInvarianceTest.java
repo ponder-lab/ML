@@ -1,10 +1,12 @@
 package com.ibm.wala.cast.python.ml.test;
 
+import com.ibm.wala.cast.python.ml.test.categories.WholeProjectFixtures;
 import com.ibm.wala.cast.python.ml.test.tensorflow.v2.TestCorpusFixtures;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 
 /**
  * Order-independence guard for the worklist engine (wala/ML#365): the whole-project NLPGNN
@@ -16,6 +18,7 @@ import org.junit.Test;
  *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
+@Category(WholeProjectFixtures.class)
 public class WorklistOrderInvarianceTest {
 
   /**

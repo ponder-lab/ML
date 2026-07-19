@@ -64,7 +64,16 @@ jobs:
         mvn package -B -q -DskipTests
         mvn install:install-file -Dfile=target/com.ibm.wala.cast.lsp-0.0.1-SNAPSHOT.jar -DgroupId="com.ibm.wala" -DartifactId="com.ibm.wala.cast.lsp" -Dversion="0.0.1" -Dpackaging="jar" -DgeneratePom=true -B
         popd
+    # The whole-project fixture analyses (the `WholeProjectFixtures` category) run in the parallel
+    # `whole-project-fixtures` job on PR/branch/queue runs, pulling the wall clock back to the
+    # pre-context-broadening band (wala/ML#755). Tag pushes run the FULL suite here instead: the
+    # deploy gate below sits in this job, and a release must never deploy while its long-pole
+    # tests run unconsumed in a sibling job.
     - name: Build with Maven
+      if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      run: mvn -Dlogging.config.file=./logging.ci.properties verify -B -Pjacoco -DexcludedGroups=com.ibm.wala.cast.python.ml.test.categories.WholeProjectFixtures
+    - name: Build with Maven (full suite, tag push)
+      if: ${{ startsWith(github.ref, 'refs/tags/') }}
       run: mvn -Dlogging.config.file=./logging.ci.properties verify -B -Pjacoco
     # Guard against `run.sh`'s JAR path drifting behind the project version (wala/ML#525): verify
     # its glob resolves to exactly one fat JAR carrying the driver's `Main-Class` manifest entry.
@@ -127,6 +136,54 @@ jobs:
         path: com.ibm.wala.cast.python.ml/target/com.ibm.wala.cast.python.ml-*-fat.jar
         if-no-files-found: error
         retention-days: 1
+  # The suite's long pole (the whole-project corpus analyses, ~4-6 of the ~12 minutes) runs beside
+  # the rest of the suite instead of after it (wala/ML#755). Tag pushes skip this job: the `build`
+  # job runs the full suite there so the deploy gate consumes every test itself.
+  whole-project-fixtures:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out wala/ML sources
+      uses: actions/checkout@v7
+      with:
+        submodules: 'recursive'
+    - name: Set up JDK 25
+      uses: actions/setup-java@v5
+      with:
+        java-version: '25'
+        distribution: 'temurin'
+        cache: maven
+    - name: Install Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+    - name: Install Python dependencies
+      run: pip install -r requirements.txt
+    - name: Install Jython3
+      run: |
+        pushd jython3
+        ant
+        pushd dist
+        mvn install:install-file -Dfile=./jython-dev.jar -DgroupId="org.python" -DartifactId="jython3" -Dversion="0.0.2" -Dpackaging="jar" -DgeneratePom=true -B
+        popd
+        popd
+      shell: bash
+    - name: Install IDE
+      run: |
+        pushd IDE/com.ibm.wala.cast.lsp
+        mvn package -B -q -DskipTests
+        mvn install:install-file -Dfile=target/com.ibm.wala.cast.lsp-0.0.1-SNAPSHOT.jar -DgroupId="com.ibm.wala" -DartifactId="com.ibm.wala.cast.lsp" -Dversion="0.0.1" -Dpackaging="jar" -DgeneratePom=true -B
+        popd
+    - name: Run whole-project fixture tests
+      run: mvn -Dlogging.config.file=./logging.ci.properties verify -B -Pjacoco -Dgroups=com.ibm.wala.cast.python.ml.test.categories.WholeProjectFixtures -DfailIfNoTests=false
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v7
+      with:
+        token: $CODECOV_TOKEN
+        slug: ponder-lab/ML
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
   # Attach the fat-classifier JAR to the GitHub Release on semver tag-push, so standalone-driver
   # users (`java -jar`) can fetch it without the `read:packages` PAT that GitHub Packages requires.
   # A separate job scopes the elevated `contents: write` permission to release tag-pushes only;
