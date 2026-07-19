@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.test;
 
 import static org.junit.Assert.assertTrue;
 
+import com.ibm.wala.cast.python.ml.test.categories.WholeProjectFixtures;
 import com.ibm.wala.cast.python.ml.test.tensorflow.v2.TestCorpusFixtures;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
@@ -9,6 +10,7 @@ import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 
 /**
  * Diagnostic-logging volume guard (<a
@@ -18,6 +20,7 @@ import org.junit.Test;
  *
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
+@Category(WholeProjectFixtures.class)
 public class DiagnosticLoggingVolumeTest {
 
   /**
