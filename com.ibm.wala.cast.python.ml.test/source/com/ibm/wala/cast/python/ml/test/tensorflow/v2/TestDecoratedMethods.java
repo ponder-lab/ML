@@ -597,4 +597,90 @@ public class TestDecoratedMethods extends AbstractTensorTest {
       throws ClassHierarchyException, CancelException, IOException {
     test("decorated_function_test.py", "f", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
   }
+
+  @Test
+  public void testDecorator()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_decorator.py", "returned", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
+  }
+
+  @Test
+  public void testDecorator2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_decorator2.py", "returned", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
+  }
+
+  @Test
+  public void testDecorator3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_decorator3.py", "returned", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+  }
+
+  @Test
+  public void testDecorator4()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_decorator4.py", "returned", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
+  }
+
+  @Test
+  public void testDecorator5()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_decorator5.py", "returned", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
+  }
+
+  @Test
+  public void testDecorator6()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_decorator6.py", "returned", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
+  }
+
+  @Test
+  public void testDecorator7()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_decorator7.py", "returned", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
+  }
+
+  @Test
+  public void testDecorator8()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_decorator8.py", "returned", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
+  }
+
+  @Test
+  public void testDecorator9()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_decorator9.py", "returned", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
+  }
+
+  @Test
+  public void testDecorator10()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_decorator10.py", "returned", 1, 1, Map.of(2, Set.of(TENSOR_5_INT32)));
+  }
+
+  @Test
+  public void testDecorator11()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_decorator11.py", "C.returned", 1, 1, Map.of(3, Set.of(TENSOR_5_INT32)));
+  }
+
+  /**
+   * The {@code returned(a)} parameter is {@code a = tf.constant([1, 1.0])}, i.e. {@code (2,)
+   * float32}. The asserted set is a union across contexts (per the test helper's union-per-vn
+   * semantics): the {@code (2,) float32} is the parameter's real type, now precise after the top_k
+   * output-shape composer (<a href="https://github.com/wala/ML/issues/609">wala/ML#609</a>)
+   * sharpened the previous ⊤. The {@code (2,) int32} is a top_k {@code indices} output leaking in
+   * through a collapsed 1-CFA context (it was already present in the old union as ⊤ int32); the
+   * composer only made it concrete. The leak itself is a context-sensitivity artifact.
+   */
+  @Test
+  public void testDecorator12()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_decorator12.py",
+        "returned",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32, TENSOR_2_INT32)));
+  }
 }
