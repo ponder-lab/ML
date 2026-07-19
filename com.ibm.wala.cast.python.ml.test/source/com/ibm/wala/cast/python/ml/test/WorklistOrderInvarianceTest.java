@@ -1,6 +1,6 @@
 package com.ibm.wala.cast.python.ml.test;
 
-import com.ibm.wala.cast.python.ml.test.tensorflow.v2.TestTensorflow2Model;
+import com.ibm.wala.cast.python.ml.test.tensorflow.v2.TestCorpusFixtures;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
@@ -30,10 +30,10 @@ public class WorklistOrderInvarianceTest {
   @Test
   public void testSeedOrderInvariance()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    new TestTensorflow2Model().runNlpgnnFullGeneration();
+    new TestCorpusFixtures().runNlpgnnFullGeneration();
     System.setProperty("ariadne.typeResolution.reverseSeeds", "true");
     try {
-      new TestTensorflow2Model().runNlpgnnFullGeneration();
+      new TestCorpusFixtures().runNlpgnnFullGeneration();
     } finally {
       System.clearProperty("ariadne.typeResolution.reverseSeeds");
     }
