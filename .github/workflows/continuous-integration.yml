@@ -136,12 +136,27 @@ jobs:
         path: com.ibm.wala.cast.python.ml/target/com.ibm.wala.cast.python.ml-*-fat.jar
         if-no-files-found: error
         retention-days: 1
-  # The suite's long pole (the whole-project corpus analyses, ~4-6 of the ~12 minutes) runs beside
-  # the rest of the suite instead of after it (wala/ML#755). Tag pushes skip this job: the `build`
+  # The suite's long pole (the whole-project corpus analyses) runs beside the rest of the suite
+  # instead of after it, sharded per subject so each leg stays short enough to serve as a required
+  # check without restoring the old queue latency (wala/ML#755; measured: the corpus class alone is
+  # ~8 minutes serial, the order-invariance meta-test ~6). Tag pushes skip this job: the `build`
   # job runs the full suite there so the deploy gate consumes every test itself.
   whole-project-fixtures:
     if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: nlpgnn
+            tests: 'TestCorpusFixtures#testNlpgnnFull*+testNlpgnnSlice*'
+          - shard: subjects
+            tests: 'TestCorpusFixtures#testGpt*+testMusicTransformer*+testBilstm*+testTextcnn*'
+          - shard: logging-volume
+            tests: 'DiagnosticLoggingVolumeTest'
+          - shard: order-invariance
+            tests: 'WorklistOrderInvarianceTest'
+    name: whole-project-fixtures (${{ matrix.shard }})
     steps:
     - name: Check out wala/ML sources
       uses: actions/checkout@v7
@@ -175,8 +190,11 @@ jobs:
         mvn package -B -q -DskipTests
         mvn install:install-file -Dfile=target/com.ibm.wala.cast.lsp-0.0.1-SNAPSHOT.jar -DgroupId="com.ibm.wala" -DartifactId="com.ibm.wala.cast.lsp" -Dversion="0.0.1" -Dpackaging="jar" -DgeneratePom=true -B
         popd
-    - name: Run whole-project fixture tests
-      run: mvn -Dlogging.config.file=./logging.ci.properties verify -B -Pjacoco -Dgroups=com.ibm.wala.cast.python.ml.test.categories.WholeProjectFixtures -DfailIfNoTests=false
+    # `-Dtest` with an explicit list is the shard filter; the `WholeProjectFixtures` category is
+    # what keeps these same tests OUT of the `build` job, so the two mechanisms partition rather
+    # than overlap. The no-test guards keep the upstream reactor modules green with zero matches.
+    - name: Run whole-project fixture tests (${{ matrix.shard }})
+      run: mvn -Dlogging.config.file=./logging.ci.properties verify -B -Pjacoco -Dtest='${{ matrix.tests }}' -Dsurefire.failIfNoSpecifiedTests=false -DfailIfNoTests=false
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v7
       with:
