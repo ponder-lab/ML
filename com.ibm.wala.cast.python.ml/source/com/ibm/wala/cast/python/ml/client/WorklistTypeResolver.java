@@ -11,6 +11,7 @@ import java.util.Deque;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.function.Supplier;
@@ -88,6 +89,20 @@ final class WorklistTypeResolver {
   private final Deque<Object> worklist = new ArrayDeque<>();
   private final Set<Object> enqueued = HashSetFactory.make();
   private final Map<Object, Integer> evaluationCounts = HashMapFactory.make();
+
+  /**
+   * The cycle-order perturbation source (wala/ML#756), or {@code null} when the knob is off. The
+   * hybrid inline scheduling fixes the acyclic region's evaluation order, so the orders the engine
+   * does not determine are the ones the worklist and the dependent re-enqueues impose on
+   * cycle-affected keys; both are identity-hash-seeded and vary with JVM run history, which is
+   * exactly what an order-invariance test cannot rerun on demand. Seeding this source (the {@code
+   * ariadne.typeResolution.shuffleCycles} system property or the {@code ARIADNE_SHUFFLE_CYCLES}
+   * environment variable, holding a {@code long} seed) perturbs both orders deterministically; the
+   * same setting also shuffles the demand-root order in {@link
+   * PythonTensorAnalysisEngine#performAnalysis}, the third undetermined order and the one whose
+   * reversal alone the reverse-seeds property exercises.
+   */
+  private final Random cycleShuffle = createCycleShuffle();
 
   /** The stack of currently-evaluating queries; reads record edges against the top. */
   private final Deque<Object> evaluating = new ArrayDeque<>();
@@ -212,8 +227,60 @@ final class WorklistTypeResolver {
     return shapeKind ? ShapeResult.bottom() : EnumSet.noneOf(DType.class);
   }
 
+  /**
+   * Parses the wala/ML#756 perturbation seed from the {@code ariadne.typeResolution.shuffleCycles}
+   * system property or the {@code ARIADNE_SHUFFLE_CYCLES} environment variable. An unparsable value
+   * disables the perturbation with a logged warning rather than aborting the analysis: the knob is
+   * diagnostic, so misconfiguration should be visible but harmless.
+   *
+   * @return The configured seed, or {@code null} when neither setting is present or the value does
+   *     not parse as a {@code long}.
+   */
+  static Long parseCycleShuffleSeed() {
+    String seed = System.getProperty("ariadne.typeResolution.shuffleCycles");
+    if (seed == null) seed = System.getenv("ARIADNE_SHUFFLE_CYCLES");
+    if (seed == null) return null;
+    try {
+      return Long.valueOf(seed);
+    } catch (NumberFormatException e) {
+      LOGGER.warning("Ignoring the unparsable cycle-shuffle seed: " + seed + ".");
+      return null;
+    }
+  }
+
+  /**
+   * Creates the cycle-order perturbation source (wala/ML#756).
+   *
+   * @return A {@link Random} seeded per {@link #parseCycleShuffleSeed}, or {@code null} when the
+   *     knob is off.
+   */
+  private static Random createCycleShuffle() {
+    Long seed = parseCycleShuffleSeed();
+    return seed == null ? null : new Random(seed);
+  }
+
   private void enqueue(Object key) {
-    if (this.enqueued.add(key)) this.worklist.add(key);
+    if (!this.enqueued.add(key)) return;
+    // Perturbation point 1 of the wala/ML#756 knob: enqueueing at a random end permutes the poll
+    // order among the keys concurrently on the worklist, which are exactly the cycle-affected keys.
+    if (this.cycleShuffle != null && !this.worklist.isEmpty() && this.cycleShuffle.nextBoolean())
+      this.worklist.addFirst(key);
+    else this.worklist.add(key);
+  }
+
+  /**
+   * Orders a changed query's dependents for re-enqueueing: iteration order as-is normally, a seeded
+   * shuffle under the wala/ML#756 perturbation knob (point 2: the relative order in which a grown
+   * value's readers join the worklist).
+   *
+   * @param dependents The dependents to order.
+   * @return The re-enqueue order.
+   */
+  private Iterable<Object> orderDependentsForReEnqueue(Set<Object> dependents) {
+    if (this.cycleShuffle == null || dependents.size() < 2) return dependents;
+    List<Object> shuffled = new ArrayList<>(dependents);
+    Collections.shuffle(shuffled, this.cycleShuffle);
+    return shuffled;
   }
 
   /** Runs the fixpoint: chaotic iteration, then SCC promotion, repeating until neither moves. */
@@ -227,8 +294,104 @@ final class WorklistTypeResolver {
       this.iterate();
       promoted = this.cycleSeen && this.promotePureCycles();
     } while (promoted);
+    if (this.cycleSeen) this.canonicalize();
     this.cycleSeen = false;
     this.dumpFiltered();
+  }
+
+  /**
+   * Recomputes cycle-affected queries once against the settled state, replacing their values
+   * (wala/ML#753, wala/ML#748). The iteration to the fixpoint joins every recomputation into the
+   * state, so join history rides into the settled values: a transfer that consumed an on-stack
+   * interim read collapses to the unknown-marked element, {@link ShapeResult#union} disjoins the
+   * mark permanently, and interim per-axis folds survive alongside their converged refinements.
+   * Which artifacts persist depends on the order the cycle iterated in, so the settled states are
+   * order-dependent exactly on cycle-affected keys. One post-fixpoint recomputation per key against
+   * the settled (no longer interim) values, replacing instead of joining, makes each canonical
+   * value a function of its dependencies' final values rather than of the join history.
+   *
+   * <p>The sweep runs over the SCC condensation in reverse-topological order (the Tarjan emission
+   * order), so every recomputation reads dependencies that are already canonical; a key is
+   * recomputed only if it sits in a cyclic SCC (where join history can originate) or reads a key
+   * whose canonical value changed (where it can propagate). Within a cyclic SCC the replacements
+   * are computed jointly against the settled state before any is written back (a Jacobi step), so
+   * intra-SCC recomputation order cannot influence the result. Two guards keep the replacement
+   * semantics sound: a transfer that throws keeps the settled value, and a recomputation may not
+   * degrade a non-bottom settled value to ⊥ &mdash; the settled evidence that the value is a tensor
+   * stands, and the pure-cycle promotion's unknown-marked elements (whose baseless transfers
+   * recompute to ⊥) must not be reclassified as "not a tensor."
+   */
+  private void canonicalize() {
+    int replaced = 0;
+    Set<Object> changed = HashSetFactory.make();
+    for (List<Object> scc : this.tarjan()) {
+      boolean cyclic =
+          scc.size() > 1
+              || this.reads.getOrDefault(scc.get(0), Collections.emptySet()).contains(scc.get(0));
+      List<Object> targets = new ArrayList<>();
+      for (Object key : scc)
+        if (cyclic
+            || !Collections.disjoint(this.reads.getOrDefault(key, Collections.emptySet()), changed))
+          targets.add(key);
+      if (targets.isEmpty()) continue;
+      Map<Object, Object> replacements = HashMapFactory.make();
+      for (Object key : targets) replacements.put(key, this.recomputeSettled(key));
+      for (Map.Entry<Object, Object> replacement : replacements.entrySet()) {
+        Object key = replacement.getKey();
+        Object value = replacement.getValue();
+        Object settled = this.state.get(key);
+        if (value == null || value.equals(settled)) continue;
+        if (isBottomValue(value) && !isBottomValue(settled)) continue;
+        this.state.put(key, value);
+        changed.add(key);
+        replaced++;
+      }
+    }
+    if (replaced > 0) {
+      int count = replaced;
+      LOGGER.fine(() -> "Canonicalization replaced " + count + " settled values.");
+    }
+  }
+
+  /**
+   * Recomputes a query's transfer once against the settled state for {@link #canonicalize}.
+   *
+   * @param key The query to recompute.
+   * @return The recomputed (widened) value, or the settled value when the transfer is unknown or
+   *     throws.
+   */
+  private Object recomputeSettled(Object key) {
+    Supplier<Object> transfer = this.transfers.get(key);
+    if (transfer == null) return this.state.get(key);
+    Object result;
+    this.evaluating.push(key);
+    this.inStack.add(key);
+    try {
+      result = transfer.get();
+    } catch (IllegalArgumentException e) {
+      LOGGER.log(
+          Level.FINE, e, () -> "Canonicalization IAE for " + key + "; keeping the settled value.");
+      return this.state.get(key);
+    } finally {
+      this.evaluating.pop();
+      this.inStack.remove(key);
+    }
+    if (result == null) result = this.shapeKinds.get(key) ? ShapeResult.unknown() : NULL_DTYPE;
+    return this.widen(key, result);
+  }
+
+  /**
+   * Decides whether a state value is the ⊥ of its kind.
+   *
+   * @param value The state value, {@code null} meaning the iteration bottom.
+   * @return {@code true} iff the value reads as "not a tensor."
+   */
+  private static boolean isBottomValue(Object value) {
+    if (value == null) return true;
+    if (value == NULL_DTYPE) return false;
+    if (value instanceof ShapeResult) return ((ShapeResult) value).isBottom();
+    if (value instanceof Set) return ((Set<?>) value).isEmpty();
+    return false;
   }
 
   /**
@@ -303,7 +466,9 @@ final class WorklistTypeResolver {
     joined = this.widen(key, joined);
     if (!joined.equals(old)) {
       this.state.put(key, joined);
-      for (Object dependent : this.dependents.getOrDefault(key, Collections.emptySet()))
+      for (Object dependent :
+          this.orderDependentsForReEnqueue(
+              this.dependents.getOrDefault(key, Collections.emptySet())))
         // An on-stack reader consumes this fresh value as its own evaluation completes (the
         // read returns after this update), so re-enqueueing it would only repeat the same
         // transfer; every first inline evaluation would otherwise schedule its whole reader
@@ -372,8 +537,9 @@ final class WorklistTypeResolver {
         if (!bottomShapes) continue;
         if (value == null && !(this.transfers.containsKey(key))) continue;
         this.state.put(key, ShapeResult.unknown());
-        for (Object dependent : this.dependents.getOrDefault(key, Collections.emptySet()))
-          this.enqueue(dependent);
+        for (Object dependent :
+            this.orderDependentsForReEnqueue(
+                this.dependents.getOrDefault(key, Collections.emptySet()))) this.enqueue(dependent);
         any = true;
       }
     }

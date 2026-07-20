@@ -105,4 +105,91 @@ public class WorklistTypeResolverTest {
 
     assertEquals(ShapeResult.unknown(), result);
   }
+
+  /**
+   * The wala/ML#753 join-history class in vitro: a transfer that collapsed to the unknown-marked
+   * element because it consumed an interim (still-bottom) cycle read joins the mark permanently,
+   * even though its recomputation against the settled value is precise. The post-fixpoint
+   * canonicalization must replace the marked value with the precise recomputation.
+   */
+  @Test
+  public void testCanonicalizationRetractsStaleCollapse() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    // STALE_C collapses to ⊤ while its partner is interim and is precise once it settles.
+    transfers.add(
+        () -> {
+          ShapeResult d = (ShapeResult) engine.read("STALE_D", transfers.get(1), true);
+          return d.members().isEmpty() ? ShapeResult.unknown() : d;
+        });
+    // STALE_D reads its partner (recording the cycle) but has its own external base.
+    transfers.add(
+        () -> {
+          engine.read("STALE_C", transfers.get(0), true);
+          return scalar;
+        });
+
+    assertEquals(scalar, engine.demand("STALE_D", transfers.get(1), true));
+    assertEquals(scalar, engine.demand("STALE_C", transfers.get(0), true));
+  }
+
+  /**
+   * The canonicalization recomputes with the settled state, and a non-monotone transfer may then
+   * yield ⊥ where the iteration had settled a real value; the replacement must keep the settled
+   * value, since the evidence that the value is a tensor stands and the pure-cycle promotion's ⊤
+   * would otherwise be reclassified as "not a tensor."
+   */
+  @Test
+  public void testCanonicalizationKeepsSettledOverBottom() {
+    WorklistTypeResolver engine = WorklistTypeResolver.install(null);
+
+    ShapeResult scalar = ShapeResult.of(Set.of(List.of()));
+    int[] evaluations = {0};
+    List<Supplier<Object>> transfers = new ArrayList<>();
+    // GUARD_G contributes its base only on the first evaluation and ⊥ afterwards.
+    transfers.add(
+        () -> {
+          engine.read("GUARD_H", transfers.get(1), true);
+          return evaluations[0]++ == 0 ? scalar : ShapeResult.bottom();
+        });
+    transfers.add(
+        () -> {
+          engine.read("GUARD_G", transfers.get(0), true);
+          return ShapeResult.bottom();
+        });
+
+    assertEquals(scalar, engine.demand("GUARD_G", transfers.get(0), true));
+  }
+
+  /**
+   * The wala/ML#756 perturbation seed parses defensively: an unparsable value disables the knob
+   * instead of aborting the analysis.
+   */
+  @Test
+  public void testShuffleSeedParsesDefensively() {
+    System.setProperty("ariadne.typeResolution.shuffleCycles", "bogus");
+    try {
+      assertNull(WorklistTypeResolver.parseCycleShuffleSeed());
+      System.setProperty("ariadne.typeResolution.shuffleCycles", "42");
+      assertEquals(Long.valueOf(42), WorklistTypeResolver.parseCycleShuffleSeed());
+    } finally {
+      System.clearProperty("ariadne.typeResolution.shuffleCycles");
+    }
+  }
+
+  /**
+   * The perturbed engine converges cycles to the same values as the unperturbed one; the seeded run
+   * also exercises the shuffle's enqueue and re-enqueue arms.
+   */
+  @Test
+  public void testShuffledCycleConverges() {
+    System.setProperty("ariadne.typeResolution.shuffleCycles", "11");
+    try {
+      testCanonicalizationRetractsStaleCollapse();
+    } finally {
+      System.clearProperty("ariadne.typeResolution.shuffleCycles");
+    }
+  }
 }

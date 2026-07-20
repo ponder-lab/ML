@@ -85,6 +85,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -1370,6 +1371,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       List<PointsToSetVariable> ordered = new ArrayList<>(sources);
       if (Boolean.getBoolean("ariadne.typeResolution.reverseSeeds")
           || "true".equals(System.getenv("ARIADNE_REVERSE_SEEDS"))) Collections.reverse(ordered);
+
+      // The wala/ML#756 perturbation knob also permutes the demand roots: reversal alone leaves
+      // most of the root order's multiplicity unexercised (the source set's iteration order is
+      // identity-hash-seeded, so a JVM rerun is an arbitrary permutation, not a reversal), and the
+      // root order decides where the evaluation first enters each dependency cycle.
+      Long shuffleSeed = WorklistTypeResolver.parseCycleShuffleSeed();
+      if (shuffleSeed != null) Collections.shuffle(ordered, new Random(shuffleSeed));
       for (PointsToSetVariable v : ordered) init.put(v, getTensorTypes(v, builder));
 
       // Second pass: a seed materialized early in the first pass predates the constraints
