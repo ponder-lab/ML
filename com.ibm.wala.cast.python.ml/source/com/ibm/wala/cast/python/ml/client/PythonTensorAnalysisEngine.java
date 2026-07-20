@@ -1376,10 +1376,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // most of the root order's multiplicity unexercised (the source set's iteration order is
       // identity-hash-seeded, so a JVM rerun is an arbitrary permutation, not a reversal), and the
       // root order decides where the evaluation first enters each dependency cycle.
-      String shuffleSeed = System.getProperty("ariadne.typeResolution.shuffleCycles");
-      if (shuffleSeed == null) shuffleSeed = System.getenv("ARIADNE_SHUFFLE_CYCLES");
-      if (shuffleSeed != null)
-        Collections.shuffle(ordered, new Random(Long.parseLong(shuffleSeed)));
+      Long shuffleSeed = WorklistTypeResolver.parseCycleShuffleSeed();
+      if (shuffleSeed != null) Collections.shuffle(ordered, new Random(shuffleSeed));
       for (PointsToSetVariable v : ordered) init.put(v, getTensorTypes(v, builder));
 
       // Second pass: a seed materialized early in the first pass predates the constraints

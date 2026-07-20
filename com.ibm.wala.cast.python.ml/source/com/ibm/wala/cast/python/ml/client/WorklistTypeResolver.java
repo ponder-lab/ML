@@ -228,18 +228,35 @@ final class WorklistTypeResolver {
   }
 
   /**
-   * Creates the cycle-order perturbation source from the {@code
-   * ariadne.typeResolution.shuffleCycles} system property or the {@code ARIADNE_SHUFFLE_CYCLES}
-   * environment variable (wala/ML#756).
+   * Parses the wala/ML#756 perturbation seed from the {@code ariadne.typeResolution.shuffleCycles}
+   * system property or the {@code ARIADNE_SHUFFLE_CYCLES} environment variable. An unparsable value
+   * disables the perturbation with a logged warning rather than aborting the analysis: the knob is
+   * diagnostic, so misconfiguration should be visible but harmless.
    *
-   * @return A {@link Random} seeded with the configured {@code long}, or {@code null} when neither
-   *     setting is present.
+   * @return The configured seed, or {@code null} when neither setting is present or the value does
+   *     not parse as a {@code long}.
    */
-  private static Random createCycleShuffle() {
+  static Long parseCycleShuffleSeed() {
     String seed = System.getProperty("ariadne.typeResolution.shuffleCycles");
     if (seed == null) seed = System.getenv("ARIADNE_SHUFFLE_CYCLES");
     if (seed == null) return null;
-    return new Random(Long.parseLong(seed));
+    try {
+      return Long.valueOf(seed);
+    } catch (NumberFormatException e) {
+      LOGGER.warning("Ignoring the unparsable cycle-shuffle seed: " + seed + ".");
+      return null;
+    }
+  }
+
+  /**
+   * Creates the cycle-order perturbation source (wala/ML#756).
+   *
+   * @return A {@link Random} seeded per {@link #parseCycleShuffleSeed}, or {@code null} when the
+   *     knob is off.
+   */
+  private static Random createCycleShuffle() {
+    Long seed = parseCycleShuffleSeed();
+    return seed == null ? null : new Random(seed);
   }
 
   private void enqueue(Object key) {
