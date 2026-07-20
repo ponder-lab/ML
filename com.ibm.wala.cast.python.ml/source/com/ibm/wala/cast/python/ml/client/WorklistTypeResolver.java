@@ -92,13 +92,15 @@ final class WorklistTypeResolver {
 
   /**
    * The cycle-order perturbation source (wala/ML#756), or {@code null} when the knob is off. The
-   * hybrid inline scheduling fixes the acyclic region's evaluation order, so the only order the
-   * engine does not determine is the one the worklist and the dependent re-enqueues impose on
-   * cycle-affected keys; that order is identity-hash-seeded and varies with JVM run history, which
-   * is exactly what an order-invariance test cannot rerun on demand. Seeding this source (the
-   * {@code ariadne.typeResolution.shuffleCycles} system property or the {@code
-   * ARIADNE_SHUFFLE_CYCLES} environment variable, holding a {@code long} seed) perturbs both orders
-   * deterministically, mirroring the reverse-seeds property for demand roots.
+   * hybrid inline scheduling fixes the acyclic region's evaluation order, so the orders the engine
+   * does not determine are the ones the worklist and the dependent re-enqueues impose on
+   * cycle-affected keys; both are identity-hash-seeded and vary with JVM run history, which is
+   * exactly what an order-invariance test cannot rerun on demand. Seeding this source (the {@code
+   * ariadne.typeResolution.shuffleCycles} system property or the {@code ARIADNE_SHUFFLE_CYCLES}
+   * environment variable, holding a {@code long} seed) perturbs both orders deterministically; the
+   * same setting also shuffles the demand-root order in {@link
+   * PythonTensorAnalysisEngine#performAnalysis}, the third undetermined order and the one whose
+   * reversal alone the reverse-seeds property exercises.
    */
   private final Random cycleShuffle = createCycleShuffle();
 
@@ -275,8 +277,104 @@ final class WorklistTypeResolver {
       this.iterate();
       promoted = this.cycleSeen && this.promotePureCycles();
     } while (promoted);
+    if (this.cycleSeen) this.canonicalize();
     this.cycleSeen = false;
     this.dumpFiltered();
+  }
+
+  /**
+   * Recomputes cycle-affected queries once against the settled state, replacing their values
+   * (wala/ML#753, wala/ML#748). The iteration to the fixpoint joins every recomputation into the
+   * state, so join history rides into the settled values: a transfer that consumed an on-stack
+   * interim read collapses to the unknown-marked element, {@link ShapeResult#union} disjoins the
+   * mark permanently, and interim per-axis folds survive alongside their converged refinements.
+   * Which artifacts persist depends on the order the cycle iterated in, so the settled states are
+   * order-dependent exactly on cycle-affected keys. One post-fixpoint recomputation per key against
+   * the settled (no longer interim) values, replacing instead of joining, makes each canonical
+   * value a function of its dependencies' final values rather than of the join history.
+   *
+   * <p>The sweep runs over the SCC condensation in reverse-topological order (the Tarjan emission
+   * order), so every recomputation reads dependencies that are already canonical; a key is
+   * recomputed only if it sits in a cyclic SCC (where join history can originate) or reads a key
+   * whose canonical value changed (where it can propagate). Within a cyclic SCC the replacements
+   * are computed jointly against the settled state before any is written back (a Jacobi step), so
+   * intra-SCC recomputation order cannot influence the result. Two guards keep the replacement
+   * semantics sound: a transfer that throws keeps the settled value, and a recomputation may not
+   * degrade a non-bottom settled value to ⊥ &mdash; the settled evidence that the value is a tensor
+   * stands, and the pure-cycle promotion's unknown-marked elements (whose baseless transfers
+   * recompute to ⊥) must not be reclassified as "not a tensor."
+   */
+  private void canonicalize() {
+    int replaced = 0;
+    Set<Object> changed = HashSetFactory.make();
+    for (List<Object> scc : this.tarjan()) {
+      boolean cyclic =
+          scc.size() > 1
+              || this.reads.getOrDefault(scc.get(0), Collections.emptySet()).contains(scc.get(0));
+      List<Object> targets = new ArrayList<>();
+      for (Object key : scc)
+        if (cyclic
+            || !Collections.disjoint(this.reads.getOrDefault(key, Collections.emptySet()), changed))
+          targets.add(key);
+      if (targets.isEmpty()) continue;
+      Map<Object, Object> replacements = HashMapFactory.make();
+      for (Object key : targets) replacements.put(key, this.recomputeSettled(key));
+      for (Map.Entry<Object, Object> replacement : replacements.entrySet()) {
+        Object key = replacement.getKey();
+        Object value = replacement.getValue();
+        Object settled = this.state.get(key);
+        if (value == null || value.equals(settled)) continue;
+        if (isBottomValue(value) && !isBottomValue(settled)) continue;
+        this.state.put(key, value);
+        changed.add(key);
+        replaced++;
+      }
+    }
+    if (replaced > 0) {
+      int count = replaced;
+      LOGGER.fine(() -> "Canonicalization replaced " + count + " settled values.");
+    }
+  }
+
+  /**
+   * Recomputes a query's transfer once against the settled state for {@link #canonicalize}.
+   *
+   * @param key The query to recompute.
+   * @return The recomputed (widened) value, or the settled value when the transfer is unknown or
+   *     throws.
+   */
+  private Object recomputeSettled(Object key) {
+    Supplier<Object> transfer = this.transfers.get(key);
+    if (transfer == null) return this.state.get(key);
+    Object result;
+    this.evaluating.push(key);
+    this.inStack.add(key);
+    try {
+      result = transfer.get();
+    } catch (IllegalArgumentException e) {
+      LOGGER.log(
+          Level.FINE, e, () -> "Canonicalization IAE for " + key + "; keeping the settled value.");
+      return this.state.get(key);
+    } finally {
+      this.evaluating.pop();
+      this.inStack.remove(key);
+    }
+    if (result == null) result = this.shapeKinds.get(key) ? ShapeResult.unknown() : NULL_DTYPE;
+    return this.widen(key, result);
+  }
+
+  /**
+   * Decides whether a state value is the ⊥ of its kind.
+   *
+   * @param value The state value, {@code null} meaning the iteration bottom.
+   * @return {@code true} iff the value reads as "not a tensor."
+   */
+  private static boolean isBottomValue(Object value) {
+    if (value == null) return true;
+    if (value == NULL_DTYPE) return false;
+    if (value instanceof ShapeResult) return ((ShapeResult) value).isBottom();
+    if (value instanceof Set) return ((Set<?>) value).isEmpty();
+    return false;
   }
 
   /**
