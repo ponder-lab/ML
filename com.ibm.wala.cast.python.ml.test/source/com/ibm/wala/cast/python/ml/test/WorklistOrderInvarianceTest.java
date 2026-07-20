@@ -41,4 +41,32 @@ public class WorklistOrderInvarianceTest {
       System.clearProperty("ariadne.typeResolution.reverseSeeds");
     }
   }
+
+  /**
+   * Runs the NLPGNN generation analysis under a cycle-order shuffle seed; the run must satisfy the
+   * same assertions as the unperturbed one (wala/ML#756). Reversed seeds permute only the demand
+   * roots, and provably do not exercise the cycle-internal iteration orders (worklist polls,
+   * dependent re-enqueues) whose identity-hash-seeded variation lets settled states differ with JVM
+   * run history; the {@code ariadne.typeResolution.shuffleCycles} knob perturbs all of them
+   * deterministically. Seed 11 is the recorded wala/ML#753 reproducer: it flips the BERT
+   * encoder-loop {@code Transformer.call} anchor, whose exact-set pin therefore stays out of the
+   * suite until that issue is fixed; the generation anchor asserted here is stable under every seed
+   * tried and guards the invariance property for the acyclic region and the canonicalized cycle
+   * residue.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testCycleOrderInvariance()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    System.setProperty("ariadne.typeResolution.shuffleCycles", "11");
+    try {
+      new TestCorpusFixtures().runNlpgnnFullGeneration();
+    } finally {
+      System.clearProperty("ariadne.typeResolution.shuffleCycles");
+    }
+  }
 }
