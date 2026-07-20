@@ -110,7 +110,8 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
                     try {
                       TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
                       if (generator != null) {
-                        ret.addAll(generator.getDTypes(builder));
+                        Set<DType> generatorDTypes = memoizedDTypes(builder, generator);
+                        if (generatorDTypes != null) ret.addAll(generatorDTypes);
                       }
                     } catch (IllegalArgumentException e) {
                       // Ignore.
@@ -162,8 +163,8 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
                   try {
                     TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
                     if (generator != null) {
-                      Set<DType> preciseTypes = generator.getDTypes(builder);
-                      if (!preciseTypes.isEmpty()) {
+                      Set<DType> preciseTypes = memoizedDTypes(builder, generator);
+                      if (preciseTypes != null && !preciseTypes.isEmpty()) {
                         ret.addAll(preciseTypes);
                         preciseTypesFound = true;
                       }
@@ -235,8 +236,7 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
                     try {
                       TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
                       if (generator != null) {
-                        Set<List<Dimension<?>>> generatorShapes = generator.getShapes(builder);
-                        if (generatorShapes != null) ret.addAll(generatorShapes);
+                        ret.addAll(memoizedShapeResult(builder, generator).members());
                       }
                     } catch (IllegalArgumentException e) {
                       // Ignore.
@@ -288,8 +288,9 @@ public class DatasetChooseFromDatasetsGenerator extends DatasetGenerator {
                   try {
                     TensorGenerator generator = TensorGeneratorFactory.getGenerator(var, builder);
                     if (generator != null) {
-                      Set<List<Dimension<?>>> preciseTypes = generator.getShapes(builder);
-                      if (preciseTypes != null && !preciseTypes.isEmpty()) {
+                      Set<List<Dimension<?>>> preciseTypes =
+                          memoizedShapeResult(builder, generator).members();
+                      if (!preciseTypes.isEmpty()) {
                         ret.addAll(preciseTypes);
                         preciseTypesFound = true;
                       }

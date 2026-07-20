@@ -1720,6 +1720,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       Set<TensorType> tensorTypes = generator.getTensorTypes(builder);
       LOGGER.fine(() -> "Found tensor types: " + tensorTypes + ".");
 
+      if (tensorTypes != null && tensorTypes.stream().anyMatch(t -> t.getDims() == null))
+        LOGGER.fine(
+            () ->
+                "NULLDIMS-SEED generator="
+                    + generator.getClass().getSimpleName()
+                    + " source="
+                    + describe(source));
+
       return tensorTypes;
     } catch (IllegalArgumentException e) {
       LOGGER.log(

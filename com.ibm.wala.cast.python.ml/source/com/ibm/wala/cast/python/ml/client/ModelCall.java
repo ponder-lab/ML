@@ -91,11 +91,14 @@ public class ModelCall extends TensorGenerator {
 
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
+    // Diverted through the engine's memo layer (wala/ML#365): a direct 1-arg call recurses
+    // outside the engine, so cyclic model graphs break at thread-local guards with
+    // evaluation-order-dependent nulls instead of converging (wala/ML#753). The resolvable
+    // members stand; an unknown remainder drops, as the legacy null filter did.
     Set<List<Dimension<?>>> outputShapes =
         this.getOutputGenerators(builder).stream()
-            .map(g -> g.getShapes(builder))
-            .filter(shapes -> shapes != null)
-            .flatMap(Collection::stream)
+            .map(g -> memoizedShapeResult(builder, g))
+            .flatMap(result -> result.members().stream())
             .collect(Collectors.toSet());
 
     // Extract shapes from the inputs passed to __call__.
@@ -274,9 +277,13 @@ public class ModelCall extends TensorGenerator {
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    // Diverted like the shape counterpart (wala/ML#365); a null (⊤) dtype result contributes
+    // nothing here, as before.
     Set<DType> outputDTypes =
         this.getOutputGenerators(builder).stream()
-            .flatMap(g -> g.getDTypes(builder).stream())
+            .map(g -> memoizedDTypes(builder, g))
+            .filter(dTypes -> dTypes != null)
+            .flatMap(Collection::stream)
             .collect(Collectors.toSet());
 
     if (outputDTypes.isEmpty()) {
