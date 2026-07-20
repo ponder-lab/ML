@@ -66,7 +66,9 @@ public class DatasetElementGenerator extends TensorGenerator implements Delegati
   @Override
   public Set<List<Dimension<?>>> getShapes(PropagationCallGraphBuilder builder) {
     if (underlying != null) {
-      return underlying.getShapes(builder);
+      // Diverted through the engine's memo layer (wala/ML#365): a direct 1-arg call recurses
+      // outside the engine and breaks order-dependently on cyclic chains (wala/ML#753).
+      return memoizedShapeResult(builder, underlying).toLegacy();
     }
     return super.getShapes(builder);
   }
@@ -79,7 +81,8 @@ public class DatasetElementGenerator extends TensorGenerator implements Delegati
   @Override
   public Set<DType> getDTypes(PropagationCallGraphBuilder builder) {
     if (underlying != null) {
-      return underlying.getDTypes(builder);
+      // Diverted like the shape counterpart (wala/ML#365).
+      return memoizedDTypes(builder, underlying);
     }
     return super.getDTypes(builder);
   }

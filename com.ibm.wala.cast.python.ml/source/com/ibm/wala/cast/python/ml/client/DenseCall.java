@@ -270,9 +270,13 @@ public class DenseCall extends TensorGenerator {
                   + ".");
 
       if (generator != null) {
-        Set<List<Dimension<?>>> generatorShapes = generator.getShapes(builder);
+        // Divert through the engine's memo layer (wala/ML#365): a direct 1-arg call recurses
+        // outside the engine, so a cyclic chain breaks at the wala/ML#599 thread-local guard with
+        // an evaluation-order-dependent null instead of converging (wala/ML#753). The resolvable
+        // members stand; an unknown remainder drops, as the legacy null-filtered call did.
+        ShapeResult generatorShapes = memoizedShapeResult(builder, generator);
         LOGGER.fine(() -> "Found input shapes: " + generatorShapes + ".");
-        if (generatorShapes != null) ret.addAll(generatorShapes);
+        ret.addAll(generatorShapes.members());
       } else {
         LOGGER.fine(
             () ->

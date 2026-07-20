@@ -246,7 +246,9 @@ public class DatasetFromTensorSlicesGenerator extends DatasetGenerator
                     PointsToSetVariable svar =
                         builder.getPropagationSystem().findOrCreatePointsToSet(spk);
                     try {
-                      fieldShapes = new SliceBuiltinOperation(svar).getShapes(builder);
+                      // Diverted through the engine's memo layer (wala/ML#365).
+                      fieldShapes =
+                          memoizedShapeResult(builder, new SliceBuiltinOperation(svar)).toLegacy();
                     } catch (IllegalArgumentException e) {
                       // leave as null
                     }
