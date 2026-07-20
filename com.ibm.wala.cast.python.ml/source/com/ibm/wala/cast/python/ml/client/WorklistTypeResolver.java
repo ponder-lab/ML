@@ -11,6 +11,7 @@ import java.util.Deque;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.function.Supplier;
@@ -88,6 +89,18 @@ final class WorklistTypeResolver {
   private final Deque<Object> worklist = new ArrayDeque<>();
   private final Set<Object> enqueued = HashSetFactory.make();
   private final Map<Object, Integer> evaluationCounts = HashMapFactory.make();
+
+  /**
+   * The cycle-order perturbation source (wala/ML#756), or {@code null} when the knob is off. The
+   * hybrid inline scheduling fixes the acyclic region's evaluation order, so the only order the
+   * engine does not determine is the one the worklist and the dependent re-enqueues impose on
+   * cycle-affected keys; that order is identity-hash-seeded and varies with JVM run history, which
+   * is exactly what an order-invariance test cannot rerun on demand. Seeding this source (the
+   * {@code ariadne.typeResolution.shuffleCycles} system property or the {@code
+   * ARIADNE_SHUFFLE_CYCLES} environment variable, holding a {@code long} seed) perturbs both orders
+   * deterministically, mirroring the reverse-seeds property for demand roots.
+   */
+  private final Random cycleShuffle = createCycleShuffle();
 
   /** The stack of currently-evaluating queries; reads record edges against the top. */
   private final Deque<Object> evaluating = new ArrayDeque<>();
@@ -212,8 +225,43 @@ final class WorklistTypeResolver {
     return shapeKind ? ShapeResult.bottom() : EnumSet.noneOf(DType.class);
   }
 
+  /**
+   * Creates the cycle-order perturbation source from the {@code
+   * ariadne.typeResolution.shuffleCycles} system property or the {@code ARIADNE_SHUFFLE_CYCLES}
+   * environment variable (wala/ML#756).
+   *
+   * @return A {@link Random} seeded with the configured {@code long}, or {@code null} when neither
+   *     setting is present.
+   */
+  private static Random createCycleShuffle() {
+    String seed = System.getProperty("ariadne.typeResolution.shuffleCycles");
+    if (seed == null) seed = System.getenv("ARIADNE_SHUFFLE_CYCLES");
+    if (seed == null) return null;
+    return new Random(Long.parseLong(seed));
+  }
+
   private void enqueue(Object key) {
-    if (this.enqueued.add(key)) this.worklist.add(key);
+    if (!this.enqueued.add(key)) return;
+    // Perturbation point 1 of the wala/ML#756 knob: enqueueing at a random end permutes the poll
+    // order among the keys concurrently on the worklist, which are exactly the cycle-affected keys.
+    if (this.cycleShuffle != null && !this.worklist.isEmpty() && this.cycleShuffle.nextBoolean())
+      this.worklist.addFirst(key);
+    else this.worklist.add(key);
+  }
+
+  /**
+   * Orders a changed query's dependents for re-enqueueing: iteration order as-is normally, a seeded
+   * shuffle under the wala/ML#756 perturbation knob (point 2: the relative order in which a grown
+   * value's readers join the worklist).
+   *
+   * @param dependents The dependents to order.
+   * @return The re-enqueue order.
+   */
+  private Iterable<Object> orderDependentsForReEnqueue(Set<Object> dependents) {
+    if (this.cycleShuffle == null || dependents.size() < 2) return dependents;
+    List<Object> shuffled = new ArrayList<>(dependents);
+    Collections.shuffle(shuffled, this.cycleShuffle);
+    return shuffled;
   }
 
   /** Runs the fixpoint: chaotic iteration, then SCC promotion, repeating until neither moves. */
@@ -303,7 +351,9 @@ final class WorklistTypeResolver {
     joined = this.widen(key, joined);
     if (!joined.equals(old)) {
       this.state.put(key, joined);
-      for (Object dependent : this.dependents.getOrDefault(key, Collections.emptySet()))
+      for (Object dependent :
+          this.orderDependentsForReEnqueue(
+              this.dependents.getOrDefault(key, Collections.emptySet())))
         // An on-stack reader consumes this fresh value as its own evaluation completes (the
         // read returns after this update), so re-enqueueing it would only repeat the same
         // transfer; every first inline evaluation would otherwise schedule its whole reader
@@ -372,8 +422,9 @@ final class WorklistTypeResolver {
         if (!bottomShapes) continue;
         if (value == null && !(this.transfers.containsKey(key))) continue;
         this.state.put(key, ShapeResult.unknown());
-        for (Object dependent : this.dependents.getOrDefault(key, Collections.emptySet()))
-          this.enqueue(dependent);
+        for (Object dependent :
+            this.orderDependentsForReEnqueue(
+                this.dependents.getOrDefault(key, Collections.emptySet()))) this.enqueue(dependent);
         any = true;
       }
     }
