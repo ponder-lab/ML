@@ -2942,11 +2942,18 @@ public abstract class TensorGenerator {
     // The engine converges the cycle from its non-cyclic base instead of recursing without bound
     // or inheriting a whole-read ⊤ (wala/ML#718).
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
-    // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback.
-    if (engine == null) return this.doGetShapeResultFromTensor(builder, asin, exact);
-    Object key = Pair.make("shape-delegation", asin);
+    // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback; only that
+    // recursive path needs the in-body self-recursion guards.
+    if (engine == null) return this.doGetShapeResultFromTensor(builder, asin, exact, true);
+    // The key carries everything the transfer depends on: the query is shared by every reader of
+    // the allocation site, so a closure capturing the first reader's identity or mode would
+    // settle the value by sighting order (wala/ML#753) — a self-reader first-sighting would pin
+    // the query at an edge-free ⊥ invisible to promotion and canonicalization. The guards are
+    // recursion breaks, and engine reads never recurse, so the transfer runs unguarded; the
+    // self-read participates as an ordinary cycle edge that converges from the acyclic base.
+    Object key = Pair.make("shape-delegation", Pair.make(asin, exact));
     java.util.function.Supplier<Object> transfer =
-        () -> this.doGetShapeResultFromTensor(builder, asin, exact);
+        () -> this.doGetShapeResultFromTensor(builder, asin, exact, false);
     return (ShapeResult)
         (engine.isEvaluating()
             ? engine.read(key, transfer, true)
@@ -2960,10 +2967,16 @@ public abstract class TensorGenerator {
    * @param builder the propagation call graph builder
    * @param asin the allocation site of the tensor
    * @param exact whether an unresolvable member marks the unknown remainder
+   * @param applyRecursionGuards whether the reader's self-recursion guards run; {@code true} only
+   *     on the null-engine recursive path, since an engine transfer must not depend on the reader
+   *     that first sighted its query (wala/ML#753)
    * @return the resolution result; ⊥ when no producer resolves
    */
   private ShapeResult doGetShapeResultFromTensor(
-      PropagationCallGraphBuilder builder, AllocationSiteInNode asin, boolean exact) {
+      PropagationCallGraphBuilder builder,
+      AllocationSiteInNode asin,
+      boolean exact,
+      boolean applyRecursionGuards) {
     boolean hasUnknown = false;
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     CGNode readDataNode = asin.getNode();
@@ -2986,7 +2999,9 @@ public abstract class TensorGenerator {
 
         if (generator != null) {
           // Avoid infinite recursion for manual generators
-          if (this.manualNode != null && this.manualNode.equals(readDataNode)) {
+          if (applyRecursionGuards
+              && this.manualNode != null
+              && this.manualNode.equals(readDataNode)) {
             if (replay)
               LOGGER.fine(
                   () ->
@@ -3018,7 +3033,9 @@ public abstract class TensorGenerator {
           }
         } else if (defSource != null) {
           // Avoid infinite recursion if the current generator is for the same source.
-          if (this.getSource() != null && this.getSource().equals(defSource)) {
+          if (applyRecursionGuards
+              && this.getSource() != null
+              && this.getSource().equals(defSource)) {
             if (replay)
               LOGGER.fine(
                   () ->
@@ -3807,10 +3824,15 @@ public abstract class TensorGenerator {
     // than UNKNOWN, since an in-band UNKNOWN would collapse the caller's union to {UNKNOWN} under
     // the lattice normalization, erasing the sibling members' resolved dtypes.
     WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
-    // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback.
-    if (engine == null) return this.doGetDTypesFromTensor(builder, asin);
+    // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback. Unlike the shape
+    // side, the transfer keeps the reader's self-recursion guards: an unguarded dtype delegation
+    // feeds the null-⊤ delegated result's UNKNOWN into unions whose normalization absorbs it,
+    // composing unknown-dtype twins of otherwise-resolved members (the wala/ML#753 round-6
+    // measurement); the shared-query first-sighting hazard stands for the shape side only.
+    if (engine == null) return this.doGetDTypesFromTensor(builder, asin, true);
     Object key = Pair.make("dtype-delegation", asin);
-    java.util.function.Supplier<Object> transfer = () -> this.doGetDTypesFromTensor(builder, asin);
+    java.util.function.Supplier<Object> transfer =
+        () -> this.doGetDTypesFromTensor(builder, asin, true);
     @SuppressWarnings("unchecked")
     Set<DType> diverted =
         (Set<DType>)
@@ -3826,10 +3848,15 @@ public abstract class TensorGenerator {
    *
    * @param builder the propagation call graph builder
    * @param asin the allocation site of the tensor
+   * @param applyRecursionGuards whether the reader's self-recursion guards run; {@code true} only
+   *     on the null-engine recursive path, since an engine transfer must not depend on the reader
+   *     that first sighted its query (wala/ML#753)
    * @return the resolved dtypes; empty when no producer resolves
    */
   private Set<DType> doGetDTypesFromTensor(
-      PropagationCallGraphBuilder builder, AllocationSiteInNode asin) {
+      PropagationCallGraphBuilder builder,
+      AllocationSiteInNode asin,
+      boolean applyRecursionGuards) {
     Set<DType> ret = EnumSet.noneOf(DType.class);
     CGNode readDataNode = asin.getNode();
 
@@ -3848,7 +3875,9 @@ public abstract class TensorGenerator {
             createManualGenerator(readDataNode, asin.concreteType().getReference(), builder);
 
         if (generator != null) {
-          if (this.manualNode != null && this.manualNode.equals(readDataNode)) {
+          if (applyRecursionGuards
+              && this.manualNode != null
+              && this.manualNode.equals(readDataNode)) {
             return ret;
           }
           LOGGER.fine("Delegating dtype inference to: " + generator);
@@ -3857,7 +3886,9 @@ public abstract class TensorGenerator {
           // the points-to set nor the caller walk); contribute UNKNOWN rather than NPE-ing.
           ret.addAll(delegated == null ? EnumSet.of(UNKNOWN) : delegated);
         } else if (defSource != null) {
-          if (this.getSource() != null && this.getSource().equals(defSource)) {
+          if (applyRecursionGuards
+              && this.getSource() != null
+              && this.getSource().equals(defSource)) {
             return ret;
           }
 
