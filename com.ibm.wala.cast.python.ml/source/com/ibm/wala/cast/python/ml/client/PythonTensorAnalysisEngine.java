@@ -315,6 +315,17 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   /** Environment-variable fallback of {@link #SHUFFLE_CYCLES_PROPERTY}. */
   public static final String SHUFFLE_CYCLES_VARIABLE = "ARIADNE_SHUFFLE_CYCLES";
 
+  /**
+   * System property naming the wala/ML#753 post-settlement replay filter: comma-separated
+   * key-string substrings selecting the settled pure-⊤ shape queries whose transfers re-run
+   * read-only against the settled state, logging each aggregation's per-member results. The {@link
+   * #REPLAY_FILTER_VARIABLE} environment variable is its fallback.
+   */
+  public static final String REPLAY_FILTER_PROPERTY = "ariadne.typeResolution.replayFilter";
+
+  /** Environment-variable fallback of {@link #REPLAY_FILTER_PROPERTY}. */
+  public static final String REPLAY_FILTER_VARIABLE = "ARIADNE_REPLAY_FILTER";
+
   private static final Logger LOGGER = Logger.getLogger(PythonTensorAnalysisEngine.class.getName());
 
   private static final MethodReference conv2d =
@@ -1666,6 +1677,16 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
       recordDepthLimitedResults(tt, builder.getClassHierarchy());
       recordShapeAnnotationCandidates(builder);
+
+      // The wala/ML#753 replay diagnostic runs last, when every demanded query has settled, so
+      // its recomputations read only final values and cannot perturb the evaluation order under
+      // measurement.
+      String replayFilter = System.getProperty(REPLAY_FILTER_PROPERTY);
+      if (replayFilter == null) replayFilter = System.getenv(REPLAY_FILTER_VARIABLE);
+      if (replayFilter != null) {
+        WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
+        if (engine != null) engine.replaySettled(replayFilter);
+      }
 
       return tt;
     } finally {

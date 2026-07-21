@@ -1959,6 +1959,21 @@ public abstract class TensorGenerator {
             // default mode keeps the resolvable subset (wala/ML#716, wala/ML#718).
             if (argShapes.hasUnknown() && exact) callerUnknown = true;
             combinedRet.addAll(argShapes.members());
+            WorklistTypeResolver activeEngine = WorklistTypeResolver.active(builder);
+            if (activeEngine != null && activeEngine.isReplaying()) {
+              int arg = argVn;
+              LOGGER.fine(
+                  () ->
+                      "REPLAY caller arg v"
+                          + arg
+                          + " in "
+                          + describe(caller)
+                          + " => members="
+                          + argShapes.members()
+                          + ", unknown="
+                          + argShapes.hasUnknown()
+                          + ".");
+            }
           }
         }
         if (!combinedRet.isEmpty()) return new ShapeResult(combinedRet, callerUnknown);
@@ -2737,6 +2752,8 @@ public abstract class TensorGenerator {
     boolean hasUnknown = false;
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
+    WorklistTypeResolver activeEngine = WorklistTypeResolver.active(builder);
+    boolean replay = activeEngine != null && activeEngine.isReplaying();
 
     for (InstanceKey valueIK : valuePointsToSet)
       if (valueIK instanceof ConstantKey) ret.add(emptyList()); // Scalar value.
@@ -2821,6 +2838,16 @@ public abstract class TensorGenerator {
                       + fromTensor.members().size()
                       + " unk="
                       + fromTensor.hasUnknown());
+          if (replay)
+            LOGGER.fine(
+                () ->
+                    "REPLAY member "
+                        + describe(asin)
+                        + " => members="
+                        + fromTensor.members()
+                        + ", unknown="
+                        + fromTensor.hasUnknown()
+                        + ".");
           // An empty result means no producer resolved for this member, not a scalar.
           if (fromTensor.hasUnknown() || fromTensor.isBottom()) {
             if (exact) hasUnknown = true; // The union is incomplete, wala/ML#718.
@@ -2848,11 +2875,34 @@ public abstract class TensorGenerator {
             ret.addAll(generatorShapes.members());
             if (exact && generatorShapes.hasUnknown())
               hasUnknown = true; // Incomplete union, wala/ML#718.
-          } else if (exact) hasUnknown = true;
+            if (replay) {
+              TensorGenerator dispatched = generator;
+              LOGGER.fine(
+                  () ->
+                      "REPLAY member "
+                          + describe(asin)
+                          + " via "
+                          + dispatched.getClass().getSimpleName()
+                          + " => members="
+                          + generatorShapes.members()
+                          + ", unknown="
+                          + generatorShapes.hasUnknown()
+                          + ".");
+            }
+          } else {
+            if (exact) hasUnknown = true;
+            if (replay)
+              LOGGER.fine(
+                  () ->
+                      "REPLAY member "
+                          + describe(asin)
+                          + " => no dispatchable generator (same operation or unresolved).");
+          }
         } catch (IllegalArgumentException e) {
           // Not a recognized generator.
           LOGGER.log(Level.FINE, "No generator found for variable: " + var, e);
           if (exact) hasUnknown = true;
+          if (replay) LOGGER.fine(() -> "REPLAY member " + describe(asin) + " => factory IAE.");
         }
       } else {
         throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
@@ -2916,6 +2966,8 @@ public abstract class TensorGenerator {
     boolean hasUnknown = false;
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     CGNode readDataNode = asin.getNode();
+    WorklistTypeResolver activeEngine = WorklistTypeResolver.active(builder);
+    boolean replay = activeEngine != null && activeEngine.isReplaying();
 
     // Support allocations directly in 'do' methods (preferred for 1-CFA context separation).
     if (readDataNode.getMethod().getName().toString().equals(DO_METHOD_NAME)) {
@@ -2934,6 +2986,14 @@ public abstract class TensorGenerator {
         if (generator != null) {
           // Avoid infinite recursion for manual generators
           if (this.manualNode != null && this.manualNode.equals(readDataNode)) {
+            if (replay)
+              LOGGER.fine(
+                  () ->
+                      "REPLAY delegation "
+                          + describe(asin)
+                          + " => ⊥ by the manual self-recursion guard of "
+                          + this.getClass().getSimpleName()
+                          + ".");
             return ShapeResult.bottom();
           }
           LOGGER.fine("Delegating shape inference to: " + generator);
@@ -2941,9 +3001,31 @@ public abstract class TensorGenerator {
           ret.addAll(delegatedShapes.members());
           if (exact && delegatedShapes.hasUnknown())
             hasUnknown = true; // Incomplete union, wala/ML#718.
+          if (replay) {
+            TensorGenerator manual = generator;
+            LOGGER.fine(
+                () ->
+                    "REPLAY delegation "
+                        + describe(asin)
+                        + " via manual "
+                        + manual.getClass().getSimpleName()
+                        + " => members="
+                        + delegatedShapes.members()
+                        + ", unknown="
+                        + delegatedShapes.hasUnknown()
+                        + ".");
+          }
         } else if (defSource != null) {
           // Avoid infinite recursion if the current generator is for the same source.
           if (this.getSource() != null && this.getSource().equals(defSource)) {
+            if (replay)
+              LOGGER.fine(
+                  () ->
+                      "REPLAY delegation "
+                          + describe(asin)
+                          + " => ⊥ by the source self-recursion guard of "
+                          + this.getClass().getSimpleName()
+                          + ".");
             return ShapeResult.bottom();
           }
           try {
@@ -2959,7 +3041,26 @@ public abstract class TensorGenerator {
             ret.addAll(delegatedShapes.members());
             if (exact && delegatedShapes.hasUnknown())
               hasUnknown = true; // Incomplete union, wala/ML#718.
-          } else if (exact) hasUnknown = true;
+            if (replay) {
+              TensorGenerator dispatched = generator;
+              LOGGER.fine(
+                  () ->
+                      "REPLAY delegation "
+                          + describe(asin)
+                          + " via "
+                          + dispatched.getClass().getSimpleName()
+                          + " => members="
+                          + delegatedShapes.members()
+                          + ", unknown="
+                          + delegatedShapes.hasUnknown()
+                          + ".");
+            }
+          } else {
+            if (exact) hasUnknown = true;
+            if (replay)
+              LOGGER.fine(
+                  () -> "REPLAY delegation " + describe(asin) + " => no generator resolved.");
+          }
         }
       }
       return new ShapeResult(ret, hasUnknown);
@@ -2999,7 +3100,24 @@ public abstract class TensorGenerator {
           Set<List<Dimension<?>>> delegatedShapes = generator.getShapes(builder);
           if (delegatedShapes != null) ret.addAll(delegatedShapes);
           else if (exact) hasUnknown = true; // Incomplete union, wala/ML#718.
-        } else if (exact) hasUnknown = true;
+          if (replay) {
+            TensorGenerator dispatched = generator;
+            LOGGER.fine(
+                () ->
+                    "REPLAY delegation "
+                        + describe(asin)
+                        + " via caller "
+                        + dispatched.getClass().getSimpleName()
+                        + " => "
+                        + (delegatedShapes == null ? "⊤" : delegatedShapes)
+                        + ".");
+          }
+        } else {
+          if (exact) hasUnknown = true;
+          if (replay)
+            LOGGER.fine(
+                () -> "REPLAY delegation " + describe(asin) + " => no caller generator resolved.");
+        }
       }
     }
     return new ShapeResult(ret, hasUnknown);
