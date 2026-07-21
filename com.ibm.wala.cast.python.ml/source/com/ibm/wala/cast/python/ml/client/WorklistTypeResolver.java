@@ -338,6 +338,7 @@ final class WorklistTypeResolver {
    */
   private void canonicalize() {
     int replaced = 0;
+    String probeFilter = System.getProperty("ariadne.typeResolution.canonProbe");
     Set<Object> changed = HashSetFactory.make();
     for (List<Object> scc : this.tarjan()) {
       boolean cyclic =
@@ -348,6 +349,28 @@ final class WorklistTypeResolver {
         if (cyclic
             || !Collections.disjoint(this.reads.getOrDefault(key, Collections.emptySet()), changed))
           targets.add(key);
+      if (probeFilter != null)
+        for (Object key : scc) {
+          Object settled = this.state.get(key);
+          if (!(settled instanceof ShapeResult)) continue;
+          ShapeResult shapes = (ShapeResult) settled;
+          if (!shapes.members().isEmpty() || !shapes.hasUnknown()) continue;
+          if (!String.valueOf(key).contains(probeFilter)) continue;
+          boolean targeted = targets.contains(key);
+          boolean inCycle = cyclic;
+          LOGGER.fine(
+              () ->
+                  "CANON-PROBE "
+                      + brief(key)
+                      + " cyclic="
+                      + inCycle
+                      + " sccSize="
+                      + scc.size()
+                      + " targeted="
+                      + targeted
+                      + " edges="
+                      + this.reads.getOrDefault(key, Collections.emptySet()).size());
+        }
       if (targets.isEmpty()) continue;
       Map<Object, Object> replacements = HashMapFactory.make();
       for (Object key : targets) replacements.put(key, this.recomputeSettled(key));
@@ -355,6 +378,8 @@ final class WorklistTypeResolver {
         Object key = replacement.getKey();
         Object value = replacement.getValue();
         Object settled = this.state.get(key);
+        if (probeFilter != null && String.valueOf(key).contains(probeFilter))
+          LOGGER.fine(() -> "CANON-PROBE recompute " + brief(key) + " := " + brief(value));
         if (value == null || value.equals(settled)) continue;
         if (isBottomValue(value) && !isBottomValue(settled)) continue;
         this.state.put(key, value);
