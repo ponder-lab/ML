@@ -2725,6 +2725,36 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Reads a container element's shapes through the engine (wala/ML#758): the list/tuple arm's
+   * direct recursion was the largest engine-invisible transfer population of the wala/ML#753
+   * witness (the zero-edge {@code get_shape_list} queries), so an element whose shapes were
+   * consumed interim had no dependency edge to reschedule its reader. The query is keyed by the
+   * element's pointer key and the exactness mode, both of which determine the transfer.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param elementKey The container element's pointer key, identifying the query.
+   * @param elementPointsToSet The element's points-to set, the transfer's input.
+   * @param exact Whether an unresolvable union member marks the unknown remainder.
+   * @return The resolution result.
+   */
+  private ShapeResult readElementShapes(
+      PropagationCallGraphBuilder builder,
+      PointerKey elementKey,
+      OrdinalSet<InstanceKey> elementPointsToSet,
+      boolean exact) {
+    WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
+    // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback.
+    if (engine == null) return this.getShapeResultOfValue(builder, elementPointsToSet, exact);
+    Object key = Pair.make("element-shapes", Pair.make(elementKey, exact));
+    java.util.function.Supplier<Object> transfer =
+        () -> this.getShapeResultOfValue(builder, elementPointsToSet, exact);
+    return (ShapeResult)
+        (engine.isEvaluating()
+            ? engine.read(key, transfer, true)
+            : engine.demand(key, transfer, true));
+  }
+
+  /**
    * Record-carrying core of {@link #getShapesOfValue(PropagationCallGraphBuilder, OrdinalSet,
    * boolean)} (wala/ML#718): in exact mode, a member whose shapes do not resolve marks the unknown
    * remainder and the resolvable members keep collecting, so a partially resolvable points-to union
@@ -2797,7 +2827,9 @@ public abstract class TensorGenerator {
                 "Points-to set for instance field: " + describe(instanceFieldPointsToSet) + ".");
 
             Set<List<Dimension<?>>> shapesOfField =
-                this.getShapesOfValue(builder, instanceFieldPointsToSet, exact);
+                this.readElementShapes(
+                        builder, pointerKeyForInstanceField, instanceFieldPointsToSet, exact)
+                    .toLegacy();
 
             if (shapesOfField == null) {
               // An unresolvable element makes the union incomplete: mark the remainder and keep
@@ -4531,7 +4563,35 @@ public abstract class TensorGenerator {
    */
   protected ShapeResult getShapeResultOfShapeVector(
       PropagationCallGraphBuilder builder, CGNode node, int vn) {
-    return getShapeResultOfShapeVector(builder, node, vn, HashSetFactory.make());
+    return this.walkShapeVector(builder, node, vn, HashSetFactory.make());
+  }
+
+  /**
+   * Dispatches one step of the shape-vector walk. Under the engine, each step is a {@code (node,
+   * vn)}-keyed query, so the walk's reads record dependency edges and its recursive chains converge
+   * as engine cycles instead of breaking at the {@code visited} guard with an order-dependent
+   * unknown; the wala/ML#758 census measured the guarded walk as the largest engine-invisible
+   * transfer population (all 70 zero-edge marked keys of the wala/ML#753 witness). On the
+   * null-engine recursive path the {@code visited} guard keeps bounding the recursion as before.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param vn The value number to resolve.
+   * @param visited The nodes already on the walk, consulted only on the null-engine path.
+   * @return The resolution result.
+   */
+  private ShapeResult walkShapeVector(
+      PropagationCallGraphBuilder builder, CGNode node, int vn, Set<CGNode> visited) {
+    WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
+    // See memoizedShapeResult on the null-engine (outside-an-analysis) fallback.
+    if (engine == null) return this.walkShapeVector(builder, node, vn, visited);
+    Object key = Pair.make("shape-vector", Pair.make(node, vn));
+    java.util.function.Supplier<Object> transfer =
+        () -> this.getShapeResultOfShapeVector(builder, node, vn, HashSetFactory.make());
+    return (ShapeResult)
+        (engine.isEvaluating()
+            ? engine.read(key, transfer, true)
+            : engine.demand(key, transfer, true));
   }
 
   /**
@@ -4600,9 +4660,7 @@ public abstract class TensorGenerator {
             }
           } else if (outerCall.getNumberOfUses() >= 2 && visited.add(outerCaller))
             // An explicit `x.build(shape)` call: walk the actual argument.
-            shapes =
-                this.getShapeResultOfShapeVector(
-                    builder, outerCaller, outerCall.getUse(1), visited);
+            shapes = this.walkShapeVector(builder, outerCaller, outerCall.getUse(1), visited);
           // The parameter unions all callers; an unresolved caller marks the unknown remainder
           // and the resolvable callers' members still stand (wala/ML#718).
           if (shapes.hasUnknown() || shapes.isBottom()) callerUnknown = true;
@@ -4652,7 +4710,7 @@ public abstract class TensorGenerator {
             continue;
           }
           try {
-            ShapeResult shapes = this.getShapeResultOfShapeVector(builder, caller, argVn, visited);
+            ShapeResult shapes = this.walkShapeVector(builder, caller, argVn, visited);
             if (shapes.hasUnknown() || shapes.isBottom()) callerUnknown = true;
             if (!shapes.members().isEmpty()) {
               if (combined == null) combined = HashSetFactory.make();
@@ -4714,14 +4772,13 @@ public abstract class TensorGenerator {
         PythonPropertyRead funcRead = (PythonPropertyRead) funcDef;
         int memberVn = funcRead.getMemberRef();
         if (st.isStringConstant(memberVn) && "as_list".equals(st.getStringValue(memberVn)))
-          return this.getShapeResultOfShapeVector(builder, node, funcRead.getObjectRef(), visited);
+          return this.walkShapeVector(builder, node, funcRead.getObjectRef(), visited);
         return ShapeResult.unknown();
       }
 
       // v[a:b]: a slice-builtin invoke of the form slice(receiver, lower, upper, step).
       if (dispatchesToSliceBuiltin(builder, node, invoke) && invoke.getNumberOfUses() >= 2) {
-        ShapeResult base =
-            this.getShapeResultOfShapeVector(builder, node, invoke.getUse(1), visited);
+        ShapeResult base = this.walkShapeVector(builder, node, invoke.getUse(1), visited);
         if (base.members().isEmpty()) return ShapeResult.unknown();
 
         // A nested slice object as a bound means a multi-dim subscript; a shape vector is 1-D, so
@@ -4842,7 +4899,7 @@ public abstract class TensorGenerator {
    */
   private ShapeResult shapeResultOfShapeVectorOrLiteralList(
       PropagationCallGraphBuilder builder, CGNode node, int vn, Set<CGNode> visited) {
-    ShapeResult shapes = this.getShapeResultOfShapeVector(builder, node, vn, visited);
+    ShapeResult shapes = this.walkShapeVector(builder, node, vn, visited);
     if (!shapes.members().isEmpty()) return shapes;
 
     SSAInstruction def = node.getDU().getDef(vn);
@@ -5233,8 +5290,7 @@ public abstract class TensorGenerator {
           // call's result isn't a resolvable shape vector.
           if (ret.getResult() < 0) return ShapeResult.unknown();
           sawReturn = true;
-          ShapeResult shapes =
-              this.getShapeResultOfShapeVector(builder, callee, ret.getResult(), visited);
+          ShapeResult shapes = this.walkShapeVector(builder, callee, ret.getResult(), visited);
           // Every return must resolve; an unresolvable remainder is marked rather than
           // collapsing the resolvable members (wala/ML#718).
           if (shapes.members().isEmpty()) return ShapeResult.unknown();
