@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.test;
 
+import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.test.categories.WholeProjectFixtures;
 import com.ibm.wala.cast.python.ml.test.tensorflow.v2.TestCorpusFixtures;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
@@ -62,11 +63,11 @@ public class WorklistOrderInvarianceTest {
   @Test
   public void testCycleOrderInvariance()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    System.setProperty("ariadne.typeResolution.shuffleCycles", "11");
+    System.setProperty(PythonTensorAnalysisEngine.SHUFFLE_CYCLES_PROPERTY, "11");
     try {
       new TestCorpusFixtures().runNlpgnnFullGeneration();
     } finally {
-      System.clearProperty("ariadne.typeResolution.shuffleCycles");
+      System.clearProperty(PythonTensorAnalysisEngine.SHUFFLE_CYCLES_PROPERTY);
     }
   }
 }

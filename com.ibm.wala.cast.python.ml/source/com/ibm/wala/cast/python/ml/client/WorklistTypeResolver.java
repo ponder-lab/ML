@@ -237,8 +237,8 @@ final class WorklistTypeResolver {
    *     not parse as a {@code long}.
    */
   static Long parseCycleShuffleSeed() {
-    String seed = System.getProperty("ariadne.typeResolution.shuffleCycles");
-    if (seed == null) seed = System.getenv("ARIADNE_SHUFFLE_CYCLES");
+    String seed = System.getProperty(PythonTensorAnalysisEngine.SHUFFLE_CYCLES_PROPERTY);
+    if (seed == null) seed = System.getenv(PythonTensorAnalysisEngine.SHUFFLE_CYCLES_VARIABLE);
     return parseCycleShuffleSeed(seed);
   }
 

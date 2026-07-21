@@ -175,11 +175,11 @@ public class WorklistTypeResolverTest {
     assertNull(WorklistTypeResolver.parseCycleShuffleSeed(null));
     assertNull(WorklistTypeResolver.parseCycleShuffleSeed("bogus"));
     assertEquals(Long.valueOf(42), WorklistTypeResolver.parseCycleShuffleSeed("42"));
-    System.setProperty("ariadne.typeResolution.shuffleCycles", "11");
+    System.setProperty(PythonTensorAnalysisEngine.SHUFFLE_CYCLES_PROPERTY, "11");
     try {
       testCanonicalizationRetractsStaleCollapse();
     } finally {
-      System.clearProperty("ariadne.typeResolution.shuffleCycles");
+      System.clearProperty(PythonTensorAnalysisEngine.SHUFFLE_CYCLES_PROPERTY);
     }
   }
 }

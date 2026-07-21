@@ -305,6 +305,16 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   /** A "fake" function name in the summaries that indicates that an API produces a new tensor. */
   public static final String TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME = "read_data";
 
+  /**
+   * System property naming the wala/ML#756 order-perturbation seed: a {@code long} that seeds a
+   * deterministic shuffle of the demand-root order and the worklist engine's cycle-internal orders.
+   * The {@link #SHUFFLE_CYCLES_VARIABLE} environment variable is its fallback.
+   */
+  public static final String SHUFFLE_CYCLES_PROPERTY = "ariadne.typeResolution.shuffleCycles";
+
+  /** Environment-variable fallback of {@link #SHUFFLE_CYCLES_PROPERTY}. */
+  public static final String SHUFFLE_CYCLES_VARIABLE = "ARIADNE_SHUFFLE_CYCLES";
+
   private static final Logger LOGGER = Logger.getLogger(PythonTensorAnalysisEngine.class.getName());
 
   private static final MethodReference conv2d =
