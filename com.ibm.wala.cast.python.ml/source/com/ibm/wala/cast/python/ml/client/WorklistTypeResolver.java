@@ -413,9 +413,25 @@ final class WorklistTypeResolver {
     }
   }
 
+  /**
+   * Renders a key or value for the diagnostic dump. The interesting record components of a query
+   * key (the value number and the exactness mode) trail its node's rendering, whose nested calling
+   * contexts exceed any reasonable truncation length, so they are hoisted in front of the truncated
+   * remainder; without this, every dumped query reads as an anonymous node prefix (wala/ML#753's
+   * localization sessions).
+   *
+   * @param o The key or value to render.
+   * @return The rendering.
+   */
   private static String brief(Object o) {
     String s = String.valueOf(o);
-    return s.length() > 160 ? s.substring(0, 160) : s;
+    int vnAt = s.lastIndexOf("valueNumber=");
+    String prefix = "";
+    if (vnAt >= 0) {
+      int end = s.indexOf(']', vnAt);
+      prefix = "{" + (end > vnAt ? s.substring(vnAt, end) : s.substring(vnAt)) + "} ";
+    }
+    return prefix + (s.length() > 400 ? s.substring(0, 400) : s);
   }
 
   private void iterate() {
