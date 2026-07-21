@@ -421,38 +421,58 @@ final class WorklistTypeResolver {
 
   /**
    * Diagnostic (wala/ML#753): re-runs the transfer of every settled pure-⊤ shape query (no members,
-   * unknown remainder) whose key string contains any of the filter's comma-separated substrings,
-   * logging the recomputed value against the settled one. The replay runs after every demand has
-   * settled, so each nested read returns a final value and the recomputation observes the
-   * aggregation's per-member results free of the evaluation-order effects an in-flight probe would
-   * perturb; the recomputed values are logged, never written back.
+   * unknown remainder) whose key string contains any of the filter's semicolon-separated
+   * substrings, logging the recomputed value against the settled one. A segment prefixed with
+   * {@code value:} instead matches against the settled value's rendering and selects any shape
+   * query regardless of its settled value, so a resolved-but-suspect member population (e.g. a
+   * spurious self-consistent fixpoint's) can be replayed to its deriving transfer. The replay runs
+   * after every demand has settled, so each nested read returns a final value and the recomputation
+   * observes the aggregation's per-member results free of the evaluation-order effects an in-flight
+   * probe would perturb; the recomputed values are logged, never written back.
    *
-   * @param filter Comma-separated key-string substrings selecting the queries to replay.
+   * @param filter Semicolon-separated substrings selecting the queries to replay: plain segments
+   *     match pure-⊤ queries by key string, {@code value:}-prefixed segments match any shape query
+   *     by value string. The separator is a semicolon because dimension renderings contain commas.
    */
   void replaySettled(String filter) {
-    // Blank segments (a stray comma or whitespace) would contain-match every key and replay the
-    // whole pure-⊤ population; drop them.
-    List<String> alternatives = new ArrayList<>();
-    for (String alternative : filter.split(",")) {
+    // Blank segments (a stray separator or whitespace) would contain-match every key and replay
+    // the whole pure-⊤ population; drop them.
+    List<String> keyAlternatives = new ArrayList<>();
+    List<String> valueAlternatives = new ArrayList<>();
+    for (String alternative : filter.split(";")) {
       String trimmed = alternative.trim();
-      if (!trimmed.isEmpty()) alternatives.add(trimmed);
+      if (trimmed.isEmpty()) continue;
+      if (trimmed.startsWith("value:")) {
+        String pattern = trimmed.substring("value:".length()).trim();
+        if (!pattern.isEmpty()) valueAlternatives.add(pattern);
+      } else keyAlternatives.add(trimmed);
     }
-    if (alternatives.isEmpty()) return;
+    if (keyAlternatives.isEmpty() && valueAlternatives.isEmpty()) return;
     List<Object> marked = new ArrayList<>();
     for (Map.Entry<Object, Object> entry : this.state.entrySet()) {
       Object value = entry.getValue();
       if (!(value instanceof ShapeResult)) continue;
       ShapeResult shapes = (ShapeResult) value;
-      if (!shapes.members().isEmpty() || !shapes.hasUnknown()) continue;
-      String keyString = String.valueOf(entry.getKey());
-      for (String alternative : alternatives)
-        if (keyString.contains(alternative)) {
-          marked.add(entry.getKey());
-          break;
-        }
+      boolean selected = false;
+      if (shapes.members().isEmpty() && shapes.hasUnknown()) {
+        String keyString = String.valueOf(entry.getKey());
+        for (String alternative : keyAlternatives)
+          if (keyString.contains(alternative)) {
+            selected = true;
+            break;
+          }
+      }
+      if (!selected && !valueAlternatives.isEmpty()) {
+        String valueString = String.valueOf(value);
+        for (String alternative : valueAlternatives)
+          if (valueString.contains(alternative)) {
+            selected = true;
+            break;
+          }
+      }
+      if (selected) marked.add(entry.getKey());
     }
-    LOGGER.fine(
-        () -> "REPLAY sweeping " + marked.size() + " settled pure-⊤ shape queries: " + filter);
+    LOGGER.fine(() -> "REPLAY sweeping " + marked.size() + " settled shape queries: " + filter);
     this.replaying = true;
     try {
       for (Object key : marked) {

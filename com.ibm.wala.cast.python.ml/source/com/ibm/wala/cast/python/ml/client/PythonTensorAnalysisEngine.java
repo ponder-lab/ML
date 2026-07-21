@@ -316,10 +316,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   public static final String SHUFFLE_CYCLES_VARIABLE = "ARIADNE_SHUFFLE_CYCLES";
 
   /**
-   * System property naming the wala/ML#753 post-settlement replay filter: comma-separated
-   * key-string substrings selecting the settled pure-⊤ shape queries whose transfers re-run
-   * read-only against the settled state, logging each aggregation's per-member results. The {@link
-   * #REPLAY_FILTER_VARIABLE} environment variable is its fallback.
+   * System property naming the wala/ML#753 post-settlement replay filter: semicolon-separated
+   * substrings selecting the settled shape queries whose transfers re-run read-only against the
+   * settled state, logging each aggregation's per-member results. Plain segments match pure-⊤
+   * queries by key string; {@code value:}-prefixed segments match any shape query by value string.
+   * The {@link #REPLAY_FILTER_VARIABLE} environment variable is its fallback.
    */
   public static final String REPLAY_FILTER_PROPERTY = "ariadne.typeResolution.replayFilter";
 
