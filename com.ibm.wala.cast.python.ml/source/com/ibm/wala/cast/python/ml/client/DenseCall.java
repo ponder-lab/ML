@@ -6,6 +6,7 @@ import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
+import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.classLoader.IField;
@@ -16,8 +17,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.types.FieldReference;
+import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
@@ -159,12 +163,38 @@ public class DenseCall extends TensorGenerator {
     return ret;
   }
 
+  /**
+   * Reads this generator's settled types for seeding, promoting a ⊥ settlement to the unknown
+   * tensor: a {@code Dense.__call__} result is a tensor by construction, so a ⊥-settled shape
+   * evaluation means the inputs never resolved (the engine's clause-3 ascent bottom, wala/ML#758),
+   * not that the value is a non-tensor. Without the promotion the seed drops the variable, the
+   * historical lattice mistake of reading ⊥ where ⊤ is meant.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} for the analysis.
+   * @return The settled types, with a ⊥ shape settlement read as shape-⊤.
+   */
+  @Override
+  public Set<TensorType> getTensorTypes(PropagationCallGraphBuilder builder) {
+    ShapeResult shapes = memoizedShapeResult(builder, this);
+    if (!shapes.isBottom()) return super.getTensorTypes(builder);
+    Set<DType> dTypes = memoizedDTypes(builder, this);
+    if (dTypes == null || dTypes.isEmpty()) return null;
+    Set<TensorType> ret = HashSetFactory.make();
+    for (DType dtype : dTypes) ret.add(TensorType.of(dtype, null, TensorType.Layout.DENSE));
+    return ret;
+  }
+
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     LOGGER.fine(() -> "Deriving shape for Dense call at: " + describe(this.getNode()));
 
     Set<List<Dimension<?>>> inputShapes = this.getInputShapes(builder);
-    if (inputShapes == null || inputShapes.isEmpty()) return null;
+    if (inputShapes == null) return null;
+    // The engine's ⊥ (still-unresolved inputs) propagates as ⊥ so this evaluation ascends with
+    // them instead of freezing a transient ⊤ into its join (wala/ML#758 clause 3); outside the
+    // engine an empty set keeps the historical ⊤.
+    if (inputShapes.isEmpty())
+      return WorklistTypeResolver.active(builder) == null ? null : Collections.emptySet();
 
     Set<Long> unitValues = this.getPossibleUnits(builder);
     if (unitValues.isEmpty()) return inputShapes; // Preserve input shapes if units unknown.
@@ -204,6 +234,26 @@ public class DenseCall extends TensorGenerator {
    */
   private Set<List<Dimension<?>>> getInputShapes(PropagationCallGraphBuilder builder) {
     CGNode self = this.getNode();
+    // The thread-local guard breaks real recursion, which exists only on the null-engine path.
+    // Under the engine, reads never recurse, and the guard's null was an engine-invisible cycle
+    // break: it read no engine keys, so the evaluation it broke settled on an order-dependent ⊤
+    // with no dependency edges to reschedule it when the inputs later resolved (wala/ML#753; the
+    // with-predecessor pin measurement and the shuffle seeds reproduce the same flip). The
+    // computation is node-determined, so the query is shared reader-neutrally by every generator
+    // anchored at the node, and the loop-carried self-cycle converges from its acyclic base like
+    // any other engine cycle.
+    WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
+    if (engine != null) {
+      Object key = Pair.make("dense-input-shapes", self);
+      java.util.function.Supplier<Object> transfer =
+          () -> ShapeResult.fromLegacy(this.computeInputShapes(builder));
+      ShapeResult diverted =
+          (ShapeResult)
+              (engine.isEvaluating()
+                  ? engine.read(key, transfer, true)
+                  : engine.demand(key, transfer, true));
+      return diverted.toLegacy();
+    }
     Set<CGNode> inProgress = INPUT_SHAPE_NODES_IN_PROGRESS.get();
     if (!inProgress.add(self)) {
       // Cyclic chain: this `Dense.__call__` node's input flows back to itself (e.g., a layer-list
@@ -251,6 +301,7 @@ public class DenseCall extends TensorGenerator {
             builder, Parameters.INPUTS.getIndex(), Parameters.INPUTS.getName());
 
     Set<List<Dimension<?>>> ret = new HashSet<>();
+    boolean primaryUnknown = false;
 
     for (InstanceKey inputIK : inputPts) {
       LOGGER.fine(() -> "Found input tensor instance key: " + describe(inputIK));
@@ -277,6 +328,7 @@ public class DenseCall extends TensorGenerator {
         ShapeResult generatorShapes = memoizedShapeResult(builder, generator);
         LOGGER.fine(() -> "Found input shapes: " + generatorShapes + ".");
         ret.addAll(generatorShapes.members());
+        if (generatorShapes.hasUnknown()) primaryUnknown = true;
       } else {
         LOGGER.fine(
             () ->
@@ -307,7 +359,12 @@ public class DenseCall extends TensorGenerator {
     } catch (IllegalArgumentException e) {
       LOGGER.fine(() -> "SSA-chain fallback IAE for vn=" + inputsVn + ": " + e.getMessage() + ".");
     }
-    return null;
+    // A marked delegation is an answered question (⊤); delegations that are still the engine's ⊥
+    // must propagate ⊥ so the shared input query ascends when they resolve, instead of freezing a
+    // transient ⊤ into its join (wala/ML#758 clause 3). The legacy null keeps the historical
+    // meaning on the null-engine recursive path.
+    if (WorklistTypeResolver.active(builder) == null) return null;
+    return primaryUnknown ? null : Collections.emptySet();
   }
 
   @Override
