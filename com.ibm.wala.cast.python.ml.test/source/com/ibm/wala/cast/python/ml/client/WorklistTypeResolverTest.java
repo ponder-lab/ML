@@ -164,27 +164,17 @@ public class WorklistTypeResolverTest {
   }
 
   /**
-   * The wala/ML#756 perturbation seed parses defensively: an unparsable value disables the knob
-   * instead of aborting the analysis.
+   * The wala/ML#756 perturbation knob end to end: the seed parses defensively (an unparsable value
+   * disables the knob instead of aborting the analysis), and a perturbed engine converges cycles to
+   * the same values as the unperturbed one, exercising the shuffle's enqueue and re-enqueue arms.
+   * One method rather than one per property scenario: the suite runs test methods in parallel and
+   * the knob is a shared system property, so split methods race on it.
    */
   @Test
-  public void testShuffleSeedParsesDefensively() {
-    System.setProperty("ariadne.typeResolution.shuffleCycles", "bogus");
-    try {
-      assertNull(WorklistTypeResolver.parseCycleShuffleSeed());
-      System.setProperty("ariadne.typeResolution.shuffleCycles", "42");
-      assertEquals(Long.valueOf(42), WorklistTypeResolver.parseCycleShuffleSeed());
-    } finally {
-      System.clearProperty("ariadne.typeResolution.shuffleCycles");
-    }
-  }
-
-  /**
-   * The perturbed engine converges cycles to the same values as the unperturbed one; the seeded run
-   * also exercises the shuffle's enqueue and re-enqueue arms.
-   */
-  @Test
-  public void testShuffledCycleConverges() {
+  public void testShuffleSeedKnob() {
+    assertNull(WorklistTypeResolver.parseCycleShuffleSeed(null));
+    assertNull(WorklistTypeResolver.parseCycleShuffleSeed("bogus"));
+    assertEquals(Long.valueOf(42), WorklistTypeResolver.parseCycleShuffleSeed("42"));
     System.setProperty("ariadne.typeResolution.shuffleCycles", "11");
     try {
       testCanonicalizationRetractsStaleCollapse();

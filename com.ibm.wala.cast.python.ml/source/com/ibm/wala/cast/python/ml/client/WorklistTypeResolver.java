@@ -239,6 +239,18 @@ final class WorklistTypeResolver {
   static Long parseCycleShuffleSeed() {
     String seed = System.getProperty("ariadne.typeResolution.shuffleCycles");
     if (seed == null) seed = System.getenv("ARIADNE_SHUFFLE_CYCLES");
+    return parseCycleShuffleSeed(seed);
+  }
+
+  /**
+   * Parsing core of {@link #parseCycleShuffleSeed()}, taking the setting value directly so the
+   * defensive behavior is testable without owning the shared system property (the suite runs test
+   * methods in parallel).
+   *
+   * @param seed The configured value, or {@code null} when unset.
+   * @return The seed, or {@code null} when unset or unparsable (logged).
+   */
+  static Long parseCycleShuffleSeed(String seed) {
     if (seed == null) return null;
     try {
       return Long.valueOf(seed);
