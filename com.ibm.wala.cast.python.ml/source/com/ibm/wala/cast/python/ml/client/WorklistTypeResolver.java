@@ -113,6 +113,9 @@ final class WorklistTypeResolver {
   /** Queries whose first (inline) evaluation has completed. */
   private final Set<Object> evaluated = HashSetFactory.make();
 
+  /** Whether the post-settlement replay diagnostic is running; see {@link #replaySettled}. */
+  private boolean replaying;
+
   /**
    * Whether an on-stack read (a cycle) occurred since the last promotion pass. The SCC promotion
    * needs a Tarjan pass over every recorded edge, and each key's hash recursively walks its calling
@@ -404,6 +407,86 @@ final class WorklistTypeResolver {
     if (value instanceof ShapeResult) return ((ShapeResult) value).isBottom();
     if (value instanceof Set) return ((Set<?>) value).isEmpty();
     return false;
+  }
+
+  /**
+   * Returns whether the post-settlement replay diagnostic is running, i.e. the per-member replay
+   * logs in the aggregation bodies should fire.
+   *
+   * @return {@code true} iff inside {@link #replaySettled}.
+   */
+  boolean isReplaying() {
+    return this.replaying;
+  }
+
+  /**
+   * Diagnostic (wala/ML#753): re-runs the transfer of every settled pure-⊤ shape query (no members,
+   * unknown remainder) whose key string contains any of the filter's comma-separated substrings,
+   * logging the recomputed value against the settled one. The replay runs after every demand has
+   * settled, so each nested read returns a final value and the recomputation observes the
+   * aggregation's per-member results free of the evaluation-order effects an in-flight probe would
+   * perturb; the recomputed values are logged, never written back.
+   *
+   * @param filter Comma-separated key-string substrings selecting the queries to replay.
+   */
+  void replaySettled(String filter) {
+    // Blank segments (a stray comma or whitespace) would contain-match every key and replay the
+    // whole pure-⊤ population; drop them.
+    List<String> alternatives = new ArrayList<>();
+    for (String alternative : filter.split(",")) {
+      String trimmed = alternative.trim();
+      if (!trimmed.isEmpty()) alternatives.add(trimmed);
+    }
+    if (alternatives.isEmpty()) return;
+    List<Object> marked = new ArrayList<>();
+    for (Map.Entry<Object, Object> entry : this.state.entrySet()) {
+      Object value = entry.getValue();
+      if (!(value instanceof ShapeResult)) continue;
+      ShapeResult shapes = (ShapeResult) value;
+      if (!shapes.members().isEmpty() || !shapes.hasUnknown()) continue;
+      String keyString = String.valueOf(entry.getKey());
+      for (String alternative : alternatives)
+        if (keyString.contains(alternative)) {
+          marked.add(entry.getKey());
+          break;
+        }
+    }
+    LOGGER.fine(
+        () -> "REPLAY sweeping " + marked.size() + " settled pure-⊤ shape queries: " + filter);
+    this.replaying = true;
+    try {
+      for (Object key : marked) {
+        Supplier<Object> transfer = this.transfers.get(key);
+        if (transfer == null) continue;
+        LOGGER.fine(() -> "REPLAY BEGIN " + brief(key));
+        Object result;
+        this.evaluating.push(key);
+        this.inStack.add(key);
+        try {
+          result = transfer.get();
+        } catch (IllegalArgumentException e) {
+          LOGGER.log(Level.FINE, e, () -> "REPLAY IAE for " + brief(key) + ".");
+          continue;
+        } finally {
+          this.evaluating.pop();
+          this.inStack.remove(key);
+        }
+        // The sweep selects only shape-kind queries; mirror evaluate's null normalization.
+        Object recomputed = result == null ? ShapeResult.unknown() : result;
+        Object settled = this.state.get(key);
+        LOGGER.fine(
+            () ->
+                "REPLAY END "
+                    + brief(key)
+                    + " := "
+                    + brief(recomputed)
+                    + " (settled := "
+                    + brief(settled)
+                    + ")");
+      }
+    } finally {
+      this.replaying = false;
+    }
   }
 
   /**
