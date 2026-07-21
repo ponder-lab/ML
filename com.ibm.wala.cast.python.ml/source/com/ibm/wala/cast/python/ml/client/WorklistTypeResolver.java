@@ -430,7 +430,14 @@ final class WorklistTypeResolver {
    * @param filter Comma-separated key-string substrings selecting the queries to replay.
    */
   void replaySettled(String filter) {
-    String[] alternatives = filter.split(",");
+    // Blank segments (a stray comma or whitespace) would contain-match every key and replay the
+    // whole pure-⊤ population; drop them.
+    List<String> alternatives = new ArrayList<>();
+    for (String alternative : filter.split(",")) {
+      String trimmed = alternative.trim();
+      if (!trimmed.isEmpty()) alternatives.add(trimmed);
+    }
+    if (alternatives.isEmpty()) return;
     List<Object> marked = new ArrayList<>();
     for (Map.Entry<Object, Object> entry : this.state.entrySet()) {
       Object value = entry.getValue();
@@ -464,8 +471,18 @@ final class WorklistTypeResolver {
           this.evaluating.pop();
           this.inStack.remove(key);
         }
-        Object recomputed = result;
-        LOGGER.fine(() -> "REPLAY END " + brief(key) + " := " + brief(recomputed));
+        // The sweep selects only shape-kind queries; mirror evaluate's null normalization.
+        Object recomputed = result == null ? ShapeResult.unknown() : result;
+        Object settled = this.state.get(key);
+        LOGGER.fine(
+            () ->
+                "REPLAY END "
+                    + brief(key)
+                    + " := "
+                    + brief(recomputed)
+                    + " (settled := "
+                    + brief(settled)
+                    + ")");
       }
     } finally {
       this.replaying = false;

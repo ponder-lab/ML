@@ -1937,6 +1937,8 @@ public abstract class TensorGenerator {
       if (paramPos >= -1) { // -1 is 'self'
         boolean callerUnknown = false;
         Set<List<Dimension<?>>> combinedRet = HashSetFactory.make();
+        WorklistTypeResolver activeEngine = WorklistTypeResolver.active(builder);
+        boolean replay = activeEngine != null && activeEngine.isReplaying();
         for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
             getCallerInvokes(builder, node)) {
           CGNode caller = callerInvoke.fst;
@@ -1959,8 +1961,7 @@ public abstract class TensorGenerator {
             // default mode keeps the resolvable subset (wala/ML#716, wala/ML#718).
             if (argShapes.hasUnknown() && exact) callerUnknown = true;
             combinedRet.addAll(argShapes.members());
-            WorklistTypeResolver activeEngine = WorklistTypeResolver.active(builder);
-            if (activeEngine != null && activeEngine.isReplaying()) {
+            if (replay) {
               int arg = argVn;
               LOGGER.fine(
                   () ->
