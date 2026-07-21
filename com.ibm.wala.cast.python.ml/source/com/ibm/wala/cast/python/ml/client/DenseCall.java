@@ -251,6 +251,7 @@ public class DenseCall extends TensorGenerator {
             builder, Parameters.INPUTS.getIndex(), Parameters.INPUTS.getName());
 
     Set<List<Dimension<?>>> ret = new HashSet<>();
+    boolean primaryUnknown = false;
 
     for (InstanceKey inputIK : inputPts) {
       LOGGER.fine(() -> "Found input tensor instance key: " + describe(inputIK));
@@ -277,6 +278,7 @@ public class DenseCall extends TensorGenerator {
         ShapeResult generatorShapes = memoizedShapeResult(builder, generator);
         LOGGER.fine(() -> "Found input shapes: " + generatorShapes + ".");
         ret.addAll(generatorShapes.members());
+        if (generatorShapes.hasUnknown()) primaryUnknown = true;
       } else {
         LOGGER.fine(
             () ->
@@ -289,6 +291,13 @@ public class DenseCall extends TensorGenerator {
     }
 
     if (!ret.isEmpty()) return ret;
+
+    // A primary delegation that resolved to the sound unknown is an answered question: the
+    // fallback's caller-side trace-back unions saturated foreign contexts and imports members the
+    // primary would never produce, and whether it fired used to depend on the interim emptiness
+    // of a still-converging delegation (wala/ML#753). The walk below recovers only the genuinely
+    // unanswered (⊥) case, where no delegation resolved at all.
+    if (primaryUnknown) return null;
 
     // Fallback: chained layer calls. The input's allocating node is a layer `__call__` summary
     // whose class isn't recognised by `createManualGenerator` (Flatten, Dense, Dropout, ...).

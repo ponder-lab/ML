@@ -502,6 +502,8 @@ final class WorklistTypeResolver {
                     + brief(recomputed)
                     + " (settled := "
                     + brief(settled)
+                    + ", evaluations := "
+                    + this.evaluationCounts.getOrDefault(key, 0)
                     + ")");
       }
     } finally {
@@ -597,15 +599,19 @@ final class WorklistTypeResolver {
     joined = this.widen(key, joined);
     if (!joined.equals(old)) {
       this.state.put(key, joined);
+      // The reader whose in-flight read triggered this evaluation (the stack top after the pop)
+      // consumes the fresh value as that read returns, so re-enqueueing it would only repeat the
+      // same transfer; every first inline evaluation would otherwise schedule its parent for a
+      // redundant second run. Deeper on-stack dependents are NOT spared: their edges come from
+      // earlier reads (this run or a prior one) whose consumed values are now stale, and skipping
+      // them left evaluations settled on interim reads with no re-run, order-dependently
+      // (wala/ML#753 round 8: 443 of 448 stale pure-⊤ evaluations had never been re-polled). A
+      // key still re-enqueues itself: a changed self-loop needs another pass to stabilize.
+      Object consumer = this.evaluating.peek();
       for (Object dependent :
           this.orderDependentsForReEnqueue(
               this.dependents.getOrDefault(key, Collections.emptySet())))
-        // An on-stack reader consumes this fresh value as its own evaluation completes (the
-        // read returns after this update), so re-enqueueing it would only repeat the same
-        // transfer; every first inline evaluation would otherwise schedule its whole reader
-        // chain for a redundant second run. A key still re-enqueues itself: a changed
-        // self-loop needs another pass to stabilize.
-        if (dependent.equals(key) || !this.inStack.contains(dependent)) this.enqueue(dependent);
+        if (dependent.equals(key) || !dependent.equals(consumer)) this.enqueue(dependent);
     }
   }
 
