@@ -394,6 +394,77 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * The shared source/manual dispatch chain (wala/ML#760). Every arm here serves both anchorings by
+   * naming both construction forms through {@link GeneratorAnchor#makeGenerator}, so an operation
+   * registered for call-site dispatch cannot silently lack its node-anchored form (the
+   * wala/ML#757/wala/ML#759 delegation dead-end class). Arms migrate here from the two
+   * anchor-specific chains family by family; new operations register here. Anchor-specific concerns
+   * stay expressible by matching the anchor kind (e.g. the wala/ML#451 gate below applies only to
+   * source anchorings).
+   *
+   * @param anchor The anchoring to construct for.
+   * @return The generator, or {@code null} when no shared arm matches and the caller's residual
+   *     chain should dispatch.
+   */
+  static TensorGenerator dispatchShared(GeneratorAnchor anchor) {
+    TypeReference type = anchor.declaredType();
+
+    if (isType(type, MULTIPLY.getDeclaringClass())
+        || isType(type, ADD.getDeclaringClass())
+        || isType(type, SUBTRACT.getDeclaringClass())
+        || isType(type, DIVIDE.getDeclaringClass())
+        || isType(type, ATAN2.getDeclaringClass())
+        || isType(type, MAXIMUM.getDeclaringClass())
+        || isType(type, MINIMUM.getDeclaringClass())
+        || isType(type, POW.getDeclaringClass())) {
+      // For SSABinaryOp sources (`a - b` rather than `tf.subtract(a, b)`), gate
+      // ElementWiseOperation dispatch on at least one operand showing tensor
+      // evidence — see {@link #operandHasTensorEvidence} for the three-axis
+      // definition (implicit PK / structural `tryGetGenerator` resolution /
+      // non-`ConstantKey` PTS content). Without this gate, every Python-int
+      // arithmetic expression (e.g. `n - 1` in a recursive function whose only
+      // call sites pass ints) gets classified as a tensor — `getDataflowSources`
+      // adds every binary-op result as a candidate source, and EWO's "always a
+      // tensor" assumption turns Integer constants in operand PTS into INT32
+      // dtypes, which then back-propagate to parameters via the PA assignment
+      // graph at the recursive-call edge. The TF-API path (`tf.add(...)`, etc.)
+      // is unaffected: those are SSAAbstractInvoke, not SSABinaryOp, so the
+      // structural check below skips them. A manual anchoring is by construction
+      // an API synthetic's allocating node, so the gate does not apply. See
+      // wala/ML#451.
+      if (anchor instanceof GeneratorAnchor.SourceAnchor sourceAnchor
+          && isBinopWithoutTensorOperand(
+              sourceAnchor.source(), sourceAnchor.builder(), sourceAnchor.visited())) {
+        LOGGER.fine(
+            () ->
+                "Rejecting ElementWiseOperation dispatch — no operand has tensor"
+                    + " evidence. source="
+                    + describe(sourceAnchor.source()));
+        throw new IllegalArgumentException(
+            "Binary op with no tensor operand: " + describe(sourceAnchor.source()) + ".");
+      }
+      return anchor.makeGenerator(ElementWiseOperation::new, ElementWiseOperation::new);
+    }
+
+    if (isType(type, REDUCE_MEAN.getDeclaringClass()))
+      return anchor.makeGenerator(ReduceMean::new, ReduceMean::new);
+    if (isType(type, REDUCE_MAX.getDeclaringClass()))
+      return anchor.makeGenerator(ReduceMax::new, ReduceMax::new);
+    if (isType(type, REDUCE_MIN.getDeclaringClass()))
+      return anchor.makeGenerator(ReduceMin::new, ReduceMin::new);
+    if (isType(type, REDUCE_PROD.getDeclaringClass()))
+      return anchor.makeGenerator(ReduceProd::new, ReduceProd::new);
+    if (isType(type, REDUCE_LOGSUMEXP.getDeclaringClass()))
+      return anchor.makeGenerator(ReduceLogSumExp::new, ReduceLogSumExp::new);
+    if (isType(type, REDUCE_ALL.getDeclaringClass()))
+      return anchor.makeGenerator(ReduceAll::new, ReduceAll::new);
+    if (isType(type, REDUCE_SUM.getDeclaringClass()))
+      return anchor.makeGenerator(ReduceSum::new, ReduceSum::new);
+
+    return null;
+  }
+
+  /**
    * Traces the dataflow graph backwards from the given source {@link PointsToSetVariable} to find
    * its creator. The creator is defined as either a return value of a function or a variable
    * defined by a relevant instruction such as an invoke, an iteration instruction, or a property
@@ -1258,6 +1329,10 @@ public class TensorGeneratorFactory {
 
     LOGGER.fine("Getting tensor generator for sanitized call to: " + calledFunction + ".");
 
+    TensorGenerator shared =
+        dispatchShared(new GeneratorAnchor.SourceAnchor(source, calledFunction, builder, visited));
+    if (shared != null) return shared;
+
     if (isType(calledFunction, ONES.getDeclaringClass())) return new Ones(source);
     else if (isType(calledFunction, CONSTANT.getDeclaringClass())) return new Constant(source);
     else if (isType(calledFunction, RANGE.getDeclaringClass())) return new Range(source);
@@ -1310,34 +1385,7 @@ public class TensorGeneratorFactory {
       return new RaggedFromNestedValueRowIds(source);
     else if (isType(calledFunction, FROM_ROW_LIMITS.getDeclaringClass()))
       return new RaggedFromRowLimits(source);
-    else if (isType(calledFunction, MULTIPLY.getDeclaringClass())
-        || isType(calledFunction, ADD.getDeclaringClass())
-        || isType(calledFunction, SUBTRACT.getDeclaringClass())
-        || isType(calledFunction, DIVIDE.getDeclaringClass())) {
-      // For SSABinaryOp sources (`a - b` rather than `tf.subtract(a, b)`), gate
-      // ElementWiseOperation dispatch on at least one operand showing tensor
-      // evidence — see {@link #operandHasTensorEvidence} for the three-axis
-      // definition (implicit PK / structural `tryGetGenerator` resolution /
-      // non-`ConstantKey` PTS content). Without this gate, every Python-int
-      // arithmetic expression (e.g. `n - 1` in a recursive function whose only
-      // call sites pass ints) gets classified as a tensor — `getDataflowSources`
-      // adds every binary-op result as a candidate source, and EWO's "always a
-      // tensor" assumption turns Integer constants in operand PTS into INT32
-      // dtypes, which then back-propagate to parameters via the PA assignment
-      // graph at the recursive-call edge. The TF-API path (`tf.add(...)`, etc.)
-      // is unaffected: those are SSAAbstractInvoke, not SSABinaryOp, so the
-      // structural check below skips them. See wala/ML#451.
-      if (isBinopWithoutTensorOperand(source, builder, visited)) {
-        LOGGER.fine(
-            () ->
-                "Rejecting ElementWiseOperation dispatch — no operand has tensor"
-                    + " evidence. source="
-                    + describe(source));
-        throw new IllegalArgumentException(
-            "Binary op with no tensor operand: " + describe(source) + ".");
-      }
-      return new ElementWiseOperation(source);
-    } else if (isType(calledFunction, SPARSE_ADD.getDeclaringClass())) return new SparseAdd(source);
+    else if (isType(calledFunction, SPARSE_ADD.getDeclaringClass())) return new SparseAdd(source);
     else if (isType(calledFunction, SPARSE_FROM_DENSE.getDeclaringClass()))
       return new SparseFromDense(source);
     else if (isType(calledFunction, SPARSE_TO_DENSE.getDeclaringClass()))
@@ -1456,17 +1504,10 @@ public class TensorGeneratorFactory {
       return new BostonHousingInputData(source, BostonHousingInputData.X_TEST_SHAPE);
     else if (isType(calledFunction, BOSTON_HOUSING_Y_TEST))
       return new BostonHousingInputData(source, BostonHousingInputData.Y_TEST_SHAPE);
-    else if (isType(calledFunction, REDUCE_MEAN.getDeclaringClass())) return new ReduceMean(source);
-    else if (isType(calledFunction, REDUCE_MAX.getDeclaringClass())) return new ReduceMax(source);
-    else if (isType(calledFunction, REDUCE_MIN.getDeclaringClass())) return new ReduceMin(source);
-    else if (isType(calledFunction, REDUCE_PROD.getDeclaringClass())) return new ReduceProd(source);
-    else if (isType(calledFunction, REDUCE_LOGSUMEXP.getDeclaringClass()))
-      return new ReduceLogSumExp(source);
     else if (isType(calledFunction, UNSORTED_SEGMENT_SUM.getDeclaringClass())
         || isType(calledFunction, UNSORTED_SEGMENT_MAX.getDeclaringClass())
         || isType(calledFunction, UNSORTED_SEGMENT_MEAN.getDeclaringClass()))
       return new UnsortedSegmentReduction(source);
-    else if (isType(calledFunction, REDUCE_ALL.getDeclaringClass())) return new ReduceAll(source);
     else if (isType(calledFunction, PLACEHOLDER.getDeclaringClass()))
       return new Placeholder(source);
     else if (isType(calledFunction, EQUAL.getDeclaringClass()))
@@ -1484,7 +1525,6 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass())
         || isType(calledFunction, SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass()))
       return new SoftmaxCrossEntropy(source);
-    else if (isType(calledFunction, REDUCE_SUM.getDeclaringClass())) return new ReduceSum(source);
     else if (isType(calledFunction, MATMUL.getDeclaringClass())) return new MatMul(source);
     else if (isType(calledFunction, SIGMOID.getDeclaringClass())) return new Sigmoid(source);
     else if (isType(calledFunction, EXP.getDeclaringClass())) return new Exp(source);
@@ -1534,12 +1574,6 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, SQUARE.getDeclaringClass())) return new Square(source);
     else if (isType(calledFunction, ERF.getDeclaringClass())) return new Erf(source);
     else if (isType(calledFunction, ERFC.getDeclaringClass())) return new Erfc(source);
-    else if (isType(calledFunction, ATAN2.getDeclaringClass()))
-      return new ElementWiseOperation(source);
-    else if (isType(calledFunction, MAXIMUM.getDeclaringClass()))
-      return new ElementWiseOperation(source);
-    else if (isType(calledFunction, MINIMUM.getDeclaringClass()))
-      return new ElementWiseOperation(source);
     else if (isType(calledFunction, EINSUM.getDeclaringClass())) return new Einsum(source);
     else if (isType(calledFunction, RELU.getDeclaringClass())) return new Relu(source);
     else if (isType(calledFunction, CAST.getDeclaringClass())) return new Cast(source);
@@ -1551,8 +1585,6 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, MESHGRID.getDeclaringClass())) return new Meshgrid(source);
     else if (isType(calledFunction, WHERE.getDeclaringClass())) return new Where(source);
     else if (isType(calledFunction, LEAKY_RELU.getDeclaringClass())) return new LeakyRelu(source);
-    else if (isType(calledFunction, POW.getDeclaringClass()))
-      return new ElementWiseOperation(source);
     else if (isType(calledFunction, CONCAT.getDeclaringClass())) return new Concat(source);
     else if (isType(calledFunction, STACK.getDeclaringClass())) return new Stack(source);
     else if (isType(calledFunction, SQRT.getDeclaringClass())) return new Sqrt(source);
