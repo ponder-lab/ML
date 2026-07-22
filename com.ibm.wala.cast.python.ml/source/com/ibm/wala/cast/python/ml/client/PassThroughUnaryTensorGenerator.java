@@ -234,14 +234,15 @@ public abstract class PassThroughUnaryTensorGenerator extends TensorGenerator {
   }
 
   /**
-   * Dtype counterpart of {@link #shapesOfArg}.
+   * Dtype counterpart of {@link #shapesOfArg}. Protected so multi-input subclasses can consult
+   * inputs beyond the primary one (wala/ML#737).
    *
    * @param builder The propagation call graph builder.
    * @param paramPos The positional index of the arg.
    * @param paramName The keyword parameter name.
    * @return The resolved dtypes, or {@code null} if neither path recovers.
    */
-  private Set<DType> dtypesOfArg(
+  protected Set<DType> dtypesOfArg(
       PropagationCallGraphBuilder builder, int paramPos, String paramName) {
     if (paramPos == UNDEFINED_PARAMETER_POSITION)
       throw new IllegalStateException(

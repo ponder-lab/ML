@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
@@ -14,10 +15,12 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -31,10 +34,10 @@ import java.util.logging.Logger;
 
 /**
  * Generator for {@code tf.einsum(equation, *inputs, **kwargs)}. Parses the equation string (e.g.
- * {@code "ij,jk->ik"}) and composes the precise output shape from each input's shape: every output
- * label is resolved to the input dimension it names. Output dtype inherits from the first tensor
- * input (TF promotes per-input dtypes upstream of einsum, so the first input's dtype is the
- * canonical source).
+ * {@code "ij,jk->ik"}) and composes the output shape from each input's shape: every output label is
+ * resolved to the input dimension it names. Output dtype inherits from the first input whose dtype
+ * resolves (the runtime requires the inputs' dtypes to agree, promotion happening upstream of the
+ * call; wala/ML#737).
  *
  * <p>Models broadcasting ellipsis ({@code ...}, wala/ML#705): each input's ellipsis binds the axes
  * its letters don't consume, the per-input groups broadcast right-aligned, and the output's {@code
@@ -43,8 +46,10 @@ import java.util.logging.Logger;
  * "ii->i"} and {@code "ii"}) constrain the named axes equal and contribute a single output
  * dimension.
  *
- * <p>Falls back to ⊤ (unknown shape) when the equation can't be resolved to a single constant
- * string, is malformed, or when any input's shape is itself ⊤ — the sound answer in those cases.
+ * <p>An input whose shape does not resolve no longer forces a ⊤ output (wala/ML#737): the equation
+ * still proves the output rank and every axis a resolved operand binds, with the remaining axes
+ * {@link UnresolvedDim}. The ⊤ fallback remains for an unresolved or malformed equation, an
+ * unsatisfiable combination, and an output broadcast group that depends on an unresolved operand.
  *
  * <p>Argument layout at the call site: the {@code *inputs} varargs are spread positionally after
  * the equation (the packing into a single {@code inputs} tuple is callee-side only), so:
@@ -116,13 +121,44 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
   }
 
   /**
-   * Composes the precise output shape by parsing the equation and indexing each output label into
-   * the corresponding input dimension. Returns ⊤ (unknown shape, {@code null}) when the equation or
-   * any input shape can't be resolved statically, or when the equation is malformed or
-   * unsatisfiable.
+   * The runtime requires einsum's inputs to agree on dtype (promotion happens upstream of the
+   * call), so any resolved input proves the output dtype: consult each input in order and return
+   * the first that resolves, rather than pinning to the first input alone (wala/ML#737; the
+   * either-operand rationale of the {@code MatMul} dtype fix). Falls back to {@link DType#UNKNOWN}
+   * when no input resolves or the equation's input count is itself unknown.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @return The single composed output shape, or {@code null} (⊤) when it can't be resolved.
+   * @return The output dtypes.
+   */
+  @Override
+  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    String equation = this.getEquation(builder);
+    ParsedEquation parsed = equation == null ? null : parseEquation(equation);
+    int inputCount = parsed == null ? 1 : parsed.inputs().size();
+    for (int i = 0; i < inputCount; i++) {
+      Set<DType> dtypes = this.dtypesOfArg(builder, Parameters.INPUTS.getIndex() + i, null);
+      if (dtypes != null && !dtypes.isEmpty() && !dtypes.contains(DType.UNKNOWN)) return dtypes;
+    }
+    return EnumSet.of(DType.UNKNOWN);
+  }
+
+  /**
+   * The cross-product cap for multi-shape inputs (wala/ML#737): beyond it, multi-shape inputs
+   * degrade to unresolved rather than enumerating, bounding the composed member count.
+   */
+  private static final int MAX_COMPOSITION_COMBINATIONS = 8;
+
+  /**
+   * Composes the output shape by parsing the equation and indexing each output label into the
+   * corresponding input dimension. An input whose shape does not resolve contributes nothing to the
+   * label bindings, and the axes only it names carry {@link UnresolvedDim} (wala/ML#737): the
+   * equation still proves the output rank and every axis a resolved operand binds. Multi-shape
+   * inputs enumerate as a capped cross-product, one composed member per combination. Returns ⊤
+   * ({@code null}) when the equation is unresolved or malformed, when a combination is
+   * unsatisfiable, or when the output's broadcast group depends on an unresolved operand.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The composed output shapes, or {@code null} (⊤) when they can't be resolved.
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
@@ -133,20 +169,72 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
     if (parsed == null) return null;
 
     // The inputs are spread positionally after the equation (they only pack into the callee's
-    // *inputs tuple), so input i is at positional index i + 1.
+    // *inputs tuple), so input i is at positional index i + 1. A null entry marks an input whose
+    // shape did not resolve.
     int inputCount = parsed.inputs().size();
-    List<List<Dimension<?>>> inputShapes = new ArrayList<>(inputCount);
+    List<Set<List<Dimension<?>>>> inputShapeSets = new ArrayList<>(inputCount);
+    long combinations = 1;
     for (int i = 0; i < inputCount; i++) {
       int position = Parameters.INPUTS.getIndex() + i;
       Set<List<Dimension<?>>> shapes = this.shapesOfArg(builder, position, null);
-      // Require a single known shape per input. A ⊤ or multi-shape input yields a ⊤ output; the
-      // multi-shape cross-product is deferred as a precision follow-up.
-      if (shapes == null || shapes.size() != 1) return null;
-      inputShapes.add(shapes.iterator().next());
+      if (shapes == null || shapes.isEmpty()) {
+        inputShapeSets.add(null);
+        continue;
+      }
+      inputShapeSets.add(shapes);
+      combinations *= shapes.size();
     }
 
-    List<Dimension<?>> outputShape = composeOutputShape(parsed, inputShapes);
-    return outputShape == null ? null : Collections.singleton(outputShape);
+    // Over the cap, multi-shape inputs degrade to unresolved: the singleton inputs' evidence and
+    // the equation's rank proof survive without enumerating.
+    if (combinations > MAX_COMPOSITION_COMBINATIONS)
+      for (int i = 0; i < inputCount; i++) {
+        Set<List<Dimension<?>>> shapes = inputShapeSets.get(i);
+        if (shapes != null && shapes.size() > 1) inputShapeSets.set(i, null);
+      }
+
+    Set<List<Dimension<?>>> outputs = HashSetFactory.make();
+    List<List<Dimension<?>>> combination = new ArrayList<>(Collections.nCopies(inputCount, null));
+    if (!composeCombinations(parsed, inputShapeSets, combination, 0, outputs)) return null;
+    return outputs.isEmpty() ? null : outputs;
+  }
+
+  /**
+   * Enumerates the cross-product of the inputs' shape possibilities, composing one output per
+   * combination into {@code outputs}.
+   *
+   * @param parsed The parsed equation.
+   * @param inputShapeSets Per-input shape possibilities; {@code null} for an unresolved input.
+   * @param combination The combination under construction; index {@code i} holds input {@code i}'s
+   *     pick, {@code null} for unresolved.
+   * @param index The next input to pick for.
+   * @param outputs The composed outputs, accumulated.
+   * @return {@code false} iff some combination fails to compose, in which case the caller returns ⊤
+   *     rather than asserting an incomplete member set.
+   */
+  private static boolean composeCombinations(
+      ParsedEquation parsed,
+      List<Set<List<Dimension<?>>>> inputShapeSets,
+      List<List<Dimension<?>>> combination,
+      int index,
+      Set<List<Dimension<?>>> outputs) {
+    if (index == inputShapeSets.size()) {
+      List<Dimension<?>> output = composeOutputShape(parsed, combination);
+      if (output == null) return false;
+      outputs.add(output);
+      return true;
+    }
+    Set<List<Dimension<?>>> shapes = inputShapeSets.get(index);
+    if (shapes == null) {
+      combination.set(index, null);
+      return composeCombinations(parsed, inputShapeSets, combination, index + 1, outputs);
+    }
+    for (List<Dimension<?>> shape : shapes) {
+      combination.set(index, shape);
+      if (!composeCombinations(parsed, inputShapeSets, combination, index + 1, outputs))
+        return false;
+    }
+    return true;
   }
 
   /**
@@ -278,7 +366,8 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
    * for it.
    *
    * @param parsed The parsed equation.
-   * @param inputShapes The resolved shape of each input, in input order.
+   * @param inputShapes The resolved shape of each input, in input order; a {@code null} entry marks
+   *     an unresolved input, which binds nothing (wala/ML#737).
    * @return The composed output shape (possibly containing {@code null} unknown-size entries), or
    *     {@code null} (⊤) when a term's label count doesn't match its input's rank, a shared label
    *     maps to conflicting known dimensions, the ellipsis groups don't broadcast, or an output
@@ -288,10 +377,17 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
       ParsedEquation parsed, List<List<Dimension<?>>> inputShapes) {
     Map<String, Dimension<?>> labelToDim = new HashMap<>();
     List<Dimension<?>> broadcast = new ArrayList<>();
+    boolean broadcastUnknown = false;
 
     for (int i = 0; i < parsed.inputs().size(); i++) {
       List<String> labels = parsed.inputs().get(i);
       List<Dimension<?>> shape = inputShapes.get(i);
+      // An unresolved input binds nothing; if it carries the ellipsis, the broadcast group's
+      // residual rank is unknowable through it (wala/ML#737).
+      if (shape == null) {
+        if (labels.contains(ELLIPSIS)) broadcastUnknown = true;
+        continue;
+      }
       int ellipsis = labels.indexOf(ELLIPSIS);
       int letters = ellipsis < 0 ? labels.size() : labels.size() - 1;
       int groupRank = shape.size() - letters;
@@ -316,11 +412,21 @@ public class Einsum extends PassThroughUnaryTensorGenerator {
     List<Dimension<?>> output = new ArrayList<>(parsed.output().size());
     for (String label : parsed.output()) {
       if (ELLIPSIS.equals(label)) {
+        // The group's rank could exceed the resolved inputs' merge through an unresolved
+        // operand's residual axes, so the output rank is unknowable (wala/ML#737).
+        if (broadcastUnknown) return null;
         output.addAll(broadcast);
         continue;
       }
-      if (!labelToDim.containsKey(label)) return null; // Output label names no input.
-      output.add(labelToDim.get(label)); // May be null: known rank, unknown size.
+      if (labelToDim.containsKey(label)) {
+        output.add(labelToDim.get(label)); // May be null: known rank, unknown size.
+        continue;
+      }
+      // The label is named only by unresolved operands: the axis exists with a fixed runtime size
+      // the analysis could not compute, with no None evidence (wala/ML#721, wala/ML#737).
+      if (parsed.inputs().stream().anyMatch(term -> term.contains(label)))
+        output.add(UnresolvedDim.INSTANCE);
+      else return null; // Output label names no input.
     }
     // Broadcast axes with no ellipsis to receive them make the equation unsatisfiable (the
     // runtime rejects it), so no shape is inferred.
