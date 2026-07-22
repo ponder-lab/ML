@@ -5,6 +5,7 @@ import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
@@ -27,6 +28,15 @@ public abstract class RaggedTensorFromValues extends TensorGenerator {
 
   public RaggedTensorFromValues(PointsToSetVariable source) {
     super(source);
+  }
+
+  /**
+   * Constructs anchored to a manual node.
+   *
+   * @param node The {@link CGNode} for the synthetic {@code do()} method.
+   */
+  public RaggedTensorFromValues(CGNode node) {
+    super(node);
   }
 
   protected abstract int getValuesParameterPosition();

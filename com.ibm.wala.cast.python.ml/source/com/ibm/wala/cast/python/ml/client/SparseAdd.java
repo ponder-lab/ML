@@ -7,6 +7,7 @@ import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.classLoader.IField;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
@@ -44,6 +45,15 @@ public class SparseAdd extends ElementWiseOperation {
 
   public SparseAdd(PointsToSetVariable source) {
     super(source);
+  }
+
+  /**
+   * Constructs anchored to a manual node.
+   *
+   * @param node The {@link CGNode} for the synthetic {@code do()} method.
+   */
+  public SparseAdd(CGNode node) {
+    super(node);
   }
 
   @Override

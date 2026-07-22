@@ -21,6 +21,7 @@ import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.RaggedDim;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.core.util.strings.Atom;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
@@ -63,6 +64,15 @@ public class RaggedFromNestedValueRowIds extends RaggedTensorFromValues {
 
   public RaggedFromNestedValueRowIds(PointsToSetVariable source) {
     super(source);
+  }
+
+  /**
+   * Constructs anchored to a manual node.
+   *
+   * @param node The {@link CGNode} for the synthetic {@code do()} method.
+   */
+  public RaggedFromNestedValueRowIds(CGNode node) {
+    super(node);
   }
 
   @Override

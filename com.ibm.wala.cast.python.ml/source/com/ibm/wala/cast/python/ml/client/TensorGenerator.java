@@ -6678,8 +6678,6 @@ public abstract class TensorGenerator {
       return new NpOnes(node);
     } else if (type.equals(NumpyTypes.ZEROS.getDeclaringClass())) {
       return new NpZeros(node);
-    } else if (type.equals(TensorFlowTypes.SPARSE_EYE.getDeclaringClass())) {
-      return new SparseEye(node);
     } else if (type.equals(TensorFlowTypes.EYE.getDeclaringClass())) {
       return new Eye(node);
     } else if (type.equals(TensorFlowTypes.UNIFORM.getDeclaringClass())) {

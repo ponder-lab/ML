@@ -461,6 +461,57 @@ public class TensorGeneratorFactory {
     if (isType(type, REDUCE_SUM.getDeclaringClass()))
       return anchor.makeGenerator(ReduceSum::new, ReduceSum::new);
 
+    if (isType(type, EQUAL.getDeclaringClass())
+        || isType(type, NOT_EQUAL.getDeclaringClass())
+        || isType(type, LESS.getDeclaringClass())
+        || isType(type, LESS_EQUAL.getDeclaringClass())
+        || isType(type, GREATER.getDeclaringClass())
+        || isType(type, GREATER_EQUAL.getDeclaringClass()))
+      return anchor.makeGenerator(ComparisonOperation::new, ComparisonOperation::new);
+
+    if (isType(type, SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass())
+        || isType(type, SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass()))
+      return anchor.makeGenerator(SoftmaxCrossEntropy::new, SoftmaxCrossEntropy::new);
+
+    if (isType(type, SPARSE_TENSOR.getDeclaringClass()))
+      return anchor.makeGenerator(SparseTensor::new, SparseTensor::new);
+    if (isType(type, SPARSE_ADD.getDeclaringClass()))
+      return anchor.makeGenerator(SparseAdd::new, SparseAdd::new);
+    if (isType(type, SPARSE_FROM_DENSE.getDeclaringClass()))
+      return anchor.makeGenerator(SparseFromDense::new, SparseFromDense::new);
+    if (isType(type, SPARSE_TO_DENSE.getDeclaringClass()))
+      return anchor.makeGenerator(SparseToDense::new, SparseToDense::new);
+    if (isType(type, SPARSE_EYE.getDeclaringClass()))
+      return anchor.makeGenerator(SparseEye::new, SparseEye::new);
+
+    if (isType(type, RAGGED_CONSTANT.getDeclaringClass()))
+      return anchor.makeGenerator(RaggedConstant::new, RaggedConstant::new);
+    if (isType(type, RAGGED_RANGE.getDeclaringClass()))
+      return anchor.makeGenerator(RaggedRange::new, RaggedRange::new);
+    if (isType(type, FROM_VALUE_ROWIDS.getDeclaringClass()))
+      return anchor.makeGenerator(RaggedFromValueRowIds::new, RaggedFromValueRowIds::new);
+    if (isType(type, FROM_ROW_STARTS.getDeclaringClass()))
+      return anchor.makeGenerator(RaggedFromRowStarts::new, RaggedFromRowStarts::new);
+    if (isType(type, FROM_ROW_SPLITS.getDeclaringClass()))
+      return anchor.makeGenerator(RaggedFromRowSplits::new, RaggedFromRowSplits::new);
+    if (isType(type, FROM_ROW_LENGTHS.getDeclaringClass()))
+      return anchor.makeGenerator(RaggedFromRowLengths::new, RaggedFromRowLengths::new);
+    if (isType(type, FROM_NESTED_ROW_LENGTHS.getDeclaringClass()))
+      return anchor.makeGenerator(RaggedFromNestedRowLengths::new, RaggedFromNestedRowLengths::new);
+    if (isType(type, FROM_NESTED_ROW_SPLITS.getDeclaringClass()))
+      return anchor.makeGenerator(RaggedFromNestedRowSplits::new, RaggedFromNestedRowSplits::new);
+    if (isType(type, FROM_NESTED_VALUE_ROWIDS.getDeclaringClass()))
+      return anchor.makeGenerator(
+          RaggedFromNestedValueRowIds::new, RaggedFromNestedValueRowIds::new);
+    if (isType(type, FROM_ROW_LIMITS.getDeclaringClass()))
+      return anchor.makeGenerator(RaggedFromRowLimits::new, RaggedFromRowLimits::new);
+
+    // `enumerate` carries index/tuple element semantics its generator models; the manual-side
+    // DATA_PACKAGE_PREFIX catch-all would otherwise swallow it into a plain pass-through
+    // DatasetGenerator (the wala/ML#759 mis-dispatch class).
+    if (isType(type, DATASET_ENUMERATE_TYPE))
+      return anchor.makeGenerator(DatasetEnumerateGenerator::new, DatasetEnumerateGenerator::new);
+
     return null;
   }
 
@@ -1356,40 +1407,12 @@ public class TensorGeneratorFactory {
       return new ConvertToTensor(source);
     else if (isType(calledFunction, ONE_HOT.getDeclaringClass())) return new OneHot(source);
     else if (isType(calledFunction, EYE.getDeclaringClass())) return new Eye(source);
-    else if (isType(calledFunction, SPARSE_EYE.getDeclaringClass())) return new SparseEye(source);
-    else if (isType(calledFunction, SPARSE_TENSOR.getDeclaringClass()))
-      return new SparseTensor(source);
     else if (isType(calledFunction, GAMMA.getDeclaringClass()) || isType(calledFunction, GAMMA_OP))
       return new Gamma(source);
     else if (isType(calledFunction, INPUT.getDeclaringClass())) return new Input(source);
     else if (isType(calledFunction, POISSON.getDeclaringClass())
         || isType(calledFunction, POISSON_OP)) return new Poisson(source);
-    else if (isType(calledFunction, RAGGED_CONSTANT.getDeclaringClass()))
-      return new RaggedConstant(source);
     else if (isType(calledFunction, VARIABLE.getDeclaringClass())) return new Variable(source);
-    else if (isType(calledFunction, RAGGED_RANGE.getDeclaringClass()))
-      return new RaggedRange(source);
-    else if (isType(calledFunction, FROM_VALUE_ROWIDS.getDeclaringClass()))
-      return new RaggedFromValueRowIds(source);
-    else if (isType(calledFunction, FROM_ROW_STARTS.getDeclaringClass()))
-      return new RaggedFromRowStarts(source);
-    else if (isType(calledFunction, FROM_ROW_SPLITS.getDeclaringClass()))
-      return new RaggedFromRowSplits(source);
-    else if (isType(calledFunction, FROM_ROW_LENGTHS.getDeclaringClass()))
-      return new RaggedFromRowLengths(source);
-    else if (isType(calledFunction, FROM_NESTED_ROW_LENGTHS.getDeclaringClass()))
-      return new RaggedFromNestedRowLengths(source);
-    else if (isType(calledFunction, FROM_NESTED_ROW_SPLITS.getDeclaringClass()))
-      return new RaggedFromNestedRowSplits(source);
-    else if (isType(calledFunction, FROM_NESTED_VALUE_ROWIDS.getDeclaringClass()))
-      return new RaggedFromNestedValueRowIds(source);
-    else if (isType(calledFunction, FROM_ROW_LIMITS.getDeclaringClass()))
-      return new RaggedFromRowLimits(source);
-    else if (isType(calledFunction, SPARSE_ADD.getDeclaringClass())) return new SparseAdd(source);
-    else if (isType(calledFunction, SPARSE_FROM_DENSE.getDeclaringClass()))
-      return new SparseFromDense(source);
-    else if (isType(calledFunction, SPARSE_TO_DENSE.getDeclaringClass()))
-      return new SparseToDense(source);
     else if (isType(calledFunction, VAR_LEN_FEATURE.getDeclaringClass()))
       return new VarLenFeature(source);
     else if (isType(calledFunction, FIXED_LEN_FEATURE.getDeclaringClass()))
@@ -1426,8 +1449,6 @@ public class TensorGeneratorFactory {
       return new DatasetChooseFromDatasetsGenerator(source);
     else if (isType(calledFunction, DATASET_SAMPLE_FROM_DATASETS_TYPE))
       return new DatasetSampleFromDatasetsGenerator(source);
-    else if (isType(calledFunction, DATASET_ENUMERATE_TYPE))
-      return new DatasetEnumerateGenerator(source);
     else if (isType(calledFunction, DATASET_SHUFFLE_TYPE)
         || isType(calledFunction, DATASET_MAP_TYPE)
         || isType(calledFunction, DATASET_REPEAT_TYPE)
@@ -1510,21 +1531,6 @@ public class TensorGeneratorFactory {
       return new UnsortedSegmentReduction(source);
     else if (isType(calledFunction, PLACEHOLDER.getDeclaringClass()))
       return new Placeholder(source);
-    else if (isType(calledFunction, EQUAL.getDeclaringClass()))
-      return new ComparisonOperation(source);
-    else if (isType(calledFunction, NOT_EQUAL.getDeclaringClass()))
-      return new ComparisonOperation(source);
-    else if (isType(calledFunction, LESS.getDeclaringClass()))
-      return new ComparisonOperation(source);
-    else if (isType(calledFunction, LESS_EQUAL.getDeclaringClass()))
-      return new ComparisonOperation(source);
-    else if (isType(calledFunction, GREATER.getDeclaringClass()))
-      return new ComparisonOperation(source);
-    else if (isType(calledFunction, GREATER_EQUAL.getDeclaringClass()))
-      return new ComparisonOperation(source);
-    else if (isType(calledFunction, SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass())
-        || isType(calledFunction, SPARSE_SOFTMAX_CROSS_ENTROPY_WITH_LOGITS.getDeclaringClass()))
-      return new SoftmaxCrossEntropy(source);
     else if (isType(calledFunction, MATMUL.getDeclaringClass())) return new MatMul(source);
     else if (isType(calledFunction, SIGMOID.getDeclaringClass())) return new Sigmoid(source);
     else if (isType(calledFunction, EXP.getDeclaringClass())) return new Exp(source);
