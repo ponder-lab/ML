@@ -1471,12 +1471,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         setCalls.put(src, onlyType);
       }
 
-      // An einsum call site with a constant equation constrains each tensor operand: the
-      // operand's term fixes its rank, and shared labels take their extents from operands whose
-      // shapes are statically known (wala/ML#704). Refine — rather than pin — the operand
-      // destinations, so unknown-shape members recover the proven axes while concrete members
-      // pass through untouched. An operand whose call sites prove disagreeing constraints is
-      // left alone.
+      // A shape-constraining consumer proves operand shapes its call alone fixes: an einsum
+      // equation fixes each operand's rank and shared-label extents (wala/ML#704), and a constant
+      // transpose permutation fixes its input's rank (wala/ML#734). Refine — rather than pin —
+      // the operand destinations, so unknown-shape members recover the proven axes while concrete
+      // members pass through untouched. An operand whose call sites prove disagreeing constraints
+      // is left alone.
       Map<PointsToSetVariable, List<Dimension<?>>> refinements = HashMapFactory.make();
       Set<PointsToSetVariable> conflictingRefinements = HashSetFactory.make();
       for (PointsToSetVariable src : sources) {
@@ -1486,9 +1486,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         } catch (IllegalArgumentException e) {
           continue;
         }
-        if (!(generator instanceof Einsum)) continue;
+        if (!(generator instanceof OperandShapeConstraining constraining)) continue;
         for (Map.Entry<PointerKey, List<Dimension<?>>> entry :
-            ((Einsum) generator).getOperandShapeConstraints(builder).entrySet()) {
+            constraining.getOperandShapeConstraints(builder).entrySet()) {
           if (builder.getPropagationSystem().isImplicit(entry.getKey())) continue;
           PointsToSetVariable operand =
               builder.getPropagationSystem().findOrCreatePointsToSet(entry.getKey());

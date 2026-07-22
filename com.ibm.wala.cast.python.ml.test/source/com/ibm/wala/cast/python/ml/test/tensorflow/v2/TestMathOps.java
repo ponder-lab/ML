@@ -1597,4 +1597,33 @@ public class TestMathOps extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_ndarray_reshape.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_60000_784_UINT8)));
   }
+
+  /**
+   * A constant transpose permutation fixes its unresolved input's rank (<a
+   * href="https://github.com/wala/ML/issues/734">wala/ML#734</a>): {@code inputs} arrives
+   * shape-opaque with a proven dtype (a cast of an unmodeled {@code tf.roll} result), and the
+   * explicit-perm {@code tf.transpose(inputs, [1, 0, 2])} proves it rank-3, the {@code crf_forward}
+   * pattern. Runtime-verified {@code (4, 3, 5) float32}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTransposeRankRecovery()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_transpose_rank.py",
+        "f",
+        1,
+        2,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
+  }
 }
