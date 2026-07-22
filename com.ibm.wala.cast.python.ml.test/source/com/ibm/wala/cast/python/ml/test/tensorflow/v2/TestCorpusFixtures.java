@@ -788,27 +788,30 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * transform after {@code map} keeps the mapped type (wala/ML#649, {@link
    * #testDatasetMapRepeat()}); {@code TFRecordDataset} is chainable ({@link #testTfrecordMap()});
    * the dataset survives the list (wala/ML#648, {@link #testFitLoop()}); and the {@code
-   * padded_batch} dims apply (wala/ML#673). So {@code real} resolves to the batched element {@code
-   * (32, ?)} int32 (the pipeline's {@code batch_size=32} with the pad-to-longest sequence dim),
-   * unioned with the standard partial-batch sibling {@code (?, ?)}.
+   * padded_batch} dims apply (wala/ML#673) through the tuple element and the post-batch
+   * pass-throughs (wala/ML#759, {@link TestDatasets#testPaddedBatchTupleEnumerate()}). So {@code
+   * real} resolves to the batched element {@code (32, Dynamic)} int32 (the pipeline's {@code
+   * batch_size=32} default with the pad-to-longest sequence axis), unioned with the standard
+   * partial-batch sibling {@code (?, Dynamic)}.
    *
    * <p>{@code pred} types too (wala/ML#665): the model forward output is a tensor union. With
    * {@code add_weight} consuming its {@code shape}/{@code dtype} arguments (wala/ML#667),
    * constructor keyword arguments forwarded to {@code __init__} (wala/ML#664), the wala/ML#739
    * operand-walk repairs, and parameter defaults materializing in the pointer analysis
-   * (wala/ML#743), the decoder stack resolves end to end under the fit-path contexts: the
-   * runtime-true logits form is {@code (Dynamic, Dynamic, 10)} float32 (the batch and sequence axes
-   * ride the dataset's dynamic dims), alongside the {@code (?, ?, 10)} partial. The wala/ML#680
-   * {@code unknown}-dtype phantom is gone: with the decoder-stack output resolving, {@code
+   * (wala/ML#743), the decoder stack resolves end to end under the fit-path contexts: the logits
+   * forms are {@code (32, Dynamic, 10)} float32 and its partial-batch sibling {@code (?, Dynamic,
+   * 10)} (the batch axis rides the wala/ML#759-batched dataset element, the sequence axis the
+   * dataset's dynamic pad), alongside the {@code (?, ?, 10)} partial. The wala/ML#680 {@code
+   * unknown}-dtype phantom is gone: with the decoder-stack output resolving, {@code
    * OutputLayer.call}'s dead {@code self.porj_weights} arm no longer contributes a member. The
    * union is the order-independent fixed point (wala/ML#674): identical across runs and across
    * suite/single-test modes. Analyzed statically here, like the consumer's vendoring; it runs in
    * the perf-eval with its tfrecord/data setup.
    *
-   * <p>TODO: Drop the {@code (Dynamic, Dynamic, 8, 8)} member once <a
+   * <p>TODO: Drop the {@code (32, Dynamic, 8, 8)}/{@code (?, Dynamic, 8, 8)} members once <a
    * href="https://github.com/wala/ML/issues/746">wala/ML#746</a> filters constant-decidable branch
-   * arms per call site; it is the {@code mode="projection"} call's rank-3 input crossing into the
-   * embedding-mode lookup, runtime-infeasible at that site.
+   * arms per call site; they are the {@code mode="projection"} call's rank-3 input crossing into
+   * the embedding-mode lookup, runtime-infeasible at that site.
    */
   @Test
   public void testGpt2GetLossVendored()
@@ -829,18 +832,30 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         8,
         Map.of(
             3,
-            Set.of(new TensorType(INT_32, asList(DynamicDim.INSTANCE))),
+            Set.of(
+                new TensorType(INT_32, asList(new NumericDim(32), DynamicDim.INSTANCE)),
+                new TensorType(INT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE))),
             4,
             Set.of(
                 new TensorType(
                     FLOAT_32,
                     asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))),
                 new TensorType(
-                    FLOAT_32, asList(DynamicDim.INSTANCE, DynamicDim.INSTANCE, new NumericDim(10))),
+                    FLOAT_32, asList(new NumericDim(32), DynamicDim.INSTANCE, new NumericDim(10))),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(10))),
                 new TensorType(
                     FLOAT_32,
                     asList(
+                        new NumericDim(32),
                         DynamicDim.INSTANCE,
+                        new NumericDim(8),
+                        new NumericDim(8))),
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new SymbolicDim("?"),
                         DynamicDim.INSTANCE,
                         new NumericDim(8),
                         new NumericDim(8))))));
