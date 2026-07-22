@@ -6306,12 +6306,19 @@ public abstract class TensorGenerator {
   /**
    * Returns the value number for the argument at the specified position or with the specified name.
    *
+   * <p><strong>Frame contract (wala/ML#760):</strong> the returned value number is always in {@link
+   * #getNode()}'s frame, whichever anchoring resolved it — a source anchoring reads the defining
+   * invoke or binary operation in the source's node, and a manual anchoring falls back to the
+   * synthetic method's own parameter. A consumer must resolve it against {@code getNode()}'s IR and
+   * nothing else; pairing a value number from one frame with another frame's IR silently resolves
+   * garbage (the wala/ML#718 {@code ElementWiseOperation} trap class).
+   *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @param paramPos The position of the argument in the function call.
    * @param paramName The name of the argument in the function call.
    * @param optional Whether the argument is optional.
    * @return The value number for the argument at the specified position or with the specified name
-   *     or -1 if the argument is optional and not present.
+   *     or -1 if the argument is optional and not present; always in {@link #getNode()}'s frame.
    * @throws IllegalStateException If the argument is mandatory and not present.
    */
   protected int getArgumentValueNumber(
