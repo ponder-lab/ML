@@ -317,9 +317,14 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * @param kind The composition kind.
    * @param operands The feeding operand variables, in operand order.
    * @param seedDType The suppressed seed's dtype; {@link DType#UNKNOWN} when it had none.
+   * @param seedMembers The suppressed seed's retained members for {@link
+   *     TensorGenerator.TypeFeedKind#DTYPE_FILL} (wala/ML#758); empty for the other kinds.
    */
   public record FeedPlan(
-      TensorGenerator.TypeFeedKind kind, List<PointsToSetVariable> operands, DType seedDType) {}
+      TensorGenerator.TypeFeedKind kind,
+      List<PointsToSetVariable> operands,
+      DType seedDType,
+      Set<TensorType> seedMembers) {}
 
   private static IKilldallFramework<PointsToSetVariable, TensorVariable> createProblem(
       Graph<PointsToSetVariable> G,
@@ -546,6 +551,16 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                 case DTYPE_ONLY:
                   for (TensorType t : rhs.state)
                     changed |= lhs.state.add(new TensorType(this.pickDType(t), null));
+                  break;
+                case DTYPE_FILL:
+                  // The generator proved the seed's shape but not its dtype (wala/ML#758): each
+                  // retained seed member keeps its dims and takes the operand member's dtype. An
+                  // unknown operand dtype composes the member as the seed asserted it, so the
+                  // destination never loses the shape evidence.
+                  for (TensorType t : rhs.state)
+                    for (TensorType s : this.plan.seedMembers())
+                      changed |=
+                          lhs.state.add(TensorType.of(t.getDType(), s.getDims(), s.layout()));
                   break;
                 case PASS_THROUGH:
                   for (TensorType t : rhs.state)
