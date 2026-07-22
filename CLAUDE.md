@@ -37,6 +37,8 @@ Initial setup (submodules + Jython) is documented in `CONTRIBUTING.md` and is a 
 
 `logging.properties` is set to FINEST at the root logger locally, so any `LOGGER.fine(...)` / `LOGGER.finer(...)` call will show up in a local run. CI uses a restricted `logging.ci.properties`. Write new diagnostic logs at `FINE`/`FINER` directly — don't add `INFO` and demote later.
 
+**For pass/fail runs, use the CI logging config**: `mvn test -Dlogging.config.file=./logging.ci.properties`. FINEST log *formatting* dominates the corpus-test runtime (the whole-project analyses run ~20× faster without it, the full ML-test module in ~2 minutes), and a FINEST full-suite run writes ~9 GB of surefire output, enough to fill a nearly-full disk. Reserve the FINEST default for probe and diagnostic runs of specific tests, and delete their logs after extraction.
+
 ## Submodules — NOT part of the codebase under change
 
 Two Git submodules live at the repo root:
