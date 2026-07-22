@@ -200,9 +200,10 @@ public class TestCorpusFixtures extends AbstractTensorTest {
   /**
    * The complete NLPGNN subject vendored verbatim under {@code nlpgnn_full_proj} (wala/ML#690);
    * shared by {@link #testNlpgnnFullGeneration()} and {@link #testNlpgnnFullInteractive()} so the
-   * two sibling guards cannot diverge as the fixture changes.
+   * two sibling guards cannot diverge as the fixture changes. Package-visible so {@link
+   * TestNlpgnnTransformer} analyzes the same vendored project without duplicating the file list.
    */
-  private static final String[] NLPGNN_FULL_PROJECT_FILES = {
+  static final String[] NLPGNN_FULL_PROJECT_FILES = {
     "nlpgnn_full_proj/nlpgnn/__init__.py",
     "nlpgnn_full_proj/nlpgnn/abandoned/GCNConvv0.py",
     "nlpgnn_full_proj/nlpgnn/abandoned/__init__.py",
