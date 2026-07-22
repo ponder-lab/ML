@@ -409,4 +409,33 @@ public class TestEinsum extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 4, 6))));
   }
+
+  /**
+   * Partial composition when an operand does not resolve (<a
+   * href="https://github.com/wala/ML/issues/737">wala/ML#737</a>): {@code
+   * tf.einsum("BFND,NDH->BFH", x, w)} with {@code x}'s shape opaque (a computed, non-literal
+   * reshape list) and {@code w = (3, 5, 6)} statically known still proves the output rank and the
+   * {@code H = 6} axis; the axes only {@code x} names carry {@link UnresolvedDim}. Runtime-verified
+   * {@code (2, 4, 6) float32}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testEinsumPartialOperand()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_einsum_partial.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(6))))));
+  }
 }

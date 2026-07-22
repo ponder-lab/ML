@@ -434,6 +434,15 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                 new TensorType(
                     FLOAT_32,
                     asList(new NumericDim(8), new NumericDim(100), UnresolvedDim.INSTANCE)),
+                // The wala/ML#737 partial composition proves the rank-4 attention form's batch
+                // axis even when the remaining operand axes stay unresolved.
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(8),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)),
                 new TensorType(
                     FLOAT_32,
                     asList(
@@ -507,6 +516,15 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                 new TensorType(
                     FLOAT_32,
                     asList(new NumericDim(8), UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
+                // The wala/ML#737 partial composition proves the rank-4 attention form's batch
+                // axis even when the remaining operand axes stay unresolved.
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(8),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE)),
                 new TensorType(
                     FLOAT_32,
                     asList(
