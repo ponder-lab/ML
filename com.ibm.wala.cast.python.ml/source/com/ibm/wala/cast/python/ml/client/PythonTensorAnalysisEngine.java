@@ -1514,13 +1514,18 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       Map<PointsToSetVariable, Set<TensorOrigin>> suppressedOrigins = HashMapFactory.make();
       for (PointsToSetVariable src : sources) {
         Set<TensorType> types = init.get(src);
-        if (types == null || types.size() != 1) continue;
-        TensorType only = types.iterator().next();
-        // Only a pure-⊤ seed is replaced: suppressing a seed whose dtype the generator proved
-        // couples into the engine-side pin computations that read seeded state (the vendored
-        // Conv1d and gather probes are the witnesses), so the known-dtype widening stays with
-        // wala/ML#682's residual.
-        if (only.getDims() != null || only.getDType() != DType.UNKNOWN) continue;
+        // Two eligible seed classes, both entirely dtype-unproven: a single pure-⊤ member is
+        // replaced by the generator-declared composition, and any other all-unknown-dtype seed
+        // (shape-resolved members, several members, or a mix) keeps its members with only the
+        // dtype fed (wala/ML#758's DTYPE_FILL, the class the einsum producer registration
+        // surfaces, wala/ML#757). Suppressing a seed with any dtype the generator PROVED couples
+        // into the engine-side pin computations that read seeded state (the vendored Conv1d and
+        // gather probes are the witnesses), so the known-dtype widening stays with wala/ML#682's
+        // residual.
+        if (types == null || types.isEmpty()) continue;
+        if (types.stream().anyMatch(t -> t.getDType() != DType.UNKNOWN)) continue;
+        boolean pureTopSeed = types.size() == 1 && types.iterator().next().getDims() == null;
+        boolean fillSeed = !pureTopSeed;
         TensorGenerator generator;
         try {
           generator = getGenerator(src, builder);
@@ -1538,16 +1543,23 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           feedSources.add(operand);
         }
         // A broadcast composes pairs, so it needs both operands; the other kinds need at least
-        // one located operand. Otherwise keep the seed.
+        // one located operand. Otherwise keep the seed. A fill seed always fills from any
+        // located operand, since only the dtype is borrowed.
         if (feedSources.isEmpty()
-            || (feed.kind() == TensorGenerator.TypeFeedKind.BROADCAST && feedSources.size() != 2))
-          continue;
+            || (pureTopSeed
+                && feed.kind() == TensorGenerator.TypeFeedKind.BROADCAST
+                && feedSources.size() != 2)) continue;
         for (PointsToSetVariable operand : feedSources) {
           if (!dataflow.containsNode(operand)) dataflow.addNode(operand);
           if (!dataflow.hasEdge(operand, src)) dataflow.addEdge(operand, src);
         }
         typeFeeds.put(
-            src, new TensorTypeAnalysis.FeedPlan(feed.kind(), feedSources, only.getDType()));
+            src,
+            new TensorTypeAnalysis.FeedPlan(
+                fillSeed ? TensorGenerator.TypeFeedKind.DTYPE_FILL : feed.kind(),
+                feedSources,
+                DType.UNKNOWN,
+                fillSeed ? types : Collections.emptySet()));
         suppressedSeeds.put(src, types);
         Set<TensorOrigin> origins = initOrigins.get(src);
         if (origins != null) suppressedOrigins.put(src, origins);

@@ -4133,7 +4133,15 @@ public abstract class TensorGenerator {
     PASS_THROUGH,
 
     /** The two operands' member shapes broadcast pairwise (element-wise semantics). */
-    BROADCAST
+    BROADCAST,
+
+    /**
+     * Each operand member's dtype fills the suppressed seed's retained shape members (wala/ML#758):
+     * the generator proved the shape but not the dtype, so the composition keeps the seed's dims
+     * and takes the operand's dtype. Selected engine-side for shape-resolved unknown-dtype seeds;
+     * generators declare one of the other kinds.
+     */
+    DTYPE_FILL
   }
 
   /**
@@ -6740,6 +6748,8 @@ public abstract class TensorGenerator {
       return new ElementWiseOperation(node);
     } else if (type.equals(TensorFlowTypes.TRANSPOSE.getDeclaringClass())) {
       return new Transpose(node);
+    } else if (type.equals(TensorFlowTypes.EINSUM.getDeclaringClass())) {
+      return new Einsum(node);
     } else if (type.equals(TensorFlowTypes.RESHAPE.getDeclaringClass())) {
       return new Reshape(node);
     } else if (type.equals(TensorFlowTypes.SQUEEZE.getDeclaringClass())) {
