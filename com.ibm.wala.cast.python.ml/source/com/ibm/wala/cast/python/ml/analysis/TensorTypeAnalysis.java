@@ -667,7 +667,11 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                 // whatever produced the input (wala/ML#724).
                 changed |= lhs.origins.add(TensorOrigin.TENSORFLOW);
               }
-              return changed ? CHANGED_AND_FIXED : NOT_CHANGED;
+              // Never FIXED: the composition consumes the predecessor's members, so an edge fixed
+              // on an early evaluation (e.g. against a suppressed seed whose feed delivers later,
+              // wala/ML#758) would hold the pin's output stale at whatever the predecessor carried
+              // first. The transfer only adds members, so re-evaluation is monotone.
+              return changed ? CHANGED : NOT_CHANGED;
             }
 
             @Override
@@ -766,7 +770,11 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                 // whatever produced the input (wala/ML#724).
                 changed |= lhs.origins.add(TensorOrigin.TENSORFLOW);
               }
-              return changed ? CHANGED_AND_FIXED : NOT_CHANGED;
+              // Never FIXED: the composition consumes the predecessor's members, so an edge fixed
+              // on an early evaluation (e.g. against a suppressed seed whose feed delivers later,
+              // wala/ML#758) would hold the pin's output stale at whatever the predecessor carried
+              // first. The transfer only adds members, so re-evaluation is monotone.
+              return changed ? CHANGED : NOT_CHANGED;
             }
 
             @Override
