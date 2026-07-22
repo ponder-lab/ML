@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 
 /**
@@ -15,6 +16,15 @@ public class RaggedFromNestedRowLengths extends RaggedFromNested {
 
   public RaggedFromNestedRowLengths(PointsToSetVariable source) {
     super(source);
+  }
+
+  /**
+   * Constructs anchored to a manual node.
+   *
+   * @param node The {@link CGNode} for the synthetic {@code do()} method.
+   */
+  public RaggedFromNestedRowLengths(CGNode node) {
+    super(node);
   }
 
   @Override
