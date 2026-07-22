@@ -1510,13 +1510,31 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       Map<PointsToSetVariable, Set<TensorOrigin>> suppressedOrigins = HashMapFactory.make();
       for (PointsToSetVariable src : sources) {
         Set<TensorType> types = init.get(src);
-        if (types == null || types.size() != 1) continue;
-        TensorType only = types.iterator().next();
-        // Only a pure-⊤ seed is replaced: suppressing a seed whose dtype the generator proved
-        // couples into the engine-side pin computations that read seeded state (the vendored
-        // Conv1d and gather probes are the witnesses), so the known-dtype widening stays with
-        // wala/ML#682's residual.
-        if (only.getDims() != null || only.getDType() != DType.UNKNOWN) continue;
+        if (types == null || types.isEmpty()) continue;
+        // Feed any seed carrying a shape-⊤ (null-dims) member, replacing ONLY that member: the
+        // proven members stay seeded and the additive feed transfer unions the operand-derived
+        // members alongside them, so a partially resolved seed no longer keeps its unresolved
+        // remainder as a permanent ⊤ in the union (wala/ML#753: the `? of float32` member that
+        // rides an evaluation whose shape marked while its dtype resolved is exactly this class,
+        // and its survival depended on evaluation order). This extends the original pure-⊤ gate
+        // across the known-dtype boundary (wala/ML#682): the fed member's proven dtype flows
+        // through the plan, which the transfer already honors.
+        Set<TensorType> unresolved = HashSetFactory.make();
+        for (TensorType t : types) if (t.getDims() == null) unresolved.add(t);
+        if (unresolved.isEmpty()) continue;
+        Set<DType> unresolvedDTypes = EnumSet.noneOf(DType.class);
+        for (TensorType t : unresolved) unresolvedDTypes.add(t.getDType());
+        // The plan carries one dtype; mixed unresolved dtypes keep the seed as-is.
+        if (unresolvedDTypes.size() != 1) continue;
+        TensorType only = unresolved.iterator().next();
+        // A seed that is entirely unresolved is fed only in the original pure-⊤ form: suppressing
+        // a whole seed whose dtype the generator proved couples into the engine-side pin
+        // computations that read seeded state (the vendored Conv1d and gather probes are the
+        // witnesses), so the known-dtype widening stays with wala/ML#682's residual. A partial
+        // seed is different: its proven members remain seeded, and only the unresolved remainder
+        // is replaced.
+        if (unresolved.size() == types.size()
+            && (types.size() != 1 || only.getDType() != DType.UNKNOWN)) continue;
         TensorGenerator generator;
         try {
           generator = getGenerator(src, builder);
@@ -1547,8 +1565,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         suppressedSeeds.put(src, types);
         Set<TensorOrigin> origins = initOrigins.get(src);
         if (origins != null) suppressedOrigins.put(src, origins);
-        init.remove(src);
-        initOrigins.remove(src);
+        // Only the unresolved members are suppressed; a partial seed keeps its proven members,
+        // whose presence also means an unfed destination never loses its tensor identity.
+        Set<TensorType> proven = HashSetFactory.make(types);
+        proven.removeAll(unresolved);
+        if (proven.isEmpty()) {
+          init.remove(src);
+          initOrigins.remove(src);
+        } else init.put(src, proven);
       }
       LOGGER.fine(() -> "wala/ML#736 type feeds: " + typeFeeds.size());
       for (Map.Entry<PointsToSetVariable, TensorTypeAnalysis.FeedPlan> f : typeFeeds.entrySet())
