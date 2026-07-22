@@ -1538,6 +1538,49 @@ public class TestDatasets extends AbstractTensorTest {
   }
 
   /**
+   * The full vendored-{@code input_fn} chain shape in miniature (<a
+   * href="https://github.com/wala/ML/issues/759">wala/ML#759</a>): like {@link
+   * #testPaddedBatchPair()} but with {@code repeat} and {@code prefetch} after the batch stage and
+   * the fit-loop's {@code enumerate} nested unpack. Both tuple halves are runtime-verified {@code
+   * (4, 3) int32}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPaddedBatchTupleEnumerate()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_padded_batch_tuple.py",
+        "consume_first",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 4, 3))));
+  }
+
+  /**
+   * Sibling half of {@link #testPaddedBatchTupleEnumerate()} (wala/ML#759): the second tuple
+   * member.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testPaddedBatchTupleEnumerate2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_padded_batch_tuple.py",
+        "consume_second",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 4, 3))));
+  }
+
+  /**
    * Pins the <a href="https://github.com/wala/ML/issues/618">wala/ML#618</a> {@code
    * TuckERLoader.target_convert} row on the vendored subject: the loader is vendored verbatim from
    * {@code kyzhouhzau/NLPGNN} ({@code nlpgnn/datas/graphloader.py}); the driver, the tiny {@code

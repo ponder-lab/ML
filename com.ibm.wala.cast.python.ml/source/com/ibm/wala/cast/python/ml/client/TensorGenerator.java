@@ -6714,6 +6714,13 @@ public abstract class TensorGenerator {
       return new DatasetRandomGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_BATCH_TYPE)) {
       return new DatasetBatchGenerator(node);
+    } else if (type.equals(TensorFlowTypes.DATASET_PADDED_BATCH_TYPE)) {
+      // Without this arm, a padded-batch-allocated dataset falls to the DATA_PACKAGE_PREFIX
+      // catch-all below: a plain pass-through DatasetGenerator that inherits from
+      // padded_batch.do's own receiver, so a downstream pass-through stage (repeat/prefetch)
+      // resolves the chain to the pre-batch element and the batch transform never applies
+      // (wala/ML#759).
+      return new DatasetPaddedBatchGenerator(node);
     } else if (type.equals(TensorFlowTypes.IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE)) {
       return new FlowFromDirectoryGenerator(node);
     } else if (type.equals(TensorFlowTypes.MNIST_X_TRAIN)) {
