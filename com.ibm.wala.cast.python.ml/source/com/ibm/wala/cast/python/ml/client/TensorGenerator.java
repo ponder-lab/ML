@@ -6664,6 +6664,10 @@ public abstract class TensorGenerator {
 
     LOGGER.fine("createManualGenerator checking sanitized type: " + type.getName());
 
+    TensorGenerator shared =
+        TensorGeneratorFactory.dispatchShared(new GeneratorAnchor.NodeAnchor(node, type, builder));
+    if (shared != null) return shared;
+
     if (type.equals(TensorFlowTypes.SPLIT.getDeclaringClass())) {
       return new Split(node);
     } else if (type.equals(TensorFlowTypes.ONES.getDeclaringClass())) {
@@ -6743,8 +6747,6 @@ public abstract class TensorGenerator {
       return new DatasetGenerator(node);
     } else if (type.equals(TensorFlowTypes.MATMUL.getDeclaringClass())) {
       return new MatMul(node);
-    } else if (type.equals(TensorFlowTypes.MULTIPLY.getDeclaringClass())) {
-      return new ElementWiseOperation(node);
     } else if (type.equals(TensorFlowTypes.TRANSPOSE.getDeclaringClass())) {
       return new Transpose(node);
     } else if (type.equals(TensorFlowTypes.EINSUM.getDeclaringClass())) {
@@ -6759,8 +6761,6 @@ public abstract class TensorGenerator {
       return new Fill(node);
     } else if (type.equals(TensorFlowTypes.ONE_HOT.getDeclaringClass())) {
       return new OneHot(node);
-    } else if (type.equals(TensorFlowTypes.REDUCE_MEAN.getDeclaringClass())) {
-      return new ReduceMean(node);
     } else if (type.equals(TensorFlowTypes.CONVERT_TO_TENSOR.getDeclaringClass())) {
       return new ConvertToTensor(node);
     } else if (type.equals(TensorFlowTypes.RANGE.getDeclaringClass())) {

@@ -28,14 +28,15 @@ import org.junit.Test;
  * constructed by their enclosing class anyway, but the limitation is real — a class-file- scanning
  * enumeration would be a strict improvement (see wala/ML#485).
  *
- * <p>Until the dispatch-table unification proposed in wala/ML#469 lands, every new {@code
- * TensorGenerator} subclass has to be added to both {@code getGeneratorBody} (factory-side) and
- * {@code createManualGenerator} (manual-walker side). Forgetting one is silent (wala/ML#468). This
- * coverage guard catches the most-common failure mode — an entirely orphan subclass that's not
- * wired to either dispatch — at test time. (The stricter "appears in <em>both</em>" check the
- * issue's original spec proposes requires either dynamic dispatch construction or per-class
- * annotation tagging for the dispatch-asymmetric subclasses; this test scopes to the orphan
- * detection that's implementable without those.)
+ * <p>The dispatch-table unification (wala/ML#469, wala/ML#760) is landing incrementally: arms
+ * migrated to the shared {@code TensorGeneratorFactory.dispatchShared} chain name both construction
+ * forms as {@code X::new} references in one arm, which makes the stricter "appears in
+ * <em>both</em>" property structural for them. Until the migration completes, every new {@code
+ * TensorGenerator} subclass registers in the shared chain (preferred) or in both {@code
+ * getGeneratorBody} (factory-side) and {@code createManualGenerator} (manual-walker side).
+ * Forgetting one is silent (wala/ML#468). This coverage guard catches the most-common failure mode
+ * — an entirely orphan subclass that's not wired to any dispatch — at test time, matching both
+ * {@code new X(} constructions and {@code X::new} references.
  *
  * <p>Subclasses that are legitimately exempt (constructed by another generator rather than from
  * either dispatch table) can carry a {@link DispatchExempt} annotation. Abstract bases are skipped
@@ -75,9 +76,15 @@ public class TestTensorGeneratorDispatchCoverage {
       if (c.isAnonymousClass() || c.isSynthetic()) continue;
 
       String simpleName = c.getSimpleName();
-      // Tolerate spotless/IDE formatting variants — `new X(...)`, `new\n        X(...)`, etc.
+      // Tolerate spotless/IDE formatting variants — `new X(...)`, `new\n        X(...)`, etc. —
+      // and the shared dispatch chain's constructor references (`X::new`, wala/ML#760).
       Pattern constructionPattern =
-          Pattern.compile("\\bnew\\s+" + Pattern.quote(simpleName) + "\\s*\\(");
+          Pattern.compile(
+              "\\bnew\\s+"
+                  + Pattern.quote(simpleName)
+                  + "\\s*\\(|\\b"
+                  + Pattern.quote(simpleName)
+                  + "::new\\b");
       boolean inFactory = constructionPattern.matcher(factorySource).find();
       boolean inTensorGenerator = constructionPattern.matcher(tensorGeneratorSource).find();
 
