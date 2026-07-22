@@ -4,17 +4,24 @@ import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -31,7 +38,7 @@ import java.util.logging.Logger;
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/transpose">tf.transpose</a>
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class Transpose extends PassThroughUnaryTensorGenerator {
+public class Transpose extends PassThroughUnaryTensorGenerator implements OperandShapeConstraining {
 
   private static final Logger LOGGER = Logger.getLogger(Transpose.class.getName());
 
@@ -112,6 +119,50 @@ public class Transpose extends PassThroughUnaryTensorGenerator {
       else ret.add(out);
     }
     return ret.isEmpty() ? ShapeResult.unknown() : new ShapeResult(ret, hasUnknown);
+  }
+
+  /**
+   * A constant explicit permutation fixes the {@code a} operand's rank at the permutation's length
+   * (wala/ML#734): when the operand's own shape does not resolve, the call proves a rank-only shape
+   * whose every axis is {@link UnresolvedDim} (wala/ML#721). An absent or {@code None} perm (the
+   * reversal default) applies at any rank and proves nothing, and a call site whose operand
+   * resolves on its own needs no constraint.
+   *
+   * @param builder The propagation call graph builder.
+   * @return A map from each caller-side {@code a} operand's {@link PointerKey} to its rank-only
+   *     proven shape; empty when nothing is proven. An operand whose call sites prove disagreeing
+   *     ranks is omitted.
+   */
+  @Override
+  public Map<PointerKey, List<Dimension<?>>> getOperandShapeConstraints(
+      PropagationCallGraphBuilder builder) {
+    Map<PointerKey, List<Dimension<?>>> ret = new LinkedHashMap<>();
+    Set<PointerKey> conflicting = new HashSet<>();
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      CGNode caller = callerInvoke.fst;
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction invoke)) continue;
+      // Uses are (callee, a, perm); a keyword-only perm is left to a follow-up.
+      if (invoke.getNumberOfPositionalParameters() < 3) continue;
+      int aVn = invoke.getUse(1);
+      int permVn = invoke.getUse(2);
+      PointerKey permKey =
+          builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, permVn);
+      OrdinalSet<InstanceKey> permPts = builder.getPointerAnalysis().getPointsToSet(permKey);
+      if (isAbsentOrNone(permPts)) continue;
+      List<Integer> perm = resolvePermList(builder, permPts);
+      if (perm == null || perm.isEmpty()) continue;
+      Set<List<Dimension<?>>> own = this.getShapes(builder, caller, aVn, true);
+      if (own != null && !own.isEmpty()) continue; // Resolves on its own; nothing to prove.
+      PointerKey aKey =
+          builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, aVn);
+      List<Dimension<?>> constraint =
+          new ArrayList<>(Collections.nCopies(perm.size(), (Dimension<?>) UnresolvedDim.INSTANCE));
+      List<Dimension<?>> previous = ret.putIfAbsent(aKey, constraint);
+      if (previous != null && !previous.equals(constraint)) conflicting.add(aKey);
+    }
+    ret.keySet().removeAll(conflicting);
+    return ret;
   }
 
   /**

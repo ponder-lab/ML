@@ -65,7 +65,7 @@ import java.util.logging.Logger;
  * @see <a href="https://github.com/wala/ML/issues/507">wala/ML#507</a>
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class Einsum extends PassThroughUnaryTensorGenerator {
+public class Einsum extends PassThroughUnaryTensorGenerator implements OperandShapeConstraining {
 
   private static final Logger LOGGER = Logger.getLogger(Einsum.class.getName());
 
