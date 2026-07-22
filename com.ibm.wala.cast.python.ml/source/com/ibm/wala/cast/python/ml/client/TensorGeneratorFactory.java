@@ -512,6 +512,230 @@ public class TensorGeneratorFactory {
     if (isType(type, DATASET_ENUMERATE_TYPE))
       return anchor.makeGenerator(DatasetEnumerateGenerator::new, DatasetEnumerateGenerator::new);
 
+    if (isType(type, ACOSH.getDeclaringClass()))
+      return anchor.makeGenerator(Acosh::new, Acosh::new);
+    if (isType(type, ASIN.getDeclaringClass())) return anchor.makeGenerator(Asin::new, Asin::new);
+    if (isType(type, ASINH.getDeclaringClass()))
+      return anchor.makeGenerator(Asinh::new, Asinh::new);
+    if (isType(type, ATAN.getDeclaringClass())) return anchor.makeGenerator(Atan::new, Atan::new);
+    if (isType(type, ATANH.getDeclaringClass()))
+      return anchor.makeGenerator(Atanh::new, Atanh::new);
+    if (isType(type, CEIL.getDeclaringClass())) return anchor.makeGenerator(Ceil::new, Ceil::new);
+    if (isType(type, COSH.getDeclaringClass())) return anchor.makeGenerator(Cosh::new, Cosh::new);
+    if (isType(type, ERF.getDeclaringClass())) return anchor.makeGenerator(Erf::new, Erf::new);
+    if (isType(type, ERFC.getDeclaringClass())) return anchor.makeGenerator(Erfc::new, Erfc::new);
+    if (isType(type, EXPM1.getDeclaringClass()))
+      return anchor.makeGenerator(Expm1::new, Expm1::new);
+    if (isType(type, FLOOR.getDeclaringClass()))
+      return anchor.makeGenerator(Floor::new, Floor::new);
+    if (isType(type, LOG.getDeclaringClass())) return anchor.makeGenerator(Log::new, Log::new);
+    if (isType(type, LOG1P.getDeclaringClass()))
+      return anchor.makeGenerator(Log1p::new, Log1p::new);
+    if (isType(type, NEGATIVE.getDeclaringClass()))
+      return anchor.makeGenerator(Negative::new, Negative::new);
+    if (isType(type, RECIPROCAL.getDeclaringClass()))
+      return anchor.makeGenerator(Reciprocal::new, Reciprocal::new);
+    if (isType(type, ROUND.getDeclaringClass()))
+      return anchor.makeGenerator(Round::new, Round::new);
+    if (isType(type, SIGN.getDeclaringClass())) return anchor.makeGenerator(Sign::new, Sign::new);
+    if (isType(type, SINH.getDeclaringClass())) return anchor.makeGenerator(Sinh::new, Sinh::new);
+    if (isType(type, SOFTPLUS.getDeclaringClass()))
+      return anchor.makeGenerator(Softplus::new, Softplus::new);
+    if (isType(type, SOFTSIGN.getDeclaringClass()))
+      return anchor.makeGenerator(Softsign::new, Softsign::new);
+    if (isType(type, TAN.getDeclaringClass())) return anchor.makeGenerator(Tan::new, Tan::new);
+    if (isType(type, LEAKY_RELU.getDeclaringClass()))
+      return anchor.makeGenerator(LeakyRelu::new, LeakyRelu::new);
+    if (isType(type, LOG_SOFTMAX.getDeclaringClass()))
+      return anchor.makeGenerator(LogSoftmax::new, LogSoftmax::new);
+    if (isType(type, AS_STRING.getDeclaringClass()))
+      return anchor.makeGenerator(AsString::new, AsString::new);
+    if (isType(type, ARGMAX.getDeclaringClass()))
+      return anchor.makeGenerator(Argmax::new, Argmax::new);
+    if (isType(type, ARGMIN.getDeclaringClass()))
+      return anchor.makeGenerator(Argmin::new, Argmin::new);
+    if (isType(type, ADJOINT.getDeclaringClass()))
+      return anchor.makeGenerator(Adjoint::new, Adjoint::new);
+    if (isType(type, BOOLEAN_MASK.getDeclaringClass()))
+      return anchor.makeGenerator(BooleanMask::new, BooleanMask::new);
+    if (isType(type, BROADCAST_TO.getDeclaringClass()))
+      return anchor.makeGenerator(BroadcastTo::new, BroadcastTo::new);
+    // `tf.constant` deliberately has NO node-anchored form: its manual-route resolution belongs
+    // to the `read_data` synthetic machinery (wala/ML#380), and a node-anchored `Constant` whose
+    // literal-value extraction fails composes ⊥ that shadows that path (six elementwise/value-
+    // index fixtures regress). The explicit null keeps the omission declared rather than silent.
+    if (isType(type, CONSTANT.getDeclaringClass()))
+      return anchor.makeGenerator(Constant::new, node -> null);
+    if (isType(type, DIAG.getDeclaringClass())) return anchor.makeGenerator(Diag::new, Diag::new);
+    if (isType(type, DIAG_PART.getDeclaringClass()))
+      return anchor.makeGenerator(DiagPart::new, DiagPart::new);
+    if (isType(type, EXTRACT_PATCHES.getDeclaringClass()))
+      return anchor.makeGenerator(ExtractPatches::new, ExtractPatches::new);
+    if (isType(type, FLATTEN.getDeclaringClass()))
+      return anchor.makeGenerator(Flatten::new, Flatten::new);
+    if (isType(type, GATHER_ND.getDeclaringClass()))
+      return anchor.makeGenerator(GatherNd::new, GatherNd::new);
+    if (isType(type, IDENTITY.getDeclaringClass()))
+      return anchor.makeGenerator(Identity::new, Identity::new);
+    if (isType(type, LINSPACE.getDeclaringClass()))
+      return anchor.makeGenerator(Linspace::new, Linspace::new);
+    if (isType(type, MATRIX_TRANSPOSE.getDeclaringClass()))
+      return anchor.makeGenerator(MatrixTranspose::new, MatrixTranspose::new);
+    if (isType(type, MAX_POOL.getDeclaringClass()))
+      return anchor.makeGenerator(MaxPool::new, MaxPool::new);
+    if (isType(type, MESHGRID.getDeclaringClass()))
+      return anchor.makeGenerator(Meshgrid::new, Meshgrid::new);
+    if (isType(type, RANK.getDeclaringClass())) return anchor.makeGenerator(Rank::new, Rank::new);
+    if (isType(type, SEQUENCE_MASK.getDeclaringClass()))
+      return anchor.makeGenerator(SequenceMask::new, SequenceMask::new);
+    if (isType(type, SIZE.getDeclaringClass())) return anchor.makeGenerator(Size::new, Size::new);
+    if (isType(type, SLICE.getDeclaringClass()))
+      return anchor.makeGenerator(Slice::new, Slice::new);
+    if (isType(type, STACK.getDeclaringClass()))
+      return anchor.makeGenerator(Stack::new, Stack::new);
+    if (isType(type, STOP_GRADIENT.getDeclaringClass()))
+      return anchor.makeGenerator(StopGradient::new, StopGradient::new);
+    if (isType(type, TENSOR_SCATTER_ND_UPDATE.getDeclaringClass()))
+      return anchor.makeGenerator(TensorScatterNdUpdate::new, TensorScatterNdUpdate::new);
+    if (isType(type, TENSORDOT.getDeclaringClass()))
+      return anchor.makeGenerator(Tensordot::new, Tensordot::new);
+    if (isType(type, TOP_K.getDeclaringClass())) return anchor.makeGenerator(TopK::new, TopK::new);
+    if (isType(type, TRACE.getDeclaringClass()))
+      return anchor.makeGenerator(Trace::new, Trace::new);
+    if (isType(type, WHERE.getDeclaringClass()))
+      return anchor.makeGenerator(Where::new, Where::new);
+    if (isType(type, ZEROS_LIKE.getDeclaringClass()))
+      return anchor.makeGenerator(ZerosLike::new, ZerosLike::new);
+
+    if (isType(type, UNSORTED_SEGMENT_SUM.getDeclaringClass())
+        || isType(type, UNSORTED_SEGMENT_MAX.getDeclaringClass())
+        || isType(type, UNSORTED_SEGMENT_MEAN.getDeclaringClass()))
+      return anchor.makeGenerator(UnsortedSegmentReduction::new, UnsortedSegmentReduction::new);
+
+    // The keras dataset loaders also dispatch from the allocation-type prelude of the
+    // three-argument createManualGenerator overload; these arms serve the declaring-class and
+    // call-site routes (wala/ML#760).
+    if (isType(type, MNIST_X_TRAIN))
+      return anchor.makeGenerator(
+          s -> new MnistInputData(s, MnistInputData.X_TRAIN_SHAPE),
+          n -> new MnistInputData(n, MnistInputData.X_TRAIN_SHAPE));
+    if (isType(type, MNIST_Y_TRAIN))
+      return anchor.makeGenerator(
+          s -> new MnistInputData(s, MnistInputData.Y_TRAIN_SHAPE),
+          n -> new MnistInputData(n, MnistInputData.Y_TRAIN_SHAPE));
+    if (isType(type, MNIST_X_TEST))
+      return anchor.makeGenerator(
+          s -> new MnistInputData(s, MnistInputData.X_TEST_SHAPE),
+          n -> new MnistInputData(n, MnistInputData.X_TEST_SHAPE));
+    if (isType(type, MNIST_Y_TEST))
+      return anchor.makeGenerator(
+          s -> new MnistInputData(s, MnistInputData.Y_TEST_SHAPE),
+          n -> new MnistInputData(n, MnistInputData.Y_TEST_SHAPE));
+    if (isType(type, FASHION_MNIST_X_TRAIN))
+      return anchor.makeGenerator(
+          s -> new MnistInputData(s, MnistInputData.X_TRAIN_SHAPE),
+          n -> new MnistInputData(n, MnistInputData.X_TRAIN_SHAPE));
+    if (isType(type, FASHION_MNIST_Y_TRAIN))
+      return anchor.makeGenerator(
+          s -> new MnistInputData(s, MnistInputData.Y_TRAIN_SHAPE),
+          n -> new MnistInputData(n, MnistInputData.Y_TRAIN_SHAPE));
+    if (isType(type, FASHION_MNIST_X_TEST))
+      return anchor.makeGenerator(
+          s -> new MnistInputData(s, MnistInputData.X_TEST_SHAPE),
+          n -> new MnistInputData(n, MnistInputData.X_TEST_SHAPE));
+    if (isType(type, FASHION_MNIST_Y_TEST))
+      return anchor.makeGenerator(
+          s -> new MnistInputData(s, MnistInputData.Y_TEST_SHAPE),
+          n -> new MnistInputData(n, MnistInputData.Y_TEST_SHAPE));
+    if (isType(type, CIFAR10_X_TRAIN))
+      return anchor.makeGenerator(
+          s -> new Cifar10InputData(s, Cifar10InputData.X_TRAIN_SHAPE),
+          n -> new Cifar10InputData(n, Cifar10InputData.X_TRAIN_SHAPE));
+    if (isType(type, CIFAR10_Y_TRAIN))
+      return anchor.makeGenerator(
+          s -> new Cifar10InputData(s, Cifar10InputData.Y_TRAIN_SHAPE),
+          n -> new Cifar10InputData(n, Cifar10InputData.Y_TRAIN_SHAPE));
+    if (isType(type, CIFAR10_X_TEST))
+      return anchor.makeGenerator(
+          s -> new Cifar10InputData(s, Cifar10InputData.X_TEST_SHAPE),
+          n -> new Cifar10InputData(n, Cifar10InputData.X_TEST_SHAPE));
+    if (isType(type, CIFAR10_Y_TEST))
+      return anchor.makeGenerator(
+          s -> new Cifar10InputData(s, Cifar10InputData.Y_TEST_SHAPE),
+          n -> new Cifar10InputData(n, Cifar10InputData.Y_TEST_SHAPE));
+    if (isType(type, IMDB_X_TRAIN))
+      return anchor.makeGenerator(
+          s -> new ImdbInputData(s, ImdbInputData.X_TRAIN_SHAPE, ImdbInputData.X_DTYPES),
+          n -> new ImdbInputData(n, ImdbInputData.X_TRAIN_SHAPE, ImdbInputData.X_DTYPES));
+    if (isType(type, IMDB_Y_TRAIN))
+      return anchor.makeGenerator(
+          s -> new ImdbInputData(s, ImdbInputData.Y_TRAIN_SHAPE, ImdbInputData.Y_DTYPES),
+          n -> new ImdbInputData(n, ImdbInputData.Y_TRAIN_SHAPE, ImdbInputData.Y_DTYPES));
+    if (isType(type, IMDB_X_TEST))
+      return anchor.makeGenerator(
+          s -> new ImdbInputData(s, ImdbInputData.X_TEST_SHAPE, ImdbInputData.X_DTYPES),
+          n -> new ImdbInputData(n, ImdbInputData.X_TEST_SHAPE, ImdbInputData.X_DTYPES));
+    if (isType(type, IMDB_Y_TEST))
+      return anchor.makeGenerator(
+          s -> new ImdbInputData(s, ImdbInputData.Y_TEST_SHAPE, ImdbInputData.Y_DTYPES),
+          n -> new ImdbInputData(n, ImdbInputData.Y_TEST_SHAPE, ImdbInputData.Y_DTYPES));
+    if (isType(type, CIFAR100_X_TRAIN))
+      return anchor.makeGenerator(
+          s ->
+              new Cifar100InputData(s, Cifar100InputData.X_TRAIN_SHAPE, Cifar100InputData.X_DTYPES),
+          n ->
+              new Cifar100InputData(
+                  n, Cifar100InputData.X_TRAIN_SHAPE, Cifar100InputData.X_DTYPES));
+    if (isType(type, CIFAR100_Y_TRAIN))
+      return anchor.makeGenerator(
+          s ->
+              new Cifar100InputData(s, Cifar100InputData.Y_TRAIN_SHAPE, Cifar100InputData.Y_DTYPES),
+          n ->
+              new Cifar100InputData(
+                  n, Cifar100InputData.Y_TRAIN_SHAPE, Cifar100InputData.Y_DTYPES));
+    if (isType(type, CIFAR100_X_TEST))
+      return anchor.makeGenerator(
+          s -> new Cifar100InputData(s, Cifar100InputData.X_TEST_SHAPE, Cifar100InputData.X_DTYPES),
+          n ->
+              new Cifar100InputData(n, Cifar100InputData.X_TEST_SHAPE, Cifar100InputData.X_DTYPES));
+    if (isType(type, CIFAR100_Y_TEST))
+      return anchor.makeGenerator(
+          s -> new Cifar100InputData(s, Cifar100InputData.Y_TEST_SHAPE, Cifar100InputData.Y_DTYPES),
+          n ->
+              new Cifar100InputData(n, Cifar100InputData.Y_TEST_SHAPE, Cifar100InputData.Y_DTYPES));
+    if (isType(type, REUTERS_X_TRAIN))
+      return anchor.makeGenerator(
+          s -> new ReutersInputData(s, ReutersInputData.X_TRAIN_SHAPE, ReutersInputData.X_DTYPES),
+          n -> new ReutersInputData(n, ReutersInputData.X_TRAIN_SHAPE, ReutersInputData.X_DTYPES));
+    if (isType(type, REUTERS_Y_TRAIN))
+      return anchor.makeGenerator(
+          s -> new ReutersInputData(s, ReutersInputData.Y_TRAIN_SHAPE, ReutersInputData.Y_DTYPES),
+          n -> new ReutersInputData(n, ReutersInputData.Y_TRAIN_SHAPE, ReutersInputData.Y_DTYPES));
+    if (isType(type, REUTERS_X_TEST))
+      return anchor.makeGenerator(
+          s -> new ReutersInputData(s, ReutersInputData.X_TEST_SHAPE, ReutersInputData.X_DTYPES),
+          n -> new ReutersInputData(n, ReutersInputData.X_TEST_SHAPE, ReutersInputData.X_DTYPES));
+    if (isType(type, REUTERS_Y_TEST))
+      return anchor.makeGenerator(
+          s -> new ReutersInputData(s, ReutersInputData.Y_TEST_SHAPE, ReutersInputData.Y_DTYPES),
+          n -> new ReutersInputData(n, ReutersInputData.Y_TEST_SHAPE, ReutersInputData.Y_DTYPES));
+    if (isType(type, BOSTON_HOUSING_X_TRAIN))
+      return anchor.makeGenerator(
+          s -> new BostonHousingInputData(s, BostonHousingInputData.X_TRAIN_SHAPE),
+          n -> new BostonHousingInputData(n, BostonHousingInputData.X_TRAIN_SHAPE));
+    if (isType(type, BOSTON_HOUSING_Y_TRAIN))
+      return anchor.makeGenerator(
+          s -> new BostonHousingInputData(s, BostonHousingInputData.Y_TRAIN_SHAPE),
+          n -> new BostonHousingInputData(n, BostonHousingInputData.Y_TRAIN_SHAPE));
+    if (isType(type, BOSTON_HOUSING_X_TEST))
+      return anchor.makeGenerator(
+          s -> new BostonHousingInputData(s, BostonHousingInputData.X_TEST_SHAPE),
+          n -> new BostonHousingInputData(n, BostonHousingInputData.X_TEST_SHAPE));
+    if (isType(type, BOSTON_HOUSING_Y_TEST))
+      return anchor.makeGenerator(
+          s -> new BostonHousingInputData(s, BostonHousingInputData.Y_TEST_SHAPE),
+          n -> new BostonHousingInputData(n, BostonHousingInputData.Y_TEST_SHAPE));
+
     return null;
   }
 
@@ -1385,7 +1609,6 @@ public class TensorGeneratorFactory {
     if (shared != null) return shared;
 
     if (isType(calledFunction, ONES.getDeclaringClass())) return new Ones(source);
-    else if (isType(calledFunction, CONSTANT.getDeclaringClass())) return new Constant(source);
     else if (isType(calledFunction, RANGE.getDeclaringClass())) return new Range(source);
     else if (isType(calledFunction, UNIFORM.getDeclaringClass())
         || isType(calledFunction, UNIFORM_OP)) return new Uniform(source);
@@ -1396,13 +1619,9 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, TRUNCATED_NORMAL.getDeclaringClass())
         || isType(calledFunction, TRUNCATED_NORMAL_OP)) return new TruncatedNormal(source);
     else if (isType(calledFunction, ZEROS.getDeclaringClass())) return new Zeros(source);
-    else if (isType(calledFunction, ZEROS_LIKE.getDeclaringClass())) return new ZerosLike(source);
     else if (isType(calledFunction, ARRAY_OPS_RESHAPE)
         || calledFunction.getName().equals(TF_RESHAPE)) return new Reshape(source);
     else if (isType(calledFunction, FILL.getDeclaringClass())) return new Fill(source);
-    else if (isType(calledFunction, LINSPACE.getDeclaringClass())) return new Linspace(source);
-    else if (isType(calledFunction, BROADCAST_TO.getDeclaringClass()))
-      return new BroadcastTo(source);
     else if (isType(calledFunction, CONVERT_TO_TENSOR.getDeclaringClass()))
       return new ConvertToTensor(source);
     else if (isType(calledFunction, ONE_HOT.getDeclaringClass())) return new OneHot(source);
@@ -1463,160 +1682,40 @@ public class TensorGeneratorFactory {
       return new FlowFromDirectoryGenerator(source);
     else if (isType(calledFunction, READ_DATA_SETS.getDeclaringClass()))
       return new ReadDataSets(source);
-    else if (isType(calledFunction, MNIST_X_TRAIN))
-      return new MnistInputData(source, MnistInputData.X_TRAIN_SHAPE);
-    else if (isType(calledFunction, MNIST_Y_TRAIN))
-      return new MnistInputData(source, MnistInputData.Y_TRAIN_SHAPE);
-    else if (isType(calledFunction, MNIST_X_TEST))
-      return new MnistInputData(source, MnistInputData.X_TEST_SHAPE);
-    else if (isType(calledFunction, MNIST_Y_TEST))
-      return new MnistInputData(source, MnistInputData.Y_TEST_SHAPE);
-    else if (isType(calledFunction, CIFAR10_X_TRAIN))
-      return new Cifar10InputData(source, Cifar10InputData.X_TRAIN_SHAPE);
-    else if (isType(calledFunction, CIFAR10_Y_TRAIN))
-      return new Cifar10InputData(source, Cifar10InputData.Y_TRAIN_SHAPE);
-    else if (isType(calledFunction, CIFAR10_X_TEST))
-      return new Cifar10InputData(source, Cifar10InputData.X_TEST_SHAPE);
-    else if (isType(calledFunction, CIFAR10_Y_TEST))
-      return new Cifar10InputData(source, Cifar10InputData.Y_TEST_SHAPE);
-    else if (isType(calledFunction, IMDB_X_TRAIN))
-      return new ImdbInputData(source, ImdbInputData.X_TRAIN_SHAPE, ImdbInputData.X_DTYPES);
-    else if (isType(calledFunction, IMDB_Y_TRAIN))
-      return new ImdbInputData(source, ImdbInputData.Y_TRAIN_SHAPE, ImdbInputData.Y_DTYPES);
-    else if (isType(calledFunction, IMDB_X_TEST))
-      return new ImdbInputData(source, ImdbInputData.X_TEST_SHAPE, ImdbInputData.X_DTYPES);
-    else if (isType(calledFunction, IMDB_Y_TEST))
-      return new ImdbInputData(source, ImdbInputData.Y_TEST_SHAPE, ImdbInputData.Y_DTYPES);
-    else if (isType(calledFunction, FASHION_MNIST_X_TRAIN))
-      return new MnistInputData(source, MnistInputData.X_TRAIN_SHAPE);
-    else if (isType(calledFunction, FASHION_MNIST_Y_TRAIN))
-      return new MnistInputData(source, MnistInputData.Y_TRAIN_SHAPE);
-    else if (isType(calledFunction, FASHION_MNIST_X_TEST))
-      return new MnistInputData(source, MnistInputData.X_TEST_SHAPE);
-    else if (isType(calledFunction, FASHION_MNIST_Y_TEST))
-      return new MnistInputData(source, MnistInputData.Y_TEST_SHAPE);
-    else if (isType(calledFunction, CIFAR100_X_TRAIN))
-      return new Cifar100InputData(
-          source, Cifar100InputData.X_TRAIN_SHAPE, Cifar100InputData.X_DTYPES);
-    else if (isType(calledFunction, CIFAR100_Y_TRAIN))
-      return new Cifar100InputData(
-          source, Cifar100InputData.Y_TRAIN_SHAPE, Cifar100InputData.Y_DTYPES);
-    else if (isType(calledFunction, CIFAR100_X_TEST))
-      return new Cifar100InputData(
-          source, Cifar100InputData.X_TEST_SHAPE, Cifar100InputData.X_DTYPES);
-    else if (isType(calledFunction, CIFAR100_Y_TEST))
-      return new Cifar100InputData(
-          source, Cifar100InputData.Y_TEST_SHAPE, Cifar100InputData.Y_DTYPES);
-    else if (isType(calledFunction, REUTERS_X_TRAIN))
-      return new ReutersInputData(
-          source, ReutersInputData.X_TRAIN_SHAPE, ReutersInputData.X_DTYPES);
-    else if (isType(calledFunction, REUTERS_Y_TRAIN))
-      return new ReutersInputData(
-          source, ReutersInputData.Y_TRAIN_SHAPE, ReutersInputData.Y_DTYPES);
-    else if (isType(calledFunction, REUTERS_X_TEST))
-      return new ReutersInputData(source, ReutersInputData.X_TEST_SHAPE, ReutersInputData.X_DTYPES);
-    else if (isType(calledFunction, REUTERS_Y_TEST))
-      return new ReutersInputData(source, ReutersInputData.Y_TEST_SHAPE, ReutersInputData.Y_DTYPES);
-    else if (isType(calledFunction, BOSTON_HOUSING_X_TRAIN))
-      return new BostonHousingInputData(source, BostonHousingInputData.X_TRAIN_SHAPE);
-    else if (isType(calledFunction, BOSTON_HOUSING_Y_TRAIN))
-      return new BostonHousingInputData(source, BostonHousingInputData.Y_TRAIN_SHAPE);
-    else if (isType(calledFunction, BOSTON_HOUSING_X_TEST))
-      return new BostonHousingInputData(source, BostonHousingInputData.X_TEST_SHAPE);
-    else if (isType(calledFunction, BOSTON_HOUSING_Y_TEST))
-      return new BostonHousingInputData(source, BostonHousingInputData.Y_TEST_SHAPE);
-    else if (isType(calledFunction, UNSORTED_SEGMENT_SUM.getDeclaringClass())
-        || isType(calledFunction, UNSORTED_SEGMENT_MAX.getDeclaringClass())
-        || isType(calledFunction, UNSORTED_SEGMENT_MEAN.getDeclaringClass()))
-      return new UnsortedSegmentReduction(source);
     else if (isType(calledFunction, PLACEHOLDER.getDeclaringClass()))
       return new Placeholder(source);
     else if (isType(calledFunction, MATMUL.getDeclaringClass())) return new MatMul(source);
     else if (isType(calledFunction, SIGMOID.getDeclaringClass())) return new Sigmoid(source);
     else if (isType(calledFunction, EXP.getDeclaringClass())) return new Exp(source);
     else if (isType(calledFunction, RSQRT.getDeclaringClass())) return new Rsqrt(source);
-    else if (isType(calledFunction, LOG_SOFTMAX.getDeclaringClass())) return new LogSoftmax(source);
-    else if (isType(calledFunction, RANK.getDeclaringClass())) return new Rank(source);
-    else if (isType(calledFunction, SIZE.getDeclaringClass())) return new Size(source);
-    else if (isType(calledFunction, ARGMAX.getDeclaringClass())) return new Argmax(source);
-    else if (isType(calledFunction, ARGMIN.getDeclaringClass())) return new Argmin(source);
-    else if (isType(calledFunction, TENSORDOT.getDeclaringClass())) return new Tensordot(source);
-    else if (isType(calledFunction, TRACE.getDeclaringClass())) return new Trace(source);
     else if (isType(calledFunction, TRANSPOSE.getDeclaringClass())) return new Transpose(source);
-    else if (isType(calledFunction, DIAG.getDeclaringClass())) return new Diag(source);
-    else if (isType(calledFunction, DIAG_PART.getDeclaringClass())) return new DiagPart(source);
-    else if (isType(calledFunction, MATRIX_TRANSPOSE.getDeclaringClass()))
-      return new MatrixTranspose(source);
-    else if (isType(calledFunction, ADJOINT.getDeclaringClass())) return new Adjoint(source);
     else if (isType(calledFunction, TILE.getDeclaringClass())) return new Tile(source);
-    else if (isType(calledFunction, TENSOR_SCATTER_ND_UPDATE.getDeclaringClass()))
-      return new TensorScatterNdUpdate(source);
-    else if (isType(calledFunction, SEQUENCE_MASK.getDeclaringClass()))
-      return new SequenceMask(source);
     else if (isType(calledFunction, EMBEDDING_LOOKUP.getDeclaringClass()))
       return new EmbeddingLookup(source);
-    else if (isType(calledFunction, GATHER_ND.getDeclaringClass())) return new GatherNd(source);
-    else if (isType(calledFunction, BOOLEAN_MASK.getDeclaringClass()))
-      return new BooleanMask(source);
-    else if (isType(calledFunction, SLICE.getDeclaringClass())) return new Slice(source);
     else if (isType(calledFunction, SQUEEZE.getDeclaringClass())) return new Squeeze(source);
     else if (isType(calledFunction, SPLIT.getDeclaringClass())) return new Split(source);
-    else if (isType(calledFunction, EXTRACT_PATCHES.getDeclaringClass()))
-      return new ExtractPatches(source);
-    else if (isType(calledFunction, TAN.getDeclaringClass())) return new Tan(source);
-    else if (isType(calledFunction, ASIN.getDeclaringClass())) return new Asin(source);
-    else if (isType(calledFunction, ATAN.getDeclaringClass())) return new Atan(source);
-    else if (isType(calledFunction, SINH.getDeclaringClass())) return new Sinh(source);
-    else if (isType(calledFunction, COSH.getDeclaringClass())) return new Cosh(source);
-    else if (isType(calledFunction, ASINH.getDeclaringClass())) return new Asinh(source);
-    else if (isType(calledFunction, ACOSH.getDeclaringClass())) return new Acosh(source);
-    else if (isType(calledFunction, ATANH.getDeclaringClass())) return new Atanh(source);
-    else if (isType(calledFunction, LOG1P.getDeclaringClass())) return new Log1p(source);
-    else if (isType(calledFunction, EXPM1.getDeclaringClass())) return new Expm1(source);
-    else if (isType(calledFunction, ROUND.getDeclaringClass())) return new Round(source);
-    else if (isType(calledFunction, RECIPROCAL.getDeclaringClass())) return new Reciprocal(source);
-    else if (isType(calledFunction, SOFTPLUS.getDeclaringClass())) return new Softplus(source);
-    else if (isType(calledFunction, SOFTSIGN.getDeclaringClass())) return new Softsign(source);
     else if (isType(calledFunction, SQUARE.getDeclaringClass())) return new Square(source);
-    else if (isType(calledFunction, ERF.getDeclaringClass())) return new Erf(source);
-    else if (isType(calledFunction, ERFC.getDeclaringClass())) return new Erfc(source);
     else if (isType(calledFunction, EINSUM.getDeclaringClass())) return new Einsum(source);
     else if (isType(calledFunction, RELU.getDeclaringClass())) return new Relu(source);
     else if (isType(calledFunction, CAST.getDeclaringClass())) return new Cast(source);
     else if (isType(calledFunction, EXPAND_DIMS.getDeclaringClass())) return new ExpandDims(source);
     else if (isType(calledFunction, CLIP_BY_VALUE.getDeclaringClass()))
       return new ClipByValue(source);
-    else if (isType(calledFunction, AS_STRING.getDeclaringClass())) return new AsString(source);
-    else if (isType(calledFunction, TOP_K.getDeclaringClass())) return new TopK(source);
-    else if (isType(calledFunction, MESHGRID.getDeclaringClass())) return new Meshgrid(source);
-    else if (isType(calledFunction, WHERE.getDeclaringClass())) return new Where(source);
-    else if (isType(calledFunction, LEAKY_RELU.getDeclaringClass())) return new LeakyRelu(source);
     else if (isType(calledFunction, CONCAT.getDeclaringClass())) return new Concat(source);
-    else if (isType(calledFunction, STACK.getDeclaringClass())) return new Stack(source);
     else if (isType(calledFunction, SQRT.getDeclaringClass())) return new Sqrt(source);
-    else if (isType(calledFunction, LOG.getDeclaringClass())) return new Log(source);
-    else if (isType(calledFunction, NEGATIVE.getDeclaringClass())) return new Negative(source);
     else if (isType(calledFunction, SIN.getDeclaringClass())) return new Sin(source);
     else if (isType(calledFunction, COS.getDeclaringClass())) return new Cos(source);
-    else if (isType(calledFunction, FLOOR.getDeclaringClass())) return new Floor(source);
-    else if (isType(calledFunction, CEIL.getDeclaringClass())) return new Ceil(source);
-    else if (isType(calledFunction, SIGN.getDeclaringClass())) return new Sign(source);
-    else if (isType(calledFunction, IDENTITY.getDeclaringClass())) return new Identity(source);
-    else if (isType(calledFunction, STOP_GRADIENT.getDeclaringClass()))
-      return new StopGradient(source);
     else if (isType(calledFunction, GRADIENT.getDeclaringClass())) return new Gradient(source);
     else if (isType(calledFunction, SOFTMAX.getDeclaringClass())) return new Softmax(source);
     else if (isType(calledFunction, DENSE_CALL.getDeclaringClass())) return new DenseCall(source);
     else if (isType(calledFunction, ADD_WEIGHT.getDeclaringClass())) return new AddWeight(source);
     else if (isType(calledFunction, MODEL_CALL.getDeclaringClass())) return new ModelCall(source);
-    else if (isType(calledFunction, FLATTEN.getDeclaringClass())) return new Flatten(source);
     else if (isType(calledFunction, FLATTEN_LAYER_CALL.getDeclaringClass()))
       return new FlattenCall(source);
     else if (isType(calledFunction, GLOBAL_AVERAGE_POOLING_1D_CALL.getDeclaringClass()))
       return new GlobalAveragePooling1DCall(source);
     else if (isType(calledFunction, EMBEDDING_LAYER_CALL.getDeclaringClass()))
       return new EmbeddingCall(source);
-    else if (isType(calledFunction, MAX_POOL.getDeclaringClass())) return new MaxPool(source);
     else if (isType(calledFunction, SLICE_BUILTIN)) return new SliceBuiltinOperation(source);
     else {
       if (source.getPointerKey() instanceof ReturnValueKey) {

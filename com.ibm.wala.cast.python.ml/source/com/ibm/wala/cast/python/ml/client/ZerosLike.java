@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import java.util.Locale;
 
@@ -32,6 +33,15 @@ public class ZerosLike extends ValueExtractingTensorGenerator {
 
   public ZerosLike(PointsToSetVariable source) {
     super(source);
+  }
+
+  /**
+   * Constructs anchored to a manual node.
+   *
+   * @param node The {@link CGNode} for the synthetic {@code do()} method.
+   */
+  public ZerosLike(CGNode node) {
+    super(node);
   }
 
   protected int getInputParameterPosition() {
