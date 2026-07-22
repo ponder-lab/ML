@@ -1069,9 +1069,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     return new TensorType(cellType, merged);
   }
 
-  private Map<PointsToSetVariable, TensorType> getShapeSourceCalls(
+  private Map<PointsToSetVariable, Set<TensorType>> getShapeSourceCalls(
       MethodReference op, PropagationCallGraphBuilder builder, int param) {
-    Map<PointsToSetVariable, TensorType> targets = HashMapFactory.make();
+    Map<PointsToSetVariable, Set<TensorType>> targets = HashMapFactory.make();
     getSourceCalls(
         op,
         builder,
@@ -1109,7 +1109,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             if (builder.getPropagationSystem().isImplicit(defKey)) return;
             PointsToSetVariable defVariable =
                 builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
-            TensorType pinned = null;
+            Set<TensorType> pinned;
             if (literalContainer) {
               // Merge the generator-side computation into the pinned type so the pin agrees with
               // the seeded result instead of contributing a weaker parallel member (wala/ML#713).
@@ -1117,18 +1117,22 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               // embedded interpreter (e.g. an `np.prod(..., axis=0)` the provenance walk refuses),
               // while the generator side also resolves field reads, shape-vector subscripts, and
               // `build`-computed attributes; the pointwise merge keeps the more precise dimension
-              // from each.
+              // from each. A multi-member generator result merges per member, so the pin carries
+              // one member per resolved shape possibility instead of discarding the generator's
+              // precision for the weaker interpreter type (wala/ML#748).
               TensorType shapeArgType = TensorType.shapeArg(src, shapeVn, builder);
               Set<TensorType> generatorTypes = this.getTensorTypes(defVariable, builder);
-              pinned =
-                  generatorTypes != null && generatorTypes.size() == 1
-                      ? mergePinnedTypes(generatorTypes.iterator().next(), shapeArgType)
-                      : shapeArgType;
+              if (generatorTypes != null && !generatorTypes.isEmpty()) {
+                pinned = HashSetFactory.make();
+                for (TensorType generatorType : generatorTypes)
+                  pinned.add(mergePinnedTypes(generatorType, shapeArgType));
+              } else pinned = Collections.singleton(shapeArgType);
             } else
               pinned =
-                  new TensorType(
-                      TensorFlowTypes.DType.FLOAT32.name().toLowerCase(java.util.Locale.ROOT),
-                      null);
+                  Collections.singleton(
+                      new TensorType(
+                          TensorFlowTypes.DType.FLOAT32.name().toLowerCase(java.util.Locale.ROOT),
+                          null));
             targets.put(defVariable, pinned);
           }
         });
@@ -1421,12 +1425,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         if (!origins.isEmpty()) initOrigins.put(v, origins);
       }
 
-      Map<PointsToSetVariable, TensorType> placeholders =
+      Map<PointsToSetVariable, Set<TensorType>> placeholders =
           handleShapeSourceOp(builder, dataflow, placeholder, 2);
       LOGGER.fine("Placeholders: " + placeholders);
 
-      for (Map.Entry<PointsToSetVariable, TensorType> e : placeholders.entrySet()) {
-        init.put(e.getKey(), Set.of(e.getValue()));
+      for (Map.Entry<PointsToSetVariable, Set<TensorType>> e : placeholders.entrySet()) {
+        init.put(e.getKey(), e.getValue());
         // `tf.compat.v1.placeholder` is a TensorFlow API (wala/ML#724).
         initOrigins.put(e.getKey(), EnumSet.of(TensorOrigin.TENSORFLOW));
       }
@@ -1555,7 +1559,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         LOGGER.fine(
             () -> "  feed " + f.getValue().kind() + ": " + describe(f.getKey().getPointerKey()));
 
-      Map<PointsToSetVariable, TensorType> shapeOps = HashMapFactory.make();
+      Map<PointsToSetVariable, Set<TensorType>> shapeOps = HashMapFactory.make();
       shapeOps.putAll(handleShapeSourceOp(builder, dataflow, reshape, 2));
 
       handlePassThroughOp(builder, dataflow, convert_to_tensor, 1);
@@ -1791,12 +1795,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     }
   }
 
-  private Map<PointsToSetVariable, TensorType> handleShapeSourceOp(
+  private Map<PointsToSetVariable, Set<TensorType>> handleShapeSourceOp(
       PropagationCallGraphBuilder builder,
       Graph<PointsToSetVariable> dataflow,
       MethodReference op,
       int shapeSrcOperand) {
-    Map<PointsToSetVariable, TensorType> reshapeTypes =
+    Map<PointsToSetVariable, Set<TensorType>> reshapeTypes =
         getShapeSourceCalls(op, builder, shapeSrcOperand);
     for (PointsToSetVariable to : reshapeTypes.keySet()) {
       assert to.getPointerKey() instanceof LocalPointerKey;

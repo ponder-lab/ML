@@ -665,16 +665,22 @@ public abstract class TensorGenerator {
             resolved.add(s);
             continue;
           }
-          // An empty position holds no resolved constant. Before degrading, try to fold a binary
-          // op over constant-valued operands (e.g. `self.heads * self.out_features`) via the
-          // analysis. `interpretAsInt` in `TensorType.shapeArg` only handles pure-literal source
-          // text; this generator-side path resolves field reads and globals through the PTS,
-          // reconciling the two shape-argument-extraction paths (wala/ML#581). An unfoldable
-          // position is a fixed runtime size the analysis could not compute — `UnresolvedDim`,
-          // not `DynamicDim`; an explicit `None` resolves through the constant path above
+          // An empty position holds no resolved constant. Before degrading, try the dimension
+          // folds — a binary op over constant-valued operands (e.g. `self.heads *
+          // self.out_features`), a shape-vector product/subscript, or a stored attribute — via
+          // the analysis. `interpretAsInt` in `TensorType.shapeArg` only handles pure-literal
+          // source text; this generator-side path resolves field reads and globals through the
+          // PTS, reconciling the two shape-argument-extraction paths (wala/ML#581). A
+          // multi-member source contributes one option per possibility, which the product below
+          // expands into per-possibility members (wala/ML#748). An unfoldable position is a
+          // fixed runtime size the analysis could not compute — `UnresolvedDim`, not
+          // `DynamicDim`; an explicit `None` resolves through the constant path above
           // (wala/ML#721).
-          Dimension<?> folded = foldArithmeticShapeDim(builder, asin, k);
-          resolved.add(Collections.singleton(folded != null ? folded : UnresolvedDim.INSTANCE));
+          Set<Dimension<?>> folded = this.foldArithmeticShapeDims(builder, asin, k);
+          resolved.add(
+              folded != null && !folded.isEmpty()
+                  ? folded
+                  : Collections.singleton(UnresolvedDim.INSTANCE));
         }
 
         List<List<Dimension<?>>> shapes = new ArrayList<>();
@@ -816,23 +822,25 @@ public abstract class TensorGenerator {
 
   /**
    * Attempts to fold the shape dimension at {@code fieldIndex} of the shape list/tuple allocated at
-   * {@code listAsin} when that element is a binary op over constant-valued operands (e.g. {@code
-   * self.heads * self.out_features}).
+   * {@code listAsin} through the dimension-fold arms: a binary op over constant-valued operands
+   * (e.g. {@code self.heads * self.out_features}), a shape-vector product, subscript, or subscript
+   * arithmetic, or a stored attribute.
    *
    * <p>The element write is located in the list's allocating node IR, and the binary op's operands
    * are resolved to constants through the points-to analysis (so field reads and globals resolve,
    * not just source-text literals). This is the generator-side half of the shape-argument
    * reconciliation in wala/ML#581: {@link TensorType#shapeArg(CGNode, int,
    * PropagationCallGraphBuilder)} can fold literal source text via the embedded interpreter but has
-   * no points-to analysis to resolve {@code self.X}.
+   * no points-to analysis to resolve {@code self.X}. An element over a multi-member source (e.g. a
+   * {@code tf.shape(x)[i]} extraction whose {@code x} unions several shapes) folds to one option
+   * per source possibility rather than degrading (wala/ML#748).
    *
    * @param builder The propagation call graph builder, used to resolve operand points-to sets.
    * @param listAsin The allocation site of the shape list/tuple.
    * @param fieldIndex The position whose dimension is being folded.
-   * @return A {@link NumericDim} holding the folded value, or {@code null} if the element is not a
-   *     constant-foldable binary op.
+   * @return The folded dimension options, or {@code null} if no arm resolves the element.
    */
-  private Dimension<?> foldArithmeticShapeDim(
+  private Set<Dimension<?>> foldArithmeticShapeDims(
       PropagationCallGraphBuilder builder, AllocationSiteInNode listAsin, int fieldIndex) {
     CGNode node = listAsin.getNode();
     if (node.getIR() == null) return null;
@@ -877,15 +885,27 @@ public abstract class TensorGenerator {
       if (objRef != listVn || index == null || index.intValue() != fieldIndex) continue;
 
       // Shared with `TensorType.shapeArg` so the two shape-argument paths agree (wala/ML#581).
+      // Each arm pairs the single-member resolver with its multi-member counterpart
+      // (wala/ML#717), so an element over a multi-member source contributes one option per
+      // source possibility instead of degrading the position wholesale (wala/ML#748).
       Dimension<?> folded = TensorType.foldArithmeticDim(builder, node, st, du, writtenVal);
-      if (folded != null) return folded;
+      if (folded != null) return Collections.singleton(folded);
       folded = this.prodOfShapeVectorDim(builder, node, st, writtenVal);
-      if (folded != null) return folded;
+      if (folded != null) return Collections.singleton(folded);
+      Set<Dimension<?>> products = this.prodOfShapeVectorDims(builder, node, st, writtenVal);
+      if (products != null) return products;
       folded = this.resolveShapeVectorElementDim(builder, node, st, writtenVal);
-      if (folded != null) return folded;
+      if (folded != null) return Collections.singleton(folded);
+      Set<Dimension<?>> elements =
+          this.resolveShapeVectorElementDims(builder, node, st, writtenVal);
+      if (elements != null) return elements;
       folded = this.resolveArithmeticOverSubscriptDim(builder, node, st, writtenVal);
-      if (folded != null) return folded;
-      return this.resolveStoredAttributeDim(builder, node, writtenVal);
+      if (folded != null) return Collections.singleton(folded);
+      Set<Dimension<?>> arithmetic =
+          this.resolveArithmeticOverSubscriptDims(builder, node, st, writtenVal);
+      if (arithmetic != null) return arithmetic;
+      folded = this.resolveStoredAttributeDim(builder, node, writtenVal);
+      return folded == null ? null : Collections.singleton(folded);
     }
     return null;
   }
