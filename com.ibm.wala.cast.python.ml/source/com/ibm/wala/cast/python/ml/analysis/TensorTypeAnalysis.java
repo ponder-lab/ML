@@ -309,21 +309,44 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
   }
 
   /**
-   * A type feed installed on a destination (wala/ML#736, wala/ML#682): the composition kind, the
-   * feeding operand variables in operand order, and the dtype the suppressed seed had resolved
-   * (kept when known, since the operands' dataflow dtype can be weaker than what the generator
-   * proved).
+   * Which axes of the suppressed seed a type feed trusts (wala/ML#758): a fill keeps the axis the
+   * generator proved and composes only the unproven one from the operands' converged state, so
+   * proven evidence is never lost to a weaker operand member.
+   */
+  public enum FeedMode {
+    /** The whole member composes from the operands per the declared kind (wala/ML#736). */
+    REPLACE,
+
+    /**
+     * The generator proved the seed's shape but not its dtype: each retained seed member keeps its
+     * dims and takes the operand member's dtype. The dtype is kind-independent, so the declared
+     * kind is not consulted.
+     */
+    DTYPE_FILL,
+
+    /**
+     * The generator proved the seed's dtype but some member's shape stayed at ⊤: shape-resolved
+     * seed members are retained verbatim, and each ⊤-shape member takes its dims from the operand
+     * state composed per the declared kind, keeping its own dtype when proven.
+     */
+    SHAPE_FILL
+  }
+
+  /**
+   * A type feed installed on a destination (wala/ML#736, wala/ML#682): the generator-declared
+   * composition kind, the trusted-axes mode, the feeding operand variables in operand order, and
+   * the suppressed seed's members.
    *
-   * @param kind The composition kind.
+   * @param kind The generator-declared composition kind.
+   * @param mode Which axes of the suppressed seed the feed trusts (wala/ML#758).
    * @param operands The feeding operand variables, in operand order.
-   * @param seedDType The suppressed seed's dtype; {@link DType#UNKNOWN} when it had none.
-   * @param seedMembers The suppressed seed's retained members for {@link
-   *     TensorGenerator.TypeFeedKind#DTYPE_FILL} (wala/ML#758); empty for the other kinds.
+   * @param seedMembers The suppressed seed's retained members for the fill modes; empty for {@link
+   *     FeedMode#REPLACE}.
    */
   public record FeedPlan(
       TensorGenerator.TypeFeedKind kind,
+      FeedMode mode,
       List<PointsToSetVariable> operands,
-      DType seedDType,
       Set<TensorType> seedMembers) {}
 
   private static IKilldallFramework<PointsToSetVariable, TensorVariable> createProblem(
@@ -522,15 +545,19 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
           /**
            * A transfer function for the synthetic type-feed edge from a generator's operand to its
            * result (wala/ML#736, wala/ML#682): the result variable, whose generator seed did not
-           * resolve its shape (and possibly not its dtype), instead composes members from the
-           * operands' converged dataflow state, which the PTS-based walks cannot see. Composition
-           * follows the plan's kind: {@code DTYPE_ONLY} lifts each operand member's dtype as an
-           * unknown-shape member; {@code PASS_THROUGH} forwards each member unchanged; {@code
-           * BROADCAST} pairs each incoming member with the other operand's current members and
-           * broadcasts their shapes (a pair whose shapes don't broadcast statically degrades to an
-           * unknown shape, and no member composes until both operands carry state, so the result is
-           * order-independent). A seed dtype the generator had proven wins over the operand
-           * members' dtype, which can be weaker.
+           * resolve some axis, instead composes members from the operands' converged dataflow
+           * state, which the PTS-based walks cannot see. Under {@link FeedMode#REPLACE} the whole
+           * member composes per the declared kind: {@code DTYPE_ONLY} lifts each operand member's
+           * dtype as an unknown-shape member; {@code PASS_THROUGH} forwards each member unchanged;
+           * {@code BROADCAST} pairs each incoming member with the other operand's current members
+           * and broadcasts their shapes (a pair whose shapes don't broadcast statically degrades to
+           * an unknown shape, and no member composes until both operands carry state, so the result
+           * is order-independent). The fill modes trust the axis the generator proved and compose
+           * only the other (wala/ML#758): {@link FeedMode#DTYPE_FILL} keeps each retained seed
+           * member's dims and takes the operand member's dtype; {@link FeedMode#SHAPE_FILL} retains
+           * shape-resolved seed members verbatim and gives each ⊤-shape member the dims the
+           * declared kind composes from the operand state, keeping a proven member dtype over the
+           * operand's, which can be weaker.
            */
           final class TypeFeedOp extends UnaryOperator<TensorVariable> {
             private final FeedPlan plan;
@@ -547,36 +574,41 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                 return NOT_CHANGED;
               boolean changed = false;
               if (lhs.state == null) lhs.state = HashSetFactory.make();
-              switch (this.plan.kind()) {
-                case DTYPE_ONLY:
-                  for (TensorType t : rhs.state)
-                    changed |= lhs.state.add(new TensorType(this.pickDType(t), null));
-                  break;
+              switch (this.plan.mode()) {
                 case DTYPE_FILL:
-                  // The generator proved the seed's shape but not its dtype (wala/ML#758): each
-                  // retained seed member keeps its dims and takes the operand member's dtype. An
-                  // unknown operand dtype composes the member as the seed asserted it, so the
+                  // An unknown operand dtype composes the member as the seed asserted it, so the
                   // destination never loses the shape evidence.
                   for (TensorType t : rhs.state)
                     for (TensorType s : this.plan.seedMembers())
                       changed |=
                           lhs.state.add(TensorType.of(t.getDType(), s.getDims(), s.layout()));
                   break;
-                case PASS_THROUGH:
-                  for (TensorType t : rhs.state)
-                    changed |=
-                        lhs.state.add(TensorType.of(this.pickDType(t), t.getDims(), t.layout()));
+                case SHAPE_FILL:
+                  for (TensorType composed : this.composeOperandMembers(rhs))
+                    for (TensorType s : this.plan.seedMembers())
+                      changed |=
+                          lhs.state.add(
+                              s.getDims() != null
+                                  ? s
+                                  : TensorType.of(
+                                      s.getDType() != DType.UNKNOWN
+                                          ? s.getDType()
+                                          : composed.getDType(),
+                                      composed.getDims(),
+                                      composed.layout()));
                   break;
-                case BROADCAST:
-                  PointsToSetVariable other =
-                      this.plan.operands().get(0).equals(this.source)
-                          ? this.plan.operands().get(1)
-                          : this.plan.operands().get(0);
-                  TensorVariable otherOut = outAccessor.get().apply(other);
-                  if (otherOut == null || otherOut.state == null) return NOT_CHANGED;
-                  for (TensorType t : rhs.state)
-                    for (TensorType u : otherOut.state)
-                      changed |= lhs.state.add(this.broadcastMembers(t, u));
+                case REPLACE:
+                  switch (this.plan.kind()) {
+                    case DTYPE_ONLY:
+                      for (TensorType t : rhs.state)
+                        changed |= lhs.state.add(new TensorType(t.getDType(), null));
+                      break;
+                    case PASS_THROUGH:
+                    case BROADCAST:
+                      for (TensorType composed : this.composeOperandMembers(rhs))
+                        changed |= lhs.state.add(composed);
+                      break;
+                  }
                   break;
               }
               // The fed result is a TensorFlow op's product regardless of what produced the
@@ -586,16 +618,49 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
             }
 
             /**
+             * Composes the incoming operand state into result members per the declared kind: {@code
+             * PASS_THROUGH} forwards each member, {@code BROADCAST} pairs each incoming member with
+             * the other operand's current members (empty until both operands carry state), and
+             * {@code DTYPE_ONLY} composes no shape-bearing members (the engine never installs a
+             * shape-consuming feed for it).
+             *
+             * @param rhs The incoming operand's variable.
+             * @return The composed members.
+             */
+            private Set<TensorType> composeOperandMembers(TensorVariable rhs) {
+              Set<TensorType> composed = HashSetFactory.make();
+              switch (this.plan.kind()) {
+                case PASS_THROUGH:
+                  composed.addAll(rhs.state);
+                  break;
+                case BROADCAST:
+                  PointsToSetVariable other =
+                      this.plan.operands().get(0).equals(this.source)
+                          ? this.plan.operands().get(1)
+                          : this.plan.operands().get(0);
+                  TensorVariable otherOut = outAccessor.get().apply(other);
+                  if (otherOut == null || otherOut.state == null) break;
+                  for (TensorType t : rhs.state)
+                    for (TensorType u : otherOut.state) composed.add(this.broadcastMembers(t, u));
+                  break;
+                case DTYPE_ONLY:
+                  break;
+              }
+              return composed;
+            }
+
+            /**
              * Broadcasts one member pair: the shapes broadcast right-aligned when both are known
              * and compatible, and degrade to unknown otherwise (an unmarked non-numeric dimension
-             * or statically incompatible sizes).
+             * or statically incompatible sizes). The dtype is the pair's proven one when either
+             * member carries it.
              *
              * @param t The incoming operand's member.
              * @param u The other operand's member.
              * @return The composed member.
              */
             private TensorType broadcastMembers(TensorType t, TensorType u) {
-              DType dtype = this.pickDType(t.getDType() != DType.UNKNOWN ? t : u);
+              DType dtype = t.getDType() != DType.UNKNOWN ? t.getDType() : u.getDType();
               if (t.getDims() == null || u.getDims() == null) return new TensorType(dtype, null);
               try {
                 return new TensorType(
@@ -603,17 +668,6 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               } catch (IllegalArgumentException e) {
                 return new TensorType(dtype, null);
               }
-            }
-
-            /**
-             * Picks the composed member's dtype: the suppressed seed's when the generator had
-             * proven one, else the operand member's.
-             *
-             * @param t The operand member.
-             * @return The dtype for the composed member.
-             */
-            private DType pickDType(TensorType t) {
-              return this.plan.seedDType() != DType.UNKNOWN ? this.plan.seedDType() : t.getDType();
             }
 
             @Override

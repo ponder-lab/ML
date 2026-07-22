@@ -1514,18 +1514,28 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       Map<PointsToSetVariable, Set<TensorOrigin>> suppressedOrigins = HashMapFactory.make();
       for (PointsToSetVariable src : sources) {
         Set<TensorType> types = init.get(src);
-        // Two eligible seed classes, both entirely dtype-unproven: a single pure-⊤ member is
+        // Three eligible seed classes. Entirely dtype-unproven seeds: a single pure-⊤ member is
         // replaced by the generator-declared composition, and any other all-unknown-dtype seed
         // (shape-resolved members, several members, or a mix) keeps its members with only the
         // dtype fed (wala/ML#758's DTYPE_FILL, the class the einsum producer registration
-        // surfaces, wala/ML#757). Suppressing a seed with any dtype the generator PROVED couples
-        // into the engine-side pin computations that read seeded state (the vendored Conv1d and
-        // gather probes are the witnesses), so the known-dtype widening stays with wala/ML#682's
-        // residual.
+        // surfaces, wala/ML#757). A seed with a PROVEN dtype and a ⊤-shape member takes the
+        // mirror SHAPE_FILL: its members are retained — the shape-resolved ones verbatim — and
+        // only the ⊤-shape members' dims compose from the operands, per the declared kind, so
+        // the proven-dtype evidence the engine-side pin computations read is never lost (the
+        // vendored Conv1d and gather probes are wala/ML#682's witnesses for wholesale
+        // suppression). DTYPE_ONLY declares no operand→result shape relation, so proven-dtype
+        // seeds under it stay untouched.
         if (types == null || types.isEmpty()) continue;
-        if (types.stream().anyMatch(t -> t.getDType() != DType.UNKNOWN)) continue;
-        boolean pureTopSeed = types.size() == 1 && types.iterator().next().getDims() == null;
-        boolean fillSeed = !pureTopSeed;
+        boolean anyProvenDType = types.stream().anyMatch(t -> t.getDType() != DType.UNKNOWN);
+        boolean anyTopShape = types.stream().anyMatch(t -> t.getDims() == null);
+        TensorTypeAnalysis.FeedMode mode;
+        if (!anyProvenDType)
+          mode =
+              types.size() == 1 && anyTopShape
+                  ? TensorTypeAnalysis.FeedMode.REPLACE
+                  : TensorTypeAnalysis.FeedMode.DTYPE_FILL;
+        else if (anyTopShape) mode = TensorTypeAnalysis.FeedMode.SHAPE_FILL;
+        else continue; // Both axes proven on every member: nothing to fill.
         TensorGenerator generator;
         try {
           generator = getGenerator(src, builder);
@@ -1534,6 +1544,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         }
         TensorGenerator.TypeFeed feed = generator.getTypeFeed(builder);
         if (feed == null) continue;
+        if (mode == TensorTypeAnalysis.FeedMode.SHAPE_FILL
+            && feed.kind() == TensorGenerator.TypeFeedKind.DTYPE_ONLY) continue;
         List<PointsToSetVariable> feedSources = new ArrayList<>();
         for (PointerKey operandKey : feed.operands()) {
           if (builder.getPropagationSystem().isImplicit(operandKey)) continue;
@@ -1542,11 +1554,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           if (operand.equals(src)) continue; // A self-loop feeds nothing.
           feedSources.add(operand);
         }
-        // A broadcast composes pairs, so it needs both operands; the other kinds need at least
-        // one located operand. Otherwise keep the seed. A fill seed always fills from any
-        // located operand, since only the dtype is borrowed.
+        // A broadcast composes pairs, so any mode that consumes the composed shape needs both
+        // operands; the other kinds need at least one located operand. Otherwise keep the seed.
+        // A dtype fill always fills from any located operand, since only the dtype is borrowed.
         if (feedSources.isEmpty()
-            || (pureTopSeed
+            || (mode != TensorTypeAnalysis.FeedMode.DTYPE_FILL
                 && feed.kind() == TensorGenerator.TypeFeedKind.BROADCAST
                 && feedSources.size() != 2)) continue;
         for (PointsToSetVariable operand : feedSources) {
@@ -1556,10 +1568,10 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         typeFeeds.put(
             src,
             new TensorTypeAnalysis.FeedPlan(
-                fillSeed ? TensorGenerator.TypeFeedKind.DTYPE_FILL : feed.kind(),
+                feed.kind(),
+                mode,
                 feedSources,
-                DType.UNKNOWN,
-                fillSeed ? types : Collections.emptySet()));
+                mode == TensorTypeAnalysis.FeedMode.REPLACE ? Collections.emptySet() : types));
         suppressedSeeds.put(src, types);
         Set<TensorOrigin> origins = initOrigins.get(src);
         if (origins != null) suppressedOrigins.put(src, origins);
@@ -1569,7 +1581,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       LOGGER.fine(() -> "wala/ML#736 type feeds: " + typeFeeds.size());
       for (Map.Entry<PointsToSetVariable, TensorTypeAnalysis.FeedPlan> f : typeFeeds.entrySet())
         LOGGER.fine(
-            () -> "  feed " + f.getValue().kind() + ": " + describe(f.getKey().getPointerKey()));
+            () ->
+                "  feed "
+                    + f.getValue().mode()
+                    + "/"
+                    + f.getValue().kind()
+                    + ": "
+                    + describe(f.getKey().getPointerKey()));
 
       Map<PointsToSetVariable, Set<TensorType>> shapeOps = HashMapFactory.make();
       shapeOps.putAll(handleShapeSourceOp(builder, dataflow, reshape, 2));
