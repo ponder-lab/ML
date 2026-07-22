@@ -3903,8 +3903,12 @@ public abstract class TensorGenerator {
           LOGGER.fine("Delegating dtype inference to: " + generator);
           Set<DType> delegated = memoizedDTypes(builder, generator);
           // A null delegation result is ⊤ (e.g., an argument dtype that resolves through neither
-          // the points-to set nor the caller walk); contribute UNKNOWN rather than NPE-ing.
-          ret.addAll(delegated == null ? EnumSet.of(UNKNOWN) : delegated);
+          // the points-to set nor the caller walk). It contributes nothing, matching the engine's
+          // empty-set dtype bottom: an in-band UNKNOWN would collapse the caller's union under
+          // the lattice normalization, composing unknown-dtype twins of otherwise-resolved
+          // sibling members (wala/ML#757). A value none of whose producers resolve still reads
+          // UNKNOWN through the empty-set mapping at its generator boundary.
+          if (delegated != null) ret.addAll(delegated);
         } else if (defSource != null) {
           if (applyRecursionGuards
               && this.getSource() != null
@@ -6740,6 +6744,8 @@ public abstract class TensorGenerator {
       return new ElementWiseOperation(node);
     } else if (type.equals(TensorFlowTypes.TRANSPOSE.getDeclaringClass())) {
       return new Transpose(node);
+    } else if (type.equals(TensorFlowTypes.EINSUM.getDeclaringClass())) {
+      return new Einsum(node);
     } else if (type.equals(TensorFlowTypes.RESHAPE.getDeclaringClass())) {
       return new Reshape(node);
     } else if (type.equals(TensorFlowTypes.SQUEEZE.getDeclaringClass())) {
