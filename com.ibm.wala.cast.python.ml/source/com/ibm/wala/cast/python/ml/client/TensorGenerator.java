@@ -6765,10 +6765,6 @@ public abstract class TensorGenerator {
       return new Range(node);
     } else if (type.equals(NumpyTypes.ARRAY.getDeclaringClass())) {
       return new NpArray(node);
-    } else if (type.equals(TensorFlowTypes.UNSORTED_SEGMENT_SUM.getDeclaringClass())
-        || type.equals(TensorFlowTypes.UNSORTED_SEGMENT_MAX.getDeclaringClass())
-        || type.equals(TensorFlowTypes.UNSORTED_SEGMENT_MEAN.getDeclaringClass())) {
-      return new UnsortedSegmentReduction(node);
     } else if (type.equals(TensorFlowTypes.SIGMOID.getDeclaringClass())) {
       return new Sigmoid(node);
     } else if (type.equals(TensorFlowTypes.SOFTMAX.getDeclaringClass())) {

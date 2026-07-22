@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
@@ -22,6 +23,15 @@ public class MaxPool extends TensorGenerator {
 
   public MaxPool(PointsToSetVariable source) {
     super(source);
+  }
+
+  /**
+   * Constructs anchored to a manual node.
+   *
+   * @param node The {@link CGNode} for the synthetic {@code do()} method.
+   */
+  public MaxPool(CGNode node) {
+    super(node);
   }
 
   @Override

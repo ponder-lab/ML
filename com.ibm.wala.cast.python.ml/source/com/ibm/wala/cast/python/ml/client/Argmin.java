@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 
 /**
@@ -15,5 +16,14 @@ public class Argmin extends Argmax {
 
   public Argmin(PointsToSetVariable source) {
     super(source);
+  }
+
+  /**
+   * Constructs anchored to a manual node.
+   *
+   * @param node The {@link CGNode} for the synthetic {@code do()} method.
+   */
+  public Argmin(CGNode node) {
+    super(node);
   }
 }
