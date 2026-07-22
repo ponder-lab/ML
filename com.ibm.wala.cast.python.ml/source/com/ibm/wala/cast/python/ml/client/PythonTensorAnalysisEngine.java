@@ -69,8 +69,6 @@ import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.CancelException;
 import com.ibm.wala.util.NullProgressMonitor;
-import com.ibm.wala.util.collections.HashMapFactory;
-import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.graph.Graph;
 import com.ibm.wala.util.graph.impl.SlowSparseNumberedGraph;
@@ -83,6 +81,8 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -380,7 +380,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   private static final MethodReference NEXT =
       MethodReference.findOrCreate(PythonTypes.NEXT_BUILTIN, AstMethodReference.fnSelector);
 
-  private final Map<PointerKey, AnalysisError> errorLog = HashMapFactory.make();
+  private final Map<PointerKey, AnalysisError> errorLog = new LinkedHashMap<>();
 
   /**
    * A tensor value that resolved to ⊤ (unknown) at a call-string context saturated to the
@@ -434,7 +434,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    */
   private static Set<PointsToSetVariable> getDataflowSources(
       PropagationCallGraphBuilder builder, Graph<PointsToSetVariable> dataflow) {
-    Set<PointsToSetVariable> sources = HashSetFactory.make();
+    // Insertion-ordered so the demand-root order follows discovery order rather than identity
+    // hashes (wala/ML#753); the wala/ML#756 root shuffle still perturbs it on request.
+    Set<PointsToSetVariable> sources = new LinkedHashSet<>();
     CallGraph callGraph = builder.getCallGraph();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
@@ -1071,7 +1073,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
   private Map<PointsToSetVariable, TensorType> getShapeSourceCalls(
       MethodReference op, PropagationCallGraphBuilder builder, int param) {
-    Map<PointsToSetVariable, TensorType> targets = HashMapFactory.make();
+    Map<PointsToSetVariable, TensorType> targets = new LinkedHashMap<>();
     getSourceCalls(
         op,
         builder,
@@ -1161,7 +1163,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    */
   private Map<PointsToSetVariable, TensorType> getSetShapeCallsSyntactic(
       PropagationCallGraphBuilder builder) {
-    Map<PointsToSetVariable, TensorType> targets = HashMapFactory.make();
+    Map<PointsToSetVariable, TensorType> targets = new LinkedHashMap<>();
     for (CGNode caller : builder.getCallGraph()) {
       IR ir = caller.getIR();
       if (ir == null) continue;
@@ -1236,7 +1238,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
   private Set<PointsToSetVariable> getKeysDefinedByCall(
       MethodReference op, PropagationCallGraphBuilder builder) {
-    Set<PointsToSetVariable> lvals = HashSetFactory.make();
+    Set<PointsToSetVariable> lvals = new LinkedHashSet<>();
     getSourceCalls(
         op,
         builder,
@@ -1386,7 +1388,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // the recorded query-dependency graph replaces the historical round-based resolution
       // (retired in Phase 3), the memo layers divert to the engine, and the seeding reads
       // stabilized values, so the results are independent of the seeding order.
-      Map<PointsToSetVariable, Set<TensorType>> init = HashMapFactory.make();
+      Map<PointsToSetVariable, Set<TensorType>> init = new LinkedHashMap<>();
 
       // The engine's results are order-independent; the reverse-seeds property exists so the
       // invariance is a tested property rather than a design claim (wala/ML#365, Phase 2).
@@ -1413,7 +1415,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // Seed each source's producing library beside its types (wala/ML#724). Origins ride the
       // same dataflow edges as the types, so the seeds are the only generator-side contribution;
       // everything downstream (operators, merges) is the analysis's union.
-      Map<PointsToSetVariable, Set<TensorOrigin>> initOrigins = HashMapFactory.make();
+      Map<PointsToSetVariable, Set<TensorOrigin>> initOrigins = new LinkedHashMap<>();
       for (PointsToSetVariable v : sources) {
         Set<TensorType> types = init.get(v);
         if (types != null && types.isEmpty()) continue; // ⊥: not a tensor, no origin to record
@@ -1473,8 +1475,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // destinations, so unknown-shape members recover the proven axes while concrete members
       // pass through untouched. An operand whose call sites prove disagreeing constraints is
       // left alone.
-      Map<PointsToSetVariable, List<Dimension<?>>> refinements = HashMapFactory.make();
-      Set<PointsToSetVariable> conflictingRefinements = HashSetFactory.make();
+      Map<PointsToSetVariable, List<Dimension<?>>> refinements = new LinkedHashMap<>();
+      Set<PointsToSetVariable> conflictingRefinements = new LinkedHashSet<>();
       for (PointsToSetVariable src : sources) {
         TensorGenerator generator;
         try {
@@ -1505,9 +1507,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // substrate). Replace such a seed with synthetic dataflow edges from the operands the
       // generator declares: the result composes from the operands' converged members per the
       // feed's kind, and the unresolved seed member is never born.
-      Map<PointsToSetVariable, TensorTypeAnalysis.FeedPlan> typeFeeds = HashMapFactory.make();
-      Map<PointsToSetVariable, Set<TensorType>> suppressedSeeds = HashMapFactory.make();
-      Map<PointsToSetVariable, Set<TensorOrigin>> suppressedOrigins = HashMapFactory.make();
+      Map<PointsToSetVariable, TensorTypeAnalysis.FeedPlan> typeFeeds = new LinkedHashMap<>();
+      Map<PointsToSetVariable, Set<TensorType>> suppressedSeeds = new LinkedHashMap<>();
+      Map<PointsToSetVariable, Set<TensorOrigin>> suppressedOrigins = new LinkedHashMap<>();
       for (PointsToSetVariable src : sources) {
         Set<TensorType> types = init.get(src);
         if (types == null || types.size() != 1) continue;
@@ -1555,7 +1557,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         LOGGER.fine(
             () -> "  feed " + f.getValue().kind() + ": " + describe(f.getKey().getPointerKey()));
 
-      Map<PointsToSetVariable, TensorType> shapeOps = HashMapFactory.make();
+      Map<PointsToSetVariable, TensorType> shapeOps = new LinkedHashMap<>();
       shapeOps.putAll(handleShapeSourceOp(builder, dataflow, reshape, 2));
 
       handlePassThroughOp(builder, dataflow, convert_to_tensor, 1);
@@ -1571,7 +1573,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // The factory already throws `IllegalArgumentException` for these PropertyReads in
       // `TensorGeneratorFactory.getGenerator`, but that only prevents generator-level seeding; it
       // doesn't block the PTS-graph edge. See wala/ML#409.
-      Set<PointsToSetVariable> drops = HashSetFactory.make();
+      Set<PointsToSetVariable> drops = new LinkedHashSet<>();
       for (PointsToSetVariable v : dataflow) {
         if (isEnumerateFirstFieldRead(v, builder)) drops.add(v);
       }
@@ -1607,7 +1609,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // seeding them exported the parameter constant through shared builtin frames onto every
       // caller's derived values (the slice builtin under `edges[:, 0]` was the wala/ML#731
       // witness), and values crossing pass-through API summaries lost their true provenance.
-      Set<PointsToSetVariable> parameters = HashSetFactory.make();
+      Set<PointsToSetVariable> parameters = new LinkedHashSet<>();
       for (PointsToSetVariable v : dataflow)
         if (v.getPointerKey() instanceof LocalPointerKey
             && ((LocalPointerKey) v.getPointerKey()).isParameter()
@@ -1623,7 +1625,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // creator walk. The PA aliases iteration results with their iterables, so without a filter
       // the parameter constant crosses onto the products. Collected here are the aliased
       // destinations: enumerate results, each-element reads, and their tuple-field unwraps.
-      Set<PointsToSetVariable> iterationProducts = HashSetFactory.make();
+      Set<PointsToSetVariable> iterationProducts = new LinkedHashSet<>();
       for (PointsToSetVariable v : dataflow) {
         if (!(v.getPointerKey() instanceof LocalPointerKey)) continue;
         LocalPointerKey lpk = (LocalPointerKey) v.getPointerKey();
@@ -1766,7 +1768,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           Level.FINER,
           e,
           () -> "Source " + describe(source) + " is not a recognized tensor generator.");
-      return HashSetFactory.make();
+      return new LinkedHashSet<>();
     }
   }
 

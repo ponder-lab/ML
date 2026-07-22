@@ -243,13 +243,13 @@ import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
-import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.debug.UnimplementedError;
 import com.ibm.wala.util.graph.Graph;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -407,7 +407,7 @@ public class TensorGeneratorFactory {
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
     Graph<PointsToSetVariable> assignmentGraph =
         builder.getPropagationSystem().getAssignmentGraph();
-    Set<PointsToSetVariable> visited = HashSetFactory.make();
+    Set<PointsToSetVariable> visited = new LinkedHashSet<>();
     Queue<PointsToSetVariable> queue = new LinkedList<>();
     queue.add(source);
     visited.add(source);
@@ -838,7 +838,7 @@ public class TensorGeneratorFactory {
    */
   public static TensorGenerator getGenerator(
       PointsToSetVariable source, PropagationCallGraphBuilder builder) {
-    return getGenerator(source, builder, HashSetFactory.make());
+    return getGenerator(source, builder, new LinkedHashSet<>());
   }
 
   /**
@@ -1660,7 +1660,7 @@ public class TensorGeneratorFactory {
             .getPointerAnalysis()
             .getHeapModel()
             .getPointerKeyForLocal(node, funcRead.getMemberRef());
-    Set<String> names = HashSetFactory.make();
+    Set<String> names = new LinkedHashSet<>();
     for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(memberKey)) {
       if (!(ik instanceof ConstantKey)) continue;
       Object value = ((ConstantKey<?>) ik).getValue();
@@ -1703,7 +1703,7 @@ public class TensorGeneratorFactory {
       if (cached != null) return cached;
     }
     String suffix = "/" + PythonTensorAnalysisEngine.TENSOR_GENERATOR_SYNTHETIC_FUNCTION_NAME;
-    Set<String> names = HashSetFactory.make();
+    Set<String> names = new LinkedHashSet<>();
     for (IClass cls : cha) {
       String typeName = cls.getName().toString();
       if (!typeName.startsWith("Ltensorflow/")) continue;

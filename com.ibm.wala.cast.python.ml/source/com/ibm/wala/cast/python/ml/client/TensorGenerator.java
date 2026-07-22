@@ -83,7 +83,6 @@ import com.ibm.wala.ssa.SSAUnaryOpInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
-import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
@@ -402,10 +401,10 @@ public abstract class TensorGenerator {
     // If we have no dtype info at all, fall back to signaling "unknown tensor" when shapes are
     // also unknown, otherwise produce an empty set (⊥, not a tensor).
     if (dTypes == null || dTypes.isEmpty()) {
-      return shapes.members().isEmpty() && shapes.hasUnknown() ? null : HashSetFactory.make();
+      return shapes.members().isEmpty() && shapes.hasUnknown() ? null : new LinkedHashSet<>();
     }
 
-    Set<TensorType> ret = HashSetFactory.make();
+    Set<TensorType> ret = new LinkedHashSet<>();
 
     final Layout layout = this.producesSparseTensor() ? Layout.SPARSE : Layout.DENSE;
 
@@ -474,7 +473,7 @@ public abstract class TensorGenerator {
       throw new IllegalArgumentException(
           "Empty points-to set for shape argument in source: " + describe(this.getSource()) + ".");
 
-    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    Set<List<Dimension<?>>> ret = new LinkedHashSet<>();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey instanceKey : pointsToSet) {
@@ -559,7 +558,7 @@ public abstract class TensorGenerator {
 
           // If the instance field points to a constant, we can use it as the shape.
           // TODO: Is it possible to also do it for (simple) expressions?
-          Set<Dimension<?>> tensorDimensions = HashSetFactory.make();
+          Set<Dimension<?>> tensorDimensions = new LinkedHashSet<>();
 
           for (InstanceKey instanceFieldIK : instanceFieldPointsToSet) {
             if (instanceFieldIK instanceof ConstantKey) {
@@ -1195,7 +1194,7 @@ public abstract class TensorGenerator {
         if (argVn <= 0 && call.getNumberOfUses() >= 2) argVn = call.getUse(1);
         if (argVn <= 0) continue;
         Set<List<Dimension<?>>> declared =
-            this.shapesOfShapeVectorOrLiteralList(builder, caller, argVn, HashSetFactory.make());
+            this.shapesOfShapeVectorOrLiteralList(builder, caller, argVn, new LinkedHashSet<>());
         int finalArgVn = argVn;
         LOGGER.fine(
             () ->
@@ -1211,7 +1210,7 @@ public abstract class TensorGenerator {
                     + declared
                     + ".");
         if (declared == null || declared.isEmpty()) continue;
-        if (combined == null) combined = HashSetFactory.make();
+        if (combined == null) combined = new LinkedHashSet<>();
         combined.addAll(declared);
       }
     }
@@ -1537,7 +1536,7 @@ public abstract class TensorGenerator {
 
     Set<List<Dimension<?>>> shapes = this.getShapesOfShapeVector(builder, node, invoke.getUse(1));
     if (shapes == null || shapes.size() < 2) return null; // The singleton path covers size one.
-    Set<Dimension<?>> options = HashSetFactory.make();
+    Set<Dimension<?>> options = new LinkedHashSet<>();
     for (List<Dimension<?>> dims : shapes) options.add(prodOfDims(dims));
     return options;
   }
@@ -1568,7 +1567,7 @@ public abstract class TensorGenerator {
     CGNode allocNode = constAlloc.getNode();
     CallGraph cg = builder.getCallGraph();
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
-    Set<InstanceKey> all = HashSetFactory.make();
+    Set<InstanceKey> all = new LinkedHashSet<>();
     for (Iterator<CGNode> it = cg.getPredNodes(allocNode); it.hasNext(); ) {
       CGNode caller = it.next();
       com.ibm.wala.ssa.IR callerIR = caller.getIR();
@@ -1801,7 +1800,7 @@ public abstract class TensorGenerator {
                 this.shapeResultOfCalleeReturnValues(
                     builder, node, (SSAAbstractInvokeInstruction) valueDef, exact);
             if (!fromValue.members().containsAll(fromCallees.members())) {
-              Set<List<Dimension<?>>> merged = HashSetFactory.make(fromValue.members());
+              Set<List<Dimension<?>>> merged = new LinkedHashSet<>(fromValue.members());
               merged.addAll(fromCallees.members());
               return new ShapeResult(merged, fromCallees.hasUnknown());
             }
@@ -1887,7 +1886,7 @@ public abstract class TensorGenerator {
     // the conditional-reshape φ keeps only its runtime arm.
     if (def instanceof SSAPhiInstruction) {
       boolean armUnknown = false;
-      Set<List<Dimension<?>>> armMembers = HashSetFactory.make();
+      Set<List<Dimension<?>>> armMembers = new LinkedHashSet<>();
       for (int i = 0; i < def.getNumberOfUses(); i++) {
         int useVn = def.getUse(i);
         if (useVn <= 0) {
@@ -1936,7 +1935,7 @@ public abstract class TensorGenerator {
 
       if (paramPos >= -1) { // -1 is 'self'
         boolean callerUnknown = false;
-        Set<List<Dimension<?>>> combinedRet = HashSetFactory.make();
+        Set<List<Dimension<?>>> combinedRet = new LinkedHashSet<>();
         WorklistTypeResolver activeEngine = WorklistTypeResolver.active(builder);
         boolean replay = activeEngine != null && activeEngine.isReplaying();
         for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
@@ -2024,7 +2023,7 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, CGNode node, SSAPhiInstruction phi, boolean exact) {
     boolean pruned = false;
     boolean armUnknown = false;
-    Set<List<Dimension<?>>> armMembers = HashSetFactory.make();
+    Set<List<Dimension<?>>> armMembers = new LinkedHashSet<>();
     for (int i = 0; i < phi.getNumberOfUses(); i++) {
       int useVn = phi.getUse(i);
       if (useVn <= 0) {
@@ -2369,7 +2368,7 @@ public abstract class TensorGenerator {
    */
   protected Set<List<Dimension<?>>> shapesFromSSAChain(
       PropagationCallGraphBuilder builder, CGNode node, int vn) {
-    return shapesFromSSAChain(builder, node, vn, HashSetFactory.make());
+    return shapesFromSSAChain(builder, node, vn, new LinkedHashSet<>());
   }
 
   /**
@@ -2512,7 +2511,7 @@ public abstract class TensorGenerator {
    */
   protected Set<DType> dtypesFromSSAChain(
       PropagationCallGraphBuilder builder, CGNode node, int vn) {
-    return dtypesFromSSAChain(builder, node, vn, HashSetFactory.make());
+    return dtypesFromSSAChain(builder, node, vn, new LinkedHashSet<>());
   }
 
   /**
@@ -2751,7 +2750,7 @@ public abstract class TensorGenerator {
     }
 
     boolean hasUnknown = false;
-    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    Set<List<Dimension<?>>> ret = new LinkedHashSet<>();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
     WorklistTypeResolver activeEngine = WorklistTypeResolver.active(builder);
     boolean replay = activeEngine != null && activeEngine.isReplaying();
@@ -2978,7 +2977,7 @@ public abstract class TensorGenerator {
       boolean exact,
       boolean applyRecursionGuards) {
     boolean hasUnknown = false;
-    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    Set<List<Dimension<?>>> ret = new LinkedHashSet<>();
     CGNode readDataNode = asin.getNode();
     WorklistTypeResolver activeEngine = WorklistTypeResolver.active(builder);
     boolean replay = activeEngine != null && activeEngine.isReplaying();
@@ -4236,7 +4235,7 @@ public abstract class TensorGenerator {
         LOGGER.fine(
             () -> "getArgumentShapesViaCallers: argVn=" + finalArgVn + " shapes=" + argShapes);
         if (argShapes != null && !argShapes.isEmpty()) {
-          if (combined == null) combined = HashSetFactory.make();
+          if (combined == null) combined = new LinkedHashSet<>();
           combined.addAll(argShapes);
         }
       } catch (IllegalArgumentException e) {
@@ -4288,7 +4287,7 @@ public abstract class TensorGenerator {
         ShapeResult argShapes = this.getShapeResult(builder, caller, argVn, true);
         if (argShapes.hasUnknown()) callerUnknown = true;
         if (!argShapes.members().isEmpty()) {
-          if (combined == null) combined = HashSetFactory.make();
+          if (combined == null) combined = new LinkedHashSet<>();
           combined.addAll(argShapes.members());
         }
       } catch (IllegalArgumentException e) {
@@ -4388,7 +4387,7 @@ public abstract class TensorGenerator {
       try {
         Set<List<Dimension<?>>> tensorShapes = this.getShapes(builder, caller, tensorVn);
         if (tensorShapes != null && !tensorShapes.isEmpty()) {
-          if (combined == null) combined = HashSetFactory.make();
+          if (combined == null) combined = new LinkedHashSet<>();
           combined.addAll(tensorShapes);
         }
       } catch (IllegalArgumentException e) {
@@ -4479,7 +4478,7 @@ public abstract class TensorGenerator {
       ShapeResult shapes = this.getShapeResultOfShapeVector(builder, caller, argVn);
       if (shapes.hasUnknown()) callerUnknown = true;
       if (!shapes.members().isEmpty()) {
-        if (combined == null) combined = HashSetFactory.make();
+        if (combined == null) combined = new LinkedHashSet<>();
         combined.addAll(shapes.members());
       }
     }
@@ -4531,7 +4530,7 @@ public abstract class TensorGenerator {
    */
   protected ShapeResult getShapeResultOfShapeVector(
       PropagationCallGraphBuilder builder, CGNode node, int vn) {
-    return getShapeResultOfShapeVector(builder, node, vn, HashSetFactory.make());
+    return getShapeResultOfShapeVector(builder, node, vn, new LinkedHashSet<>());
   }
 
   /**
@@ -4607,7 +4606,7 @@ public abstract class TensorGenerator {
           // and the resolvable callers' members still stand (wala/ML#718).
           if (shapes.hasUnknown() || shapes.isBottom()) callerUnknown = true;
           if (!shapes.members().isEmpty()) {
-            if (combined == null) combined = HashSetFactory.make();
+            if (combined == null) combined = new LinkedHashSet<>();
             combined.addAll(shapes.members());
           }
         }
@@ -4655,7 +4654,7 @@ public abstract class TensorGenerator {
             ShapeResult shapes = this.getShapeResultOfShapeVector(builder, caller, argVn, visited);
             if (shapes.hasUnknown() || shapes.isBottom()) callerUnknown = true;
             if (!shapes.members().isEmpty()) {
-              if (combined == null) combined = HashSetFactory.make();
+              if (combined == null) combined = new LinkedHashSet<>();
               combined.addAll(shapes.members());
             }
           } finally {
@@ -4752,7 +4751,7 @@ public abstract class TensorGenerator {
         // Slice per member and candidate combination with Python's adjusted-indices semantics
         // (wala/ML#709); the base's unknown remainder rides through (wala/ML#718). Only the
         // invalid zero step keeps the ⊤ fallback.
-        Set<List<Dimension<?>>> sliced = HashSetFactory.make();
+        Set<List<Dimension<?>>> sliced = new LinkedHashSet<>();
         for (Integer lower : lowers)
           for (Integer upper : uppers)
             for (Integer step : steps) {
@@ -4801,7 +4800,7 @@ public abstract class TensorGenerator {
                   + right.members().size()
                   + " member(s).");
       if (right.members().isEmpty()) return ShapeResult.unknown();
-      Set<List<Dimension<?>>> concatenated = HashSetFactory.make();
+      Set<List<Dimension<?>>> concatenated = new LinkedHashSet<>();
       for (List<Dimension<?>> l : left.members())
         for (List<Dimension<?>> r : right.members()) {
           List<Dimension<?>> joined = new ArrayList<>(l);
@@ -4926,7 +4925,7 @@ public abstract class TensorGenerator {
       if (next.size() > 16) return ShapeResult.unknown();
       composed = next;
     }
-    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    Set<List<Dimension<?>>> ret = new LinkedHashSet<>();
     ret.addAll(composed);
     return ShapeResult.of(ret);
   }
@@ -5007,7 +5006,7 @@ public abstract class TensorGenerator {
     Set<List<Dimension<?>>> shapes =
         this.getShapesOfShapeVector(builder, node, read.getObjectRef());
     if (shapes == null || shapes.size() < 2) return null; // The singleton path covers size 1.
-    Set<Dimension<?>> options = HashSetFactory.make();
+    Set<Dimension<?>> options = new LinkedHashSet<>();
     for (List<Dimension<?>> dims : shapes) {
       int k = index < 0 ? dims.size() + index : index;
       if (k < 0 || k >= dims.size()) continue;
@@ -5050,7 +5049,7 @@ public abstract class TensorGenerator {
     }
     if (lefts.size() < 2 && rights.size() < 2) return null; // The singleton path covers this.
 
-    Set<Dimension<?>> options = HashSetFactory.make();
+    Set<Dimension<?>> options = new LinkedHashSet<>();
     for (int left : lefts)
       for (int right : rights) {
         if (binOp.getOperator() == IBinaryOpInstruction.Operator.DIV
@@ -5084,7 +5083,7 @@ public abstract class TensorGenerator {
     int peeled = peelIntBuiltin(builder, node, vn);
     Set<Dimension<?>> dims = this.resolveShapeVectorElementDims(builder, node, st, peeled);
     if (dims == null) return null;
-    Set<Integer> options = HashSetFactory.make();
+    Set<Integer> options = new LinkedHashSet<>();
     for (Dimension<?> dim : dims) {
       if (!(dim instanceof NumericDim)) return null; // A non-numeric member: not enumerable.
       options.add(((NumericDim) dim).value());
@@ -5218,7 +5217,7 @@ public abstract class TensorGenerator {
     if (targets == null || targets.isEmpty()) return ShapeResult.unknown();
 
     boolean hasUnknown = false;
-    Set<List<Dimension<?>>> combined = HashSetFactory.make();
+    Set<List<Dimension<?>>> combined = new LinkedHashSet<>();
     for (CGNode callee : targets) {
       if (callee.getIR() == null || callee.getDU() == null) return ShapeResult.unknown();
       if (!visited.add(callee)) return ShapeResult.unknown(); // Recursive helper: unmodeled.
@@ -5277,7 +5276,7 @@ public abstract class TensorGenerator {
     if (targets == null || targets.isEmpty()) return ShapeResult.unknown();
 
     boolean hasUnknown = false;
-    Set<List<Dimension<?>>> combined = HashSetFactory.make();
+    Set<List<Dimension<?>>> combined = new LinkedHashSet<>();
     for (CGNode callee : targets) {
       if (callee.getIR() == null || callee.getDU() == null) return ShapeResult.unknown();
       boolean sawReturn = false;
@@ -5364,7 +5363,7 @@ public abstract class TensorGenerator {
    */
   public static boolean isShapeVectorChain(
       PropagationCallGraphBuilder builder, CGNode node, int vn) {
-    return isShapeVectorChain(builder, node, vn, HashSetFactory.make());
+    return isShapeVectorChain(builder, node, vn, new LinkedHashSet<>());
   }
 
   /**
@@ -5598,7 +5597,7 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, CGNode node, int argVn) {
     if (argVn <= 0 || node.getIR() == null || node.getDU() == null)
       return ShapeUnresolutionCause.UNDETERMINED;
-    int rootVn = this.peelShapeVectorRoot(builder, node, argVn, HashSetFactory.make());
+    int rootVn = this.peelShapeVectorRoot(builder, node, argVn, new LinkedHashSet<>());
     return this.classifyRootValue(builder, node, rootVn);
   }
 
@@ -6437,7 +6436,7 @@ public abstract class TensorGenerator {
    */
   protected Set<Integer> getNumberOfPossiblePositionalArguments(
       PropagationCallGraphBuilder builder) {
-    Set<Integer> ret = HashSetFactory.make();
+    Set<Integer> ret = new LinkedHashSet<>();
 
     PythonInvokeInstruction call = getInvokeInstruction();
     if (call != null) {
@@ -6476,7 +6475,7 @@ public abstract class TensorGenerator {
    */
   protected static Set<Double> getPossibleDoubleValues(
       PropagationCallGraphBuilder builder, CGNode caller, int vn) {
-    Set<Double> vals = HashSetFactory.make();
+    Set<Double> vals = new LinkedHashSet<>();
     if (vn == -1) return vals;
 
     // 1. Try symbol table (for literal constants)
@@ -6509,7 +6508,7 @@ public abstract class TensorGenerator {
     Set<Object> constants = getConstantValues(pts, true);
     if (constants == null) return null;
 
-    Set<Double> ret = HashSetFactory.make();
+    Set<Double> ret = new LinkedHashSet<>();
 
     for (Object val : constants) {
       if (val instanceof Number) {
@@ -6537,7 +6536,7 @@ public abstract class TensorGenerator {
     Set<Object> constants = getConstantValues(pointsToSet, true);
     if (constants == null) return null;
 
-    Set<Long> ret = HashSetFactory.make();
+    Set<Long> ret = new LinkedHashSet<>();
 
     for (Object val : constants) {
       if (val instanceof Number) {
@@ -6567,7 +6566,7 @@ public abstract class TensorGenerator {
    */
   protected static Set<Object> getConstantValues(
       OrdinalSet<InstanceKey> pts, boolean requireConstants) {
-    Set<Object> ret = HashSetFactory.make();
+    Set<Object> ret = new LinkedHashSet<>();
 
     if (pts != null) {
       for (InstanceKey ik : pts) {

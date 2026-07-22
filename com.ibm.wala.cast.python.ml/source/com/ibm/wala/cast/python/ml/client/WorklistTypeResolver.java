@@ -2,13 +2,13 @@ package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
-import com.ibm.wala.util.collections.HashMapFactory;
-import com.ibm.wala.util.collections.HashSetFactory;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -41,6 +41,12 @@ import java.util.logging.Logger;
  * promotion step). Widenings bound divergence: a member-set cardinality cap and a rank cap, both
  * logged when they fire.
  *
+ * <p>Every internal structure whose iteration influences scheduling (dependent re-enqueue order,
+ * Tarjan root and edge order, the sweep orders of the diagnostic passes) is insertion-ordered, so
+ * the engine's evaluation order is a function of the query discovery order alone rather than of
+ * identity hashes, which vary with JVM run history (wala/ML#753: predecessor tests in the same JVM
+ * were an order perturbation the wala/ML#756 knob could not reproduce).
+ *
  * <p>The default resolution engine since Phase 3, installed per analysis run by {@link
  * PythonTensorAnalysisEngine#performAnalysis}; the historical round-based resolution is retired.
  */
@@ -72,23 +78,23 @@ final class WorklistTypeResolver {
       Collections.synchronizedMap(new WeakHashMap<>());
 
   /** Query values; absent means the iteration bottom for the query's kind. */
-  private final Map<Object, Object> state = HashMapFactory.make();
+  private final Map<Object, Object> state = new LinkedHashMap<>();
 
   /** Transfer functions, registered on first encounter of each query. */
-  private final Map<Object, Supplier<Object>> transfers = HashMapFactory.make();
+  private final Map<Object, Supplier<Object>> transfers = new LinkedHashMap<>();
 
   /** Whether each query is {@link ShapeResult}-valued ({@code true}) or dtype-valued. */
-  private final Map<Object, Boolean> shapeKinds = HashMapFactory.make();
+  private final Map<Object, Boolean> shapeKinds = new LinkedHashMap<>();
 
   /** Reverse dependency edges: query → the queries whose evaluations read it. */
-  private final Map<Object, Set<Object>> dependents = HashMapFactory.make();
+  private final Map<Object, Set<Object>> dependents = new LinkedHashMap<>();
 
   /** Forward edges, for the SCC promotion pass. */
-  private final Map<Object, Set<Object>> reads = HashMapFactory.make();
+  private final Map<Object, Set<Object>> reads = new LinkedHashMap<>();
 
   private final Deque<Object> worklist = new ArrayDeque<>();
-  private final Set<Object> enqueued = HashSetFactory.make();
-  private final Map<Object, Integer> evaluationCounts = HashMapFactory.make();
+  private final Set<Object> enqueued = new LinkedHashSet<>();
+  private final Map<Object, Integer> evaluationCounts = new LinkedHashMap<>();
 
   /**
    * The cycle-order perturbation source (wala/ML#756), or {@code null} when the knob is off. The
@@ -108,10 +114,10 @@ final class WorklistTypeResolver {
   private final Deque<Object> evaluating = new ArrayDeque<>();
 
   /** Membership view of {@link #evaluating}, the inline-recursion cycle break. */
-  private final Set<Object> inStack = HashSetFactory.make();
+  private final Set<Object> inStack = new LinkedHashSet<>();
 
   /** Queries whose first (inline) evaluation has completed. */
-  private final Set<Object> evaluated = HashSetFactory.make();
+  private final Set<Object> evaluated = new LinkedHashSet<>();
 
   /** Whether the post-settlement replay diagnostic is running; see {@link #replaySettled}. */
   private boolean replaying;
@@ -189,8 +195,8 @@ final class WorklistTypeResolver {
   Object read(Object key, Supplier<Object> transfer, boolean shapeKind) {
     Object reader = this.evaluating.peek();
     if (reader != null && !reader.equals(key)) {
-      this.reads.computeIfAbsent(reader, k -> HashSetFactory.make()).add(key);
-      this.dependents.computeIfAbsent(key, k -> HashSetFactory.make()).add(reader);
+      this.reads.computeIfAbsent(reader, k -> new LinkedHashSet<>()).add(key);
+      this.dependents.computeIfAbsent(key, k -> new LinkedHashSet<>()).add(reader);
     }
     if (!this.transfers.containsKey(key)) {
       this.transfers.put(key, transfer);
@@ -339,7 +345,7 @@ final class WorklistTypeResolver {
   private void canonicalize() {
     int replaced = 0;
     String probeFilter = System.getProperty("ariadne.typeResolution.canonProbe");
-    Set<Object> changed = HashSetFactory.make();
+    Set<Object> changed = new LinkedHashSet<>();
     for (List<Object> scc : this.tarjan()) {
       boolean cyclic =
           scc.size() > 1
@@ -372,7 +378,7 @@ final class WorklistTypeResolver {
                       + this.reads.getOrDefault(key, Collections.emptySet()).size());
         }
       if (targets.isEmpty()) continue;
-      Map<Object, Object> replacements = HashMapFactory.make();
+      Map<Object, Object> replacements = new LinkedHashMap<>();
       for (Object key : targets) replacements.put(key, this.recomputeSettled(key));
       for (Map.Entry<Object, Object> replacement : replacements.entrySet()) {
         Object key = replacement.getKey();
@@ -703,9 +709,9 @@ final class WorklistTypeResolver {
   }
 
   private List<List<Object>> tarjan() {
-    Map<Object, Integer> index = HashMapFactory.make();
-    Map<Object, Integer> low = HashMapFactory.make();
-    Set<Object> onStack = HashSetFactory.make();
+    Map<Object, Integer> index = new LinkedHashMap<>();
+    Map<Object, Integer> low = new LinkedHashMap<>();
+    Set<Object> onStack = new LinkedHashSet<>();
     Deque<Object> stack = new ArrayDeque<>();
     List<List<Object>> sccs = new ArrayList<>();
     int[] counter = {0};
