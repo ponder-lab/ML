@@ -58,6 +58,14 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- Fork a fresh JVM per test class: a settled type union can flip under same-JVM
+            predecessor analyses, whose `identityHashCode`/ASLR variance perturbs
+            WALA-internal collection orders (wala/ML#753). Single-analysis JVMs are the
+            measured deterministic baseline, and `TestNlpgnnTransformer`'s exact-set pin
+            relies on it. -->
+          <reuseForks>false</reuseForks>
+        </configuration>
       </plugin>
     </plugins>
     <sourceDirectory>source</sourceDirectory>

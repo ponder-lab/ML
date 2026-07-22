@@ -150,6 +150,8 @@ jobs:
         include:
           - shard: nlpgnn
             tests: 'TestCorpusFixtures#testNlpgnnFull*+testNlpgnnSlice*'
+          - shard: transformer-pin
+            tests: 'TestNlpgnnTransformer'
           - shard: subjects
             tests: 'TestCorpusFixtures#testGpt*+testMusicTransformer*+testBilstm*+testTextcnn*'
           - shard: logging-volume
