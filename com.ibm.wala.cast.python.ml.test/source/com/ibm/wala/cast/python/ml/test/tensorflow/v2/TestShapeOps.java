@@ -797,6 +797,35 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
+   * Fold-granularity guard for wala/ML#748: {@code f}'s parameter carries a two-member shape union
+   * (the concrete {@code (2, 3, 8)} constant and the dynamic-batch Keras input) through a
+   * conditional's φ, so the {@code tf.shape(x)[i]} extractions fold against a multi-member source.
+   * Each member keeps its own axis classification &mdash; the concrete-sourced member folds to its
+   * constants, the dynamic-sourced one to {@link DynamicDim} on the batch axis &mdash; instead of
+   * the ambiguity joining every member to the wider marker.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testReshapeTfShapeUnion()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reshape_tf_shape_union.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_32, 2, 3, 8),
+                new TensorType(
+                    FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(3), new NumericDim(8))))));
+  }
+
+  /**
    * A configuration attribute as a literal concat element (wala/ML#712): the reshape target
    * concatenates a shape-vector slice with {@code [self.units]}, whose stored value is the
    * constructor argument, exercising the constant fallback of the attribute chase.

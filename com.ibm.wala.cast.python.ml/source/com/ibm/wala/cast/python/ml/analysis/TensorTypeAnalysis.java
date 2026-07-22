@@ -323,7 +323,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
 
   private static IKilldallFramework<PointsToSetVariable, TensorVariable> createProblem(
       Graph<PointsToSetVariable> G,
-      Map<PointsToSetVariable, TensorType> reshapeNodes,
+      Map<PointsToSetVariable, Set<TensorType>> reshapeNodes,
       Map<PointsToSetVariable, TensorType> set_shapes,
       Map<PointsToSetVariable, List<Dimension<?>>> refinements,
       Map<PointsToSetVariable, FeedPlan> typeFeeds,
@@ -419,7 +419,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
             @Override
             public boolean equals(Object o) {
               return this == o
-                  || ((o instanceof ReshapeOp) && setShapeTo.equals(((ReshapeOp) o).reshapeTo));
+                  || ((o instanceof SetShapeOp) && setShapeTo.equals(((SetShapeOp) o).setShapeTo));
             }
 
             @Override
@@ -672,68 +672,79 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
           }
 
           final class ReshapeOp extends UnaryOperator<TensorVariable> {
-            private final TensorType reshapeTo;
+            private final Set<TensorType> reshapeTos;
             private final PointsToSetVariable v;
 
-            public ReshapeOp(TensorType reshapeTo, PointsToSetVariable v) {
+            public ReshapeOp(Set<TensorType> reshapeTos, PointsToSetVariable v) {
               this.v = v;
-              this.reshapeTo = reshapeTo;
+              this.reshapeTos = reshapeTos;
             }
 
             @Override
             public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
               boolean changed = false;
-              int ssz = reshapeTo.symbolicDims();
-              int csz = reshapeTo.concreteSize();
               if (rhs != null && rhs.state != null) {
                 for (TensorType t : rhs.state) {
-                  TensorType newType = reshapeTo;
-                  // If there is exactly one dynamic dimension (symbolic), try to resolve it by
-                  // comparing the total size of the input tensor with the concrete size of the
-                  // target shape.
-                  if (ssz == 1 && t.symbolicDims() == 0 && t.concreteSize() != -1) {
-                    int totalSize = t.concreteSize();
-                    int partialSize = 1;
-                    for (Dimension<?> d : reshapeTo.getDims()) {
-                      if (d instanceof NumericDim) {
-                        partialSize *= ((NumericDim) d).value();
-                      }
-                    }
+                  // The target carries one pinned member per resolved shape possibility
+                  // (wala/ML#748); each incoming member is reshaped against every one, and a
+                  // mismatch is only an error when no target agrees.
+                  boolean anyTargetAgrees = false;
 
-                    if (partialSize > 0 && totalSize % partialSize == 0) {
-                      int missingDim = totalSize / partialSize;
-                      List<Dimension<?>> newDims = new ArrayList<>();
+                  for (TensorType reshapeTo : reshapeTos) {
+                    int ssz = reshapeTo.symbolicDims();
+                    int csz = reshapeTo.concreteSize();
+                    TensorType newType = reshapeTo;
+                    // If there is exactly one dynamic dimension (symbolic), try to resolve it by
+                    // comparing the total size of the input tensor with the concrete size of the
+                    // target shape.
+                    if (ssz == 1 && t.symbolicDims() == 0 && t.concreteSize() != -1) {
+                      int totalSize = t.concreteSize();
+                      int partialSize = 1;
                       for (Dimension<?> d : reshapeTo.getDims()) {
-                        if (d instanceof SymbolicDim) {
-                          newDims.add(new NumericDim(missingDim));
-                        } else {
-                          newDims.add(d);
+                        if (d instanceof NumericDim) {
+                          partialSize *= ((NumericDim) d).value();
                         }
                       }
-                      // Use the source tensor's cell type to ensure precision in the reshaped type.
-                      newType = new TensorType(t.getCellType(), newDims);
+
+                      if (partialSize > 0 && totalSize % partialSize == 0) {
+                        int missingDim = totalSize / partialSize;
+                        List<Dimension<?>> newDims = new ArrayList<>();
+                        for (Dimension<?> d : reshapeTo.getDims()) {
+                          if (d instanceof SymbolicDim) {
+                            newDims.add(new NumericDim(missingDim));
+                          } else {
+                            newDims.add(d);
+                          }
+                        }
+                        // Use the source tensor's cell type to ensure precision in the reshaped
+                        // type.
+                        newType = new TensorType(t.getCellType(), newDims);
+                      } else {
+                        newType = new TensorType(t.getCellType(), reshapeTo.getDims());
+                      }
                     } else {
                       newType = new TensorType(t.getCellType(), reshapeTo.getDims());
                     }
-                  } else {
-                    newType = new TensorType(t.getCellType(), reshapeTo.getDims());
+
+                    // Process the reshape normally regardless of whether there is a shape mismatch
+                    // so that tensor type propagation continues. The shape may be inaccurate, but
+                    // users can inspect the error messages to find out about it. See
+                    // https://github.com/wala/ML/issues/195.
+                    if (lhs.state == null) {
+                      lhs.state = HashSetFactory.make();
+                    }
+                    changed |= lhs.state.add(newType);
+
+                    if (t.symbolicDims() == ssz && t.concreteSize() == csz) anyTargetAgrees = true;
                   }
 
-                  // Process the reshape normally regardless of whether there is a shape mismatch so
-                  // that tensor type propagation continues. The shape may be inaccurate, but users
-                  // can inspect the error messages to find out about it. See
-                  // https://github.com/wala/ML/issues/195.
-                  if (lhs.state == null) {
-                    lhs.state = HashSetFactory.make();
-                  }
-                  changed |= lhs.state.add(newType);
-
-                  if (t.symbolicDims() != ssz || t.concreteSize() != csz) {
+                  if (!anyTargetAgrees && !reshapeTos.isEmpty()) {
                     Position pos = getTargetPos(v.getPointerKey());
                     assert pos != null;
                     errorLog.put(
                         v.getPointerKey(),
-                        new ReshapeError(t, reshapeTo, pos, getTargetDef(v.getPointerKey())));
+                        new ReshapeError(
+                            t, reshapeTos.iterator().next(), pos, getTargetDef(v.getPointerKey())));
                   }
                 }
                 // `tf.reshape` is a TensorFlow operation; its result is TensorFlow-origin
@@ -745,18 +756,18 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
 
             @Override
             public int hashCode() {
-              return reshapeTo.hashCode();
+              return reshapeTos.hashCode();
             }
 
             @Override
             public boolean equals(Object o) {
               return this == o
-                  || ((o instanceof ReshapeOp) && reshapeTo.equals(((ReshapeOp) o).reshapeTo));
+                  || ((o instanceof ReshapeOp) && reshapeTos.equals(((ReshapeOp) o).reshapeTos));
             }
 
             @Override
             public String toString() {
-              return "reshape to " + reshapeTo;
+              return "reshape to " + reshapeTos;
             }
           }
 
@@ -917,7 +928,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Graph<PointsToSetVariable> G,
       Map<PointsToSetVariable, Set<TensorType>> init,
       Map<PointsToSetVariable, Set<TensorOrigin>> initOrigins,
-      Map<PointsToSetVariable, TensorType> reshapeTypes,
+      Map<PointsToSetVariable, Set<TensorType>> reshapeTypes,
       Map<PointsToSetVariable, TensorType> set_shapes,
       Map<PointsToSetVariable, List<Dimension<?>>> refinements,
       Map<PointsToSetVariable, FeedPlan> typeFeeds,
@@ -958,7 +969,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Graph<PointsToSetVariable> G,
       Map<PointsToSetVariable, Set<TensorType>> init,
       Map<PointsToSetVariable, Set<TensorOrigin>> initOrigins,
-      Map<PointsToSetVariable, TensorType> reshapeTypes,
+      Map<PointsToSetVariable, Set<TensorType>> reshapeTypes,
       Map<PointsToSetVariable, TensorType> set_shapes,
       Map<PointsToSetVariable, List<Dimension<?>>> refinements,
       Map<PointsToSetVariable, FeedPlan> typeFeeds,
