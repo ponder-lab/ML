@@ -115,8 +115,6 @@ public class Concat extends TensorGenerator {
 
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
-    boolean sawUnknown = false;
-    boolean sawBottom = false;
 
     for (InstanceKey valIk : valuesPts) {
       AllocationSiteInNode asin = getAllocationSiteInNode(valIk);
@@ -132,22 +130,22 @@ public class Concat extends TensorGenerator {
           catalog.size() == 0
               ? ShapeResult.bottom()
               : computeConcatenatedShape(builder, asin, catalog, axis);
-      // An append-populated list has no numeric catalog entries; its elements live under the
-      // synthetic append-contents field. The element count is not statically known, so the axis
-      // dim is dynamic while the rank and non-axis dims survive (wala/ML#570).
-      if (outShape.isBottom()) outShape = computeAppendedShape(builder, asin, axis);
+      // An append-populated list resolves nothing through the catalog: its elements live under
+      // the synthetic append-contents field, and its catalog is empty or carries only attribute
+      // keys. Whenever the catalog path yields no members, the appended contents decide; the
+      // element count is not statically known there, so the axis dim is dynamic while the rank
+      // and non-axis dims survive (wala/ML#570).
+      if (outShape.members().isEmpty()) {
+        ShapeResult appended = computeAppendedShape(builder, asin, axis);
+        if (!appended.members().isEmpty()) outShape = appended;
+      }
       ret.addAll(outShape.members());
-      if (outShape.hasUnknown()) sawUnknown = true;
-      else if (outShape.isBottom()) sawBottom = true;
     }
-    if (!ret.isEmpty()) return ret;
-    if (sawUnknown) return null;
-    // Every operand's elements are still unresolved (wala/ML#758 clause 3): contribute the
-    // engine's ⊥ so the evaluation ascends when the elements resolve, instead of freezing a
-    // transient ⊤ into the join. The pure-cycle promotion supplies the sound ⊤ for elements that
-    // stay baseless.
-    if (sawBottom) return Collections.emptySet();
-    return null;
+    // A memberless evaluation stays ⊤ at this legacy view: this method also composes seeds, where
+    // an empty set reads as "not a tensor" and would pair a ⊥ shape with a resolved dtype. The
+    // clause-3 ⊥ contribution for still-unresolved elements needs the element reads themselves to
+    // be engine-visible first (wala/ML#758).
+    return ret.isEmpty() ? null : ret;
   }
 
   @Override
@@ -198,9 +196,13 @@ public class Concat extends TensorGenerator {
       PropagationCallGraphBuilder builder, AllocationSiteInNode listAsin, int axis) {
     OrdinalSet<InstanceKey> contentsPts = getAppendedContentsPts(builder, listAsin);
     if (contentsPts == null) return ShapeResult.unknown();
-    ShapeResult contents = this.getShapeResultOfValue(builder, contentsPts, true);
+    // The appended template computes from the resolvable subset, this path's historical
+    // default-mode contract (wala/ML#716); an exact read would collapse a partial's members at
+    // every legacy-view boundary. A memberless unmarked result is the engine's ⊥ and propagates;
+    // only a memberless unknown collapses the result.
+    ShapeResult contents = this.getShapeResultOfValue(builder, contentsPts, false);
     if (contents.isBottom()) return ShapeResult.bottom();
-    if (contents.hasUnknown()) return ShapeResult.unknown();
+    if (contents.members().isEmpty()) return ShapeResult.unknown();
     Set<List<Dimension<?>>> shapes = contents.members();
 
     List<Dimension<?>> template = null;
@@ -248,7 +250,7 @@ public class Concat extends TensorGenerator {
     // nondeterminism.
     OrdinalSet<InstanceKey> firstElemPts = getElementPts(builder, listAsin, catalog, 0);
     if (firstElemPts == null) return ShapeResult.unknown();
-    ShapeResult firstResult = this.getShapeResultOfValue(builder, firstElemPts, true);
+    ShapeResult firstResult = this.getShapeResultOfValue(builder, firstElemPts, false);
     if (firstResult.isBottom()) return ShapeResult.bottom();
     if (firstResult.hasUnknown() || firstResult.members().size() != 1) return ShapeResult.unknown();
     List<Dimension<?>> firstShape = firstResult.members().iterator().next();
@@ -264,7 +266,7 @@ public class Concat extends TensorGenerator {
       if (fieldIndex == null) return ShapeResult.unknown();
       OrdinalSet<InstanceKey> elemPts = getElementPts(builder, listAsin, catalog, fieldIndex);
       if (elemPts == null) return ShapeResult.unknown();
-      ShapeResult elemResult = this.getShapeResultOfValue(builder, elemPts, true);
+      ShapeResult elemResult = this.getShapeResultOfValue(builder, elemPts, false);
       if (elemResult.isBottom()) return ShapeResult.bottom();
       if (elemResult.hasUnknown() || elemResult.members().size() != 1) return ShapeResult.unknown();
       List<Dimension<?>> elemShape = elemResult.members().iterator().next();
