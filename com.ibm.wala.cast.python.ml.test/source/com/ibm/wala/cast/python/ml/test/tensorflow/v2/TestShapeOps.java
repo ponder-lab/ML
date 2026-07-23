@@ -1176,4 +1176,22 @@ public class TestShapeOps extends AbstractTensorTest {
                 new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE)),
                 TensorType.of(FLOAT_32, 24))));
   }
+
+  /**
+   * Probes <a href="https://github.com/wala/ML/issues/746">wala/ML#746</a>: a string-guarded
+   * dispatch whose arms return different ranks. Each call site's {@code mode} constant (the keyword
+   * at the second site, the materialized default at the first, wala/ML#743) decides its arm, so
+   * neither sink sees the other site's member.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testModeGuardDispatch()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_mode_guard.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_3_1_FLOAT32)));
+    test("tf2_test_mode_guard.py", "consume2", 1, 1, Map.of(2, Set.of(TENSOR_6_FLOAT32)));
+  }
 }

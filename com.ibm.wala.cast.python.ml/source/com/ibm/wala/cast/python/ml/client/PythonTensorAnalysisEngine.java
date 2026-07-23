@@ -46,6 +46,7 @@ import com.ibm.wala.ipa.callgraph.impl.ContextInsensitiveSelector;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
 import com.ibm.wala.ipa.callgraph.propagation.ConcreteTypeKey;
 import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
+import com.ibm.wala.ipa.callgraph.propagation.HeapModel;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
@@ -59,10 +60,12 @@ import com.ibm.wala.ipa.callgraph.propagation.cfa.nCFAContextSelector;
 import com.ibm.wala.ipa.cha.IClassHierarchy;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.IR;
+import com.ibm.wala.ssa.ISSABasicBlock;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
+import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
@@ -1679,6 +1682,80 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       }
       LOGGER.fine(() -> "wala/ML#729 iteration-product destinations: " + iterationProducts.size());
 
+      // A call site whose constant bindings decide a callee guard must not receive the callee's
+      // merged return flow: the merged return-value key unions every arm, including those the
+      // site's constants prove untaken (wala/ML#746). Suppress the merged edge per such site and
+      // wire the feasible returns' values directly to the call result instead. Sites whose
+      // bindings prune nothing, or whose feasible returns the propagation system cannot
+      // represent, keep the merged edge untouched.
+      Map<PointsToSetVariable, Set<PointsToSetVariable>> armSuppressions = HashMapFactory.make();
+      HeapModel heapModel = builder.getPointerAnalysis().getHeapModel();
+      PropagationSystem system = builder.getPropagationSystem();
+      for (CGNode caller : builder.getCallGraph()) {
+        IR callerIR = caller.getIR();
+        if (callerIR == null) continue;
+        for (Iterator<SSAInstruction> it = callerIR.iterateAllInstructions(); it.hasNext(); ) {
+          SSAInstruction inst = it.next();
+          if (!(inst instanceof PythonInvokeInstruction)) continue;
+          PythonInvokeInstruction call = (PythonInvokeInstruction) inst;
+          if (call.getNumberOfReturnValues() == 0) continue;
+          PointerKey destPK = heapModel.getPointerKeyForLocal(caller, call.getReturnValue(0));
+          if (system.isImplicit(destPK)) continue;
+          for (CGNode callee :
+              builder.getCallGraph().getPossibleTargets(caller, call.getCallSite())) {
+            if (callee.getIR() == null) continue;
+            Map<Integer, Object> bindings =
+                TensorGenerator.computeCallSiteConstantBindings(builder, caller, call, callee);
+            Set<ISSABasicBlock> reachable =
+                TensorGenerator.computeReachableBlocksUnderBindings(builder, callee, bindings);
+            List<Integer> feasibleReturns = new ArrayList<>();
+            boolean prunedReturn = false;
+            boolean unrepresentable = false;
+            for (ISSABasicBlock block : callee.getIR().getControlFlowGraph()) {
+              for (SSAInstruction member : block) {
+                if (!(member instanceof SSAReturnInstruction)) continue;
+                int retVn = ((SSAReturnInstruction) member).getResult();
+                if (!reachable.contains(block)) {
+                  prunedReturn = true;
+                  continue;
+                }
+                if (retVn < 0) continue;
+                if (system.isImplicit(heapModel.getPointerKeyForLocal(callee, retVn))) {
+                  unrepresentable = true;
+                  continue;
+                }
+                feasibleReturns.add(retVn);
+              }
+            }
+            if (!prunedReturn || feasibleReturns.isEmpty() || unrepresentable) continue;
+            PointerKey mergedPK = heapModel.getPointerKeyForReturnValue(callee);
+            if (system.isImplicit(mergedPK)) continue;
+            PointsToSetVariable dest = system.findOrCreatePointsToSet(destPK);
+            PointsToSetVariable merged = system.findOrCreatePointsToSet(mergedPK);
+            if (!dataflow.containsNode(dest)
+                || !dataflow.containsNode(merged)
+                || !dataflow.hasEdge(merged, dest)) continue;
+            for (int retVn : feasibleReturns) {
+              PointsToSetVariable retVar =
+                  system.findOrCreatePointsToSet(heapModel.getPointerKeyForLocal(callee, retVn));
+              if (!dataflow.containsNode(retVar)) dataflow.addNode(retVar);
+              if (!dataflow.hasEdge(retVar, dest)) dataflow.addEdge(retVar, dest);
+            }
+            armSuppressions.computeIfAbsent(dest, k -> HashSetFactory.make()).add(merged);
+            LOGGER.fine(
+                () ->
+                    "Suppressing the merged return edge into "
+                        + describe(dest.getPointerKey())
+                        + " from "
+                        + describe(callee)
+                        + " under the site bindings "
+                        + bindings
+                        + " (wala/ML#746).");
+          }
+        }
+      }
+      LOGGER.fine(() -> "wala/ML#746 arm-suppressed call results: " + armSuppressions.size());
+
       TensorTypeAnalysis tt =
           new TensorTypeAnalysis(
               dataflow,
@@ -1688,6 +1765,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               setCalls,
               refinements,
               typeFeeds,
+              armSuppressions,
               conv2ds,
               conv3ds,
               drops,
