@@ -65,6 +65,7 @@ import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.ssa.SSABinaryOpInstruction;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
+import com.ibm.wala.ssa.SSAPhiInstruction;
 import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.MethodReference;
@@ -1779,6 +1780,44 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         }
       }
       LOGGER.fine(() -> "wala/ML#746 arm-suppressed call results: " + armSuppressions.size());
+
+      // A φ whose governing branch folds must not receive its infeasible arm's flow either: the
+      // dataflow union has no branch sensitivity, so a decided guard's dead arm (a helper call
+      // that never runs, a dead reassignment) leaks its members into the φ and onward
+      // (wala/ML#763). Suppress the dead arm's edge, keeping at least one live arm.
+      int phiSuppressions = 0;
+      for (CGNode node : builder.getCallGraph()) {
+        IR ir = node.getIR();
+        if (ir == null) continue;
+        for (Iterator<? extends SSAInstruction> it = ir.iteratePhis(); it.hasNext(); ) {
+          SSAInstruction phi = it.next();
+          if (!(phi instanceof SSAPhiInstruction)) continue;
+          PointsToSetVariable phiVar =
+              flowVarsByKey.get(heapModel.getPointerKeyForLocal(node, phi.getDef()));
+          if (phiVar == null) continue;
+          List<PointsToSetVariable> infeasible = new ArrayList<>();
+          boolean liveArm = false;
+          for (int i = 0; i < phi.getNumberOfUses(); i++) {
+            int useVn = phi.getUse(i);
+            PointsToSetVariable armVar =
+                useVn > 0 ? flowVarsByKey.get(heapModel.getPointerKeyForLocal(node, useVn)) : null;
+            if (Boolean.FALSE.equals(
+                TensorGenerator.computePhiArmFeasibility(
+                    builder, node, (SSAPhiInstruction) phi, i))) {
+              if (armVar != null && dataflow.hasEdge(armVar, phiVar)) infeasible.add(armVar);
+            } else {
+              liveArm = true;
+            }
+          }
+          if (!liveArm || infeasible.isEmpty()) continue;
+          for (PointsToSetVariable armVar : infeasible) {
+            armSuppressions.computeIfAbsent(phiVar, k -> HashSetFactory.make()).add(armVar);
+            phiSuppressions++;
+          }
+        }
+      }
+      int phiCount = phiSuppressions;
+      LOGGER.fine(() -> "wala/ML#763 arm-suppressed phi edges: " + phiCount);
 
       TensorTypeAnalysis tt =
           new TensorTypeAnalysis(

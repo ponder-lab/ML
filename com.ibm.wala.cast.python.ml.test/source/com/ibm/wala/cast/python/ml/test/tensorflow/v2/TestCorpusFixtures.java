@@ -388,12 +388,13 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * shape-⊤ members carry equation-proven ranks since the einsum-operand refinement (wala/ML#704):
    * {@code DenseLayer3d.call}'s {@code use_einsum} arm makes its input an operand of the rank-3
    * {@code "BFH"} term and {@code DenseLayer3dProj.call}'s of the rank-4 {@code "BFND"} term, and
-   * the refined parameter states transport through the call boundary into this helper. Every proven
-   * axis stays {@link UnresolvedDim} in vivo, since {@code w}'s extents are config-derived; the
-   * union is dtype-homogeneous {@code float32} since the dtype feed (wala/ML#736) replaced the
-   * attention path's pure-⊤ seeds. The {@code w} parameter keeps rank 3 and {@code float32} (its
-   * chain is layer-local) but no numeric dimensions, since the {@code build}-computed head sizes
-   * also derive from the config.
+   * the refined parameter states transport through the call boundary into this helper; the
+   * dead-site rank-2/3 matmul artifacts are gone with the caller-walk filtering (wala/ML#763).
+   * Every proven axis stays {@link UnresolvedDim} in vivo, since {@code w}'s extents are
+   * config-derived; the union is dtype-homogeneous {@code float32} since the dtype feed
+   * (wala/ML#736) replaced the attention path's pure-⊤ seeds. The {@code w} parameter keeps rank 3
+   * and {@code float32} (its chain is layer-local) but no numeric dimensions, since the {@code
+   * build}-computed head sizes also derive from the config.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -421,13 +422,9 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                         UnresolvedDim.INSTANCE,
                         UnresolvedDim.INSTANCE)),
                 new TensorType(FLOAT_32, asList(new NumericDim(8), UnresolvedDim.INSTANCE)),
-                new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
                 new TensorType(
                     FLOAT_32,
                     asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
-                new TensorType(
-                    FLOAT_32,
-                    asList(new NumericDim(8), UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
                 new TensorType(
                     FLOAT_32,
                     asList(new NumericDim(8), new NumericDim(10), UnresolvedDim.INSTANCE)),
@@ -477,12 +474,11 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * {@code (8, 100)}/{@code (8, 10)} leading pairs are the entry contracts (wala/ML#717); the ranks
    * are the einsum operand refinement's (wala/ML#704).
    *
-   * <p>TODO: Drop the rank-4 {@code (8, 100, ?, ?)}/{@code (8, 10, ?, ?)} members once <a
-   * href="https://github.com/wala/ML/issues/763">wala/ML#763</a> prunes the ALBERT pipeline's
-   * cross-rank members: the {@code use_einsum} guard folds (wala/ML#761, wala/ML#762) and the union
-   * is depth-invariant (wala/ML#601, depths 2 through 6), so the members are variable-level imports
-   * from the pipeline's states, the loop-carried layer-stack φ the prime suspect. The {@code (8, ?,
-   * ?, ?)} member is the legitimate wala/ML#737 partial and stays regardless.
+   * <p>The former rank-4 {@code (8, 100, ?, ?)}/{@code (8, 10, ?, ?)} members and the rank-2/3
+   * dead-arm artifacts are gone (wala/ML#763): with the {@code use_einsum} guard folding
+   * (wala/ML#761, wala/ML#762), the dead {@code einsum_via_matmul} sites no longer contribute, to
+   * either the caller walks or the dataflow φs. The {@code (8, ?, ?, ?)} member is the legitimate
+   * wala/ML#737 partial.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -512,10 +508,6 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                 new TensorType(
                     FLOAT_32,
                     asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
-                new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
-                new TensorType(
-                    FLOAT_32,
-                    asList(new NumericDim(8), UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
                 // The wala/ML#737 partial composition proves the rank-4 attention form's batch
                 // axis even when the remaining operand axes stay unresolved.
                 new TensorType(
@@ -523,20 +515,6 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                     asList(
                         new NumericDim(8),
                         UnresolvedDim.INSTANCE,
-                        UnresolvedDim.INSTANCE,
-                        UnresolvedDim.INSTANCE)),
-                new TensorType(
-                    FLOAT_32,
-                    asList(
-                        new NumericDim(8),
-                        new NumericDim(100),
-                        UnresolvedDim.INSTANCE,
-                        UnresolvedDim.INSTANCE)),
-                new TensorType(
-                    FLOAT_32,
-                    asList(
-                        new NumericDim(8),
-                        new NumericDim(10),
                         UnresolvedDim.INSTANCE,
                         UnresolvedDim.INSTANCE)))));
   }

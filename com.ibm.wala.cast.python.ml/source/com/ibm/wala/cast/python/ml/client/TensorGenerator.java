@@ -2123,7 +2123,7 @@ public abstract class TensorGenerator {
    * @return {@link Boolean#FALSE} iff the arm is decidably infeasible; {@link Boolean#TRUE} when
    *     decidably taken; {@code null} when undecidable (the arm is kept).
    */
-  private Boolean computePhiArmFeasibility(
+  static Boolean computePhiArmFeasibility(
       PropagationCallGraphBuilder builder, CGNode node, SSAPhiInstruction phi, int armIndex) {
     IR ir = node.getIR();
     if (ir == null) return null;
@@ -2171,7 +2171,7 @@ public abstract class TensorGenerator {
    * @return Whether the runtime takes the edge, or {@code null} when the block does not end with a
    *     decidable two-way conditional branch over the successor.
    */
-  private Boolean decideEdgeFromBranchBlock(
+  private static Boolean decideEdgeFromBranchBlock(
       PropagationCallGraphBuilder builder,
       CGNode node,
       SSACFG cfg,
@@ -2208,7 +2208,7 @@ public abstract class TensorGenerator {
    * @param branch The conditional branch.
    * @return The comparison's outcome, or {@code null} when either side does not fold.
    */
-  private Boolean evaluateBranchComparison(
+  private static Boolean evaluateBranchComparison(
       PropagationCallGraphBuilder builder, CGNode node, SSAConditionalBranchInstruction branch) {
     return evaluateBranchComparison(builder, node, branch, Collections.emptyMap());
   }
@@ -4676,13 +4676,26 @@ public abstract class TensorGenerator {
       PropagationCallGraphBuilder builder, CGNode node) {
     List<Pair<CGNode, SSAAbstractInvokeInstruction>> ret = new ArrayList<>();
     CallGraph callGraph = builder.getCallGraph();
+    Map<CGNode, Set<ISSABasicBlock>> reachableByCaller = HashMapFactory.make();
     for (Iterator<CGNode> it = callGraph.getPredNodes(node); it.hasNext(); ) {
       CGNode caller = it.next();
       if (caller.getIR() == null) continue;
+      // A call site in a block the caller's decided guards prove unreachable never runs, so its
+      // arguments must not contribute to the callee's parameter reads (wala/ML#763): the shared
+      // helper called only from a folded-dead arm otherwise unions every dead site's values.
+      Set<ISSABasicBlock> reachable =
+          reachableByCaller.computeIfAbsent(
+              caller, c -> computeReachableBlocksUnderBindings(builder, c, Collections.emptyMap()));
       for (Iterator<CallSiteReference> sites = callGraph.getPossibleSites(caller, node);
           sites.hasNext(); )
-        for (SSAAbstractInvokeInstruction call : caller.getIR().getCalls(sites.next()))
+        for (SSAAbstractInvokeInstruction call : caller.getIR().getCalls(sites.next())) {
+          if (call.iIndex() >= 0) {
+            ISSABasicBlock block =
+                caller.getIR().getControlFlowGraph().getBlockForInstruction(call.iIndex());
+            if (block != null && !reachable.contains(block)) continue;
+          }
           ret.add(Pair.make(caller, call));
+        }
     }
     return ret;
   }
