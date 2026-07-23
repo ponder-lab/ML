@@ -116,6 +116,7 @@ public class Concat extends TensorGenerator {
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
+    boolean sawConvergingElement = false;
     for (InstanceKey valIk : valuesPts) {
       AllocationSiteInNode asin = getAllocationSiteInNode(valIk);
       if (asin == null) continue;
@@ -139,13 +140,20 @@ public class Concat extends TensorGenerator {
         ShapeResult appended = computeAppendedShape(builder, asin, axis);
         if (!appended.members().isEmpty()) outShape = appended;
       }
+      if (outShape.isBottom()) sawConvergingElement = true;
       ret.addAll(outShape.members());
     }
-    // A memberless evaluation stays ⊤ at this legacy view: this method also composes seeds, where
-    // an empty set reads as "not a tensor" and would pair a ⊥ shape with a resolved dtype. The
-    // clause-3 ⊥ contribution for still-unresolved elements needs the element reads themselves to
-    // be engine-visible first (wala/ML#758).
-    return ret.isEmpty() ? null : ret;
+    if (ret.isEmpty()) {
+      // Clause 3 (wala/ML#758): with the element reads engine-visible, a memberless evaluation
+      // that consumed a still-converging (⊥) element contributes ⊥, so the ascent delivers the
+      // resolved shape instead of freezing a transient ⊤ mark; the settled recomputation restores
+      // the legacy ⊤ when the elements finally resolve nothing. Seed composition only ever reads
+      // the settled value, so the interim ⊥ never pairs with a resolved dtype there. A memberless
+      // evaluation with no ⊥ element keeps the legacy ⊤ outright.
+      if (sawConvergingElement && !isObservationFinal(builder)) return Collections.emptySet();
+      return null;
+    }
+    return ret;
   }
 
   @Override
