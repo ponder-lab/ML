@@ -1170,4 +1170,73 @@ public class TestConstructors extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_param_default2.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_2_FLOAT32)));
   }
+
+  /**
+   * Probes <a href="https://github.com/wala/ML/issues/745">wala/ML#745</a>: two modules each define
+   * {@code make} with a different integer default, so any cross-module union of the intermediate
+   * default globals shows up as the sibling's shape in either sink.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testParamDefaultCollision()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    String[] files = {
+      "defaults_collision/mod_a.py", "defaults_collision/mod_b.py", "defaults_collision/driver.py"
+    };
+    test(
+        files,
+        "driver.py",
+        "consume",
+        "defaults_collision",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_2_FLOAT32)));
+    test(
+        files,
+        "driver.py",
+        "consume2",
+        "defaults_collision",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 5, 3))));
+  }
+
+  /**
+   * Class-method variant of {@link #testParamDefaultCollision()} (wala/ML#745): two modules each
+   * define {@code Maker.make} with a different integer default.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testParamDefaultCollision2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    String[] files = {
+      "defaults_collision/cls_a.py",
+      "defaults_collision/cls_b.py",
+      "defaults_collision/driver_cls.py"
+    };
+    test(
+        files,
+        "driver_cls.py",
+        "consume",
+        "defaults_collision",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_2_FLOAT32)));
+    test(
+        files,
+        "driver_cls.py",
+        "consume2",
+        "defaults_collision",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 5, 3))));
+  }
 }
