@@ -572,6 +572,15 @@ public abstract class TensorGenerator {
               ConstantKey<?> instanceFieldConstant = (ConstantKey<?>) instanceFieldIK;
               Object instanceFieldValue = instanceFieldConstant.getValue();
 
+              // A non-numeric constant (e.g., a boolean flag reaching a shape slot through a
+              // materialized default, wala/ML#762) is not a dimension; skip it rather than abort
+              // the walk.
+              if (instanceFieldValue != null && !(instanceFieldValue instanceof Number)) {
+                LOGGER.fine(
+                    () -> "Skipping non-numeric shape constant: " + instanceFieldValue + ".");
+                continue;
+              }
+
               // We have a shape value.
               Number shapeValue = (Number) instanceFieldValue;
               LOGGER.fine(
