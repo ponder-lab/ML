@@ -128,11 +128,13 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
     // beneath it (wala/ML#742): a shared module-level helper called by sibling layer methods
     // otherwise collapses onto method-keyed call strings, and every read through it unions the
     // callers' operands (the vendored einsum-via-matmul shim was the witness, minting mixed-rank
-    // matmul results from the unioned operands). The caller-site keying stays PAIRED with the
-    // base selector's context so the call-string machinery extends wherever the chain ends.
-    // {@link #MAX_RECEIVER_DEPTH} bounds the chain, degrading to the base selector past it; the
-    // cap is load-bearing here, since recursive helpers would otherwise grow one pair per
-    // recursive call.
+    // matmul results from the unioned operands). The keying is the calling node and site alone:
+    // pairing in the base selector's call-string context multiplied every keyed node by its
+    // base-context tail for ~36% of the layer-heavy whole-project wall clock, with no witness in
+    // the suite distinguishing the pair from the bare caller-site key (wala/ML#689). {@link
+    // #MAX_RECEIVER_DEPTH} bounds the chain, degrading to the base selector past it; the cap is
+    // load-bearing here, since recursive helpers would otherwise grow one pair per recursive
+    // call.
     if (caller.getContext().get(ContextKey.RECEIVER) != null
         || caller.getContext() instanceof CallerSiteContext) {
       // The guard is recursion, not depth: a deep-but-acyclic layer stack (a BERT encoder tower)
@@ -149,10 +151,7 @@ public class TrampolineReceiverContextSelector implements ContextSelector {
                     + ".");
         return base.getCalleeTarget(caller, site, callee, actualParameters);
       }
-      Context baseContext = base.getCalleeTarget(caller, site, callee, actualParameters);
-      return baseContext == null
-          ? new CallerSiteContext(caller, site)
-          : new CallerSiteContextPair(caller, site, baseContext);
+      return new CallerSiteContext(caller, site);
     }
 
     return base.getCalleeTarget(caller, site, callee, actualParameters);
