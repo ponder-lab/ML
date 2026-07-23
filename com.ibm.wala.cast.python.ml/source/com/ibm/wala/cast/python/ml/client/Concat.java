@@ -27,6 +27,7 @@ import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -125,14 +126,25 @@ public class Concat extends TensorGenerator {
           pa.getPointsToSet(
               ((AstPointerKeyFactory) builder.getPointerKeyFactory())
                   .getPointerKeyForObjectCatalog(asin));
-      List<Dimension<?>> outShape =
-          catalog.size() == 0 ? null : computeConcatenatedShape(builder, asin, catalog, axis);
-      // An append-populated list has no numeric catalog entries; its elements live under the
-      // synthetic append-contents field. The element count is not statically known, so the axis
-      // dim is dynamic while the rank and non-axis dims survive (wala/ML#570).
-      if (outShape == null) outShape = computeAppendedShape(builder, asin, axis);
-      if (outShape != null) ret.add(outShape);
+      ShapeResult outShape =
+          catalog.size() == 0
+              ? ShapeResult.bottom()
+              : computeConcatenatedShape(builder, asin, catalog, axis);
+      // An append-populated list resolves nothing through the catalog: its elements live under
+      // the synthetic append-contents field, and its catalog is empty or carries only attribute
+      // keys. Whenever the catalog path yields no members, the appended contents decide; the
+      // element count is not statically known there, so the axis dim is dynamic while the rank
+      // and non-axis dims survive (wala/ML#570).
+      if (outShape.members().isEmpty()) {
+        ShapeResult appended = computeAppendedShape(builder, asin, axis);
+        if (!appended.members().isEmpty()) outShape = appended;
+      }
+      ret.addAll(outShape.members());
     }
+    // A memberless evaluation stays ⊤ at this legacy view: this method also composes seeds, where
+    // an empty set reads as "not a tensor" and would pair a ⊥ shape with a resolved dtype. The
+    // clause-3 ⊥ contribution for still-unresolved elements needs the element reads themselves to
+    // be engine-visible first (wala/ML#758).
     return ret.isEmpty() ? null : ret;
   }
 
@@ -177,31 +189,38 @@ public class Concat extends TensorGenerator {
    * @param builder The propagation call graph builder.
    * @param listAsin The list allocation whose appended contents to read.
    * @param axis The resolved concatenation axis.
-   * @return The output shape, or {@code null} if the appended values' shapes cannot be resolved or
-   *     disagree.
+   * @return The resolution result: the single output shape, ⊥ while the appended values are still
+   *     unresolved, or the unknown element when they are settled-unknown or disagree.
    */
-  private List<Dimension<?>> computeAppendedShape(
+  private ShapeResult computeAppendedShape(
       PropagationCallGraphBuilder builder, AllocationSiteInNode listAsin, int axis) {
     OrdinalSet<InstanceKey> contentsPts = getAppendedContentsPts(builder, listAsin);
-    if (contentsPts == null) return null;
-    Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, contentsPts);
-    if (shapes == null || shapes.isEmpty()) return null;
+    if (contentsPts == null) return ShapeResult.unknown();
+    // The appended template computes from the resolvable subset, this path's historical
+    // default-mode contract (wala/ML#716); an exact read would collapse a partial's members at
+    // every legacy-view boundary. A memberless unmarked result is the engine's ⊥ and propagates;
+    // only a memberless unknown collapses the result.
+    ShapeResult contents = this.getShapeResultOfValue(builder, contentsPts, false);
+    if (contents.isBottom()) return ShapeResult.bottom();
+    if (contents.members().isEmpty()) return ShapeResult.unknown();
+    Set<List<Dimension<?>>> shapes = contents.members();
 
     List<Dimension<?>> template = null;
     for (List<Dimension<?>> shape : shapes) {
       if (template == null) template = shape;
-      else if (shape.size() != template.size()) return null; // rank mismatch — can't concat soundly
+      else if (shape.size() != template.size())
+        return ShapeResult.unknown(); // rank mismatch — can't concat soundly
     }
 
     int rank = template.size();
     int normalizedAxis = axis < 0 ? axis + rank : axis;
-    if (normalizedAxis < 0 || normalizedAxis >= rank) return null;
+    if (normalizedAxis < 0 || normalizedAxis >= rank) return ShapeResult.unknown();
 
     List<Dimension<?>> outShape = new ArrayList<>(template);
     for (List<Dimension<?>> shape : shapes)
       for (int d = 0; d < rank; d++)
         if (d != normalizedAxis && !shape.get(d).equals(outShape.get(d)))
-          return null; // non-axis dim disagreement — can't pick a sound template
+          return ShapeResult.unknown(); // non-axis dim disagreement — can't pick a sound template
 
     // The concatenation axis sums the appended elements' axis sizes over an unknown element
     // count: a sum involving any `None` axis is itself `None` at run time; otherwise it is a
@@ -210,50 +229,57 @@ public class Concat extends TensorGenerator {
     boolean anyDynamicAxis =
         shapes.stream().anyMatch(shape -> shape.get(normalizedAxis) instanceof DynamicDim);
     outShape.set(normalizedAxis, anyDynamicAxis ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE);
-    return outShape;
+    return ShapeResult.of(Collections.singleton(outShape));
   }
 
   /**
    * Computes the concatenated shape: takes the first input's shape verbatim except at the {@code
-   * axis} position, where the dim is replaced by the sum across all inputs. Returns {@code null} if
-   * any input's shape can't be resolved or has a non-{@link NumericDim} at the axis.
+   * axis} position, where the dim is replaced by the sum across all inputs. Propagates ⊥ while any
+   * input is still unresolved and the unknown element when an input is settled-unknown, ambiguous,
+   * or has a non-{@link NumericDim} at the axis.
    */
-  private List<Dimension<?>> computeConcatenatedShape(
+  private ShapeResult computeConcatenatedShape(
       PropagationCallGraphBuilder builder,
       AllocationSiteInNode listAsin,
       OrdinalSet<InstanceKey> catalog,
       int axis) {
-    // Get the first element's shape as the template.
+    // Get the first element's shape as the template. A still-unresolved element is the engine's ⊥
+    // and propagates as ⊥ so the evaluation ascends when it resolves; a settled-unknown or
+    // ambiguous (multi-shape) element makes the output unknown (wala/ML#758). The previous
+    // arbitrary pick from a multi-shape element followed hash order, itself a run-to-run
+    // nondeterminism.
     OrdinalSet<InstanceKey> firstElemPts = getElementPts(builder, listAsin, catalog, 0);
-    if (firstElemPts == null) return null;
-    Set<List<Dimension<?>>> firstShapes = this.getShapesOfValue(builder, firstElemPts);
-    if (firstShapes == null || firstShapes.isEmpty()) return null;
-    // Pick any one; in practice we expect a single shape for the list.
-    List<Dimension<?>> firstShape = firstShapes.iterator().next();
+    if (firstElemPts == null) return ShapeResult.unknown();
+    ShapeResult firstResult = this.getShapeResultOfValue(builder, firstElemPts, false);
+    if (firstResult.isBottom()) return ShapeResult.bottom();
+    if (firstResult.hasUnknown() || firstResult.members().size() != 1) return ShapeResult.unknown();
+    List<Dimension<?>> firstShape = firstResult.members().iterator().next();
     int rank = firstShape.size();
     int normalizedAxis = axis < 0 ? axis + rank : axis;
-    if (normalizedAxis < 0 || normalizedAxis >= rank) return null;
+    if (normalizedAxis < 0 || normalizedAxis >= rank) return ShapeResult.unknown();
 
     // Sum the axis dim across all elements.
     long sum = 0;
     for (InstanceKey catalogIK : catalog) {
-      if (!(catalogIK instanceof ConstantKey)) return null;
+      if (!(catalogIK instanceof ConstantKey)) return ShapeResult.unknown();
       Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
-      if (fieldIndex == null) return null;
+      if (fieldIndex == null) return ShapeResult.unknown();
       OrdinalSet<InstanceKey> elemPts = getElementPts(builder, listAsin, catalog, fieldIndex);
-      if (elemPts == null) return null;
-      Set<List<Dimension<?>>> elemShapes = this.getShapesOfValue(builder, elemPts);
-      if (elemShapes == null || elemShapes.isEmpty()) return null;
-      List<Dimension<?>> elemShape = elemShapes.iterator().next();
-      if (elemShape.size() != rank) return null; // rank mismatch — can't concat soundly
+      if (elemPts == null) return ShapeResult.unknown();
+      ShapeResult elemResult = this.getShapeResultOfValue(builder, elemPts, false);
+      if (elemResult.isBottom()) return ShapeResult.bottom();
+      if (elemResult.hasUnknown() || elemResult.members().size() != 1) return ShapeResult.unknown();
+      List<Dimension<?>> elemShape = elemResult.members().iterator().next();
+      if (elemShape.size() != rank)
+        return ShapeResult.unknown(); // rank mismatch — can't concat soundly
       Dimension<?> axisDim = elemShape.get(normalizedAxis);
-      if (!(axisDim instanceof NumericDim)) return null; // non-numeric → can't sum
+      if (!(axisDim instanceof NumericDim)) return ShapeResult.unknown(); // non-numeric → can't sum
       sum += ((NumericDim) axisDim).value();
     }
 
     List<Dimension<?>> outShape = new ArrayList<>(firstShape);
     outShape.set(normalizedAxis, new NumericDim((int) sum));
-    return outShape;
+    return ShapeResult.of(Collections.singleton(outShape));
   }
 
   /**

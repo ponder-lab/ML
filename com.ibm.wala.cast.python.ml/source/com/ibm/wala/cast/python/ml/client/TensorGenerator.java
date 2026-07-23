@@ -1906,6 +1906,7 @@ public abstract class TensorGenerator {
     // vendored einsum-via-matmul's inner-dimension count is a single constant per context, so
     // the conditional-reshape φ keeps only its runtime arm.
     if (def instanceof SSAPhiInstruction) {
+      boolean engineActive = WorklistTypeResolver.active(builder) != null;
       boolean armUnknown = false;
       Set<List<Dimension<?>>> armMembers = HashSetFactory.make();
       for (int i = 0; i < def.getNumberOfUses(); i++) {
@@ -1937,7 +1938,12 @@ public abstract class TensorGenerator {
           armUnknown = true;
           continue;
         }
-        if (armResult.hasUnknown() || armResult.isBottom()) armUnknown = true;
+        // Under the engine a ⊥ arm read is still converging or holds no tensor; it contributes
+        // nothing, and the pure-cycle promotion turns a finally-baseless arm into the marked ⊤,
+        // which arrives here as hasUnknown on re-evaluation (wala/ML#758 clause 3). A mark taken
+        // from an interim ⊥ would survive the join permanently. Outside the engine a ⊥ read is
+        // final, so it keeps the conservative mark.
+        if (armResult.hasUnknown() || (!engineActive && armResult.isBottom())) armUnknown = true;
         armMembers.addAll(armResult.members());
       }
       if (!armMembers.isEmpty()) return new ShapeResult(armMembers, armUnknown);
@@ -2042,6 +2048,7 @@ public abstract class TensorGenerator {
    */
   private ShapeResult shapeResultOfFeasibleArms(
       PropagationCallGraphBuilder builder, CGNode node, SSAPhiInstruction phi, boolean exact) {
+    boolean engineActive = WorklistTypeResolver.active(builder) != null;
     boolean pruned = false;
     boolean armUnknown = false;
     Set<List<Dimension<?>>> armMembers = HashSetFactory.make();
@@ -2074,11 +2081,18 @@ public abstract class TensorGenerator {
         armUnknown = true;
         continue;
       }
-      if (armResult.hasUnknown() || armResult.isBottom()) armUnknown = true;
+      // Same ⊥-arm convention as the unpruned φ union: under the engine a ⊥ read contributes
+      // nothing and the pure-cycle promotion marks finally-baseless arms; outside the engine the
+      // final ⊥ keeps the conservative mark (wala/ML#758 clause 3).
+      if (armResult.hasUnknown() || (!engineActive && armResult.isBottom())) armUnknown = true;
       armMembers.addAll(armResult.members());
     }
     if (!pruned) return null;
-    return armMembers.isEmpty() ? ShapeResult.unknown() : new ShapeResult(armMembers, armUnknown);
+    if (armMembers.isEmpty())
+      // With no members, an unknown-marked arm set is the answered ⊤; an all-⊥ arm set under the
+      // engine is the ⊥ that ascends when the arms resolve (wala/ML#758 clause 3).
+      return armUnknown || !engineActive ? ShapeResult.unknown() : ShapeResult.bottom();
+    return new ShapeResult(armMembers, armUnknown);
   }
 
   /**
