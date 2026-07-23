@@ -1154,4 +1154,20 @@ public class TestConstructors extends AbstractTensorTest {
 
     test("tf2_test_variable_positional_dtype.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_FLOAT64)));
   }
+
+  /**
+   * Probes <a href="https://github.com/wala/ML/issues/743">wala/ML#743</a> value-sensitively: the
+   * unpassed integer default {@code n} determines the constructed tensor's leading dimension, so
+   * the shape resolves only if the default materializes in the pointer analysis.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testParamDefault2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_param_default2.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_2_FLOAT32)));
+  }
 }
