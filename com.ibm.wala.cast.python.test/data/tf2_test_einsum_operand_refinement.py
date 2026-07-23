@@ -1,3 +1,5 @@
+import os
+
 import tensorflow as tf
 
 
@@ -37,6 +39,12 @@ def blur(x, w):
 # versus rank 3 with a trailing 5) for the same operand, so neither is
 # asserted: the conflicting refinement drops.
 def choose(x, a, b, flag):
+    if flag:
+        return tf.einsum("ij,jk->ik", x, a)
+    return tf.einsum("ijk,kl->ijl", x, b)
+
+
+def choose2(x, a, b, flag):
     if flag:
         return tf.einsum("ij,jk->ik", x, a)
     return tf.einsum("ijk,kl->ijl", x, b)
@@ -108,5 +116,15 @@ r4 = choose(z, tf.ones((3, 4)), tf.ones((5, 6)), True)
 assert r4.shape == (2, 4)
 assert r4.dtype == tf.float32
 k(r4)
+
+# The flag below is opaque to the analysis (an environment read), so both of `choose2`'s
+# einsum sites stay live and their disagreeing operand constraints drop (wala/ML#704); at
+# run time the unset variable takes the rank-2 arm.
+flag2 = os.environ.get("ARIADNE_CHOOSE2", "") == ""
+z2 = opaque(z0, z0.shape.ndims)
+r5 = choose2(z2, tf.ones((3, 4)), tf.ones((5, 6)), flag2)
+assert r5.shape == (2, 4)
+assert r5.dtype == tf.float32
+f(r5)
 
 dead(False, x)

@@ -323,9 +323,11 @@ public class TestEinsum extends AbstractTensorTest {
   }
 
   /**
-   * Two einsum call sites prove disagreeing constraints for the same operand (wala/ML#704) — rank 2
-   * with a trailing 3 versus rank 3 with a trailing 5 — so neither is asserted and the parameter
-   * keeps its unknown shape: the conflicting refinement drops.
+   * Two einsum call sites once proved disagreeing constraints for the same operand (wala/ML#704),
+   * but the guard's flag is the constant {@code True} at the call, so the rank-3 site is dead and
+   * no longer contributes (wala/ML#763): the surviving site's constraint asserts the runtime-true
+   * rank 2 with the trailing 3. {@link #testEinsumOperandRefinement5()} keeps the disagreement
+   * scenario alive on an opaque flag.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -338,6 +340,34 @@ public class TestEinsum extends AbstractTensorTest {
     test(
         "tf2_test_einsum_operand_refinement.py",
         "choose",
+        3,
+        5,
+        Map.of(
+            2,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(3)))),
+            3,
+            Set.of(TensorType.of(FLOAT_32, 3, 4)),
+            4,
+            Set.of(TensorType.of(FLOAT_32, 5, 6))));
+  }
+
+  /**
+   * Two einsum call sites prove disagreeing constraints for the same operand (wala/ML#704), rank 2
+   * with a trailing 3 versus rank 3 with a trailing 5, and the guard's flag is an opaque
+   * environment read no fold decides (wala/ML#763), so neither is asserted and the parameter keeps
+   * its unknown shape: the conflicting refinement drops.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testEinsumOperandRefinement5()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_einsum_operand_refinement.py",
+        "choose2",
         3,
         5,
         Map.of(
