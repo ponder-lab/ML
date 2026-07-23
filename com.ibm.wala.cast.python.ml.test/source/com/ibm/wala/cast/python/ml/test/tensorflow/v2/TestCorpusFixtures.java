@@ -478,11 +478,11 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * are the einsum operand refinement's (wala/ML#704).
    *
    * <p>TODO: Drop the rank-4 {@code (8, 100, ?, ?)}/{@code (8, 10, ?, ?)} members once <a
-   * href="https://github.com/wala/ML/issues/746">wala/ML#746</a>'s arm filtering reaches the
-   * argument reads' points-to stage; the members ride the sibling {@code DenseLayer3dProj}'s
-   * einsum-refined operands through the shared helper's conditional-reshape φ, whose infeasible arm
-   * the points-to union cannot distinguish (the cross-context half was separated by the caller-node
-   * context propagation).
+   * href="https://github.com/wala/ML/issues/761">wala/ML#761</a> folds branch guards over constant
+   * instance attributes; they enter through the undecided {@code use_einsum} guard, whose compared
+   * value is a receiver field the wala/ML#746 call-site bindings cannot reach, and ride the shared
+   * {@code einsum_via_matmul} helper's cross-layer members into the input's state. The {@code (8,
+   * ?, ?, ?)} member is the legitimate wala/ML#737 partial and stays regardless.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
