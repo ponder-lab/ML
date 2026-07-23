@@ -1194,4 +1194,20 @@ public class TestShapeOps extends AbstractTensorTest {
     test("tf2_test_mode_guard.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_3_1_FLOAT32)));
     test("tf2_test_mode_guard.py", "consume2", 1, 1, Map.of(2, Set.of(TENSOR_6_FLOAT32)));
   }
+
+  /**
+   * Probes <a href="https://github.com/wala/ML/issues/761">wala/ML#761</a>: a guard over a constant
+   * instance attribute decides its arm, so the untaken arm's differently-ranked member never
+   * reaches the sink.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAttrGuardDispatch()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_attr_guard.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_3_1_FLOAT32)));
+  }
 }

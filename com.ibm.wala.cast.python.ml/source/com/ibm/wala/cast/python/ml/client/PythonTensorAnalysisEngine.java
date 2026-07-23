@@ -1690,17 +1690,27 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // represent, keep the merged edge untouched.
       Map<PointsToSetVariable, Set<PointsToSetVariable>> armSuppressions = HashMapFactory.make();
       HeapModel heapModel = builder.getPointerAnalysis().getHeapModel();
-      PropagationSystem system = builder.getPropagationSystem();
+      // Resolve pointer keys against the duplicated flow graph itself: the graph includes
+      // implicit-constraint nodes (synthetic-method locals and returns have implicit pointer
+      // keys), which the propagation system's find-or-create cannot represent.
+      Map<PointerKey, PointsToSetVariable> flowVarsByKey = HashMapFactory.make();
+      for (PointsToSetVariable flowVar : dataflow)
+        flowVarsByKey.putIfAbsent(flowVar.getPointerKey(), flowVar);
       for (CGNode caller : builder.getCallGraph()) {
         IR callerIR = caller.getIR();
         if (callerIR == null) continue;
         for (Iterator<SSAInstruction> it = callerIR.iterateAllInstructions(); it.hasNext(); ) {
           SSAInstruction inst = it.next();
-          if (!(inst instanceof PythonInvokeInstruction)) continue;
-          PythonInvokeInstruction call = (PythonInvokeInstruction) inst;
+          // Synthetic forwarding invokes (trampoline bodies) are not PythonInvokeInstructions but
+          // still carry the hop whose callee holds the guard; the bindings computation declines
+          // them and the reachability fold still decides via node-wide points-to singletons and
+          // constant instance attributes (wala/ML#761).
+          if (!(inst instanceof SSAAbstractInvokeInstruction)) continue;
+          SSAAbstractInvokeInstruction call = (SSAAbstractInvokeInstruction) inst;
           if (call.getNumberOfReturnValues() == 0) continue;
-          PointerKey destPK = heapModel.getPointerKeyForLocal(caller, call.getReturnValue(0));
-          if (system.isImplicit(destPK)) continue;
+          PointsToSetVariable dest =
+              flowVarsByKey.get(heapModel.getPointerKeyForLocal(caller, call.getReturnValue(0)));
+          if (dest == null) continue;
           for (CGNode callee :
               builder.getCallGraph().getPossibleTargets(caller, call.getCallSite())) {
             if (callee.getIR() == null) continue;
@@ -1720,25 +1730,39 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                   continue;
                 }
                 if (retVn < 0) continue;
-                if (system.isImplicit(heapModel.getPointerKeyForLocal(callee, retVn))) {
+                if (flowVarsByKey.get(heapModel.getPointerKeyForLocal(callee, retVn)) == null) {
                   unrepresentable = true;
                   continue;
                 }
                 feasibleReturns.add(retVn);
               }
             }
+            {
+              boolean prunedF = prunedReturn;
+              boolean unrepF = unrepresentable;
+              int feasF = feasibleReturns.size();
+              CGNode calleeF = callee;
+              LOGGER.fine(
+                  () ->
+                      "ARM-SWEEP callee "
+                          + describe(calleeF)
+                          + ": pruned="
+                          + prunedF
+                          + " feasible="
+                          + feasF
+                          + " unrepresentable="
+                          + unrepF
+                          + " bindings="
+                          + bindings.size()
+                          + ".");
+            }
             if (!prunedReturn || feasibleReturns.isEmpty() || unrepresentable) continue;
-            PointerKey mergedPK = heapModel.getPointerKeyForReturnValue(callee);
-            if (system.isImplicit(mergedPK)) continue;
-            PointsToSetVariable dest = system.findOrCreatePointsToSet(destPK);
-            PointsToSetVariable merged = system.findOrCreatePointsToSet(mergedPK);
-            if (!dataflow.containsNode(dest)
-                || !dataflow.containsNode(merged)
-                || !dataflow.hasEdge(merged, dest)) continue;
+            PointsToSetVariable merged =
+                flowVarsByKey.get(heapModel.getPointerKeyForReturnValue(callee));
+            if (merged == null || !dataflow.hasEdge(merged, dest)) continue;
             for (int retVn : feasibleReturns) {
               PointsToSetVariable retVar =
-                  system.findOrCreatePointsToSet(heapModel.getPointerKeyForLocal(callee, retVn));
-              if (!dataflow.containsNode(retVar)) dataflow.addNode(retVar);
+                  flowVarsByKey.get(heapModel.getPointerKeyForLocal(callee, retVn));
               if (!dataflow.hasEdge(retVar, dest)) dataflow.addEdge(retVar, dest);
             }
             armSuppressions.computeIfAbsent(dest, k -> HashSetFactory.make()).add(merged);

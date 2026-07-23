@@ -2317,11 +2317,90 @@ public abstract class TensorGenerator {
       return outcome == null ? null : (outcome ? 1 : 0);
     }
 
+    // A receiver-field read folds when every instance holds the same single constant in the
+    // field (wala/ML#761): guards like `if self.use_einsum:` compare a configuration constant
+    // the local points-to set cannot see.
+    if (def instanceof PythonPropertyRead) {
+      Object viaField = resolveInstanceFieldConstant(builder, node, (PythonPropertyRead) def);
+      if (viaField != null) return viaField;
+    }
+
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
     OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
     if (pts == null || pts.size() != 1) return null;
     InstanceKey only = pts.iterator().next();
     return only instanceof ConstantKey ? ((ConstantKey<?>) only).getValue() : null;
+  }
+
+  /**
+   * Resolves a receiver-field read to a constant for the branch fold (wala/ML#761): every instance
+   * the object resolves to must hold the same single {@link ConstantKey} in the named field.
+   * Disagreeing instances, non-constant field values, and unresolvable names all decline.
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The CG node whose IR contains the property read.
+   * @param propRead The property-read instruction.
+   * @return The field's constant, or {@code null} when the read does not fold.
+   */
+  private static Object resolveInstanceFieldConstant(
+      PropagationCallGraphBuilder builder, CGNode node, PythonPropertyRead propRead) {
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    String fieldName = null;
+    for (InstanceKey ik :
+        pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, propRead.getMemberRef()))) {
+      if (ik instanceof ConstantKey && ((ConstantKey<?>) ik).getValue() instanceof String) {
+        fieldName = (String) ((ConstantKey<?>) ik).getValue();
+        break;
+      }
+    }
+    if (fieldName == null) {
+      LOGGER.fine(() -> "ATTR-FOLD no field name in " + describe(node) + ".");
+      return null;
+    }
+    String fn = fieldName;
+    IField f =
+        builder
+            .getClassHierarchy()
+            .resolveField(
+                FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldName), Root));
+    if (f == null) {
+      LOGGER.fine(() -> "ATTR-FOLD unresolved field " + fn + ".");
+      return null;
+    }
+    Object constant = null;
+    for (InstanceKey objIK :
+        pa.getPointsToSet(pa.getHeapModel().getPointerKeyForLocal(node, propRead.getObjectRef()))) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(objIK);
+      if (asin == null) {
+        LOGGER.fine(() -> "ATTR-FOLD non-allocation instance for " + fn + ".");
+        return null;
+      }
+      OrdinalSet<InstanceKey> fieldPts =
+          pa.getPointsToSet(builder.getPointerKeyForInstanceField(asin, f));
+      if (fieldPts == null || fieldPts.size() != 1) {
+        LOGGER.fine(
+            () ->
+                "ATTR-FOLD field pts size "
+                    + (fieldPts == null ? "null" : fieldPts.size())
+                    + " for "
+                    + fn
+                    + " on "
+                    + describe(asin)
+                    + ".");
+        return null;
+      }
+      InstanceKey only = fieldPts.iterator().next();
+      if (!(only instanceof ConstantKey)) {
+        LOGGER.fine(() -> "ATTR-FOLD non-constant field value for " + fn + ".");
+        return null;
+      }
+      Object value = ((ConstantKey<?>) only).getValue();
+      if (value == null || (constant != null && !constant.equals(value))) return null;
+      constant = value;
+    }
+    Object folded = constant;
+    LOGGER.fine(() -> "ATTR-FOLD " + fn + " => " + folded + " in " + describe(node) + ".");
+    return constant;
   }
 
   /**
