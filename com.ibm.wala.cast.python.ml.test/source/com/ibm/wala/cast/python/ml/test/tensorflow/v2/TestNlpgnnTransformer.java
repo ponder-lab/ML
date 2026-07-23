@@ -41,7 +41,10 @@ public class TestNlpgnnTransformer extends AbstractTensorTest {
    * each trailing hidden dimension a config-derived {@link UnresolvedDim} (wala/ML#721) &mdash;
    * plus each pair's loop-carried degraded-rank siblings ({@code (batch, U)} and {@code (batch, U,
    * U)} from the {@code reshape_to_matrix}/{@code reshape_from_matrix} round trip's non-entry
-   * contexts) and the fully-unresolved rank-2/rank-3 members. The {@code mask} (value number 4)
+   * contexts) and the fully-unresolved rank-2/rank-3 members, plus the unknown-rank {@code float32}
+   * member the restored {@code reshape_from_matrix} opaque-operand pin contributes (wala/ML#765):
+   * that reshape's result is generator-⊥ here, so the pin is its only tensor evidence, and its
+   * conservative unknown-rank type joins the loop-carried union. The {@code mask} (value number 4)
    * union is the attention mask's {@code (batch, seq, seq)} broadcast per the same six entry
    * pipelines.
    *
@@ -60,6 +63,7 @@ public class TestNlpgnnTransformer extends AbstractTensorTest {
     expected.put(
         3,
         Set.of(
+            new TensorType(FLOAT_32, null),
             new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
             new TensorType(FLOAT_32, asList(new NumericDim(2), UnresolvedDim.INSTANCE)),
             new TensorType(FLOAT_32, asList(new NumericDim(6), UnresolvedDim.INSTANCE)),

@@ -1090,7 +1090,6 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             // type for it; pin a tensor of unknown rank instead, which keeps the result
             // tensor-classified without asserting a wrong shape.
             int shapeVn = call.getUse(param);
-            if (TensorGenerator.isShapeVectorChain(builder, src, shapeVn)) return;
             SSAInstruction shapeDef = src.getDU().getDef(shapeVn);
             boolean literalContainer =
                 shapeDef instanceof SSANewInstruction
@@ -1113,6 +1112,17 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             if (builder.getPropagationSystem().isImplicit(defKey)) return;
             PointsToSetVariable defVariable =
                 builder.getPropagationSystem().findOrCreatePointsToSet(defKey);
+            // A chain-classified operand is the provenance walk's territory only when the
+            // generator side actually types the result: any nonempty generator result already
+            // tensor-classifies the destination (a precise resolution the pin would only pollute,
+            // wala/ML#703, wala/ML#706; a dtype-only member says what the pin would say). The pin's
+            // unique value is the chain the generator resolves to nothing at all, so only that
+            // falls through to the unknown-rank pin below; the bare structural skip withdrew the
+            // pin there too and starved consumers whose only tensor evidence it was (wala/ML#765).
+            if (TensorGenerator.isShapeVectorChain(builder, src, shapeVn)) {
+              Set<TensorType> generatorTypes = this.getTensorTypes(defVariable, builder);
+              if (generatorTypes != null && !generatorTypes.isEmpty()) return;
+            }
             Set<TensorType> pinned;
             if (literalContainer) {
               // Merge the generator-side computation into the pinned type so the pin agrees with
