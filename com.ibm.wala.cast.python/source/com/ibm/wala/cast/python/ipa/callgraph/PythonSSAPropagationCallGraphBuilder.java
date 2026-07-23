@@ -13,6 +13,7 @@ package com.ibm.wala.cast.python.ipa.callgraph;
 import static com.ibm.wala.cast.python.types.PythonTypes.CALLABLE_METHOD_NAME;
 import static com.ibm.wala.cast.python.types.PythonTypes.CALLABLE_METHOD_NAME_FOR_KERAS_MODELS;
 import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
+import static com.ibm.wala.cast.python.types.PythonTypes.INIT_METHOD_NAME;
 import static com.ibm.wala.cast.python.util.Util.IMPORT_WILDCARD_CHARACTER;
 import static com.ibm.wala.cast.python.util.Util.MODULE_INITIALIZATION_FILENAME;
 import static com.ibm.wala.cast.python.util.Util.PYTHON_FILE_EXTENSION;
@@ -25,6 +26,7 @@ import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
 import com.ibm.wala.cast.ir.ssa.AstLexicalWrite;
 import com.ibm.wala.cast.ir.ssa.AstPropertyRead;
 import com.ibm.wala.cast.loader.AstMethod;
+import com.ibm.wala.cast.python.ipa.summaries.PythonConstructorFunction;
 import com.ibm.wala.cast.python.ipa.summaries.PythonInstanceMethodTrampoline;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.ssa.ForElementGetInstruction;
@@ -1000,18 +1002,33 @@ public class PythonSSAPropagationCallGraphBuilder extends AstSSAPropagationCallG
         paramNumber++;
       }
 
-      int dflts =
-          target.getMethod().getNumberOfParameters()
-              - target.getMethod().getNumberOfDefaultParameters();
-      for (int i = dflts; i < target.getMethod().getNumberOfParameters(); i++) {
+      // A synthesized constructor's summary declares the wrapped `__init__`'s parameter count,
+      // although its own formals stop one short (formal i mirrors `__init__`'s parameter i + 1),
+      // so its defaulted range shifts down by one (wala/ML#762).
+      boolean ctorTarget = target.getMethod() instanceof PythonConstructorFunction;
+      int numParams = target.getMethod().getNumberOfParameters() - (ctorTarget ? 1 : 0);
+      int dflts = numParams - target.getMethod().getNumberOfDefaultParameters();
+      for (int i = dflts; i < numParams; i++) {
         if (!args.contains(i)) {
-          String name = target.getMethod().getDeclaringClass().getName() + "_defaults_" + i;
+          // A synthesized constructor's trailing formal i mirrors `__init__`'s parameter i + 1,
+          // and the default globals are written under `__init__`'s entity name, so the lookup
+          // follows that mapping (wala/ML#762). Every other target reads its own entity's global.
+          String name =
+              target.getMethod() instanceof PythonConstructorFunction
+                  ? target.getMethod().getDeclaringClass().getName()
+                      + "/"
+                      + INIT_METHOD_NAME
+                      + "_defaults_"
+                      + (i + 1)
+                  : target.getMethod().getDeclaringClass().getName() + "_defaults_" + i;
           FieldReference global =
               FieldReference.findOrCreate(
                   PythonTypes.Root,
                   Atom.findOrCreateUnicodeAtom("global " + name),
                   PythonTypes.Root);
           IField f = getClassHierarchy().resolveField(global);
+          logger.fine(
+              "DEFAULTS-BIND target " + target + " param " + i + " global " + name + " field " + f);
           PointerKey lval = getPointerKeyForLocal(target, i + 1);
           getSystem().newConstraint(lval, assignOperator, new StaticFieldKey(f));
         }
