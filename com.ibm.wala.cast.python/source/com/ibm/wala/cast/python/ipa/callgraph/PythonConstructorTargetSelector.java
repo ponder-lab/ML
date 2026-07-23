@@ -410,7 +410,10 @@ public class PythonConstructorTargetSelector implements MethodTargetSelector {
             ctor.setValueNames(Collections.singletonMap(1, Atom.findOrCreateUnicodeAtom("self")));
           }
 
-          ctors.put(receiver, new PythonConstructorFunction(ref, ctor, receiver));
+          ctors.put(
+              receiver,
+              new PythonConstructorFunction(
+                  ref, ctor, receiver, init == null ? 0 : init.getNumberOfDefaultParameters()));
         }
 
         return ctors.get(receiver);

@@ -1210,4 +1210,20 @@ public class TestShapeOps extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_attr_guard.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_3_1_FLOAT32)));
   }
+
+  /**
+   * Probes <a href="https://github.com/wala/ML/issues/762">wala/ML#762</a> driving wala/ML#761: the
+   * guard attribute takes its value from an unpassed constructor default, so the arm decision
+   * requires the default to bind at the class-instantiation call.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAttrGuardDispatch2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_attr_guard2.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_3_1_FLOAT32)));
+  }
 }

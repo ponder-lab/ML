@@ -29,14 +29,37 @@ import com.ibm.wala.types.MethodReference;
 public class PythonConstructorFunction extends PythonSummarizedFunction {
 
   /**
+   * The wrapped {@code __init__}'s defaulted-parameter count; see {@link
+   * #getNumberOfDefaultParameters()}.
+   */
+  private final int initDefaultParameters;
+
+  /**
    * Constructs a {@link PythonConstructorFunction}.
    *
    * @param ref The constructor's method reference.
    * @param summary The synthesized constructor body.
    * @param declaringClass The class being constructed.
+   * @param initDefaultParameters The wrapped {@code __init__}'s defaulted-parameter count.
    */
   public PythonConstructorFunction(
-      MethodReference ref, MethodSummary summary, IClass declaringClass) {
+      MethodReference ref,
+      MethodSummary summary,
+      IClass declaringClass,
+      int initDefaultParameters) {
     super(ref, summary, declaringClass);
+    this.initDefaultParameters = initDefaultParameters;
+  }
+
+  /**
+   * The constructor's trailing formals mirror the wrapped {@code __init__}'s parameters, so its
+   * defaulted-parameter count carries over: an instantiation that leaves them unpassed binds them
+   * from {@code __init__}'s default globals (wala/ML#762).
+   *
+   * @return The wrapped {@code __init__}'s defaulted-parameter count.
+   */
+  @Override
+  public int getNumberOfDefaultParameters() {
+    return this.initDefaultParameters;
   }
 }
