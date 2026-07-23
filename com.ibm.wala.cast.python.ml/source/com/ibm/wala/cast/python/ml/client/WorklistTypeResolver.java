@@ -31,8 +31,11 @@ import java.util.logging.Logger;
  * ShapeResult} ordered by member inclusion with the unknown mark as a second component, dtype sets
  * by inclusion with the {@code UNKNOWN}-absorbing normalization and the legacy null-⊤ preserved
  * through a sentinel so callers' null-check fallback arms behave as under recursion — via joins at
- * every update, so iteration reaches a fixpoint; a grown value re-enqueues the query's dependents,
- * and the per-key evaluation-count valve pins any oscillator at its current value.
+ * every update, so iteration reaches a fixpoint; scheduling follows the read-version staleness
+ * criterion (wala/ML#758): each reader records the version of every value it consumes, a grown
+ * value re-enqueues exactly the dependents whose latest evaluation consumed it, a solve-level sweep
+ * re-enqueues any reader whose recorded versions still lag before the fixpoint is declared, and the
+ * per-key evaluation-count valve pins any oscillator at its current value.
  *
  * <p>Cycles need no guards: reads never recurse. A dependency SCC with no external base stabilizes
  * at the iteration bottom, which would read as "not a tensor," so after each stabilization the
@@ -50,6 +53,9 @@ final class WorklistTypeResolver {
 
   /** Member-set cardinality beyond which a value widens to unknown-marked. */
   private static final int MEMBER_WIDENING_CAP = 16;
+
+  /** Evaluations of one query beyond which it pins at its current value. */
+  private static final int EVALUATION_CAP = 100;
 
   /**
    * Sentinel for the legacy null dtype result (⊤). The state table cannot hold {@code null}, but
@@ -85,6 +91,36 @@ final class WorklistTypeResolver {
 
   /** Forward edges, for the SCC promotion pass. */
   private final Map<Object, Set<Object>> reads = HashMapFactory.make();
+
+  /** Per-query value versions: the number of state changes; absent means 0 (never written). */
+  private final Map<Object, Integer> versions = HashMapFactory.make();
+
+  /**
+   * Per-reader consumed versions: for each query, the {@link #versions} entry of every value its
+   * latest evaluation read (wala/ML#758's read-version staleness criterion). Cleared at the start
+   * of each evaluation, so an entry always reflects the run that produced the reader's current
+   * contribution; a reader is stale iff any recorded version lags the value's current one.
+   */
+  private final Map<Object, Map<Object, Integer>> readVersions = HashMapFactory.make();
+
+  /**
+   * Queries that ever consumed a value that subsequently grew. Their settled values can carry join
+   * history from the stale consumption even when re-evaluation caught them up (joins never remove
+   * members), so {@link #canonicalize} targets them for replacement regardless of its cyclic-SCC
+   * and changed-read criteria (the residual artifact class of wala/ML#758).
+   */
+  private final Set<Object> staleReaders = HashSetFactory.make();
+
+  /**
+   * Queries whose transfers deferred a finality-dependent arm (wala/ML#717's contract seed) during
+   * a possibly-interim evaluation via {@link #requestSettledRecomputation}. {@link #canonicalize}
+   * recomputes them against the settled state, where {@link #isSettling} holds and the arm can fire
+   * knowing every read is final.
+   */
+  private final Set<Object> settlementRequested = HashSetFactory.make();
+
+  /** Whether the post-fixpoint canonicalization pass is running; see {@link #isSettling}. */
+  private boolean settling;
 
   private final Deque<Object> worklist = new ArrayDeque<>();
   private final Set<Object> enqueued = HashSetFactory.make();
@@ -164,7 +200,9 @@ final class WorklistTypeResolver {
                 + engine.state.size()
                 + " queries, "
                 + engine.reads.values().stream().mapToInt(Set::size).sum()
-                + " dependency edges.");
+                + " dependency edges, "
+                + engine.versions.values().stream().mapToInt(Integer::intValue).sum()
+                + " value growths.");
   }
 
   /**
@@ -202,10 +240,51 @@ final class WorklistTypeResolver {
     // converges just the cycle-affected keys.
     if (!this.evaluated.contains(key) && !this.inStack.contains(key)) this.evaluate(key);
     else if (this.inStack.contains(key)) this.cycleSeen = true;
+    // Record the version of the value the reader consumes (wala/ML#758): recorded after any inline
+    // evaluation so it matches the value returned below, and an on-stack (interim) read records the
+    // pre-completion version, which lags as soon as the read value grows.
+    if (reader != null && !reader.equals(key))
+      this.readVersions
+          .computeIfAbsent(reader, k -> HashMapFactory.make())
+          .put(key, this.versions.getOrDefault(key, 0));
     Object value = this.state.get(key);
     if (value == NULL_DTYPE) return null;
     if (value != null) return value;
     return shapeKind ? ShapeResult.bottom() : EnumSet.noneOf(DType.class);
+  }
+
+  /**
+   * Returns whether an evaluation running now could observe an interim (still-converging) value.
+   * Interim values are observable only through an on-stack read (a cycle, which sets the cycle
+   * flag) or a read of an enqueued key (a nonempty worklist); without either, hybrid inline
+   * scheduling makes every read final on return.
+   *
+   * @return {@code true} iff a value read now may later grow.
+   */
+  boolean mayObserveInterim() {
+    return this.cycleSeen || !this.worklist.isEmpty();
+  }
+
+  /**
+   * Returns whether the post-fixpoint canonicalization pass is running, i.e. every read observes a
+   * settled (final) value and finality-dependent arms may fire.
+   *
+   * @return {@code true} iff inside {@link #canonicalize}.
+   */
+  boolean isSettling() {
+    return this.settling;
+  }
+
+  /**
+   * Registers the currently evaluating query for a recomputation against the settled state in
+   * {@link #canonicalize}. A transfer whose arm must not fire on a possibly-interim observation
+   * (wala/ML#717's contract seed under the wala/ML#758 clause-1 contract) calls this and withholds
+   * the arm; the canonicalization recomputes the query with {@link #isSettling} holding, where the
+   * arm can fire on a provably final observation, and replaces the settled value.
+   */
+  void requestSettledRecomputation() {
+    Object reader = this.evaluating.peek();
+    if (reader != null) this.settlementRequested.add(reader);
   }
 
   /**
@@ -298,20 +377,61 @@ final class WorklistTypeResolver {
     return shuffled;
   }
 
-  /** Runs the fixpoint: chaotic iteration, then SCC promotion, repeating until neither moves. */
+  /**
+   * Runs the fixpoint: chaotic iteration, a read-version staleness sweep, then SCC promotion,
+   * repeating until none moves. The sweep runs before promotion so the pure-cycle step (whose
+   * unknown mark is permanent under join) only fires on a staleness-drained state, and promotion's
+   * value changes feed back through the sweep on the next round.
+   */
   private void solve() {
-    // Nothing queued and no cycle observed since the last pass: every value came from a single
-    // inline evaluation and is already final, so skip the iteration and (Tarjan-priced) promotion
-    // entirely. This is what makes repeated demands (the second seeding pass) effectively free.
-    if (this.worklist.isEmpty() && !this.cycleSeen) return;
-    boolean promoted;
+    // Nothing queued, no cycle observed, and no settlement requested since the last pass: every
+    // value came from a single inline evaluation and is already final, so skip the iteration and
+    // (Tarjan-priced) promotion entirely. This is what makes repeated demands (the second seeding
+    // pass) effectively free.
+    if (this.worklist.isEmpty() && !this.cycleSeen && this.settlementRequested.isEmpty()) return;
+    boolean moved;
     do {
       this.iterate();
-      promoted = this.cycleSeen && this.promotePureCycles();
-    } while (promoted);
-    if (this.cycleSeen) this.canonicalize();
+      moved = this.enqueueStaleReaders();
+      if (!moved) moved = this.cycleSeen && this.promotePureCycles();
+    } while (moved);
+    if (this.cycleSeen || !this.settlementRequested.isEmpty()) this.canonicalize();
     this.cycleSeen = false;
     this.dumpFiltered();
+  }
+
+  /**
+   * Re-enqueues every query whose recorded read versions lag the read values' current versions
+   * (wala/ML#758's read-version staleness criterion, exact where the change-driven re-enqueue in
+   * {@link #reEnqueueStaleDependents} spares on-stack readers): such a reader consumed a value that
+   * has since grown, so its contribution predates evidence it must incorporate. Queries already
+   * enqueued or pinned at the evaluation cap are skipped; the pinned skip is what keeps repeated
+   * sweeps from re-enqueueing a capped query forever.
+   *
+   * @return {@code true} iff any stale reader was re-enqueued.
+   */
+  private boolean enqueueStaleReaders() {
+    List<Object> stale = new ArrayList<>();
+    for (Map.Entry<Object, Map<Object, Integer>> reader : this.readVersions.entrySet()) {
+      Object key = reader.getKey();
+      if (this.enqueued.contains(key)
+          || this.evaluationCounts.getOrDefault(key, 0) > EVALUATION_CAP) continue;
+      for (Map.Entry<Object, Integer> record : reader.getValue().entrySet())
+        if (this.versions.getOrDefault(record.getKey(), 0) > record.getValue()) {
+          stale.add(key);
+          break;
+        }
+    }
+    if (stale.isEmpty()) return false;
+    LOGGER.fine(() -> "Staleness sweep re-enqueueing " + stale.size() + " readers.");
+    this.staleReaders.addAll(stale);
+    // Perturbation point 3 of the wala/ML#756 knob: the sweep's enqueue order is the map's
+    // (deterministic) iteration order unless the seeded shuffle perturbs it, so the sweep adds no
+    // unseeded order dependence.
+    if (this.cycleShuffle != null && stale.size() > 1)
+      Collections.shuffle(stale, this.cycleShuffle);
+    for (Object key : stale) this.enqueue(key);
+    return true;
   }
 
   /**
@@ -327,65 +447,83 @@ final class WorklistTypeResolver {
    *
    * <p>The sweep runs over the SCC condensation in reverse-topological order (the Tarjan emission
    * order), so every recomputation reads dependencies that are already canonical; a key is
-   * recomputed only if it sits in a cyclic SCC (where join history can originate) or reads a key
-   * whose canonical value changed (where it can propagate). Within a cyclic SCC the replacements
-   * are computed jointly against the settled state before any is written back (a Jacobi step), so
-   * intra-SCC recomputation order cannot influence the result. Two guards keep the replacement
-   * semantics sound: a transfer that throws keeps the settled value, and a recomputation may not
-   * degrade a non-bottom settled value to ⊥ &mdash; the settled evidence that the value is a tensor
-   * stands, and the pure-cycle promotion's unknown-marked elements (whose baseless transfers
-   * recompute to ⊥) must not be reclassified as "not a tensor."
+   * recomputed only if it sits in a cyclic SCC (where join history can originate), reads a key
+   * whose canonical value changed (where it can propagate), ever consumed a since-grown value (the
+   * {@link #staleReaders} criterion — its joins can hold artifacts of the stale consumption even
+   * off-cycle), or requested a settled recomputation for a withheld finality-dependent arm ({@link
+   * #requestSettledRecomputation}). Within a cyclic SCC the replacements are computed jointly
+   * against the settled state before any is written back (a Jacobi step), so intra-SCC
+   * recomputation order cannot influence the result. Two guards keep the replacement semantics
+   * sound: a transfer that throws keeps the settled value, and a recomputation may not degrade a
+   * non-bottom settled value to ⊥ &mdash; the settled evidence that the value is a tensor stands,
+   * and the pure-cycle promotion's unknown-marked elements (whose baseless transfers recompute to
+   * ⊥) must not be reclassified as "not a tensor."
    */
   private void canonicalize() {
     int replaced = 0;
     String probeFilter = System.getProperty("ariadne.typeResolution.canonProbe");
     Set<Object> changed = HashSetFactory.make();
-    for (List<Object> scc : this.tarjan()) {
-      boolean cyclic =
-          scc.size() > 1
-              || this.reads.getOrDefault(scc.get(0), Collections.emptySet()).contains(scc.get(0));
-      List<Object> targets = new ArrayList<>();
-      for (Object key : scc)
-        if (cyclic
-            || !Collections.disjoint(this.reads.getOrDefault(key, Collections.emptySet()), changed))
-          targets.add(key);
-      if (probeFilter != null)
-        for (Object key : scc) {
+    this.settling = true;
+    try {
+      for (List<Object> scc : this.tarjan()) {
+        boolean cyclic =
+            scc.size() > 1
+                || this.reads.getOrDefault(scc.get(0), Collections.emptySet()).contains(scc.get(0));
+        List<Object> targets = new ArrayList<>();
+        // Beyond the cyclic-SCC and changed-read criteria, an ever-stale reader is targeted (its
+        // join history can hold artifacts of the since-grown consumption even after re-evaluation
+        // caught it up), and so is a settlement-requested query (its transfer withheld a
+        // finality-dependent arm that must now fire against the settled state). wala/ML#758.
+        for (Object key : scc)
+          if (cyclic
+              || this.staleReaders.contains(key)
+              || this.settlementRequested.contains(key)
+              || !Collections.disjoint(
+                  this.reads.getOrDefault(key, Collections.emptySet()), changed)) targets.add(key);
+        if (probeFilter != null)
+          for (Object key : scc) {
+            Object settled = this.state.get(key);
+            if (!(settled instanceof ShapeResult)) continue;
+            ShapeResult shapes = (ShapeResult) settled;
+            if (!shapes.members().isEmpty() || !shapes.hasUnknown()) continue;
+            if (!String.valueOf(key).contains(probeFilter)) continue;
+            boolean targeted = targets.contains(key);
+            boolean inCycle = cyclic;
+            LOGGER.fine(
+                () ->
+                    "CANON-PROBE "
+                        + brief(key)
+                        + " cyclic="
+                        + inCycle
+                        + " sccSize="
+                        + scc.size()
+                        + " targeted="
+                        + targeted
+                        + " edges="
+                        + this.reads.getOrDefault(key, Collections.emptySet()).size());
+          }
+        if (targets.isEmpty()) continue;
+        Map<Object, Object> replacements = HashMapFactory.make();
+        for (Object key : targets) replacements.put(key, this.recomputeSettled(key));
+        for (Map.Entry<Object, Object> replacement : replacements.entrySet()) {
+          Object key = replacement.getKey();
+          Object value = replacement.getValue();
           Object settled = this.state.get(key);
-          if (!(settled instanceof ShapeResult)) continue;
-          ShapeResult shapes = (ShapeResult) settled;
-          if (!shapes.members().isEmpty() || !shapes.hasUnknown()) continue;
-          if (!String.valueOf(key).contains(probeFilter)) continue;
-          boolean targeted = targets.contains(key);
-          boolean inCycle = cyclic;
-          LOGGER.fine(
-              () ->
-                  "CANON-PROBE "
-                      + brief(key)
-                      + " cyclic="
-                      + inCycle
-                      + " sccSize="
-                      + scc.size()
-                      + " targeted="
-                      + targeted
-                      + " edges="
-                      + this.reads.getOrDefault(key, Collections.emptySet()).size());
+          if (probeFilter != null && String.valueOf(key).contains(probeFilter))
+            LOGGER.fine(() -> "CANON-PROBE recompute " + brief(key) + " := " + brief(value));
+          if (value == null || value.equals(settled)) continue;
+          if (isBottomValue(value) && !isBottomValue(settled)) continue;
+          this.state.put(key, value);
+          changed.add(key);
+          replaced++;
         }
-      if (targets.isEmpty()) continue;
-      Map<Object, Object> replacements = HashMapFactory.make();
-      for (Object key : targets) replacements.put(key, this.recomputeSettled(key));
-      for (Map.Entry<Object, Object> replacement : replacements.entrySet()) {
-        Object key = replacement.getKey();
-        Object value = replacement.getValue();
-        Object settled = this.state.get(key);
-        if (probeFilter != null && String.valueOf(key).contains(probeFilter))
-          LOGGER.fine(() -> "CANON-PROBE recompute " + brief(key) + " := " + brief(value));
-        if (value == null || value.equals(settled)) continue;
-        if (isBottomValue(value) && !isBottomValue(settled)) continue;
-        this.state.put(key, value);
-        changed.add(key);
-        replaced++;
       }
+    } finally {
+      this.settling = false;
+      // Both target sets are served by this pass; a replaced value propagates through the changed
+      // set above, and later solves must not re-target (and re-replace) on stale membership.
+      this.staleReaders.clear();
+      this.settlementRequested.clear();
     }
     if (replaced > 0) {
       int count = replaced;
@@ -403,6 +541,8 @@ final class WorklistTypeResolver {
   private Object recomputeSettled(Object key) {
     Supplier<Object> transfer = this.transfers.get(key);
     if (transfer == null) return this.state.get(key);
+    Map<Object, Integer> records = this.readVersions.get(key);
+    if (records != null) records.clear();
     Object result;
     this.evaluating.push(key);
     this.inStack.add(key);
@@ -581,8 +721,8 @@ final class WorklistTypeResolver {
       int count = this.evaluationCounts.merge(key, 1, Integer::sum);
       // Ascent through the finite lattice bounds re-evaluations; a runaway count means a
       // non-monotone transfer or an unbounded value, so log the offender and stop ascending it.
-      if (count > 100) {
-        if (count == 101)
+      if (count > EVALUATION_CAP) {
+        if (count == EVALUATION_CAP + 1)
           LOGGER.warning(
               "Worklist evaluation cap hit for "
                   + key
@@ -596,6 +736,10 @@ final class WorklistTypeResolver {
   private void evaluate(Object key) {
     Supplier<Object> transfer = this.transfers.get(key);
     if (transfer == null) return;
+    // The consumed-version records reflect the latest evaluation only: a value the last run did
+    // not read cannot stale this run's result (wala/ML#758's exactness over the edge heuristic).
+    Map<Object, Integer> records = this.readVersions.get(key);
+    if (records != null) records.clear();
     Object result;
     this.evaluating.push(key);
     this.inStack.add(key);
@@ -622,15 +766,35 @@ final class WorklistTypeResolver {
     joined = this.widen(key, joined);
     if (!joined.equals(old)) {
       this.state.put(key, joined);
-      for (Object dependent :
-          this.orderDependentsForReEnqueue(
-              this.dependents.getOrDefault(key, Collections.emptySet())))
-        // An on-stack reader consumes this fresh value as its own evaluation completes (the
-        // read returns after this update), so re-enqueueing it would only repeat the same
-        // transfer; every first inline evaluation would otherwise schedule its whole reader
-        // chain for a redundant second run. A key still re-enqueues itself: a changed
-        // self-loop needs another pass to stabilize.
-        if (dependent.equals(key) || !this.inStack.contains(dependent)) this.enqueue(dependent);
+      this.versions.merge(key, 1, Integer::sum);
+      this.reEnqueueStaleDependents(key);
+    }
+  }
+
+  /**
+   * Re-enqueues the dependents whose latest evaluation consumed the key's just-grown value
+   * (wala/ML#758's read-version staleness criterion, replacing the every-edge heuristic): a
+   * dependent with no consumed-version record for the key did not read it in its latest run — its
+   * first inline read (recorded after this update returns) or a run that took another arm — so its
+   * result cannot depend on the growth. A consuming on-stack reader cannot rerun now, but it is
+   * marked stale and {@link #enqueueStaleReaders} re-enqueues it once it pops (its recorded version
+   * lags), which closes the sparing hole of the heuristic this criterion subsumes. A key still
+   * re-enqueues itself: a changed self-loop needs another pass to stabilize.
+   *
+   * @param key The query whose value just changed (its version already bumped).
+   */
+  private void reEnqueueStaleDependents(Object key) {
+    for (Object dependent :
+        this.orderDependentsForReEnqueue(
+            this.dependents.getOrDefault(key, Collections.emptySet()))) {
+      if (dependent.equals(key)) {
+        this.enqueue(dependent);
+        continue;
+      }
+      Map<Object, Integer> records = this.readVersions.get(dependent);
+      if (records == null || !records.containsKey(key)) continue;
+      this.staleReaders.add(dependent);
+      if (!this.inStack.contains(dependent)) this.enqueue(dependent);
     }
   }
 
@@ -693,9 +857,8 @@ final class WorklistTypeResolver {
         if (!bottomShapes) continue;
         if (value == null && !(this.transfers.containsKey(key))) continue;
         this.state.put(key, ShapeResult.unknown());
-        for (Object dependent :
-            this.orderDependentsForReEnqueue(
-                this.dependents.getOrDefault(key, Collections.emptySet()))) this.enqueue(dependent);
+        this.versions.merge(key, 1, Integer::sum);
+        this.reEnqueueStaleDependents(key);
         any = true;
       }
     }
@@ -709,10 +872,20 @@ final class WorklistTypeResolver {
     Deque<Object> stack = new ArrayDeque<>();
     List<List<Object>> sccs = new ArrayList<>();
     int[] counter = {0};
-    for (Object root : new ArrayList<>(this.reads.keySet())) {
+    // A settlement-requested query with no reads of its own (its transfer observed emptiness
+    // without an engine read) appears in no edge, so it roots explicitly; a read-free root emits
+    // as a trivial SCC before any reader that reaches it, preserving the reverse-topological
+    // emission order.
+    List<Object> roots = new ArrayList<>(this.reads.keySet());
+    for (Object requested : this.settlementRequested)
+      if (!this.reads.containsKey(requested)) roots.add(requested);
+    for (Object root : roots) {
       if (index.containsKey(root)) continue;
       Deque<Object[]> frames = new ArrayDeque<>();
-      frames.push(new Object[] {root, new ArrayList<>(this.reads.get(root)).iterator()});
+      frames.push(
+          new Object[] {
+            root, new ArrayList<>(this.reads.getOrDefault(root, Collections.emptySet())).iterator()
+          });
       index.put(root, counter[0]);
       low.put(root, counter[0]);
       counter[0]++;
