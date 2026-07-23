@@ -1633,4 +1633,21 @@ public class TestElementwiseOps extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_multiply7.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
   }
+
+  /**
+   * Probes <a href="https://github.com/wala/ML/issues/743">wala/ML#743</a>: an unpassed parameter
+   * default (the float scalar {@code eps}) must materialize in the pointer analysis for the
+   * elementwise addition to resolve. The result keeps the tensor operand's shape (scalar broadcast)
+   * and dtype.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testParamDefault()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_param_default.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
 }
