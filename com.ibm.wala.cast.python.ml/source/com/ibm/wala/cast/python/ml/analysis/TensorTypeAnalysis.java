@@ -225,6 +225,39 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
   }
 
   /**
+   * A transfer function for a call-site-infeasible return edge (wala/ML#746): the destination is a
+   * call result whose site's constant bindings decide the callee's guard, and this edge carries the
+   * merged return value that includes the pruned arms. The edge contributes nothing; the feasible
+   * returns' values arrive over the direct edges installed alongside the suppression. Unlike {@link
+   * DropOp} the destination's state is untouched, so every other predecessor contributes as usual.
+   */
+  static final class ArmSuppressOp extends UnaryOperator<TensorVariable> {
+    static final ArmSuppressOp INSTANCE = new ArmSuppressOp();
+
+    private ArmSuppressOp() {}
+
+    @Override
+    public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
+      return NOT_CHANGED;
+    }
+
+    @Override
+    public int hashCode() {
+      return 0x746A0501; // arbitrary constant; this is a singleton
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof ArmSuppressOp;
+    }
+
+    @Override
+    public String toString() {
+      return "suppress a call-site-infeasible return edge (wala/ML#746)";
+    }
+  }
+
+  /**
    * A transfer function for parameter destinations (wala/ML#726): tensor types flow through
    * unchanged, but the origins union is skipped, so a parameter keeps its seeded {@link
    * TensorOrigin#PARAMETER} instead of inheriting its call sites' origins. Mirrors the plain node
@@ -355,6 +388,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Map<PointsToSetVariable, TensorType> set_shapes,
       Map<PointsToSetVariable, List<Dimension<?>>> refinements,
       Map<PointsToSetVariable, FeedPlan> typeFeeds,
+      Map<PointsToSetVariable, Set<PointsToSetVariable>> armSuppressions,
       Set<PointsToSetVariable> conv2ds,
       Set<PointsToSetVariable> conv3ds,
       Set<PointsToSetVariable> drops,
@@ -918,6 +952,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               PointsToSetVariable src, PointsToSetVariable dst) {
             if (drops.contains(dst)) {
               return DropOp.INSTANCE;
+            } else if (armSuppressions.containsKey(dst) && armSuppressions.get(dst).contains(src)) {
+              return ArmSuppressOp.INSTANCE;
             } else if (typeFeeds.containsKey(dst) && typeFeeds.get(dst).operands().contains(src)) {
               return new TypeFeedOp(typeFeeds.get(dst), src);
             } else if (set_shapes.containsKey(dst)) {
@@ -1009,6 +1045,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Map<PointsToSetVariable, TensorType> set_shapes,
       Map<PointsToSetVariable, List<Dimension<?>>> refinements,
       Map<PointsToSetVariable, FeedPlan> typeFeeds,
+      Map<PointsToSetVariable, Set<PointsToSetVariable>> armSuppressions,
       Set<PointsToSetVariable> conv2ds,
       Set<PointsToSetVariable> conv3ds,
       Set<PointsToSetVariable> drops,
@@ -1023,6 +1060,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
         set_shapes,
         refinements,
         typeFeeds,
+        armSuppressions,
         conv2ds,
         conv3ds,
         drops,
@@ -1050,6 +1088,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Map<PointsToSetVariable, TensorType> set_shapes,
       Map<PointsToSetVariable, List<Dimension<?>>> refinements,
       Map<PointsToSetVariable, FeedPlan> typeFeeds,
+      Map<PointsToSetVariable, Set<PointsToSetVariable>> armSuppressions,
       Set<PointsToSetVariable> conv2ds,
       Set<PointsToSetVariable> conv3ds,
       Set<PointsToSetVariable> drops,
@@ -1064,6 +1103,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
             set_shapes,
             refinements,
             typeFeeds,
+            armSuppressions,
             conv2ds,
             conv3ds,
             drops,

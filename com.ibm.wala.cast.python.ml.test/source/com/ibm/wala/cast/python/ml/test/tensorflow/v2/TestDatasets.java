@@ -1180,9 +1180,10 @@ public class TestDatasets extends AbstractTensorTest {
 
   /**
    * Pins the vendored gpt-2 {@code EmbeddingLayer} forward result (wala/ML#618): the {@code
-   * add_weight}-created weight dispatches and both {@code mode} branches contribute to the result
-   * union. With {@code add_weight} consuming its {@code shape}/{@code dtype} arguments
-   * (wala/ML#667), the embedding-mode member is fully concrete: {@code (2, 3, 8)} float32.
+   * add_weight}-created weight dispatches, and the call's default {@code mode} decides the
+   * embedding arm per call site (wala/ML#746), so the projection arm's one-hot member no longer
+   * crosses in. With {@code add_weight} consuming its {@code shape}/{@code dtype} arguments
+   * (wala/ML#667), the result is fully concrete: {@code (2, 3, 8)} float32.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -1192,8 +1193,6 @@ public class TestDatasets extends AbstractTensorTest {
   @Test
   public void testCollectionProbeVendoredEmbedding()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    // Count-only: the parameter's type is a union across the `mode` branches whose exact
-    // members shift with modeling precision.
     test(
         new String[] {
           "gpt2_vendored/layers/__init__.py",
@@ -1205,13 +1204,7 @@ public class TestDatasets extends AbstractTensorTest {
         "gpt2_vendored",
         1,
         1,
-        Map.of(
-            2,
-            Set.of(
-                TensorType.of(FLOAT_32, 2, 3, 8),
-                // The one-hot member's leading dims fold to the runtime-true (2, 3) through the
-                // tf.shape shape-vector arm (wala/ML#722).
-                TensorType.of(INT_32, 2, 3, 10))));
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 3, 8))));
   }
 
   /**
@@ -1240,10 +1233,10 @@ public class TestDatasets extends AbstractTensorTest {
    * gone: with the decoder-stack output resolving, {@code OutputLayer.call}'s dead {@code
    * self.porj_weights} arm no longer contributes a member.
    *
-   * <p>TODO: Drop the {@code (2, 3, 8, 8)} member once <a
-   * href="https://github.com/wala/ML/issues/746">wala/ML#746</a> filters constant-decidable branch
-   * arms per call site; it is the {@code mode="projection"} call's rank-3 input crossing into the
-   * embedding-mode lookup, runtime-infeasible at that site.
+   * <p>The former {@code (2, 3, 8, 8)} member, the {@code mode="projection"} call's rank-3 input
+   * crossing into the embedding-mode lookup, is gone: <a
+   * href="https://github.com/wala/ML/issues/746">wala/ML#746</a>'s per-call-site arm filtering
+   * prunes the embedding arm at that site.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -1271,7 +1264,6 @@ public class TestDatasets extends AbstractTensorTest {
             2,
             Set.of(
                 TensorType.of(FLOAT_32, 2, 3, 10),
-                TensorType.of(FLOAT_32, 2, 3, 8, 8),
                 new TensorType(
                     FLOAT_32,
                     asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, new NumericDim(10))))));

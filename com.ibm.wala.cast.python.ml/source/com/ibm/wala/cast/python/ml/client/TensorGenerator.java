@@ -54,6 +54,7 @@ import com.ibm.wala.classLoader.IClass;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.classLoader.NewSiteReference;
+import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.CallGraph;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -65,6 +66,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ipa.callgraph.propagation.ReturnValueKey;
+import com.ibm.wala.ipa.callgraph.propagation.StaticFieldKey;
 import com.ibm.wala.shrike.shrikeBT.IBinaryOpInstruction;
 import com.ibm.wala.shrike.shrikeBT.IConditionalBranchInstruction;
 import com.ibm.wala.ssa.DefUse;
@@ -83,12 +85,15 @@ import com.ibm.wala.ssa.SSAUnaryOpInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
+import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -2196,8 +2201,27 @@ public abstract class TensorGenerator {
    */
   private Boolean evaluateBranchComparison(
       PropagationCallGraphBuilder builder, CGNode node, SSAConditionalBranchInstruction branch) {
-    Object left = resolveComparableConstant(builder, node, branch.getUse(0));
-    Object right = resolveComparableConstant(builder, node, branch.getUse(1));
+    return evaluateBranchComparison(builder, node, branch, Collections.emptyMap());
+  }
+
+  /**
+   * Environment-aware variant of {@link #evaluateBranchComparison(PropagationCallGraphBuilder,
+   * CGNode, SSAConditionalBranchInstruction)} (wala/ML#746): the environment supplies per-call-site
+   * constants for parameter value numbers, taking precedence over the node's points-to union.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for points-to constant lookup.
+   * @param node The {@link CGNode} whose IR contains the branch.
+   * @param branch The conditional branch.
+   * @param env Per-call-site constants keyed by value number.
+   * @return The comparison's outcome, or {@code null} when either side does not fold.
+   */
+  private static Boolean evaluateBranchComparison(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      SSAConditionalBranchInstruction branch,
+      Map<Integer, Object> env) {
+    Object left = resolveComparableConstant(builder, node, branch.getUse(0), env);
+    Object right = resolveComparableConstant(builder, node, branch.getUse(1), env);
     if (left == null || right == null) {
       LOGGER.finer(
           () ->
@@ -2237,7 +2261,24 @@ public abstract class TensorGenerator {
    */
   private Object resolveComparableConstant(
       PropagationCallGraphBuilder builder, CGNode node, int vn) {
+    return resolveComparableConstant(builder, node, vn, Collections.emptyMap());
+  }
+
+  /**
+   * Environment-aware variant of {@link #resolveComparableConstant(PropagationCallGraphBuilder,
+   * CGNode, int)} (wala/ML#746): a value number bound in the environment resolves to its
+   * per-call-site constant before any other source.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for points-to constant lookup.
+   * @param node The {@link CGNode} whose IR defines the value.
+   * @param vn The value number.
+   * @param env Per-call-site constants keyed by value number.
+   * @return The constant, or {@code null} when the value does not fold.
+   */
+  private static Object resolveComparableConstant(
+      PropagationCallGraphBuilder builder, CGNode node, int vn, Map<Integer, Object> env) {
     if (vn <= 0 || node.getIR() == null) return null;
+    if (env.containsKey(vn)) return env.get(vn);
     SymbolTable st = node.getIR().getSymbolTable();
     if (st.isConstant(vn)) return st.getConstantValue(vn);
 
@@ -2245,8 +2286,8 @@ public abstract class TensorGenerator {
     if (def instanceof SSABinaryOpInstruction) {
       SSABinaryOpInstruction binop = (SSABinaryOpInstruction) def;
       if (!(binop.getOperator() instanceof CAstBinaryOp)) return null;
-      Object left = resolveComparableConstant(builder, node, binop.getUse(0));
-      Object right = resolveComparableConstant(builder, node, binop.getUse(1));
+      Object left = resolveComparableConstant(builder, node, binop.getUse(0), env);
+      Object right = resolveComparableConstant(builder, node, binop.getUse(1), env);
       if (left == null || right == null) return null;
       Boolean outcome;
       switch ((CAstBinaryOp) binop.getOperator()) {
@@ -2300,6 +2341,182 @@ public abstract class TensorGenerator {
     if (l instanceof Number && r instanceof Number)
       return ((Number) l).doubleValue() == ((Number) r).doubleValue();
     return l.equals(r);
+  }
+
+  /**
+   * Computes a call site's constant parameter bindings for a callee (wala/ML#746): each callee
+   * parameter value number whose argument at this site folds to a constant maps to that constant.
+   * Positional and keyword arguments mirror {@code
+   * PythonSSAPropagationCallGraphBuilder.processCallingConstraints}'s binding, and an unpassed
+   * defaulted parameter takes its materialized default global's constant (wala/ML#743). Every
+   * source is analysis-stable substrate (symbol tables, the finished pointer analysis), so the
+   * binding is a function of the call site alone.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for constant lookup.
+   * @param caller The calling {@link CGNode}.
+   * @param invoke The call-site invoke.
+   * @param callee The callee {@link CGNode}.
+   * @return The bindings, keyed by callee parameter value number; empty when none fold.
+   */
+  static Map<Integer, Object> computeCallSiteConstantBindings(
+      PropagationCallGraphBuilder builder,
+      CGNode caller,
+      SSAAbstractInvokeInstruction invoke,
+      CGNode callee) {
+    if (!(invoke instanceof PythonInvokeInstruction)) return Collections.emptyMap();
+    PythonInvokeInstruction call = (PythonInvokeInstruction) invoke;
+    IR calleeIR = callee.getIR();
+    if (calleeIR == null) return Collections.emptyMap();
+    int numParams = callee.getMethod().getNumberOfParameters();
+    Map<Integer, Object> bindings = HashMapFactory.make();
+    Set<Integer> boundParams = HashSetFactory.make();
+
+    for (int i = 0; i < call.getNumberOfPositionalParameters() && i < numParams; i++) {
+      boundParams.add(i);
+      Object constant = resolveFrameConstant(builder, caller, call.getUse(i));
+      if (constant != null) bindings.put(i + 1, constant);
+    }
+
+    for (String argName : call.getKeywords()) {
+      for (int i = 0; i < numParams; i++) {
+        String[] paramNames = calleeIR.getLocalNames(0, i + 1);
+        if (paramNames == null) continue;
+        boolean matches = false;
+        for (String destName : paramNames) matches |= argName.equals(destName);
+        if (!matches) continue;
+        boundParams.add(i);
+        Object constant = resolveFrameConstant(builder, caller, call.getUse(argName));
+        if (constant != null) bindings.put(i + 1, constant);
+        break;
+      }
+    }
+
+    int firstDefaulted = numParams - callee.getMethod().getNumberOfDefaultParameters();
+    for (int i = firstDefaulted; i < numParams; i++) {
+      if (boundParams.contains(i)) continue;
+      Object constant = resolveDefaultGlobalConstant(builder, callee, i);
+      if (constant != null) bindings.put(i + 1, constant);
+    }
+    return bindings;
+  }
+
+  /**
+   * Resolves a caller-frame value number to a constant: a symbol-table constant, or a points-to set
+   * holding a single {@link ConstantKey}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for points-to lookup.
+   * @param caller The frame's {@link CGNode}.
+   * @param vn The value number.
+   * @return The constant, or {@code null} when the value does not fold.
+   */
+  private static Object resolveFrameConstant(
+      PropagationCallGraphBuilder builder, CGNode caller, int vn) {
+    if (vn <= 0 || caller.getIR() == null) return null;
+    SymbolTable st = caller.getIR().getSymbolTable();
+    if (st.isConstant(vn)) return st.getConstantValue(vn);
+    PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(caller, vn);
+    OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
+    if (pts == null || pts.size() != 1) return null;
+    InstanceKey only = pts.iterator().next();
+    return only instanceof ConstantKey ? ((ConstantKey<?>) only).getValue() : null;
+  }
+
+  /**
+   * Resolves a defaulted parameter's materialized default to a constant, reading the {@code
+   * <class>_defaults_<i>} global the translator writes and the call processing binds unpassed
+   * parameters to (wala/ML#743).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for points-to lookup.
+   * @param callee The callee {@link CGNode}.
+   * @param paramIndex The zero-based parameter index.
+   * @return The default's constant, or {@code null} when the global holds anything but a single
+   *     constant.
+   */
+  private static Object resolveDefaultGlobalConstant(
+      PropagationCallGraphBuilder builder, CGNode callee, int paramIndex) {
+    String name = callee.getMethod().getDeclaringClass().getName() + "_defaults_" + paramIndex;
+    FieldReference global =
+        FieldReference.findOrCreate(Root, Atom.findOrCreateUnicodeAtom("global " + name), Root);
+    IField f = builder.getClassHierarchy().resolveField(global);
+    if (f == null) return null;
+    OrdinalSet<InstanceKey> pts =
+        builder.getPointerAnalysis().getPointsToSet(new StaticFieldKey(f));
+    if (pts == null || pts.size() != 1) return null;
+    InstanceKey only = pts.iterator().next();
+    return only instanceof ConstantKey ? ((ConstantKey<?>) only).getValue() : null;
+  }
+
+  /**
+   * Computes the callee blocks reachable from entry when every conditional branch decidable under
+   * the call site's constant bindings takes only its decided edge (wala/ML#746). Undecidable
+   * branches keep both edges, and exceptional edges always follow, so the walk only ever prunes
+   * edges the site's constants prove untaken.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for constant lookup.
+   * @param callee The callee {@link CGNode}.
+   * @param env The call site's constant bindings, keyed by parameter value number.
+   * @return The reachable blocks.
+   */
+  static Set<ISSABasicBlock> computeReachableBlocksUnderBindings(
+      PropagationCallGraphBuilder builder, CGNode callee, Map<Integer, Object> env) {
+    SSACFG cfg = callee.getIR().getControlFlowGraph();
+    Set<ISSABasicBlock> reachable = HashSetFactory.make();
+    Deque<ISSABasicBlock> work = new ArrayDeque<>();
+    reachable.add(cfg.entry());
+    work.add(cfg.entry());
+    while (!work.isEmpty()) {
+      ISSABasicBlock block = work.poll();
+      Collection<ISSABasicBlock> normals = cfg.getNormalSuccessors(block);
+      Collection<ISSABasicBlock> kept = normals;
+      if (normals.size() == 2
+          && block.getLastInstructionIndex() >= block.getFirstInstructionIndex()
+          && block.getLastInstructionIndex() >= 0
+          && block.getLastInstruction() instanceof SSAConditionalBranchInstruction) {
+        SSAConditionalBranchInstruction branch =
+            (SSAConditionalBranchInstruction) block.getLastInstruction();
+        Boolean condition = evaluateBranchComparison(builder, callee, branch, env);
+        if (condition != null) {
+          ISSABasicBlock target = cfg.getBlockForInstruction(branch.getTarget());
+          if (target != null && normals.contains(target)) {
+            List<ISSABasicBlock> taken = new ArrayList<>();
+            for (ISSABasicBlock successor : normals)
+              if (successor.equals(target) == condition) taken.add(successor);
+            kept = taken;
+          }
+        }
+      }
+      for (ISSABasicBlock successor : kept) if (reachable.add(successor)) work.add(successor);
+      for (ISSABasicBlock successor : cfg.getExceptionalSuccessors(block))
+        if (reachable.add(successor)) work.add(successor);
+    }
+    return reachable;
+  }
+
+  /**
+   * Computes a callee's feasible return value numbers under the given (possibly empty) constant
+   * bindings (wala/ML#746): with an empty environment the fold still decides guards whose compared
+   * values are node-wide points-to singletons, which covers callees whose contexts are per call
+   * site. Returns {@code null} when no return-bearing block prunes, so callers can skip filtering
+   * entirely.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for constant lookup.
+   * @param callee The callee {@link CGNode}.
+   * @param env The call site's constant bindings, possibly empty.
+   * @return The feasible return value numbers, or {@code null} when nothing prunes.
+   */
+  static Set<Integer> computeFeasibleReturnValueNumbers(
+      PropagationCallGraphBuilder builder, CGNode callee, Map<Integer, Object> env) {
+    if (callee.getIR() == null) return null;
+    Set<ISSABasicBlock> reachable = computeReachableBlocksUnderBindings(builder, callee, env);
+    Set<Integer> feasible = HashSetFactory.make();
+    boolean pruned = false;
+    for (ISSABasicBlock block : callee.getIR().getControlFlowGraph())
+      for (SSAInstruction instruction : block) {
+        if (!(instruction instanceof SSAReturnInstruction)) continue;
+        if (!reachable.contains(block)) pruned = true;
+        else feasible.add(((SSAReturnInstruction) instruction).getResult());
+      }
+    return pruned && !feasible.isEmpty() ? feasible : null;
   }
 
   /**
@@ -5257,23 +5474,30 @@ public abstract class TensorGenerator {
       if (callee.getIR() == null || callee.getDU() == null) return ShapeResult.unknown();
       if (!visited.add(callee)) return ShapeResult.unknown(); // Recursive helper: unmodeled.
       try {
+        // Returns in blocks this call site's constant bindings prove unreachable are skipped,
+        // like the tensor-value twin's (wala/ML#746).
+        Map<Integer, Object> bindings =
+            computeCallSiteConstantBindings(builder, node, invoke, callee);
+        Set<ISSABasicBlock> reachable =
+            computeReachableBlocksUnderBindings(builder, callee, bindings);
         boolean sawReturn = false;
-        for (Iterator<SSAInstruction> it = callee.getIR().iterateAllInstructions();
-            it.hasNext(); ) {
-          SSAInstruction instruction = it.next();
-          if (!(instruction instanceof SSAReturnInstruction)) continue;
-          SSAReturnInstruction ret = (SSAReturnInstruction) instruction;
-          // A bare `return` means the helper can produce no value (None) on some path, so the
-          // call's result isn't a resolvable shape vector.
-          if (ret.getResult() < 0) return ShapeResult.unknown();
-          sawReturn = true;
-          ShapeResult shapes =
-              this.getShapeResultOfShapeVector(builder, callee, ret.getResult(), visited);
-          // Every return must resolve; an unresolvable remainder is marked rather than
-          // collapsing the resolvable members (wala/ML#718).
-          if (shapes.members().isEmpty()) return ShapeResult.unknown();
-          if (shapes.hasUnknown()) hasUnknown = true;
-          combined.addAll(shapes.members());
+        for (ISSABasicBlock block : callee.getIR().getControlFlowGraph()) {
+          if (!reachable.contains(block)) continue;
+          for (SSAInstruction instruction : block) {
+            if (!(instruction instanceof SSAReturnInstruction)) continue;
+            SSAReturnInstruction ret = (SSAReturnInstruction) instruction;
+            // A bare `return` means the helper can produce no value (None) on some path, so the
+            // call's result isn't a resolvable shape vector.
+            if (ret.getResult() < 0) return ShapeResult.unknown();
+            sawReturn = true;
+            ShapeResult shapes =
+                this.getShapeResultOfShapeVector(builder, callee, ret.getResult(), visited);
+            // Every return must resolve; an unresolvable remainder is marked rather than
+            // collapsing the resolvable members (wala/ML#718).
+            if (shapes.members().isEmpty()) return ShapeResult.unknown();
+            if (shapes.hasUnknown()) hasUnknown = true;
+            combined.addAll(shapes.members());
+          }
         }
         if (!sawReturn) return ShapeResult.unknown();
       } finally {
@@ -5314,29 +5538,39 @@ public abstract class TensorGenerator {
     Set<List<Dimension<?>>> combined = HashSetFactory.make();
     for (CGNode callee : targets) {
       if (callee.getIR() == null || callee.getDU() == null) return ShapeResult.unknown();
+      // A return whose block this call site's constant bindings prove unreachable contributes
+      // nothing: the site's guard constants decide the arm, so the other arms' returns are
+      // runtime-infeasible here (wala/ML#746).
+      Map<Integer, Object> bindings =
+          computeCallSiteConstantBindings(builder, node, invoke, callee);
+      Set<ISSABasicBlock> reachable =
+          computeReachableBlocksUnderBindings(builder, callee, bindings);
       boolean sawReturn = false;
-      for (Iterator<SSAInstruction> it = callee.getIR().iterateAllInstructions(); it.hasNext(); ) {
-        SSAInstruction instruction = it.next();
-        if (!(instruction instanceof SSAReturnInstruction)) continue;
-        SSAReturnInstruction ret = (SSAReturnInstruction) instruction;
-        sawReturn = true;
-        if (ret.getResult() < 0) {
-          hasUnknown = true;
-          continue;
+      for (ISSABasicBlock block : callee.getIR().getControlFlowGraph()) {
+        if (!reachable.contains(block)) continue;
+        for (SSAInstruction instruction : block) {
+          if (!(instruction instanceof SSAReturnInstruction)) continue;
+          SSAReturnInstruction ret = (SSAReturnInstruction) instruction;
+          sawReturn = true;
+          if (ret.getResult() < 0) {
+            hasUnknown = true;
+            continue;
+          }
+          ShapeResult shapes;
+          try {
+            shapes = this.getShapeResult(builder, callee, ret.getResult(), exact);
+          } catch (IllegalArgumentException e) {
+            LOGGER.log(
+                Level.FINE,
+                e,
+                () ->
+                    "shapeResultOfCalleeReturnValues: IAE reading a return of " + describe(callee));
+            hasUnknown = true;
+            continue;
+          }
+          if (shapes.hasUnknown() || shapes.isBottom()) hasUnknown = true;
+          combined.addAll(shapes.members());
         }
-        ShapeResult shapes;
-        try {
-          shapes = this.getShapeResult(builder, callee, ret.getResult(), exact);
-        } catch (IllegalArgumentException e) {
-          LOGGER.log(
-              Level.FINE,
-              e,
-              () -> "shapeResultOfCalleeReturnValues: IAE reading a return of " + describe(callee));
-          hasUnknown = true;
-          continue;
-        }
-        if (shapes.hasUnknown() || shapes.isBottom()) hasUnknown = true;
-        combined.addAll(shapes.members());
       }
       if (!sawReturn) hasUnknown = true;
     }

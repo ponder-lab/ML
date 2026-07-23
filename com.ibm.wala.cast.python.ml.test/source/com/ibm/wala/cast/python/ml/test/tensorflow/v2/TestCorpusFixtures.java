@@ -826,10 +826,10 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * suite/single-test modes. Analyzed statically here, like the consumer's vendoring; it runs in
    * the perf-eval with its tfrecord/data setup.
    *
-   * <p>TODO: Drop the {@code (32, Dynamic, 8, 8)}/{@code (?, Dynamic, 8, 8)} members once <a
-   * href="https://github.com/wala/ML/issues/746">wala/ML#746</a> filters constant-decidable branch
-   * arms per call site; they are the {@code mode="projection"} call's rank-3 input crossing into
-   * the embedding-mode lookup, runtime-infeasible at that site.
+   * <p>The former {@code (32, Dynamic, 8, 8)}/{@code (?, Dynamic, 8, 8)} members, the {@code
+   * mode="projection"} call's rank-3 input crossing into the embedding-mode lookup, are gone: <a
+   * href="https://github.com/wala/ML/issues/746">wala/ML#746</a>'s per-call-site arm filtering
+   * prunes the embedding arm at that site.
    */
   @Test
   public void testGpt2GetLossVendored()
@@ -862,21 +862,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                     FLOAT_32, asList(new NumericDim(32), DynamicDim.INSTANCE, new NumericDim(10))),
                 new TensorType(
                     FLOAT_32,
-                    asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(10))),
-                new TensorType(
-                    FLOAT_32,
-                    asList(
-                        new NumericDim(32),
-                        DynamicDim.INSTANCE,
-                        new NumericDim(8),
-                        new NumericDim(8))),
-                new TensorType(
-                    FLOAT_32,
-                    asList(
-                        new SymbolicDim("?"),
-                        DynamicDim.INSTANCE,
-                        new NumericDim(8),
-                        new NumericDim(8))))));
+                    asList(new SymbolicDim("?"), DynamicDim.INSTANCE, new NumericDim(10))))));
   }
 
   /**

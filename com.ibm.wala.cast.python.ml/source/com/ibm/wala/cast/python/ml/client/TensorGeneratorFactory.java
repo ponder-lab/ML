@@ -1719,11 +1719,24 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, SLICE_BUILTIN)) return new SliceBuiltinOperation(source);
     else {
       if (source.getPointerKey() instanceof ReturnValueKey) {
+        // A pruned return's local must not decide the dispatch: when the callee node's guard
+        // folds (a per-call-site context makes the compared parameter a points-to singleton),
+        // only the feasible returns' predecessors are candidates (wala/ML#746). The historical
+        // first-match walk over all predecessors picked an arbitrary arm.
+        CGNode calleeOfReturn = ((ReturnValueKey) source.getPointerKey()).getNode();
+        Set<Integer> feasibleReturns =
+            TensorGenerator.computeFeasibleReturnValueNumbers(
+                builder, calleeOfReturn, Collections.emptyMap());
         Graph<PointsToSetVariable> assignmentGraph =
             builder.getPropagationSystem().getAssignmentGraph();
         for (Iterator<PointsToSetVariable> it = assignmentGraph.getPredNodes(source);
             it.hasNext(); ) {
           PointsToSetVariable pred = it.next();
+          if (feasibleReturns != null
+              && pred.getPointerKey() instanceof LocalPointerKey
+              && ((LocalPointerKey) pred.getPointerKey()).getNode().equals(calleeOfReturn)
+              && !feasibleReturns.contains(
+                  ((LocalPointerKey) pred.getPointerKey()).getValueNumber())) continue;
           try {
             TensorGenerator gen = getGenerator(pred, builder, visited);
             if (gen != null) {
