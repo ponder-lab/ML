@@ -1119,6 +1119,30 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Decides whether the wala/ML#717 contract seed may fire on the emptiness the calling arm just
+   * observed. The seed covers a {@code call} input whose runtime feed finally resolves nothing, but
+   * under the engine an observed emptiness can be interim (a still-converging read): firing on it
+   * would join contract members alongside the runtime members a later delivery adds, which no
+   * settled evaluation would produce (the wala/ML#758 clause-1/clause-2 contract). The observation
+   * is provably final — and the seed may fire — outside the engine, outside an evaluation, during
+   * the settlement (canonicalization) pass, and whenever no interim value is observable at all;
+   * otherwise the arm is withheld and the query registers for a settled recomputation, where a
+   * still-empty feed is final ⊥ and the seed fires with delivery guaranteed (the read-version
+   * staleness scheduling re-runs the reader on any interim feed's growth, and the settlement pass
+   * replaces an interim firing's join history).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose engine (if any) is resolving.
+   * @return {@code true} iff the observed feed emptiness is final and the contract seed may fire.
+   */
+  private static boolean mayFireContractSeed(PropagationCallGraphBuilder builder) {
+    WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
+    if (engine == null || !engine.isEvaluating() || engine.isSettling()) return true;
+    if (!engine.mayObserveInterim()) return true;
+    engine.requestSettledRecomputation();
+    return false;
+  }
+
+  /**
    * Applies the explicit {@code model.build(input_shape=...)} contract seed when the given value is
    * the first input parameter of a Keras {@code call} body (wala/ML#717).
    *
@@ -1845,8 +1869,9 @@ public abstract class TensorGenerator {
         // An unresolvable (⊤) result for a Keras call input can still be seeded from an explicit
         // `model.build(input_shape=...)` contract: the runtime value exists (non-empty PTS) but
         // its shape does not resolve, exactly the case the declared contract covers
-        // (wala/ML#717).
-        if (fromValue.members().isEmpty()) {
+        // (wala/ML#717). The seed fires only on a provably final emptiness; a possibly-interim
+        // observation defers it to the settlement pass (wala/ML#758).
+        if (fromValue.members().isEmpty() && mayFireContractSeed(builder)) {
           Set<List<Dimension<?>>> contract =
               this.contractSeedForCallInput(builder, node, valueNumber);
           if (contract != null && !contract.isEmpty()) return ShapeResult.of(contract);
@@ -2022,10 +2047,13 @@ public abstract class TensorGenerator {
         // The runtime arguments did not resolve. For a Keras `call`'s first input, an explicitly
         // invoked `model.build(input_shape=(...))` with a resolvable literal declares the input
         // contract (built layers validate call inputs against the built shape), so seed the
-        // parameter from it (wala/ML#717).
-        Set<List<Dimension<?>>> contract =
-            this.contractSeedForCallInput(builder, node, valueNumber);
-        if (contract != null && !contract.isEmpty()) return ShapeResult.of(contract);
+        // parameter from it (wala/ML#717). The seed fires only on a provably final emptiness; a
+        // possibly-interim observation defers it to the settlement pass (wala/ML#758).
+        if (mayFireContractSeed(builder)) {
+          Set<List<Dimension<?>>> contract =
+              this.contractSeedForCallInput(builder, node, valueNumber);
+          if (contract != null && !contract.isEmpty()) return ShapeResult.of(contract);
+        }
         if (callerUnknown) partial = ShapeResult.unknown();
       }
     }
