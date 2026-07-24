@@ -639,6 +639,24 @@ public abstract class TensorGenerator {
             }
           }
 
+          // A multi-constant element is commonly a dead library default unioned with the live
+          // caller override (wala/ML#769); the same-body store's flow-refined value is the one
+          // that holds at the read, and a declined refinement keeps the union.
+          if (tensorDimensions.size() > 1) {
+            Integer refined = refineAmbiguousFieldConstant(builder, asin, fieldIndex);
+            if (refined != null) {
+              LOGGER.fine(
+                  () ->
+                      "Refined ambiguous shape element "
+                          + tensorDimensions
+                          + " to "
+                          + refined
+                          + " via the flow-sensitive store chase (wala/ML#769).");
+              tensorDimensions.clear();
+              tensorDimensions.add(new NumericDim(refined));
+            }
+          }
+
           LOGGER.fine(
               "Found possible shape dimensions: "
                   + tensorDimensions
@@ -1481,6 +1499,389 @@ public abstract class TensorGenerator {
       found = stored;
     }
     return found;
+  }
+
+  /**
+   * Ceiling on the flow-sensitive constant resolution's recursion depth (wala/ML#769). The chase
+   * crosses a handful of hops in practice (a same-body store, a receiver-matched constructor write,
+   * and the constructor chain's argument forwarding); the cap bounds pathological chains.
+   */
+  private static final int FLOW_SENSITIVE_CONSTANT_DEPTH_CAP = 8;
+
+  /**
+   * Resolves a value to the integer constant that holds at its read, preferring flow-refined stores
+   * over the flow-insensitive points-to union (wala/ML#769). A library factory commonly writes a
+   * default into a holder field that the caller immediately overwrites (NLPGNN's {@code
+   * load_bert_param} defaults against the drivers' {@code param.maxlen} overrides), so the field's
+   * points-to set unions the dead default with the live override, and every shape composed from the
+   * union pairs values that co-occur at runtime nowhere. The resolution extends the wala/ML#717
+   * contract chase's assumption &mdash; the same-body write is the one that holds at the read
+   * &mdash; across the receiver and constructor hops:
+   *
+   * <ul>
+   *   <li>a symbol-table constant resolves directly;
+   *   <li>a non-{@code self} attribute read chases the same-body writes ({@link
+   *       #resolveLocalObjectAttributeDim}'s criterion), recursing on the stored value;
+   *   <li>a {@code self} attribute read chases the writes across the receiver class's method
+   *       bodies, restricted to bodies whose {@code self} may alias the read's receiver instance
+   *       (so sibling instances' constructors do not conflict), recursing on each stored value;
+   *   <li>a parameter resolves through every caller invoke's argument, all of which must agree;
+   *   <li>otherwise a singleton constant in the points-to set resolves, and anything else declines.
+   * </ul>
+   *
+   * <p>Every multi-candidate step declines on disagreement rather than unioning, so the refinement
+   * never invents a value: a {@code null} result leaves the caller on today's points-to-union
+   * behavior.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR defines {@code vn}.
+   * @param vn The value number to resolve.
+   * @param visited The {@code (node, vn)} pairs already on this chase, breaking cycles.
+   * @param depth The remaining recursion budget.
+   * @return The flow-refined integer constant, or {@code null} when the chase declines.
+   */
+  static Integer resolveIntFlowSensitively(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      int vn,
+      Set<Pair<CGNode, Integer>> visited,
+      int depth) {
+    if (vn <= 0 || depth <= 0 || node.getIR() == null || node.getDU() == null) return null;
+    if (!visited.add(Pair.make(node, vn))) return null;
+    SymbolTable st = node.getIR().getSymbolTable();
+    if (st.isNumberConstant(vn)) return intProjectionOrNull((Number) st.getConstantValue(vn));
+
+    SSAInstruction def = node.getDU().getDef(vn);
+
+    if (def instanceof PythonPropertyRead) {
+      PythonPropertyRead read = (PythonPropertyRead) def;
+      int memberVn = read.getMemberRef();
+      if (!st.isStringConstant(memberVn)) return null;
+      String attributeName = st.getStringValue(memberVn);
+      int objectVn = read.getObjectRef();
+
+      if (node.getMethod().getNumberOfParameters() >= 2 && objectVn == node.getIR().getParameter(1))
+        return resolveSelfAttributeIntFlowSensitively(
+            builder, node, objectVn, attributeName, visited, depth);
+
+      Integer viaObject =
+          resolveObjectAttributeIntFlowSensitively(
+              builder, node, objectVn, attributeName, visited, depth);
+      if (viaObject != null) return viaObject;
+      // No chased write resolved: fall through to the points-to fallback below.
+    }
+
+    if (def == null) {
+      // A parameter: resolve through every caller invoke's argument; all must agree.
+      int paramPos = -1;
+      for (int i = 0; i < node.getIR().getNumberOfParameters(); i++)
+        if (node.getIR().getParameter(i) == vn) {
+          paramPos = node.getMethod().isStatic() ? i : i - 1;
+          break;
+        }
+      if (paramPos >= 0) {
+        Integer agreed = null;
+        boolean any = false;
+        for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+            getCallerInvokes(builder, node)) {
+          SSAAbstractInvokeInstruction call = callerInvoke.snd;
+          int argVn = -1;
+          if (call instanceof PythonInvokeInstruction) {
+            if (paramPos + 1 < call.getNumberOfUses()) argVn = call.getUse(paramPos + 1);
+          } else if (paramPos < call.getNumberOfUses()) argVn = call.getUse(paramPos);
+          if (argVn <= 0) return null;
+          Integer viaCaller =
+              resolveIntFlowSensitively(builder, callerInvoke.fst, argVn, visited, depth - 1);
+          if (viaCaller == null) return null;
+          if (agreed != null && !agreed.equals(viaCaller)) return null; // Disagreeing callers.
+          agreed = viaCaller;
+          any = true;
+        }
+        if (any) return agreed;
+      }
+      return null;
+    }
+
+    PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+    if (pk == null || builder.getPropagationSystem().isImplicit(pk)) return null;
+    OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
+    if (pts == null || pts.size() != 1) return null;
+    InstanceKey only = pts.iterator().next();
+    if (!(only instanceof ConstantKey) || !(((ConstantKey<?>) only).getValue() instanceof Number))
+      return null;
+    return intProjectionOrNull((Number) ((ConstantKey<?>) only).getValue());
+  }
+
+  /**
+   * The {@code self}-attribute arm of {@link #resolveIntFlowSensitively}: chases the attribute's
+   * writes across the receiver class's method-body nodes, keeping only bodies whose {@code self}
+   * may alias the read's receiver instance, so a per-context constructor's write resolves for its
+   * own receiver without conflicting with sibling instances' values.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR contains the read.
+   * @param objectVn The read's {@code self} value number.
+   * @param attributeName The attribute being read.
+   * @param visited The {@code (node, vn)} pairs already on this chase.
+   * @param depth The remaining recursion budget.
+   * @return The flow-refined constant, or {@code null} when the chase declines.
+   */
+  private static Integer resolveSelfAttributeIntFlowSensitively(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      int objectVn,
+      String attributeName,
+      Set<Pair<CGNode, Integer>> visited,
+      int depth) {
+    PointerKey selfPk =
+        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, objectVn);
+    Integer agreed = null;
+    boolean any = false;
+    for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(selfPk)) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      if (asin == null) return null;
+      String classPrefix =
+          asin.getNode().getMethod().getDeclaringClass().getReference().getName().toString() + "/";
+      Integer perInstance = null;
+      for (CGNode candidate : builder.getCallGraph()) {
+        if (candidate.getIR() == null || candidate.getDU() == null) continue;
+        IMethod method = candidate.getMethod();
+        if (!(method instanceof AstMethod)) continue;
+        if (!method.getDeclaringClass().getReference().getName().toString().startsWith(classPrefix))
+          continue;
+        if (method.getNumberOfParameters() < 2) continue;
+        int selfVn = candidate.getIR().getParameter(1);
+        // Receiver matching: only bodies whose `self` may alias the read's instance write it.
+        boolean aliases = false;
+        for (InstanceKey writerSelf :
+            builder
+                .getPointerAnalysis()
+                .getPointsToSet(
+                    builder
+                        .getPointerAnalysis()
+                        .getHeapModel()
+                        .getPointerKeyForLocal(candidate, selfVn)))
+          if (writerSelf.equals(ik)) {
+            aliases = true;
+            break;
+          }
+        if (!aliases) continue;
+        SymbolTable candidateSt = candidate.getIR().getSymbolTable();
+        for (SSAInstruction inst : candidate.getIR().getInstructions()) {
+          if (!(inst instanceof PythonPropertyWrite)) continue;
+          PythonPropertyWrite write = (PythonPropertyWrite) inst;
+          int memberVn = write.getMemberRef();
+          if (write.getObjectRef() != selfVn
+              || !candidateSt.isStringConstant(memberVn)
+              || !attributeName.equals(candidateSt.getStringValue(memberVn))) continue;
+          Integer stored =
+              resolveIntFlowSensitively(builder, candidate, write.getValue(), visited, depth - 1);
+          if (stored == null) return null; // An unresolvable write declines the attribute.
+          if (perInstance != null && !perInstance.equals(stored)) return null; // Conflict.
+          perInstance = stored;
+        }
+      }
+      if (perInstance == null) return null;
+      if (agreed != null && !agreed.equals(perInstance)) return null; // Conflicting receivers.
+      agreed = perInstance;
+      any = true;
+    }
+    return any ? agreed : null;
+  }
+
+  /**
+   * The non-{@code self} arm of {@link #resolveIntFlowSensitively}: chases the attribute's writes
+   * on the given local object within the same code body ({@link #resolveLocalObjectAttributeDim}'s
+   * criterion), and when the body holds no write and the object is itself a parameter, hops to each
+   * caller's argument and retries there (the constructor idiom {@code self.batch_size =
+   * param.batch_size}, whose override write lives in the constructing driver's body), all callers
+   * agreeing.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR contains the read.
+   * @param objectVn The read's object value number.
+   * @param attributeName The attribute being read.
+   * @param visited The {@code (node, vn)} pairs already on this chase.
+   * @param depth The remaining recursion budget.
+   * @return The flow-refined constant, or {@code null} when no chased write resolves or distinct
+   *     writes disagree.
+   */
+  private static Integer resolveObjectAttributeIntFlowSensitively(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      int objectVn,
+      String attributeName,
+      Set<Pair<CGNode, Integer>> visited,
+      int depth) {
+    if (depth <= 0 || node.getIR() == null || node.getDU() == null) return null;
+    Integer sameBody =
+        resolveSameBodyStoreInt(builder, node, objectVn, attributeName, visited, depth);
+    if (sameBody != null) return sameBody;
+
+    // The object is a parameter: the write may live in the frame the object came from.
+    int paramPos = -1;
+    if (node.getDU().getDef(objectVn) == null)
+      for (int i = 0; i < node.getIR().getNumberOfParameters(); i++)
+        if (node.getIR().getParameter(i) == objectVn) {
+          paramPos = node.getMethod().isStatic() ? i : i - 1;
+          break;
+        }
+    if (paramPos < 0) return null;
+    if (!visited.add(Pair.make(node, -objectVn))) return null; // Object-hop cycle break.
+    Integer agreed = null;
+    boolean any = false;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, node)) {
+      SSAAbstractInvokeInstruction call = callerInvoke.snd;
+      int argVn = -1;
+      if (call instanceof PythonInvokeInstruction) {
+        if (paramPos + 1 < call.getNumberOfUses()) argVn = call.getUse(paramPos + 1);
+      } else if (paramPos < call.getNumberOfUses()) argVn = call.getUse(paramPos);
+      if (argVn <= 0) return null;
+      Integer viaCaller =
+          resolveObjectAttributeIntFlowSensitively(
+              builder, callerInvoke.fst, argVn, attributeName, visited, depth - 1);
+      if (viaCaller == null) return null;
+      if (agreed != null && !agreed.equals(viaCaller)) return null; // Disagreeing callers.
+      agreed = viaCaller;
+      any = true;
+    }
+    return any ? agreed : null;
+  }
+
+  /**
+   * The same-body leg of {@link #resolveObjectAttributeIntFlowSensitively}: chases the attribute's
+   * writes on the given local object within one code body, recursing on each stored value.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR contains the read and the chased writes.
+   * @param objectVn The read's object value number.
+   * @param attributeName The attribute being read.
+   * @param visited The {@code (node, vn)} pairs already on this chase.
+   * @param depth The remaining recursion budget.
+   * @return The flow-refined constant, or {@code null} when no same-body write resolves or distinct
+   *     writes disagree.
+   */
+  private static Integer resolveSameBodyStoreInt(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      int objectVn,
+      String attributeName,
+      Set<Pair<CGNode, Integer>> visited,
+      int depth) {
+    SymbolTable st = node.getIR().getSymbolTable();
+    Integer found = null;
+    for (Iterator<SSAInstruction> uses = node.getDU().getUses(objectVn); uses.hasNext(); ) {
+      SSAInstruction use = uses.next();
+      if (!(use instanceof PythonPropertyWrite)) continue;
+      PythonPropertyWrite write = (PythonPropertyWrite) use;
+      int memberVn = write.getMemberRef();
+      if (write.getObjectRef() != objectVn
+          || !st.isStringConstant(memberVn)
+          || !attributeName.equals(st.getStringValue(memberVn))) continue;
+      Integer stored =
+          resolveIntFlowSensitively(builder, node, write.getValue(), visited, depth - 1);
+      if (stored == null) return null; // An unresolvable write makes the attribute unresolvable.
+      if (found != null && !found.equals(stored)) return null; // Conflicting writes.
+      found = stored;
+    }
+    return found;
+  }
+
+  /**
+   * Refines a container field whose points-to set unions multiple constants to the single constant
+   * its same-body store holds (wala/ML#769): finds the store into the container's field within the
+   * allocating node and resolves the stored value via {@link #resolveIntFlowSensitively}. The
+   * dead-default class this serves stores exactly once per container (a shape-literal element), so
+   * multiple agreeing stores resolve and disagreeing ones decline.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param asin The container's allocation site.
+   * @param fieldIndex The element index being read.
+   * @return The flow-refined constant, or {@code null} when the chase declines.
+   */
+  private static Integer refineAmbiguousFieldConstant(
+      PropagationCallGraphBuilder builder, AllocationSiteInNode asin, int fieldIndex) {
+    CGNode node = asin.getNode();
+    if (node.getIR() == null || node.getDU() == null) return null;
+    int allocVn = findDefinition(node, asin);
+    if (allocVn <= 0) return null;
+    SymbolTable st = node.getIR().getSymbolTable();
+    Integer found = null;
+    for (Iterator<SSAInstruction> uses = node.getDU().getUses(allocVn); uses.hasNext(); ) {
+      SSAInstruction use = uses.next();
+      if (!(use instanceof PythonPropertyWrite)) continue;
+      PythonPropertyWrite write = (PythonPropertyWrite) use;
+      int memberVn = write.getMemberRef();
+      if (write.getObjectRef() != allocVn || !st.isConstant(memberVn)) continue;
+      Object member = st.getConstantValue(memberVn);
+      if (member == null || !String.valueOf(fieldIndex).equals(String.valueOf(member))) continue;
+      Integer stored =
+          resolveIntFlowSensitively(
+              builder,
+              node,
+              write.getValue(),
+              HashSetFactory.make(),
+              FLOW_SENSITIVE_CONSTANT_DEPTH_CAP);
+      if (stored == null) return null;
+      if (found != null && !found.equals(stored)) return null;
+      found = stored;
+    }
+    return found;
+  }
+
+  /**
+   * Refines an ambiguous scalar argument of this generator's call to the flow-sensitive constant
+   * that holds at the call (wala/ML#769): resolves the argument's value number through {@link
+   * #resolveIntFlowSensitively} at the anchoring invoke, or, for a manual anchor, through every
+   * caller invoke, all of which must agree. A {@code null} result leaves the caller on the
+   * points-to union.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param paramPos The argument's positional index (excluding {@code self}).
+   * @param paramName The argument's keyword name, or {@code null}.
+   * @return The flow-refined constant, or {@code null} when the chase declines.
+   */
+  protected Integer refineArgumentIntFlowSensitively(
+      PropagationCallGraphBuilder builder, int paramPos, String paramName) {
+    PythonInvokeInstruction call = this.getInvokeInstruction();
+    if (call != null) {
+      int argVn = paramName != null ? call.getUse(paramName) : -1;
+      if (argVn == -1 && paramPos >= 0) {
+        int numKeywords = call.getKeywords() != null ? call.getKeywords().size() : 0;
+        int numPosParams = call.getNumberOfUses() - 1 - numKeywords;
+        if (paramPos < numPosParams) argVn = call.getUse(paramPos + 1);
+      }
+      if (argVn <= 0) return null;
+      return resolveIntFlowSensitively(
+          builder, this.getNode(), argVn, HashSetFactory.make(), FLOW_SENSITIVE_CONSTANT_DEPTH_CAP);
+    }
+    Integer agreed = null;
+    boolean any = false;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction)) return null;
+      PythonInvokeInstruction callerCall = (PythonInvokeInstruction) callerInvoke.snd;
+      int argVn = paramName != null ? callerCall.getUse(paramName) : -1;
+      if (argVn == -1 && paramPos >= 0) {
+        int numKeywords = callerCall.getKeywords() != null ? callerCall.getKeywords().size() : 0;
+        int numPosParams = callerCall.getNumberOfUses() - 1 - numKeywords;
+        if (paramPos < numPosParams) argVn = callerCall.getUse(paramPos + 1);
+      }
+      if (argVn <= 0) return null;
+      Integer viaCaller =
+          resolveIntFlowSensitively(
+              builder,
+              callerInvoke.fst,
+              argVn,
+              HashSetFactory.make(),
+              FLOW_SENSITIVE_CONSTANT_DEPTH_CAP);
+      if (viaCaller == null) return null;
+      if (agreed != null && !agreed.equals(viaCaller)) return null;
+      agreed = viaCaller;
+      any = true;
+    }
+    return any ? agreed : null;
   }
 
   /**
