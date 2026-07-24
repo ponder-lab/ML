@@ -7522,6 +7522,8 @@ public abstract class TensorGenerator {
       return new NpZeros(node);
     } else if (type.equals(ScipyTypes.SPARSE_MATRIX_DOT.getDeclaringClass())) {
       return new SparseMatrixDot(node);
+    } else if (type.equals(ScipyTypes.SPARSE_MATRIX_TODENSE.getDeclaringClass())) {
+      return new SparseDensify(node);
     } else if (type.equals(TensorFlowTypes.EYE.getDeclaringClass())) {
       return new Eye(node);
     } else if (type.equals(TensorFlowTypes.UNIFORM.getDeclaringClass())) {

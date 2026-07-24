@@ -1346,6 +1346,26 @@ public class TensorGeneratorFactory {
             return new SparseMatrixDot(source);
           }
 
+          // If we're calling `scipy.sparse`'s matrix `todense`, the result is a rank-2 dense
+          // matrix with unresolved extents. See wala/ML#768.
+          if (callee
+              .getMethod()
+              .getReference()
+              .getDeclaringClass()
+              .equals(ScipyTypes.SPARSE_MATRIX_TODENSE.getDeclaringClass())) {
+            LOGGER.fine(
+                () ->
+                    TensorGeneratorFactory.class.getSimpleName()
+                        + ": dispatching sparse-matrix todense call at "
+                        + describe(node)
+                        + " v"
+                        + vn
+                        + " to "
+                        + SparseDensify.class.getSimpleName()
+                        + ".");
+            return new SparseDensify(source);
+          }
+
           // If we're calling `next`, the result is an element of the collection.
           if (callee
               .getMethod()

@@ -9,6 +9,8 @@
         <putfield class="LRoot" field="sparse" fieldType="LRoot" ref="x" value="sparse"/>
         <new def="diags_fn" class="Lscipy/sparse/diags"/>
         <putfield class="LRoot" field="diags" fieldType="LRoot" ref="sparse" value="diags_fn"/>
+        <new def="vstack_fn" class="Lscipy/sparse/vstack"/>
+        <putfield class="LRoot" field="vstack" fieldType="LRoot" ref="sparse" value="vstack_fn"/>
         <return value="x"/>
       </method>
     </class>
@@ -24,6 +26,24 @@
           <new def="ret" class="Lscipy/sparse/spmatrix"/>
           <new def="dot_fn" class="Lscipy/sparse/spmatrix/dot"/>
           <putfield class="LRoot" field="dot" fieldType="LRoot" ref="ret" value="dot_fn"/>
+          <new def="tolil_fn" class="Lscipy/sparse/spmatrix/tolil"/>
+          <putfield class="LRoot" field="tolil" fieldType="LRoot" ref="ret" value="tolil_fn"/>
+          <new def="todense_fn" class="Lscipy/sparse/spmatrix/todense"/>
+          <putfield class="LRoot" field="todense" fieldType="LRoot" ref="ret" value="todense_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.vstack.html -->
+      <!-- Modeled as a class-per-function (same pattern as `diags`); the stacked result is a sparse matrix carrying the same method fields. -->
+      <class name="vstack" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self blocks format">
+          <new def="ret" class="Lscipy/sparse/spmatrix"/>
+          <new def="dot_fn" class="Lscipy/sparse/spmatrix/dot"/>
+          <putfield class="LRoot" field="dot" fieldType="LRoot" ref="ret" value="dot_fn"/>
+          <new def="tolil_fn" class="Lscipy/sparse/spmatrix/tolil"/>
+          <putfield class="LRoot" field="tolil" fieldType="LRoot" ref="ret" value="tolil_fn"/>
+          <new def="todense_fn" class="Lscipy/sparse/spmatrix/todense"/>
+          <putfield class="LRoot" field="todense" fieldType="LRoot" ref="ret" value="todense_fn"/>
           <return value="ret"/>
         </method>
       </class>
@@ -31,6 +51,32 @@
       <class name="spmatrix" allocatable="true"></class>
     </package>
     <package name="scipy/sparse/spmatrix">
+      <!-- https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.csr_matrix.tolil.html -->
+      <!-- Format conversion: still a sparse matrix, so the result carries the same method fields. -->
+      <class name="tolil" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="ret" class="Lscipy/sparse/spmatrix"/>
+          <new def="dot_fn" class="Lscipy/sparse/spmatrix/dot"/>
+          <putfield class="LRoot" field="dot" fieldType="LRoot" ref="ret" value="dot_fn"/>
+          <new def="tolil_fn" class="Lscipy/sparse/spmatrix/tolil"/>
+          <putfield class="LRoot" field="tolil" fieldType="LRoot" ref="ret" value="tolil_fn"/>
+          <new def="todense_fn" class="Lscipy/sparse/spmatrix/todense"/>
+          <putfield class="LRoot" field="todense" fieldType="LRoot" ref="ret" value="todense_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.csr_matrix.todense.html -->
+      <!-- Densification: a SciPy sparse matrix is two-dimensional by construction, so the dense result is rank-2 with extents the analysis cannot compute; see `SparseDensify` (wala/ML#768). -->
+      <class name="todense" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
       <!-- https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.csr_matrix.dot.html -->
       <!-- Modeled as a class-per-function (same pattern as `numpy/ndarray/astype`) so that attribute access `A.dot` on a sparse-matrix value resolves to this class via a field lookup, and the subsequent invocation dispatches to its `do` method. The product of a sparse matrix and a dense array is dense, so the result is a `numpy/ndarray`; its type is computed by `SparseMatrixDot`. -->
       <class name="dot" allocatable="true">

@@ -6,7 +6,6 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_5_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_3_FLOAT32;
-import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.UNKNOWN;
 import static java.util.Arrays.asList;
@@ -526,13 +525,11 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * row-normalized features. With {@code norm=True} constant at every {@code Planetoid} site, the
    * wala/ML#763 φ-arm suppression correctly cuts the un-normalized {@code np.array} arm, so the
    * parameter's type must arrive through the normalization itself: {@code
-   * sp.diags(r_inv).dot(features)}, typed by the SciPy sparse product modeling ({@code scipy.xml}
-   * plus {@code SparseMatrixDot}) as {@code ? of float32}: dtype from the dense operand, shape
-   * unknown because the dense operand's extents are pickle-loaded data.
-   *
-   * <p>TODO: The shape should improve to {@code (Unresolved, Unresolved)} once rank flows through
-   * the dense-ification chain ({@code todense}); see <a
-   * href="https://github.com/wala/ML/issues/768">wala/ML#768</a>.
+   * sp.diags(r_inv).dot(features)}, typed by the SciPy sparse modeling ({@code scipy.xml} plus
+   * {@code SparseMatrixDot} and {@code SparseDensify}) as {@code (Unresolved, Unresolved) of
+   * float32}: dtype from the dense operand, rank 2 through the densification chain ({@code
+   * vstack}/{@code tolil}/{@code todense}, wala/ML#768; a SciPy sparse matrix is two-dimensional by
+   * construction), and both extents pickle-loaded data the analysis cannot compute.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -549,7 +546,10 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "nlpgnn_full_proj",
         1,
         5,
-        Map.of(3, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        Map.of(
+            3,
+            Set.of(
+                new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
   }
 
   /**
@@ -573,7 +573,10 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "nlpgnn_full_proj",
         1,
         3,
-        Map.of(3, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        Map.of(
+            3,
+            Set.of(
+                new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
   }
 
   /**
@@ -597,7 +600,10 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "nlpgnn_full_proj",
         1,
         3,
-        Map.of(3, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+        Map.of(
+            3,
+            Set.of(
+                new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)))));
   }
 
   /**
