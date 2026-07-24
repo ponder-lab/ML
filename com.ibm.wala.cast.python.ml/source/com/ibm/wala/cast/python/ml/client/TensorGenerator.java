@@ -1506,7 +1506,7 @@ public abstract class TensorGenerator {
    * crosses a handful of hops in practice (a same-body store, a receiver-matched constructor write,
    * and the constructor chain's argument forwarding); the cap bounds pathological chains.
    */
-  private static final int FLOW_SENSITIVE_CONSTANT_DEPTH_CAP = 8;
+  static final int FLOW_SENSITIVE_CONSTANT_DEPTH_CAP = 8;
 
   /**
    * Resolves a value to the integer constant that holds at its read, preferring flow-refined stores

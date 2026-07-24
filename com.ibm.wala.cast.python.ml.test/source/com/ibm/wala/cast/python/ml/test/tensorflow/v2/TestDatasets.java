@@ -1422,6 +1422,32 @@ public class TestDatasets extends AbstractTensorTest {
   }
 
   /**
+   * The {@code Dense}-units face of {@link #testDeadDefaultFieldStore()} (<a
+   * href="https://github.com/wala/ML/issues/769">wala/ML#769</a>): the factory default reaches the
+   * layer width through a stored attribute ({@code self.width = param.maxlen}; {@code
+   * Dense(self.width)}), so the instance's units field unions the dead default with the live
+   * override, and the flow-sensitive constructor-argument chase resolves the width to the override
+   * alone.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDeadDefaultDenseUnits()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"deadstore_proj/lib.py", "deadstore_proj/driver_dense.py"},
+        "driver_dense.py",
+        "consume",
+        "deadstore_proj",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(10))))));
+  }
+
+  /**
    * Pins wala/ML#665: {@code tf} reached through {@code from helpers import *} binds, matching
    * Python's wildcard semantics (every public module-level name is exported, including modules the
    * source module imported).
