@@ -553,6 +553,54 @@ public class TestCorpusFixtures extends AbstractTensorTest {
   }
 
   /**
+   * The GAT sibling of {@link #testNlpgnnFullGcnCallInput()}: the vendored NLPGNN {@code
+   * GATLayer.call}'s {@code node_embeddings}, fed by the same {@code Planetoid} loader
+   * normalization through {@code train_gan.py}. One of the eight wala/ML#766 inferences and their
+   * in-suite regression guard.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNlpgnnFullGatCallInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        NLPGNN_FULL_PROJECT_FILES,
+        "nlpgnn/models/GAT.py",
+        "GATLayer.call",
+        "nlpgnn_full_proj",
+        1,
+        3,
+        Map.of(3, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The GAAE sibling of {@link #testNlpgnnFullGcnCallInput()}: the vendored NLPGNN {@code
+   * GAAELayer.call}'s {@code node_embeddings}, fed by the same {@code Planetoid} loader
+   * normalization through the auto-encoder driver ({@code tests/GNN/auto_encoder/GAAE.py}). One of
+   * the eight wala/ML#766 inferences and their in-suite regression guard.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNlpgnnFullGaaeCallInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        NLPGNN_FULL_PROJECT_FILES,
+        "nlpgnn/models/GAAE.py",
+        "GAAELayer.call",
+        "nlpgnn_full_proj",
+        1,
+        3,
+        Map.of(3, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
    * In-vivo anchor for the wala/ML#704 einsum-operand refinement at its reopen measurement point:
    * the vendored NLPGNN {@code DenseLayer3dProj.call}'s {@code input_tensor}, formerly {@code ? of
    * float32} (shape ⊤) in every context. The {@code use_einsum} arm's {@code
