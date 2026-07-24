@@ -126,6 +126,16 @@ public class DatasetBatchGenerator extends DatasetGenerator {
     // an unspecified batch size (the symbolic-batching path below).
     if (batchSizes == null) batchSizes = Collections.emptySet();
 
+    // A multi-valued batch size is commonly a dead library default unioned with the live caller
+    // override (wala/ML#769); the flow-refined argument is the one that holds at the call, and a
+    // declined refinement keeps the union.
+    if (batchSizes.size() > 1) {
+      Integer refined =
+          this.refineArgumentIntFlowSensitively(
+              builder, Parameters.BATCH_SIZE.getIndex(), Parameters.BATCH_SIZE.getName());
+      if (refined != null) batchSizes = Collections.singleton(refined.longValue());
+    }
+
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
 
     Set<Long> datasetSizes = this.getDatasetSizes(builder);

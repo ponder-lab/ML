@@ -1363,6 +1363,32 @@ public class TestDatasets extends AbstractTensorTest {
   }
 
   /**
+   * Distilled guard for the dead library-default field write (<a
+   * href="https://github.com/wala/ML/issues/769">wala/ML#769</a>): the factory writes {@code
+   * batch_size = 10; maxlen = 100} into the holder and the driver overwrites both before any read,
+   * so the iterator elements are {@code (2, 10)} and never a default-times-override product ({@code
+   * (10, 100)}, {@code (2, 100)}, {@code (10, 10)}). The flow-sensitive store chase resolves the
+   * shape-argument element and the batch size to the same-body overrides.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDeadDefaultFieldStore()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"deadstore_proj/lib.py", "deadstore_proj/driver.py"},
+        "driver.py",
+        "consume",
+        "deadstore_proj",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(10))))));
+  }
+
+  /**
    * Pins wala/ML#665: {@code tf} reached through {@code from helpers import *} binds, matching
    * Python's wildcard semantics (every public module-level name is exported, including modules the
    * source module imported).
