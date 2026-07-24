@@ -87,6 +87,7 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -202,6 +203,112 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     super(pythonPath);
     this.targetFramework = targetFramework;
     this.targetedCfaDepth = checkTargetedCfaDepth(targetedCfaDepth);
+    this.sidecarSearchPath = pythonPath;
+  }
+
+  /**
+   * The Python-path roots searched for a type-annotation sidecar (wala/ML#370); retained here
+   * because the base engine consumes its path without keeping it.
+   */
+  private List<File> sidecarSearchPath;
+
+  /**
+   * Seeds user-supplied type annotations from the project's sidecar (wala/ML#370). Fill-only and
+   * check-and-report: an entry seeds a binding only when inference produced no type for it; where
+   * an inferred seed exists, a disagreeing annotation is reported and not applied, so annotations
+   * can extend the analysis but never change or mask what it computes. Every applied seed carries
+   * {@link TensorOrigin#ANNOTATION}, keeping user-supplied evidence auditable downstream. An entry
+   * applies to every definition of the named binding that lacks an inferred type, so annotated
+   * names should be single-purpose in their scope. Unmatched entries are reported, so stale anchors
+   * surface instead of rotting.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param dataflow The analysis's dataflow graph, gaining the seeded variables as needed.
+   * @param init The initial tensor-type seeding map.
+   * @param initOrigins The initial origin seeding map.
+   */
+  private void seedTypeAnnotationSidecarEntries(
+      PropagationCallGraphBuilder builder,
+      Graph<PointsToSetVariable> dataflow,
+      Map<PointsToSetVariable, Set<TensorType>> init,
+      Map<PointsToSetVariable, Set<TensorOrigin>> initOrigins) {
+    List<TypeAnnotationSidecar.Entry> entries = TypeAnnotationSidecar.load(this.sidecarSearchPath);
+    for (TypeAnnotationSidecar.Entry entry : entries) {
+      String target =
+          "script "
+              + entry.module().replace('/', '.')
+              + (entry.function().isEmpty() ? "" : "." + entry.function())
+              + ".do()LRoot;";
+      boolean matched = false;
+      for (CGNode node : builder.getCallGraph()) {
+        if (!node.getMethod().getSignature().equals(target)) continue;
+        IR ir = node.getIR();
+        if (ir == null) continue;
+        SSAInstruction[] instructions = ir.getInstructions();
+        Set<Integer> valueNumbers = new LinkedHashSet<>();
+        for (int i = 0; i < instructions.length; i++) {
+          SSAInstruction instruction = instructions[i];
+          if (instruction == null) continue;
+          for (int d = 0; d < instruction.getNumberOfDefs(); d++) {
+            int def = instruction.getDef(d);
+            String[] names = ir.getLocalNames(i, def);
+            if (names == null) continue;
+            for (String name : names)
+              if (entry.variable().equals(name)) {
+                valueNumbers.add(def);
+                break;
+              }
+          }
+        }
+        for (int vn : valueNumbers) {
+          PointerKey pk =
+              builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+          if (builder.getPropagationSystem().isImplicit(pk)) {
+            LOGGER.warning(
+                "Type annotation "
+                    + entry.anchor()
+                    + " addresses an implicit pointer key; not applied (wala/ML#370).");
+            continue;
+          }
+          PointsToSetVariable var = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
+          matched = true;
+          Set<TensorType> inferred = init.get(var);
+          if (inferred != null && !inferred.isEmpty()) {
+            if (!inferred.equals(Set.of(entry.type())))
+              LOGGER.warning(
+                  "Type annotation "
+                      + entry.anchor()
+                      + " = "
+                      + entry.type()
+                      + " conflicts with the inferred "
+                      + inferred
+                      + "; the annotation is not applied (wala/ML#370)"
+                      + entry.attributionSuffix()
+                      + ".");
+            continue; // Fill-only: inference wins wherever it has a type.
+          }
+          if (!dataflow.containsNode(var)) dataflow.addNode(var);
+          init.put(var, HashSetFactory.make(Set.of(entry.type())));
+          initOrigins.put(var, EnumSet.of(TensorOrigin.ANNOTATION));
+          LOGGER.fine(
+              () ->
+                  "Applied type annotation "
+                      + entry.anchor()
+                      + " = "
+                      + entry.type()
+                      + " at "
+                      + describe(var.getPointerKey())
+                      + " (wala/ML#370)"
+                      + entry.attributionSuffix()
+                      + ".");
+        }
+      }
+      if (!matched)
+        LOGGER.warning(
+            "Type annotation "
+                + entry.anchor()
+                + " matched no analyzed binding; check the module path and names (wala/ML#370).");
+    }
   }
 
   @Override
@@ -1448,6 +1555,8 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         // `tf.compat.v1.placeholder` is a TensorFlow API (wala/ML#724).
         initOrigins.put(e.getKey(), EnumSet.of(TensorOrigin.TENSORFLOW));
       }
+
+      this.seedTypeAnnotationSidecarEntries(builder, dataflow, init, initOrigins);
 
       // wala/ML#509: recognize `x.set_shape(s)` via IR scanning rather than call-graph dispatch on
       // the `Ltensorflow/functions/set_shape` synthetic class. The legacy dispatch path requires

@@ -632,4 +632,53 @@ public class TestMisc extends AbstractTensorTest {
     assertEquals(new TensorType(FLOAT_32, asList(new NumericDim(3))), TensorType.of(FLOAT_32, 3));
     assertTrue(TensorType.of(FLOAT32, 2, 2).asSparse().isSparse());
   }
+
+  /**
+   * Distilled guard for the type-annotation sidecar (<a
+   * href="https://github.com/wala/ML/issues/370">wala/ML#370</a>): {@code np.load} is an opaque
+   * content-dependent read the analysis cannot type, and the project's {@code ariadne-types.json}
+   * supplies {@code (4, 3) float32} for the loaded binding without touching the program. The seeded
+   * type flows to the consuming parameter.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTypeAnnotationSidecarFillsOpaqueLoad()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"sidecar_proj/driver.py"},
+        "driver.py",
+        "consume",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 3))));
+  }
+
+  /**
+   * The decline direction of {@link #testTypeAnnotationSidecarFillsOpaqueLoad()} (<a
+   * href="https://github.com/wala/ML/issues/370">wala/ML#370</a>): the sidecar's {@code (5, 5)}
+   * claim disagrees with the inferred {@code (2, 2) float32}, so the annotation is reported and not
+   * applied; inference wins wherever it has a type (the fill-only, check-and-report semantics).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTypeAnnotationSidecarDoesNotOverrideInference()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"sidecar_proj/driver_conflict.py"},
+        "driver_conflict.py",
+        "consume",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 2))));
+  }
 }

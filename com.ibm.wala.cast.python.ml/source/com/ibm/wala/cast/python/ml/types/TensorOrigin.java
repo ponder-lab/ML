@@ -26,6 +26,13 @@ package com.ibm.wala.cast.python.ml.types;
  */
 public enum TensorOrigin {
 
+  /**
+   * The value's type was supplied by a user annotation (a sidecar entry, wala/ML#370) rather than
+   * inferred. Annotation seeding is fill-only: it applies only where inference has no type, so this
+   * origin marks exactly the evidence that rests on user-supplied facts.
+   */
+  ANNOTATION,
+
   /** The value is an ndarray produced by a numpy operation. */
   NUMPY,
 
