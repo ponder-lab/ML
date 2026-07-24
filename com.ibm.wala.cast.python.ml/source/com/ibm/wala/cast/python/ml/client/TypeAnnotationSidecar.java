@@ -36,7 +36,9 @@ import org.json.JSONObject;
  * annotated binding. {@code dtype} and {@code shape} are each optional (an absent axis stays
  * unknown). The shape vocabulary is the dimension string: whitespace-separated integers ({@code
  * NumericDim}) or names ({@code SymbolicDim}); {@code "..."} alone declares an unknown rank; the
- * empty string declares rank 0.
+ * empty string declares rank 0. The optional {@code attribution} string cites the evidence that the
+ * value is content-dependent (e.g., a data-set reference or an issue link); it is echoed in every
+ * report about the entry so the audit trail travels with the fact.
  *
  * <p>Consumption semantics live in {@link PythonTensorAnalysisEngine}: fill-only (an entry seeds
  * only where inference has no type), check-and-report on conflicts, and a dedicated {@link
@@ -62,8 +64,11 @@ public class TypeAnnotationSidecar {
    * @param function The dotted qualified function name within the module; empty for module level.
    * @param variable The source-level name of the annotated binding.
    * @param type The declared tensor type (unknown axes per the entry's omissions).
+   * @param attribution The citation for why the value is content-dependent; empty when the entry
+   *     supplies none.
    */
-  public record Entry(String module, String function, String variable, TensorType type) {
+  public record Entry(
+      String module, String function, String variable, TensorType type, String attribution) {
 
     /**
      * Renders the entry's program-point anchor for logs and reports.
@@ -72,6 +77,16 @@ public class TypeAnnotationSidecar {
      */
     public String anchor() {
       return this.module() + ":" + this.function() + ":" + this.variable();
+    }
+
+    /**
+     * Renders the entry's attribution for logs and reports.
+     *
+     * @return The attribution as a parenthesized suffix, or the empty string when the entry
+     *     supplies none.
+     */
+    public String attributionSuffix() {
+      return this.attribution().isEmpty() ? "" : " (attributed: " + this.attribution() + ")";
     }
   }
 
@@ -181,7 +196,12 @@ public class TypeAnnotationSidecar {
         return null;
       }
     }
-    return new Entry(module, function, variable, new TensorType(dtype, dims));
+    return new Entry(
+        module,
+        function,
+        variable,
+        new TensorType(dtype, dims),
+        object.optString("attribution", ""));
   }
 
   /**

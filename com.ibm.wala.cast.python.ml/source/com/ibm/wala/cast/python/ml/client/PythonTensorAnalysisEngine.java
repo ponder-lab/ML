@@ -282,7 +282,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                       + entry.type()
                       + " conflicts with the inferred "
                       + inferred
-                      + "; the annotation is not applied (wala/ML#370).");
+                      + "; the annotation is not applied (wala/ML#370)"
+                      + entry.attributionSuffix()
+                      + ".");
             continue; // Fill-only: inference wins wherever it has a type.
           }
           if (!dataflow.containsNode(var)) dataflow.addNode(var);
@@ -296,7 +298,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                       + entry.type()
                       + " at "
                       + describe(var.getPointerKey())
-                      + " (wala/ML#370).");
+                      + " (wala/ML#370)"
+                      + entry.attributionSuffix()
+                      + ".");
         }
       }
       if (!matched)

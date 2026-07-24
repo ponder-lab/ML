@@ -5,14 +5,16 @@
       "function": "",
       "variable": "x",
       "dtype": "float32",
-      "shape": "4 3"
+      "shape": "4 3",
+      "attribution": "fixture: np.load of an array saved in the same script"
     },
     {
       "module": "driver_conflict.py",
       "function": "",
       "variable": "y",
       "dtype": "float32",
-      "shape": "5 5"
+      "shape": "5 5",
+      "attribution": "fixture: deliberately wrong to exercise the conflict report"
     },
     {
       "module": "driver.py",
