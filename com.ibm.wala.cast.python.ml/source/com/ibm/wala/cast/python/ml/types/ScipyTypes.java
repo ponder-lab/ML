@@ -26,6 +26,13 @@ public class ScipyTypes extends PythonTypes {
               PythonTypes.pythonLoader, TypeName.string2TypeName("Lscipy/sparse/diags")),
           AstMethodReference.fnSelector);
 
+  /** https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.csr_matrix.todense.html */
+  public static final MethodReference SPARSE_MATRIX_TODENSE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lscipy/sparse/spmatrix/todense")),
+          AstMethodReference.fnSelector);
+
   /** https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.csr_matrix.dot.html */
   public static final MethodReference SPARSE_MATRIX_DOT =
       MethodReference.findOrCreate(
