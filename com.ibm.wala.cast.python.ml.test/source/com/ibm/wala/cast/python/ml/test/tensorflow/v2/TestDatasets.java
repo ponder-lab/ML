@@ -1389,6 +1389,39 @@ public class TestDatasets extends AbstractTensorTest {
   }
 
   /**
+   * The decline direction of {@link #testDeadDefaultFieldStore()} (<a
+   * href="https://github.com/wala/ML/issues/769">wala/ML#769</a>): two disagreeing same-body
+   * overrides make the chase decline, so the element keeps the points-to union of the factory
+   * default and both overrides, batched to one member per surviving size. The runtime value is the
+   * later store's {@code (2, 30)}; the union is the documented conservative degradation.
+   *
+   * <p>TODO: An order-aware same-body chase could pick the dominating later store; see <a
+   * href="https://github.com/wala/ML/issues/769">wala/ML#769</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDeadDefaultFieldStoreConflict()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"deadstore_proj/lib.py", "deadstore_proj/driver_conflict.py"},
+        "driver_conflict.py",
+        "consume",
+        "deadstore_proj",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(100))),
+                new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(20))),
+                new TensorType(FLOAT_32, asList(new NumericDim(2), new NumericDim(30))))));
+  }
+
+  /**
    * Pins wala/ML#665: {@code tf} reached through {@code from helpers import *} binds, matching
    * Python's wildcard semantics (every public module-level name is exported, including modules the
    * source module imported).
