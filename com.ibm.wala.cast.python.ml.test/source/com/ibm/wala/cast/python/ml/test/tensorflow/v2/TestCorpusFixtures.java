@@ -6,6 +6,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_5_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_3_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.UNKNOWN;
 import static java.util.Arrays.asList;
@@ -517,6 +518,38 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                         UnresolvedDim.INSTANCE,
                         UnresolvedDim.INSTANCE,
                         UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * In-vivo anchor for the wala/ML#766 GNN entry feed: the vendored NLPGNN {@code GCNLayer.call}'s
+   * {@code node_embeddings}, whose only runtime feed is the {@code Planetoid} loader's
+   * row-normalized features. With {@code norm=True} constant at every {@code Planetoid} site, the
+   * wala/ML#763 φ-arm suppression correctly cuts the un-normalized {@code np.array} arm, so the
+   * parameter's type must arrive through the normalization itself: {@code
+   * sp.diags(r_inv).dot(features)}, typed by the SciPy sparse product modeling ({@code scipy.xml}
+   * plus {@code SparseMatrixDot}) as {@code ? of float32}: dtype from the dense operand, shape
+   * unknown because the dense operand's extents are pickle-loaded data.
+   *
+   * <p>TODO: The shape should improve to {@code (Unresolved, Unresolved)} once rank flows through
+   * the dense-ification chain ({@code todense}); see <a
+   * href="https://github.com/wala/ML/issues/768">wala/ML#768</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNlpgnnFullGcnCallInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        NLPGNN_FULL_PROJECT_FILES,
+        "nlpgnn/models/GCN.py",
+        "GCNLayer.call",
+        "nlpgnn_full_proj",
+        1,
+        5,
+        Map.of(3, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
