@@ -13,6 +13,33 @@
       "variable": "y",
       "dtype": "float32",
       "shape": "5 5"
+    },
+    {
+      "module": "driver.py",
+      "function": "",
+      "variable": "no_such_binding",
+      "dtype": "float32",
+      "shape": "1"
+    },
+    {
+      "module": "driver.py",
+      "function": "",
+      "dtype": "float32",
+      "shape": "2"
+    },
+    {
+      "module": "driver.py",
+      "function": "",
+      "variable": "x2",
+      "dtype": "complex999",
+      "shape": "3"
+    },
+    {
+      "module": "driver.py",
+      "function": "",
+      "variable": "x3",
+      "dtype": "float32",
+      "shape": "4 $!"
     }
   ]
 }
