@@ -1,0 +1,48 @@
+<?xml version="1.0" ?>
+<!DOCTYPE summary-spec>
+<summary-spec>
+  <classloader name="PythonLoader">
+    <class name="scipy" allocatable="true">
+      <method name="import" static="true" descriptor="()Lscipy;">
+        <new def="x" class="Lscipy"/>
+        <new def="sparse" class="Lscipy/sparse"/>
+        <putfield class="LRoot" field="sparse" fieldType="LRoot" ref="x" value="sparse"/>
+        <new def="diags_fn" class="Lscipy/sparse/diags"/>
+        <putfield class="LRoot" field="diags" fieldType="LRoot" ref="sparse" value="diags_fn"/>
+        <return value="x"/>
+      </method>
+    </class>
+    <package name="scipy">
+      <!-- The `scipy.sparse` submodule object, reachable as a field of the `scipy` module so that both `import scipy.sparse as sp` (an `import("scipy")` followed by an `OBJECT_REF` on `sparse`) and `from scipy import sparse` resolve to it. Declared `allocatable="true"` for the same reason as `numpy/ndarray`: it is only referenced as a `<new>` target inside `scipy`'s `import()`. -->
+      <class name="sparse" allocatable="true"></class>
+    </package>
+    <package name="scipy/sparse">
+      <!-- https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.diags.html -->
+      <!-- Modeled as a class-per-function (same pattern as `numpy/array`) so that `sp.diags` resolves to this class via a field lookup on the `scipy.sparse` submodule, and the invocation dispatches to its `do` method. The returned sparse matrix carries a `dot` method field (the same per-allocation field-population pattern as `numpy/ndarray`'s `astype`/`reshape`; see the 1-CFA aliasing note in `numpy.xml`). -->
+      <class name="diags" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self diagonals offsets">
+          <new def="ret" class="Lscipy/sparse/spmatrix"/>
+          <new def="dot_fn" class="Lscipy/sparse/spmatrix/dot"/>
+          <putfield class="LRoot" field="dot" fieldType="LRoot" ref="ret" value="dot_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- The sparse-matrix value class. Declared `allocatable="true"` so `<new class="Lscipy/sparse/spmatrix"/>` in `diags`'s `do()` resolves to a concrete `InstanceKey`; deliberately has no method body because it is only referenced as a `<new>` target. -->
+      <class name="spmatrix" allocatable="true"></class>
+    </package>
+    <package name="scipy/sparse/spmatrix">
+      <!-- https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.csr_matrix.dot.html -->
+      <!-- Modeled as a class-per-function (same pattern as `numpy/ndarray/astype`) so that attribute access `A.dot` on a sparse-matrix value resolves to this class via a field lookup, and the subsequent invocation dispatches to its `do` method. The product of a sparse matrix and a dense array is dense, so the result is a `numpy/ndarray`; its type is computed by `SparseMatrixDot`. -->
+      <class name="dot" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self b">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+    </package>
+  </classloader>
+</summary-spec>

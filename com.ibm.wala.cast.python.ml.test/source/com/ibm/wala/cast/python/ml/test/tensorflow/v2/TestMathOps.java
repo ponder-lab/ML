@@ -121,6 +121,33 @@ public class TestMathOps extends AbstractTensorTest {
     test("tf2_test_sigmoid.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_4_FLOAT32)));
   }
 
+  /**
+   * Distilled guard for the SciPy sparse matrix product (<a
+   * href="https://github.com/wala/ML/issues/766">wala/ML#766</a>): the NLPGNN {@code Planetoid}
+   * loader's row normalization {@code sp.diags(r_inv).dot(features)} is the real feed of the GNN
+   * {@code call} parameters. The product's dtype follows the dense operand, and its shape composes
+   * the sparse operand's row extent — a fixed runtime integer the analysis cannot compute ({@code
+   * UnresolvedDim}, wala/ML#721), since the sparse operand is a SciPy-internal value it never types
+   * — with the dense operand's trailing extent (here the fixture's static {@code 2}).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testScipySparseDot()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_scipy_sparse_dot.py",
+        "consume",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, new NumericDim(2))))));
+  }
+
   @Test
   public void testAbs()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {

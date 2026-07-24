@@ -216,6 +216,7 @@ import static java.util.logging.Logger.getLogger;
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
+import com.ibm.wala.cast.python.ml.types.ScipyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
@@ -1155,6 +1156,10 @@ public class TensorGeneratorFactory {
       if (ik instanceof AllocationSiteInNode) {
         TypeReference allocated = ((AllocationSiteInNode) ik).getSite().getDeclaredType();
         if (allocated.equals(PythonTypes.list) || allocated.equals(PythonTypes.tuple)) continue;
+        // A SciPy sparse matrix (`sp.diags(...)`, wala/ML#766) is a deliberately untyped SciPy
+        // internal: a binop over it is sparse-matrix algebra, not a tensor op. Only its dense
+        // `dot` product boundary is typed (`SparseMatrixDot`).
+        if (allocated.equals(ScipyTypes.SPARSE_MATRIX_TYPE)) continue;
       }
       return true;
     }
@@ -1318,6 +1323,27 @@ public class TensorGeneratorFactory {
                         + vn
                         + " to NdarrayReshape.");
             return new NdarrayReshape(source);
+          }
+
+          // If we're calling `scipy.sparse`'s matrix `dot`, the result is a dense product whose
+          // dtype follows the dense operand; the sparse receiver is never typed, so the shape is
+          // unknown. See wala/ML#766.
+          if (callee
+              .getMethod()
+              .getReference()
+              .getDeclaringClass()
+              .equals(ScipyTypes.SPARSE_MATRIX_DOT.getDeclaringClass())) {
+            LOGGER.fine(
+                () ->
+                    TensorGeneratorFactory.class.getSimpleName()
+                        + ": dispatching sparse-matrix dot call at "
+                        + describe(node)
+                        + " v"
+                        + vn
+                        + " to "
+                        + SparseMatrixDot.class.getSimpleName()
+                        + ".");
+            return new SparseMatrixDot(source);
           }
 
           // If we're calling `next`, the result is an element of the collection.

@@ -35,6 +35,7 @@ import com.ibm.wala.cast.ir.ssa.CAstUnaryOp;
 import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
+import com.ibm.wala.cast.python.ml.types.ScipyTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorOrigin;
@@ -7118,6 +7119,8 @@ public abstract class TensorGenerator {
       return new NpOnes(node);
     } else if (type.equals(NumpyTypes.ZEROS.getDeclaringClass())) {
       return new NpZeros(node);
+    } else if (type.equals(ScipyTypes.SPARSE_MATRIX_DOT.getDeclaringClass())) {
+      return new SparseMatrixDot(node);
     } else if (type.equals(TensorFlowTypes.EYE.getDeclaringClass())) {
       return new Eye(node);
     } else if (type.equals(TensorFlowTypes.UNIFORM.getDeclaringClass())) {
