@@ -154,6 +154,25 @@ public class DenseCall extends TensorGenerator {
           LOGGER.finer(
               "Possible `units` values: " + unitValues + " for points-to set: " + unitsPTS + ".");
 
+          // A multi-valued field is commonly a dead library default unioned with the live
+          // override reaching the constructor argument (wala/ML#769); the flow-refined
+          // constructor argument is the value that holds for this instance, and a declined
+          // refinement keeps the union.
+          if (unitValues != null && unitValues.size() > 1) {
+            CGNode constructorNode = selfASIN.getNode();
+            if (constructorNode.getIR() != null
+                && constructorNode.getIR().getNumberOfParameters() > 1) {
+              Integer refined =
+                  TensorGenerator.resolveIntFlowSensitively(
+                      builder,
+                      constructorNode,
+                      constructorNode.getIR().getParameter(1),
+                      HashSetFactory.make(),
+                      FLOW_SENSITIVE_CONSTANT_DEPTH_CAP);
+              if (refined != null) unitValues = Set.of(refined.longValue());
+            }
+          }
+
           // A null result means `units` is not statically resolvable (wala/ML#669); skip it
           // rather than crashing or claiming a partial value.
           if (unitValues != null) ret.addAll(unitValues);
