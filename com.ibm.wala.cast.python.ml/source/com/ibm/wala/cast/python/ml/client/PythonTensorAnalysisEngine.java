@@ -1434,29 +1434,33 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
-   * Returns whether the given invoke is a slice <em>constructor</em> over non-tensor bounds: it
-   * resolves to the {@code slice} builtin and every argument is either a compile-time constant (the
-   * {@code slice(None, None, None)} form that subscripts like {@code x[:, 0]} compile to,
-   * wala/ML#732) or a value whose points-to set carries no allocation-site member (an
-   * integer-valued bound such as the shape-element read in {@code x[:, :n, :]}, wala/ML#787). The
-   * subscript-application form never matches: its arguments include the sliced tensor or the
-   * previously constructed slice objects, all of which carry allocation sites, so an argument whose
-   * points-to set has an allocation-site member disqualifies the invoke.
+   * Returns whether the given invoke is a slice <em>constructor</em> over non-tensor bounds whose
+   * consumers subscript tensors: it resolves to the {@code slice} builtin, has constructor arity,
+   * every argument is either a compile-time constant (the {@code slice(None, None, None)} form that
+   * subscripts like {@code x[:, 0]} compile to, wala/ML#732) or a value whose points-to set carries
+   * no allocation-site member (an integer-valued bound such as the shape-element read in {@code
+   * x[:, :n, :]}, wala/ML#787), and no consuming slice application subscripts a list or tuple. The
+   * subscript-application form never matches: it has application arity, and its arguments include
+   * the sliced tensor or the previously constructed slice objects, which carry allocation sites.
+   * The consumer check keeps shape-vector slicing unpinned, since the empty-and-fixed pin would
+   * sever the reshape shape-vector flow such a slice feeds.
    *
    * @param node The {@link CGNode} containing the invoke.
    * @param invoke The invoke instruction to test.
    * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the targets.
-   * @return {@code true} iff the invoke constructs a slice object from non-tensor bounds.
+   * @return {@code true} iff the invoke constructs a slice object from non-tensor bounds and no
+   *     consumer applies it to a list or tuple.
    */
   private static boolean isNonTensorSliceConstructor(
       CGNode node, SSAAbstractInvokeInstruction invoke, PropagationCallGraphBuilder builder) {
-    boolean resolvesToSlice = false;
-    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite()))
-      if (callee.getMethod().getReference().getDeclaringClass().equals(PythonTypes.SLICE_BUILTIN)) {
-        resolvesToSlice = true;
-        break;
-      }
-    if (!resolvesToSlice) return false;
+    if (!resolvesToSliceBuiltin(node, invoke, builder)) return false;
+    // Arity separates the forms regardless of points-to resolution: a constructor is the callable
+    // plus at most the three bounds, while an application is the callable plus the subscripted
+    // object plus the padded three bounds (the front-end pads absent bounds with None), so a
+    // five-use invoke is an application even when the subscripted object's points-to set is
+    // implicit — the fused single-slice form `input_shape[:-n]` whose result IS the sliced shape
+    // list (wala/ML#787).
+    if (invoke.getNumberOfUses() > 4) return false;
     SymbolTable st = node.getIR().getSymbolTable();
     for (int i = 1; i < invoke.getNumberOfUses(); i++) {
       int use = invoke.getUse(i);
@@ -1466,7 +1470,49 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       for (InstanceKey useIK : builder.getPointerAnalysis().getPointsToSet(usePK))
         if (getAllocationSiteInNode(useIK) != null) return false;
     }
+    // Classify by application context: a consumer that applies this slice to a list or tuple is
+    // shape-vector machinery, not a tensor subscript, so the constructor stays unpinned. An empty
+    // or unresolvable applied-to points-to set also keeps it unpinned, erring toward not fixing
+    // state the analysis cannot classify.
+    int result = invoke.getDef();
+    for (Iterator<SSAInstruction> uses = node.getDU().getUses(result); uses.hasNext(); ) {
+      SSAInstruction consumer = uses.next();
+      if (!(consumer instanceof SSAAbstractInvokeInstruction)) continue;
+      SSAAbstractInvokeInstruction application = (SSAAbstractInvokeInstruction) consumer;
+      if (!resolvesToSliceBuiltin(node, application, builder)) continue;
+      if (application.getNumberOfUses() < 2) continue;
+      int appliedTo = application.getUse(1);
+      if (appliedTo == result) continue;
+      PointerKey appliedToPK =
+          builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, appliedTo);
+      boolean sawAllocation = false;
+      for (InstanceKey appliedToIK : builder.getPointerAnalysis().getPointsToSet(appliedToPK)) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(appliedToIK);
+        if (asin == null) continue;
+        sawAllocation = true;
+        TypeReference appliedToType = asin.concreteType().getReference();
+        if (appliedToType.equals(PythonTypes.list) || appliedToType.equals(PythonTypes.tuple))
+          return false;
+      }
+      if (!sawAllocation) return false;
+    }
     return true;
+  }
+
+  /**
+   * Returns whether the given invoke resolves to the {@code slice} builtin.
+   *
+   * @param node The {@link CGNode} containing the invoke.
+   * @param invoke The invoke instruction to test.
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the targets.
+   * @return {@code true} iff a resolved callee is the {@code slice} builtin.
+   */
+  private static boolean resolvesToSliceBuiltin(
+      CGNode node, SSAAbstractInvokeInstruction invoke, PropagationCallGraphBuilder builder) {
+    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite()))
+      if (callee.getMethod().getReference().getDeclaringClass().equals(PythonTypes.SLICE_BUILTIN))
+        return true;
+    return false;
   }
 
   /**
