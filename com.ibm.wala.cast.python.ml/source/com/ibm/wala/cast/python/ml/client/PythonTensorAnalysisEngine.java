@@ -1462,8 +1462,21 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     // list (wala/ML#787).
     if (invoke.getNumberOfUses() > 4) return false;
     SymbolTable st = node.getIR().getSymbolTable();
+    // A two-dimensional application has constructor arity (callable, subscripted object, one
+    // argument per dimension), so arity alone cannot separate `content[:, 0]` from
+    // `slice(None, n, None)`. Two syntactic markers finish the job without depending on
+    // points-to resolution (an unmodeled receiver like `np.genfromtxt`'s result has an empty
+    // points-to set): an application's arguments include results of other slice invokes (the
+    // per-dimension slice objects), and an application's first argument is the computed
+    // subscripted object whereas a constructor's first bound is a constant (`None` or a
+    // literal).
+    if (!st.isConstant(invoke.getUse(1))) return false;
     for (int i = 1; i < invoke.getNumberOfUses(); i++) {
       int use = invoke.getUse(i);
+      SSAInstruction useDef = node.getDU().getDef(use);
+      if (useDef instanceof SSAAbstractInvokeInstruction
+          && resolvesToSliceBuiltin(node, (SSAAbstractInvokeInstruction) useDef, builder))
+        return false;
       if (st.isConstant(use)) continue;
       PointerKey usePK =
           builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, use);
@@ -1870,7 +1883,16 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
 
       LOGGER.fine(() -> "wala/ML#409 drops (enumerate-first-field): " + drops.size());
       for (PointsToSetVariable d : drops)
-        LOGGER.fine(() -> "  drop: " + describe(d.getPointerKey()));
+        LOGGER.fine(
+            () -> {
+              String def = "";
+              if (d.getPointerKey() instanceof LocalPointerKey) {
+                LocalPointerKey dropLpk = (LocalPointerKey) d.getPointerKey();
+                if (dropLpk.getNode().getDU() != null)
+                  def = " def: " + dropLpk.getNode().getDU().getDef(dropLpk.getValueNumber());
+              }
+              return "  drop: " + describe(d.getPointerKey()) + def;
+            });
 
       // User-code parameter destinations get the hybridization-frame origin and a barrier against
       // caller-side origin inflow (wala/ML#726): under `tf.function` tracing a tensor parameter is
