@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ipa.summaries;
 
 import com.ibm.wala.cast.loader.DynamicCallSiteReference;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ir.PythonLanguage;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.cast.python.types.PythonTypes;
@@ -11,6 +12,7 @@ import com.ibm.wala.classLoader.IMethod;
 import com.ibm.wala.core.util.strings.Atom;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.MethodTargetSelector;
+import com.ibm.wala.ssa.ConstantValue;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.Selector;
@@ -80,6 +82,18 @@ public class PythonComprehensionTrampolines implements MethodTargetSelector {
         x.addStatement(new PythonInvokeInstruction(s, r, v++, ss, args, keywordParams));
 
         x.addStatement(PythonLanguage.Python.instructionFactory().PropertyWrite(idx++, 2, ofv, r));
+
+        // The reflected write above keys the element by the input iterable's field, which an
+        // opaque input cannot enumerate; also store the element under the append-contents
+        // property, the same durable channel `xs.append(v)` uses, so container-element consumers
+        // (value iteration, subscript reads, element feeds) observe comprehension-built elements
+        // exactly like append-built ones (wala/ML#773).
+        int contentsKey = v++;
+        x.addConstant(
+            contentsKey,
+            new ConstantValue(PythonSSAPropagationCallGraphBuilder.LIST_APPEND_CONTENTS_FIELD));
+        x.addStatement(
+            PythonLanguage.Python.instructionFactory().PropertyWrite(idx++, 2, contentsKey, r));
 
         x.addStatement(
             PythonLanguage.Python.instructionFactory().ReturnInstruction(idx++, 2, false));
