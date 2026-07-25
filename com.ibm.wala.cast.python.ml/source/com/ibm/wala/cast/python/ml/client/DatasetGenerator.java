@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import static com.ibm.wala.cast.python.types.PythonTypes.DO_METHOD_NAME;
 import static com.ibm.wala.cast.python.util.Util.findDefinition;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 
@@ -72,9 +73,38 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
     OrdinalSet<InstanceKey> receiverPTS =
         this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, SELF);
     if (receiverPTS != null && !receiverPTS.isEmpty()) {
-      return this.getShapesOfValue(builder, receiverPTS);
+      Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, receiverPTS);
+      // An API-produced dataset receiver's elements are tensors by construction, so an empty
+      // resolution here means the upstream element shape did not resolve, not that the elements
+      // are non-tensors. The default-mode delegation walk flattens an all-unknown union to ⊥ (the
+      // wala/ML#718 resolvable-subset contract keeps the unknown remainder only in exact mode),
+      // which without this floor kills the whole transformation chain at its first unresolved
+      // hop: ⊥ shapes compose with any resolved dtype to no types at all (wala/ML#776). The
+      // modeled-producer gate keeps a receiver with no synthetic-`do` allocation (e.g. the
+      // import-block `Dataset` singleton reached by the illegal direct construction in
+      // `tf2_test_dataset3.py`) at ⊥.
+      if ((shapes == null || shapes.isEmpty()) && hasModeledProducer(receiverPTS)) return null;
+      return shapes;
     }
     return null;
+  }
+
+  /**
+   * Returns whether any member of the given points-to set is allocated in a synthetic {@code do}
+   * method, i.e., was produced by a modeled dataset API rather than reached some other way (such as
+   * the import-block class singleton).
+   *
+   * @param pointsToSet The receiver's points-to set.
+   * @return {@code true} iff some member's allocation node is a {@code do} method.
+   */
+  private static boolean hasModeledProducer(OrdinalSet<InstanceKey> pointsToSet) {
+    for (InstanceKey ik : pointsToSet) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      if (asin != null && asin.getNode().getMethod().getName().toString().equals(DO_METHOD_NAME)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @Override
@@ -83,7 +113,13 @@ public class DatasetGenerator extends TensorGenerator implements TupleElementPro
     OrdinalSet<InstanceKey> receiverPTS =
         this.getArgumentPointsToSet(builder, RECEIVER_PARAMETER_POSITION, SELF);
     if (receiverPTS != null && !receiverPTS.isEmpty()) {
-      return this.getDTypesOfValue(builder, receiverPTS);
+      Set<DType> dTypes = this.getDTypesOfValue(builder, receiverPTS);
+      // The dtype counterpart of the shape floor above: ⊥ on one axis must pair with ⊥ on the
+      // other, so an unresolved element dtype degrades to UNKNOWN (⊤) rather than emptying the
+      // set, under the same modeled-producer gate (wala/ML#776).
+      if ((dTypes == null || dTypes.isEmpty()) && hasModeledProducer(receiverPTS))
+        return EnumSet.of(DType.UNKNOWN);
+      return dTypes == null ? EnumSet.of(DType.UNKNOWN) : dTypes;
     }
     return EnumSet.of(DType.UNKNOWN);
   }
