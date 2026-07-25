@@ -735,13 +735,14 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * @throws IOException On I/O error reading the test file.
    *     <p>The local count excludes the slice-constructor objects under the multi-dim subscript,
    *     pinned non-tensor since wala/ML#732 (all-constant bounds) and wala/ML#787 (the dynamic
-   *     {@code inputs.shape[1]} bound); the subscript result stays typed. The {@code tf.add} return
-   *     is currently uncounted: its only typing was cross-caller leakage through the shared {@code
-   *     slice} builtin frame, which the wala/ML#787 pin cuts, and its own generator seed is ⊥
-   *     because the untyped subscript operand annihilates the typed one.
-   *     <p>TODO: Expect a fourth local ({@code tf.add}'s {@code (2, 50, 64)} float32 return) when
-   *     <a href="https://github.com/wala/ML/issues/790">wala/ML#790</a> stops a ⊥ operand from
-   *     annihilating the resolved one.
+   *     {@code inputs.shape[1]} bound); the subscript result stays typed. The fourth local is the
+   *     {@code tf.add} return at {@code {? of float32}}: its shape operand (the subscript result)
+   *     floors at ⊤ under wala/ML#788 and the elementwise seed composes honestly, where before
+   *     wala/ML#787 the same union arrived via cross-caller leakage through the shared {@code
+   *     slice} builtin frame.
+   *     <p>TODO: Expect {@code (2, 50, 64)} float32 for the {@code tf.add} return when <a
+   *     href="https://github.com/wala/ML/issues/790">wala/ML#790</a> broadcasts a resolved operand
+   *     shape past an unknown one instead of degrading to ⊤.
    */
   @Test
   public void testMusicTransformerPositionEmbedding()
@@ -756,7 +757,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "DynamicPositionEmbedding.call",
         "musictx_proj",
         1,
-        3,
+        4,
         Map.of(3, Set.of(TensorType.of(FLOAT_32, 2, 50, 64))));
   }
 
