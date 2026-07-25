@@ -3550,6 +3550,7 @@ public abstract class TensorGenerator {
     }
 
     boolean hasUnknown = false;
+    boolean sawUnknown = false;
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
     WorklistTypeResolver activeEngine = WorklistTypeResolver.active(builder);
@@ -3604,6 +3605,7 @@ public abstract class TensorGenerator {
               // An unresolvable element makes the union incomplete: mark the remainder and keep
               // collecting the resolvable members (wala/ML#718).
               if (exact) hasUnknown = true;
+              sawUnknown = true;
               continue;
             }
 
@@ -3654,6 +3656,7 @@ public abstract class TensorGenerator {
           if (fromTensor.hasUnknown() || fromTensor.isBottom()) {
             if (exact) hasUnknown = true; // The union is incomplete, wala/ML#718.
           }
+          sawUnknown |= fromTensor.hasUnknown();
           ret.addAll(fromTensor.members());
         }
       } else if (getAllocationSiteInNode(valueIK) != null) {
@@ -3677,6 +3680,7 @@ public abstract class TensorGenerator {
             ret.addAll(generatorShapes.members());
             if (exact && generatorShapes.hasUnknown())
               hasUnknown = true; // Incomplete union, wala/ML#718.
+            sawUnknown |= generatorShapes.hasUnknown();
             if (replay) {
               TensorGenerator dispatched = generator;
               LOGGER.fine(
@@ -3710,7 +3714,26 @@ public abstract class TensorGenerator {
         throw new IllegalStateException("Unknown value type: " + valueIK.getClass() + ".");
       }
 
-    return new ShapeResult(ret, hasUnknown);
+    return finishShapeResult(ret, hasUnknown, sawUnknown);
+  }
+
+  /**
+   * Finalizes a shape resolution over a member union: when no members resolved but an unknown
+   * remainder was sighted, the value is a tensor of unknown shape (⊤), not a non-tensor (⊥). In the
+   * default (non-exact) mode the per-member unknown flags drop from the result (the resolvable
+   * subset contract, wala/ML#718), which without this floor collapses an all-unknown union to ⊥ and
+   * silently drops the value from downstream analysis (wala/ML#788).
+   *
+   * @param members The resolvable shape members collected over the union.
+   * @param hasUnknown Whether the result carries an unknown remainder under the current mode.
+   * @param sawUnknown Whether any union member resolved to an unknown remainder, regardless of
+   *     mode.
+   * @return The finalized resolution result.
+   */
+  private static ShapeResult finishShapeResult(
+      Set<List<Dimension<?>>> members, boolean hasUnknown, boolean sawUnknown) {
+    if (members.isEmpty() && (hasUnknown || sawUnknown)) return ShapeResult.unknown();
+    return new ShapeResult(members, hasUnknown);
   }
 
   /**
@@ -3779,6 +3802,7 @@ public abstract class TensorGenerator {
       boolean exact,
       boolean applyRecursionGuards) {
     boolean hasUnknown = false;
+    boolean sawUnknown = false;
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     CGNode readDataNode = asin.getNode();
     WorklistTypeResolver activeEngine = WorklistTypeResolver.active(builder);
@@ -3818,6 +3842,7 @@ public abstract class TensorGenerator {
           ret.addAll(delegatedShapes.members());
           if (exact && delegatedShapes.hasUnknown())
             hasUnknown = true; // Incomplete union, wala/ML#718.
+          sawUnknown |= delegatedShapes.hasUnknown();
           if (replay) {
             TensorGenerator manual = generator;
             LOGGER.fine(
@@ -3860,6 +3885,7 @@ public abstract class TensorGenerator {
             ret.addAll(delegatedShapes.members());
             if (exact && delegatedShapes.hasUnknown())
               hasUnknown = true; // Incomplete union, wala/ML#718.
+            sawUnknown |= delegatedShapes.hasUnknown();
             if (replay) {
               TensorGenerator dispatched = generator;
               LOGGER.fine(
@@ -3882,7 +3908,7 @@ public abstract class TensorGenerator {
           }
         }
       }
-      return new ShapeResult(ret, hasUnknown);
+      return finishShapeResult(ret, hasUnknown, sawUnknown);
     }
 
     // 1. read_data is called by the operation's 'do' method; the call-graph edges identify the
@@ -3918,7 +3944,10 @@ public abstract class TensorGenerator {
           LOGGER.fine("Delegating shape inference to: " + generator);
           Set<List<Dimension<?>>> delegatedShapes = generator.getShapes(builder);
           if (delegatedShapes != null) ret.addAll(delegatedShapes);
-          else if (exact) hasUnknown = true; // Incomplete union, wala/ML#718.
+          else {
+            if (exact) hasUnknown = true; // Incomplete union, wala/ML#718.
+            sawUnknown = true;
+          }
           if (replay) {
             TensorGenerator dispatched = generator;
             LOGGER.fine(
@@ -3939,7 +3968,7 @@ public abstract class TensorGenerator {
         }
       }
     }
-    return new ShapeResult(ret, hasUnknown);
+    return finishShapeResult(ret, hasUnknown, sawUnknown);
   }
 
   /**
