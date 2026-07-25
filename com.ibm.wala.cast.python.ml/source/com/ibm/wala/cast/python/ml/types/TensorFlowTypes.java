@@ -222,6 +222,11 @@ public class TensorFlowTypes extends PythonTypes {
 
   public static final String DATASET_PREFETCH_SIGNATURE = "tf.data.Dataset.prefetch()";
 
+  public static final TypeReference DATASET_WINDOW_TYPE =
+      TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/window"));
+
+  public static final String DATASET_WINDOW_SIGNATURE = "tf.data.Dataset.window()";
+
   public static final TypeReference DATASET_TAKE_TYPE =
       TypeReference.findOrCreate(pythonLoader, TypeName.findOrCreate("Ltensorflow/data/take"));
 
@@ -1991,6 +1996,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(DATASET_MAP_TYPE, DATASET_MAP_SIGNATURE),
           Map.entry(DATASET_REPEAT_TYPE, DATASET_REPEAT_SIGNATURE),
           Map.entry(DATASET_PREFETCH_TYPE, DATASET_PREFETCH_SIGNATURE),
+          Map.entry(DATASET_WINDOW_TYPE, DATASET_WINDOW_SIGNATURE),
           Map.entry(DATASET_TAKE_TYPE, DATASET_TAKE_SIGNATURE),
           Map.entry(DATASET_WITH_OPTIONS_TYPE, DATASET_WITH_OPTIONS_SIGNATURE),
           Map.entry(DATASET_CONCATENATE_TYPE, DATASET_CONCATENATE_SIGNATURE),

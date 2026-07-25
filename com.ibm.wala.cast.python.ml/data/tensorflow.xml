@@ -2680,6 +2680,8 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
         <method name="__iter__" descriptor="()LRoot;" numArgs="1" paramNames="self">
@@ -2717,6 +2719,8 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
         <method name="__iter__" descriptor="()LRoot;" numArgs="1" paramNames="self">
@@ -2754,6 +2758,8 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
       </class>
@@ -2786,6 +2792,8 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
       </class>
@@ -2817,6 +2825,8 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
       </class>
@@ -2849,6 +2859,8 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
       </class>
@@ -2881,6 +2893,42 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
+          <return value="x"/>
+        </method>
+      </class>
+      <class name="window" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#window (wala/ML#776). Level-collapsed model: the runtime yields windows (sub-datasets) whose own iteration yields the source elements; this model returns an element-preserving Dataset, so the generic pass-through dataset generator delegates element types to the source and the two-level iteration observes the source element types. -->
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self size shift stride drop_remainder name">
+          <new def="x" class="Ltensorflow/data/Dataset"/>
+          <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
+          <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
+          <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>
+          <new def="rd_batch" class="Ltensorflow/data/batch"/>
+          <putfield class="LRoot" field="batch" fieldType="LRoot" ref="x" value="rd_batch"/>
+          <new def="rd_padded_batch" class="Ltensorflow/data/padded_batch"/>
+          <putfield class="LRoot" field="padded_batch" fieldType="LRoot" ref="x" value="rd_padded_batch"/>
+          <new def="rd_repeat" class="Ltensorflow/data/repeat"/>
+          <putfield class="LRoot" field="repeat" fieldType="LRoot" ref="x" value="rd_repeat"/>
+          <new def="rd_prefetch" class="Ltensorflow/data/prefetch"/>
+          <putfield class="LRoot" field="prefetch" fieldType="LRoot" ref="x" value="rd_prefetch"/>
+          <new def="rd_with_options" class="Ltensorflow/data/with_options"/>
+          <putfield class="LRoot" field="with_options" fieldType="LRoot" ref="x" value="rd_with_options"/>
+          <new def="rd_take" class="Ltensorflow/data/take"/>
+          <putfield class="LRoot" field="take" fieldType="LRoot" ref="x" value="rd_take"/>
+          <new def="rd_map" class="Ltensorflow/data/map"/>
+          <putfield class="LRoot" field="map" fieldType="LRoot" ref="x" value="rd_map"/>
+          <new def="rd_filter" class="Ltensorflow/data/filter"/>
+          <putfield class="LRoot" field="filter" fieldType="LRoot" ref="x" value="rd_filter"/>
+          <new def="rd_concatenate" class="Ltensorflow/data/concatenate"/>
+          <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="x" value="rd_concatenate"/>
+          <new def="rd_reduce" class="Ltensorflow/data/reduce"/>
+          <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
+          <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
+          <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
       </class>
@@ -2913,6 +2961,8 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
       </class>
@@ -2945,6 +2995,8 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
       </class>
@@ -2980,6 +3032,8 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
       </class>
@@ -3012,6 +3066,8 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
       </class>
@@ -3044,6 +3100,8 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
       </class>
@@ -3082,6 +3140,8 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
       </class>
@@ -3117,6 +3177,8 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
       </class>
@@ -3149,6 +3211,8 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
       </class>
@@ -3181,6 +3245,8 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
       </class>
@@ -3213,6 +3279,8 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
       </class>
@@ -3245,6 +3313,8 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
       </class>
@@ -3277,6 +3347,8 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
       </class>
@@ -3309,6 +3381,8 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <!-- FIXME: This could return tuples of tensors. See https://github.com/wala/ML/issues/165. -->
           <return value="x"/>
         </method>
@@ -3342,6 +3416,8 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
       </class>
@@ -3374,6 +3450,8 @@
           <putfield class="LRoot" field="reduce" fieldType="LRoot" ref="x" value="rd_reduce"/>
           <new def="rd_enumerate" class="Ltensorflow/data/enumerate"/>
           <putfield class="LRoot" field="enumerate" fieldType="LRoot" ref="x" value="rd_enumerate"/>
+          <new def="rd_window" class="Ltensorflow/data/window"/>
+          <putfield class="LRoot" field="window" fieldType="LRoot" ref="x" value="rd_window"/>
           <return value="x"/>
         </method>
       </class>
