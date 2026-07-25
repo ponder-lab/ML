@@ -786,20 +786,17 @@ public class TestMisc extends AbstractTensorTest {
    * href="https://github.com/wala/ML/issues/772">wala/ML#772</a>): the annotated opaque read is
    * conditionally slice-reassigned inside its method, collected by a list comprehension in a second
    * method, and batched through {@code np.array} behind a method-call boundary. The comprehension
-   * trampoline's reflected element write is invisible to container-element dataflow consumers, so
-   * the {@code int64} dies at the comprehension hop and the parameter observes {@code {? of
-   * unknown}}.
-   *
-   * <p>TODO: Flip to a plain positive test when <a
-   * href="https://github.com/wala/ML/issues/773">wala/ML#773</a> gives comprehension element writes
-   * an enumerable channel.
+   * trampoline stores each element under the append-contents property (<a
+   * href="https://github.com/wala/ML/issues/773">wala/ML#773</a>), so container-element consumers
+   * observe comprehension-built elements like append-built ones and the annotated {@code int64}
+   * arrives at the parameter.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testTypeAnnotationSidecarFeedsThroughLoaderChain()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(

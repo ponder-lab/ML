@@ -21,6 +21,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_6_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_28_28_UINT8;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_6_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_6_1_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_6_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_6_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
@@ -418,15 +419,11 @@ public class TestShapeOps extends AbstractTensorTest {
   /**
    * Indexed dispatch over a comprehension-built sublayer list (wala/ML#661 shape 3, wala/ML#694):
    * {@code self.sub_layers = [Inner() for _ in range(n)]} dispatched through {@code
-   * self.sub_layers[i](out)} in a loop. {@code Inner.call} returns a distinctly-shaped {@code (6,
-   * 1)} tensor, so a working dispatch would flow {@code (6, 1)} to {@code consume}. The analysis
-   * instead reports the pre-loop input's {@code (2, 3)} (carried by the loop phi): the
-   * comprehension-built indexed call materializes no callee, so the sub-layer forward result never
-   * reaches the sink.
-   *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/694">wala/ML#694</a>): once the
-   * comprehension-built indexed dispatch materializes its callee, tighten the assertion to the
-   * precise {@code (6, 1)} shape (the Python runtime shape).
+   * self.sub_layers[i](out)} in a loop. The comprehension trampoline stores its elements under the
+   * append-contents property (<a href="https://github.com/wala/ML/issues/773">wala/ML#773</a>), so
+   * the indexed call materializes {@code Inner.call} and the sub-layer's distinctly-shaped {@code
+   * (6, 1)} forward result (the Python runtime shape) reaches {@code consume}; the pre-loop input's
+   * {@code (2, 3)} rides along in the union through the loop phi.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -436,12 +433,20 @@ public class TestShapeOps extends AbstractTensorTest {
   @Test
   public void testIndexedComprehensionLayerListCall()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    // TODO(wala/ML#694): observed-but-imprecise (2, 3); the runtime shape is (6, 1).
-    test("tf2_test_layer_list_compr.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+    test(
+        "tf2_test_layer_list_compr.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_3_FLOAT32, TENSOR_6_1_FLOAT32)));
   }
 
   /**
-   * Probes wala/ML#661's indexed sub-layer call shape ({@code self.container[i](x)}).
+   * Probes wala/ML#661's indexed sub-layer call shape ({@code self.container[i](x)}). The
+   * comprehension-built {@code inner_layers} dispatch materializes {@code Inner.call} (<a
+   * href="https://github.com/wala/ML/issues/773">wala/ML#773</a>); the runtime {@code (4, 4)}
+   * matmul result is present, alongside an unknown-shape member from the matmul over the loop-phi's
+   * union.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -451,7 +456,12 @@ public class TestShapeOps extends AbstractTensorTest {
   @Test
   public void testIndexedLayerCall()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_indexed_layer_call.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+    test(
+        "tf2_test_indexed_layer_call.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_4_FLOAT32, TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**
