@@ -44,7 +44,6 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_NONE_NONE_STRING;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNRESOLVED_UNRESOLVED_FLOAT32;
-import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.UNKNOWN;
 import static java.util.Arrays.asList;
 
 import com.ibm.wala.cast.python.ml.client.Constant;
@@ -282,12 +281,14 @@ public class TestConstructors extends AbstractTensorTest {
   }
 
   /**
-   * Companion to {@link #testNpArrayBareParam()} for the non-literal-source floor of <a
+   * Companion to {@link #testNpArrayBareParam()} for the non-literal source of <a
    * href="https://github.com/wala/ML/issues/626">wala/ML#626</a>: when {@code x} is itself an
-   * {@code np.ndarray} rather than a Python literal, numpy preserves the source's dtype, which the
-   * walk does not model, so the dtype floors to ⊤. The nested-array {@code (2,)} shape now
-   * propagates through the outer {@code np.array} via the producer registration (wala/ML#625); the
-   * dtype residue stays with wala/ML#626.
+   * {@code np.ndarray} rather than a Python literal, numpy preserves the source's dtype. The
+   * nested-array {@code (2,)} shape propagates through the outer {@code np.array} via the producer
+   * registration (wala/ML#625), and the preserved {@code int64} dtype arrives through {@code
+   * NpArray}'s dtype feed from the source argument's dataflow state (<a
+   * href="https://github.com/wala/ML/issues/772">wala/ML#772</a>), lifting the former ⊤-dtype
+   * floor.
    */
   @Test
   public void testNpArrayArraySource()
@@ -297,7 +298,7 @@ public class TestConstructors extends AbstractTensorTest {
         "f",
         1,
         1,
-        Map.of(2, Set.of(new TensorType(UNKNOWN, asList(new NumericDim(2))))));
+        Map.of(2, Set.of(new TensorType(INT_64, asList(new NumericDim(2))))));
   }
 
   /**

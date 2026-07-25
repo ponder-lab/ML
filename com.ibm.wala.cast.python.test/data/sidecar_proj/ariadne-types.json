@@ -17,6 +17,14 @@
       "attribution": "fixture: deliberately wrong to exercise the conflict report"
     },
     {
+      "module": "driver_feed.py",
+      "function": "get_seq",
+      "variable": "data",
+      "dtype": "int64",
+      "shape": "4 3",
+      "attribution": "fixture: opaque np.load inside a helper; the dtype must reach the np.array result through the feed"
+    },
+    {
       "module": "driver_refine.py",
       "function": "",
       "variable": "t",

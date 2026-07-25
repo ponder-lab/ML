@@ -53,6 +53,31 @@ public class NpArray extends TensorGenerator {
     super(node);
   }
 
+  /**
+   * Declares a dtype feed from the source argument ({@code x}) (<a
+   * href="https://github.com/wala/ML/issues/772">wala/ML#772</a>): {@code numpy.array} preserves an
+   * array-like input's element dtype, so when this generator's own resolution floors at {@code
+   * UNKNOWN} (an opaque, content-dependent {@code x}), dtype evidence that lives only in {@code
+   * TensorTypeAnalysis} dataflow state at the argument (e.g. a type-annotation seed, <a
+   * href="https://github.com/wala/ML/issues/370">wala/ML#370</a>) still reaches the result. The
+   * operand key pairs {@link #getArgumentValueNumber(int)}'s value number with {@link #getNode()}'s
+   * own frame, the same pairing this generator's shape and dtype reads use, so it is consistent for
+   * both anchor shapes; the caller-argument edges in the assignment graph deliver the operand's
+   * state there.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The {@code DTYPE_ONLY} feed from {@code x}, or {@code null} for an unlocatable
+   *     argument.
+   */
+  @Override
+  protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
+    int sourceVn = getArgumentValueNumber(0);
+    if (sourceVn <= 0) return null;
+    PointerKey operand =
+        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(this.getNode(), sourceVn);
+    return new TypeFeed(TypeFeedKind.DTYPE_ONLY, List.of(operand));
+  }
+
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
     int sourceVn = getArgumentValueNumber(0);

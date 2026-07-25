@@ -13,6 +13,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_32_28_28_1_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_4_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_8_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_INT64;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.COMPLEX64;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.util.Util.addPytestEntrypoints;
@@ -728,5 +729,30 @@ public class TestMisc extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 3))));
+  }
+
+  /**
+   * Feed-through of an annotation across an {@code np.array} boundary (<a
+   * href="https://github.com/wala/ML/issues/772">wala/ML#772</a>): the sidecar types an opaque
+   * {@code np.load} inside a helper, and the {@code int64} dtype reaches the {@code np.array}
+   * result through {@code NpArray}'s dtype feed rather than dying at the generator-seeded boundary.
+   * The result's shape stays unknown: the {@code DTYPE_ONLY} feed borrows only the dtype.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTypeAnnotationSidecarFeedsThroughNpArray()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"sidecar_proj/driver_feed.py"},
+        "driver_feed.py",
+        "consume",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_INT64)));
   }
 }
