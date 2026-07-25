@@ -733,8 +733,15 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
-   *     <p>The local count excludes the two all-constant slice-constructor objects under the
-   *     multi-dim subscript, pinned non-tensor since wala/ML#732; the subscript result stays typed.
+   *     <p>The local count excludes the slice-constructor objects under the multi-dim subscript,
+   *     pinned non-tensor since wala/ML#732 (all-constant bounds) and wala/ML#787 (the dynamic
+   *     {@code inputs.shape[1]} bound); the subscript result stays typed. The {@code tf.add} return
+   *     is currently uncounted: its only typing was cross-caller leakage through the shared {@code
+   *     slice} builtin frame, which the wala/ML#787 pin cuts, and its own generator seed is ⊥
+   *     because the untyped subscript operand annihilates the typed one.
+   *     <p>TODO: Expect a fourth local ({@code tf.add}'s {@code (2, 50, 64)} float32 return) when
+   *     <a href="https://github.com/wala/ML/issues/790">wala/ML#790</a> stops a ⊥ operand from
+   *     annihilating the resolved one.
    */
   @Test
   public void testMusicTransformerPositionEmbedding()
@@ -749,7 +756,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "DynamicPositionEmbedding.call",
         "musictx_proj",
         1,
-        4,
+        3,
         Map.of(3, Set.of(TensorType.of(FLOAT_32, 2, 50, 64))));
   }
 
