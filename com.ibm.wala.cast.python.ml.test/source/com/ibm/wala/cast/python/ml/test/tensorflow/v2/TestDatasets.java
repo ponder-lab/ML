@@ -901,6 +901,83 @@ public class TestDatasets extends AbstractTensorTest {
   }
 
   /**
+   * The tuple-structured legacy {@code output_types} form of {@code tf.data.Dataset.from_generator}
+   * (<a href="https://github.com/wala/ML/issues/776">wala/ML#776</a>): the declared {@code
+   * (tf.int32, tf.float32)} statically determines each iterated component's dtype, regardless of
+   * the generator body's opacity. The dict-structured form (wala/ML#615) delivers, but the tuple
+   * form observes a scalar-shaped unknown-dtype element, so the declaration is currently lost.
+   *
+   * <p>TODO: Flip to a positive test when <a
+   * href="https://github.com/wala/ML/issues/776">wala/ML#776</a> delivers the tuple-form
+   * per-component dtypes.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testDatasetFromGeneratorTupleTypes()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_from_generator.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_32, null))));
+  }
+
+  /**
+   * The second component of {@link #testDatasetFromGeneratorTupleTypes()}.
+   *
+   * <p>TODO: Flip to a positive test when <a
+   * href="https://github.com/wala/ML/issues/776">wala/ML#776</a> delivers the tuple-form
+   * per-component dtypes.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testDatasetFromGeneratorTupleTypes2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_from_generator.py",
+        "consume2",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
+
+  /**
+   * The corpus loader-chain shape (<a
+   * href="https://github.com/wala/ML/issues/776">wala/ML#776</a>): {@code from_generator} with a
+   * declared element dtype, then {@code .shuffle(...).prefetch(...).window(n)}. {@code window} is
+   * unmodeled (it yields datasets of datasets), so the declared dtype currently dies at the
+   * combinator and the doubly-iterated element observes nothing.
+   *
+   * <p>TODO: Flip to a positive test when <a
+   * href="https://github.com/wala/ML/issues/776">wala/ML#776</a> models {@code window} and the
+   * declaration survives the chain.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testDatasetWindowedChain()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_window.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_32, null))));
+  }
+
+  /**
    * Regression guard for wala/ML#506: {@code tf.data.Dataset.map(map_func)} types its elements from
    * {@code map_func}'s return, not the receiver's elements. {@code map_func} here ({@code double})
    * consumes its argument ({@code tf.cast(x, tf.int64)}), exercising both halves: the callback's
