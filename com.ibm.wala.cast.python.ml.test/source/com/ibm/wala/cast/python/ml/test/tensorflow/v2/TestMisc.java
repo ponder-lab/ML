@@ -681,4 +681,52 @@ public class TestMisc extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 2))));
   }
+
+  /**
+   * Axis-level refinement of a top placeholder (<a
+   * href="https://github.com/wala/ML/issues/771">wala/ML#771</a>): inference holds a
+   * both-axes-unknown member for {@code tf.constant} of an opaque {@code np.load}, and the sidecar
+   * fills both axes rather than being declined as a conflict.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTypeAnnotationSidecarRefinesTopInference()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"sidecar_proj/driver_refine.py"},
+        "driver_refine.py",
+        "consume",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 3))));
+  }
+
+  /**
+   * Axis-level refinement of a partially-known member (<a
+   * href="https://github.com/wala/ML/issues/771">wala/ML#771</a>): inference knows {@code
+   * tf.zeros}' float32 dtype but not its opaque extent; a shape-only sidecar entry fills the dims
+   * axis, and the omitted dtype axis does not conflict with the definite inferred one.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTypeAnnotationSidecarRefinesPartialShape()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"sidecar_proj/driver_refine.py"},
+        "driver_refine.py",
+        "consume2",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 3))));
+  }
 }

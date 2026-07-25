@@ -17,6 +17,21 @@
       "attribution": "fixture: deliberately wrong to exercise the conflict report"
     },
     {
+      "module": "driver_refine.py",
+      "function": "",
+      "variable": "t",
+      "dtype": "float32",
+      "shape": "4 3",
+      "attribution": "fixture: tf.constant of an opaque np.load; inference holds a top placeholder"
+    },
+    {
+      "module": "driver_refine.py",
+      "function": "",
+      "variable": "z",
+      "shape": "4 3",
+      "attribution": "fixture: tf.zeros of an opaque extent; inference knows the dtype, the sidecar fills the shape"
+    },
+    {
       "module": "driver.py",
       "function": "",
       "variable": "no_such_binding",

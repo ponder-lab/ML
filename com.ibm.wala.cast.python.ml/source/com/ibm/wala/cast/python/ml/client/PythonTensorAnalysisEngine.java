@@ -274,7 +274,11 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           matched = true;
           Set<TensorType> inferred = init.get(var);
           if (inferred != null && !inferred.isEmpty()) {
-            if (!inferred.equals(Set.of(entry.type())))
+            // Fill-only, per axis (wala/ML#771): the annotation refines exactly the axes where
+            // inference holds no information; a definite inferred axis wins, and a definite
+            // disagreement is reported rather than applied.
+            Set<TensorType> merged = mergeAnnotationIntoInferredTypes(inferred, entry.type());
+            if (merged == null) {
               LOGGER.warning(
                   "Type annotation "
                       + entry.anchor()
@@ -285,7 +289,28 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                       + "; the annotation is not applied (wala/ML#370)"
                       + entry.attributionSuffix()
                       + ".");
-            continue; // Fill-only: inference wins wherever it has a type.
+              continue;
+            }
+            if (merged == inferred) continue; // The annotation adds no information.
+            init.put(var, HashSetFactory.make(merged));
+            EnumSet<TensorOrigin> origins = EnumSet.of(TensorOrigin.ANNOTATION);
+            Set<TensorOrigin> priorOrigins = initOrigins.get(var);
+            if (priorOrigins != null) origins.addAll(priorOrigins);
+            initOrigins.put(var, origins);
+            LOGGER.fine(
+                () ->
+                    "Refined the inferred "
+                        + inferred
+                        + " with type annotation "
+                        + entry.anchor()
+                        + " = "
+                        + entry.type()
+                        + " at "
+                        + describe(var.getPointerKey())
+                        + " (wala/ML#771)"
+                        + entry.attributionSuffix()
+                        + ".");
+            continue;
           }
           if (!dataflow.containsNode(var)) dataflow.addNode(var);
           init.put(var, HashSetFactory.make(Set.of(entry.type())));
@@ -309,6 +334,37 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                 + entry.anchor()
                 + " matched no analyzed binding; check the module path and names (wala/ML#370).");
     }
+  }
+
+  /**
+   * Merges a sidecar annotation into an inferred type set axis-by-axis (wala/ML#771). For each
+   * inferred member, the annotation fills the dtype only where the member's is {@link
+   * DType#UNKNOWN} and the dims only where the member's are unknown ({@code null}); a definite
+   * inferred axis is kept, and a definite inferred axis that disagrees with a definite annotation
+   * axis is a conflict.
+   *
+   * @param inferred The inferred members at the annotated binding.
+   * @param annotation The annotation's declared type.
+   * @return The merged members; {@code inferred} itself (same reference) when the annotation adds
+   *     no information; or {@code null} on an axis conflict.
+   */
+  private static Set<TensorType> mergeAnnotationIntoInferredTypes(
+      Set<TensorType> inferred, TensorType annotation) {
+    Set<TensorType> merged = HashSetFactory.make();
+    boolean changed = false;
+    for (TensorType member : inferred) {
+      DType dtype = member.getDType();
+      if (dtype == DType.UNKNOWN) dtype = annotation.getDType();
+      else if (annotation.getDType() != DType.UNKNOWN && annotation.getDType() != dtype)
+        return null;
+      List<Dimension<?>> dims = member.getDims();
+      if (dims == null) dims = annotation.getDims();
+      else if (annotation.getDims() != null && !annotation.getDims().equals(dims)) return null;
+      TensorType mergedMember = TensorType.of(dtype, dims, member.layout());
+      changed |= !mergedMember.equals(member);
+      merged.add(mergedMember);
+    }
+    return changed ? merged : inferred;
   }
 
   @Override
