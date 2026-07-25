@@ -27,7 +27,9 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_RAGGED_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_INT32_UNKNOWN_SHAPE;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_NONE_32_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.UINT_8;
 
+import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
@@ -1649,5 +1651,51 @@ public class TestElementwiseOps extends AbstractTensorTest {
   public void testParamDefault()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_param_default.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
+   * The shape-and-dtype-preserving {@code tf.image} augmentation chain (<a
+   * href="https://github.com/wala/ML/issues/792">wala/ML#792</a>): {@code adjust_brightness},
+   * {@code random_flip_left_right}, {@code adjust_contrast}, {@code adjust_saturation}, and {@code
+   * adjust_hue} each pass the image argument's shape and dtype through, so the {@code (4, 5, 3)}
+   * uint8 constant survives all five hops.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testImageAugmentationChain()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_image_augmentation.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 4, 5, 3))));
+  }
+
+  /**
+   * The cropped companion of {@link #testImageAugmentationChain()}: the image passes through a
+   * {@code tf.slice} hop into {@code adjust_brightness}, matching the corpus augmentation chain's
+   * crop-then-adjust structure. With constant extents the sliced shape computes exactly
+   * (wala/ML#569); the corpus's dynamically sized crop rides the same dtype path with the shape
+   * axis at ⊤ instead.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testImageAugmentationCroppedChain()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_image_augmentation.py",
+        "consume2",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 2, 2, 3))));
   }
 }

@@ -1279,6 +1279,57 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String EXTRACT_PATCHES_SIGNATURE = "tf.image.extract_patches()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/image/random_flip_left_right. */
+  public static final MethodReference RANDOM_FLIP_LEFT_RIGHT =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/image/random_flip_left_right")),
+          AstMethodReference.fnSelector);
+
+  private static final String RANDOM_FLIP_LEFT_RIGHT_SIGNATURE =
+      "tf.image.random_flip_left_right()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/image/adjust_contrast. */
+  public static final MethodReference ADJUST_CONTRAST =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/image/adjust_contrast")),
+          AstMethodReference.fnSelector);
+
+  private static final String ADJUST_CONTRAST_SIGNATURE = "tf.image.adjust_contrast()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/image/adjust_brightness. */
+  public static final MethodReference ADJUST_BRIGHTNESS =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/image/adjust_brightness")),
+          AstMethodReference.fnSelector);
+
+  private static final String ADJUST_BRIGHTNESS_SIGNATURE = "tf.image.adjust_brightness()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/image/adjust_saturation. */
+  public static final MethodReference ADJUST_SATURATION =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/image/adjust_saturation")),
+          AstMethodReference.fnSelector);
+
+  private static final String ADJUST_SATURATION_SIGNATURE = "tf.image.adjust_saturation()";
+
+  /** https://www.tensorflow.org/api_docs/python/tf/image/adjust_hue. */
+  public static final MethodReference ADJUST_HUE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/image/adjust_hue")),
+          AstMethodReference.fnSelector);
+
+  private static final String ADJUST_HUE_SIGNATURE = "tf.image.adjust_hue()";
+
   // Tier-A math ops (continued, wala/ML#422). Most are shape and dtype passthrough on their primary
   // tensor argument (named `x` for most unary ops; `features` for `softplus` / `softsign`). The
   // binary ops `atan2` / `maximum` / `minimum` are the exception: they're routed through
@@ -2118,6 +2169,11 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(SQUEEZE.getDeclaringClass(), SQUEEZE_SIGNATURE),
           Map.entry(SPLIT.getDeclaringClass(), SPLIT_SIGNATURE),
           Map.entry(EXTRACT_PATCHES.getDeclaringClass(), EXTRACT_PATCHES_SIGNATURE),
+          Map.entry(RANDOM_FLIP_LEFT_RIGHT.getDeclaringClass(), RANDOM_FLIP_LEFT_RIGHT_SIGNATURE),
+          Map.entry(ADJUST_CONTRAST.getDeclaringClass(), ADJUST_CONTRAST_SIGNATURE),
+          Map.entry(ADJUST_BRIGHTNESS.getDeclaringClass(), ADJUST_BRIGHTNESS_SIGNATURE),
+          Map.entry(ADJUST_SATURATION.getDeclaringClass(), ADJUST_SATURATION_SIGNATURE),
+          Map.entry(ADJUST_HUE.getDeclaringClass(), ADJUST_HUE_SIGNATURE),
           Map.entry(TAN.getDeclaringClass(), TAN_SIGNATURE),
           Map.entry(ASIN.getDeclaringClass(), ASIN_SIGNATURE),
           Map.entry(ATAN.getDeclaringClass(), ATAN_SIGNATURE),

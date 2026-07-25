@@ -497,6 +497,26 @@
         <new def="extract_patches" class="Ltensorflow/functions/image/extract_patches"/>
         <putfield class="LRoot" field="extract_patches" fieldType="LRoot" ref="image" value="extract_patches"/>
         <putfield class="LRoot" field="extract_patches" fieldType="LRoot" ref="array_ops" value="extract_patches"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/image/random_flip_left_right -->
+        <new def="random_flip_left_right" class="Ltensorflow/functions/image/random_flip_left_right"/>
+        <putfield class="LRoot" field="random_flip_left_right" fieldType="LRoot" ref="image" value="random_flip_left_right"/>
+        <putfield class="LRoot" field="random_flip_left_right" fieldType="LRoot" ref="image_ops_impl" value="random_flip_left_right"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/image/adjust_contrast -->
+        <new def="adjust_contrast" class="Ltensorflow/functions/image/adjust_contrast"/>
+        <putfield class="LRoot" field="adjust_contrast" fieldType="LRoot" ref="image" value="adjust_contrast"/>
+        <putfield class="LRoot" field="adjust_contrast" fieldType="LRoot" ref="image_ops_impl" value="adjust_contrast"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/image/adjust_brightness -->
+        <new def="adjust_brightness" class="Ltensorflow/functions/image/adjust_brightness"/>
+        <putfield class="LRoot" field="adjust_brightness" fieldType="LRoot" ref="image" value="adjust_brightness"/>
+        <putfield class="LRoot" field="adjust_brightness" fieldType="LRoot" ref="image_ops_impl" value="adjust_brightness"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/image/adjust_saturation -->
+        <new def="adjust_saturation" class="Ltensorflow/functions/image/adjust_saturation"/>
+        <putfield class="LRoot" field="adjust_saturation" fieldType="LRoot" ref="image" value="adjust_saturation"/>
+        <putfield class="LRoot" field="adjust_saturation" fieldType="LRoot" ref="image_ops_impl" value="adjust_saturation"/>
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/image/adjust_hue -->
+        <new def="adjust_hue" class="Ltensorflow/functions/image/adjust_hue"/>
+        <putfield class="LRoot" field="adjust_hue" fieldType="LRoot" ref="image" value="adjust_hue"/>
+        <putfield class="LRoot" field="adjust_hue" fieldType="LRoot" ref="image_ops_impl" value="adjust_hue"/>
         <new def="zeros" class="Ltensorflow/functions/zeros"/>
         <putfield class="LRoot" field="zeros" fieldType="LRoot" ref="x" value="zeros"/>
         <putfield class="LRoot" field="zeros" fieldType="LRoot" ref="array_ops" value="zeros"/>
@@ -726,6 +746,9 @@
         <putfield class="LRoot" field="float64" fieldType="LRoot" ref="x" value="float64"/>
         <putfield class="LRoot" field="float64" fieldType="LRoot" ref="dtypes" value="float64"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes#int32 -->
+        <new def="uint8" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="uint8" fieldType="LRoot" ref="x" value="uint8"/>
+        <putfield class="LRoot" field="uint8" fieldType="LRoot" ref="dtypes" value="uint8"/>
         <new def="int32" class="Ltensorflow/dtypes/DType"/>
         <putfield class="LRoot" field="int32" fieldType="LRoot" ref="x" value="int32"/>
         <putfield class="LRoot" field="int32" fieldType="LRoot" ref="dtypes" value="int32"/>
@@ -2329,6 +2352,42 @@
       <class name="extract_patches" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/image/extract_patches#example. Direct `<new>+<return>` per wala/ML#380 (was a `read_data` materialization chain). -->
         <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self images sizes strides rates padding name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <!-- The five shape-and-dtype-preserving augmentation ops below share the `ImageAugmentation` generator (wala/ML#792): each returns a fresh tensor of the same shape and type as its image argument, so the model is a direct `<new>`+`<return>` and the generator passes both axes through from arg 0. -->
+      <class name="random_flip_left_right" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/image/random_flip_left_right -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self image seed">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="adjust_contrast" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/image/adjust_contrast -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self images contrast_factor">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="adjust_brightness" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/image/adjust_brightness -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self image delta">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="adjust_saturation" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/image/adjust_saturation -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self image saturation_factor name">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="adjust_hue" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/image/adjust_hue -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self image delta name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
         </method>
