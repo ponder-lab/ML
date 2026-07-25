@@ -375,12 +375,16 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * @param operands The feeding operand variables, in operand order.
    * @param seedMembers The suppressed seed's retained members for the fill modes; empty for {@link
    *     FeedMode#REPLACE}.
+   * @param seedOrigins The suppressed seed's origins, stamped on the fed result: the producing
+   *     library is the modeled operation's, whatever produced the operand (wala/ML#724,
+   *     wala/ML#772).
    */
   public record FeedPlan(
       TensorGenerator.TypeFeedKind kind,
       FeedMode mode,
       List<PointsToSetVariable> operands,
-      Set<TensorType> seedMembers) {}
+      Set<TensorType> seedMembers,
+      Set<TensorOrigin> seedOrigins) {}
 
   private static IKilldallFramework<PointsToSetVariable, TensorVariable> createProblem(
       Graph<PointsToSetVariable> G,
@@ -645,9 +649,15 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                   }
                   break;
               }
-              // The fed result is a TensorFlow op's product regardless of what produced the
-              // operand (wala/ML#724).
-              if (changed) changed |= lhs.origins.add(TensorOrigin.TENSORFLOW);
+              // The fed result carries the modeled operation's own origins regardless of what
+              // produced the operand (wala/ML#724, wala/ML#772), plus the operand's ANNOTATION
+              // marker when present: evidence resting on user-supplied facts stays auditable
+              // through feeds (wala/ML#370).
+              if (changed) {
+                changed |= lhs.origins.addAll(this.plan.seedOrigins());
+                if (rhs.origins.contains(TensorOrigin.ANNOTATION))
+                  changed |= lhs.origins.add(TensorOrigin.ANNOTATION);
+              }
               return changed ? CHANGED : NOT_CHANGED;
             }
 

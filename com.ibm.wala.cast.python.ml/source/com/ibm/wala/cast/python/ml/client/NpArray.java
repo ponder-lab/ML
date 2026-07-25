@@ -8,6 +8,7 @@ import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -23,6 +24,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -51,6 +53,66 @@ public class NpArray extends TensorGenerator {
    */
   public NpArray(CGNode node) {
     super(node);
+  }
+
+  /**
+   * Declares a dtype feed from the source argument ({@code x}) (<a
+   * href="https://github.com/wala/ML/issues/772">wala/ML#772</a>): {@code numpy.array} preserves an
+   * array-like input's element dtype, so when this generator's own resolution floors at {@code
+   * UNKNOWN} (an opaque, content-dependent {@code x}), dtype evidence that lives only in {@code
+   * TensorTypeAnalysis} dataflow state at the argument (e.g. a type-annotation seed, <a
+   * href="https://github.com/wala/ML/issues/370">wala/ML#370</a>) still reaches the result. The
+   * operand key pairs {@link #getArgumentValueNumber(int)}'s value number with {@link #getNode()}'s
+   * own frame, the same pairing this generator's shape and dtype reads use, so it is consistent for
+   * both anchor shapes; the caller-argument edges in the assignment graph deliver the operand's
+   * state there.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The {@code DTYPE_ONLY} feed from {@code x}, or {@code null} for an unlocatable
+   *     argument.
+   */
+  @Override
+  protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
+    int sourceVn = getArgumentValueNumber(0);
+    if (sourceVn <= 0) return null;
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    PointerKey argument = pa.getHeapModel().getPointerKeyForLocal(this.getNode(), sourceVn);
+    List<PointerKey> operands = new ArrayList<>();
+    operands.add(argument);
+    // The argument is often a container of the actual values (an append-built or literal batch
+    // list), whose own variable carries no dataflow state: the element state lives in the
+    // container's field keys. Add the append-contents key and the cataloged subscript keys of
+    // each list/tuple allocation so element evidence feeds too.
+    for (InstanceKey ik : pa.getPointsToSet(argument)) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      if (asin == null) continue;
+      TypeReference reference = asin.concreteType().getReference();
+      if (!reference.equals(list) && !reference.equals(tuple)) continue;
+      FieldReference contents =
+          FieldReference.findOrCreate(
+              Root,
+              findOrCreateAsciiAtom(
+                  PythonSSAPropagationCallGraphBuilder.LIST_APPEND_CONTENTS_FIELD),
+              Root);
+      IField contentsField = builder.getClassHierarchy().resolveField(contents);
+      if (contentsField != null)
+        operands.add(builder.getPointerKeyForInstanceField(asin, contentsField));
+      OrdinalSet<InstanceKey> catalogPTS =
+          pa.getPointsToSet(
+              ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                  .getPointerKeyForObjectCatalog(asin));
+      for (InstanceKey catalogIK : catalogPTS) {
+        if (!(catalogIK instanceof ConstantKey)) continue;
+        Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
+        if (fieldIndex == null) continue;
+        FieldReference subscript =
+            FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+        IField subscriptField = builder.getClassHierarchy().resolveField(subscript);
+        if (subscriptField != null)
+          operands.add(builder.getPointerKeyForInstanceField(asin, subscriptField));
+      }
+    }
+    return new TypeFeed(TypeFeedKind.DTYPE_ONLY, operands);
   }
 
   @Override

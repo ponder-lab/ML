@@ -1744,15 +1744,16 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           if (!dataflow.containsNode(operand)) dataflow.addNode(operand);
           if (!dataflow.hasEdge(operand, src)) dataflow.addEdge(operand, src);
         }
+        Set<TensorOrigin> origins = initOrigins.get(src);
         typeFeeds.put(
             src,
             new TensorTypeAnalysis.FeedPlan(
                 feed.kind(),
                 mode,
                 feedSources,
-                mode == TensorTypeAnalysis.FeedMode.REPLACE ? Collections.emptySet() : types));
+                mode == TensorTypeAnalysis.FeedMode.REPLACE ? Collections.emptySet() : types,
+                origins != null ? origins : generator.getOrigins(builder)));
         suppressedSeeds.put(src, types);
-        Set<TensorOrigin> origins = initOrigins.get(src);
         if (origins != null) suppressedOrigins.put(src, origins);
         init.remove(src);
         initOrigins.remove(src);
