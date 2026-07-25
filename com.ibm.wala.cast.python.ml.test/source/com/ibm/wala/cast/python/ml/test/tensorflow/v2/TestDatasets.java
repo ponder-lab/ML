@@ -874,6 +874,76 @@ public class TestDatasets extends AbstractTensorTest {
   }
 
   /**
+   * Both axes declared at the {@code from_generator} source (<a
+   * href="https://github.com/wala/ML/issues/776">wala/ML#776</a>): {@code output_types} fixes the
+   * element dtype and {@code output_shapes} the element shape, and both declarations survive the
+   * {@code shuffle}/{@code prefetch} pass-through chain to the iterated element. The shape-axis
+   * companion of {@link #testDatasetWindowedChain()}, whose source declares no shapes and so
+   * degrades that axis to ⊤.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDatasetFromGeneratorDeclaredShapes()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_from_generator_shapes.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 2))));
+  }
+
+  /**
+   * The keyword form of {@link #testDatasetFromGeneratorDeclaredShapes()}: {@code output_shapes}
+   * passed by keyword rather than positionally.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDatasetFromGeneratorDeclaredShapes2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_from_generator_shapes2.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 2))));
+  }
+
+  /**
+   * The {@code tf.TensorShape} literal form of {@link #testDatasetFromGeneratorDeclaredShapes()}:
+   * the declared shape is wrapped in a {@code TensorShape} constructor rather than a plain tuple.
+   * {@code tf.TensorShape} is unmodeled, so the argument is present but unparseable and the shape
+   * axis soundly degrades to ⊤ ({@code {? of int32}}) instead of composing {@code (2,)}.
+   *
+   * <p>TODO: Flip to expect {@code TensorType.of(INT_32, 2)} when <a
+   * href="https://github.com/wala/ML/issues/789">wala/ML#789</a> parses {@code TensorShape}
+   * constructor literals in shape arguments.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDatasetFromGeneratorDeclaredShapes3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_from_generator_shapes3.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_32, null))));
+  }
+
+  /**
    * The corpus loader-chain shape (<a
    * href="https://github.com/wala/ML/issues/776">wala/ML#776</a>): {@code from_generator} with a
    * declared element dtype, then {@code .shuffle(...).prefetch(...).window(n)}. {@code window}
