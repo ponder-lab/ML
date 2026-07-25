@@ -12,6 +12,7 @@ import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuild
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
 import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
@@ -21,8 +22,10 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerAnalysis;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -67,15 +70,25 @@ public class NpArray extends TensorGenerator {
    * both anchor shapes; the caller-argument edges in the assignment graph deliver the operand's
    * state there.
    *
+   * <p>The feed models only the preservation case: an explicit {@code dtype} argument overrides the
+   * source's dtype at runtime, so when a caller passes one that the dtype resolution could not map,
+   * borrowing the operand's dtype would fabricate evidence, and no feed is declared (<a
+   * href="https://github.com/wala/ML/issues/774">wala/ML#774</a>; the result stays soundly {@code
+   * UNKNOWN}). The passing is detected syntactically at the caller invokes, which is decisive
+   * regardless of whether the argument's own points-to evidence survives.
+   *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @return The {@code DTYPE_ONLY} feed from {@code x}, or {@code null} for an unlocatable
-   *     argument.
+   * @return The {@code DTYPE_ONLY} feed from {@code x}, or {@code null} for an unlocatable argument
+   *     or an explicit-but-unresolvable {@code dtype} argument.
    */
   @Override
   protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
     int sourceVn = getArgumentValueNumber(0);
     if (sourceVn <= 0) return null;
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    int dtypeVn = getArgumentValueNumber(1);
+    if (dtypeVn > 0 && getDTypes(builder, dtypeVn).isEmpty() && this.isDtypeArgumentPassed(builder))
+      return null;
     PointerKey argument = pa.getHeapModel().getPointerKeyForLocal(this.getNode(), sourceVn);
     List<PointerKey> operands = new ArrayList<>();
     operands.add(argument);
@@ -113,6 +126,24 @@ public class NpArray extends TensorGenerator {
       }
     }
     return new TypeFeed(TypeFeedKind.DTYPE_ONLY, operands);
+  }
+
+  /**
+   * Determines whether any caller invoke supplies a {@code dtype} argument, positionally (a second
+   * positional argument beyond {@code x}) or by keyword (wala/ML#774).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the callers.
+   * @return {@code true} iff some caller passes a {@code dtype} argument.
+   */
+  private boolean isDtypeArgumentPassed(PropagationCallGraphBuilder builder) {
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      if (!(callerInvoke.snd instanceof PythonInvokeInstruction)) continue;
+      PythonInvokeInstruction invoke = (PythonInvokeInstruction) callerInvoke.snd;
+      if (invoke.getNumberOfPositionalParameters() >= 3 || invoke.getKeywords().contains("dtype"))
+        return true;
+    }
+    return false;
   }
 
   @Override

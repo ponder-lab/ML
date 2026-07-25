@@ -14,6 +14,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_4_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_8_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_INT64;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.COMPLEX64;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.util.Util.addPytestEntrypoints;
@@ -754,6 +755,30 @@ public class TestMisc extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_INT64)));
+  }
+
+  /**
+   * The feed's decline leg (<a href="https://github.com/wala/ML/issues/774">wala/ML#774</a>): an
+   * explicit {@code dtype} argument overrides the source's dtype at runtime, so when a caller
+   * passes one the dtype resolution cannot map, the feed must decline and the result stays soundly
+   * both-axes-unknown rather than borrowing the operand's {@code int64}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTypeAnnotationSidecarFeedDeclinesOnDtypeArgument()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"sidecar_proj/driver_feed.py"},
+        "driver_feed.py",
+        "consume2",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
   }
 
   /**
