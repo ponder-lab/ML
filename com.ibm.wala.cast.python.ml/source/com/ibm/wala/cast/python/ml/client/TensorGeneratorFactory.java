@@ -8,6 +8,10 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ACOSH;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD_WEIGHT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADJOINT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADJUST_BRIGHTNESS;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADJUST_CONTRAST;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADJUST_HUE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADJUST_SATURATION;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARGMAX;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARGMIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ARRAY_OPS_RESHAPE;
@@ -141,6 +145,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.POISSON_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.POW;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RAGGED_RANGE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANDOM_FLIP_LEFT_RIGHT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANDOM_NORMAL_INIT_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANGE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RANK;
@@ -573,6 +578,12 @@ public class TensorGeneratorFactory {
       return anchor.makeGenerator(DiagPart::new, DiagPart::new);
     if (isType(type, EXTRACT_PATCHES.getDeclaringClass()))
       return anchor.makeGenerator(ExtractPatches::new, ExtractPatches::new);
+    if (isType(type, RANDOM_FLIP_LEFT_RIGHT.getDeclaringClass())
+        || isType(type, ADJUST_CONTRAST.getDeclaringClass())
+        || isType(type, ADJUST_BRIGHTNESS.getDeclaringClass())
+        || isType(type, ADJUST_SATURATION.getDeclaringClass())
+        || isType(type, ADJUST_HUE.getDeclaringClass()))
+      return anchor.makeGenerator(ImageAugmentation::new, ImageAugmentation::new);
     if (isType(type, FLATTEN.getDeclaringClass()))
       return anchor.makeGenerator(Flatten::new, Flatten::new);
     if (isType(type, GATHER_ND.getDeclaringClass()))
