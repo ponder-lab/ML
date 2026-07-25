@@ -302,6 +302,29 @@ public class TestConstructors extends AbstractTensorTest {
   }
 
   /**
+   * The corpus metrics-mask shape (<a
+   * href="https://github.com/wala/ML/issues/774">wala/ML#774</a>): {@code np.zeros} feeds {@code
+   * np.array} with an explicit but statically-unresolvable dtype, which overrides the source's
+   * dtype at runtime, so the operand feed declines and the result's dtype stays unknown rather than
+   * borrowing the operand's float64. The shape is likewise unresolved at present.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpArrayUnresolvableDtypeMask()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_nparray_bool_mask.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(UNKNOWN, null))));
+  }
+
+  /**
    * Regression guard for <a href="https://github.com/wala/ML/issues/598">wala/ML#598</a>: the
    * {@code tf.constant}-wrapped {@code numpy.array} form also propagates to the callee parameter.
    * It currently types to {@code ⊤} unknown, coarser than the bare form's {@code (3,)} because
