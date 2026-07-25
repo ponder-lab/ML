@@ -1434,21 +1434,94 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
-   * Returns whether the given invoke is a slice <em>constructor</em>: it resolves to the {@code
-   * slice} builtin and every argument is a compile-time constant (the {@code slice(None, None,
-   * None)} form that subscripts like {@code x[:, 0]} compile to). The subscript-application form
-   * never matches, since its first argument is the sliced tensor. See wala/ML#732.
+   * Returns whether the given invoke is a slice <em>constructor</em> over non-tensor bounds whose
+   * consumers subscript tensors: it resolves to the {@code slice} builtin, has constructor arity,
+   * every argument is either a compile-time constant (the {@code slice(None, None, None)} form that
+   * subscripts like {@code x[:, 0]} compile to, wala/ML#732) or a value whose points-to set carries
+   * no allocation-site member (an integer-valued bound such as the shape-element read in {@code
+   * x[:, :n, :]}, wala/ML#787), and no consuming slice application subscripts a list or tuple. The
+   * subscript-application form never matches: it has application arity, and its arguments include
+   * the sliced tensor or the previously constructed slice objects, which carry allocation sites.
+   * The consumer check keeps shape-vector slicing unpinned, since the empty-and-fixed pin would
+   * sever the reshape shape-vector flow such a slice feeds.
    *
    * @param node The {@link CGNode} containing the invoke.
    * @param invoke The invoke instruction to test.
    * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the targets.
-   * @return {@code true} iff the invoke constructs a slice object from constants.
+   * @return {@code true} iff the invoke constructs a slice object from non-tensor bounds and no
+   *     consumer applies it to a list or tuple.
    */
-  private static boolean isConstantSliceConstructor(
+  private static boolean isNonTensorSliceConstructor(
       CGNode node, SSAAbstractInvokeInstruction invoke, PropagationCallGraphBuilder builder) {
+    if (!resolvesToSliceBuiltin(node, invoke, builder)) return false;
+    // Arity separates the forms regardless of points-to resolution: a constructor is the callable
+    // plus at most the three bounds, while an application is the callable plus the subscripted
+    // object plus the padded three bounds (the front-end pads absent bounds with None), so a
+    // five-use invoke is an application even when the subscripted object's points-to set is
+    // implicit — the fused single-slice form `input_shape[:-n]` whose result IS the sliced shape
+    // list (wala/ML#787).
+    if (invoke.getNumberOfUses() > 4) return false;
     SymbolTable st = node.getIR().getSymbolTable();
-    for (int i = 1; i < invoke.getNumberOfUses(); i++)
-      if (!st.isConstant(invoke.getUse(i))) return false;
+    // A two-dimensional application has constructor arity (callable, subscripted object, one
+    // argument per dimension), so arity alone cannot separate `content[:, 0]` from
+    // `slice(None, n, None)`. Two syntactic markers finish the job without depending on
+    // points-to resolution (an unmodeled receiver like `np.genfromtxt`'s result has an empty
+    // points-to set): an application's arguments include results of other slice invokes (the
+    // per-dimension slice objects), and an application's first argument is the computed
+    // subscripted object whereas a constructor's first bound is a constant (`None` or a
+    // literal).
+    if (!st.isConstant(invoke.getUse(1))) return false;
+    for (int i = 1; i < invoke.getNumberOfUses(); i++) {
+      int use = invoke.getUse(i);
+      SSAInstruction useDef = node.getDU().getDef(use);
+      if (useDef instanceof SSAAbstractInvokeInstruction
+          && resolvesToSliceBuiltin(node, (SSAAbstractInvokeInstruction) useDef, builder))
+        return false;
+      if (st.isConstant(use)) continue;
+      PointerKey usePK =
+          builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, use);
+      for (InstanceKey useIK : builder.getPointerAnalysis().getPointsToSet(usePK))
+        if (getAllocationSiteInNode(useIK) != null) return false;
+    }
+    // Classify by application context: a consumer that applies this slice to a list or tuple is
+    // shape-vector machinery, not a tensor subscript, so the constructor stays unpinned. An empty
+    // or unresolvable applied-to points-to set also keeps it unpinned, erring toward not fixing
+    // state the analysis cannot classify.
+    int result = invoke.getDef();
+    for (Iterator<SSAInstruction> uses = node.getDU().getUses(result); uses.hasNext(); ) {
+      SSAInstruction consumer = uses.next();
+      if (!(consumer instanceof SSAAbstractInvokeInstruction)) continue;
+      SSAAbstractInvokeInstruction application = (SSAAbstractInvokeInstruction) consumer;
+      if (!resolvesToSliceBuiltin(node, application, builder)) continue;
+      if (application.getNumberOfUses() < 2) continue;
+      int appliedTo = application.getUse(1);
+      if (appliedTo == result) continue;
+      PointerKey appliedToPK =
+          builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, appliedTo);
+      boolean sawAllocation = false;
+      for (InstanceKey appliedToIK : builder.getPointerAnalysis().getPointsToSet(appliedToPK)) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(appliedToIK);
+        if (asin == null) continue;
+        sawAllocation = true;
+        TypeReference appliedToType = asin.concreteType().getReference();
+        if (appliedToType.equals(PythonTypes.list) || appliedToType.equals(PythonTypes.tuple))
+          return false;
+      }
+      if (!sawAllocation) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Returns whether the given invoke resolves to the {@code slice} builtin.
+   *
+   * @param node The {@link CGNode} containing the invoke.
+   * @param invoke The invoke instruction to test.
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the targets.
+   * @return {@code true} iff a resolved callee is the {@code slice} builtin.
+   */
+  private static boolean resolvesToSliceBuiltin(
+      CGNode node, SSAAbstractInvokeInstruction invoke, PropagationCallGraphBuilder builder) {
     for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite()))
       if (callee.getMethod().getReference().getDeclaringClass().equals(PythonTypes.SLICE_BUILTIN))
         return true;
@@ -1790,11 +1863,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         if (isEnumerateFirstFieldRead(v, builder)) drops.add(v);
       }
       // Semantically non-tensor iteration machinery pins to empty-and-fixed too (wala/ML#732):
-      // an all-constant-bounds slice constructor (`slice(None, None, None)` under `x[:, 0]`) is a
-      // runtime slice object, and an enumerate result is an iterator object whose element typing
-      // the element generators serve; both otherwise read cross-caller tensor state through
-      // shared builtin frames and count as tensor defs downstream. The subscript-application form
-      // is untouched: its first argument is a tensor receiver, not a constant.
+      // a slice constructor over non-tensor bounds (all-constant `slice(None, None, None)` under
+      // `x[:, 0]`, or a dynamic integer bound like the shape-element read under `x[:, :n, :]`,
+      // wala/ML#787) is a runtime slice object, and an enumerate result is an iterator object
+      // whose element typing the element generators serve; both otherwise read cross-caller
+      // tensor state through shared builtin frames and count as tensor defs downstream. The
+      // subscript-application form is untouched: its arguments carry allocation sites (the
+      // sliced tensor or the constructed slice objects).
       for (PointsToSetVariable v : dataflow) {
         if (!(v.getPointerKey() instanceof LocalPointerKey)) continue;
         LocalPointerKey lpk = (LocalPointerKey) v.getPointerKey();
@@ -1803,12 +1878,21 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         if (!(def instanceof SSAAbstractInvokeInstruction)) continue;
         SSAAbstractInvokeInstruction invoke = (SSAAbstractInvokeInstruction) def;
         if (isEnumerateCall(lpk.getNode(), invoke, builder)
-            || isConstantSliceConstructor(lpk.getNode(), invoke, builder)) drops.add(v);
+            || isNonTensorSliceConstructor(lpk.getNode(), invoke, builder)) drops.add(v);
       }
 
       LOGGER.fine(() -> "wala/ML#409 drops (enumerate-first-field): " + drops.size());
       for (PointsToSetVariable d : drops)
-        LOGGER.fine(() -> "  drop: " + describe(d.getPointerKey()));
+        LOGGER.fine(
+            () -> {
+              String def = "";
+              if (d.getPointerKey() instanceof LocalPointerKey) {
+                LocalPointerKey dropLpk = (LocalPointerKey) d.getPointerKey();
+                if (dropLpk.getNode().getDU() != null)
+                  def = " def: " + dropLpk.getNode().getDU().getDef(dropLpk.getValueNumber());
+              }
+              return "  drop: " + describe(d.getPointerKey()) + def;
+            });
 
       // User-code parameter destinations get the hybridization-frame origin and a barrier against
       // caller-side origin inflow (wala/ML#726): under `tf.function` tracing a tensor parameter is
