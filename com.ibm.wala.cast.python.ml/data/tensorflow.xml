@@ -746,6 +746,9 @@
         <putfield class="LRoot" field="float64" fieldType="LRoot" ref="x" value="float64"/>
         <putfield class="LRoot" field="float64" fieldType="LRoot" ref="dtypes" value="float64"/>
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes#int32 -->
+        <new def="bool" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="bool" fieldType="LRoot" ref="x" value="bool"/>
+        <putfield class="LRoot" field="bool" fieldType="LRoot" ref="dtypes" value="bool"/>
         <new def="uint8" class="Ltensorflow/dtypes/DType"/>
         <putfield class="LRoot" field="uint8" fieldType="LRoot" ref="x" value="uint8"/>
         <putfield class="LRoot" field="uint8" fieldType="LRoot" ref="dtypes" value="uint8"/>
