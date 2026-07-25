@@ -18,6 +18,10 @@ def consume(m):
     pass
 
 
+def consume2(b):
+    pass
+
+
 np.save("sidecar_feed_tmp.npy", np.ones((4, 3), dtype=np.int64))
 batch_data = []
 for _ in range(2):
@@ -25,4 +29,10 @@ for _ in range(2):
 m = np.array(batch_data)
 assert m.dtype == np.int64
 consume(m)
+# An explicit dtype argument overrides the source's dtype at runtime, so when it is statically
+# unresolvable the feed must decline rather than borrow the operand's dtype (wala/ML#774).
+dt = np.load("sidecar_feed_tmp.npy").dtype
+b = np.array(batch_data, dtype=dt)
+assert b.dtype == np.int64
+consume2(b)
 os.remove("sidecar_feed_tmp.npy")
