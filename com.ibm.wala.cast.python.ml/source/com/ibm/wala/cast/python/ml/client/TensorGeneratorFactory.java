@@ -58,6 +58,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_REPEAT_T
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SAMPLE_FROM_DATASETS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_SHUFFLE_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_TAKE_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_WINDOW_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_WITH_OPTIONS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_ZIP_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DENSE_CALL;
@@ -1715,6 +1716,7 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, DATASET_SAMPLE_FROM_DATASETS_TYPE))
       return new DatasetSampleFromDatasetsGenerator(source);
     else if (isType(calledFunction, DATASET_SHUFFLE_TYPE)
+        || isType(calledFunction, DATASET_WINDOW_TYPE)
         || isType(calledFunction, DATASET_MAP_TYPE)
         || isType(calledFunction, DATASET_REPEAT_TYPE)
         || isType(calledFunction, DATASET_PREFETCH_TYPE)

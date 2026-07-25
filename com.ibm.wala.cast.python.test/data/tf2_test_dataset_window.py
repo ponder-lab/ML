@@ -14,6 +14,10 @@ def consume(w):
     pass
 
 
+def consume_outer(w):
+    pass
+
+
 ds = (
     tf.data.Dataset.from_generator(gen, tf.int32)
     .shuffle(4)
@@ -21,6 +25,7 @@ ds = (
     .window(2)
 )
 for w in ds:
+    consume_outer(w)
     for e in w:
         assert e.dtype == tf.int32
         consume(e)

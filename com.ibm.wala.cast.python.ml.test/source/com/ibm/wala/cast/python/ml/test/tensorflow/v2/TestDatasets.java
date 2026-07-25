@@ -876,20 +876,17 @@ public class TestDatasets extends AbstractTensorTest {
   /**
    * The corpus loader-chain shape (<a
    * href="https://github.com/wala/ML/issues/776">wala/ML#776</a>): {@code from_generator} with a
-   * declared element dtype, then {@code .shuffle(...).prefetch(...).window(n)}. {@code window} is
-   * unmodeled (it yields datasets of datasets), so the declared dtype currently dies at the
-   * combinator and the doubly-iterated element observes nothing.
-   *
-   * <p>TODO: Flip to a positive test when <a
-   * href="https://github.com/wala/ML/issues/776">wala/ML#776</a> models {@code window} and the
-   * declaration survives the chain.
+   * declared element dtype, then {@code .shuffle(...).prefetch(...).window(n)}. {@code window}
+   * yields datasets of datasets, modeled level-collapsed as an element-preserving transform; the
+   * declared dtype survives the combinator chain to the doubly-iterated element, whose shape is
+   * unknown (⊤) since {@code from_generator} declares no {@code output_shapes}.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testDatasetWindowedChain()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
