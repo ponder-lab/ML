@@ -7,6 +7,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_INT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_STRING;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.STRING;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_10000_1_INT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_10000_28_28_UINT8;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_10000_32_32_3_UINT8;
@@ -452,7 +453,7 @@ public class TestDatasets extends AbstractTensorTest {
   @Test
   public void testDataset36()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_dataset36.py", "id1", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_STRING)));
+    test("tf2_test_dataset36.py", "id1", 1, 1, Map.of(2, Set.of(new TensorType(STRING, null))));
     //    test("tf2_test_dataset36.py", "id2", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_STRING)));
   }
 
@@ -823,7 +824,7 @@ public class TestDatasets extends AbstractTensorTest {
   @Test
   public void testDataset72()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_dataset72.py", "consume", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+    test("tf2_test_dataset72.py", "consume", 1, 1, Map.of(2, Set.of(new TensorType(INT_32, null))));
   }
 
   /**
@@ -842,7 +843,7 @@ public class TestDatasets extends AbstractTensorTest {
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testDatasetFromGeneratorTupleTypes()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -856,16 +857,12 @@ public class TestDatasets extends AbstractTensorTest {
   /**
    * The second component of {@link #testDatasetFromGeneratorTupleTypes()}.
    *
-   * <p>TODO: Flip to a positive test when <a
-   * href="https://github.com/wala/ML/issues/776">wala/ML#776</a> delivers the tuple-form
-   * per-component dtypes.
-   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testDatasetFromGeneratorTupleTypes2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
