@@ -25,6 +25,13 @@
       "attribution": "fixture: opaque np.load inside a helper; the dtype must reach the np.array result through the feed"
     },
     {
+      "module": "driver_feed2.py",
+      "function": "Data._get_seq",
+      "variable": "data",
+      "dtype": "int64",
+      "attribution": "fixture: opaque np.load conditionally slice-reassigned, comprehension-collected, batched via np.array"
+    },
+    {
       "module": "driver_refine.py",
       "function": "",
       "variable": "t",

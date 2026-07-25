@@ -755,4 +755,35 @@ public class TestMisc extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_INT64)));
   }
+
+  /**
+   * The faithful loader shape for {@link #testTypeAnnotationSidecarFeedsThroughNpArray()} (<a
+   * href="https://github.com/wala/ML/issues/772">wala/ML#772</a>): the annotated opaque read is
+   * conditionally slice-reassigned inside its method, collected by a list comprehension in a second
+   * method, and batched through {@code np.array} behind a method-call boundary. The comprehension
+   * trampoline's reflected element write is invisible to container-element dataflow consumers, so
+   * the {@code int64} dies at the comprehension hop and the parameter observes {@code {? of
+   * unknown}}.
+   *
+   * <p>TODO: Flip to a plain positive test when <a
+   * href="https://github.com/wala/ML/issues/773">wala/ML#773</a> gives comprehension element writes
+   * an enumerable channel.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testTypeAnnotationSidecarFeedsThroughLoaderChain()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"sidecar_proj/driver_feed2.py"},
+        "driver_feed2.py",
+        "consume",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_INT64)));
+  }
 }

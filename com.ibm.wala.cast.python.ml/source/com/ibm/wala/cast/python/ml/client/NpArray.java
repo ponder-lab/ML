@@ -8,6 +8,7 @@ import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -23,6 +24,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -73,9 +75,44 @@ public class NpArray extends TensorGenerator {
   protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
     int sourceVn = getArgumentValueNumber(0);
     if (sourceVn <= 0) return null;
-    PointerKey operand =
-        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(this.getNode(), sourceVn);
-    return new TypeFeed(TypeFeedKind.DTYPE_ONLY, List.of(operand));
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    PointerKey argument = pa.getHeapModel().getPointerKeyForLocal(this.getNode(), sourceVn);
+    List<PointerKey> operands = new ArrayList<>();
+    operands.add(argument);
+    // The argument is often a container of the actual values (an append-built or literal batch
+    // list), whose own variable carries no dataflow state: the element state lives in the
+    // container's field keys. Add the append-contents key and the cataloged subscript keys of
+    // each list/tuple allocation so element evidence feeds too.
+    for (InstanceKey ik : pa.getPointsToSet(argument)) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      if (asin == null) continue;
+      TypeReference reference = asin.concreteType().getReference();
+      if (!reference.equals(list) && !reference.equals(tuple)) continue;
+      FieldReference contents =
+          FieldReference.findOrCreate(
+              Root,
+              findOrCreateAsciiAtom(
+                  PythonSSAPropagationCallGraphBuilder.LIST_APPEND_CONTENTS_FIELD),
+              Root);
+      IField contentsField = builder.getClassHierarchy().resolveField(contents);
+      if (contentsField != null)
+        operands.add(builder.getPointerKeyForInstanceField(asin, contentsField));
+      OrdinalSet<InstanceKey> catalogPTS =
+          pa.getPointsToSet(
+              ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                  .getPointerKeyForObjectCatalog(asin));
+      for (InstanceKey catalogIK : catalogPTS) {
+        if (!(catalogIK instanceof ConstantKey)) continue;
+        Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
+        if (fieldIndex == null) continue;
+        FieldReference subscript =
+            FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+        IField subscriptField = builder.getClassHierarchy().resolveField(subscript);
+        if (subscriptField != null)
+          operands.add(builder.getPointerKeyForInstanceField(asin, subscriptField));
+      }
+    }
+    return new TypeFeed(TypeFeedKind.DTYPE_ONLY, operands);
   }
 
   @Override
