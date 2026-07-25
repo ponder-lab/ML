@@ -55,8 +55,11 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
     }
 
     public int getIndex() {
-      // +1 to skip 'self' which is the Dataset class
-      return ordinal() + 1;
+      // The argument resolvers ({@code getArgumentPointsToSet} and the invoke-side
+      // {@code getArgumentValueNumber}) take 0-based positions excluding the receiver, so the
+      // ordinal maps directly; a former +1 "skip self" adjustment probed one slot too far and
+      // silently emptied every positional read, leaving only keyword forms working (wala/ML#776).
+      return ordinal();
     }
   }
 
@@ -293,9 +296,11 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
       }
     }
 
-    // Default: No shape information could be extracted from generator arguments.
-    // Default to scalar shape as missing output_shapes often implies it.
-    return Collections.singleton(Collections.emptyList());
+    // Default: no shape information could be extracted from the generator arguments. An absent
+    // output_shapes means the element shapes are unknown (the runtime treats every component as
+    // TensorShape(None)), so the sound default is ⊤; the former scalar default fabricated a
+    // rank-0 claim that becomes signature-visible once the dtype resolves (wala/ML#776).
+    return null;
   }
 
   /**
@@ -398,11 +403,19 @@ public class DatasetFromGeneratorGenerator extends DatasetGenerator
   @Override
   public Set<TensorType> getTensorTypesForIndex(PropagationCallGraphBuilder builder, int index) {
     Set<List<Dimension<?>>> shapes = this.getShapesForIndex(builder, index);
-    if (shapes == null) return null;
     Set<DType> dTypes = this.getDTypesForIndex(builder, index);
     if (dTypes == null) return null;
 
     Set<TensorType> ret = HashSetFactory.make();
+
+    // A null shape set is the ⊤ shape (unknown rank), not the absence of a tensor: compose
+    // unknown-rank members so a dtype-resolved element with no declared shape still counts
+    // (wala/ML#776).
+    if (shapes == null) {
+      for (DType dtype : dTypes)
+        ret.add(new TensorType(dtype.name().toLowerCase(Locale.ROOT), null));
+      return ret;
+    }
 
     for (List<Dimension<?>> dimensionList : shapes)
       for (DType dtype : dTypes)
