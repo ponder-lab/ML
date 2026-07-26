@@ -748,7 +748,17 @@ final class WorklistTypeResolver {
     } catch (IllegalArgumentException e) {
       // Demand-driven callers catch this variously; under the engine the conservative reading is
       // an unknown value of the query's kind.
-      LOGGER.log(Level.FINE, e, () -> "Worklist transfer IAE for " + key + "; treating as ⊤.");
+      LOGGER.log(
+          Level.FINE,
+          e,
+          () ->
+              "Worklist transfer IAE for "
+                  + key
+                  + " ("
+                  + e.getMessage()
+                  + " at "
+                  + e.getStackTrace()[0]
+                  + "); treating as ⊤.");
       result = this.shapeKinds.get(key) ? ShapeResult.unknown() : EnumSet.of(DType.UNKNOWN);
     } finally {
       this.evaluating.pop();

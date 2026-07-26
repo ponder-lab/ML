@@ -303,11 +303,12 @@ public class TestConstructors extends AbstractTensorTest {
   }
 
   /**
-   * The corpus metrics-mask shape (<a
-   * href="https://github.com/wala/ML/issues/774">wala/ML#774</a>): {@code np.zeros} feeds {@code
-   * np.array} with an explicit but statically-unresolvable dtype, which overrides the source's
-   * dtype at runtime, so the operand feed declines and the result's dtype stays unknown rather than
-   * borrowing the operand's float64. The shape is likewise unresolved at present.
+   * The corpus metrics-mask shape (<a href="https://github.com/wala/ML/issues/774">wala/ML#774</a>
+   * and <a href="https://github.com/wala/ML/issues/775">wala/ML#775</a>): {@code np.zeros} feeds
+   * {@code np.array} with an explicit {@code np.bool_} dtype, which overrides the source's dtype at
+   * runtime. The wala/ML#774 decline correctly refused to borrow the operand's float64 while the
+   * token was unresolvable; with the {@code bool_} token modeled and the scalar shape-argument form
+   * parsed ({@code np.zeros(5)} allocates rank 1), both axes resolve exactly.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -322,7 +323,7 @@ public class TestConstructors extends AbstractTensorTest {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(new TensorType(UNKNOWN, null))));
+        Map.of(2, Set.of(TensorType.of(BOOL, 5))));
   }
 
   /**
@@ -1263,6 +1264,67 @@ public class TestConstructors extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 5, 3))));
+  }
+
+  /**
+   * The numpy dtype-token witnesses of <a
+   * href="https://github.com/wala/ML/issues/775">wala/ML#775</a>: the {@code np.ndarray}
+   * constructor resolves its {@code np.int32} token through the {@code zeros} typing contract.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNdarrayConstructor()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_dtype_tokens.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_32, 3))));
+  }
+
+  /**
+   * The builtin-token companion of {@link #testNdarrayConstructor()}: {@code np.array(...,
+   * dtype=int)}, where numpy promotes the Python builtin to int64.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpArrayBuiltinIntDtype()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_dtype_tokens.py",
+        "consume2",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 2, 2))));
+  }
+
+  /**
+   * The {@code np.uint8} token companion of {@link #testNdarrayConstructor()} on the {@code
+   * np.zeros} allocator.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpZerosUint8()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_dtype_tokens.py",
+        "consume3",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 2))));
   }
 
   /**
