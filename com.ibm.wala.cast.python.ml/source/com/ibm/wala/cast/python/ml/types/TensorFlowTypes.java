@@ -329,6 +329,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   public static final String RAGGED_TENSOR_SPEC_SIGNATURE = "tf.RaggedTensorSpec()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/TensorShape. */
+  public static final TypeReference TENSOR_SHAPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/framework/TensorShape"));
+
+  /** The {@code dims} argument the {@code TensorShape} constructor stores (wala/ML#789). */
+  public static final FieldReference TENSOR_SHAPE_DIMS =
+      FieldReference.findOrCreate(TENSOR_SHAPE, findOrCreateAsciiAtom("dims"), Root);
+
   public static final FieldReference SPEC_SHAPE =
       FieldReference.findOrCreate(TENSOR_SPEC, findOrCreateAsciiAtom("shape"), Root);
 

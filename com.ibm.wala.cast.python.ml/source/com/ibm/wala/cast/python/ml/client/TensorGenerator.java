@@ -619,7 +619,8 @@ public abstract class TensorGenerator {
               if (innerReference.equals(tuple)
                   || innerReference.equals(list)
                   || innerReference.equals(TensorFlowTypes.TENSOR_SPEC)
-                  || innerReference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)) {
+                  || innerReference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)
+                  || innerReference.equals(TensorFlowTypes.TENSOR_SHAPE)) {
                 // Nested tuple/list or Spec. Recurse.
                 Set<List<Dimension<?>>> nestedShapes =
                     this.getShapesFromShapeArgument(
@@ -782,17 +783,21 @@ public abstract class TensorGenerator {
         if (constantShapes == null) return null;
         ret.addAll(constantShapes);
       } else if (reference.equals(TensorFlowTypes.TENSOR_SPEC)
-          || reference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)) {
-        // We have a TensorSpec or RaggedTensorSpec. These objects carry shape and dtype
-        // information in their fields. We extract the 'shape' field and recurse to
-        // parse the actual shape structure (usually a tuple or list of integers).
+          || reference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)
+          || reference.equals(TensorFlowTypes.TENSOR_SHAPE)) {
+        // We have a TensorSpec, RaggedTensorSpec, or TensorShape. These objects carry their shape
+        // structure in a field ('shape' for the specs, the stored 'dims' argument for a
+        // TensorShape constructor, wala/ML#789); extract it and recurse to parse the actual
+        // structure (usually a tuple or list of integers).
         IField shapeField =
             builder
                 .getClassHierarchy()
                 .resolveField(
                     reference.equals(TensorFlowTypes.TENSOR_SPEC)
                         ? TensorFlowTypes.SPEC_SHAPE
-                        : TensorFlowTypes.RAGGED_SPEC_SHAPE);
+                        : reference.equals(TensorFlowTypes.RAGGED_TENSOR_SPEC)
+                            ? TensorFlowTypes.RAGGED_SPEC_SHAPE
+                            : TensorFlowTypes.TENSOR_SHAPE_DIMS);
         PointerKey shapePK = builder.getPointerKeyForInstanceField(instanceKey, shapeField);
         OrdinalSet<InstanceKey> shapePts = pointerAnalysis.getPointsToSet(shapePK);
         if (shapePts == null || shapePts.isEmpty()) return null;
