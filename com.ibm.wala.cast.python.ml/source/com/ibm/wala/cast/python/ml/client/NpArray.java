@@ -177,12 +177,7 @@ public class NpArray extends TensorGenerator {
     // multi-strategy resolver: the callee-frame parameter's points-to set is empty on a
     // return-value anchoring, and the caller walk recovers the keyword (wala/ML#775).
     OrdinalSet<InstanceKey> dtypePTS = getArgumentPointsToSet(builder, 1, "dtype");
-    LOGGER.fine(
-        () ->
-            "DTYPE-ARG-PROBE size="
-                + (dtypePTS == null ? "null" : dtypePTS.size())
-                + " members="
-                + describe(dtypePTS));
+    LOGGER.fine(() -> "Resolved dtype argument points-to set: " + describe(dtypePTS) + ".");
     if (dtypePTS != null && !dtypePTS.isEmpty()) {
       Set<DType> dTypes = getDTypesFromDTypeArgument(builder, dtypePTS);
       if (!dTypes.isEmpty()) {
