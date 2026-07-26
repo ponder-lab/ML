@@ -1328,6 +1328,49 @@ public class TestConstructors extends AbstractTensorTest {
   }
 
   /**
+   * The inter-procedural builtin dtype token (the NLPGNN graph-reader pattern, wala/ML#775): the
+   * builtin {@code int} flows as an argument into a reader helper whose {@code dtype} parameter
+   * reaches {@code np.array}, resolving through the call edge, and the subtraction preserves the
+   * declared dtype through the elementwise broadcast.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testInterproceduralDtypeToken()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dtype_token_flow.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 3))));
+  }
+
+  /**
+   * The two-hop corpus form of {@link #testInterproceduralDtypeToken()}: the token forwards through
+   * {@code Loader.read_file} into {@code read_raw_text}, whose comprehension-built rows feed {@code
+   * np.array} with the forwarded {@code dtype}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testInterproceduralDtypeToken2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dtype_token_flow.py",
+        "consume2",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_64, null))));
+  }
+
+  /**
    * The {@code tf.bool} dtype token (<a
    * href="https://github.com/wala/ML/issues/793">wala/ML#793</a>): an explicit {@code
    * dtype=tf.bool} on an allocator resolves to the boolean dtype rather than falling to the float32
