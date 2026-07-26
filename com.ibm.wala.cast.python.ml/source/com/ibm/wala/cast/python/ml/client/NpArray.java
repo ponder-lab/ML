@@ -171,9 +171,20 @@ public class NpArray extends TensorGenerator {
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    int dtypeVn = getArgumentValueNumber(1);
-    if (dtypeVn > 0) {
-      Set<DType> dTypes = getDTypes(builder, dtypeVn);
+    // The explicit `dtype` argument is a token (`np.int32`, the builtin `int`), not a value whose
+    // dtype the value walk could compute (that walk deliberately ignores `DType` allocations), so
+    // it resolves through the dtype-argument token resolver, with the argument located by the
+    // multi-strategy resolver: the callee-frame parameter's points-to set is empty on a
+    // return-value anchoring, and the caller walk recovers the keyword (wala/ML#775).
+    OrdinalSet<InstanceKey> dtypePTS = getArgumentPointsToSet(builder, 1, "dtype");
+    LOGGER.fine(
+        () ->
+            "DTYPE-ARG-PROBE size="
+                + (dtypePTS == null ? "null" : dtypePTS.size())
+                + " members="
+                + describe(dtypePTS));
+    if (dtypePTS != null && !dtypePTS.isEmpty()) {
+      Set<DType> dTypes = getDTypesFromDTypeArgument(builder, dtypePTS);
       if (!dTypes.isEmpty()) {
         return dTypes;
       }

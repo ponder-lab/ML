@@ -2358,6 +2358,15 @@ public class TensorFlowTypes extends PythonTypes {
       FieldReference.findOrCreate(
           PythonTypes.Root, findOrCreateAsciiAtom(BOOL.name().toLowerCase(Locale.ROOT)), D_TYPE);
 
+  /**
+   * The {@code bool_} dtype token: numpy's modern spelling ({@code np.bool_}). Lives in this map
+   * because the dtype-argument resolver iterates these entries against both the TensorFlow and
+   * numpy owner objects; no TensorFlow field carries the name, so it can only match on the numpy
+   * side.
+   */
+  public static final FieldReference BOOL_ALIAS_FIELD =
+      FieldReference.findOrCreate(PythonTypes.Root, findOrCreateAsciiAtom("bool_"), D_TYPE);
+
   /** A mapping from a field reference to its associated {@link DType}, if any. */
   public static final Map<FieldReference, DType> FIELD_REFERENCE_TO_DTYPE =
       Map.ofEntries(
@@ -2367,6 +2376,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(INT_64, INT64),
           Map.entry(UINT_8, UINT8),
           Map.entry(BOOL_FIELD, BOOL),
+          Map.entry(BOOL_ALIAS_FIELD, BOOL),
           Map.entry(COMPLEX_64, COMPLEX64),
           Map.entry(COMPLEX_128, COMPLEX128),
           Map.entry(STRING, DType.STRING));

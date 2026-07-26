@@ -3989,6 +3989,22 @@ public abstract class TensorGenerator {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey instanceKey : pointsToSet) {
+      // Python builtin type objects passed as dtype tokens (`np.array(x, dtype=int)`): numpy
+      // promotes the builtins to its 64-bit defaults on 64-bit platforms, and `bool` maps to the
+      // boolean dtype (wala/ML#775). Checked before the allocation-site extraction below, which
+      // throws for the builtin's `ConcreteTypeKey`.
+      String builtinTypeName = instanceKey.concreteType().getReference().getName().toString();
+      if (builtinTypeName.equals("Lwala/builtin/int")) {
+        ret.add(DType.INT64);
+        continue;
+      } else if (builtinTypeName.equals("Lwala/builtin/float")) {
+        ret.add(DType.FLOAT64);
+        continue;
+      } else if (builtinTypeName.equals("Lwala/builtin/bool")) {
+        ret.add(DType.BOOL);
+        continue;
+      }
+
       AllocationSiteInNode asin = getAllocationSiteInNode(instanceKey);
       if (asin == null && !(instanceKey instanceof ConstantKey)) continue;
       // First, check for `None`.
@@ -7548,6 +7564,10 @@ public abstract class TensorGenerator {
     } else if (type.equals(NumpyTypes.ONES.getDeclaringClass())) {
       return new NpOnes(node);
     } else if (type.equals(NumpyTypes.ZEROS.getDeclaringClass())) {
+      return new NpZeros(node);
+    } else if (type.equals(NumpyTypes.NDARRAY_CONSTRUCTOR.getDeclaringClass())) {
+      // The `np.ndarray(shape, dtype, ...)` constructor shares the `zeros` typing contract
+      // (wala/ML#775).
       return new NpZeros(node);
     } else if (type.equals(ScipyTypes.SPARSE_MATRIX_DOT.getDeclaringClass())) {
       return new SparseMatrixDot(node);

@@ -13,6 +13,14 @@
         <putfield class="LRoot" field="int32" fieldType="LRoot" ref="x" value="int32"/>
         <new def="int64" class="Ltensorflow/dtypes/DType"/>
         <putfield class="LRoot" field="int64" fieldType="LRoot" ref="x" value="int64"/>
+        <new def="uint8" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="uint8" fieldType="LRoot" ref="x" value="uint8"/>
+        <new def="bool" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="bool" fieldType="LRoot" ref="x" value="bool"/>
+        <new def="bool_" class="Ltensorflow/dtypes/DType"/>
+        <putfield class="LRoot" field="bool_" fieldType="LRoot" ref="x" value="bool_"/>
+        <new def="ndarray_fn" class="Lnumpy/ndarray_constructor"/>
+        <putfield class="LRoot" field="ndarray" fieldType="LRoot" ref="x" value="ndarray_fn"/>
         <new def="array_fn" class="Lnumpy/array"/>
         <putfield class="LRoot" field="array" fieldType="LRoot" ref="x" value="array_fn"/>
         <new def="ones_fn" class="Lnumpy/ones"/>
@@ -25,6 +33,18 @@
       </method>
     </class>
     <package name="numpy">
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html -->
+      <!-- The `np.ndarray(shape, dtype, ...)` constructor: an uninitialized array of the given shape and dtype, so the typing model is the `zeros` allocator's (shape from arg 0, dtype from the `dtype` argument) and the dispatch reuses `NpZeros`. wala/ML#775. -->
+      <class name="ndarray_constructor" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self shape dtype buffer">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
       <!-- https://numpy.org/doc/stable/reference/generated/numpy.array.html -->
       <!-- Modeled as a class-per-function so that `np.array` resolves to this class via a field lookup on the numpy module, and the invocation dispatches to its `do` method. The returned ndarray preserves shape from arg 0 and takes dtype from arg 1; see `NpArray`. -->
       <class name="array" allocatable="true">

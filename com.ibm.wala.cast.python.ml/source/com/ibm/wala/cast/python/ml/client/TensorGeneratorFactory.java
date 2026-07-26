@@ -1702,6 +1702,11 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, NumpyTypes.ONES.getDeclaringClass())) return new NpOnes(source);
     else if (isType(calledFunction, NumpyTypes.ZEROS.getDeclaringClass()))
       return new NpZeros(source);
+    // `np.ndarray(shape, dtype, ...)` is an uninitialized allocation with the `zeros` typing
+    // contract (shape from arg 0, dtype from the `dtype` argument), so it reuses `NpZeros`
+    // (wala/ML#775).
+    else if (isType(calledFunction, NumpyTypes.NDARRAY_CONSTRUCTOR.getDeclaringClass()))
+      return new NpZeros(source);
     else if (isType(calledFunction, NumpyTypes.RESHAPE.getDeclaringClass()))
       return new NpReshape(source);
     else if (isType(calledFunction, DATASET_FROM_TENSOR_SLICES_TYPE))
