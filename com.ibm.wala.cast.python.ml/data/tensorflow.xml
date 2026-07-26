@@ -197,6 +197,8 @@
         <putfield class="LRoot" field="random" fieldType="LRoot" ref="Dataset" value="dsrandom"/>
         <new def="from_tensors" class="Ltensorflow/data/Dataset/from_tensors"/>
         <putfield class="LRoot" field="from_tensors" fieldType="LRoot" ref="Dataset" value="from_tensors"/>
+        <new def="TensorShape" class="Ltensorflow/framework/TensorShape"/>
+        <putfield class="LRoot" field="TensorShape" fieldType="LRoot" ref="x" value="TensorShape"/>
         <new def="TensorSpec" class="Ltensorflow/framework/TensorSpec"/>
         <putfield class="LRoot" field="TensorSpec" fieldType="LRoot" ref="x" value="TensorSpec"/>
         <new def="RaggedTensorSpec" class="Ltensorflow/framework/RaggedTensorSpec"/>
@@ -1105,6 +1107,14 @@
       </class>
     </package>
     <package name="tensorflow/framework">
+      <class name="TensorShape" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/TensorShape. The constructor stores its dims argument on the result so the shape-argument parser can recurse into the wrapped list (wala/ML#789), mirroring TensorSpec's shape field. -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self dims name">
+          <new def="ts" class="Ltensorflow/framework/TensorShape"/>
+          <putfield class="LRoot" field="dims" fieldType="LRoot" ref="ts" value="dims"/>
+          <return value="ts"/>
+        </method>
+      </class>
       <class name="TensorSpec" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self shape dtype name">
           <new def="spec" class="Ltensorflow/framework/TensorSpec"/>

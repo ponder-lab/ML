@@ -919,13 +919,10 @@ public class TestDatasets extends AbstractTensorTest {
 
   /**
    * The {@code tf.TensorShape} literal form of {@link #testDatasetFromGeneratorDeclaredShapes()}:
-   * the declared shape is wrapped in a {@code TensorShape} constructor rather than a plain tuple.
-   * {@code tf.TensorShape} is unmodeled, so the argument is present but unparseable and the shape
-   * axis soundly degrades to ⊤ ({@code {? of int32}}) instead of composing {@code (2,)}.
-   *
-   * <p>TODO: Flip to expect {@code TensorType.of(INT_32, 2)} when <a
-   * href="https://github.com/wala/ML/issues/789">wala/ML#789</a> parses {@code TensorShape}
-   * constructor literals in shape arguments.
+   * the declared shape is wrapped in a {@code TensorShape} constructor rather than a plain tuple,
+   * whose stored {@code dims} the shape-argument parser recurses into (<a
+   * href="https://github.com/wala/ML/issues/789">wala/ML#789</a>), composing {@code (2,)} exactly
+   * like the tuple forms.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -940,7 +937,7 @@ public class TestDatasets extends AbstractTensorTest {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(new TensorType(INT_32, null))));
+        Map.of(2, Set.of(TensorType.of(INT_32, 2))));
   }
 
   /**
