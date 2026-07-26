@@ -484,6 +484,17 @@ public abstract class TensorGenerator {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey instanceKey : pointsToSet) {
+      // A bare integer shape denotes rank 1 (`np.zeros(5)` allocates shape `(5,)`); the shape
+      // parameter of the numpy and TensorFlow allocators accepts an int or a sequence, and the
+      // container arms below only cover the sequence forms (wala/ML#775).
+      if (instanceKey instanceof ConstantKey) {
+        Object constantValue = ((ConstantKey<?>) instanceKey).getValue();
+        if (constantValue instanceof Number) {
+          ret.add(List.of(new NumericDim(((Number) constantValue).intValue())));
+          continue;
+        }
+      }
+
       AllocationSiteInNode asin = getAllocationSiteInNode(instanceKey);
       if (asin == null) continue;
       TypeReference reference = asin.concreteType().getReference();

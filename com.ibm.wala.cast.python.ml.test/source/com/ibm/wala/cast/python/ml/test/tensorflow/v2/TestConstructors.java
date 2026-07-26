@@ -307,8 +307,8 @@ public class TestConstructors extends AbstractTensorTest {
    * and <a href="https://github.com/wala/ML/issues/775">wala/ML#775</a>): {@code np.zeros} feeds
    * {@code np.array} with an explicit {@code np.bool_} dtype, which overrides the source's dtype at
    * runtime. The wala/ML#774 decline correctly refused to borrow the operand's float64 while the
-   * token was unresolvable; with the {@code bool_} token modeled, the declared dtype resolves and
-   * the result reads boolean with the shape still unresolved.
+   * token was unresolvable; with the {@code bool_} token modeled and the scalar shape-argument form
+   * parsed ({@code np.zeros(5)} allocates rank 1), both axes resolve exactly.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -323,7 +323,7 @@ public class TestConstructors extends AbstractTensorTest {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(new TensorType(BOOL, null))));
+        Map.of(2, Set.of(TensorType.of(BOOL, 5))));
   }
 
   /**
