@@ -265,6 +265,12 @@ public class ElementWiseOperation extends TensorGenerator {
       int opaqueVn = xHas ? yVn : xVn;
       if (resolved.stream().anyMatch(dims -> !dims.isEmpty())
           && isScalarExpression(builder, opaqueVn)) return ShapeResult.of(resolved);
+      // A non-scalar opaque co-operand can dominate the broadcast when its rank exceeds the
+      // resolved side's, so the resolved shapes stand as members with the unknown remainder
+      // marking those possibilities (wala/ML#790): the default view reads the same-shape
+      // elementwise case, and exact readers keep the remainder. The legacy path annihilated the
+      // resolved evidence entirely.
+      return new ShapeResult(resolved, true);
     }
     return ShapeResult.fromLegacy(this.getDefaultShapes(builder));
   }

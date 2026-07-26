@@ -740,9 +740,10 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    *     floors at ⊤ under wala/ML#788 and the elementwise seed composes honestly, where before
    *     wala/ML#787 the same union arrived via cross-caller leakage through the shared {@code
    *     slice} builtin frame.
-   *     <p>TODO: Expect {@code (2, 50, 64)} float32 for the {@code tf.add} return when <a
-   *     href="https://github.com/wala/ML/issues/790">wala/ML#790</a> broadcasts a resolved operand
-   *     shape past an unknown one instead of degrading to ⊤.
+   *     <p>Under <a href="https://github.com/wala/ML/issues/790">wala/ML#790</a> the {@code tf.add}
+   *     return additionally carries the concrete {@code (2, 50, 64)} member: the elementwise
+   *     broadcast emits the resolved operand's shapes as partial-result members with the unknown
+   *     remainder covering a rank-dominating opaque side, so the union reads both.
    */
   @Test
   public void testMusicTransformerPositionEmbedding()
