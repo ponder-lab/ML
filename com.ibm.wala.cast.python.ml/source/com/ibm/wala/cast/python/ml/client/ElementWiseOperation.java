@@ -278,6 +278,13 @@ public class ElementWiseOperation extends TensorGenerator {
       ShapeResult legacy = ShapeResult.fromLegacy(this.getDefaultShapes(builder));
       if (!legacy.isBottom()) return legacy;
       if (!isObservationFinal(builder)) return legacy;
+      LOGGER.fine(
+          () ->
+              "One-sided broadcast rescue for "
+                  + describe(this.getSource())
+                  + ": members "
+                  + resolved
+                  + ".");
       return new ShapeResult(resolved, true);
     }
     return ShapeResult.fromLegacy(this.getDefaultShapes(builder));
@@ -675,7 +682,11 @@ public class ElementWiseOperation extends TensorGenerator {
    */
   private Set<List<Dimension<?>>> getOperandShapes(PropagationCallGraphBuilder builder, int vn) {
     ElementWiseOperation nested = getNestedForBinop(builder, vn);
-    if (nested != null) return nested.getDefaultShapes(builder);
+    // The nested evaluation diverts through the engine's memoized generator eval (wala/ML#790): a
+    // direct getDefaultShapes call is an engine-invisible transfer whose result depends on the
+    // evaluation schedule (the wala/ML#753 class), so consumers that bake operand members (the
+    // one-sided broadcast rescue) would bake schedule-dependent content.
+    if (nested != null) return memoizedShapeResult(builder, nested).toLegacy();
     if (isScalarLiteral(builder, vn)) {
       return singleton(emptyList());
     }
@@ -687,7 +698,8 @@ public class ElementWiseOperation extends TensorGenerator {
   /** Dtype counterpart of {@link #getOperandShapes(PropagationCallGraphBuilder, int)}. */
   private Set<DType> getOperandDTypes(PropagationCallGraphBuilder builder, int vn) {
     ElementWiseOperation nested = getNestedForBinop(builder, vn);
-    if (nested != null) return nested.getDefaultDTypes(builder);
+    // Diverted like the shape counterpart (wala/ML#790).
+    if (nested != null) return memoizedDTypes(builder, nested);
     return this.getDTypes(builder, vn);
   }
 
