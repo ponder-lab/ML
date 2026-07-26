@@ -1,5 +1,6 @@
 package com.ibm.wala.cast.python.ml.types;
 
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.BOOL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.COMPLEX128;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.COMPLEX64;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
@@ -2347,6 +2348,16 @@ public class TensorFlowTypes extends PythonTypes {
           findOrCreateAsciiAtom(COMPLEX128.name().toLowerCase(Locale.ROOT)),
           D_TYPE);
 
+  /**
+   * Represents the TensorFlow bool data type.
+   *
+   * @see <a href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/dtypes#bool">
+   *     TensorFlow bool DType</a>.
+   */
+  public static final FieldReference BOOL_FIELD =
+      FieldReference.findOrCreate(
+          PythonTypes.Root, findOrCreateAsciiAtom(BOOL.name().toLowerCase(Locale.ROOT)), D_TYPE);
+
   /** A mapping from a field reference to its associated {@link DType}, if any. */
   public static final Map<FieldReference, DType> FIELD_REFERENCE_TO_DTYPE =
       Map.ofEntries(
@@ -2355,6 +2366,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(INT_32, INT32),
           Map.entry(INT_64, INT64),
           Map.entry(UINT_8, UINT8),
+          Map.entry(BOOL_FIELD, BOOL),
           Map.entry(COMPLEX_64, COMPLEX64),
           Map.entry(COMPLEX_128, COMPLEX128),
           Map.entry(STRING, DType.STRING));
