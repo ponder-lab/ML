@@ -268,8 +268,16 @@ public class ElementWiseOperation extends TensorGenerator {
       // A non-scalar opaque co-operand can dominate the broadcast when its rank exceeds the
       // resolved side's, so the resolved shapes stand as members with the unknown remainder
       // marking those possibilities (wala/ML#790): the default view reads the same-shape
-      // elementwise case, and exact readers keep the remainder. The legacy path annihilated the
-      // resolved evidence entirely.
+      // elementwise case, and exact readers keep the remainder. Two gates keep the rescue
+      // deterministic and additive. It applies only where the legacy path annihilates the result
+      // outright, since a legacy result with members feeds downstream walks (the transformer
+      // reshape chains) whose real multi-rank members the partial's members would displace. And
+      // it fires only on a provably final observation: one operand's emptiness during an interim
+      // read is exactly the non-monotone-fallback-arm hazard (wala/ML#753), so a possibly-interim
+      // sighting defers to the settlement pass (wala/ML#758), mirroring the Concat memberless arm.
+      ShapeResult legacy = ShapeResult.fromLegacy(this.getDefaultShapes(builder));
+      if (!legacy.isBottom()) return legacy;
+      if (!isObservationFinal(builder)) return legacy;
       return new ShapeResult(resolved, true);
     }
     return ShapeResult.fromLegacy(this.getDefaultShapes(builder));

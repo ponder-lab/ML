@@ -74,7 +74,7 @@ public class TestMathOps extends AbstractTensorTest {
   @Test
   public void testTopPLogits()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_top_p_logits.py", "top_p_logits", 1, 12, Map.of(2, Set.of(TENSOR_1_5_FLOAT32)));
+    test("tf2_test_top_p_logits.py", "top_p_logits", 1, 13, Map.of(2, Set.of(TENSOR_1_5_FLOAT32)));
   }
 
   /**

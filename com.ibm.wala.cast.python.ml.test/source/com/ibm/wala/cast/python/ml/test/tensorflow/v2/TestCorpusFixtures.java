@@ -453,7 +453,16 @@ public class TestCorpusFixtures extends AbstractTensorTest {
                         new NumericDim(8),
                         new NumericDim(100),
                         UnresolvedDim.INSTANCE,
-                        UnresolvedDim.INSTANCE))),
+                        UnresolvedDim.INSTANCE)),
+                // The wala/ML#790 rescue members: a one-sided broadcast whose legacy result was ⊥
+                // now stands its resolved operand's shapes as partial members, so the union gains
+                // the resolvable subset of those operands (including a constant operand's scalar
+                // member) beside the compositions above.
+                new TensorType(FLOAT_32, asList()),
+                new TensorType(FLOAT_32, asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE)),
+                new TensorType(
+                    FLOAT_32,
+                    asList(new NumericDim(8), UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE))),
             3,
             Set.of(
                 new TensorType(
@@ -1019,7 +1028,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "MusicTransformer.__prepare_train_data",
         "musictransformer_proj",
         2,
-        5,
+        6,
         Map.of(
             2,
             Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE),
