@@ -93,6 +93,15 @@ public class NumpyTypes extends PythonTypes {
 
   private static final String NDARRAY_CONSTRUCTOR_SIGNATURE = "numpy.ndarray()";
 
+  /** https://numpy.org/doc/stable/reference/generated/numpy.eye.html */
+  public static final MethodReference EYE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/eye")),
+          AstMethodReference.fnSelector);
+
+  private static final String EYE_SIGNATURE = "numpy.eye()";
+
   /** https://numpy.org/doc/stable/reference/generated/numpy.reshape.html */
   public static final MethodReference RESHAPE =
       MethodReference.findOrCreate(
@@ -130,6 +139,7 @@ public class NumpyTypes extends PythonTypes {
           Map.entry(ZEROS.getDeclaringClass(), ZEROS_SIGNATURE),
           Map.entry(ONES.getDeclaringClass(), ONES_SIGNATURE),
           Map.entry(NDARRAY_CONSTRUCTOR.getDeclaringClass(), NDARRAY_CONSTRUCTOR_SIGNATURE),
+          Map.entry(EYE.getDeclaringClass(), EYE_SIGNATURE),
           Map.entry(RESHAPE.getDeclaringClass(), RESHAPE_SIGNATURE),
           Map.entry(RESHAPE_METHOD.getDeclaringClass(), RESHAPE_METHOD_SIGNATURE),
           Map.entry(ASTYPE.getDeclaringClass(), ASTYPE_SIGNATURE));

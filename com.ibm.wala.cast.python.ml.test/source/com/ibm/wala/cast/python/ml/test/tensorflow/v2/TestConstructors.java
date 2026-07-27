@@ -1324,6 +1324,42 @@ public class TestConstructors extends AbstractTensorTest {
   }
 
   /**
+   * The {@code np.eye} identity-matrix allocator (<a
+   * href="https://github.com/wala/ML/issues/797">wala/ML#797</a>): shape from the constant {@code
+   * N} argument, dtype the NumPy {@code float64} default.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpEye()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_np_eye.py", "consume", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_64, 3, 3))));
+  }
+
+  /**
+   * The one-hot fancy-indexing idiom over the {@code np.eye} allocation (<a
+   * href="https://github.com/wala/ML/issues/797">wala/ML#797</a>): the row-select subscript
+   * inherits the base array's {@code float64} dtype.
+   *
+   * <p>TODO: The pinned {@code (3,)} shape is the scalar-index row-select result; the length-4 list
+   * index actually selects four rows, so the runtime shape is {@code (4, 3)}. Flip when <a
+   * href="https://github.com/wala/ML/issues/798">wala/ML#798</a> lands.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpEyeOneHot()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_np_eye.py", "consume2", 1, 1, Map.of(2, Set.of(TensorType.of(FLOAT_64, 3))));
+  }
+
+  /**
    * The {@code np.uint8} token companion of {@link #testNdarrayConstructor()} on the {@code
    * np.zeros} allocator.
    *
