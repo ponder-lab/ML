@@ -476,6 +476,10 @@ public class BuiltinFunctions {
     //		builtinFunctions.put("enumerate", Either.forLeft(PythonTypes.enumerate));
     builtinFunctions.put("enumerate", Either.forRight(2));
     builtinFunctions.put("int", Either.forLeft(TypeReference.Int));
+    // https://docs.python.org/3/library/functions.html#float
+    builtinFunctions.put("float", Either.forLeft(TypeReference.Double));
+    // https://docs.python.org/3/library/functions.html#bool
+    builtinFunctions.put("bool", Either.forLeft(TypeReference.Boolean));
     builtinFunctions.put("round", Either.forLeft(TypeReference.Int));
     builtinFunctions.put("len", Either.forLeft(TypeReference.Int));
     builtinFunctions.put("list", Either.forLeft(PythonTypes.list));
