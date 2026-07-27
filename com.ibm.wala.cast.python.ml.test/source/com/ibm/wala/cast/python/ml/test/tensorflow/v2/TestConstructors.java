@@ -1308,6 +1308,22 @@ public class TestConstructors extends AbstractTensorTest {
   }
 
   /**
+   * The {@code bool} sibling of {@link #testNpArrayBuiltinIntDtype()} (<a
+   * href="https://github.com/wala/ML/issues/796">wala/ML#796</a>): the builtin resolves through the
+   * front-end's builtin-function table like {@code int} and {@code float}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpArrayBuiltinBoolDtype()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_np_builtin_bool.py", "consume", 1, 1, Map.of(2, Set.of(TensorType.of(BOOL, 3))));
+  }
+
+  /**
    * The {@code np.uint8} token companion of {@link #testNdarrayConstructor()} on the {@code
    * np.zeros} allocator.
    *
@@ -1368,6 +1384,46 @@ public class TestConstructors extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(new TensorType(INT_64, null))));
+  }
+
+  /**
+   * The three-hop corpus form of the graph-reader pattern (<a
+   * href="https://github.com/wala/ML/issues/796">wala/ML#796</a>): {@code read_data} calls the
+   * shared reader with mixed {@code int} and {@code float} tokens over a real file read.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testInterproceduralDtypeToken3()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dtype_token_flow2.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_64, null))));
+  }
+
+  /**
+   * The float side of {@link #testInterproceduralDtypeToken3()}'s mixed call sites.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testInterproceduralDtypeToken4()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dtype_token_flow2.py",
+        "consume2",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(FLOAT_64, null))));
   }
 
   /**
