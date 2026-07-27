@@ -66,6 +66,7 @@ public class NpEye extends EyeBase {
     return Parameters.DTYPE.getIndex();
   }
 
+  @Override
   protected String getDTypeParameterName() {
     return Parameters.DTYPE.getName();
   }
