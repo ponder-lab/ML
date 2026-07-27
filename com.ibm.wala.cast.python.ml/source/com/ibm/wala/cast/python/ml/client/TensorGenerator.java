@@ -7585,6 +7585,8 @@ public abstract class TensorGenerator {
       // The `np.ndarray(shape, dtype, ...)` constructor shares the `zeros` typing contract
       // (wala/ML#775).
       return new NpZeros(node);
+    } else if (type.equals(NumpyTypes.EYE.getDeclaringClass())) {
+      return new NpEye(node);
     } else if (type.equals(ScipyTypes.SPARSE_MATRIX_DOT.getDeclaringClass())) {
       return new SparseMatrixDot(node);
     } else if (type.equals(ScipyTypes.SPARSE_MATRIX_TODENSE.getDeclaringClass())) {

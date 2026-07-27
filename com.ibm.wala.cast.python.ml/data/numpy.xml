@@ -29,6 +29,8 @@
         <putfield class="LRoot" field="zeros" fieldType="LRoot" ref="x" value="zeros_fn"/>
         <new def="reshape_fn" class="Lnumpy/reshape"/>
         <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="x" value="reshape_fn"/>
+        <new def="eye_fn" class="Lnumpy/eye"/>
+        <putfield class="LRoot" field="eye" fieldType="LRoot" ref="x" value="eye_fn"/>
         <return value="x"/>
       </method>
     </class>
@@ -73,6 +75,18 @@
       <!-- Modeled as a class-per-function (same pattern as `array`) so that `np.zeros` resolves to this class via a field lookup on the numpy module, and the invocation dispatches to its `do` method. The returned ndarray takes its shape from arg 0 (a shape tuple) and its dtype from the `dtype` argument; see `NpZeros`. -->
       <class name="zeros" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self shape dtype">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.eye.html -->
+      <!-- Modeled as a class-per-function (same pattern as `zeros`) so that `np.eye` resolves to this class via a field lookup on the numpy module, and the invocation dispatches to its `do` method. The returned identity matrix takes its shape from the `n`/`m` arguments and its dtype from the `dtype` argument (float64 default); the `k` diagonal offset does not affect the type. See `NpEye`; wala/ML#797. -->
+      <class name="eye" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self n m k dtype">
           <new def="ret" class="Lnumpy/ndarray"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
