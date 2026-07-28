@@ -7122,7 +7122,11 @@ public abstract class TensorGenerator {
           getCallerInvokes(builder, node)) {
         CGNode caller = callerInvoke.fst;
         SSAAbstractInvokeInstruction callInstr = callerInvoke.snd;
-        callAnalyzed = true;
+        // Only a Python invoke carries the positional/keyword structure this analysis reads; a
+        // synthetic summary `<call>` (a plain SSA invoke) binds its arguments straight onto the
+        // callee frame, so it must fall through to the callee-parameter fallback below rather
+        // than counting as an analyzed-but-argless caller (wala/ML#799).
+        if (callInstr instanceof PythonInvokeInstruction) callAnalyzed = true;
 
         if (callInstr instanceof PythonInvokeInstruction) {
           PythonInvokeInstruction pyCallInstr = (PythonInvokeInstruction) callInstr;
@@ -7587,6 +7591,10 @@ public abstract class TensorGenerator {
       return new NpZeros(node);
     } else if (type.equals(NumpyTypes.EYE.getDeclaringClass())) {
       return new NpEye(node);
+    } else if (type.equals(NumpyTypes.UNIQUE_VALUES.getDeclaringClass())) {
+      return new NpUniqueValues(node);
+    } else if (type.equals(NumpyTypes.UNIQUE_INDICES.getDeclaringClass())) {
+      return new NpUniqueIndices(node);
     } else if (type.equals(ScipyTypes.SPARSE_MATRIX_DOT.getDeclaringClass())) {
       return new SparseMatrixDot(node);
     } else if (type.equals(ScipyTypes.SPARSE_MATRIX_TODENSE.getDeclaringClass())) {

@@ -1360,6 +1360,75 @@ public class TestConstructors extends AbstractTensorTest {
   }
 
   /**
+   * The inverse output of {@code np.unique} (<a
+   * href="https://github.com/wala/ML/issues/799">wala/ML#799</a>): always {@code int64} regardless
+   * of the input dtype, rank 1 with a statically unresolvable length.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpUniqueInverse()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_unique.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_64, asList(UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * The values output of {@code np.unique} (<a
+   * href="https://github.com/wala/ML/issues/799">wala/ML#799</a>): dtype preserved from the input,
+   * rank 1 with a statically unresolvable length.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpUniqueValues()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_unique.py",
+        "consume2",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_64, asList(UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * The {@code TUDataset.read_data} two-branch label idiom (<a
+   * href="https://github.com/wala/ML/issues/799">wala/ML#799</a>): regression labels are float,
+   * classification labels are int densified through the unique inverse and a shape-preserving
+   * reshape; the union must carry both dtypes rather than collapsing to a wrong definite when the
+   * labels branch's producer is unmodeled.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpUniqueTwoBranchLabels()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_unique.py",
+        "consume3",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                TensorType.of(FLOAT_64, 2),
+                new TensorType(INT_64, asList(UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
    * The {@code np.uint8} token companion of {@link #testNdarrayConstructor()} on the {@code
    * np.zeros} allocator.
    *
