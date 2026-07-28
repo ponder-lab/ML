@@ -72,6 +72,22 @@
       "variable": "x3",
       "dtype": "float32",
       "shape": "4 $!"
+    },
+    {
+      "module": "driver_unresolved.py",
+      "function": "",
+      "variable": "inv",
+      "dtype": "int64",
+      "shape": "4",
+      "attribution": "fixture: the concrete length of the np.unique inverse, the fixed runtime integer its Unresolved axis asserts is uncomputable"
+    },
+    {
+      "module": "driver_unresolved.py",
+      "function": "",
+      "variable": "batch",
+      "dtype": "float32",
+      "shape": "8 3",
+      "attribution": "fixture: deliberately concrete against the Dynamic batch axis to exercise the kept conflict"
     }
   ]
 }
