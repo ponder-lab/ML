@@ -11,6 +11,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -22,6 +23,34 @@ import java.util.Set;
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
 public class NpUniqueValues extends TensorGenerator {
+
+  /**
+   * Parameter positions and keyword names for the {@code numpy/unique_values} synthetic. Ordinals
+   * match the position in {@code numpy.xml}'s {@code paramNames} after the implicit {@code self}
+   * receiver.
+   */
+  protected enum Parameters {
+    /** The input array whose unique values are taken; its dtype is preserved. */
+    AR;
+
+    /**
+     * Lowercase keyword name used in argument-resolution helpers.
+     *
+     * @return The lowercased enum name (e.g. {@code "ar"}).
+     */
+    public String getName() {
+      return name().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Positional index of this parameter, excluding the implicit {@code self} receiver.
+     *
+     * @return The zero-based positional index.
+     */
+    public int getIndex() {
+      return ordinal();
+    }
+  }
 
   public NpUniqueValues(PointsToSetVariable source) {
     super(source);
@@ -40,7 +69,8 @@ public class NpUniqueValues extends TensorGenerator {
 
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    OrdinalSet<InstanceKey> arPts = getArgumentPointsToSet(builder, 0, "ar");
+    OrdinalSet<InstanceKey> arPts =
+        getArgumentPointsToSet(builder, Parameters.AR.getIndex(), Parameters.AR.getName());
     Set<DType> preserved = getDTypesOfValue(builder, arPts);
     return preserved == null || preserved.isEmpty() ? EnumSet.of(DType.UNKNOWN) : preserved;
   }
