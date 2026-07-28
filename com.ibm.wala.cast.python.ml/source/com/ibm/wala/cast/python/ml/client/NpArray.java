@@ -45,6 +45,12 @@ import java.util.logging.Logger;
 public class NpArray extends TensorGenerator {
   private static final Logger LOGGER = Logger.getLogger(NpArray.class.getName());
 
+  /**
+   * The Jython runtime class representing a Python complex literal. Matched by name to avoid a
+   * compile-time dependency on the Jython runtime.
+   */
+  private static final String PYCOMPLEX_CLASS_NAME = "org.python.core.PyComplex";
+
   public NpArray(PointsToSetVariable source) {
     super(source);
   }
@@ -252,9 +258,8 @@ public class NpArray extends TensorGenerator {
         else if (value instanceof Boolean) leaves.add(DType.BOOL);
         else if (value instanceof Integer || value instanceof Long) leaves.add(DType.INT64);
         else if (value instanceof String) leaves.add(DType.STRING);
-        else if ("org.python.core.PyComplex".equals(value.getClass().getName()))
-          // A Python complex literal, which the Jython front-end represents as a `PyComplex{@code .
-          // Matched by class name to avoid a compile-time dependency on the Jython runtime.
+        else if (PYCOMPLEX_CLASS_NAME.equals(value.getClass().getName()))
+          // A Python complex literal, which the Jython front-end represents as a `PyComplex`.
           leaves.add(DType.COMPLEX128);
         else {
           LOGGER.fine(() -> "collectNumpyLeaves: unrecognized scalar " + value + "; flooring.");
