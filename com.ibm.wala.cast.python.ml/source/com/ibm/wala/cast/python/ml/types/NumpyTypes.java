@@ -102,6 +102,33 @@ public class NumpyTypes extends PythonTypes {
 
   private static final String EYE_SIGNATURE = "numpy.eye()";
 
+  /** https://numpy.org/doc/stable/reference/generated/numpy.unique.html */
+  public static final MethodReference UNIQUE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/unique")),
+          AstMethodReference.fnSelector);
+
+  private static final String UNIQUE_SIGNATURE = "numpy.unique()";
+
+  /** Slot 0 of {@link #UNIQUE}: the unique values, dtype preserved from the input. wala/ML#799. */
+  public static final MethodReference UNIQUE_VALUES =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/unique_values")),
+          AstMethodReference.fnSelector);
+
+  private static final String UNIQUE_VALUES_SIGNATURE = "numpy.unique() values";
+
+  /** Slots 1-3 of {@link #UNIQUE}: index, inverse, and counts, always int64. wala/ML#799. */
+  public static final MethodReference UNIQUE_INDICES =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/unique_indices")),
+          AstMethodReference.fnSelector);
+
+  private static final String UNIQUE_INDICES_SIGNATURE = "numpy.unique() indices";
+
   /** https://numpy.org/doc/stable/reference/generated/numpy.reshape.html */
   public static final MethodReference RESHAPE =
       MethodReference.findOrCreate(
@@ -140,6 +167,9 @@ public class NumpyTypes extends PythonTypes {
           Map.entry(ONES.getDeclaringClass(), ONES_SIGNATURE),
           Map.entry(NDARRAY_CONSTRUCTOR.getDeclaringClass(), NDARRAY_CONSTRUCTOR_SIGNATURE),
           Map.entry(EYE.getDeclaringClass(), EYE_SIGNATURE),
+          Map.entry(UNIQUE.getDeclaringClass(), UNIQUE_SIGNATURE),
+          Map.entry(UNIQUE_VALUES.getDeclaringClass(), UNIQUE_VALUES_SIGNATURE),
+          Map.entry(UNIQUE_INDICES.getDeclaringClass(), UNIQUE_INDICES_SIGNATURE),
           Map.entry(RESHAPE.getDeclaringClass(), RESHAPE_SIGNATURE),
           Map.entry(RESHAPE_METHOD.getDeclaringClass(), RESHAPE_METHOD_SIGNATURE),
           Map.entry(ASTYPE.getDeclaringClass(), ASTYPE_SIGNATURE));

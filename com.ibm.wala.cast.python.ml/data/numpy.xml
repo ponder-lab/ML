@@ -31,6 +31,8 @@
         <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="x" value="reshape_fn"/>
         <new def="eye_fn" class="Lnumpy/eye"/>
         <putfield class="LRoot" field="eye" fieldType="LRoot" ref="x" value="eye_fn"/>
+        <new def="unique_fn" class="Lnumpy/unique"/>
+        <putfield class="LRoot" field="unique" fieldType="LRoot" ref="x" value="unique_fn"/>
         <return value="x"/>
       </method>
     </class>
@@ -97,6 +99,48 @@
       </class>
       <!-- Must be declared `allocatable="true"` so that `<new class="Lnumpy/ndarray"/>` in the various array-producing `do()` methods (both here and in `tensorflow.xml`) resolves to a concrete `InstanceKey` in the heap model. Without this declaration, `HeapModel.getInstanceKeyForAllocation` returns `null`, `getInvariantContents` returns empty, and `visitReturn` never adds the iKey to the caller-side `PointerKey`. Same pattern as the wala/WALA#1889 fix for `tensorflow/python/ops/variables/Variable`. The class deliberately has no method body because it is only referenced as a `<new>` target, not invoked directly. -->
       <class name="ndarray" allocatable="true"></class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.unique.html -->
+      <!-- `np.unique(ar, return_index, return_inverse, return_counts, axis)` modeled as the flag form the corpus destructures: a tuple whose slot 0 is the unique values (dtype preserved from `ar`, flattened to rank 1) and whose slots 1-3 are the index, inverse, and counts outputs (positional indices, always int64 regardless of the input dtype). Each slot is produced by its own class (the `load_data` per-output pattern) so tuple-field reads dispatch per-slot generators; see `NpUniqueValues`/`NpUniqueIndices`. The flagless call's runtime result is the bare values array rather than a tuple; this model returns the tuple regardless, a deliberate approximation scoped to the destructuring form. wala/ML#799. -->
+      <class name="unique" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self ar return_index return_inverse return_counts axis">
+          <new def="values_fn" class="Lnumpy/unique_values"/>
+          <call class="Lnumpy/unique_values" name="do" type="virtual" def="values" descriptor="()LRoot;" arg0="values_fn" arg1="ar" numArgs="2"/>
+          <new def="index_fn" class="Lnumpy/unique_indices"/>
+          <call class="Lnumpy/unique_indices" name="do" type="virtual" def="index" descriptor="()LRoot;" arg0="index_fn" numArgs="1"/>
+          <new def="inverse_fn" class="Lnumpy/unique_indices"/>
+          <call class="Lnumpy/unique_indices" name="do" type="virtual" def="inverse" descriptor="()LRoot;" arg0="inverse_fn" numArgs="1"/>
+          <new def="counts_fn" class="Lnumpy/unique_indices"/>
+          <call class="Lnumpy/unique_indices" name="do" type="virtual" def="counts" descriptor="()LRoot;" arg0="counts_fn" numArgs="1"/>
+          <new def="ret" class="Ltuple"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="ret" value="values"/>
+          <putfield class="LRoot" field="1" fieldType="LRoot" ref="ret" value="index"/>
+          <putfield class="LRoot" field="2" fieldType="LRoot" ref="ret" value="inverse"/>
+          <putfield class="LRoot" field="3" fieldType="LRoot" ref="ret" value="counts"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- Slot 0 of `np.unique`: the unique values, dtype preserved from `ar`, flattened to rank 1 with a statically unresolvable length. wala/ML#799. -->
+      <class name="unique_values" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self ar">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- Slots 1-3 of `np.unique`: the index, inverse, and counts outputs, always int64 (positional indices), rank 1 with a statically unresolvable length. wala/ML#799. -->
+      <class name="unique_indices" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="1" paramNames="self">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
       <!-- https://numpy.org/doc/stable/reference/generated/numpy.reshape.html -->
       <!-- Function-form counterpart of `numpy/ndarray/reshape`: `np.reshape(x, shape)` rather than `x.reshape(shape)`. Modeled as a class-per-function so that `np.reshape` resolves to this class via a field lookup on the numpy module, and the invocation dispatches to its `do` method. Shape comes from arg 1 (target shape); dtype is preserved from arg 0 (input tensor); see `NpReshape`. -->
       <class name="reshape" allocatable="true">

@@ -1708,6 +1708,10 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, NumpyTypes.NDARRAY_CONSTRUCTOR.getDeclaringClass()))
       return new NpZeros(source);
     else if (isType(calledFunction, NumpyTypes.EYE.getDeclaringClass())) return new NpEye(source);
+    else if (isType(calledFunction, NumpyTypes.UNIQUE_VALUES.getDeclaringClass()))
+      return new NpUniqueValues(source);
+    else if (isType(calledFunction, NumpyTypes.UNIQUE_INDICES.getDeclaringClass()))
+      return new NpUniqueIndices(source);
     else if (isType(calledFunction, NumpyTypes.RESHAPE.getDeclaringClass()))
       return new NpReshape(source);
     else if (isType(calledFunction, DATASET_FROM_TENSOR_SLICES_TYPE))
