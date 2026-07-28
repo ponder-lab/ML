@@ -81,9 +81,11 @@ import com.ibm.wala.util.graph.impl.SlowSparseNumberedGraph;
 import com.ibm.wala.util.intset.IntSet;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.io.File;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -297,6 +299,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             Set<TensorOrigin> priorOrigins = initOrigins.get(var);
             if (priorOrigins != null) origins.addAll(priorOrigins);
             initOrigins.put(var, origins);
+            mergeAnnotationIntoUpstreamSeeds(
+                dataflow,
+                init,
+                initOrigins,
+                var,
+                entry.type(),
+                entry.anchor(),
+                entry.attributionSuffix());
             LOGGER.fine(
                 () ->
                     "Refined the inferred "
@@ -315,6 +325,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
           if (!dataflow.containsNode(var)) dataflow.addNode(var);
           init.put(var, HashSetFactory.make(Set.of(entry.type())));
           initOrigins.put(var, EnumSet.of(TensorOrigin.ANNOTATION));
+          mergeAnnotationIntoUpstreamSeeds(
+              dataflow,
+              init,
+              initOrigins,
+              var,
+              entry.type(),
+              entry.anchor(),
+              entry.attributionSuffix());
           LOGGER.fine(
               () ->
                   "Applied type annotation "
@@ -359,12 +377,129 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         return null;
       List<Dimension<?>> dims = member.getDims();
       if (dims == null) dims = annotation.getDims();
-      else if (annotation.getDims() != null && !annotation.getDims().equals(dims)) return null;
+      else if (annotation.getDims() != null) {
+        dims = mergeAnnotationDims(dims, annotation.getDims());
+        if (dims == null) return null;
+      }
       TensorType mergedMember = TensorType.of(dtype, dims, member.layout());
       changed |= !mergedMember.equals(member);
       merged.add(mergedMember);
     }
     return changed ? merged : inferred;
+  }
+
+  /**
+   * Merges a matched annotation into the seeded values dataflow-upstream of the matched binding
+   * (wala/ML#800). The at-binding merge alone cannot hold: the analysis state unions monotonically,
+   * so a producer seed flowing into the annotated binding re-unions its unmerged member (an {@code
+   * Unresolved}-axis twin of the filled member) into every downstream consumer, and the
+   * whole-function signature consensus then re-wildcards the filled axis. Walking the dataflow
+   * predecessors and applying the same fill-only merge at the first seed on each path removes the
+   * twin at its source; a seed that conflicts is reported and left untouched (the fill-only
+   * doctrine per seed), and the walk never descends past a seed, so sibling outputs of a shared
+   * producer (e.g. the other {@code np.unique} slots) are never reached.
+   *
+   * @param dataflow The dataflow graph whose predecessor edges are walked.
+   * @param init The seed map to merge into.
+   * @param initOrigins The seed-origin map to stamp.
+   * @param var The matched binding's variable.
+   * @param annotation The annotation's type.
+   * @param anchor The annotation's anchor, for logging.
+   * @param attributionSuffix The annotation's attribution suffix, for logging.
+   */
+  private static void mergeAnnotationIntoUpstreamSeeds(
+      Graph<PointsToSetVariable> dataflow,
+      Map<PointsToSetVariable, Set<TensorType>> init,
+      Map<PointsToSetVariable, Set<TensorOrigin>> initOrigins,
+      PointsToSetVariable var,
+      TensorType annotation,
+      String anchor,
+      String attributionSuffix) {
+    if (!dataflow.containsNode(var)) return;
+    Deque<PointsToSetVariable> work = new ArrayDeque<>();
+    Set<PointsToSetVariable> visited = HashSetFactory.make();
+    work.add(var);
+    visited.add(var);
+    while (!work.isEmpty()) {
+      PointsToSetVariable v = work.poll();
+      for (Iterator<PointsToSetVariable> it = dataflow.getPredNodes(v); it.hasNext(); ) {
+        PointsToSetVariable pred = it.next();
+        if (!visited.add(pred)) continue;
+        Set<TensorType> seed = init.get(pred);
+        if (seed == null || seed.isEmpty()) {
+          // An unseeded pass-through: keep walking, under a cap that bounds pathological graphs.
+          if (visited.size() < UPSTREAM_ANNOTATION_MERGE_CAP) work.add(pred);
+          continue;
+        }
+        Set<TensorType> merged = mergeAnnotationIntoInferredTypes(seed, annotation);
+        if (merged == null) {
+          LOGGER.warning(
+              "Type annotation "
+                  + anchor
+                  + " = "
+                  + annotation
+                  + " conflicts with the upstream seed "
+                  + seed
+                  + " at "
+                  + describe(pred.getPointerKey())
+                  + "; the seed is not refined (wala/ML#800)"
+                  + attributionSuffix
+                  + ".");
+          continue; // Stop this path at the conflicting seed.
+        }
+        if (merged != seed) {
+          init.put(pred, HashSetFactory.make(merged));
+          EnumSet<TensorOrigin> origins = EnumSet.of(TensorOrigin.ANNOTATION);
+          Set<TensorOrigin> priorOrigins = initOrigins.get(pred);
+          if (priorOrigins != null) origins.addAll(priorOrigins);
+          initOrigins.put(pred, origins);
+          LOGGER.fine(
+              () ->
+                  "Refined the upstream seed "
+                      + seed
+                      + " with type annotation "
+                      + anchor
+                      + " = "
+                      + annotation
+                      + " at "
+                      + describe(pred.getPointerKey())
+                      + " (wala/ML#800)"
+                      + attributionSuffix
+                      + ".");
+        }
+        // A seed terminates the walk on this path either way.
+      }
+    }
+  }
+
+  /** Visit cap for {@link #mergeAnnotationIntoUpstreamSeeds}'s predecessor walk. */
+  private static final int UPSTREAM_ANNOTATION_MERGE_CAP = 64;
+
+  /**
+   * Merges an annotation's dims into an inferred member's dims per axis (wala/ML#800). An axis
+   * agrees when equal; an inferred {@link UnresolvedDim} accepts the annotation's {@link
+   * NumericDim}, since {@code Unresolved} asserts precisely that the size is a fixed runtime
+   * integer the analysis could not compute, which is the fact the annotation supplies (the
+   * wala/ML#721 criterion). Every other disagreement conflicts: a {@link TensorType.DynamicDim}
+   * carries runtime-{@code None} evidence a concrete size would contradict, and numeric or symbolic
+   * disagreements are definite-vs-definite.
+   *
+   * @param inferred The inferred member's dims.
+   * @param annotated The annotation's dims.
+   * @return The merged dims, or {@code null} on a rank or axis conflict.
+   */
+  private static List<Dimension<?>> mergeAnnotationDims(
+      List<Dimension<?>> inferred, List<Dimension<?>> annotated) {
+    if (inferred.size() != annotated.size()) return null;
+    List<Dimension<?>> out = new ArrayList<>(inferred.size());
+    for (int i = 0; i < inferred.size(); i++) {
+      Dimension<?> inf = inferred.get(i);
+      Dimension<?> ann = annotated.get(i);
+      if (inf.equals(ann)) out.add(inf);
+      else if (inf instanceof UnresolvedDim && ann instanceof NumericDim) out.add(ann);
+      else return null;
+    }
+    return out;
   }
 
   @Override

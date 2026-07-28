@@ -733,6 +733,58 @@ public class TestMisc extends AbstractTensorTest {
   }
 
   /**
+   * An inferred {@code Unresolved} axis accepts a concrete annotated size (<a
+   * href="https://github.com/wala/ML/issues/800">wala/ML#800</a>): the {@code np.unique} inverse
+   * infers {@code [Unresolved] int64}, and {@code Unresolved} asserts precisely that the length is
+   * a fixed runtime integer the analysis could not compute, which is the fact the annotation
+   * supplies (the wala/ML#721 criterion).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTypeAnnotationSidecarFillsUnresolvedAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"sidecar_proj/driver_unresolved.py"},
+        "driver_unresolved.py",
+        "consume",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 4))));
+  }
+
+  /**
+   * The kept-conflict direction of {@link #testTypeAnnotationSidecarFillsUnresolvedAxis()}: a
+   * {@code Dynamic} axis carries runtime-{@code None} evidence a concrete annotated size would
+   * contradict, so the annotation is reported as a conflict and not applied, and the inferred type
+   * stands (<a href="https://github.com/wala/ML/issues/800">wala/ML#800</a>). The {@code (None, 3)}
+   * pin is the ceiling, not a concession: a batch-size-less {@code tf.keras.Input}'s runtime static
+   * shape is {@code [None, 3]} (the fixture asserts it), so {@code Dynamic} is the faithful
+   * representation per the wala/ML#721 criterion and any concrete batch axis here would be wrong.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTypeAnnotationSidecarKeepsDynamicConflict()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        new String[] {"sidecar_proj/driver_unresolved.py"},
+        "driver_unresolved.py",
+        "consume2",
+        "sidecar_proj",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_3_FLOAT32)));
+  }
+
+  /**
    * Feed-through of an annotation across an {@code np.array} boundary (<a
    * href="https://github.com/wala/ML/issues/772">wala/ML#772</a>): the sidecar types an opaque
    * {@code np.load} inside a helper, and the {@code int64} dtype reaches the {@code np.array}
