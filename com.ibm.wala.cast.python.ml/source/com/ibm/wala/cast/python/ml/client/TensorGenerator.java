@@ -4509,6 +4509,24 @@ public abstract class TensorGenerator {
    */
   protected Set<DType> getDTypesOfValue(
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> valuePointsToSet) {
+    return getDTypesOfValue(builder, valuePointsToSet, new HashSet<>());
+  }
+
+  /**
+   * The recursive worker for {@link #getDTypesOfValue(PropagationCallGraphBuilder, OrdinalSet)},
+   * threading the set of already-visited instance keys through the container-element descent. A
+   * points-to cycle among container allocations (e.g. a loop-carried phi whose list elements reach
+   * the list itself) otherwise recurses without bound (wala/ML#796).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param valuePointsToSet The points-to set of the value from which the dtype will be derived.
+   * @param visited The instance keys already descended through in this resolution.
+   * @return A set of possible dtypes of the tensor returned by this generator.
+   */
+  private Set<DType> getDTypesOfValue(
+      PropagationCallGraphBuilder builder,
+      OrdinalSet<InstanceKey> valuePointsToSet,
+      Set<InstanceKey> visited) {
     if (valuePointsToSet == null || valuePointsToSet.isEmpty()) {
       LOGGER.fine(
           () ->
@@ -4522,6 +4540,7 @@ public abstract class TensorGenerator {
     PointerAnalysis<InstanceKey> pointerAnalysis = builder.getPointerAnalysis();
 
     for (InstanceKey valueIK : valuePointsToSet) {
+      if (valueIK instanceof AllocationSiteInNode && !visited.add(valueIK)) continue;
       if (valueIK instanceof ConstantKey) { // It's a scalar value.
         ConstantKey<?> constantKey = (ConstantKey<?>) valueIK;
         Object value = constantKey.getValue();
@@ -4620,7 +4639,8 @@ public abstract class TensorGenerator {
             LOGGER.fine(
                 "Points-to set for instance field: " + describe(instanceFieldPointsToSet) + ".");
 
-            Set<DType> fieldDTypes = this.getDTypesOfValue(builder, instanceFieldPointsToSet);
+            Set<DType> fieldDTypes =
+                this.getDTypesOfValue(builder, instanceFieldPointsToSet, visited);
             if (fieldDTypes != null) ret.addAll(fieldDTypes);
           }
         } else if (reference.equals(TensorFlowTypes.FEATURE)) {
@@ -4679,7 +4699,7 @@ public abstract class TensorGenerator {
     return ret;
   }
 
-  private Set<DType> getDTypesFromTensor(
+  protected Set<DType> getDTypesFromTensor(
       PropagationCallGraphBuilder builder, AllocationSiteInNode asin) {
     // Dtype counterpart of the producer-cycle handling in `getShapeResultFromTensor`
     // (wala/ML#718): the engine's bottom for an unconverged dtype read is the empty set rather
@@ -5003,6 +5023,51 @@ public abstract class TensorGenerator {
    */
   protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
     return null;
+  }
+
+  /**
+   * Adds the container-element pointer keys of {@code argument}'s list/tuple allocations to {@code
+   * operands}: the append-contents key and the cataloged integer-subscript keys. A container-valued
+   * argument's own variable carries no dataflow state — the element state lives in the container's
+   * field keys — so a type feed over the argument must include them for element evidence to feed
+   * (wala/ML#772, wala/ML#796).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param argument The argument's pointer key.
+   * @param operands The operand list to extend.
+   */
+  protected void addContainerElementOperands(
+      PropagationCallGraphBuilder builder, PointerKey argument, List<PointerKey> operands) {
+    PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
+    for (InstanceKey ik : pa.getPointsToSet(argument)) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      if (asin == null) continue;
+      TypeReference reference = asin.concreteType().getReference();
+      if (!reference.equals(list) && !reference.equals(tuple)) continue;
+      FieldReference contents =
+          FieldReference.findOrCreate(
+              Root,
+              findOrCreateAsciiAtom(
+                  PythonSSAPropagationCallGraphBuilder.LIST_APPEND_CONTENTS_FIELD),
+              Root);
+      IField contentsField = builder.getClassHierarchy().resolveField(contents);
+      if (contentsField != null)
+        operands.add(builder.getPointerKeyForInstanceField(asin, contentsField));
+      OrdinalSet<InstanceKey> catalogPTS =
+          pa.getPointsToSet(
+              ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                  .getPointerKeyForObjectCatalog(asin));
+      for (InstanceKey catalogIK : catalogPTS) {
+        if (!(catalogIK instanceof ConstantKey)) continue;
+        Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
+        if (fieldIndex == null) continue;
+        FieldReference subscript =
+            FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
+        IField subscriptField = builder.getClassHierarchy().resolveField(subscript);
+        if (subscriptField != null)
+          operands.add(builder.getPointerKeyForInstanceField(asin, subscriptField));
+      }
+    }
   }
 
   protected PythonInvokeInstruction getInvokeInstruction() {
@@ -7163,6 +7228,23 @@ public abstract class TensorGenerator {
               found = true;
             }
           }
+          final int finalArgValNum = argValNum;
+          LOGGER.fine(
+              () ->
+                  "getArgumentPointsToSet: caller "
+                      + describe(caller)
+                      + " instr "
+                      + pyCallInstr
+                      + " argValNum="
+                      + finalArgValNum);
+        } else {
+          LOGGER.fine(
+              () ->
+                  "getArgumentPointsToSet: caller "
+                      + describe(caller)
+                      + " has non-Python invoke "
+                      + callInstr
+                      + "; skipped.");
         }
       }
 
@@ -7171,6 +7253,15 @@ public abstract class TensorGenerator {
       }
       // If we analyzed the call but couldn't find the argument, it likely wasn't provided.
       if (callAnalyzed) {
+        LOGGER.fine(
+            () ->
+                "getArgumentPointsToSet: caller analysis of "
+                    + describe(node)
+                    + " found no argument at pos="
+                    + paramPos
+                    + " name="
+                    + paramName
+                    + "; returning empty.");
         return OrdinalSet.empty();
       }
     }

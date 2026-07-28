@@ -156,6 +156,29 @@ public class Concat extends TensorGenerator {
     return ret;
   }
 
+  /**
+   * Declares a dtype feed over the {@code values} list's element keys. The elements' dtypes often
+   * exist only in dataflow state (e.g. seeded binary-op results whose points-to sets are empty, the
+   * NLPGNN merge chain of wala/ML#796), so the seed-time resolution of {@link
+   * #getDefaultDTypes(PropagationCallGraphBuilder)} starves while the state-side evidence is
+   * complete; the feed composes the result's dtype from the element states instead.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The dtype feed over the {@code values} argument and its container element keys, or
+   *     {@code null} when the argument cannot be located.
+   */
+  @Override
+  protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
+    int valuesVn = getArgumentValueNumber(Parameters.VALUES.getIndex());
+    if (valuesVn <= 0) return null;
+    PointerKey argument =
+        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(this.getNode(), valuesVn);
+    List<PointerKey> operands = new ArrayList<>();
+    operands.add(argument);
+    addContainerElementOperands(builder, argument, operands);
+    return new TypeFeed(TypeFeedKind.DTYPE_ONLY, operands);
+  }
+
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     OrdinalSet<InstanceKey> valuesPts =

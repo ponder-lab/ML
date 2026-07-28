@@ -1532,6 +1532,147 @@ public class TestConstructors extends AbstractTensorTest {
   }
 
   /**
+   * The NLPGNN TUDataset downstream chain (<a
+   * href="https://github.com/wala/ML/issues/796">wala/ML#796</a>): a typed reader output must
+   * survive load-time slicing comprehensions with {@code tolist()}, the tuple return and unpack,
+   * the sampling generator's tuple yield and for-loop unpack, and the merge-time {@code np.array}
+   * rebase with {@code tf.concat} to reach the model-call parameters.
+   *
+   * <p>TODO: Flip to a positive guard when the remaining chain hops land (<a
+   * href="https://github.com/wala/ML/issues/796">wala/ML#796</a>): the slice receiver's lexical
+   * read is invisible to the SSA-chain walkers, and the reader tuple's cross-frame unpack defeats
+   * the same-frame tuple peel, so the merge-side feeds compose from unknown states.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testReaderChainMergedDtype()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reader_chain.py",
+        "consume_merged",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_64, null))));
+  }
+
+  /**
+   * {@link #testReaderChainMergedDtype()} with the {@code tolist()} hop removed, isolating the
+   * unmodeled ndarray {@code tolist} method from the generator-yield/unpack and merge-rebase hops
+   * (<a href="https://github.com/wala/ML/issues/796">wala/ML#796</a>).
+   *
+   * <p>TODO: Flip to a positive guard when the remaining chain hops land (<a
+   * href="https://github.com/wala/ML/issues/796">wala/ML#796</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testReaderChainMergedDtype2()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reader_chain2.py",
+        "consume_merged",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_64, null))));
+  }
+
+  /**
+   * Staged probes for the {@code wala/ML#796} downstream chain (see {@code
+   * tf2_test_reader_chain3.py}): each probe observes the reader's {@code int64} one hop deeper.
+   * Diagnostic scaffolding while the chain lands; the pins localize where the dtype state stops
+   * flowing. The unpacked and sliced probes pass and guard the working hops; the listed, dynamic,
+   * and rearrayed probes are expected failures pinning the frontier.
+   *
+   * <p>TODO: Flip the expected-failure probes to positive guards when the remaining chain hops land
+   * (<a href="https://github.com/wala/ML/issues/796">wala/ML#796</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testReaderChainProbeUnpacked()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reader_chain3.py",
+        "consume_unpacked",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_64, null))));
+  }
+
+  /** See {@link #testReaderChainProbeUnpacked()}. */
+  @Test
+  public void testReaderChainProbeSliced()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reader_chain3.py",
+        "consume_sliced",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_64, null))));
+  }
+
+  /**
+   * See {@link #testReaderChainProbeUnpacked()}.
+   *
+   * <p>TODO: Flip to a positive guard when the remaining chain hops land (<a
+   * href="https://github.com/wala/ML/issues/796">wala/ML#796</a>).
+   */
+  @Test(expected = AssertionError.class)
+  public void testReaderChainProbeListed()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reader_chain3.py",
+        "consume_listed",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_64, null))));
+  }
+
+  /**
+   * See {@link #testReaderChainProbeUnpacked()}.
+   *
+   * <p>TODO: Flip to a positive guard when the remaining chain hops land (<a
+   * href="https://github.com/wala/ML/issues/796">wala/ML#796</a>).
+   */
+  @Test(expected = AssertionError.class)
+  public void testReaderChainProbeDynamic()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reader_chain3.py",
+        "consume_dynamic",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_64, null))));
+  }
+
+  /**
+   * See {@link #testReaderChainProbeUnpacked()}.
+   *
+   * <p>TODO: Flip to a positive guard when the remaining chain hops land (<a
+   * href="https://github.com/wala/ML/issues/796">wala/ML#796</a>).
+   */
+  @Test(expected = AssertionError.class)
+  public void testReaderChainProbeRearrayed()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reader_chain3.py",
+        "consume_rearrayed",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_64, null))));
+  }
+
+  /**
    * The {@code tf.bool} dtype token (<a
    * href="https://github.com/wala/ML/issues/793">wala/ML#793</a>): an explicit {@code
    * dtype=tf.bool} on an allocator resolves to the boolean dtype rather than falling to the float32
