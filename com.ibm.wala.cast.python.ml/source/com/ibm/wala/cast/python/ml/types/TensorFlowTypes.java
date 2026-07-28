@@ -362,6 +362,29 @@ public class TensorFlowTypes extends PythonTypes {
 
   public static final String TEXT_LINE_DATASET_SIGNATURE = "tf.data.TextLineDataset()";
 
+  /** Serialized-record elements are 0-D string tensors; see {@code TFRecordDatasetGenerator}. */
+  public static final TypeReference TFRECORD_DATASET_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/data/TFRecordDataset"));
+
+  public static final String TFRECORD_DATASET_SIGNATURE = "tf.data.TFRecordDataset()";
+
+  /** The {@code tf.data.Dataset.list_files} function class, for source-side dispatch. */
+  public static final TypeReference DATASET_LIST_FILES_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset/list_files"));
+
+  public static final String DATASET_LIST_FILES_SIGNATURE = "tf.data.Dataset.list_files()";
+
+  /**
+   * The dataset allocated by {@code list_files}' summary, distinct from the generic {@code Dataset}
+   * so producer delegation can recover its filename-string element type (the wala/ML#618
+   * distinct-class treatment); see {@code ListFilesDatasetGenerator}.
+   */
+  public static final TypeReference LIST_FILES_DATASET_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader, TypeName.findOrCreate("Ltensorflow/data/ListFilesDataset"));
+
   public static final TypeReference DATASET_FROM_TENSOR_SLICES_TYPE =
       TypeReference.findOrCreate(
           pythonLoader, TypeName.findOrCreate("Ltensorflow/data/Dataset/from_tensor_slices"));
@@ -2067,6 +2090,9 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(DATASET_FROM_TENSOR_SLICES_TYPE, DATASET_FROM_TENSOR_SLICES_SIGNATURE),
           Map.entry(DATASET_RANGE_TYPE, DATASET_RANGE_SIGNATURE),
           Map.entry(TEXT_LINE_DATASET_TYPE, TEXT_LINE_DATASET_SIGNATURE),
+          Map.entry(TFRECORD_DATASET_TYPE, TFRECORD_DATASET_SIGNATURE),
+          Map.entry(DATASET_LIST_FILES_TYPE, DATASET_LIST_FILES_SIGNATURE),
+          Map.entry(LIST_FILES_DATASET_TYPE, DATASET_LIST_FILES_SIGNATURE),
           Map.entry(IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE, FLOW_FROM_DIRECTORY_SIGNATURE),
           Map.entry(DATASET_FROM_GENERATOR_TYPE, DATASET_FROM_GENERATOR_SIGNATURE),
           Map.entry(DATASET_FROM_TENSORS_TYPE, DATASET_FROM_TENSORS_SIGNATURE),

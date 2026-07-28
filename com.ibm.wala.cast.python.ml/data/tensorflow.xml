@@ -2762,6 +2762,8 @@
           <return value="it"/>
         </method>
       </class>
+      <!-- The distinct allocation class for `list_files` results (the wala/ML#618 treatment); deliberately body-less, a `<new>` target only, like `numpy/ndarray`. Its elements are 0-D filename-string tensors; see `ListFilesDatasetGenerator`. -->
+      <class name="ListFilesDataset" allocatable="true"></class>
       <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/TFRecordDataset. A fresh chainable dataset per call site (parallel to TextLineDataset); its elements are serialized records, typically consumed by a `map(parse_*)` that derives its own types. The chain-method fields are bound on the new instance so `tf.data.TFRecordDataset(...).map(...).padded_batch(...)` chains resolve. wala/ML#618. -->
       <class name="TFRecordDataset" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="6" paramNames="self filenames compression_type buffer_size num_parallel_reads name">
@@ -3324,8 +3326,9 @@
       </class>
       <class name="list_files" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/data/Dataset#list_files -->
+        <!-- Allocates the distinct `ListFilesDataset` class (not the generic `Dataset`) so producer delegation can recover the filename-string element type; the wala/ML#618 distinct-class treatment. See `ListFilesDatasetGenerator`. -->
         <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self file_pattern shuffle seed name">
-          <new def="x" class="Ltensorflow/data/Dataset"/>
+          <new def="x" class="Ltensorflow/data/ListFilesDataset"/>
           <!-- NOTE: This block of dataset field initializations is duplicated intentionally. The duplication is structural to how the Python loader's instance-attribute dispatch works in this XML modeling: non-dunder instance attributes (`shuffle`, `batch`, `repeat`, …) must be attached *per-instance* via `<putfield>`, not inherited from a class-level definition (the loader handles only dunder methods that way; see wala/ML#509's day-2 finding for the parallel set_shape case). Centralising into a shared helper doesn't dissolve the duplication: even with a single helper method, the helper's `<new>` allocations would alias across callers and chained `dataset.shuffle(...).batch(...)` would lose distinctness because each step's field-target allocations would be shared with prior steps. Verified empirically — stripping the block from `shuffle.do` alone produced 19 test failures under the current 2-CFA-for-TF setup (wala/ML#549 spike). The previous version of this comment cited "1-CFA context sensitivity limits"; the engine actually applies 2-CFA to TF callees per `PythonTensorAnalysisEngine.getCallGraphBuilder`, so depth-of-context wasn't the actual blocker. -->
           <new def="rd_shuffle" class="Ltensorflow/data/shuffle"/>
           <putfield class="LRoot" field="shuffle" fieldType="LRoot" ref="x" value="rd_shuffle"/>

@@ -52,6 +52,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FILTER_T
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FROM_GENERATOR_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FROM_TENSORS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_FROM_TENSOR_SLICES_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_LIST_FILES_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_MAP_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_PADDED_BATCH_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_PREFETCH_TYPE;
@@ -116,6 +117,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LEAKY_RELU;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LESS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LESS_EQUAL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LINSPACE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LIST_FILES_DATASET_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG1P;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LOG_SOFTMAX;
@@ -194,6 +196,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSORDOT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TENSOR_SCATTER_ND_UPDATE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TEXT_LINE_DATASET_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TFRECORD_DATASET_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TF_RESHAPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TILE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.TOP_K;
@@ -1728,6 +1731,11 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, DATASET_RANGE_TYPE)) return new DatasetRangeGenerator(source);
     else if (isType(calledFunction, TEXT_LINE_DATASET_TYPE))
       return new TextLineDatasetGenerator(source);
+    else if (isType(calledFunction, TFRECORD_DATASET_TYPE))
+      return new TFRecordDatasetGenerator(source);
+    else if (isType(calledFunction, DATASET_LIST_FILES_TYPE)
+        || isType(calledFunction, LIST_FILES_DATASET_TYPE))
+      return new ListFilesDatasetGenerator(source);
     else if (isType(calledFunction, DATASET_RANDOM_TYPE)) return new DatasetRandomGenerator(source);
     else if (isType(calledFunction, DATASET_FROM_GENERATOR_TYPE))
       return new DatasetFromGeneratorGenerator(source);

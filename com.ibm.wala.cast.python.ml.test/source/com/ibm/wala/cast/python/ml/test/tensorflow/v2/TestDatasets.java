@@ -1673,6 +1673,78 @@ public class TestDatasets extends AbstractTensorTest {
   }
 
   /**
+   * A {@code tf.data.TFRecordDataset}'s iterated elements are 0-D string tensors (one serialized
+   * record each), the {@link TextLineDatasetGenerator}-family intrinsic element type for the
+   * string-truth corpus rows (gpt-2 and deep_recommenders record parsers).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTFRecordDatasetIterationElementType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tfrecord_string_elements.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_STRING)));
+  }
+
+  /**
+   * The map-callback direction of {@link #testTFRecordDatasetIterationElementType()}: {@code
+   * dataset.map(parse_example)} types the callback's parameter as the dataset's 0-D string element
+   * (the gpt-2 {@code parse_example(serialized_example)} corpus form).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testTFRecordDatasetMapCallbackParameter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_tfrecord_string_elements.py",
+        "parse_example",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_STRING)));
+  }
+
+  /**
+   * A {@code tf.data.Dataset.list_files} dataset's iterated elements are 0-D filename-string
+   * tensors, keyed on the distinct {@code ListFilesDataset} allocation its summary now makes.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testListFilesIterationElementType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_list_files_map.py", "consume", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_STRING)));
+  }
+
+  /**
+   * The map-callback direction of {@link #testListFilesIterationElementType()} (the Pix2Pix {@code
+   * load(image_file)} corpus form).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testListFilesMapCallbackParameter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_list_files_map.py", "load", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_STRING)));
+  }
+
+  /**
    * Regression guard for wala/ML#655: a {@code tf.io.FixedLenFeature} value, parsed by {@code
    * tf.io.parse_single_example} and read back through a dict subscript, types as a dense tensor
    * whose shape comes from the feature's {@code dims} argument and whose dtype comes from its
