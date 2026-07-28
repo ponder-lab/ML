@@ -8,7 +8,6 @@ import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
-import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorOrigin;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
@@ -29,6 +28,7 @@ import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
@@ -96,35 +96,7 @@ public class NpArray extends TensorGenerator {
     // list), whose own variable carries no dataflow state: the element state lives in the
     // container's field keys. Add the append-contents key and the cataloged subscript keys of
     // each list/tuple allocation so element evidence feeds too.
-    for (InstanceKey ik : pa.getPointsToSet(argument)) {
-      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-      if (asin == null) continue;
-      TypeReference reference = asin.concreteType().getReference();
-      if (!reference.equals(list) && !reference.equals(tuple)) continue;
-      FieldReference contents =
-          FieldReference.findOrCreate(
-              Root,
-              findOrCreateAsciiAtom(
-                  PythonSSAPropagationCallGraphBuilder.LIST_APPEND_CONTENTS_FIELD),
-              Root);
-      IField contentsField = builder.getClassHierarchy().resolveField(contents);
-      if (contentsField != null)
-        operands.add(builder.getPointerKeyForInstanceField(asin, contentsField));
-      OrdinalSet<InstanceKey> catalogPTS =
-          pa.getPointsToSet(
-              ((AstPointerKeyFactory) builder.getPointerKeyFactory())
-                  .getPointerKeyForObjectCatalog(asin));
-      for (InstanceKey catalogIK : catalogPTS) {
-        if (!(catalogIK instanceof ConstantKey)) continue;
-        Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
-        if (fieldIndex == null) continue;
-        FieldReference subscript =
-            FieldReference.findOrCreate(Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root);
-        IField subscriptField = builder.getClassHierarchy().resolveField(subscript);
-        if (subscriptField != null)
-          operands.add(builder.getPointerKeyForInstanceField(asin, subscriptField));
-      }
-    }
+    addContainerElementOperands(builder, argument, operands);
     return new TypeFeed(TypeFeedKind.DTYPE_ONLY, operands);
   }
 
@@ -218,9 +190,21 @@ public class NpArray extends TensorGenerator {
   private Set<DType> numpyPromotedDTypes(
       PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> sourcePTS) {
     if (sourcePTS == null || sourcePTS.isEmpty()) return Set.of();
+    LOGGER.fine(() -> "numpyPromotedDTypes: walking " + describe(sourcePTS) + ".");
 
     EnumSet<DType> leaves = EnumSet.noneOf(DType.class);
-    if (!collectNumpyLeaves(builder, sourcePTS, leaves)) return Set.of(DType.UNKNOWN);
+    if (!collectNumpyLeaves(builder, sourcePTS, leaves, new HashSet<>()))
+      return Set.of(DType.UNKNOWN);
+
+    // A single leaf kind needs no promotion: this covers dtype preservation from an existing
+    // array/tensor element (wala/ML#796), whose non-literal dtype (e.g. int32) the ladder below
+    // does not rank.
+    if (leaves.size() == 1) return EnumSet.copyOf(leaves);
+
+    // Promotion is modeled only over the literal leaf kinds; a mix involving a preserved
+    // non-literal dtype floors to ⊤ rather than mis-ranking.
+    if (!EnumSet.of(DType.STRING, DType.COMPLEX128, DType.FLOAT64, DType.INT64, DType.BOOL)
+        .containsAll(leaves)) return Set.of(DType.UNKNOWN);
 
     // Promotion order: a string array subsumes everything; otherwise widen numerically.
     if (leaves.contains(DType.STRING)) return Set.of(DType.STRING);
@@ -239,17 +223,31 @@ public class NpArray extends TensorGenerator {
    * @param pts The points-to set to walk.
    * @param leaves Accumulator for the leaf numpy base dtypes ({@code BOOL}, {@code INT64}, {@code
    *     FLOAT64}, {@code COMPLEX128}, {@code STRING}).
-   * @return {@code true} if every element was a literal scalar or a nested list/tuple of literals;
-   *     {@code false} if an element is not a promotable literal (e.g. an existing array/tensor), in
-   *     which case the caller floors to ⊤.
+   * @param visited The instance keys already descended through, guarding against points-to cycles
+   *     among container allocations (wala/ML#796).
+   * @return {@code true} if every element was a literal scalar, a nested list/tuple of literals, or
+   *     an existing array/tensor whose producer resolves a definite dtype (preservation,
+   *     wala/ML#796); {@code false} otherwise, in which case the caller floors to ⊤.
    */
   private boolean collectNumpyLeaves(
-      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> pts, EnumSet<DType> leaves) {
+      PropagationCallGraphBuilder builder,
+      OrdinalSet<InstanceKey> pts,
+      EnumSet<DType> leaves,
+      Set<InstanceKey> visited) {
     PointerAnalysis<InstanceKey> pa = builder.getPointerAnalysis();
 
     for (InstanceKey ik : pts) {
+      if (!(ik instanceof ConstantKey) && !visited.add(ik)) continue;
       if (ik instanceof ConstantKey) {
         Object value = ((ConstantKey<?>) ik).getValue();
+        if (value == null) {
+          // A null constant next to real members is analysis substrate (loop-carried phi
+          // defaults, the generator iteration protocol), not element evidence; flooring on it
+          // would erase the sibling members' dtypes (wala/ML#796). A value that is only null
+          // collects nothing and degrades to ⊤ via the empty-leaves path.
+          LOGGER.fine(() -> "collectNumpyLeaves: skipping null constant.");
+          continue;
+        }
         if (value instanceof Float || value instanceof Double) leaves.add(DType.FLOAT64);
         else if (value instanceof Boolean) leaves.add(DType.BOOL);
         else if (value instanceof Integer || value instanceof Long) leaves.add(DType.INT64);
@@ -258,16 +256,35 @@ public class NpArray extends TensorGenerator {
           // A Python complex literal, which the Jython front-end represents as a `PyComplex{@code .
           // Matched by class name to avoid a compile-time dependency on the Jython runtime.
           leaves.add(DType.COMPLEX128);
-        else return false; // Unrecognized scalar.
+        else {
+          LOGGER.fine(() -> "collectNumpyLeaves: unrecognized scalar " + value + "; flooring.");
+          return false; // Unrecognized scalar.
+        }
       } else {
         AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-        if (asin == null) return false;
+        if (asin == null) {
+          LOGGER.fine(() -> "collectNumpyLeaves: no allocation site for " + ik + "; flooring.");
+          return false;
+        }
 
         TypeReference reference = asin.concreteType().getReference();
-        if (!reference.equals(list) && !reference.equals(tuple))
-          // An existing array/tensor (or other non-literal): numpy would preserve its dtype rather
-          // than promote, which this walk does not model. Floor to ⊤.
-          return false;
+        if (!reference.equals(list) && !reference.equals(tuple)) {
+          // An existing array/tensor: numpy preserves its dtype rather than promoting. Delegate
+          // to the producer for the preserved dtype; floor only when the producer cannot resolve
+          // one (wala/ML#796).
+          Set<DType> preserved = this.getDTypesFromTensor(builder, asin);
+          LOGGER.fine(
+              () ->
+                  "collectNumpyLeaves: producer of "
+                      + asin.concreteType().getReference().getName()
+                      + " preserved "
+                      + preserved
+                      + ".");
+          if (preserved == null || preserved.isEmpty() || preserved.contains(DType.UNKNOWN))
+            return false;
+          leaves.addAll(preserved);
+          continue;
+        }
 
         OrdinalSet<InstanceKey> catalogPTS =
             pa.getPointsToSet(
@@ -285,7 +302,7 @@ public class NpArray extends TensorGenerator {
 
           OrdinalSet<InstanceKey> fieldPTS =
               pa.getPointsToSet(builder.getPointerKeyForInstanceField(asin, f));
-          if (!collectNumpyLeaves(builder, fieldPTS, leaves)) return false;
+          if (!collectNumpyLeaves(builder, fieldPTS, leaves, visited)) return false;
         }
       }
     }
