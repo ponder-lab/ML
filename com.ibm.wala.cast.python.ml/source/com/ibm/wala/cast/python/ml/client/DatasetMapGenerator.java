@@ -278,7 +278,9 @@ public class DatasetMapGenerator extends DatasetGenerator {
     }
     if (!ssaShapes.isEmpty()) return ssaShapes;
 
-    return super.getShapesForIndex(builder, index);
+    // The per-index counterpart of the honest ⊤ floor in getDefaultShapes: inheriting the
+    // receiver's per-index shape asserts callback type preservation (wala/ML#803).
+    return null;
   }
 
   @Override
@@ -298,7 +300,8 @@ public class DatasetMapGenerator extends DatasetGenerator {
     }
     if (!ssaDTypes.isEmpty()) return ssaDTypes;
 
-    return super.getDTypesForIndex(builder, index);
+    // The per-index counterpart of the honest ⊤ floor in getDefaultDTypes (wala/ML#803).
+    return EnumSet.of(DType.UNKNOWN);
   }
 
   /**
@@ -316,26 +319,38 @@ public class DatasetMapGenerator extends DatasetGenerator {
   private Set<Pair<CGNode, Integer>> getMappedElementComponentValueNumbers(
       PropagationCallGraphBuilder builder, int index) {
     Set<Pair<CGNode, Integer>> ret = HashSetFactory.make();
+    Set<Pair<CGNode, Integer>> allocations = HashSetFactory.make();
     OrdinalSet<InstanceKey> elementPTS = getMappedElementPointsToSet(builder);
-    if (elementPTS == null || elementPTS.isEmpty()) return ret;
+    if (elementPTS != null)
+      for (InstanceKey ik : elementPTS) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        if (asin == null) continue;
+        CGNode node = asin.getNode();
+        IR ir = node.getIR();
+        if (ir == null) continue;
+        for (SSAInstruction inst : ir.getInstructions())
+          if (inst instanceof SSANewInstruction newInst
+              && newInst.getNewSite().equals(asin.getSite())) {
+            allocations.add(Pair.make(node, newInst.getDef()));
+            break;
+          }
+      }
+    // An element field with no points-to evidence: derive the tuple allocations from the
+    // callback's returns instead, so a tuple-returning callback's components still resolve
+    // through this walk rather than leaking the receiver's per-index type (wala/ML#803).
+    if (allocations.isEmpty())
+      for (Pair<CGNode, Integer> returnValue : getCallbackReturnValueNumbers(builder)) {
+        SSAInstruction def = returnValue.fst.getDU().getDef(returnValue.snd);
+        if (def instanceof SSANewInstruction)
+          allocations.add(Pair.make(returnValue.fst, returnValue.snd));
+      }
 
     String fieldName = String.valueOf(index);
-    for (InstanceKey ik : elementPTS) {
-      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
-      if (asin == null) continue;
-      CGNode node = asin.getNode();
+    for (Pair<CGNode, Integer> allocation : allocations) {
+      CGNode node = allocation.fst;
       IR ir = node.getIR();
       if (ir == null) continue;
-
-      // Find the allocation's definition.
-      int allocVn = -1;
-      for (SSAInstruction inst : ir.getInstructions())
-        if (inst instanceof SSANewInstruction newInst
-            && newInst.getNewSite().equals(asin.getSite())) {
-          allocVn = newInst.getDef();
-          break;
-        }
-      if (allocVn < 0) continue;
+      int allocVn = allocation.snd;
 
       // Find the stores into `<field index>` on that allocation.
       for (SSAInstruction inst : ir.getInstructions()) {
