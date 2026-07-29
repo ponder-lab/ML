@@ -7726,7 +7726,11 @@ public abstract class TensorGenerator {
       return new TextLineDatasetGenerator(node);
     } else if (type.equals(TensorFlowTypes.TFRECORD_DATASET_TYPE)) {
       return new TFRecordDatasetGenerator(node);
-    } else if (type.equals(TensorFlowTypes.LIST_FILES_DATASET_TYPE)) {
+    } else if (type.equals(TensorFlowTypes.DATASET_LIST_FILES_TYPE)
+        || type.equals(TensorFlowTypes.LIST_FILES_DATASET_TYPE)) {
+      // The allocating class for a `list_files` result is the function class
+      // `Ltensorflow/data/Dataset/list_files`, not the distinct allocation class the summary
+      // makes; the node-based dispatch keys on the former (wala/ML#802).
       return new ListFilesDatasetGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_RANDOM_TYPE)) {
       return new DatasetRandomGenerator(node);
