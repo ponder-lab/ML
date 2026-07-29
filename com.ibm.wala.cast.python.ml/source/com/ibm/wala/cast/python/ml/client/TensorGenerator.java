@@ -3175,13 +3175,75 @@ public abstract class TensorGenerator {
    */
   private static Set<Pair<CGNode, Integer>> findCalleeTupleFieldStores(
       PropagationCallGraphBuilder builder, CGNode node, PythonPropertyRead propRead) {
-    Set<Pair<CGNode, Integer>> ret = HashSetFactory.make();
     SymbolTable symbolTable = node.getIR().getSymbolTable();
     int memberVn = propRead.getMemberRef();
-    if (!symbolTable.isConstant(memberVn)) return ret;
+    if (!symbolTable.isConstant(memberVn)) return HashSetFactory.make();
     String fieldName = String.valueOf(symbolTable.getConstantValue(memberVn));
     SSAInstruction objDef = node.getDU().getDef(propRead.getObjectRef());
-    if (!(objDef instanceof SSAAbstractInvokeInstruction call)) return ret;
+    if (!(objDef instanceof SSAAbstractInvokeInstruction call)) {
+      // The object is a parameter: the tuple was built in a frame reachable only through the
+      // CALLERS' actuals, so hop the object out and peel the same field against each actual's
+      // producing invoke (`edge_index, batch = data` inside a callee whose caller passes
+      // `load(...)`'s result). wala/ML#796.
+      Set<Pair<CGNode, Integer>> ret = HashSetFactory.make();
+      int objVn = propRead.getObjectRef();
+      if (objDef == null)
+        for (Pair<CGNode, Integer> producerSite : producingInvokeSites(builder, node, objVn, 0)) {
+          SSAInstruction producerDef = producerSite.fst.getDU().getDef(producerSite.snd);
+          if (producerDef instanceof SSAAbstractInvokeInstruction producer)
+            ret.addAll(calleeTupleFieldStoresOf(builder, producerSite.fst, producer, fieldName));
+        }
+      return ret;
+    }
+    return calleeTupleFieldStoresOf(builder, node, call, fieldName);
+  }
+
+  /**
+   * Resolves a parameter's producing sites through the caller chain (bounded): the (frame, value
+   * number) pairs whose definitions are actual instructions rather than parameters. A trampoline
+   * caller's actual is itself a parameter, so the resolution recurses until a real definition or
+   * the depth bound. wala/ML#796.
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The frame holding the parameter.
+   * @param vn The parameter's value number.
+   * @param depth The current recursion depth; resolution stops at 8.
+   * @return The (frame, value number) pairs with non-parameter definitions.
+   */
+  private static Set<Pair<CGNode, Integer>> producingInvokeSites(
+      PropagationCallGraphBuilder builder, CGNode node, int vn, int depth) {
+    Set<Pair<CGNode, Integer>> ret = HashSetFactory.make();
+    if (depth > 8 || node.getIR() == null) return ret;
+    if (vn > node.getIR().getSymbolTable().getNumberOfParameters()) return ret;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, node)) {
+      int useIdx = vn - 1;
+      if (useIdx < 0 || useIdx >= callerInvoke.snd.getNumberOfUses()) continue;
+      int actualVn = callerInvoke.snd.getUse(useIdx);
+      SSAInstruction actualDef = callerInvoke.fst.getDU().getDef(actualVn);
+      if (actualDef == null)
+        ret.addAll(producingInvokeSites(builder, callerInvoke.fst, actualVn, depth + 1));
+      else ret.add(Pair.make(callerInvoke.fst, actualVn));
+    }
+    return ret;
+  }
+
+  /**
+   * Core of {@code findCalleeTupleFieldStores}: peel the given field from the return-tuples of the
+   * invoke's user-body callees (trampoline-expanded, bounded).
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The CG node whose IR contains {@code call}.
+   * @param call The invoke producing the tuple.
+   * @param fieldName The read field's name.
+   * @return The (callee node, stored value number) pairs.
+   */
+  private static Set<Pair<CGNode, Integer>> calleeTupleFieldStoresOf(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      SSAAbstractInvokeInstruction call,
+      String fieldName) {
+    Set<Pair<CGNode, Integer>> ret = HashSetFactory.make();
     // Method dispatch interposes synthetic trampolines between the invoke and the user body;
     // expand through them (bounded) to the AstMethod callees that hold the tuple.
     Deque<CGNode> work = new ArrayDeque<>();
@@ -3202,14 +3264,13 @@ public abstract class TensorGenerator {
     }
     LOGGER.fine(
         () ->
-            "findCalleeTupleFieldStores: field="
+            "Peeling field "
                 + fieldName
-                + " bodies="
+                + " from "
                 + bodies.size()
-                + " for "
-                + propRead
-                + " in "
-                + describe(node));
+                + " callee body(ies) in "
+                + describe(node)
+                + ".");
     for (CGNode callee : bodies) {
       IR calleeIr = callee.getIR();
       if (calleeIr == null) continue;
@@ -3235,6 +3296,92 @@ public abstract class TensorGenerator {
         }
       }
     }
+    return ret;
+  }
+
+  /**
+   * The generator-yield counterpart of {@code findCalleeTupleFieldStores} (wala/ML#796): a {@code
+   * for x, y in gen(...)} unpack reads a constant tuple field off a loop element that is a DYNAMIC
+   * member read over the generator call's result, so the invoke sits one property-read further out
+   * than the direct-call peel expects. A {@code yield a, b} lowers to a tuple allocation stored
+   * into the generator function object's {@code __content__} field; this peel expands the generator
+   * call's callees through trampolines, collects the {@code __content__}-stored tuples, and returns
+   * the (generator frame, value number) pairs stored under the read's field on those tuples.
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The CG node whose IR contains {@code propRead}.
+   * @param propRead The constant-member tuple-field read over the loop element.
+   * @return The (generator node, stored value number) pairs; empty if the structure does not match.
+   */
+  private static Set<Pair<CGNode, Integer>> findGeneratorYieldTupleStores(
+      PropagationCallGraphBuilder builder, CGNode node, PythonPropertyRead propRead) {
+    Set<Pair<CGNode, Integer>> ret = HashSetFactory.make();
+    SymbolTable symbolTable = node.getIR().getSymbolTable();
+    int memberVn = propRead.getMemberRef();
+    if (!symbolTable.isConstant(memberVn)) return ret;
+    String fieldName = String.valueOf(symbolTable.getConstantValue(memberVn));
+    SSAInstruction objDef = node.getDU().getDef(propRead.getObjectRef());
+    if (!(objDef instanceof PythonPropertyRead elementRead)) return ret;
+    // The element read's member is the loop-carried iteration key, deliberately not required to
+    // be constant.
+    SSAInstruction genDef = node.getDU().getDef(elementRead.getObjectRef());
+    if (!(genDef instanceof SSAAbstractInvokeInstruction call)) return ret;
+    Deque<CGNode> work = new ArrayDeque<>();
+    Set<CGNode> seen = HashSetFactory.make();
+    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, call.getCallSite()))
+      if (seen.add(callee)) work.add(callee);
+    Set<CGNode> bodies = HashSetFactory.make();
+    while (!work.isEmpty() && seen.size() < 32) {
+      CGNode callee = work.poll();
+      if (callee.getMethod() instanceof AstMethod) {
+        bodies.add(callee);
+        continue;
+      }
+      for (Iterator<CGNode> it = builder.getCallGraph().getSuccNodes(callee); it.hasNext(); ) {
+        CGNode next = it.next();
+        if (seen.add(next)) work.add(next);
+      }
+    }
+    for (CGNode gen : bodies) {
+      IR genIr = gen.getIR();
+      if (genIr == null) continue;
+      SymbolTable genSymbols = genIr.getSymbolTable();
+      for (SSAInstruction instruction : genIr.getInstructions()) {
+        int yieldedVn = -1;
+        if (instruction instanceof SSAPutInstruction put
+            && !put.isStatic()
+            && "__content__".equals(put.getDeclaredField().getName().toString()))
+          yieldedVn = put.getVal();
+        else if (instruction instanceof AstPropertyWrite write
+            && genSymbols.isConstant(write.getMemberRef())
+            && "__content__"
+                .equals(String.valueOf(genSymbols.getConstantValue(write.getMemberRef()))))
+          yieldedVn = write.getValue();
+        if (yieldedVn <= 0) continue;
+        for (SSAInstruction store : genIr.getInstructions()) {
+          if (store instanceof SSAPutInstruction put2
+              && !put2.isStatic()
+              && put2.getRef() == yieldedVn
+              && fieldName.equals(put2.getDeclaredField().getName().toString()))
+            ret.add(Pair.make(gen, put2.getVal()));
+          else if (store instanceof AstPropertyWrite write2 && write2.getObjectRef() == yieldedVn) {
+            int storeMemberVn = write2.getMemberRef();
+            if (genSymbols.isConstant(storeMemberVn)
+                && fieldName.equals(String.valueOf(genSymbols.getConstantValue(storeMemberVn))))
+              ret.add(Pair.make(gen, write2.getValue()));
+          }
+        }
+      }
+    }
+    LOGGER.fine(
+        () ->
+            "Resolved "
+                + ret.size()
+                + " generator-yield store(s) for field "
+                + fieldName
+                + " in "
+                + describe(node)
+                + ".");
     return ret;
   }
 
@@ -3365,6 +3512,17 @@ public abstract class TensorGenerator {
         }
         Set<List<Dimension<?>>> chain = shapesFromSSAChain(builder, store.fst, store.snd, visited);
         if (chain != null && !chain.isEmpty()) return chain;
+      }
+      // The generator-yield peel; see the dtype walker's arm. wala/ML#796.
+      for (Pair<CGNode, Integer> store : findGeneratorYieldTupleStores(builder, node, propRead)) {
+        try {
+          Set<List<Dimension<?>>> viaPts = getShapes(builder, store.fst, store.snd);
+          if (viaPts != null && !viaPts.isEmpty()) return viaPts;
+        } catch (IllegalArgumentException e) {
+          // fall through to the generator-frame chain walk
+        }
+        Set<List<Dimension<?>>> chain2 = shapesFromSSAChain(builder, store.fst, store.snd, visited);
+        if (chain2 != null && !chain2.isEmpty()) return chain2;
       }
       return null;
     }
@@ -3577,6 +3735,25 @@ public abstract class TensorGenerator {
         Set<DType> chain = dtypesFromSSAChain(builder, store.fst, store.snd, visited);
         if (chain != null && !chain.isEmpty()) return chain;
       }
+      // The generator-yield peel: `for x, y in gen(...)` reads the yielded tuples' fields.
+      for (Pair<CGNode, Integer> store : findGeneratorYieldTupleStores(builder, node, propRead)) {
+        try {
+          Set<DType> viaPts = getDTypes(builder, store.fst, store.snd);
+          if (viaPts != null
+              && !viaPts.isEmpty()
+              && !(viaPts.size() == 1 && viaPts.contains(UNKNOWN))) return viaPts;
+        } catch (IllegalArgumentException e) {
+          // fall through to the generator-frame chain walk
+        }
+        Set<DType> chain = dtypesFromSSAChain(builder, store.fst, store.snd, visited);
+        if (chain != null && !chain.isEmpty()) return chain;
+      }
+      // An element read whose member is not a constant (a loop-carried index) reads a homogeneous
+      // container position: the element's dtype is whatever array producer the CONTAINER's chain
+      // bottoms out at, so continue on the object. Constant-member reads already peeled above and
+      // must not fall through here, since a heterogeneous tuple's fields differ. wala/ML#796.
+      if (!node.getIR().getSymbolTable().isConstant(propRead.getMemberRef()))
+        return dtypesFromSSAChain(builder, node, propRead.getObjectRef(), visited);
       return null;
     }
 
@@ -3714,7 +3891,64 @@ public abstract class TensorGenerator {
       }
       return dtypesFromSSAChain(builder, node, inputVn, visited);
     }
+
+    // Generic callee-return continuation: for a user-body callee (an AstMethod, reached through
+    // synthetic trampolines), the invoke result's dtype is the callee's returned value's — chain
+    // into each return in the callee frame. Comprehension calls return the per-item value, so
+    // this is how a chain crosses `xs = [f(x) for x in ...]` producers. wala/ML#796.
+    for (Pair<CGNode, Integer> returned : calleeReturnedValues(builder, node, call)) {
+      try {
+        Set<DType> viaPts = getDTypes(builder, returned.fst, returned.snd);
+        if (viaPts != null
+            && !viaPts.isEmpty()
+            && !(viaPts.size() == 1 && viaPts.contains(UNKNOWN))) return viaPts;
+      } catch (IllegalArgumentException e) {
+        // fall through to the callee-frame chain walk
+      }
+      Set<DType> chain = dtypesFromSSAChain(builder, returned.fst, returned.snd, visited);
+      if (chain != null && !chain.isEmpty()) return chain;
+    }
     return null;
+  }
+
+  /**
+   * Expands an invoke's callees through synthetic trampolines (bounded) to user bodies and returns
+   * the (callee frame, returned value number) pairs of their return instructions. The generic
+   * interprocedural continuation for the SSA-chain walkers' invoke arms. wala/ML#796.
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The CG node whose IR contains {@code call}.
+   * @param call The invoke whose callee returns are wanted.
+   * @return The (callee node, returned value number) pairs; empty if no user body resolves.
+   */
+  private static Set<Pair<CGNode, Integer>> calleeReturnedValues(
+      PropagationCallGraphBuilder builder, CGNode node, SSAAbstractInvokeInstruction call) {
+    Set<Pair<CGNode, Integer>> ret = HashSetFactory.make();
+    Deque<CGNode> work = new ArrayDeque<>();
+    Set<CGNode> seen = HashSetFactory.make();
+    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, call.getCallSite()))
+      if (seen.add(callee)) work.add(callee);
+    Set<CGNode> bodies = HashSetFactory.make();
+    while (!work.isEmpty() && seen.size() < 32) {
+      CGNode callee = work.poll();
+      if (callee.getMethod() instanceof AstMethod) {
+        bodies.add(callee);
+        continue;
+      }
+      for (Iterator<CGNode> it = builder.getCallGraph().getSuccNodes(callee); it.hasNext(); ) {
+        CGNode next = it.next();
+        if (seen.add(next)) work.add(next);
+      }
+    }
+    for (CGNode callee : bodies) {
+      IR calleeIr = callee.getIR();
+      if (calleeIr == null) continue;
+      for (SSAInstruction instruction : calleeIr.getInstructions())
+        if (instruction instanceof SSAReturnInstruction returnInstruction
+            && returnInstruction.getResult() > 0)
+          ret.add(Pair.make(callee, returnInstruction.getResult()));
+    }
+    return ret;
   }
 
   /**

@@ -172,9 +172,22 @@ public class NpArray extends TensorGenerator {
       PointerKey pk = pa.getHeapModel().getPointerKeyForLocal(getNode(), sourceVn);
       OrdinalSet<InstanceKey> sourcePTS = pa.getPointsToSet(pk);
       Set<DType> inferred = numpyPromotedDTypes(builder, sourcePTS);
-      if (!inferred.isEmpty()) {
-        LOGGER.fine(() -> "NpArray.getDefaultDTypes: inferred " + inferred + " from sourceVn.");
+      if (!inferred.isEmpty() && !(inferred.size() == 1 && inferred.contains(DType.UNKNOWN))) {
+        LOGGER.fine(() -> "Inferred " + inferred + " from the content argument's leaves.");
         return inferred;
+      }
+
+      // The content's leaves resolve to nothing or only the ⊤ floor (e.g. a rebased element whose
+      // producers are only reachable syntactically, the reader-chain merge frames): fall back to
+      // the SSA-chain walk, whose lexical, phi, tuple-peel, and parameter arms recover the
+      // producing array's dtype interprocedurally. `np.array` preserves an array-typed content's
+      // dtype, so the recovered dtype is the result's. wala/ML#796.
+      Set<DType> viaChain = getDTypesOrSSAChain(builder, getNode(), sourceVn);
+      if (viaChain != null
+          && !viaChain.isEmpty()
+          && !(viaChain.size() == 1 && viaChain.contains(DType.UNKNOWN))) {
+        LOGGER.fine(() -> "Recovered " + viaChain + " via the content argument's SSA chain.");
+        return viaChain;
       }
     }
 
