@@ -1538,11 +1538,17 @@ public class TestConstructors extends AbstractTensorTest {
    * the sampling generator's tuple yield and for-loop unpack, and the merge-time {@code np.array}
    * rebase with {@code tf.concat} to reach the model-call parameters.
    *
-   * <p>TODO: Flip to a positive guard when the last wala/ML#796 hop lands: the merge-side {@code
-   * np.array(item)} receives yield-delivered elements whose points-to sets carry only analysis
-   * substrate (the generator-protocol nulls and a self-referential list union), so its content walk
-   * and the downstream {@code tf.concat} feed compose from unknown state; the sampling generator's
-   * yield/unpack element plumbing is the remaining path.
+   * <p>The wala/ML#796 chain work types every merge-side {@code np.array} and the batch-side {@code
+   * tf.concat} as {@code int64}. What remains is the {@code edge_index} concat, whose elements pass
+   * through the arithmetic comprehension {@code w + strips[i]}: that binary operation is swept as a
+   * dataflow source but declines {@code ElementWiseOperation} dispatch, because the
+   * operand-evidence gate requires points-to evidence (correctly, since it is what keeps integer
+   * arithmetic and list concatenation from being typed as tensors, wala/ML#653) and neither operand
+   * has any, their producers minting no allocation site at all.
+   *
+   * <p>TODO: Flip to a positive guard when <a
+   * href="https://github.com/wala/ML/issues/805">wala/ML#805</a> lands (binary-operator results
+   * mint no {@code InstanceKey}), which supplies exactly the operand evidence the gate looks for.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -1565,7 +1571,8 @@ public class TestConstructors extends AbstractTensorTest {
    * unmodeled ndarray {@code tolist} method from the generator-yield/unpack and merge-rebase hops
    * (<a href="https://github.com/wala/ML/issues/796">wala/ML#796</a>).
    *
-   * <p>TODO: Flip to a positive guard when the last wala/ML#796 hop lands; see {@link
+   * <p>TODO: Flip to a positive guard when <a
+   * href="https://github.com/wala/ML/issues/805">wala/ML#805</a> lands; see {@link
    * #testReaderChainMergedDtype()}.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
@@ -1648,12 +1655,7 @@ public class TestConstructors extends AbstractTensorTest {
         Map.of(2, Set.of(new TensorType(INT_64, null))));
   }
 
-  /**
-   * See {@link #testReaderChainProbeUnpacked()}.
-   *
-   * <p>TODO: Flip to a positive guard when the last wala/ML#796 hop lands; see {@link
-   * #testReaderChainMergedDtype()}.
-   */
+  /** See {@link #testReaderChainProbeUnpacked()}. */
   @Test
   public void testReaderChainProbeListed()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -1665,12 +1667,7 @@ public class TestConstructors extends AbstractTensorTest {
         Map.of(2, Set.of(new TensorType(INT_64, null))));
   }
 
-  /**
-   * See {@link #testReaderChainProbeUnpacked()}.
-   *
-   * <p>TODO: Flip to a positive guard when the last wala/ML#796 hop lands; see {@link
-   * #testReaderChainMergedDtype()}.
-   */
+  /** See {@link #testReaderChainProbeUnpacked()}. */
   @Test
   public void testReaderChainProbeDynamic()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
@@ -1682,12 +1679,7 @@ public class TestConstructors extends AbstractTensorTest {
         Map.of(2, Set.of(new TensorType(INT_64, null))));
   }
 
-  /**
-   * See {@link #testReaderChainProbeUnpacked()}.
-   *
-   * <p>TODO: Flip to a positive guard when the last wala/ML#796 hop lands; see {@link
-   * #testReaderChainMergedDtype()}.
-   */
+  /** See {@link #testReaderChainProbeUnpacked()}. */
   @Test
   public void testReaderChainProbeRearrayed()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
