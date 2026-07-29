@@ -1730,6 +1730,30 @@ public class TestDatasets extends AbstractTensorTest {
   }
 
   /**
+   * The no-leak guard for the mapped-element fallback (<a
+   * href="https://github.com/wala/ML/issues/803">wala/ML#803</a>): a callback transforming its
+   * element through unmodeled ops must yield an honest unknown element, never the receiver's
+   * element type (the runtime element here is float32 while the receiver's is string; the {@code {?
+   * of unknown}} pin is the honest ceiling until the read/parse chain is modeled, and any STRING
+   * member would be the leak).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testMapOpaqueCallbackDoesNotInheritReceiverElement()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_map_opaque_callback.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE)));
+  }
+
+  /**
    * The Pix2Pix corpus form of {@link #testListFilesMapCallbackParameter()}: an intervening {@code
    * shuffle} before a {@code map} with {@code num_parallel_calls}; the element type must survive
    * the chain hop into the callback (<a

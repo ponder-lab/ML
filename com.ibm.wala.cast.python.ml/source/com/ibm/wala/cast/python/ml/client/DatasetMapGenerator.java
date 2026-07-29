@@ -7,6 +7,7 @@ import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
 import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
+import com.ibm.wala.cast.loader.AstMethod;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.classLoader.IField;
@@ -20,6 +21,7 @@ import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSANewInstruction;
 import com.ibm.wala.ssa.SSAPutInstruction;
+import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.TypeReference;
@@ -28,6 +30,7 @@ import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -134,8 +137,24 @@ public class DatasetMapGenerator extends DatasetGenerator {
       Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, elementPTS);
       if (shapes != null && !shapes.isEmpty()) return shapes;
     }
-    // No mapped element resolved; fall back to the receiver's element shapes.
-    return super.getDefaultShapes(builder);
+    // A computed callback return (e.g. a binary-op over the element) has no allocation, so the
+    // element field's points-to set is empty; resolve the callback's return values at the SSA
+    // level instead, the scalar analog of the wala/ML#688 tuple-component walk (wala/ML#803).
+    Set<List<Dimension<?>>> ssaShapes = HashSetFactory.make();
+    for (Pair<CGNode, Integer> returnValue : getCallbackReturnValueNumbers(builder)) {
+      try {
+        Set<List<Dimension<?>>> shapes = this.getShapes(builder, returnValue.fst, returnValue.snd);
+        if (shapes != null) ssaShapes.addAll(shapes);
+      } catch (IllegalArgumentException e) {
+        // An unresolvable return contributes nothing; the floor below stays honest.
+      }
+    }
+    if (!ssaShapes.isEmpty()) return ssaShapes;
+    // Still nothing: the element is the callback's return, so the honest answer is an
+    // unknown-shape tensor. Inheriting the receiver's element shape asserts that the callback
+    // preserves its input's shape, which fabricates evidence once the receiver resolves (the
+    // Pix2Pix decode chain typed its float32 images as filename strings, wala/ML#803).
+    return null;
   }
 
   @Override
@@ -145,8 +164,53 @@ public class DatasetMapGenerator extends DatasetGenerator {
       Set<DType> dtypes = this.getDTypesOfValue(builder, elementPTS);
       if (dtypes != null && !dtypes.isEmpty()) return dtypes;
     }
-    // No mapped element resolved; fall back to the receiver's element dtypes.
-    return super.getDefaultDTypes(builder);
+    // The SSA fallback for computed callback returns; see getDefaultShapes (wala/ML#803).
+    Set<DType> ssaDTypes = EnumSet.noneOf(DType.class);
+    for (Pair<CGNode, Integer> returnValue : getCallbackReturnValueNumbers(builder)) {
+      try {
+        Set<DType> dtypes = this.getDTypes(builder, returnValue.fst, returnValue.snd);
+        if (dtypes != null) ssaDTypes.addAll(dtypes);
+      } catch (IllegalArgumentException e) {
+        // An unresolvable return contributes nothing; the floor below stays honest.
+      }
+    }
+    if (!ssaDTypes.isEmpty()) return ssaDTypes;
+    // The dtype counterpart of the honest ⊤ above (wala/ML#803).
+    return EnumSet.of(DType.UNKNOWN);
+  }
+
+  /**
+   * Finds the SSA return values of {@code map_func}, per callback node: for each mapped-dataset
+   * allocation, the allocating {@code map.do()} node's user-code callees are the callback, and
+   * their return instructions' results are the mapped element. Recovers computed returns (binary-op
+   * results and other allocation-less values) whose points-to sets are empty, so the element type
+   * composes from the callback's own dataflow instead of leaking the receiver's (wala/ML#803).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for the analysis.
+   * @return The (node, value number) pairs of the callback's returns; empty if none resolve.
+   */
+  private Set<Pair<CGNode, Integer>> getCallbackReturnValueNumbers(
+      PropagationCallGraphBuilder builder) {
+    Set<Pair<CGNode, Integer>> ret = HashSetFactory.make();
+    OrdinalSet<InstanceKey> selfPTS = selfInstances(builder);
+    if (selfPTS == null) return ret;
+    for (InstanceKey ik : selfPTS) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      if (asin == null) continue;
+      for (Iterator<CGNode> it = builder.getCallGraph().getSuccNodes(asin.getNode());
+          it.hasNext(); ) {
+        CGNode callee = it.next();
+        if (!(callee.getMethod() instanceof AstMethod)) continue; // Callbacks are user code.
+        IR ir = callee.getIR();
+        if (ir == null) continue;
+        for (SSAInstruction instruction : ir.getInstructions()) {
+          if (instruction instanceof SSAReturnInstruction returnInstruction
+              && returnInstruction.getResult() > 0)
+            ret.add(Pair.make(callee, returnInstruction.getResult()));
+        }
+      }
+    }
+    return ret;
   }
 
   /**
