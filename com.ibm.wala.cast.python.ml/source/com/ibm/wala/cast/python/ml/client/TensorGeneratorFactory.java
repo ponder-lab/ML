@@ -4,6 +4,7 @@ import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.ml.types.NumpyTypes.ASTYPE;
 import static com.ibm.wala.cast.python.ml.types.NumpyTypes.ASTYPE_METHOD_NAME;
 import static com.ibm.wala.cast.python.ml.types.NumpyTypes.RESHAPE_METHOD;
+import static com.ibm.wala.cast.python.ml.types.NumpyTypes.TOLIST_METHOD_NAME;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ACOSH;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ADD_WEIGHT;
@@ -302,6 +303,8 @@ public class TensorGeneratorFactory {
       PROPERTY_NAME_GENERATORS =
           Map.ofEntries(
               entry(ASTYPE_METHOD_NAME, AstypeOperation::new),
+              // `x.tolist()` on slice results and other unsummarized property reads (wala/ML#796).
+              entry(TOLIST_METHOD_NAME, TolistOperation::new),
               // wala/ML#449: `tf.random.truncated_normal(...)` doesn't reach the per-class
               // `isType` checks because `calledFunction` resolves to generic `LCodeBody`
               // rather than the specific `TRUNCATED_NORMAL`/`TRUNCATED_NORMAL_OP` class.
