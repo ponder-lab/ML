@@ -1732,9 +1732,7 @@ public class TestDatasets extends AbstractTensorTest {
   /**
    * The Pix2Pix corpus form of {@link #testListFilesMapCallbackParameter()}: an intervening {@code
    * shuffle} before a {@code map} with {@code num_parallel_calls}; the element type must survive
-   * the chain hop into the callback (wala/ML#801 residual probe).
-   *
-   * <p>TODO: Flip to a positive guard when the shuffle-hop element delegation lands (<a
+   * the chain hop into the callback (<a
    * href="https://github.com/wala/ML/issues/802">wala/ML#802</a>).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
@@ -1742,7 +1740,7 @@ public class TestDatasets extends AbstractTensorTest {
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testListFilesShuffleMapCallbackParameter()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
