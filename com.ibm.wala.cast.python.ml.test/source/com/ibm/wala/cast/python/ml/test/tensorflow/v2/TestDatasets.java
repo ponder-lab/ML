@@ -1730,6 +1730,30 @@ public class TestDatasets extends AbstractTensorTest {
   }
 
   /**
+   * The Pix2Pix corpus form of {@link #testListFilesMapCallbackParameter()}: an intervening {@code
+   * shuffle} before a {@code map} with {@code num_parallel_calls}; the element type must survive
+   * the chain hop into the callback (wala/ML#801 residual probe).
+   *
+   * <p>TODO: Flip to a positive guard when the shuffle-hop element delegation lands (<a
+   * href="https://github.com/wala/ML/issues/802">wala/ML#802</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testListFilesShuffleMapCallbackParameter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_list_files_shuffle_map.py",
+        "load_image_train",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_STRING)));
+  }
+
+  /**
    * The map-callback direction of {@link #testListFilesIterationElementType()} (the Pix2Pix {@code
    * load(image_file)} corpus form).
    *
