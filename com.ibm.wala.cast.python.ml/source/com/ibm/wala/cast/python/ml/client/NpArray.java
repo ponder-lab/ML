@@ -197,8 +197,8 @@ public class NpArray extends TensorGenerator {
         viaChain =
             (Set<DType>)
                 (engine.isEvaluating()
-                    ? engine.read(key, transfer, true)
-                    : engine.demand(key, transfer, true));
+                    ? engine.read(key, transfer, false)
+                    : engine.demand(key, transfer, false));
       }
       if (viaChain != null
           && !viaChain.isEmpty()

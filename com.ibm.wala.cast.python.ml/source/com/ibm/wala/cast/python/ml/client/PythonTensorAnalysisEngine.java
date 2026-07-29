@@ -1912,11 +1912,18 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         // vendored Conv1d and gather probes are wala/ML#682's witnesses for wholesale
         // suppression). DTYPE_ONLY declares no operand→result shape relation, so proven-dtype
         // seeds under it stay untouched.
-        if (types == null || types.isEmpty()) continue;
+        if (types == null) continue;
         boolean anyProvenDType = types.stream().anyMatch(t -> t.getDType() != DType.UNKNOWN);
         boolean anyTopShape = types.stream().anyMatch(t -> t.getDims() == null);
         TensorTypeAnalysis.FeedMode mode;
-        if (!anyProvenDType)
+        if (types.isEmpty())
+          // A ⊥ seed (nothing provable at evaluation time) still registers its declared feed:
+          // operand evidence arriving during the fixpoint replaces the empty state, or the
+          // variable stays ⊥ exactly as before. Without this, a schedule artifact at seed time
+          // permanently excludes the variable from the feed channel (the merge-frame binops of
+          // wala/ML#796, whose operand states only exist after the reader generators evaluate).
+          mode = TensorTypeAnalysis.FeedMode.REPLACE;
+        else if (!anyProvenDType)
           mode =
               types.size() == 1 && anyTopShape
                   ? TensorTypeAnalysis.FeedMode.REPLACE
@@ -2320,7 +2327,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       if (generator == null) return null;
 
       Set<TensorType> tensorTypes = generator.getTensorTypes(builder);
-      LOGGER.fine(() -> "Found tensor types: " + tensorTypes + ".");
+      LOGGER.fine(() -> "Found tensor types: " + tensorTypes + " for " + describe(source) + ".");
 
       if (tensorTypes != null && tensorTypes.stream().anyMatch(t -> t.getDims() == null))
         LOGGER.fine(

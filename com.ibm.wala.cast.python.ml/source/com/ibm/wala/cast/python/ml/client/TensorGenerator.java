@@ -3190,8 +3190,22 @@ public abstract class TensorGenerator {
       if (objDef == null)
         for (Pair<CGNode, Integer> producerSite : producingInvokeSites(builder, node, objVn, 0)) {
           SSAInstruction producerDef = producerSite.fst.getDU().getDef(producerSite.snd);
-          if (producerDef instanceof SSAAbstractInvokeInstruction producer)
-            ret.addAll(calleeTupleFieldStoresOf(builder, producerSite.fst, producer, fieldName));
+          if (producerDef instanceof SSAAbstractInvokeInstruction producer) {
+            // The enumerate peel: field #1 of an enumerate element is the iterated container's
+            // element, so the continuation is the enumerate ARGUMENT in the producing frame.
+            // Field #0 is the integer index (the wala/ML#409 drop) and gets no continuation.
+            SSAInstruction producerFn =
+                producer.getNumberOfUses() < 2
+                    ? null
+                    : producerSite.fst.getDU().getDef(producer.getUse(0));
+            if ("1".equals(fieldName)
+                && producerFn instanceof AstLexicalRead lexRead
+                && lexRead.getAccessCount() > 0
+                && "enumerate".equals(lexRead.getAccess(0).getName().fst))
+              ret.add(Pair.make(producerSite.fst, producer.getUse(1)));
+            else
+              ret.addAll(calleeTupleFieldStoresOf(builder, producerSite.fst, producer, fieldName));
+          }
         }
       return ret;
     }
@@ -3297,6 +3311,34 @@ public abstract class TensorGenerator {
       }
     }
     return ret;
+  }
+
+  /**
+   * The {@code enumerate} peel (wala/ML#796): {@code for i, x in enumerate(xs)} reads field {@code
+   * #1} of the enumerate tuples, whose values are exactly the elements of {@code xs} — so the walk
+   * continues on the {@code enumerate} ARGUMENT. Field {@code #0} is the integer index (the
+   * wala/ML#409 drop) and must not continue. Matches a constant-member read over a dynamic element
+   * read over an invoke whose function is the lexical builtin {@code enumerate}.
+   *
+   * @param node The CG node whose IR contains {@code propRead}.
+   * @param propRead The constant-member tuple-field read over the loop element.
+   * @return The {@code xs} argument's value number, or {@code -1} when the structure does not match
+   *     or the field is not {@code 1}.
+   */
+  private static int enumerateArgumentVn(CGNode node, PythonPropertyRead propRead) {
+    SymbolTable symbolTable = node.getIR().getSymbolTable();
+    int memberVn = propRead.getMemberRef();
+    if (!symbolTable.isConstant(memberVn)) return -1;
+    if (!"1".equals(String.valueOf(symbolTable.getConstantValue(memberVn)))) return -1;
+    SSAInstruction objDef = node.getDU().getDef(propRead.getObjectRef());
+    if (!(objDef instanceof PythonPropertyRead elementRead)) return -1;
+    SSAInstruction iterDef = node.getDU().getDef(elementRead.getObjectRef());
+    if (!(iterDef instanceof SSAAbstractInvokeInstruction call) || call.getNumberOfUses() < 2)
+      return -1;
+    SSAInstruction funcDef = node.getDU().getDef(call.getUse(0));
+    if (!(funcDef instanceof AstLexicalRead read) || read.getAccessCount() == 0) return -1;
+    if (!"enumerate".equals(read.getAccess(0).getName().fst)) return -1;
+    return call.getUse(1);
   }
 
   /**
@@ -3746,6 +3788,20 @@ public abstract class TensorGenerator {
           // fall through to the generator-frame chain walk
         }
         Set<DType> chain = dtypesFromSSAChain(builder, store.fst, store.snd, visited);
+        if (chain != null && !chain.isEmpty()) return chain;
+      }
+      // The enumerate peel: field #1 of an enumerate element is the iterated container's element.
+      int enumArgVn = enumerateArgumentVn(node, propRead);
+      if (enumArgVn > 0) {
+        try {
+          Set<DType> viaPts = getDTypes(builder, node, enumArgVn);
+          if (viaPts != null
+              && !viaPts.isEmpty()
+              && !(viaPts.size() == 1 && viaPts.contains(UNKNOWN))) return viaPts;
+        } catch (IllegalArgumentException e) {
+          // fall through to the chain walk on the argument
+        }
+        Set<DType> chain = dtypesFromSSAChain(builder, node, enumArgVn, visited);
         if (chain != null && !chain.isEmpty()) return chain;
       }
       // An element read whose member is not a constant (a loop-carried index) reads a homogeneous
