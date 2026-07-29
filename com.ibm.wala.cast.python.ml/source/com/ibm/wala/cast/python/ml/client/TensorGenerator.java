@@ -7724,6 +7724,10 @@ public abstract class TensorGenerator {
       return new DatasetRangeGenerator(node);
     } else if (type.equals(TensorFlowTypes.TEXT_LINE_DATASET_TYPE)) {
       return new TextLineDatasetGenerator(node);
+    } else if (type.equals(TensorFlowTypes.TFRECORD_DATASET_TYPE)) {
+      return new TFRecordDatasetGenerator(node);
+    } else if (type.equals(TensorFlowTypes.LIST_FILES_DATASET_TYPE)) {
+      return new ListFilesDatasetGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_RANDOM_TYPE)) {
       return new DatasetRandomGenerator(node);
     } else if (type.equals(TensorFlowTypes.DATASET_BATCH_TYPE)) {
