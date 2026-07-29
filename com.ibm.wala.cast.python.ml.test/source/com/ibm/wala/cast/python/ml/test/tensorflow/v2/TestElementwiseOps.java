@@ -1698,4 +1698,32 @@ public class TestElementwiseOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(UINT_8, 2, 2, 3))));
   }
+
+  /**
+   * Test a {@code W * x + b} chain whose {@code W} and {@code b} are scalar {@code tf.Variable}s.
+   * The runtime truth is {@code float32 (3,)}, but the {@code tf.Variable} allocation never reaches
+   * the {@code W} operand's points-to walk, and the one-sided broadcast rule discards the resolved
+   * {@code [3]} because the opaque co-operand is not structurally a scalar expression. Mirrors the
+   * TensorFlow-Examples linear-regression rows whose concrete member degraded to ⊤ at 0.52.73, when
+   * the wala/ML#796 null-skip removed the fabricated scalar member the broadcast had been riding.
+   *
+   * <p>TODO: Flip to a positive guard when <a
+   * href="https://github.com/wala/ML/issues/804">wala/ML#804</a> lands (scalar {@code tf.Variable}
+   * operands recognized by the one-sided elementwise broadcast).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testScalarVariableBroadcast()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_scalar_variable_broadcast.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
 }
