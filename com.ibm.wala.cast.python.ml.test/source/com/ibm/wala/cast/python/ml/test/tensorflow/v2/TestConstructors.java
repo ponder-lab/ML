@@ -1538,10 +1538,11 @@ public class TestConstructors extends AbstractTensorTest {
    * the sampling generator's tuple yield and for-loop unpack, and the merge-time {@code np.array}
    * rebase with {@code tf.concat} to reach the model-call parameters.
    *
-   * <p>TODO: Flip to a positive guard when the remaining chain hops land (<a
-   * href="https://github.com/wala/ML/issues/796">wala/ML#796</a>): the slice receiver's lexical
-   * read is invisible to the SSA-chain walkers, and the reader tuple's cross-frame unpack defeats
-   * the same-frame tuple peel, so the merge-side feeds compose from unknown states.
+   * <p>TODO: Flip to a positive guard when the last wala/ML#796 hop lands: the merge-side {@code
+   * np.array(item)} receives yield-delivered elements whose points-to sets carry only analysis
+   * substrate (the generator-protocol nulls and a self-referential list union), so its content walk
+   * and the downstream {@code tf.concat} feed compose from unknown state; the sampling generator's
+   * yield/unpack element plumbing is the remaining path.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -1564,8 +1565,8 @@ public class TestConstructors extends AbstractTensorTest {
    * unmodeled ndarray {@code tolist} method from the generator-yield/unpack and merge-rebase hops
    * (<a href="https://github.com/wala/ML/issues/796">wala/ML#796</a>).
    *
-   * <p>TODO: Flip to a positive guard when the remaining chain hops land (<a
-   * href="https://github.com/wala/ML/issues/796">wala/ML#796</a>).
+   * <p>TODO: Flip to a positive guard when the last wala/ML#796 hop lands; see {@link
+   * #testReaderChainMergedDtype()}.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -1624,7 +1625,7 @@ public class TestConstructors extends AbstractTensorTest {
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testReaderChainProbeLexicalSlice()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -1650,10 +1651,10 @@ public class TestConstructors extends AbstractTensorTest {
   /**
    * See {@link #testReaderChainProbeUnpacked()}.
    *
-   * <p>TODO: Flip to a positive guard when the remaining chain hops land (<a
-   * href="https://github.com/wala/ML/issues/796">wala/ML#796</a>).
+   * <p>TODO: Flip to a positive guard when the last wala/ML#796 hop lands; see {@link
+   * #testReaderChainMergedDtype()}.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testReaderChainProbeListed()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -1667,10 +1668,10 @@ public class TestConstructors extends AbstractTensorTest {
   /**
    * See {@link #testReaderChainProbeUnpacked()}.
    *
-   * <p>TODO: Flip to a positive guard when the remaining chain hops land (<a
-   * href="https://github.com/wala/ML/issues/796">wala/ML#796</a>).
+   * <p>TODO: Flip to a positive guard when the last wala/ML#796 hop lands; see {@link
+   * #testReaderChainMergedDtype()}.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testReaderChainProbeDynamic()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -1684,10 +1685,10 @@ public class TestConstructors extends AbstractTensorTest {
   /**
    * See {@link #testReaderChainProbeUnpacked()}.
    *
-   * <p>TODO: Flip to a positive guard when the remaining chain hops land (<a
-   * href="https://github.com/wala/ML/issues/796">wala/ML#796</a>).
+   * <p>TODO: Flip to a positive guard when the last wala/ML#796 hop lands; see {@link
+   * #testReaderChainMergedDtype()}.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testReaderChainProbeRearrayed()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(

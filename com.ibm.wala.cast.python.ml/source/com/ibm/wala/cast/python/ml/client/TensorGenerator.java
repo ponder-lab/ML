@@ -3725,6 +3725,26 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Returns whether every member of the given points-to set is a {@code null} {@link ConstantKey},
+   * i.e., the value is statically an explicit Python {@code None}. Consumers of optional arguments
+   * use this to treat an explicit {@code None} the same as an omitted argument, since the shape and
+   * dtype walks deliberately produce nothing for {@code null} constants (wala/ML#796) and composing
+   * with the resulting empty set would annihilate the composition.
+   *
+   * @param pointsToSet The {@link OrdinalSet} of {@link InstanceKey}s to examine.
+   * @return {@code true} iff {@code pointsToSet} is non-empty and every member is a {@code null}
+   *     constant.
+   */
+  protected static boolean allNullConstants(OrdinalSet<InstanceKey> pointsToSet) {
+    if (pointsToSet == null || pointsToSet.isEmpty()) return false;
+
+    for (InstanceKey ik : pointsToSet)
+      if (!(ik instanceof ConstantKey) || ((ConstantKey<?>) ik).getValue() != null) return false;
+
+    return true;
+  }
+
+  /**
    * Record-carrying core of {@link #getShapesOfValue(PropagationCallGraphBuilder, OrdinalSet,
    * boolean)} (wala/ML#718): in exact mode, a member whose shapes do not resolve marks the unknown
    * remainder and the resolvable members keep collecting, so a partially resolvable points-to union
@@ -3758,8 +3778,16 @@ public abstract class TensorGenerator {
     boolean replay = activeEngine != null && activeEngine.isReplaying();
 
     for (InstanceKey valueIK : valuePointsToSet)
-      if (valueIK instanceof ConstantKey) ret.add(emptyList()); // Scalar value.
-      else if (valueIK instanceof AllocationSiteInNode) {
+      if (valueIK instanceof ConstantKey) {
+        // A null constant is analysis substrate (loop-carried phi defaults, the generator
+        // iteration protocol) or an explicit `None` argument, never a scalar value; typing it as
+        // shape [] fabricates a scalar member the downstream pass-throughs then propagate (the
+        // shape twin of the dtype walk's null skip, wala/ML#796). A consumer of an *optional*
+        // argument must treat an all-null points-to set as an absent argument rather than
+        // composing with the resulting empty set (see `Gamma.getShapes` and
+        // `allNullConstants(OrdinalSet)`).
+        if (((ConstantKey<?>) valueIK).getValue() != null) ret.add(emptyList()); // Scalar value.
+      } else if (valueIK instanceof AllocationSiteInNode) {
         AllocationSiteInNode asin = getAllocationSiteInNode(valueIK);
         TypeReference reference = asin.concreteType().getReference();
 
