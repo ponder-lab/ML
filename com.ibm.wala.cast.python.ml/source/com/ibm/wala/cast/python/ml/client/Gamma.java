@@ -106,8 +106,12 @@ public class Gamma extends TensorTypeAllocator {
         this.getArgumentPointsToSet(
             builder, this.getBetaParameterPosition(), this.getBetaParameterName());
 
-    // If there is no beta parameter.
-    if (betaPointsToSet == null || betaPointsToSet.isEmpty())
+    // If there is no beta parameter. An explicit `beta=None` reaches here as a points-to set of
+    // null constants; that is the same absent case (`tf.random.gamma` then defaults beta to 1,
+    // whose scalar shape broadcasts away), not a value whose shape participates in the
+    // composition. Route it to the no-beta arm rather than letting the null-skipping shape walk
+    // return an empty beta-shape set that annihilates the whole product. wala/ML#796.
+    if (betaPointsToSet == null || betaPointsToSet.isEmpty() || allNullConstants(betaPointsToSet))
       // return shape `tf.concat([shape, tf.shape(alpha)], axis=0)`.
       shapes.forEach(
           shape -> {
@@ -121,6 +125,9 @@ public class Gamma extends TensorTypeAllocator {
     else { // There is a beta parameter.
       // return shape `tf.concat([shape, tf.shape(alpha + beta)], axis=0)`.
       Set<List<Dimension<?>>> betaShapes = this.getShapesOfValue(builder, betaPointsToSet);
+
+      // beta's shape is part of the output rank; ⊤ if unresolvable, matching alpha. wala/ML#611.
+      if (betaShapes == null || betaShapes.isEmpty()) return null;
 
       shapes.forEach(
           shape -> {
