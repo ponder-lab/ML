@@ -25,6 +25,8 @@ with tempfile.TemporaryDirectory() as tmp:
 
     dataset = tf.data.TFRecordDataset(record_path)
     mapped = dataset.map(parse_example)
+    for length in mapped:
+        assert length.dtype == tf.int32
     for element in dataset:
         assert element.dtype == tf.string
         assert element.shape.rank == 0

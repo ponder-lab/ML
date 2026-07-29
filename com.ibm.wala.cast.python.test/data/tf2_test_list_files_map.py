@@ -23,6 +23,8 @@ def consume(a):
 
 dataset = tf.data.Dataset.list_files(os.path.join(folder, "*.txt"))
 mapped = dataset.map(load)
+for length in mapped:
+    assert length.dtype == tf.int32
 for element in dataset:
     assert element.dtype == tf.string
     assert element.shape.rank == 0
