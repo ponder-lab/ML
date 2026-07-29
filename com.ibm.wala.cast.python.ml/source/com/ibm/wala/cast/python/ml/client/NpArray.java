@@ -148,6 +148,7 @@ public class NpArray extends TensorGenerator {
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
     // The explicit `dtype` argument is a token (`np.int32`, the builtin `int`), not a value whose
     // dtype the value walk could compute (that walk deliberately ignores `DType` allocations), so
@@ -181,8 +182,24 @@ public class NpArray extends TensorGenerator {
       // producers are only reachable syntactically, the reader-chain merge frames): fall back to
       // the SSA-chain walk, whose lexical, phi, tuple-peel, and parameter arms recover the
       // producing array's dtype interprocedurally. `np.array` preserves an array-typed content's
-      // dtype, so the recovered dtype is the result's. wala/ML#796.
-      Set<DType> viaChain = getDTypesOrSSAChain(builder, getNode(), sourceVn);
+      // dtype, so the recovered dtype is the result's. The walk is routed through the engine so
+      // the transfer is schedule-visible: a seed-time evaluation that runs before the upstream
+      // generators exist re-evaluates when the values it read grow, instead of memoizing the
+      // unknown forever (the wala/ML#753 class; `readElementShapes` is the precedent).
+      // wala/ML#796.
+      WorklistTypeResolver engine = WorklistTypeResolver.active(builder);
+      Set<DType> viaChain;
+      if (engine == null) viaChain = getDTypesOrSSAChain(builder, getNode(), sourceVn);
+      else {
+        Object key = Pair.make("nparray-content-chain", pk);
+        java.util.function.Supplier<Object> transfer =
+            () -> getDTypesOrSSAChain(builder, getNode(), sourceVn);
+        viaChain =
+            (Set<DType>)
+                (engine.isEvaluating()
+                    ? engine.read(key, transfer, true)
+                    : engine.demand(key, transfer, true));
+      }
       if (viaChain != null
           && !viaChain.isEmpty()
           && !(viaChain.size() == 1 && viaChain.contains(DType.UNKNOWN))) {
