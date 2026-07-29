@@ -200,12 +200,21 @@ public class NpArray extends TensorGenerator {
                     ? engine.read(key, transfer, false)
                     : engine.demand(key, transfer, false));
       }
-      if (viaChain != null
-          && !viaChain.isEmpty()
-          && !(viaChain.size() == 1 && viaChain.contains(DType.UNKNOWN))) {
+      // Only a SINGLE resolved dtype is content evidence. `np.array` promotes heterogeneous
+      // content to one dtype rather than producing a union, so a multi-dtype chain result cannot
+      // describe the content's element type: in the corpus it means the walk reached a container
+      // of mixed constants (an object catalog or a keyword map, one dtype per Java constant kind)
+      // and widened edge-weight parameters to a `STRING`-bearing union (wala/ML#806).
+      if (viaChain != null && viaChain.size() == 1 && !viaChain.contains(DType.UNKNOWN)) {
         LOGGER.fine(() -> "Recovered " + viaChain + " via the content argument's SSA chain.");
         return viaChain;
       }
+      if (viaChain != null && viaChain.size() > 1)
+        LOGGER.fine(
+            () ->
+                "Discarding the content argument's multi-dtype chain result as non-evidence: "
+                    + viaChain
+                    + ".");
     }
 
     return Set.of(DType.UNKNOWN);
