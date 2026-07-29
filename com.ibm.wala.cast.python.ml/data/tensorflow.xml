@@ -3743,6 +3743,8 @@
           <!-- Populate ndarray method fields so `x_train.astype(...)` / `x_train.reshape(...)` calls resolve via class-type dispatch (mirrors the Dataset-method pattern). -->
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -3753,6 +3755,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/mnist/y_train"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -3763,6 +3767,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/mnist/x_test"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -3773,6 +3779,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/mnist/y_test"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -3809,6 +3817,8 @@
           <!-- Populate ndarray method fields so `x_train.astype(...)` / `x_train.reshape(...)` calls resolve via class-type dispatch (mirrors the mnist/Dataset-method pattern). -->
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -3819,6 +3829,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/cifar10/y_train"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -3829,6 +3841,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/cifar10/x_test"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -3839,6 +3853,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/cifar10/y_test"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -3874,6 +3890,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/imdb/x_train"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -3884,6 +3902,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/imdb/y_train"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -3894,6 +3914,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/imdb/x_test"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -3904,6 +3926,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/imdb/y_test"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -3939,6 +3963,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/fashion_mnist/x_train"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -3949,6 +3975,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/fashion_mnist/y_train"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -3959,6 +3987,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/fashion_mnist/x_test"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -3969,6 +3999,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/fashion_mnist/y_test"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -4004,6 +4036,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/cifar100/x_train"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -4014,6 +4048,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/cifar100/y_train"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -4024,6 +4060,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/cifar100/x_test"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -4034,6 +4072,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/cifar100/y_test"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -4069,6 +4109,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/reuters/x_train"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -4079,6 +4121,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/reuters/y_train"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -4089,6 +4133,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/reuters/x_test"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -4099,6 +4145,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/reuters/y_test"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -4134,6 +4182,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/boston_housing/x_train"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -4144,6 +4194,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/boston_housing/y_train"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -4154,6 +4206,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/boston_housing/x_test"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
@@ -4164,6 +4218,8 @@
           <new def="ret" class="Ltensorflow/keras/datasets/boston_housing/y_test"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>

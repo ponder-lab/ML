@@ -159,6 +159,27 @@ public class NumpyTypes extends PythonTypes {
 
   private static final String ASTYPE_SIGNATURE = "numpy.ndarray.astype()";
 
+  /** Method name used in {@code numpy.xml} for {@link #TOLIST}. */
+  public static final String TOLIST_METHOD_NAME = "tolist";
+
+  /** https://numpy.org/doc/stable/reference/generated/numpy.ndarray.tolist.html */
+  public static final MethodReference TOLIST =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/ndarray/tolist")),
+          AstMethodReference.fnSelector);
+
+  private static final String TOLIST_SIGNATURE = "numpy.ndarray.tolist()";
+
+  /**
+   * The allocation-only marker class for {@link #TOLIST} results: a distinct class rather than
+   * {@code Lnumpy/ndarray} so producer delegation dispatches {@code TolistOperation} without
+   * conflating the value with a real ndarray. wala/ML#796.
+   */
+  public static final TypeReference TOLIST_RESULT =
+      TypeReference.findOrCreate(
+          PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/ndarray/tolist_result"));
+
   /** A mapping from a {@link TypeReference} to its associated NumPy signature. */
   public static final Map<TypeReference, String> TYPE_REFERENCE_TO_SIGNATURE =
       Map.ofEntries(
@@ -172,7 +193,8 @@ public class NumpyTypes extends PythonTypes {
           Map.entry(UNIQUE_INDICES.getDeclaringClass(), UNIQUE_INDICES_SIGNATURE),
           Map.entry(RESHAPE.getDeclaringClass(), RESHAPE_SIGNATURE),
           Map.entry(RESHAPE_METHOD.getDeclaringClass(), RESHAPE_METHOD_SIGNATURE),
-          Map.entry(ASTYPE.getDeclaringClass(), ASTYPE_SIGNATURE));
+          Map.entry(ASTYPE.getDeclaringClass(), ASTYPE_SIGNATURE),
+          Map.entry(TOLIST.getDeclaringClass(), TOLIST_SIGNATURE));
 
   public static final FieldReference FLOAT_32 =
       FieldReference.findOrCreate(

@@ -3272,7 +3272,40 @@ public abstract class TensorGenerator {
           ret.add(Pair.make(lpk.getNode(), lpk.getValueNumber()));
       }
     }
-    LOGGER.fine(() -> "lexicalDefiners: vn=" + vn + " in " + describe(node) + " -> " + ret.size());
+    // The funarg's local predecessor is the variable's merged EXIT state (an SSA phi whose arms
+    // are the substrate null default and post-rebinding values), which loses the capture-time
+    // write: `xs = [f(x) for ...]` rebinds `xs` to a value built FROM the capture, so the phi's
+    // only real arm is self-referential and the cycle guard rightly kills it. Recover the
+    // individual writes by scanning each definer frame's `AstLexicalWrite`s for the same
+    // variable name and adding their written values as definers. wala/ML#796.
+    SSAInstruction readDef = node.getDU().getDef(vn);
+    if (readDef instanceof AstLexicalRead read && read.getAccessCount() > 0) {
+      String name = read.getAccess(0).getName().fst;
+      Set<CGNode> definerNodes = HashSetFactory.make();
+      for (Pair<CGNode, Integer> d : ret) definerNodes.add(d.fst);
+      for (CGNode definer : definerNodes) {
+        IR ir = definer.getIR();
+        if (ir == null) continue;
+        SSAInstruction[] insts = ir.getInstructions();
+        for (int i = 0; i < insts.length; i++) {
+          SSAInstruction inst = insts[i];
+          if (inst == null || !inst.hasDef()) continue;
+          int d = inst.getDef();
+          String[] names = ir.getLocalNames(i, d);
+          if (names == null) continue;
+          for (String nm : names) if (name.equals(nm)) ret.add(Pair.make(definer, d));
+        }
+      }
+    }
+    LOGGER.fine(
+        () ->
+            "Resolved "
+                + ret.size()
+                + " lexical definer(s) for vn="
+                + vn
+                + " in "
+                + describe(node)
+                + ".");
     return ret;
   }
 
@@ -3351,6 +3384,30 @@ public abstract class TensorGenerator {
         if (chain != null && !chain.isEmpty()) return chain;
       }
       return null;
+    }
+
+    // A multiply-written local (e.g. a variable rebound after a comprehension) reaches the walk
+    // as the phi over its writes; union the arms, skipping null-constant substrate uses. The
+    // per-frame visited set breaks loop-carried self-reference. wala/ML#796.
+    if (def instanceof SSAPhiInstruction) {
+      SymbolTable st = node.getIR() == null ? null : node.getIR().getSymbolTable();
+      Set<List<Dimension<?>>> union = HashSetFactory.make();
+      for (int i = 0; i < def.getNumberOfUses(); i++) {
+        int use = def.getUse(i);
+        if (use <= 0 || (st != null && st.isNullConstant(use))) continue;
+        try {
+          Set<List<Dimension<?>>> viaPts = getShapes(builder, node, use);
+          if (viaPts != null && !viaPts.isEmpty()) {
+            union.addAll(viaPts);
+            continue;
+          }
+        } catch (IllegalArgumentException e) {
+          // fall through to the chain walk on this arm
+        }
+        Set<List<Dimension<?>>> chain = shapesFromSSAChain(builder, node, use, visited);
+        if (chain != null) union.addAll(chain);
+      }
+      return union.isEmpty() ? null : union;
     }
 
     if (!(def instanceof SSAAbstractInvokeInstruction)) return null;
@@ -3436,7 +3493,7 @@ public abstract class TensorGenerator {
    * them recover the underlying dtype, even when an op is unmodeled. See wala/ML#602.
    */
   private static final Set<String> DTYPE_PRESERVING_OP_NAMES =
-      Set.of("reshape", "pad", "expand_dims", "squeeze", "transpose", "identity");
+      Set.of("reshape", "pad", "expand_dims", "squeeze", "transpose", "identity", "tolist");
 
   /**
    * Dtype counterpart to {@link #shapesFromSSAChain(PropagationCallGraphBuilder, CGNode, int)}.
@@ -3526,6 +3583,32 @@ public abstract class TensorGenerator {
         if (chain != null && !chain.isEmpty()) return chain;
       }
       return null;
+    }
+
+    // The dtype twin of the shape walker's phi arm: union over the writes of a multiply-written
+    // local, skipping null-constant substrate uses; the per-frame visited set breaks loop-carried
+    // self-reference. wala/ML#796.
+    if (def instanceof SSAPhiInstruction) {
+      SymbolTable st = node.getIR() == null ? null : node.getIR().getSymbolTable();
+      Set<DType> union = EnumSet.noneOf(DType.class);
+      for (int i = 0; i < def.getNumberOfUses(); i++) {
+        int use = def.getUse(i);
+        if (use <= 0 || (st != null && st.isNullConstant(use))) continue;
+        try {
+          Set<DType> viaPts = getDTypes(builder, node, use);
+          if (viaPts != null
+              && !viaPts.isEmpty()
+              && !(viaPts.size() == 1 && viaPts.contains(UNKNOWN))) {
+            union.addAll(viaPts);
+            continue;
+          }
+        } catch (IllegalArgumentException e) {
+          // fall through to the chain walk on this arm
+        }
+        Set<DType> chain = dtypesFromSSAChain(builder, node, use, visited);
+        if (chain != null) union.addAll(chain);
+      }
+      return union.isEmpty() ? null : union;
     }
 
     if (!(def instanceof SSAAbstractInvokeInstruction)) return null;
@@ -7899,6 +7982,10 @@ public abstract class TensorGenerator {
       return new NpUniqueValues(node);
     } else if (type.equals(NumpyTypes.UNIQUE_INDICES.getDeclaringClass())) {
       return new NpUniqueIndices(node);
+    } else if (type.equals(NumpyTypes.TOLIST.getDeclaringClass())) {
+      // Producer delegation for `tolist_result` allocations: dtype and shape recover from the
+      // receiver (wala/ML#796).
+      return new TolistOperation(node);
     } else if (type.equals(ScipyTypes.SPARSE_MATRIX_DOT.getDeclaringClass())) {
       return new SparseMatrixDot(node);
     } else if (type.equals(ScipyTypes.SPARSE_MATRIX_TODENSE.getDeclaringClass())) {
