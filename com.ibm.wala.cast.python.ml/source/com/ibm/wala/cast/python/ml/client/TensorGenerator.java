@@ -3410,6 +3410,32 @@ public abstract class TensorGenerator {
       return union.isEmpty() ? null : union;
     }
 
+    // A function parameter has no defining instruction (DefUse is intraprocedural); continue the
+    // walk on the corresponding actual argument in each caller frame. Value numbers v1..vN are
+    // the parameters and use index vn-1 pairs the caller-side actual with the callee-side formal
+    // (use 0 holds the callee function object for v1). A trampoline caller's actual is itself a
+    // parameter, so interposed dispatch hops compose by recursion. wala/ML#796.
+    if (def == null
+        && node.getIR() != null
+        && vn <= node.getIR().getSymbolTable().getNumberOfParameters()) {
+      for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+          getCallerInvokes(builder, node)) {
+        int useIdx = vn - 1;
+        if (useIdx < 0 || useIdx >= callerInvoke.snd.getNumberOfUses()) continue;
+        int actualVn = callerInvoke.snd.getUse(useIdx);
+        try {
+          Set<List<Dimension<?>>> viaPts = getShapes(builder, callerInvoke.fst, actualVn);
+          if (viaPts != null && !viaPts.isEmpty()) return viaPts;
+        } catch (IllegalArgumentException e) {
+          // fall through to the caller-frame chain walk
+        }
+        Set<List<Dimension<?>>> chain =
+            shapesFromSSAChain(builder, callerInvoke.fst, actualVn, visited);
+        if (chain != null && !chain.isEmpty()) return chain;
+      }
+      return null;
+    }
+
     if (!(def instanceof SSAAbstractInvokeInstruction)) return null;
     SSAAbstractInvokeInstruction call = (SSAAbstractInvokeInstruction) def;
     for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, call.getCallSite())) {
@@ -3609,6 +3635,30 @@ public abstract class TensorGenerator {
         if (chain != null) union.addAll(chain);
       }
       return union.isEmpty() ? null : union;
+    }
+
+    // The dtype twin of the shape walker's parameter arm: continue on each caller's actual
+    // argument (use index vn-1); trampoline hops compose by recursion. wala/ML#796.
+    if (def == null
+        && node.getIR() != null
+        && vn <= node.getIR().getSymbolTable().getNumberOfParameters()) {
+      for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+          getCallerInvokes(builder, node)) {
+        int useIdx = vn - 1;
+        if (useIdx < 0 || useIdx >= callerInvoke.snd.getNumberOfUses()) continue;
+        int actualVn = callerInvoke.snd.getUse(useIdx);
+        try {
+          Set<DType> viaPts = getDTypes(builder, callerInvoke.fst, actualVn);
+          if (viaPts != null
+              && !viaPts.isEmpty()
+              && !(viaPts.size() == 1 && viaPts.contains(UNKNOWN))) return viaPts;
+        } catch (IllegalArgumentException e) {
+          // fall through to the caller-frame chain walk
+        }
+        Set<DType> chain = dtypesFromSSAChain(builder, callerInvoke.fst, actualVn, visited);
+        if (chain != null && !chain.isEmpty()) return chain;
+      }
+      return null;
     }
 
     if (!(def instanceof SSAAbstractInvokeInstruction)) return null;

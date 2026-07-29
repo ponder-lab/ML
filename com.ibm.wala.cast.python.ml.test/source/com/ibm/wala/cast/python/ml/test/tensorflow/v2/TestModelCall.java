@@ -26,7 +26,6 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_8_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_784_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_FLOAT32;
-import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
 import static com.ibm.wala.cast.python.util.Util.addPytestEntrypoints;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
@@ -367,10 +366,10 @@ public class TestModelCall extends AbstractTensorTest {
    * accuracy}'s {@code y_pred} parameter. This test runs at k-CFA depth 4 (wala/ML#379) so {@code
    * NeuralNet.call} is analyzed per caller and its layer-output ({@code pred}) no longer collapses
    * the training shape into the test context (wala/ML#530); value 2 is therefore the per-context
-   * union {@code {(256, 10) float32, ? float32}}. The test-context contribution is ⊤ shape because
-   * the {@code x_test} chain resolves to a rank-preserving but shape-unknown tensor by the time it
-   * reaches {@code NeuralNet.call}'s first {@code Dense} operand; closing that gap would narrow the
-   * ⊤ to {@code (10000, 10)} (orthogonal to #358/#530).
+   * union {@code {(256, 10) float32, (10000, 10) float32}}. The test-context member narrowed from ⊤
+   * shape when the SSA-chain walkers gained the parameter-to-caller-argument arm (wala/ML#796),
+   * which resolves the {@code x_test} chain through {@code NeuralNet.call}'s first {@code Dense}
+   * operand.
    */
   @Test
   public void testNeuralNetwork4()
@@ -389,12 +388,11 @@ public class TestModelCall extends AbstractTensorTest {
         Map.of(
             2,
             // Per-context union: training call site `accuracy(pred, batch_y)` gives `(256, 10)`;
-            // the test-set call site `accuracy(pred, y_test)` resolves to ⊤ shape because the
-            // `x_test` chain is shape-unknown by the time it reaches `NeuralNet.call`'s first
-            // `Dense` operand. With the depth-4 context separation (wala/ML#530), `argmax`'s result
-            // no longer leaks the training shape into the test context. TODO: the test-context ⊤
-            // should narrow to `(10000, 10)` once the `x_test` shape gap is closed.
-            Set.of(TENSOR_256_10_FLOAT32, TENSOR_UNKNOWN_SHAPE_FLOAT32),
+            // the test-set call site `accuracy(pred, y_test)` gives `(10000, 10)`: the walkers'
+            // parameter-to-caller-argument arm (wala/ML#796) resolves the `x_test` chain that
+            // previously floored the test context to ⊤ shape. With the depth-4 context separation
+            // (wala/ML#530), `argmax`'s result does not leak the training shape across contexts.
+            Set.of(TENSOR_256_10_FLOAT32, TENSOR_10000_10_FLOAT32),
             3,
             Set.of(TENSOR_256_UINT8, TENSOR_10000_UINT8)));
   }
