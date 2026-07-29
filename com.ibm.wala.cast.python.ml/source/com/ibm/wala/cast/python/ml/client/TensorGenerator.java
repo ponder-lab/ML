@@ -30,6 +30,9 @@ import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 import static java.util.Collections.emptyList;
 
 import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
+import com.ibm.wala.cast.ir.ssa.AstLexicalRead;
+import com.ibm.wala.cast.ir.ssa.AstLexicalWrite;
+import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.ir.ssa.CAstBinaryOp;
 import com.ibm.wala.cast.ir.ssa.CAstUnaryOp;
 import com.ibm.wala.cast.loader.AstMethod;
@@ -89,6 +92,7 @@ import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
+import com.ibm.wala.util.graph.Graph;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -3158,6 +3162,121 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Cross-frame counterpart of {@code findTupleFieldStore} (wala/ML#796): when a tuple-unpack
+   * read's object was produced by an invoke, the tuple and its field stores live in the callee's
+   * frame; find the callee returns whose results are tuple allocations and the store into the
+   * read's field on each, yielding (callee, stored value number) pairs the SSA-chain walkers
+   * continue in.
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The reading node.
+   * @param propRead The tuple-unpack property read.
+   * @return The (callee node, stored value number) pairs; empty if none resolve.
+   */
+  private static Set<Pair<CGNode, Integer>> findCalleeTupleFieldStores(
+      PropagationCallGraphBuilder builder, CGNode node, PythonPropertyRead propRead) {
+    Set<Pair<CGNode, Integer>> ret = HashSetFactory.make();
+    SymbolTable symbolTable = node.getIR().getSymbolTable();
+    int memberVn = propRead.getMemberRef();
+    if (!symbolTable.isConstant(memberVn)) return ret;
+    String fieldName = String.valueOf(symbolTable.getConstantValue(memberVn));
+    SSAInstruction objDef = node.getDU().getDef(propRead.getObjectRef());
+    if (!(objDef instanceof SSAAbstractInvokeInstruction call)) return ret;
+    // Method dispatch interposes synthetic trampolines between the invoke and the user body;
+    // expand through them (bounded) to the AstMethod callees that hold the tuple.
+    Deque<CGNode> work = new ArrayDeque<>();
+    Set<CGNode> seen = HashSetFactory.make();
+    for (CGNode callee : builder.getCallGraph().getPossibleTargets(node, call.getCallSite()))
+      if (seen.add(callee)) work.add(callee);
+    Set<CGNode> bodies = HashSetFactory.make();
+    while (!work.isEmpty() && seen.size() < 32) {
+      CGNode callee = work.poll();
+      if (callee.getMethod() instanceof AstMethod) {
+        bodies.add(callee);
+        continue;
+      }
+      for (Iterator<CGNode> it = builder.getCallGraph().getSuccNodes(callee); it.hasNext(); ) {
+        CGNode next = it.next();
+        if (seen.add(next)) work.add(next);
+      }
+    }
+    LOGGER.fine(
+        () ->
+            "findCalleeTupleFieldStores: field="
+                + fieldName
+                + " bodies="
+                + bodies.size()
+                + " for "
+                + propRead
+                + " in "
+                + describe(node));
+    for (CGNode callee : bodies) {
+      IR calleeIr = callee.getIR();
+      if (calleeIr == null) continue;
+      for (SSAInstruction instruction : calleeIr.getInstructions()) {
+        if (!(instruction instanceof SSAReturnInstruction returnInstruction)
+            || returnInstruction.getResult() <= 0) continue;
+        SSAInstruction returnDef = callee.getDU().getDef(returnInstruction.getResult());
+        if (!(returnDef instanceof SSANewInstruction)) continue;
+        int allocVn = returnInstruction.getResult();
+        for (SSAInstruction store : calleeIr.getInstructions()) {
+          if (store instanceof SSAPutInstruction put
+              && !put.isStatic()
+              && put.getRef() == allocVn
+              && fieldName.equals(put.getDeclaredField().getName().toString()))
+            ret.add(Pair.make(callee, put.getVal()));
+          else if (store instanceof AstPropertyWrite write && write.getObjectRef() == allocVn) {
+            int storeMemberVn = write.getMemberRef();
+            SymbolTable calleeSymbols = calleeIr.getSymbolTable();
+            if (calleeSymbols.isConstant(storeMemberVn)
+                && fieldName.equals(String.valueOf(calleeSymbols.getConstantValue(storeMemberVn))))
+              ret.add(Pair.make(callee, write.getValue()));
+          }
+        }
+      }
+    }
+    return ret;
+  }
+
+  /**
+   * Resolves the frames defining a lexically-read variable: the two-hop predecessor walk in the
+   * propagation graph from the read's pointer key to the {@link AstLexicalWrite} writers' local
+   * keys (the {@code PythonTurtleAnalysisEngine} recipe), yielding the (definer node, value number)
+   * pairs the SSA-chain walkers continue in. Comprehension bodies read their enclosing frame's
+   * locals this way, which previously dead-ended both walkers (wala/ML#796).
+   *
+   * @param builder The propagation call graph builder.
+   * @param node The reading node.
+   * @param vn The lexical read's definition value number.
+   * @return The definer (node, value number) pairs; empty if none resolve.
+   */
+  private static Set<Pair<CGNode, Integer>> lexicalDefiners(
+      PropagationCallGraphBuilder builder, CGNode node, int vn) {
+    Set<Pair<CGNode, Integer>> ret = HashSetFactory.make();
+    PointerKey pk = builder.getPointerKeyForLocal(node, vn);
+    if (builder.getPropagationSystem().isImplicit(pk)) return ret;
+    PointsToSetVariable av = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
+    Graph<PointsToSetVariable> flow =
+        builder.getPropagationSystem().getFlowGraphIncludingImplicitConstraints();
+    if (!flow.containsNode(av)) return ret;
+    for (Iterator<PointsToSetVariable> outer = flow.getPredNodes(av); outer.hasNext(); ) {
+      PointsToSetVariable p = outer.next();
+      // The read's immediate predecessor is the upward-funarg key linking the closure to its
+      // enclosing frame; its own predecessors are the defining locals. An explicit
+      // AstLexicalWrite use is not required: a comprehension's closure capture flows through the
+      // funarg key by direct constraint, so the funarg hop itself is the discriminator.
+      if (!p.getPointerKey().getClass().getSimpleName().contains("UpwardFunarg")) continue;
+      for (Iterator<PointsToSetVariable> inner = flow.getPredNodes(p); inner.hasNext(); ) {
+        PointsToSetVariable pp = inner.next();
+        if (pp.getPointerKey() instanceof LocalPointerKey lpk)
+          ret.add(Pair.make(lpk.getNode(), lpk.getValueNumber()));
+      }
+    }
+    LOGGER.fine(() -> "lexicalDefiners: vn=" + vn + " in " + describe(node) + " -> " + ret.size());
+    return ret;
+  }
+
+  /**
    * Recursive worker for {@link #shapesFromSSAChain(PropagationCallGraphBuilder, CGNode, int)}.
    *
    * @param builder The propagation call graph builder used to resolve callees.
@@ -3169,8 +3288,11 @@ public abstract class TensorGenerator {
    *     has already visited {@code vn} on this walk (cycle guard).
    */
   private Set<List<Dimension<?>>> shapesFromSSAChain(
-      PropagationCallGraphBuilder builder, CGNode node, int vn, Set<Integer> visited) {
-    if (!visited.add(vn)) return null; // cycle guard
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      int vn,
+      Set<Pair<CGNode, Integer>> visited) {
+    if (!visited.add(Pair.make(node, vn))) return null; // cycle guard (per-frame, wala/ML#796)
     SSAInstruction def = node.getDU().getDef(vn);
     LOGGER.fine(
         () ->
@@ -3198,6 +3320,35 @@ public abstract class TensorGenerator {
           // fall through
         }
         return shapesFromSSAChain(builder, node, storedVn, visited);
+      }
+      // The tuple was built in a callee (a cross-frame unpack, wala/ML#796); continue at the
+      // callee-side field stores.
+      for (Pair<CGNode, Integer> store : findCalleeTupleFieldStores(builder, node, propRead)) {
+        try {
+          Set<List<Dimension<?>>> viaPts = getShapes(builder, store.fst, store.snd);
+          if (viaPts != null && !viaPts.isEmpty()) return viaPts;
+        } catch (IllegalArgumentException e) {
+          // fall through to the callee-frame chain walk
+        }
+        Set<List<Dimension<?>>> chain = shapesFromSSAChain(builder, store.fst, store.snd, visited);
+        if (chain != null && !chain.isEmpty()) return chain;
+      }
+      return null;
+    }
+
+    // A comprehension body reads its enclosing frame's locals lexically; continue the walk in
+    // the definer frame(s) (wala/ML#796).
+    if (def instanceof AstLexicalRead) {
+      for (Pair<CGNode, Integer> definer : lexicalDefiners(builder, node, vn)) {
+        try {
+          Set<List<Dimension<?>>> viaPts = getShapes(builder, definer.fst, definer.snd);
+          if (viaPts != null && !viaPts.isEmpty()) return viaPts;
+        } catch (IllegalArgumentException e) {
+          // fall through to the definer-frame chain walk
+        }
+        Set<List<Dimension<?>>> chain =
+            shapesFromSSAChain(builder, definer.fst, definer.snd, visited);
+        if (chain != null && !chain.isEmpty()) return chain;
       }
       return null;
     }
@@ -3311,8 +3462,11 @@ public abstract class TensorGenerator {
    *     has already visited {@code vn} on this walk (cycle guard).
    */
   private Set<DType> dtypesFromSSAChain(
-      PropagationCallGraphBuilder builder, CGNode node, int vn, Set<Integer> visited) {
-    if (!visited.add(vn)) return null;
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      int vn,
+      Set<Pair<CGNode, Integer>> visited) {
+    if (!visited.add(Pair.make(node, vn))) return null; // cycle guard (per-frame, wala/ML#796)
     SSAInstruction def = node.getDU().getDef(vn);
 
     if (def instanceof PythonPropertyRead) {
@@ -3326,6 +3480,19 @@ public abstract class TensorGenerator {
           // fall through
         }
         return dtypesFromSSAChain(builder, node, storedVn, visited);
+      }
+      // The cross-frame unpack counterpart; see shapesFromSSAChain (wala/ML#796).
+      for (Pair<CGNode, Integer> store : findCalleeTupleFieldStores(builder, node, propRead)) {
+        try {
+          Set<DType> viaPts = getDTypes(builder, store.fst, store.snd);
+          if (viaPts != null
+              && !viaPts.isEmpty()
+              && !(viaPts.size() == 1 && viaPts.contains(UNKNOWN))) return viaPts;
+        } catch (IllegalArgumentException e) {
+          // fall through to the callee-frame chain walk
+        }
+        Set<DType> chain = dtypesFromSSAChain(builder, store.fst, store.snd, visited);
+        if (chain != null && !chain.isEmpty()) return chain;
       }
       return null;
     }
@@ -3341,6 +3508,24 @@ public abstract class TensorGenerator {
       }
       // Otherwise take the first operand's dtype.
       return dtypesFromSSAChain(builder, node, xVn, visited);
+    }
+
+    // A comprehension body reads its enclosing frame's locals lexically; continue the walk in
+    // the definer frame(s) (wala/ML#796).
+    if (def instanceof AstLexicalRead) {
+      for (Pair<CGNode, Integer> definer : lexicalDefiners(builder, node, vn)) {
+        try {
+          Set<DType> viaPts = getDTypes(builder, definer.fst, definer.snd);
+          if (viaPts != null
+              && !viaPts.isEmpty()
+              && !(viaPts.size() == 1 && viaPts.contains(UNKNOWN))) return viaPts;
+        } catch (IllegalArgumentException e) {
+          // fall through to the definer-frame chain walk
+        }
+        Set<DType> chain = dtypesFromSSAChain(builder, definer.fst, definer.snd, visited);
+        if (chain != null && !chain.isEmpty()) return chain;
+      }
+      return null;
     }
 
     if (!(def instanceof SSAAbstractInvokeInstruction)) return null;

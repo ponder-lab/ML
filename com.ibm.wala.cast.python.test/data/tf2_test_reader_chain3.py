@@ -25,6 +25,10 @@ def consume_rearrayed(e):
     pass
 
 
+def consume_lexical_slice(f):
+    pass
+
+
 class Loader:
     def read_file(self, src, dtype=None):
         rows = [[dtype(x) for x in line.split(",")] for line in src]
@@ -45,6 +49,7 @@ assert sliced.dtype == np.int64
 consume_sliced(sliced)
 
 value = [(0, 1), (1, 2)]
+probed = [consume_lexical_slice(edge_index[se[0] : se[1]]) for se in value]
 listed = [edge_index[se[0] : se[1]] for se in value]
 assert listed[0].dtype == np.int64
 consume_listed(listed[0])

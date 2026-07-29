@@ -1609,6 +1609,32 @@ public class TestConstructors extends AbstractTensorTest {
         Map.of(2, Set.of(new TensorType(INT_64, null))));
   }
 
+  /**
+   * The lexical-hop witness (wala/ML#796): a dynamic-bound slice consumed inside the comprehension
+   * itself, whose receiver is a lexical read of the enclosing frame's unpacked reader result; the
+   * SSA-chain walkers must cross both the closure boundary and the callee tuple to recover the
+   * dtype.
+   *
+   * <p>TODO: Flip to a positive guard when the remaining wala/ML#796 residuals land (the reader
+   * shape walk's spurious scalar member and the consume-side dtype drop; see the issue's diagnosis
+   * comments).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testReaderChainProbeLexicalSlice()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_reader_chain3.py",
+        "consume_lexical_slice",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(INT_64, null))));
+  }
+
   /** See {@link #testReaderChainProbeUnpacked()}. */
   @Test
   public void testReaderChainProbeSliced()
