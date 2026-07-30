@@ -389,7 +389,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
   private static IKilldallFramework<PointsToSetVariable, TensorVariable> createProblem(
       Graph<PointsToSetVariable> G,
       Map<PointsToSetVariable, Set<TensorType>> reshapeNodes,
-      Map<PointsToSetVariable, TensorType> set_shapes,
+      Map<PointsToSetVariable, Set<TensorType>> set_shapes,
       Map<PointsToSetVariable, List<Dimension<?>>> refinements,
       Map<PointsToSetVariable, FeedPlan> typeFeeds,
       Map<PointsToSetVariable, Set<PointsToSetVariable>> armSuppressions,
@@ -448,9 +448,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
           }
 
           final class SetShapeOp extends UnaryOperator<TensorVariable> {
-            private final TensorType setShapeTo;
+            private final Set<TensorType> setShapeTo;
 
-            public SetShapeOp(TensorType reshapeTo) {
+            public SetShapeOp(Set<TensorType> reshapeTo) {
               this.setShapeTo = reshapeTo;
             }
 
@@ -462,10 +462,15 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               // previous `add`-only semantics caused the cast result's Cast-generator-seeded
               // `(?, dtype)` to leak into the post-set_shape state alongside the asserted shape.
               // Clear-then-add mirrors `DropOp`'s clear-state pattern with CHANGED_AND_FIXED.
+              //
+              // The pinned value is a SET rather than a single type (wala/ML#813): a subscript
+              // result routed here legitimately carries one member per calling context, and
+              // restricting the pin to singletons left multi-member results unpinned, which is
+              // exactly the leak the reroute exists to block.
               boolean changed = false;
-              if (!(lhs.state.size() == 1 && lhs.state.contains(setShapeTo))) {
+              if (!lhs.state.equals(setShapeTo)) {
                 lhs.state.clear();
-                lhs.state.add(setShapeTo);
+                lhs.state.addAll(setShapeTo);
                 changed = true;
               }
               // Pinning replaces the SHAPE, not the provenance: the destination's value is still
@@ -1052,7 +1057,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Map<PointsToSetVariable, Set<TensorType>> init,
       Map<PointsToSetVariable, Set<TensorOrigin>> initOrigins,
       Map<PointsToSetVariable, Set<TensorType>> reshapeTypes,
-      Map<PointsToSetVariable, TensorType> set_shapes,
+      Map<PointsToSetVariable, Set<TensorType>> set_shapes,
       Map<PointsToSetVariable, List<Dimension<?>>> refinements,
       Map<PointsToSetVariable, FeedPlan> typeFeeds,
       Map<PointsToSetVariable, Set<PointsToSetVariable>> armSuppressions,
@@ -1095,7 +1100,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Map<PointsToSetVariable, Set<TensorType>> init,
       Map<PointsToSetVariable, Set<TensorOrigin>> initOrigins,
       Map<PointsToSetVariable, Set<TensorType>> reshapeTypes,
-      Map<PointsToSetVariable, TensorType> set_shapes,
+      Map<PointsToSetVariable, Set<TensorType>> set_shapes,
       Map<PointsToSetVariable, List<Dimension<?>>> refinements,
       Map<PointsToSetVariable, FeedPlan> typeFeeds,
       Map<PointsToSetVariable, Set<PointsToSetVariable>> armSuppressions,

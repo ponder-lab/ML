@@ -1,6 +1,7 @@
 package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.FLOAT_32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.INT_32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_16_UINT8;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_1_1_3_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_1_28_28_1_FLOAT32;
@@ -333,6 +334,110 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TENSOR_4_6_FLOAT32)));
+  }
+
+  /**
+   * Pins the output shape of a trailing integer index with no following slice (wala/ML#813). {@code
+   * x[:, 0]} over a {@code (4, 5)} tensor drops the last axis entirely: {@code (4,)}. This differs
+   * from {@link #testSubscriptMultidimIndex} in that the indexed axis is the last one, so the
+   * subscript has no trailing slice component to mark the axes it keeps.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testColumnSliceRankConstant()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_column_slice_rank.py",
+        "consume_const_col",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_FLOAT32)));
+  }
+
+  /**
+   * Pins the output shape of a trailing integer index applied to a batched dataset element
+   * (wala/ML#813), which is how such a column arrives in practice. {@code batch[:, 0]} over a
+   * {@code (2, 5)} batch leaves rank 1.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testColumnSliceRankBatched()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_column_slice_rank.py",
+        "consume_batch_col",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_FLOAT32)));
+  }
+
+  /**
+   * Pins the shape of a dict-valued padded batch before any column is taken (wala/ML#813). The
+   * value declared with {@code padded_shapes={"h_r": [None]}} is rank 2: the batch axis, and the
+   * padded axis that {@code None} leaves dynamic. The union carries the full batch alongside its
+   * partial-batch sibling, the same pairing as {@link TestCorpusFixtures#testGpt2GetLossVendored}.
+   * {@code drop_remainder=True} makes the partial batch unreachable here, which is the separate
+   * concern of wala/ML#812.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDictColumnSliceRow()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dict_column_slice.py",
+        "consume_row",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(INT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)),
+                new TensorType(INT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE)))));
+  }
+
+  /**
+   * Pins the rank of a column indexed out of a dict-valued padded batch (wala/ML#813). {@code
+   * data["h_r"][:, 0]} drops the last axis, so every member of the column's union is rank 1, each
+   * one the batch axis of the corresponding member in {@link #testDictColumnSliceRow}.
+   *
+   * <p>The generator computed those rank-1 members all along; what leaked was the receiver. The
+   * reroute that blocks a container's shape from reaching its subscript result used to install its
+   * pin only for a single-member result, so a subscript resolving to one member per calling context
+   * went unpinned and carried its rank-2 container alongside itself. Over-ranking is the more
+   * damaging direction: a rank-1 argument is not a subtype of a rank-2 specification, so a
+   * signature written from the leaked union rejects every call the function actually receives,
+   * where a signature that is merely too loose still admits them all.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testDictColumnSliceColumn()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dict_column_slice.py",
+        "consume_col",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(INT_32, asList(new NumericDim(2))),
+                new TensorType(INT_32, asList(new SymbolicDim("?"))))));
   }
 
   /**

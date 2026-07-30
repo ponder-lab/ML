@@ -1473,11 +1473,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
    * guard for this filtering.
    *
    * @param builder The propagation call graph builder.
-   * @return Map from receiver {@link PointsToSetVariable} to the asserted {@link TensorType}.
+   * @return Map from receiver {@link PointsToSetVariable} to the asserted {@link TensorType}, as a
+   *     singleton set: an assertion pins exactly one shape, while the same pin mechanism carries
+   *     multi-member sets for the subscript reroute (wala/ML#813).
    */
-  private Map<PointsToSetVariable, TensorType> getSetShapeCallsSyntactic(
+  private Map<PointsToSetVariable, Set<TensorType>> getSetShapeCallsSyntactic(
       PropagationCallGraphBuilder builder) {
-    Map<PointsToSetVariable, TensorType> targets = HashMapFactory.make();
+    Map<PointsToSetVariable, Set<TensorType>> targets = HashMapFactory.make();
     for (CGNode caller : builder.getCallGraph()) {
       IR ir = caller.getIR();
       if (ir == null) continue;
@@ -1544,7 +1546,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         if (builder.getPropagationSystem().isImplicit(receiverKey)) continue;
         targets.put(
             builder.getPropagationSystem().findOrCreatePointsToSet(receiverKey),
-            TensorType.shapeArg(caller, call.getUse(1), builder));
+            Collections.singleton(TensorType.shapeArg(caller, call.getUse(1), builder)));
       }
     }
     return targets;
@@ -1826,7 +1828,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // the `Ltensorflow/functions/set_shape` synthetic class. The legacy dispatch path requires
       // the receiver to have the `set_shape` attribute attached (via FixedLenFeature.do's
       // <putfield>) and breaks when the cast pass_through alias is removed.
-      Map<PointsToSetVariable, TensorType> setCalls = getSetShapeCallsSyntactic(builder);
+      Map<PointsToSetVariable, Set<TensorType>> setCalls = getSetShapeCallsSyntactic(builder);
 
       // wala/ML#509: `set_shape` is a user-supplied OVERRIDE of any per-op-generator init seed on
       // the receiver. Remove receivers from `init` so the SetShapeOp edge transfer is the sole
@@ -1852,10 +1854,23 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         if (!(generator instanceof SliceBuiltinOperation)
             && !(generator instanceof NdarraySubscriptOperation)) continue;
         Set<TensorType> types = init.get(src);
-        if (types == null || types.size() != 1) continue;
-        TensorType onlyType = types.iterator().next();
-        if (onlyType.getDims() == null) continue;
-        setCalls.put(src, onlyType);
+        if (types == null || types.isEmpty()) continue;
+        // Every member must carry dimensions. A ⊤-shape member says nothing about the subscript's
+        // result, so pinning a set containing one would assert "the receiver's shape does not flow
+        // here" while offering no replacement, and the destination is better served by whatever the
+        // predecessors contribute.
+        boolean allRanked = true;
+        for (TensorType type : types) if (type.getDims() == null) allRanked = false;
+        if (!allRanked) continue;
+        // Pin the whole set, not just a singleton (wala/ML#813). A subscript evaluated in several
+        // calling contexts legitimately resolves to one member per context — `x[:, 0]` over a
+        // padded batch yields both the concrete-batch and the unresolved-batch column — and
+        // requiring a singleton left exactly those results unpinned. The receiver's pre-subscript
+        // shape then leaked back in through the assignment graph, so a rank-1 column carried its
+        // rank-2 container alongside it, and a signature written from that union OVER-RANKS the
+        // parameter: a rank-1 argument is not a subtype of a rank-2 specification, so the signature
+        // rejects every call the function actually receives.
+        setCalls.put(src, types);
       }
 
       // A shape-constraining consumer proves operand shapes its call alone fixes: an einsum
