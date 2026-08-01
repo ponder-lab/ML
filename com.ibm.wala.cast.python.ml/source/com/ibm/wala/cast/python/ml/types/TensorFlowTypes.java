@@ -67,6 +67,36 @@ public class TensorFlowTypes extends PythonTypes {
       this.precision = precision;
     }
 
+    /**
+     * Whether this is a numeric dtype, i.e. one arithmetic can widen and narrow.
+     *
+     * @return {@code true} iff this dtype is numeric.
+     */
+    public boolean isNumeric() {
+      return this.numeric;
+    }
+
+    /**
+     * Whether this is a floating-point dtype, as opposed to an integral or non-numeric one.
+     *
+     * @return {@code true} iff this dtype is floating-point.
+     */
+    public boolean isFloatingPoint() {
+      return this.floatingPoint;
+    }
+
+    /**
+     * Whether this is an integral dtype, i.e. numeric but neither floating-point nor complex.
+     * Promotion rules distinguish these from floating-point dtypes, since an integral operand
+     * combined with a floating-point one widens to the floating-point type while a floating-point
+     * operand keeps its own precision.
+     *
+     * @return {@code true} iff this dtype is integral.
+     */
+    public boolean isIntegral() {
+      return this.numeric && !this.floatingPoint && !this.complex;
+    }
+
     public boolean canConvertTo(DType other) {
       if (other == null) return false;
 

@@ -575,20 +575,15 @@ public class ElementWiseOperation extends TensorGenerator {
     LOGGER.fine("ElementWiseOperation getDefaultDTypes xVn: " + xVn + ", yVn: " + yVn);
     if (xVn <= 0) return EnumSet.of(DType.UNKNOWN);
 
-    // Type promotion for scalar-literal operands: NumPy/TF rules promote `int_tensor op
-    // float_literal` to float32 (e.g., `x_train.astype(uint8) / 255.0` → float32). Check for
-    // literals BEFORE calling getOperandDTypes to avoid short-circuiting via exception on
-    // an implicit-PK operand (see wala/WALA#1889).
+    // Type promotion for scalar-literal operands. Check for literals BEFORE calling
+    // getOperandDTypes on the literal's own value number, to avoid short-circuiting via
+    // exception on an implicit-PK operand (see wala/WALA#1889).
     CGNode node = this.getNode();
     if (yVn > 0 && isFloatLiteralVn(node, yVn)) {
-      LOGGER.fine(
-          "ElementWiseOperation getDefaultDTypes: promoting to FLOAT32 (y is float literal)");
-      return EnumSet.of(DType.FLOAT32);
+      return promoteWithFloatLiteral(builder, xVn);
     }
     if (isFloatLiteralVn(node, xVn)) {
-      LOGGER.fine(
-          "ElementWiseOperation getDefaultDTypes: promoting to FLOAT32 (x is float literal)");
-      return EnumSet.of(DType.FLOAT32);
+      return promoteWithFloatLiteral(builder, yVn);
     }
 
     Set<DType> xDTypes = this.getOperandDTypes(builder, xVn);
@@ -600,6 +595,48 @@ public class ElementWiseOperation extends TensorGenerator {
     // identification across the chain even though every step is demonstrably a tensor producer.
     if (xDTypes == null || xDTypes.isEmpty()) return EnumSet.of(DType.UNKNOWN);
     return xDTypes;
+  }
+
+  /**
+   * Computes the dtype of an element-wise result whose other operand is a Python float literal.
+   *
+   * <p>The previous rule promoted every such result to {@code float32}, citing {@code
+   * x_train.astype(uint8) / 255.0}. That is the wrong answer for exactly that expression. NumPy
+   * promotes an integral array combined with a Python float to {@code float64}, because a Python
+   * float is a double; a {@code float32} array keeps {@code float32}. TensorFlow does not promote
+   * at all, and raises when an integral tensor meets a float literal. So the only combination of an
+   * integral operand with a float literal that can execute is NumPy's, and its result is {@code
+   * float64} (wala/ML#814).
+   *
+   * <p>A floating-point or complex operand keeps its own dtype, which is correct for both
+   * libraries. An operand that does not resolve, or that is neither numeric nor floating-point,
+   * keeps the previous {@code float32} answer rather than degrading, so this narrows a wrong result
+   * without widening an unknown one.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @param operandVn The value number of the operand that is not the float literal.
+   * @return The dtypes of the result.
+   */
+  private Set<DType> promoteWithFloatLiteral(PropagationCallGraphBuilder builder, int operandVn) {
+    Set<DType> operandDTypes = operandVn > 0 ? this.getOperandDTypes(builder, operandVn) : null;
+    LOGGER.fine(
+        () ->
+            "ElementWiseOperation getDefaultDTypes: float literal beside operand vn="
+                + operandVn
+                + " dtypes="
+                + operandDTypes);
+    if (operandDTypes == null || operandDTypes.isEmpty()) return EnumSet.of(DType.FLOAT32);
+
+    Set<DType> ret = EnumSet.noneOf(DType.class);
+    for (DType operandDType : operandDTypes)
+      if (operandDType.isIntegral()) ret.add(DType.FLOAT64);
+      // Numeric but not integral means floating-point or complex, and both keep their own
+      // dtype: `complex64 / 255.0` is `complex64`, verified alongside the cases above. Testing
+      // `isFloatingPoint` here instead would send complex operands to the `float32` fallback,
+      // which contradicts this method's own contract and loses the imaginary part.
+      else if (operandDType.isNumeric()) ret.add(operandDType);
+      else ret.add(DType.FLOAT32);
+    return ret;
   }
 
   /**
