@@ -630,7 +630,11 @@ public class ElementWiseOperation extends TensorGenerator {
     Set<DType> ret = EnumSet.noneOf(DType.class);
     for (DType operandDType : operandDTypes)
       if (operandDType.isIntegral()) ret.add(DType.FLOAT64);
-      else if (operandDType.isFloatingPoint()) ret.add(operandDType);
+      // Numeric but not integral means floating-point or complex, and both keep their own
+      // dtype: `complex64 / 255.0` is `complex64`, verified alongside the cases above. Testing
+      // `isFloatingPoint` here instead would send complex operands to the `float32` fallback,
+      // which contradicts this method's own contract and loses the imaginary part.
+      else if (operandDType.isNumeric()) ret.add(operandDType);
       else ret.add(DType.FLOAT32);
     return ret;
   }
