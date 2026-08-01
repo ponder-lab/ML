@@ -18,6 +18,8 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_4_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_RAGGED_RAGGED_INT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_5_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_5_FLOAT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_FLOAT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_INT32;
@@ -1725,5 +1727,47 @@ public class TestElementwiseOps extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * Pins the dtype of an integral NumPy array divided by a Python float (wala/ML#814). NumPy
+   * promotes to {@code float64}, because a Python float is a double. The previous rule answered
+   * {@code float32} for every float-literal operand, citing this very idiom.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNumpyIntegerDividedByFloatLiteral()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_numpy_float_division.py",
+        "consume_int_scaled",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_5_FLOAT64)));
+  }
+
+  /**
+   * Companion to {@link #testNumpyIntegerDividedByFloatLiteral} (wala/ML#814): a {@code float32}
+   * array keeps {@code float32} under the same operation, so the rule is not "a float literal makes
+   * the result {@code float64}" either. The operand's own dtype decides.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNumpyFloat32DividedByFloatLiteral()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_numpy_float_division.py",
+        "consume_float_scaled",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_5_FLOAT32)));
   }
 }
