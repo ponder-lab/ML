@@ -6,6 +6,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_1_1_3_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_1_28_28_1_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_1_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_256_8_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_1_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_3_1_FLOAT32;
@@ -1340,5 +1341,71 @@ public class TestShapeOps extends AbstractTensorTest {
   public void testAttrGuardDispatch2()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_attr_guard2.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_3_1_FLOAT32)));
+  }
+
+  /**
+   * Pins the output shape of {@code tf.gather} at its default axis (wala/ML#815). Gathering rows of
+   * a {@code (5000, 8)} table with {@code (2, 256)} indices yields {@code (2, 256, 8)}: the
+   * indices' shape indexes the result and each entry is a row of the table.
+   *
+   * <p>The operation was previously modeled as a pass-through, which reported the table's own
+   * shape. That is a rank error rather than an imprecision, so a signature written from it rejects
+   * every call.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGatherRank()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gather_rank.py",
+        "consume_gathered",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_256_8_FLOAT32)));
+  }
+
+  /**
+   * Companion to {@link #testGatherRank} through the Keras backend alias (wala/ML#815), which is
+   * the form the corpus uses.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testBackendGatherRank()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gather_rank.py",
+        "consume_backend_gathered",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_256_8_FLOAT32)));
+  }
+
+  /**
+   * Checks that a gathered value composes as an operand rather than only as a sink argument
+   * (wala/ML#815). The elementwise consumer reads the gather result's shape and dtype, so the
+   * lookup's rank has to survive one hop past the call that produced it.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGatherRankThroughElementwiseConsumer()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gather_rank.py",
+        "consume_scaled",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_256_8_FLOAT32)));
   }
 }

@@ -1285,6 +1285,15 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String EMBEDDING_LOOKUP_SIGNATURE = "tf.nn.embedding_lookup()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/gather. */
+  public static final MethodReference GATHER =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Ltensorflow/functions/gather")),
+          AstMethodReference.fnSelector);
+
+  private static final String GATHER_SIGNATURE = "tf.gather()";
+
   /** https://www.tensorflow.org/api_docs/python/tf/gather_nd. */
   public static final MethodReference GATHER_ND =
       MethodReference.findOrCreate(
@@ -2229,6 +2238,7 @@ public class TensorFlowTypes extends PythonTypes {
               TENSOR_SCATTER_ND_UPDATE.getDeclaringClass(), TENSOR_SCATTER_ND_UPDATE_SIGNATURE),
           Map.entry(SEQUENCE_MASK.getDeclaringClass(), SEQUENCE_MASK_SIGNATURE),
           Map.entry(EMBEDDING_LOOKUP.getDeclaringClass(), EMBEDDING_LOOKUP_SIGNATURE),
+          Map.entry(GATHER.getDeclaringClass(), GATHER_SIGNATURE),
           Map.entry(GATHER_ND.getDeclaringClass(), GATHER_ND_SIGNATURE),
           Map.entry(BOOLEAN_MASK.getDeclaringClass(), BOOLEAN_MASK_SIGNATURE),
           Map.entry(SLICE.getDeclaringClass(), SLICE_SIGNATURE),
