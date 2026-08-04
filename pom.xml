@@ -218,6 +218,14 @@
                   <exclude>**/*.min.*</exclude>
                   <exclude>**/tmp.*</exclude>
                   <exclude>**/*.jar</exclude>
+                  <!-- Archive and record formats written by executing a test fixture. Spotless
+                       walks the filesystem rather than the index, so ignoring these in git is
+                       not enough: it still attempts to format them and fails on the encoding,
+                       which fails the pre-commit hook and makes the tree un-committable while
+                       one is present. -->
+                  <exclude>**/*.tgz</exclude>
+                  <exclude>**/*.tar.gz</exclude>
+                  <exclude>**/*.tfrecord</exclude>
                   <exclude>**/*.exe</exclude>
                   <exclude>**/*.dll</exclude>
                   <exclude>**/*.class</exclude>
