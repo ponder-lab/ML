@@ -1,0 +1,7 @@
+# Byproducts, written when this fixture is executed rather than analyzed.
+# `deep_recommenders.datasets.cora` fetches the archive from an external URL behind an
+# existence check and extracts it beside itself. The JUnit tests analyze the fixture
+# statically and never read the bytes, so committing these would version outputs nothing
+# in the build consumes.
+cora.tgz
+cora/

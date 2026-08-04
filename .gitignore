@@ -80,13 +80,3 @@ gha-creds-*.json
 
 # Claude Code local settings
 .claude/
-
-# Test-data byproducts, written when a fixture is executed rather than analyzed.
-# The Cora archive and its extraction are fetched by `deep_recommenders.datasets.cora`
-# behind an existence check; the tfrecord is named by a vendored gpt-2 driver. The JUnit
-# tests analyze these fixtures statically and never read the bytes, so committing them
-# would version outputs nothing in the build consumes. `spotless` also fails on the
-# archive, since it is binary.
-com.ibm.wala.cast.python.test/data/tr_proj/cora.tgz
-com.ibm.wala.cast.python.test/data/tr_proj/cora/
-com.ibm.wala.cast.python.test/data/gpt2_vendored/dummy.tfrecord
