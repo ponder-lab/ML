@@ -102,6 +102,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_ROW_STARTS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.FROM_VALUE_ROWIDS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA_OP;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GATHER;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GATHER_ND;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GLOBAL_AVERAGE_POOLING_1D_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GRADIENT;
@@ -592,6 +593,8 @@ public class TensorGeneratorFactory {
       return anchor.makeGenerator(ImageAugmentation::new, ImageAugmentation::new);
     if (isType(type, FLATTEN.getDeclaringClass()))
       return anchor.makeGenerator(Flatten::new, Flatten::new);
+    if (isType(type, GATHER.getDeclaringClass()))
+      return anchor.makeGenerator(Gather::new, Gather::new);
     if (isType(type, GATHER_ND.getDeclaringClass()))
       return anchor.makeGenerator(GatherNd::new, GatherNd::new);
     if (isType(type, IDENTITY.getDeclaringClass()))
