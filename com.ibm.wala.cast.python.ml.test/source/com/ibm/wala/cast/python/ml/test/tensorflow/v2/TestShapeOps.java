@@ -1387,4 +1387,25 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TENSOR_2_256_8_FLOAT32)));
   }
+
+  /**
+   * Checks that a gathered value composes as an operand rather than only as a sink argument
+   * (wala/ML#815). The elementwise consumer reads the gather result's shape and dtype, so the
+   * lookup's rank has to survive one hop past the call that produced it.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGatherRankThroughElementwiseConsumer()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gather_rank.py",
+        "consume_scaled",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_2_256_8_FLOAT32)));
+  }
 }
