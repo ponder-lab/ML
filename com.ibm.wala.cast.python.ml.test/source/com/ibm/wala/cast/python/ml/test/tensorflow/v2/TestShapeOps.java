@@ -3,7 +3,7 @@ package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.FLOAT_32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.INT_32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_16_UINT8;
-import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_1_1_3_2_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_1_1_2_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_1_28_28_1_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_1_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_256_8_FLOAT32;
@@ -1184,10 +1184,11 @@ public class TestShapeOps extends AbstractTensorTest {
    * com.ibm.wala.cast.python.ml.client.TensorGenerator#dtypesFromSSAChain} recurses through the
    * dtype-preserving chain to the concrete {@code float32} input.
    *
-   * <p>TODO: the shape stays {@code (1, 1, 3, 2)} (the reshape result) rather than {@code (1, 1, 2,
-   * 2)} &mdash; the {@code [:, :, 1:, :]} subscript isn't reducing axis 2, a shape-precision gap
-   * tracked by <a href="https://github.com/wala/ML/issues/607">wala/ML#607</a>. This test pins the
-   * dtype recovery and the currently-observed shape.
+   * <p>The shape is now the reduced {@code (1, 1, 2, 2)} rather than the reshape result {@code (1,
+   * 1, 3, 2)}: the {@code [:, :, 1:, :]} subscript reduces axis 2 from 3 to 2, which closes <a
+   * href="https://github.com/wala/ML/issues/607">wala/ML#607</a>. That subscript sits in a method
+   * body, so it was one of the subscripts left unparsed by the recognizer wala/ML#824 fixed, and
+   * the unparsed fallback passed the receiver's own shape through unreduced.
    */
   @Test
   public void testSliceReshapePadDtype()
@@ -1197,7 +1198,7 @@ public class TestShapeOps extends AbstractTensorTest {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_1_1_3_2_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_1_1_2_2_FLOAT32)));
   }
 
   /**
@@ -1407,5 +1408,121 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TENSOR_2_256_8_FLOAT32)));
+  }
+
+  /**
+   * A column sliced out of a parameter drops the indexed axis, so {@code adjacency[:, 0]} over a
+   * rank-2 receiver is rank 1 (<a href="https://github.com/wala/ML/issues/824">wala/ML#824</a>).
+   * The subscript is inside a function body, where the {@code slice} builtin arrives by lexical
+   * read rather than by allocation; recognizing only the allocation left every subscript in a
+   * method unparsed, and the unparsed fallback passed the receiver's own shape through.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSlicedIndicesOffParameter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gather_unresolved_indices.py",
+        "consume_direct_indices",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_30_INT32)));
+  }
+
+  /**
+   * The gather one hop past that slice still composes the receiver's rank, giving {@code (30, 2,
+   * 16)} where the run-time value is {@code (30, 16)}, even though the slice itself now resolves.
+   * The generator-side shape query walks the points-to set rather than the pinned dataflow state,
+   * and the points-to set still carries the receiver's allocation.
+   *
+   * <p>TODO: Blocked by <a href="https://github.com/wala/ML/issues/825">wala/ML#825</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testGatherOnSlicedIndicesOffParameter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gather_unresolved_indices.py",
+        "consume_direct",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_30_16_FLOAT32)));
+  }
+
+  /**
+   * The same slice one container hop further out, the message-passing idiom: the element of an
+   * enumerated sequence carries no tensor type to the slice at all, so the indices are untyped
+   * rather than merely over-ranked.
+   *
+   * <p>TODO: Blocked by <a href="https://github.com/wala/ML/issues/824">wala/ML#824</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testSlicedIndicesThroughEnumeratedSequence()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gather_unresolved_indices.py",
+        "consume_listed_indices",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_30_INT32)));
+  }
+
+  /**
+   * The gather downstream of that untyped index, which falls to ⊤ and discards the table's known
+   * trailing axis. This is the shape of the loss reported in <a
+   * href="https://github.com/wala/ML/issues/823">wala/ML#823</a>; its cause is the untyped index
+   * above, so it clears when that does.
+   *
+   * <p>TODO: Blocked by <a href="https://github.com/wala/ML/issues/824">wala/ML#824</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testGatherThroughEnumeratedSequence()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gather_unresolved_indices.py",
+        "consume_listed",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_30_16_FLOAT32)));
+  }
+
+  /**
+   * A slice whose bounds are variables reduces its axis like any other. The discriminator
+   * separating a slice construction from a two-dimensional application must not key on the bounds
+   * being constants, or this form falls back to passing the receiver's shape through, which is the
+   * rank error <a href="https://github.com/wala/ML/issues/824">wala/ML#824</a> removes.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSlicedVariableBoundsOffParameter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gather_unresolved_indices.py",
+        "consume_variable_bounds",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_10_INT32)));
   }
 }
