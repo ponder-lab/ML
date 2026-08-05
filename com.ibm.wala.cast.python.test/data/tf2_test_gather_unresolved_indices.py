@@ -49,3 +49,18 @@ adjacency = tf.ones((30, 2), dtype=tf.int32)
 
 propagate_direct(node_embeddings, adjacency)
 propagate_listed(node_embeddings, [adjacency])
+
+
+def consume_variable_bounds(v):
+    pass
+
+
+# A slice whose bounds are variables rather than literals. The construction is the same
+# `slice(lower, upper, step)`; only the bounds differ, and the axis still reduces.
+def propagate_variable_bounds(adjacency, lo, hi):
+    window = adjacency[lo:hi, 0]
+    assert window.shape == (10,)
+    consume_variable_bounds(window)
+
+
+propagate_variable_bounds(adjacency, 0, 10)

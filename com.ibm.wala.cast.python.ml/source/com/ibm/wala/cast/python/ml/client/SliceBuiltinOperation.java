@@ -558,10 +558,15 @@ public class SliceBuiltinOperation extends TensorGenerator {
    * indexed axis.
    *
    * <p>Arity alone does not separate a construction from a two-dimensional application, which has
-   * the same four uses. The discriminator is the one {@code
-   * PythonTensorAnalysisEngine#isNonTensorSliceConstructor} uses: a construction's first bound is a
-   * constant ({@code None} or a literal), whereas an application's first argument is the computed
-   * subscripted object.
+   * the same four uses. The discriminator is the per-dimension marker {@code
+   * PythonTensorAnalysisEngine#isNonTensorSliceConstructor} also uses: an application's arguments
+   * carry the results of other slice invokes, one per subscripted dimension, and a construction's
+   * bounds never do.
+   *
+   * <p>That sibling additionally requires the first bound to be a constant. Requiring it here would
+   * reject {@code adjacency[lo:hi, 0]}, whose bounds are variables, sending it back to the
+   * receiver-passthrough fallback this exists to remove and reintroducing the rank error in another
+   * form.
    *
    * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the callee.
    * @param caller The caller {@link CGNode}.
@@ -576,8 +581,31 @@ public class SliceBuiltinOperation extends TensorGenerator {
     // `slice(lower, upper, step)` is the callable plus exactly its three bounds; anything wider is
     // an application, which pads the bounds behind the subscripted object.
     if (inv.getNumberOfUses() != 4) return false;
-    if (!caller.getIR().getSymbolTable().isConstant(inv.getUse(1))) return false;
-    for (CGNode callee : builder.getCallGraph().getPossibleTargets(caller, inv.getCallSite()))
+    if (!resolvesToSliceBuiltin(builder, caller, inv)) return false;
+    // A two-dimensional application has the same arity. Its arguments carry the per-dimension
+    // slice objects, which a construction's bounds never do.
+    for (int u = 1; u < inv.getNumberOfUses(); u++) {
+      SSAInstruction boundDef = caller.getDU().getDef(inv.getUse(u));
+      if (boundDef instanceof SSAAbstractInvokeInstruction
+          && resolvesToSliceBuiltin(builder, caller, (SSAAbstractInvokeInstruction) boundDef))
+        return false;
+    }
+    return true;
+  }
+
+  /**
+   * Returns whether an invoke reaches the {@code slice} builtin. Resolution goes through the call
+   * graph rather than the callable's defining instruction, which keeps the answer independent of
+   * how the name was reached and correct when an enclosing scope rebinds it.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the targets.
+   * @param caller The caller {@link CGNode}.
+   * @param invoke The invoke to test.
+   * @return {@code true} iff a resolved callee is the {@code slice} builtin.
+   */
+  private static boolean resolvesToSliceBuiltin(
+      PropagationCallGraphBuilder builder, CGNode caller, SSAAbstractInvokeInstruction invoke) {
+    for (CGNode callee : builder.getCallGraph().getPossibleTargets(caller, invoke.getCallSite()))
       if (callee.getMethod().getReference().getDeclaringClass().equals(PythonTypes.SLICE_BUILTIN))
         return true;
     return false;

@@ -1503,4 +1503,26 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TENSOR_30_16_FLOAT32)));
   }
+
+  /**
+   * A slice whose bounds are variables reduces its axis like any other. The discriminator
+   * separating a slice construction from a two-dimensional application must not key on the bounds
+   * being constants, or this form falls back to passing the receiver's shape through, which is the
+   * rank error <a href="https://github.com/wala/ML/issues/824">wala/ML#824</a> removes.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSlicedVariableBoundsOffParameter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gather_unresolved_indices.py",
+        "consume_variable_bounds",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_10_INT32)));
+  }
 }
