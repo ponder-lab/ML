@@ -479,7 +479,7 @@ public class SliceBuiltinOperation extends TensorGenerator {
    */
   private SubscriptDim classifyDim(PropagationCallGraphBuilder builder, CGNode caller, int argVn) {
     if (argVn <= 0) return null;
-    if (isSliceObject(caller, argVn)) {
+    if (isSliceObject(builder, caller, argVn)) {
       SSAAbstractInvokeInstruction inv =
           (SSAAbstractInvokeInstruction) caller.getDU().getDef(argVn);
       // slice(lower, upper, step): uses 1, 2, 3.
@@ -546,23 +546,41 @@ public class SliceBuiltinOperation extends TensorGenerator {
 
   /**
    * Returns whether {@code argVn}'s defining instruction is a {@code slice(...)} object
-   * construction (an invoke whose callee is the {@link PythonTypes#SLICE_BUILTIN} allocation).
+   * construction, i.e. the object a {@code :} compiles to inside a multi-dimensional subscript.
    *
+   * <p>Resolution goes through the call graph rather than the callable's defining instruction (<a
+   * href="https://github.com/wala/ML/issues/824">wala/ML#824</a>). A subscript written at module
+   * scope reaches the builtin through a {@link SSANewInstruction}, but one written inside a
+   * function body reaches it through an {@code AstLexicalRead} of the enclosing scope's binding,
+   * and requiring the {@code new} recognized only the first. Every subscript in a method body was
+   * therefore unparsed, which fell through to the single-bound path and passed the receiver's own
+   * shape through, so {@code adjacency[:, 0]} reported the receiver's rank instead of dropping the
+   * indexed axis.
+   *
+   * <p>Arity alone does not separate a construction from a two-dimensional application, which has
+   * the same four uses. The discriminator is the one {@code
+   * PythonTensorAnalysisEngine#isNonTensorSliceConstructor} uses: a construction's first bound is a
+   * constant ({@code None} or a literal), whereas an application's first argument is the computed
+   * subscripted object.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the callee.
    * @param caller The caller {@link CGNode}.
    * @param argVn The argument value number.
    * @return {@code true} iff {@code argVn} is defined by a slice-object construction.
    */
-  private static boolean isSliceObject(CGNode caller, int argVn) {
+  private static boolean isSliceObject(
+      PropagationCallGraphBuilder builder, CGNode caller, int argVn) {
     SSAInstruction def = caller.getDU().getDef(argVn);
     if (!(def instanceof SSAAbstractInvokeInstruction)) return false;
     SSAAbstractInvokeInstruction inv = (SSAAbstractInvokeInstruction) def;
-    if (inv.getNumberOfUses() < 4) return false;
-    SSAInstruction funcDef = caller.getDU().getDef(inv.getUse(0));
-    return funcDef instanceof SSANewInstruction
-        && ((SSANewInstruction) funcDef)
-            .getNewSite()
-            .getDeclaredType()
-            .equals(PythonTypes.SLICE_BUILTIN);
+    // `slice(lower, upper, step)` is the callable plus exactly its three bounds; anything wider is
+    // an application, which pads the bounds behind the subscripted object.
+    if (inv.getNumberOfUses() != 4) return false;
+    if (!caller.getIR().getSymbolTable().isConstant(inv.getUse(1))) return false;
+    for (CGNode callee : builder.getCallGraph().getPossibleTargets(caller, inv.getCallSite()))
+      if (callee.getMethod().getReference().getDeclaringClass().equals(PythonTypes.SLICE_BUILTIN))
+        return true;
+    return false;
   }
 
   /**

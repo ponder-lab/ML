@@ -3,7 +3,7 @@ package com.ibm.wala.cast.python.ml.test.tensorflow.v2;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.FLOAT_32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.INT_32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_16_UINT8;
-import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_1_1_3_2_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_1_1_2_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_1_28_28_1_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_1_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_256_8_FLOAT32;
@@ -1184,10 +1184,11 @@ public class TestShapeOps extends AbstractTensorTest {
    * com.ibm.wala.cast.python.ml.client.TensorGenerator#dtypesFromSSAChain} recurses through the
    * dtype-preserving chain to the concrete {@code float32} input.
    *
-   * <p>TODO: the shape stays {@code (1, 1, 3, 2)} (the reshape result) rather than {@code (1, 1, 2,
-   * 2)} &mdash; the {@code [:, :, 1:, :]} subscript isn't reducing axis 2, a shape-precision gap
-   * tracked by <a href="https://github.com/wala/ML/issues/607">wala/ML#607</a>. This test pins the
-   * dtype recovery and the currently-observed shape.
+   * <p>The shape is now the reduced {@code (1, 1, 2, 2)} rather than the reshape result {@code (1,
+   * 1, 3, 2)}: the {@code [:, :, 1:, :]} subscript reduces axis 2 from 3 to 2, which closes <a
+   * href="https://github.com/wala/ML/issues/607">wala/ML#607</a>. That subscript sits in a method
+   * body, so it was one of the subscripts left unparsed by the recognizer wala/ML#824 fixed, and
+   * the unparsed fallback passed the receiver's own shape through unreduced.
    */
   @Test
   public void testSliceReshapePadDtype()
@@ -1197,7 +1198,7 @@ public class TestShapeOps extends AbstractTensorTest {
         "consume",
         1,
         1,
-        Map.of(2, Set.of(TENSOR_1_1_3_2_FLOAT32)));
+        Map.of(2, Set.of(TENSOR_1_1_2_2_FLOAT32)));
   }
 
   /**
@@ -1410,17 +1411,18 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
-   * A column sliced out of a parameter keeps the receiver's rank instead of dropping the indexed
-   * axis, so {@code adjacency[:, 0]} reports rank 2 where the run-time value is rank 1.
-   *
-   * <p>TODO: Blocked by <a href="https://github.com/wala/ML/issues/824">wala/ML#824</a>.
+   * A column sliced out of a parameter drops the indexed axis, so {@code adjacency[:, 0]} over a
+   * rank-2 receiver is rank 1 (<a href="https://github.com/wala/ML/issues/824">wala/ML#824</a>).
+   * The subscript is inside a function body, where the {@code slice} builtin arrives by lexical
+   * read rather than by allocation; recognizing only the allocation left every subscript in a
+   * method unparsed, and the unparsed fallback passed the receiver's own shape through.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testSlicedIndicesOffParameter()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -1432,10 +1434,12 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
-   * The gather one hop past that slice composes the leaked rank, giving {@code (30, 2, 16)} where
-   * the run-time value is {@code (30, 16)}. The gather model is correct; its indices are not.
+   * The gather one hop past that slice still composes the receiver's rank, giving {@code (30, 2,
+   * 16)} where the run-time value is {@code (30, 16)}, even though the slice itself now resolves.
+   * The generator-side shape query walks the points-to set rather than the pinned dataflow state,
+   * and the points-to set still carries the receiver's allocation.
    *
-   * <p>TODO: Blocked by <a href="https://github.com/wala/ML/issues/824">wala/ML#824</a>.
+   * <p>TODO: Blocked by <a href="https://github.com/wala/ML/issues/825">wala/ML#825</a>.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
