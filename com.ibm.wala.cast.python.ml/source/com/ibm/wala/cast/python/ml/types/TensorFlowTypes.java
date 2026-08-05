@@ -1975,6 +1975,17 @@ public class TensorFlowTypes extends PythonTypes {
 
   private static final String SOFTMAX_SIGNATURE = "tf.nn.softmax()";
 
+  /** https://www.tensorflow.org/api_docs/python/tf/keras/layers/Conv2D. */
+  public static final MethodReference CONV2D_CALL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/keras/layers/Conv2D/" + CALLABLE_METHOD_NAME)),
+          AstMethodReference.fnSelector);
+
+  private static final String CONV2D_CALL_SIGNATURE =
+      "tf.keras.layers.Conv2D." + CALLABLE_METHOD_NAME + "()";
+
   /**
    * https://github.com/keras-team/keras/blob/f6c4ac55692c132cd16211f4877fac6dbeead749/keras/src/layers/core/dense.py#L149-L155.
    */
@@ -2316,6 +2327,7 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(STOP_GRADIENT.getDeclaringClass(), STOP_GRADIENT_SIGNATURE),
           Map.entry(GRADIENT.getDeclaringClass(), GRADIENT_SIGNATURE),
           Map.entry(SOFTMAX.getDeclaringClass(), SOFTMAX_SIGNATURE),
+          Map.entry(CONV2D_CALL.getDeclaringClass(), CONV2D_CALL_SIGNATURE),
           Map.entry(DENSE_CALL.getDeclaringClass(), DENSE_CALL_SIGNATURE),
           Map.entry(
               GLOBAL_AVERAGE_POOLING_1D_CALL.getDeclaringClass(),
