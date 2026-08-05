@@ -1310,4 +1310,53 @@ public class TestModelCall extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TENSOR_1_10_FLOAT32)));
   }
+
+  /**
+   * Control for {@link #testModelCallResultConsumerConv()}: a model whose {@code call} chains only
+   * {@code Flatten} and {@code Dense} keeps its output shape all the way to a sibling function that
+   * consumes the call result.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testModelCallResultConsumer()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_call_result_consumer.py",
+        "consume_plain",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_128_10_FLOAT32)));
+  }
+
+  /**
+   * The same chain with a {@code Conv2D} layer call in front loses the output shape entirely, so
+   * the consumer of the model call's result gets no rank. Minimal form of what {@code
+   * aymericdamien/TensorFlow-Examples}'s {@code ConvNet} does before handing {@code pred} to {@code
+   * accuracy} and {@code cross_entropy_loss}, which is the dominant shape behind the unknown-rank
+   * parameters observed on real subjects.
+   *
+   * <p>Before wala/ML#820, the dtype survived and the shape was lost entirely, because the model
+   * file described {@code conv2d}, the function, and nothing described {@code Conv2D}, the layer.
+   * The convolution's spatial extents remain unresolved, which does not matter here: {@code Dense}
+   * rewrites only the last axis, so the final shape is reached from a rank-4 input regardless.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testModelCallResultConsumerConv()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_model_call_result_consumer.py",
+        "consume_conv",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_128_10_FLOAT32)));
+  }
 }

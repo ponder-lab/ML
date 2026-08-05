@@ -198,6 +198,10 @@ public class TestMisc extends AbstractTensorTest {
    * residual gap from 4 to the rule-based 5 is one intermediate that still doesn't register; see
    * wala/ML#389.
    *
+   * <p>The local count rose from four to five with wala/ML#820: the {@code Conv2D} layer call's
+   * result now carries a shape, so it counts as a tensor-typed local where before it carried
+   * nothing at all.
+   *
    * <p>With the count check passing, the test now fails on value 3's type: actual {@code {(32, 28)
    * float32, (16, 28) float32, (28, 28) float32, ? unknown}} &mdash; a union that contains an
    * over-peeled shape ({@code (32, 28)} / {@code (16, 28)} = batch applied to a peeled {@code
@@ -216,7 +220,7 @@ public class TestMisc extends AbstractTensorTest {
         "tensorflow_eager_execution.py",
         "MyModel.call",
         1,
-        4,
+        5,
         Map.of(3, Set.of(TENSOR_32_28_28_1_FLOAT32, TENSOR_16_28_28_1_FLOAT32)));
   }
 

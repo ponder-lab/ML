@@ -43,6 +43,19 @@ public class DenseCall extends TensorGenerator {
   private static final String DENSE_UNITS_FIELD_NAME = "units";
 
   /**
+   * Name of the constructor argument the model file stores on the layer instance, giving the size
+   * of the output's last axis.
+   *
+   * <p>Overridable because a sibling layer names the same idea differently: a convolution calls it
+   * {@code filters}. The lookup is otherwise identical, so it is shared rather than copied.
+   *
+   * @return The field name to read off the layer instance.
+   */
+  protected String getUnitsFieldName() {
+    return DENSE_UNITS_FIELD_NAME;
+  }
+
+  /**
    * Per-thread set of {@code Dense.__call__} nodes whose input shape is currently being computed.
    *
    * <p>Breaks unbounded recursion when a layer call's input flows back to itself. The motivating
@@ -128,7 +141,7 @@ public class DenseCall extends TensorGenerator {
         FieldReference unitsFieldRef =
             FieldReference.findOrCreate(
                 selfASIN.concreteType().getReference(),
-                findOrCreateAsciiAtom(DENSE_UNITS_FIELD_NAME),
+                findOrCreateAsciiAtom(this.getUnitsFieldName()),
                 Root);
 
         IField f = builder.getClassHierarchy().resolveField(unitsFieldRef);
@@ -251,7 +264,7 @@ public class DenseCall extends TensorGenerator {
    * @return The set of possible input shapes, or {@code null} if neither path resolves a shape or
    *     the node is already being resolved on this thread (cycle).
    */
-  private Set<List<Dimension<?>>> getInputShapes(PropagationCallGraphBuilder builder) {
+  protected Set<List<Dimension<?>>> getInputShapes(PropagationCallGraphBuilder builder) {
     CGNode self = this.getNode();
     // The thread-local guard breaks real recursion, which exists only on the null-engine path.
     // Under the engine, reads never recurse, and the guard's null was an engine-invisible cycle

@@ -41,6 +41,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CLIP_BY_VALUE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONCAT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONV2D_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.COS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.COSH;
@@ -1790,6 +1791,7 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, COS.getDeclaringClass())) return new Cos(source);
     else if (isType(calledFunction, GRADIENT.getDeclaringClass())) return new Gradient(source);
     else if (isType(calledFunction, SOFTMAX.getDeclaringClass())) return new Softmax(source);
+    else if (isType(calledFunction, CONV2D_CALL.getDeclaringClass())) return new Conv2DCall(source);
     else if (isType(calledFunction, DENSE_CALL.getDeclaringClass())) return new DenseCall(source);
     else if (isType(calledFunction, ADD_WEIGHT.getDeclaringClass())) return new AddWeight(source);
     else if (isType(calledFunction, MODEL_CALL.getDeclaringClass())) return new ModelCall(source);
