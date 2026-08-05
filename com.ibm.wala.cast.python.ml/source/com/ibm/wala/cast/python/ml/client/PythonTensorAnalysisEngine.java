@@ -2072,6 +2072,29 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       for (PointsToSetVariable p : parameters)
         initOrigins.put(p, EnumSet.of(TensorOrigin.PARAMETER));
 
+      // A Keras layer casts its first floating-point argument to the layer's compute dtype before
+      // the body runs (wala/ML#821), so the caller's dtype is not the parameter's and propagating
+      // it names a dtype no call ever passes. Collected here are those first arguments; the cast
+      // itself is the edge transfer, which also does the parameter barrier's job.
+      //
+      // The recognizer is the class-name suffix `explicitBuildContractShapes` already uses for a
+      // Keras call body, and the parameter is `getParameter(2)` as `contractSeedForCallInput`
+      // already indexes it. `call` and not `__call__`: the cast happens inside Keras's own
+      // `Layer.__call__`, which a user-written `__call__` replaces rather than passes through.
+      Set<PointsToSetVariable> computeDTypeCasts = HashSetFactory.make();
+      for (PointsToSetVariable v : parameters) {
+        LocalPointerKey lpk = (LocalPointerKey) v.getPointerKey();
+        CGNode owner = lpk.getNode();
+        if (owner.getIR() == null || owner.getMethod().isStatic()) continue;
+        if (owner.getIR().getNumberOfParameters() < 3) continue;
+        if (owner.getIR().getParameter(2) != lpk.getValueNumber()) continue;
+        String declaringClass =
+            owner.getMethod().getDeclaringClass().getReference().getName().toString();
+        if (declaringClass.endsWith("/" + PythonTypes.CALLABLE_METHOD_NAME_FOR_KERAS_MODELS))
+          computeDTypeCasts.add(v);
+      }
+      LOGGER.fine(() -> "wala/ML#821 Keras call input destinations: " + computeDTypeCasts.size());
+
       // Iteration products do not inherit the hybridization-frame origin (wala/ML#729): iterating
       // a symbolic tensor raises under tf.function tracing, so a value iterated out of a parameter
       // is an eager-only product of the fed data, whose provenance comes from its own seed's
@@ -2250,6 +2273,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               conv3ds,
               drops,
               parameters,
+              computeDTypeCasts,
               iterationProducts,
               errorLog);
 

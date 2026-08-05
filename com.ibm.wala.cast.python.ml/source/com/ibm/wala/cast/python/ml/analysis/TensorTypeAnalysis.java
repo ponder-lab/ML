@@ -342,6 +342,74 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
   }
 
   /**
+   * A transfer function for the first argument of a Keras {@code call} body (<a
+   * href="https://github.com/wala/ML/issues/821">wala/ML#821</a>): an incoming floating-point type
+   * is rewritten to the layer's compute dtype and everything else flows unchanged. {@code
+   * Layer.__call__} casts its first argument to {@code self.compute_dtype} before dispatching to
+   * {@code call}, so the caller's dtype is not the parameter's, and propagating it named a dtype no
+   * call ever passes.
+   *
+   * <p>Only floating-point cells are rewritten. Keras leaves an integral, boolean or complex
+   * argument alone, which is why a {@code uint8} label parameter keeps reporting the caller's type.
+   *
+   * <p>The compute dtype is taken to be {@link #COMPUTE_DTYPE}, the default policy. A layer
+   * constructed with an explicit {@code dtype=} is therefore reported as if it carried the default;
+   * that construction is rare and unmodeled, and the runtime evidence is what would catch it.
+   *
+   * <p>Origins are blocked exactly as {@link ParameterBarrierOp} blocks them, since this
+   * destination is a parameter and this operator replaces rather than supplements that barrier.
+   */
+  static final class ComputeDTypeCastOp extends UnaryOperator<TensorVariable> {
+    static final ComputeDTypeCastOp INSTANCE = new ComputeDTypeCastOp();
+
+    /** The compute dtype of a layer under the default policy. */
+    private static final DType COMPUTE_DTYPE = DType.FLOAT32;
+
+    private ComputeDTypeCastOp() {}
+
+    @Override
+    public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
+      if (lhs == null || rhs == null || rhs.state == null) return NOT_CHANGED;
+      if (lhs.state == null) {
+        lhs.state = HashSetFactory.make();
+        for (TensorType t : rhs.state) lhs.state.add(cast(t));
+        return CHANGED;
+      }
+      boolean changed = false;
+      for (TensorType t : rhs.state) changed |= lhs.state.add(cast(t));
+      return changed ? CHANGED : NOT_CHANGED;
+    }
+
+    /**
+     * The type as the {@code call} body sees it.
+     *
+     * @param type The type the caller holds.
+     * @return {@code type} with a floating-point cell replaced by the compute dtype, or {@code
+     *     type} itself when Keras would not cast it.
+     */
+    private static TensorType cast(TensorType type) {
+      DType dtype = type.getDType();
+      if (dtype == null || !dtype.isFloatingPoint() || dtype == COMPUTE_DTYPE) return type;
+      return TensorType.of(COMPUTE_DTYPE, type.getDims(), type.layout());
+    }
+
+    @Override
+    public int hashCode() {
+      return 0x821CA57;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof ComputeDTypeCastOp;
+    }
+
+    @Override
+    public String toString() {
+      return "cast a floating-point argument to the layer's compute dtype (Keras call input)";
+    }
+  }
+
+  /**
    * Which axes of the suppressed seed a type feed trusts (wala/ML#758): a fill keeps the axis the
    * generator proved and composes only the unproven one from the operands' converged state, so
    * proven evidence is never lost to a weaker operand member.
@@ -397,6 +465,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> conv3ds,
       Set<PointsToSetVariable> drops,
       Set<PointsToSetVariable> parameters,
+      Set<PointsToSetVariable> computeDTypeCasts,
       Set<PointsToSetVariable> iterationProducts,
       AtomicReference<Function<PointsToSetVariable, TensorVariable>> outAccessor,
       Map<PointerKey, AnalysisError> errorLog) {
@@ -948,6 +1017,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               return new ConvOp(2, node);
             } else if (conv3ds.contains(node)) {
               return new ConvOp(3, node);
+            } else if (computeDTypeCasts.contains(node)) {
+              return ComputeDTypeCastOp.INSTANCE;
             } else if (parameters.contains(node)) {
               return ParameterBarrierOp.INSTANCE;
             } else if (iterationProducts.contains(node)) {
@@ -975,6 +1046,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               return new SetShapeOp(set_shapes.get(dst));
             } else if (refinements.containsKey(dst)) {
               return new RefineShapeOp(refinements.get(dst), dst);
+            } else if (computeDTypeCasts.contains(dst)) {
+              return ComputeDTypeCastOp.INSTANCE;
             } else if (parameters.contains(dst)) {
               return ParameterBarrierOp.INSTANCE;
             } else if (iterationProducts.contains(dst)) {
@@ -1048,6 +1121,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * @param parameters Parameter destinations, whose types flow normally but whose origins are
    *     pinned to their {@link TensorOrigin#PARAMETER} seed by blocking caller-side origin inflow
    *     (wala/ML#726).
+   * @param computeDTypeCasts Keras {@code call} first-argument destinations, whose incoming
+   *     floating-point types are rewritten to the layer's compute dtype (wala/ML#821).
    * @param iterationProducts Iteration-product destinations, whose types flow normally but whose
    *     origin inflow drops {@link TensorOrigin#PARAMETER} (wala/ML#729).
    * @param errorLog The sink for shape-mismatch diagnostics.
@@ -1065,6 +1140,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> conv3ds,
       Set<PointsToSetVariable> drops,
       Set<PointsToSetVariable> parameters,
+      Set<PointsToSetVariable> computeDTypeCasts,
       Set<PointsToSetVariable> iterationProducts,
       Map<PointerKey, AnalysisError> errorLog) {
     this(
@@ -1080,6 +1156,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
         conv3ds,
         drops,
         parameters,
+        computeDTypeCasts,
         iterationProducts,
         errorLog,
         new AtomicReference<>());
@@ -1108,6 +1185,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> conv3ds,
       Set<PointsToSetVariable> drops,
       Set<PointsToSetVariable> parameters,
+      Set<PointsToSetVariable> computeDTypeCasts,
       Set<PointsToSetVariable> iterationProducts,
       Map<PointerKey, AnalysisError> errorLog,
       AtomicReference<Function<PointsToSetVariable, TensorVariable>> outAccessor) {
@@ -1123,6 +1201,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
             conv3ds,
             drops,
             parameters,
+            computeDTypeCasts,
             iterationProducts,
             outAccessor,
             errorLog));

@@ -1359,4 +1359,47 @@ public class TestModelCall extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TENSOR_128_10_FLOAT32)));
   }
+
+  /**
+   * A Keras layer casts its first floating-point argument to the layer's compute dtype before the
+   * body runs, so {@code call}'s parameter is {@code float32} where the caller holds {@code
+   * float64}. The caller's dtype used to flow through unchanged, which named a dtype no call ever
+   * passes (<a href="https://github.com/wala/ML/issues/821">wala/ML#821</a>).
+   *
+   * <p>The cast is the one Keras performs in {@code Layer.__call__}, so it applies to {@code call}
+   * and not to a user-written {@code __call__}, which replaces that entry rather than passing
+   * through it. {@link #testModelCall()} pins the untouched case.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testKerasAutocast()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_keras_autocast.py",
+        "MyModel.call",
+        1,
+        2,
+        Map.of(3, Set.of(TENSOR_20_28_FLOAT32)));
+  }
+
+  /**
+   * The caller's side of {@link #testKerasAutocast()}: the value handed to the model really is
+   * {@code float64}, so the cast is the parameter's own semantics rather than a repair of a
+   * mis-typed argument. Without this the test above would still pass if the caller stopped
+   * resolving.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testKerasAutocastCaller()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_keras_autocast.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_20_28_FLOAT64)));
+  }
 }
