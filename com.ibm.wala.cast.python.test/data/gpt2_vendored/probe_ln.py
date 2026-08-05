@@ -11,4 +11,6 @@ def consume(t):
 
 ln = LayerNormalization(8)
 out = ln(tf.ones((2, 3, 8)))
+# Observed by running this file under `python3.10` (wala/ML#808), not read off the source.
+assert out.shape == (2, 3, 8) and out.dtype == tf.float32
 consume(out)
