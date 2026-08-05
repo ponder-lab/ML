@@ -385,6 +385,10 @@ public abstract class AbstractTensorTest extends TestPythonMLCallGraphShape {
 
   protected static final TensorType TENSOR_20_28_FLOAT32 = TensorType.of(FLOAT_32, 20, 28);
 
+  protected static final TensorType TENSOR_30_INT32 = TensorType.of(INT_32, 30);
+
+  protected static final TensorType TENSOR_30_16_FLOAT32 = TensorType.of(FLOAT_32, 30, 16);
+
   protected static final TensorType TENSOR_20_28_FLOAT64 = TensorType.of(FLOAT_64, 20, 28);
 
   protected static final TensorType TENSOR_20_64_FLOAT32 = TensorType.of(FLOAT_32, 20, 64);

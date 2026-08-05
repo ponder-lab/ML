@@ -1408,4 +1408,95 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TENSOR_2_256_8_FLOAT32)));
   }
+
+  /**
+   * A column sliced out of a parameter keeps the receiver's rank instead of dropping the indexed
+   * axis, so {@code adjacency[:, 0]} reports rank 2 where the run-time value is rank 1.
+   *
+   * <p>TODO: Blocked by <a href="https://github.com/wala/ML/issues/824">wala/ML#824</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testSlicedIndicesOffParameter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gather_unresolved_indices.py",
+        "consume_direct_indices",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_30_INT32)));
+  }
+
+  /**
+   * The gather one hop past that slice composes the leaked rank, giving {@code (30, 2, 16)} where
+   * the run-time value is {@code (30, 16)}. The gather model is correct; its indices are not.
+   *
+   * <p>TODO: Blocked by <a href="https://github.com/wala/ML/issues/824">wala/ML#824</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testGatherOnSlicedIndicesOffParameter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gather_unresolved_indices.py",
+        "consume_direct",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_30_16_FLOAT32)));
+  }
+
+  /**
+   * The same slice one container hop further out, the message-passing idiom: the element of an
+   * enumerated sequence carries no tensor type to the slice at all, so the indices are untyped
+   * rather than merely over-ranked.
+   *
+   * <p>TODO: Blocked by <a href="https://github.com/wala/ML/issues/824">wala/ML#824</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testSlicedIndicesThroughEnumeratedSequence()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gather_unresolved_indices.py",
+        "consume_listed_indices",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_30_INT32)));
+  }
+
+  /**
+   * The gather downstream of that untyped index, which falls to ⊤ and discards the table's known
+   * trailing axis. This is the shape of the loss reported in <a
+   * href="https://github.com/wala/ML/issues/823">wala/ML#823</a>; its cause is the untyped index
+   * above, so it clears when that does.
+   *
+   * <p>TODO: Blocked by <a href="https://github.com/wala/ML/issues/824">wala/ML#824</a>.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test(expected = AssertionError.class)
+  public void testGatherThroughEnumeratedSequence()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gather_unresolved_indices.py",
+        "consume_listed",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_30_16_FLOAT32)));
+  }
 }
