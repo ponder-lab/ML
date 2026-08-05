@@ -2193,7 +2193,7 @@ public class TestDatasets extends AbstractTensorTest {
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testPairedStepFunctionsTestArm()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(

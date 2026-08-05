@@ -39,16 +39,15 @@ public class TestTupleBinding extends AbstractTensorTest {
   /**
    * The same destructuring, except that field 0's target rebinds the very name on the right, which
    * is {@code gpt-2-tensorflow2.0}'s {@code train_dataset, test_dataset = train_dataset}. Field 1
-   * loses its type.
-   *
-   * <p>TODO: Blocked by wala/ML#819.
+   * used to lose its type, because the read that followed the rebinding was re-pointed at field 0's
+   * result rather than at the tuple (wala/ML#819).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testRebindingDestructure()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(

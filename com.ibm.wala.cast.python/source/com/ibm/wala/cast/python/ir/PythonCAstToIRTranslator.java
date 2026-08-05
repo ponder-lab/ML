@@ -1315,6 +1315,16 @@ public class PythonCAstToIRTranslator extends AstTranslator {
 
   private void handleObjectLiteralAssign(
       CAstNode n, CAstNode lvalAst, int rval, WalkContext c, CAstVisitor<WalkContext> visitor) {
+    // Capture the right-hand side before any target is bound. Python evaluates it once and then
+    // binds, so `a, b = a` must read both fields out of the incoming tuple. Reading the symbol
+    // instead lets a target that rebinds the source name re-point the reads that follow it at its
+    // own definition: field 1 was read out of field 0's result rather than out of the tuple, which
+    // silently dropped every field but the first. A copy no symbol names cannot be re-pointed.
+    // See wala/ML#819.
+    int source = c.currentScope().allocateTempValue();
+    c.cfg().addInstruction(new AssignInstruction(c.cfg().getCurrentInstruction(), source, rval));
+    rval = source;
+
     for (int i = 1; i < lvalAst.getChildCount(); i += 2) {
       int idx = c.getValue(lvalAst.getChild(i));
       if (idx == -1) {
