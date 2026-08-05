@@ -1,5 +1,4 @@
-# Byproduct, written when this fixture is executed rather than analyzed. The record is
-# named by the vendored data-pipeline driver. The JUnit tests analyze the fixture
-# statically and never read the bytes, so committing it would version an output nothing
-# in the build consumes.
-dummy.tfrecord
+# The vendored gpt-2 driver reads `dummy.tfrecord` and nothing writes it, so it is an input
+# rather than a byproduct and is committed beside the fixture it feeds. Left here as a note
+# because it was briefly ignored as a byproduct, which made the fixture unrunnable from a
+# fresh clone.
