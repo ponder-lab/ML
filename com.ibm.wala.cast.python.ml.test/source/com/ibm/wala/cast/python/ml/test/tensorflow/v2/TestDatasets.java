@@ -2184,7 +2184,7 @@ public class TestDatasets extends AbstractTensorTest {
   /**
    * Companion to {@link #testPairedStepFunctionsTrainArm} for the testing arm, whose dataset is
    * field 1 of a destructuring whose field 0 rebinds the parameter being destructured. The corpus
-   * shape of {@link #testRebindingDestructure}.
+   * shape of {@link TestTupleBinding#testRebindingDestructure}.
    *
    * <p>TODO: Blocked by wala/ML#819.
    *
@@ -2202,48 +2202,5 @@ public class TestDatasets extends AbstractTensorTest {
         2,
         2,
         Map.of(2, Set.of(TENSOR_8_207_INT32), 3, Set.of(TENSOR_8_207_INT32)));
-  }
-
-  /**
-   * A destructuring assignment whose left-hand side does not mention the name being destructured.
-   * Both fields keep their types, which is the control for {@link #testRebindingDestructure}.
-   *
-   * @throws ClassHierarchyException On WALA class-hierarchy error.
-   * @throws IllegalArgumentException On illegal argument.
-   * @throws CancelException On analysis cancellation.
-   * @throws IOException On I/O error reading the test file.
-   */
-  @Test
-  public void testPlainDestructureSecondField()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_rebinding_destructure.py",
-        "consume_plain_second",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_4_5_FLOAT32)));
-  }
-
-  /**
-   * The same destructuring, except that field 0's target rebinds the very name on the right, which
-   * is {@code gpt-2-tensorflow2.0}'s {@code train_dataset, test_dataset = train_dataset}. Field 1
-   * loses its type.
-   *
-   * <p>TODO: Blocked by wala/ML#819.
-   *
-   * @throws ClassHierarchyException On WALA class-hierarchy error.
-   * @throws IllegalArgumentException On illegal argument.
-   * @throws CancelException On analysis cancellation.
-   * @throws IOException On I/O error reading the test file.
-   */
-  @Test(expected = AssertionError.class)
-  public void testRebindingDestructure()
-      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test(
-        "tf2_test_rebinding_destructure.py",
-        "consume_rebound_second",
-        1,
-        1,
-        Map.of(2, Set.of(TENSOR_4_5_FLOAT32)));
   }
 }
