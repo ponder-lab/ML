@@ -146,6 +146,62 @@ public class BuiltinFunctions {
   }
 
   /**
+   * Builds the summary for {@code enumerate}: a freshly-allocated list holding one tuple whose
+   * field 0 is an {@code int} index and whose field 1 is an element of the argument. Iterating the
+   * result and unpacking each element (the {@code for i, x in enumerate(xs)} idiom) then binds
+   * {@code i} to the index and {@code x} to the input's element.
+   *
+   * <p>Previously {@code enumerate} returned its argument, so iterating it yielded the sequence's
+   * elements rather than {@code (index, element)} pairs, and the destructuring read fields 0 and 1
+   * off the element itself. Both reads were empty, so {@code x} was untyped and the element's type
+   * was stranded on the value nothing read. Same shape as {@code zip} (wala/ML#618), and the same
+   * starvation as {@code range} (wala/ML#599). See <a
+   * href="https://github.com/wala/ML/issues/826">wala/ML#826</a>.
+   *
+   * @param cls The builtin function class whose summary this is.
+   * @param name The builtin's name ({@code enumerate}).
+   * @return The populated summary.
+   */
+  private static IMethod enumerateSummary(IClass cls, String name) {
+    TypeReference type = builtinFunction(name);
+    MethodReference ref = MethodReference.findOrCreate(type, AstMethodReference.fnSelector);
+    PythonSummary x = new PythonSummary(ref, 10);
+
+    AstInstructionFactory factory = PythonLanguage.Python.instructionFactory();
+    int container = 11;
+    int tuple = 12;
+    int index = 13;
+    int nullKey = 14;
+    int zero = 15;
+    int one = 16;
+    int elementKey = 17;
+    int element = 18;
+    int idx = 0;
+
+    x.addStatement(
+        factory.NewInstruction(idx++, container, NewSiteReference.make(0, PythonTypes.list)));
+    x.addStatement(
+        factory.NewInstruction(idx++, tuple, NewSiteReference.make(1, PythonTypes.tuple)));
+    // The counter `enumerate` supplies, which is an int regardless of what is being enumerated.
+    x.addStatement(
+        factory.NewInstruction(idx++, index, NewSiteReference.make(2, TypeReference.Int)));
+    x.addConstant(nullKey, new ConstantValue(null));
+    x.addConstant(zero, new ConstantValue(0));
+    x.addConstant(one, new ConstantValue(1));
+
+    // The element of the enumerated argument, read the way `zip` reads its inputs'.
+    x.addStatement(factory.EachElementGetInstruction(idx++, elementKey, 2, nullKey));
+    x.addStatement(factory.PropertyRead(idx++, element, 2, elementKey));
+
+    x.addStatement(factory.PropertyWrite(idx++, tuple, zero, index));
+    x.addStatement(factory.PropertyWrite(idx++, tuple, one, element));
+    x.addStatement(factory.PropertyWrite(idx++, container, zero, tuple));
+    x.addStatement(factory.ReturnInstruction(idx++, container, false));
+
+    return new PythonSummarizedFunction(ref, x, cls);
+  }
+
+  /**
    * Builds the summary for {@code next}: a read of the {@value
    * PythonTypes#GENERATOR_CONTENT_FIELD_NAME} field off the argument. A generator function's object
    * accumulates every yielded value in that field (the front-end translates {@code yield x} as a
@@ -284,16 +340,21 @@ public class BuiltinFunctions {
                   // see `zipSummary` (wala/ML#618).
                   : name.equals("zip")
                       ? zipSummary(this, name)
-                      // `next` must read the yields accumulated on a generator object; see
-                      // `nextSummary` (wala/ML#696).
-                      : name.equals("next")
-                          ? nextSummary(this, name)
-                          // `iter` must carry its argument's generator content through the fresh
-                          // iterator so that `next(iter(gen()))` recovers the yields; see
-                          // `iterSummary` (wala/ML#698).
-                          : name.equals("iter")
-                              ? iterSummary(this, name)
-                              : typeSummary(this, name, returnedType);
+                      // `enumerate` must return a list of (index, element) tuples rather than its
+                      // argument; see `enumerateSummary` (wala/ML#826).
+                      : name.equals("enumerate")
+                          ? enumerateSummary(this, name)
+                          // `next` must read the yields accumulated on a generator object; see
+                          // `nextSummary` (wala/ML#696).
+                          : name.equals("next")
+                              ? nextSummary(this, name)
+                              // `iter` must carry its argument's generator content through the
+                              // fresh
+                              // iterator so that `next(iter(gen()))` recovers the yields; see
+                              // `iterSummary` (wala/ML#698).
+                              : name.equals("iter")
+                                  ? iterSummary(this, name)
+                                  : typeSummary(this, name, returnedType);
     }
 
     private BuiltinFunction(IClassHierarchy cha, String name, int arg) {
@@ -473,8 +534,11 @@ public class BuiltinFunctions {
       HashMapFactory.make();
 
   static {
-    //		builtinFunctions.put("enumerate", Either.forLeft(PythonTypes.enumerate));
-    builtinFunctions.put("enumerate", Either.forRight(2));
+    // Returns a list of `(index, element)` tuples, built by `enumerateSummary` (wala/ML#826). The
+    // previous `forRight(2)` returned the argument itself, so iterating the result yielded the
+    // sequence's elements and the `for i, x in enumerate(xs)` destructuring read empty fields off
+    // one of them.
+    builtinFunctions.put("enumerate", Either.forLeft(PythonTypes.list));
     builtinFunctions.put("int", Either.forLeft(TypeReference.Int));
     // https://docs.python.org/3/library/functions.html#float
     builtinFunctions.put("float", Either.forLeft(TypeReference.Double));

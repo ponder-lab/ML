@@ -1458,18 +1458,18 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
-   * The same slice one container hop further out, the message-passing idiom: the element of an
-   * enumerated sequence carries no tensor type to the slice at all, so the indices are untyped
-   * rather than merely over-ranked.
-   *
-   * <p>TODO: Blocked by <a href="https://github.com/wala/ML/issues/824">wala/ML#824</a>.
+   * The same slice one container hop further out, the message-passing idiom. The element of an
+   * enumerated sequence now carries its tensor type to the slice, so the index resolves here as it
+   * does in the direct form (<a href="https://github.com/wala/ML/issues/826">wala/ML#826</a>).
+   * Before that, {@code enumerate} returned its argument, so iterating yielded the sequence's
+   * elements and the destructuring read empty fields off one of them.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testSlicedIndicesThroughEnumeratedSequence()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(

@@ -27,7 +27,6 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
 import static com.ibm.wala.cast.python.util.Util.addPytestEntrypoints;
 import static java.util.Collections.emptyMap;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -490,9 +489,12 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    * is the same context-collapse class as <a
    * href="https://github.com/wala/ML/issues/570">wala/ML#570</a>.
    *
-   * <p>TODO(<a href="https://github.com/wala/ML/issues/659">wala/ML#659</a>): {@code index} should
-   * type as a tensor once the shared-summary context collapse is resolved. Flip this to assert vn=2
-   * <em>is</em> typed when it is fixed.
+   * <p>The chain no longer depends on that read. {@code enumerate} yields {@code (index, element)}
+   * tuples whose field 1 <em>is</em> the element rather than a field read off it (<a
+   * href="https://github.com/wala/ML/issues/826">wala/ML#826</a>), so the subscript sees the
+   * adjacency list and {@code index} types. Whether the underlying shared-summary context collapse
+   * of <a href="https://github.com/wala/ML/issues/659">wala/ML#659</a> is itself resolved is a
+   * separate question this fixture no longer witnesses.
    */
   @Test
   public void testGatMaybeNumNodesIndexUntyped()
@@ -544,10 +546,9 @@ public class TestNetworkFixtures extends AbstractTensorTest {
               typedParamVns.add(lpk.getValueNumber());
           }
         });
-    assertFalse(
-        "Captured gap for wala/ML#659: `maybe_num_nodes`'s `index` (vn=2) is currently untyped"
-            + " because `adjacency_lists` is context-collapsed on the shared message-passing"
-            + " summary. Flip this assertion when the collapse is resolved.",
+    assertTrue(
+        "`maybe_num_nodes`'s `index` (vn=2) types as a tensor: the element of an enumerated"
+            + " sequence now reaches the subscript that produces it (wala/ML#826).",
         typedParamVns.contains(2));
   }
 
