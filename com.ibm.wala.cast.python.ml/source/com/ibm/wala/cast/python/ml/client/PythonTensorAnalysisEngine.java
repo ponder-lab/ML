@@ -1211,6 +1211,26 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * Whether an instruction consumes a second operand beside the one being examined, and so could
+   * impose an eager coercion on it (<a
+   * href="https://github.com/wala/ML/issues/828">wala/ML#828</a>).
+   *
+   * <p>Used to decline a parameter whose consumers are not fully accounted for. A binary operator
+   * always takes two; a call takes a second when it passes at least two positional arguments beside
+   * the callee, which is what separates {@code tf.matmul(x, W)} from a sink like {@code consume(x)}
+   * or a reduction over {@code x} alone.
+   *
+   * @param instruction The consuming instruction.
+   * @return {@code true} iff the instruction consumes a second operand.
+   */
+  private static boolean takesSecondOperand(SSAInstruction instruction) {
+    if (instruction instanceof SSABinaryOpInstruction) return true;
+    if (instruction instanceof PythonInvokeInstruction invoke)
+      return invoke.getNumberOfPositionalParameters() >= 3;
+    return false;
+  }
+
+  /**
    * True iff the given {@link SSAInstruction} constitutes individual elements.
    *
    * @param instruction The {@link SSAInstruction} in question.
@@ -2095,6 +2115,82 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       }
       LOGGER.fine(() -> "wala/ML#821 Keras call input destinations: " + computeDTypeCasts.size());
 
+      // A parameter's consumers coerce it (wala/ML#828): TensorFlow converts a NumPy argument
+      // through the dtype of the operand beside it, so the dtype a parameter is fed is not the
+      // dtype its body computes with, and only the latter survives tracing. Collected here are the
+      // coercions the coercing operations declare over their own operands; the rewrite itself is
+      // the transfer, which also does the parameter barrier's job.
+      //
+      // Conflicting declarations drop the operand, which is the rule's own decline arm rather than
+      // caution: a parameter consumed by `W32 * x` beside `V64 * x` has no single eager-effective
+      // dtype, and both consumptions succeed alone. Only direct operands are declared, which is
+      // sound because a chain cannot widen the set — past the first consumer the value is a tensor,
+      // and a tensor-tensor mismatch raises eagerly.
+      //
+      // Restricted to parameter destinations. The coercion is real wherever it happens, but a
+      // non-parameter operand's own dtype is a fact about the value the program holds, while a
+      // parameter's is a question about the signature to write, and only the latter is decided by
+      // what the body computes with.
+      //
+      // Driven from the parameters rather than from the seeded sources. A consumer's own result is
+      // a source only when something assigns from it, and an operand of a further operation is
+      // assigned from by nothing: in `W * x + b` the product carries no assignment edge, so it is
+      // absent from the dataflow graph while being exactly the consumer that coerces `x`. Walking
+      // the parameter's uses reaches every direct consumer by construction, which is also the set
+      // the rule is defined over.
+      //
+      // A consumer that takes a second operand but declares no coercion is unaccounted for, and
+      // declines the parameter rather than being ignored. The rule reads the WHOLE set of direct
+      // consumptions, so a family that does not yet declare (matmul, the tensordot/einsum shapes)
+      // could otherwise leave a lone `float32` unopposed beside a `float64` it cannot see, turning
+      // an incomplete collection into a wrong pin instead of a missing one. Declining costs only
+      // the improvement, since the parameter then keeps the dtype it is fed.
+      Map<PointsToSetVariable, DType> dtypeCoercions = HashMapFactory.make();
+      Set<PointsToSetVariable> declinedCoercions = HashSetFactory.make();
+      for (PointsToSetVariable parameter : parameters) {
+        LocalPointerKey lpk = (LocalPointerKey) parameter.getPointerKey();
+        CGNode owner = lpk.getNode();
+        if (owner.getIR() == null || owner.getDU() == null) continue;
+        for (Iterator<SSAInstruction> uses = owner.getDU().getUses(lpk.getValueNumber());
+            uses.hasNext(); ) {
+          SSAInstruction use = uses.next();
+          if (!use.hasDef()) continue;
+          PointerKey consumerKey =
+              builder
+                  .getPointerAnalysis()
+                  .getHeapModel()
+                  .getPointerKeyForLocal(owner, use.getDef());
+          if (builder.getPropagationSystem().isImplicit(consumerKey)) continue;
+          TensorGenerator generator;
+          try {
+            generator =
+                getGenerator(
+                    builder.getPropagationSystem().findOrCreatePointsToSet(consumerKey), builder);
+          } catch (IllegalArgumentException e) {
+            generator = null;
+          }
+          if (!(generator instanceof OperandDTypeCoercing coercing)) {
+            if (takesSecondOperand(use)) declinedCoercions.add(parameter);
+            continue;
+          }
+          DType imposed = coercing.getOperandDTypeCoercions(builder).get(lpk);
+          if (imposed == null) continue;
+          DType previous = dtypeCoercions.putIfAbsent(parameter, imposed);
+          if (previous != null && previous != imposed) declinedCoercions.add(parameter);
+        }
+      }
+      dtypeCoercions.keySet().removeAll(declinedCoercions);
+      LOGGER.fine(
+          () ->
+              "wala/ML#828 parameter dtype coercions: "
+                  + dtypeCoercions.size()
+                  + " ("
+                  + declinedCoercions.size()
+                  + " declined for disagreeing or unaccounted consumers)");
+      for (Map.Entry<PointsToSetVariable, DType> c : dtypeCoercions.entrySet())
+        LOGGER.fine(
+            () -> "  coerce: " + describe(c.getKey().getPointerKey()) + " -> " + c.getValue());
+
       // Iteration products do not inherit the hybridization-frame origin (wala/ML#729): iterating
       // a symbolic tensor raises under tf.function tracing, so a value iterated out of a parameter
       // is an eager-only product of the fed data, whose provenance comes from its own seed's
@@ -2274,6 +2370,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
               drops,
               parameters,
               computeDTypeCasts,
+              dtypeCoercions,
               iterationProducts,
               errorLog);
 
