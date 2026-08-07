@@ -4,18 +4,14 @@ import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.callgraph.CGNode;
-import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
-import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 /**
  * Shared base for identity-matrix generators ({@code tf.eye} and {@code tf.sparse.eye}): the {@code
@@ -49,49 +45,6 @@ public abstract class EyeBase extends TensorTypeAllocator {
 
   public EyeBase(CGNode node) {
     super(node);
-  }
-
-  /**
-   * Retrieves the possible integer values for a specific argument.
-   *
-   * <p>It first checks the symbol table for constant values associated with the argument's value
-   * number. If not found, it falls back to the points-to analysis results to find potential integer
-   * values.
-   *
-   * @param builder the propagation call graph builder
-   * @param paramPosition the positional index of the argument
-   * @param paramName the keyword name of the argument
-   * @return a set of optional integers representing the possible values. An empty optional
-   *     indicates a null or non-integer value.
-   */
-  protected Set<Optional<Integer>> getPossibleArgumentValues(
-      PropagationCallGraphBuilder builder, int paramPosition, String paramName) {
-    int valNum = this.getArgumentValueNumber(builder, paramPosition, paramName, true);
-    if (valNum <= 0) return HashSetFactory.make();
-
-    if (this.getNode().getIR() != null
-        && this.getNode().getIR().getSymbolTable().isConstant(valNum)) {
-      Object c = this.getNode().getIR().getSymbolTable().getConstantValue(valNum);
-      Set<Optional<Integer>> ret = HashSetFactory.make();
-      if (c instanceof Number) {
-        ret.add(Optional.of(((Number) c).intValue()));
-      } else if (c == null) {
-        ret.add(Optional.empty());
-      }
-      if (!ret.isEmpty()) {
-        return ret;
-      }
-    }
-
-    OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, paramPosition, paramName);
-
-    if (pts == null || pts.isEmpty())
-      // Fallback to default (empty).
-      return HashSetFactory.make();
-
-    return StreamSupport.stream(pts.spliterator(), false)
-        .map(TensorTypeAllocator::getIntValueFromInstanceKey)
-        .collect(Collectors.toSet());
   }
 
   @Override

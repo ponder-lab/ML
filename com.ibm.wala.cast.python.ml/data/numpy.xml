@@ -4,21 +4,39 @@
   <classloader name="PythonLoader">
     <class name="numpy" allocatable="true">
       <method name="import" static="true" descriptor="()Lnumpy;">
+        <!-- The `Lnumpy` module object must stay this method's FIRST allocation: the dtype-argument resolver reaches it as `NewSiteReference.make(0, NUMPY_TYPE)` in this node to test whether a candidate token is one of the fields below. -->
         <new def="x" class="Lnumpy"/>
-        <new def="float32" class="Ltensorflow/dtypes/DType"/>
+        <!-- https://numpy.org/doc/stable/reference/arrays.scalars.html -->
+        <!-- The scalar types are type objects, so each name has two roles: passed as `dtype=`, it names a dtype; called, it constructs a rank-0 array of that dtype (`np.float64(2.0)`). Both roles are served by a single allocation per name, whose class is the constructor's (dispatching `NpScalarType`) rather than `Ltensorflow/dtypes/DType`. The dtype role survives the class change because the dtype-argument resolver matches a token by its identity in the module field's points-to set, not by its allocated class; the class-keyed arms that back that resolution up read `NumpyTypes.SCALAR_TYPE_TO_DTYPE`. wala/ML#827. -->
+        <new def="float32" class="Lnumpy/float32"/>
         <putfield class="LRoot" field="float32" fieldType="LRoot" ref="x" value="float32"/>
-        <new def="float64" class="Ltensorflow/dtypes/DType"/>
+        <new def="float64" class="Lnumpy/float64"/>
         <putfield class="LRoot" field="float64" fieldType="LRoot" ref="x" value="float64"/>
-        <new def="int32" class="Ltensorflow/dtypes/DType"/>
+        <new def="int32" class="Lnumpy/int32"/>
         <putfield class="LRoot" field="int32" fieldType="LRoot" ref="x" value="int32"/>
-        <new def="int64" class="Ltensorflow/dtypes/DType"/>
+        <new def="int64" class="Lnumpy/int64"/>
         <putfield class="LRoot" field="int64" fieldType="LRoot" ref="x" value="int64"/>
-        <new def="uint8" class="Ltensorflow/dtypes/DType"/>
+        <new def="uint8" class="Lnumpy/uint8"/>
         <putfield class="LRoot" field="uint8" fieldType="LRoot" ref="x" value="uint8"/>
+        <!-- `np.bool` is not a scalar type: it was an alias of the Python builtin, deprecated in NumPy 1.20 and removed in 1.24, so it stays a bare dtype token. Its scalar-type sibling is `np.bool_`. -->
         <new def="bool" class="Ltensorflow/dtypes/DType"/>
         <putfield class="LRoot" field="bool" fieldType="LRoot" ref="x" value="bool"/>
-        <new def="bool_" class="Ltensorflow/dtypes/DType"/>
+        <new def="bool_" class="Lnumpy/bool_"/>
         <putfield class="LRoot" field="bool_" fieldType="LRoot" ref="x" value="bool_"/>
+        <!-- https://numpy.org/doc/stable/reference/random/legacy.html -->
+        <!-- `np.random`, the legacy module-level random surface, modeled as a plain module object (the pattern `tensorflow.xml` uses for `tf.random`) whose fields hold the per-function classes. The module-alias form `rng = np.random` reaches the same fields, since the alias copies the reference. wala/ML#827. -->
+        <new def="random" class="Lobject"/>
+        <putfield class="LRoot" field="random" fieldType="LRoot" ref="x" value="random"/>
+        <new def="randn_fn" class="Lnumpy/random/randn"/>
+        <putfield class="LRoot" field="randn" fieldType="LRoot" ref="random" value="randn_fn"/>
+        <new def="rand_fn" class="Lnumpy/random/rand"/>
+        <putfield class="LRoot" field="rand" fieldType="LRoot" ref="random" value="rand_fn"/>
+        <new def="np_normal_fn" class="Lnumpy/random/normal"/>
+        <putfield class="LRoot" field="normal" fieldType="LRoot" ref="random" value="np_normal_fn"/>
+        <new def="np_uniform_fn" class="Lnumpy/random/uniform"/>
+        <putfield class="LRoot" field="uniform" fieldType="LRoot" ref="random" value="np_uniform_fn"/>
+        <new def="seed_fn" class="Lnumpy/random/seed"/>
+        <putfield class="LRoot" field="seed" fieldType="LRoot" ref="random" value="seed_fn"/>
         <new def="ndarray_fn" class="Lnumpy/ndarray_constructor"/>
         <putfield class="LRoot" field="ndarray" fieldType="LRoot" ref="x" value="ndarray_fn"/>
         <new def="array_fn" class="Lnumpy/array"/>
@@ -37,6 +55,80 @@
       </method>
     </class>
     <package name="numpy">
+      <!-- https://numpy.org/doc/stable/reference/arrays.scalars.html -->
+      <!-- The scalar type constructors. Calling one coerces its argument to a rank-0 array of that type, so each `do` allocates an ndarray whose shape and dtype the paired `NpScalarType` fixes; the argument contributes neither axis. The same allocation doubles as the `dtype=` token — see the module method above. wala/ML#827. -->
+      <class name="float32" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self value">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <class name="float64" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self value">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <class name="int32" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self value">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <class name="int64" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self value">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <class name="uint8" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self value">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <class name="bool_" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self value">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
       <!-- https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html -->
       <!-- The `np.ndarray(shape, dtype, ...)` constructor: an uninitialized array of the given shape and dtype, so the typing model is the `zeros` allocator's (shape from arg 0, dtype from the `dtype` argument) and the dispatch reuses `NpZeros`. wala/ML#775. -->
       <class name="ndarray_constructor" allocatable="true">
@@ -167,6 +259,72 @@
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
           <return value="ret"/>
+        </method>
+      </class>
+    </package>
+    <package name="numpy/random">
+      <!-- The legacy module-level random surface. Every draw returns a `float64` array of the requested shape, except that a draw with no shape request returns a Python scalar instead; the shape request is spelled as variadic dimensions here and as a `size` argument in the `normal`/`uniform` family, which is why the two shapes of signature take different generators (`NpRandomVariadicDraw` and `NpRandomSizedDraw`). Both allocate the same `Lnumpy/ndarray` and let the generator decide which case a given call is. wala/ML#827. -->
+      <!-- https://numpy.org/doc/stable/reference/random/generated/numpy.random.randn.html -->
+      <!-- `np.random.randn(d0, d1, ...)`: standard-normal draws, dimensions given variadically. The rank comes from the call's own arity rather than from the parameter list below, so a call passing more dimensions than are modeled here keeps its rank; what it can lose is the individual sizes, which then read as unknown fixed axes. -->
+      <class name="randn" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self d0 d1 d2 d3 d4 d5">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/random/generated/numpy.random.rand.html -->
+      <!-- `np.random.rand(d0, d1, ...)`: uniform draws over [0, 1), variadic like `randn`. -->
+      <class name="rand" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="7" paramNames="self d0 d1 d2 d3 d4 d5">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/random/generated/numpy.random.normal.html -->
+      <!-- `np.random.normal(loc, scale, size)`: the shape is the `size` argument, so the distribution parameters occupy the two positions before it. -->
+      <class name="normal" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self loc scale size">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/random/generated/numpy.random.uniform.html -->
+      <!-- `np.random.uniform(low, high, size)`: the `normal` signature with different distribution parameters. -->
+      <class name="uniform" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self low high size">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/random/generated/numpy.random.seed.html -->
+      <!-- `np.random.seed(seed)` mutates the global generator state and returns `None`. Modeled so that the call resolves to a target and its result is `None` rather than an unmodeled value; there is no generator, so the result is not a tensor source. -->
+      <class name="seed" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self seed">
+          <return value="null"/>
         </method>
       </class>
     </package>

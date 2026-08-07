@@ -1703,23 +1703,23 @@ public class TestElementwiseOps extends AbstractTensorTest {
   }
 
   /**
-   * Test a {@code W * x + b} chain whose {@code W} and {@code b} are scalar {@code tf.Variable}s.
-   * The runtime truth is {@code float32 (3,)}, but the {@code tf.Variable} allocation never reaches
-   * the {@code W} operand's points-to walk, and the one-sided broadcast rule discards the resolved
-   * {@code [3]} because the opaque co-operand is not structurally a scalar expression. Mirrors the
-   * TensorFlow-Examples linear-regression rows whose concrete member degraded to ⊤ at 0.52.73, when
-   * the wala/ML#796 null-skip removed the fabricated scalar member the broadcast had been riding.
+   * Test a {@code W * x + b} chain whose {@code W} and {@code b} are scalar {@code tf.Variable}s,
+   * against the runtime truth of {@code float32 (3,)}. Mirrors the TensorFlow-Examples
+   * linear-regression rows whose concrete member degraded to ⊤ at 0.52.73, when the wala/ML#796
+   * null-skip removed the fabricated scalar member the broadcast had been riding.
    *
-   * <p>TODO: Flip to a positive guard when <a
-   * href="https://github.com/wala/ML/issues/804">wala/ML#804</a> lands (scalar {@code tf.Variable}
-   * operands recognized by the one-sided elementwise broadcast).
+   * <p>The chain used to floor to ⊤ because {@code W}'s initializer is {@code rng.randn()} and
+   * {@code np.random} was unmodeled, so the operand was ⊤ rather than the rank-0 tensor it is. With
+   * the initializer resolving (<a href="https://github.com/wala/ML/issues/827">wala/ML#827</a>) the
+   * operand is scalar outright, and the elementwise composition never reaches the one-sided
+   * broadcast rule that <a href="https://github.com/wala/ML/issues/804">wala/ML#804</a> reports on.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testScalarVariableBroadcast()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
