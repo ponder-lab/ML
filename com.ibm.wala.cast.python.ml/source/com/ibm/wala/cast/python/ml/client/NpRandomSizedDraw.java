@@ -59,19 +59,33 @@ public class NpRandomSizedDraw extends NpRandomDraw {
    * {@code None}, which NumPy treats identically. A {@code size} that is present but unresolvable
    * is not evidence of either, so it reads as an array draw and floors to ⊤.
    *
+   * <p>Whether the argument was passed is read off the call sites rather than off the callee
+   * frame's parameter. A manual anchoring has the parameter regardless, since the summary declares
+   * it, so its value number is present even for a call that supplied nothing; the call sites are
+   * what distinguish the two, and they are visible under both anchorings.
+   *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
    * @return {@code true} iff the call requests no size.
    */
   @Override
   protected boolean isScalarDraw(PropagationCallGraphBuilder builder) {
-    int sizeVn =
-        this.getArgumentValueNumber(
-            builder, this.getShapeParameterPosition(), this.getShapeParameterName(), true);
-    if (sizeVn <= 0) return true;
+    int sizePosition = this.getShapeParameterPosition();
+    boolean passed =
+        this.getNumberOfPossiblePositionalArguments(builder).stream()
+                .anyMatch(count -> count > sizePosition)
+            || this.isKeywordArgumentPresent(builder, this.getShapeParameterName());
+
+    if (!passed) {
+      LOGGER.fine(
+          () ->
+              "No size argument for source: "
+                  + describe(this.getSource())
+                  + "; the draw is a scalar.");
+      return true;
+    }
 
     OrdinalSet<InstanceKey> sizePointsToSet =
-        this.getArgumentPointsToSet(
-            builder, this.getShapeParameterPosition(), this.getShapeParameterName());
+        this.getArgumentPointsToSet(builder, sizePosition, this.getShapeParameterName());
 
     if (allNullConstants(sizePointsToSet)) {
       LOGGER.fine(

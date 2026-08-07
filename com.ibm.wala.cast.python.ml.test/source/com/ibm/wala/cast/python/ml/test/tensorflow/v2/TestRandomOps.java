@@ -4,6 +4,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_10_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_10_2_FLOAT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_2_FLOAT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_3_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_3_FLOAT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_2_FLOAT64;
@@ -225,5 +226,36 @@ public class TestRandomOps extends AbstractTensorTest {
   public void testNpRandomNormal()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_np_random.py", "consume4", 1, 1, Map.of(2, Set.of(TENSOR_5_2_FLOAT64)));
+  }
+
+  /**
+   * The sibling distribution under the sized signature, {@code np.random.uniform(0.0, 1.0, (2,
+   * 2))}: the two share a generator, so this pins that both names reach it.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpRandomUniform()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_np_random.py", "consume5", 1, 1, Map.of(2, Set.of(TENSOR_2_2_FLOAT64)));
+  }
+
+  /**
+   * The sized family's own shapeless draw, {@code np.random.normal()}: omitting {@code size} is the
+   * scalar case that {@link #testNpRandomScalarDraw()} reaches through an empty argument list, so
+   * the two recognitions are pinned separately.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpRandomSizedScalarDraw()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_np_random.py", "consume6", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT32)));
   }
 }

@@ -25,6 +25,14 @@ def consume4(c):
     pass
 
 
+def consume5(d):
+    pass
+
+
+def consume6(e):
+    pass
+
+
 # A Python float initializer takes TensorFlow's weak default, `float32`, not NumPy's `float64`.
 w = tf.Variable(rng.randn(), name="weight")
 assert w.dtype == tf.float32 and w.shape.as_list() == []
@@ -41,3 +49,12 @@ consume3(b)
 c = np.random.normal(0.0, 1.0, (5, 2))
 assert c.dtype == np.float64 and c.shape == (5, 2)
 consume4(c)
+
+d = np.random.uniform(0.0, 1.0, (2, 2))
+assert d.dtype == np.float64 and d.shape == (2, 2)
+consume5(d)
+
+# The sized family's own shapeless draw: no `size`, so a Python float rather than an array.
+e = tf.Variable(np.random.normal())
+assert e.dtype == tf.float32 and e.shape.as_list() == []
+consume6(e)
