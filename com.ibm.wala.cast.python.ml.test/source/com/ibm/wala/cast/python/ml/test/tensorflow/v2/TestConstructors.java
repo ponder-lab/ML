@@ -8,6 +8,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.INT_32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.INT_64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_BOOL;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_FLOAT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.SCALAR_TENSOR_OF_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.STRING;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_0_0_FLOAT32;
@@ -1706,5 +1707,79 @@ public class TestConstructors extends AbstractTensorTest {
   public void testZerosBoolMask()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_bool_mask.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_2_2_BOOL)));
+  }
+
+  /**
+   * A NumPy scalar type called on a Python number (<a
+   * href="https://github.com/wala/ML/issues/827">wala/ML#827</a>): {@code np.float64(2.0)} is a
+   * rank-0 array of the type's own dtype, not of the argument's.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpScalarType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_scalar_types.py",
+        "consume",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT64)));
+  }
+
+  /**
+   * The reported witness of <a href="https://github.com/wala/ML/issues/827">wala/ML#827</a>: {@code
+   * tf.Variable(np.float64(2.0))} keeps the NumPy scalar's {@code float64}, where a Python number
+   * would have taken TensorFlow's {@code float32} weak default. The initializer propagation this
+   * exercises was never the gap; the scalar type being unmodeled was.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpScalarTypeVariableInitializer()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_scalar_types.py",
+        "consume2",
+        1,
+        1,
+        Map.of(2, Set.of(SCALAR_TENSOR_OF_FLOAT64)));
+  }
+
+  /**
+   * The integral sibling of {@link #testNpScalarType()}: {@code np.int32(3)}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpScalarTypeInt()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_np_scalar_types.py", "consume3", 1, 1, Map.of(2, Set.of(SCALAR_TENSOR_OF_INT32)));
+  }
+
+  /**
+   * The scalar type's other role (<a href="https://github.com/wala/ML/issues/827">wala/ML#827</a>):
+   * {@code np.zeros((2, 3), dtype=np.float64)} still resolves its dtype token, which making the
+   * name callable must not cost.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpScalarTypeAsDTypeToken()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_np_scalar_types.py", "consume4", 1, 1, Map.of(2, Set.of(TENSOR_2_3_FLOAT64)));
   }
 }

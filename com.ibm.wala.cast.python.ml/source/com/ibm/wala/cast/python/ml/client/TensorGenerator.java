@@ -4272,7 +4272,11 @@ public abstract class TensorGenerator {
               ret.add(shape);
             }
           }
-        } else if (reference.equals(TensorFlowTypes.D_TYPE)) {
+        } else if (reference.equals(TensorFlowTypes.D_TYPE)
+            || NumpyTypes.SCALAR_TYPE_TO_DTYPE.containsKey(reference)) {
+          // A dtype token names a dtype; it has no shape of its own. A NumPy scalar type is such a
+          // token as well as a constructor (wala/ML#827), so it is ignored here for the same
+          // reason: the shape belongs to what the constructor returns, not to the type object.
           LOGGER.fine("Ignoring DType: " + describe(asin));
         } else if (reference.equals(TensorFlowTypes.FEATURE)) {
           LOGGER.fine("Ignoring feature: " + describe(asin));
@@ -4731,7 +4735,24 @@ public abstract class TensorGenerator {
       IClass concreteType = instanceKey.concreteType();
       TypeReference typeReference = concreteType.getReference();
 
-      if (typeReference.equals(TensorFlowTypes.D_TYPE)) {
+      DType scalarTypeDType = NumpyTypes.SCALAR_TYPE_TO_DTYPE.get(typeReference);
+      if (scalarTypeDType != null) {
+        // A NumPy scalar type passed as a dtype token, e.g. `np.zeros(n, dtype=np.float64)`. The
+        // identity-keyed match above normally resolves it, since the token is the very object the
+        // module's field of that name holds; this arm keys on the type object's own class instead,
+        // so a token that reaches here by a route the module-field walk does not cover still names
+        // its dtype rather than falling to the terminal throw below. wala/ML#827.
+        LOGGER.fine(
+            () ->
+                "Found dtype: "
+                    + scalarTypeDType
+                    + " for source: "
+                    + describe(this.getSource())
+                    + " from the NumPy scalar type: "
+                    + describe(instanceKey)
+                    + ".");
+        ret.add(scalarTypeDType);
+      } else if (typeReference.equals(TensorFlowTypes.D_TYPE)) {
         // An unmodeled dtype: a `tf.DType` instance with no entry in `FIELD_REFERENCE_TO_DTYPE`
         // (e.g. a half-precision or quantized dtype not yet enumerated). Degrade to UNKNOWN (the ⊤
         // dtype) rather than throwing. When this resolves a parameter dtype during entrypoint
@@ -5282,8 +5303,12 @@ public abstract class TensorGenerator {
         } else if (reference.equals(TensorFlowTypes.FEATURE)) {
           // Ignore features.
           LOGGER.fine("Ignoring feature: " + describe(asin));
-        } else if (reference.equals(TensorFlowTypes.D_TYPE)) {
-          // Ignore DTypes.
+        } else if (reference.equals(TensorFlowTypes.D_TYPE)
+            || NumpyTypes.SCALAR_TYPE_TO_DTYPE.containsKey(reference)) {
+          // Ignore DTypes. A NumPy scalar type is such a token as well as a constructor
+          // (wala/ML#827); this walk asks what dtype a *tensor* has, and a type object is not one,
+          // so it is ignored here exactly as a `tf.DType` is. Reading a token as a dtype is the
+          // dtype-argument resolver's job, not this walk's.
           LOGGER.fine("Ignoring DType: " + describe(asin));
         } else {
           // Assume the value is a tensor and attempt to find the generator that created it

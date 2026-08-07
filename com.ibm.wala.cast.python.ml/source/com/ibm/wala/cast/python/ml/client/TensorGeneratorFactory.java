@@ -521,6 +521,25 @@ public class TensorGeneratorFactory {
     if (isType(type, FROM_ROW_LIMITS.getDeclaringClass()))
       return anchor.makeGenerator(RaggedFromRowLimits::new, RaggedFromRowLimits::new);
 
+    // The NumPy scalar types and the legacy `np.random` draws (wala/ML#827). Both families
+    // allocate a plain `Lnumpy/ndarray`, so producer delegation reaches them only through the
+    // manual form, and both are written at call sites, so seeding reaches them only through the
+    // source form; registering here supplies both at once.
+    for (Map.Entry<TypeReference, DType> scalarType : NumpyTypes.SCALAR_TYPE_TO_DTYPE.entrySet())
+      if (isType(type, scalarType.getKey())) {
+        DType dtype = scalarType.getValue();
+        return anchor.makeGenerator(
+            source -> new NpScalarType(source, dtype), node -> new NpScalarType(node, dtype));
+      }
+
+    if (isType(type, NumpyTypes.RANDOM_RANDN.getDeclaringClass())
+        || isType(type, NumpyTypes.RANDOM_RAND.getDeclaringClass()))
+      return anchor.makeGenerator(NpRandomVariadicDraw::new, NpRandomVariadicDraw::new);
+
+    if (isType(type, NumpyTypes.RANDOM_NORMAL.getDeclaringClass())
+        || isType(type, NumpyTypes.RANDOM_UNIFORM.getDeclaringClass()))
+      return anchor.makeGenerator(NpRandomSizedDraw::new, NpRandomSizedDraw::new);
+
     // `enumerate` carries index/tuple element semantics its generator models; the manual-side
     // DATA_PACKAGE_PREFIX catch-all would otherwise swallow it into a plain pass-through
     // DatasetGenerator (the wala/ML#759 mis-dispatch class).
