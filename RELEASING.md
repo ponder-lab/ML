@@ -10,7 +10,9 @@ The alternative, releasing per improvement, is a bottleneck out of proportion to
 
 Between releases, a consumer that wants the latest can build this repository at a known commit, install it locally, and depend on the `X.Y.Z-SNAPSHOT` coordinate. That stays reproducible on one condition, which is the whole discipline: **record the commit the snapshot was built from wherever the result is recorded.** A snapshot is mutable, so "built against `0.52.83-SNAPSHOT`" names nothing a month later, while "built against `0.52.83-SNAPSHOT` at `<sha>`" names exactly one artifact. Without that, a result cannot be re-derived and has to be re-measured.
 
-So: snapshots pinned to a recorded commit for iteration, releases for results anyone else will cite.
+Snapshots do not stretch to cover everything, and the boundary is not about how careful the record is. A downstream process that derives a *name* from the version &mdash; a tag, a branch, anything written where other people and later runs resolve it by that name &mdash; needs a release, because a name cannot carry a commit beside it the way a note can, and a mutable coordinate reused later silently means something else. Consumers that read this project's version off a built artifact tend to work exactly this way, and they generally cannot parse a snapshot coordinate at all, so the failure is usually loud rather than subtle.
+
+So: snapshots pinned to a recorded commit for iteration, releases for results anyone else will cite, and releases for anything that turns the version into a name.
 
 ## One-Click Release (Preferred)
 
