@@ -17,6 +17,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_3_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_4_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_FLOAT64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_3_RAGGED_RAGGED_INT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_5_COMPLEX64;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_5_FLOAT32;
@@ -1798,5 +1799,77 @@ public class TestElementwiseOps extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TENSOR_4_5_COMPLEX64)));
+  }
+
+  /**
+   * The eager-coercion parameter dtype of <a
+   * href="https://github.com/wala/ML/issues/828">wala/ML#828</a>: {@code W * x} over a {@code
+   * float32} variable makes the parameter's eager-effective dtype {@code float32}, though its
+   * caller feeds a {@code float64} array. Naming the fed dtype in a signature is what turns a
+   * working eager call into a failing traced one.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testEagerCoercionDType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_eager_coercion_dtype.py", "coerced", 1, 3, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * The decline arm of {@link #testEagerCoercionDType()}: two consumers impose different dtypes on
+   * the same parameter, each succeeding on its own, so there is no single eager-effective dtype and
+   * the parameter keeps the one it is fed.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testEagerCoercionDTypeDeclined()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_eager_coercion_dtype.py", "declined", 1, 5, Map.of(2, Set.of(TENSOR_3_FLOAT64)));
+  }
+
+  /**
+   * The no-op arm of {@link #testEagerCoercionDType()}: the argument already carries the dtype its
+   * consumer imposes, so the coercion is recorded but changes nothing.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testEagerCoercionDTypeAgreeing()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test("tf2_test_eager_coercion_dtype.py", "agreeing", 1, 3, Map.of(2, Set.of(TENSOR_3_FLOAT32)));
+  }
+
+  /**
+   * The parameter half of {@link #testScalarVariableBroadcast()}, and the guard <a
+   * href="https://github.com/wala/ML/issues/828">wala/ML#828</a> asks for: the same {@code W * x +
+   * b} body, asserted on the parameter rather than on the sink. Its caller feeds a {@code float64}
+   * array, but the body computes in the variable's {@code float32}, and a signature written from
+   * the fed dtype is what makes the traced call raise where the eager one runs.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testScalarVariableBroadcastParameter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_scalar_variable_broadcast.py",
+        "linear_regression",
+        1,
+        4,
+        Map.of(2, Set.of(TENSOR_3_FLOAT32)));
   }
 }

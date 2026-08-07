@@ -27,9 +27,12 @@ import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -38,7 +41,7 @@ import java.util.logging.Logger;
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/multiply">tf.multiply</a>.
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
  */
-public class ElementWiseOperation extends TensorGenerator {
+public class ElementWiseOperation extends TensorGenerator implements OperandDTypeCoercing {
 
   private static final Logger LOGGER = getLogger(ElementWiseOperation.class.getName());
 
@@ -732,6 +735,109 @@ public class ElementWiseOperation extends TensorGenerator {
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
     if (!builder.getPointerAnalysis().getPointsToSet(pk).isEmpty()) return false;
     return node.getIR().getSymbolTable().isConstant(vn);
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * <p>Each operand is coerced through the dtype of the operand beside it, so the two slots
+   * constrain each other. A slot is left unconstrained when the slot beside it is a scalar literal
+   * (a Python number is weak and imposes nothing on either library), when that slot does not
+   * resolve to a single definite dtype, or when it is itself a parameter, since deciding one
+   * undecided dtype from another would be circular rather than evidence.
+   *
+   * @param builder The propagation call graph builder.
+   * @return The coercions this operation imposes on its two operand slots.
+   */
+  @Override
+  public Map<PointerKey, DType> getOperandDTypeCoercions(PropagationCallGraphBuilder builder) {
+    int xVn;
+    int yVn;
+    try {
+      xVn = this.getXArgumentValueNumber(builder);
+      yVn = this.getYArgumentValueNumber(builder);
+    } catch (IllegalStateException e) {
+      LOGGER.log(Level.FINE, "Operand value numbers unavailable for " + describe(source) + ".", e);
+      return Map.of();
+    }
+    if (xVn <= 0 || yVn <= 0) return Map.of();
+    LOGGER.finer(
+        () ->
+            "Collecting eager coercions for "
+                + describe(source)
+                + ": xVn="
+                + xVn
+                + ", yVn="
+                + yVn
+                + ".");
+
+    Map<PointerKey, DType> ret = new LinkedHashMap<>();
+    this.coerce(builder, yVn, xVn, ret);
+    this.coerce(builder, xVn, yVn, ret);
+    return ret;
+  }
+
+  /**
+   * Records the coercion one operand slot imposes on the other, when it imposes one.
+   *
+   * @param builder The propagation call graph builder.
+   * @param sourceVn The slot supplying the dtype.
+   * @param targetVn The slot the dtype is imposed on.
+   * @param ret The accumulating map, keyed by the target's {@link PointerKey}.
+   */
+  private void coerce(
+      PropagationCallGraphBuilder builder, int sourceVn, int targetVn, Map<PointerKey, DType> ret) {
+    CGNode node = this.getNode();
+    if (node.getIR() == null || node.getDU() == null) return;
+    // A Python number is weak in both libraries: it takes the other operand's dtype rather than
+    // imposing its own, which is what `promoteWithFloatLiteral` already models for the result.
+    if (this.isScalarLiteral(builder, sourceVn) || this.isScalarLiteral(builder, targetVn)) return;
+    if (isParameterVn(node, sourceVn)) return;
+
+    DType imposed = singleDefiniteDType(this.getOperandDTypes(builder, sourceVn));
+    if (imposed == null) return;
+
+    // A coercion that matches the target's own dtype is recorded rather than skipped. It changes
+    // nothing on its own, but it is what makes a second, disagreeing consumer visible as a
+    // conflict: `V64 * x` beside `W32 * x` over a `float64` argument imposes nothing new and would
+    // silently leave the `float32` unopposed if this returned early.
+    PointerKey targetKey =
+        builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, targetVn);
+    ret.put(targetKey, imposed);
+    LOGGER.fine(
+        () ->
+            "Eager coercion of operand vn="
+                + targetVn
+                + " to "
+                + imposed
+                + " in "
+                + describe(node)
+                + ".");
+  }
+
+  /**
+   * Reduces a resolved dtype set to the single definite dtype it names, if it names one.
+   *
+   * @param dtypes The resolved dtypes, possibly {@code null}.
+   * @return The single dtype, or {@code null} when the set is absent, plural, or ⊤.
+   */
+  private static DType singleDefiniteDType(Set<DType> dtypes) {
+    if (dtypes == null || dtypes.size() != 1) return null;
+    DType only = dtypes.iterator().next();
+    return only == DType.UNKNOWN ? null : only;
+  }
+
+  /**
+   * Whether a value number is one of its frame's parameters.
+   *
+   * @param node The frame.
+   * @param vn The value number.
+   * @return {@code true} iff {@code vn} is a parameter of {@code node}.
+   */
+  private static boolean isParameterVn(CGNode node, int vn) {
+    for (int i = 0; i < node.getIR().getNumberOfParameters(); i++)
+      if (node.getIR().getParameter(i) == vn) return true;
+    return false;
   }
 
   /**

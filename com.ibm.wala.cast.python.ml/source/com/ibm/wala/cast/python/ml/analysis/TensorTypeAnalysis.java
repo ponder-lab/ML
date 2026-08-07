@@ -410,6 +410,74 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
   }
 
   /**
+   * A transfer function for a parameter whose consumers coerce it (<a
+   * href="https://github.com/wala/ML/issues/828">wala/ML#828</a>): the incoming cell is rewritten
+   * to the dtype eager execution imposes where the parameter is used, and the shape flows
+   * unchanged. TensorFlow converts a NumPy argument through the dtype of the operand beside it, so
+   * the dtype a parameter is fed is not the dtype its body computes with, and only the latter
+   * survives tracing. A signature written from the fed dtype turns a working eager call into a
+   * failing traced one.
+   *
+   * <p>The rewrite is unconditional on the incoming cell, unlike {@link ComputeDTypeCastOp}'s
+   * floating-point-only cast: eager coercion applies to an integral NumPy argument just as it does
+   * to a floating-point one, and the collected dtype is what the runtime computes with in either
+   * case. A parameter genuinely fed tensors is unaffected in substance, since a mismatch there
+   * raises eagerly and the coercion collected can only be the dtype it already carries.
+   *
+   * <p>Origins are blocked exactly as {@link ParameterBarrierOp} blocks them, since this
+   * destination is a parameter and this operator replaces rather than supplements that barrier.
+   */
+  static final class CoerceDTypeOp extends UnaryOperator<TensorVariable> {
+
+    /** The dtype eager execution imposes on this destination. */
+    private final DType coerced;
+
+    CoerceDTypeOp(DType coerced) {
+      this.coerced = coerced;
+    }
+
+    @Override
+    public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
+      if (lhs == null || rhs == null || rhs.state == null) return NOT_CHANGED;
+      if (lhs.state == null) {
+        lhs.state = HashSetFactory.make();
+        for (TensorType t : rhs.state) lhs.state.add(this.cast(t));
+        return CHANGED;
+      }
+      boolean changed = false;
+      for (TensorType t : rhs.state) changed |= lhs.state.add(this.cast(t));
+      return changed ? CHANGED : NOT_CHANGED;
+    }
+
+    /**
+     * The type as the body computes with it.
+     *
+     * @param type The type the caller feeds.
+     * @return {@code type} with its cell replaced by the coerced dtype, or {@code type} itself when
+     *     it already carries that dtype.
+     */
+    private TensorType cast(TensorType type) {
+      if (type.getDType() == this.coerced) return type;
+      return TensorType.of(this.coerced, type.getDims(), type.layout());
+    }
+
+    @Override
+    public int hashCode() {
+      return 0x828C0E4 + this.coerced.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof CoerceDTypeOp && ((CoerceDTypeOp) o).coerced == this.coerced;
+    }
+
+    @Override
+    public String toString() {
+      return "coerce a parameter to the " + this.coerced + " its consumers impose";
+    }
+  }
+
+  /**
    * Which axes of the suppressed seed a type feed trusts (wala/ML#758): a fill keeps the axis the
    * generator proved and composes only the unproven one from the operands' converged state, so
    * proven evidence is never lost to a weaker operand member.
@@ -466,6 +534,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> drops,
       Set<PointsToSetVariable> parameters,
       Set<PointsToSetVariable> computeDTypeCasts,
+      Map<PointsToSetVariable, DType> dtypeCoercions,
       Set<PointsToSetVariable> iterationProducts,
       AtomicReference<Function<PointsToSetVariable, TensorVariable>> outAccessor,
       Map<PointerKey, AnalysisError> errorLog) {
@@ -1017,6 +1086,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               return new ConvOp(2, node);
             } else if (conv3ds.contains(node)) {
               return new ConvOp(3, node);
+            } else if (dtypeCoercions.containsKey(node)) {
+              return new CoerceDTypeOp(dtypeCoercions.get(node));
             } else if (computeDTypeCasts.contains(node)) {
               return ComputeDTypeCastOp.INSTANCE;
             } else if (parameters.contains(node)) {
@@ -1046,6 +1117,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               return new SetShapeOp(set_shapes.get(dst));
             } else if (refinements.containsKey(dst)) {
               return new RefineShapeOp(refinements.get(dst), dst);
+            } else if (dtypeCoercions.containsKey(dst)) {
+              return new CoerceDTypeOp(dtypeCoercions.get(dst));
             } else if (computeDTypeCasts.contains(dst)) {
               return ComputeDTypeCastOp.INSTANCE;
             } else if (parameters.contains(dst)) {
@@ -1123,6 +1196,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    *     (wala/ML#726).
    * @param computeDTypeCasts Keras {@code call} first-argument destinations, whose incoming
    *     floating-point types are rewritten to the layer's compute dtype (wala/ML#821).
+   * @param dtypeCoercions Parameter destinations whose consumers coerce them, keyed to the dtype
+   *     eager execution imposes there (wala/ML#828).
    * @param iterationProducts Iteration-product destinations, whose types flow normally but whose
    *     origin inflow drops {@link TensorOrigin#PARAMETER} (wala/ML#729).
    * @param errorLog The sink for shape-mismatch diagnostics.
@@ -1141,6 +1216,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> drops,
       Set<PointsToSetVariable> parameters,
       Set<PointsToSetVariable> computeDTypeCasts,
+      Map<PointsToSetVariable, DType> dtypeCoercions,
       Set<PointsToSetVariable> iterationProducts,
       Map<PointerKey, AnalysisError> errorLog) {
     this(
@@ -1157,6 +1233,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
         drops,
         parameters,
         computeDTypeCasts,
+        dtypeCoercions,
         iterationProducts,
         errorLog,
         new AtomicReference<>());
@@ -1186,6 +1263,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> drops,
       Set<PointsToSetVariable> parameters,
       Set<PointsToSetVariable> computeDTypeCasts,
+      Map<PointsToSetVariable, DType> dtypeCoercions,
       Set<PointsToSetVariable> iterationProducts,
       Map<PointerKey, AnalysisError> errorLog,
       AtomicReference<Function<PointsToSetVariable, TensorVariable>> outAccessor) {
@@ -1202,6 +1280,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
             drops,
             parameters,
             computeDTypeCasts,
+            dtypeCoercions,
             iterationProducts,
             outAccessor,
             errorLog));
