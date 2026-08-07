@@ -2,16 +2,6 @@
 
 Releases are published to GitHub Packages (`maven.pkg.github.com/ponder-lab/ML`), including the consumer-facing fat JAR `com.ibm.wala.cast.python.ml-X.Y.Z-fat.jar`. The mechanism is `maven-release-plugin`: it pushes two version-bump commits and a plain-semver tag to `master`, and the tag push drives CI's deploy gate (publish to GitHub Packages) and `release-upload` job (create the GitHub Release with generated notes and attach the fat JAR; the release is marked a pre-release only when the tag carries a `-` suffix). The normal path needs no manual `mvn deploy` or `gh release create` step (a manual-deploy fallback for CI failures is in [Troubleshooting](#troubleshooting) below).
 
-## When To Cut One
-
-A release is how a downstream consumer names a fixed version of this analysis, so cut one when something downstream needs to *name* a version, not whenever the analysis changes. In practice that means a release marks a measurement rather than a change: engine work accumulates on `master`, and one release covers everything that landed since the last one.
-
-The alternative, releasing per improvement, is a bottleneck out of proportion to what it buys. The workflow below is one dispatch, but each release pulls a version bump through the consumer's target platform and any test there that pins this analysis's current answers, so the real cost is paid downstream and repeatedly.
-
-Between releases, a consumer that wants the latest can build this repository at a known commit, install it locally, and depend on the `X.Y.Z-SNAPSHOT` coordinate. That stays reproducible on one condition, which is the whole discipline: **record the commit the snapshot was built from wherever the result is recorded.** A snapshot is mutable, so "built against `0.52.83-SNAPSHOT`" names nothing a month later, while "built against `0.52.83-SNAPSHOT` at `<sha>`" names exactly one artifact. Without that, a result cannot be re-derived and has to be re-measured.
-
-So: snapshots pinned to a recorded commit for iteration, releases for results anyone else will cite.
-
 ## One-Click Release (Preferred)
 
 Dispatch the **Cut release** workflow (`.github/workflows/release.yml`), which runs `maven-release-plugin` on a runner — no local toolchain, flags, or credentials. From the Actions UI: **Actions → Cut release → Run workflow**, select branch `master`, and enter the versions. Or from the CLI:
