@@ -1211,6 +1211,26 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   }
 
   /**
+   * Whether an instruction consumes a second operand beside the one being examined, and so could
+   * impose an eager coercion on it (<a
+   * href="https://github.com/wala/ML/issues/828">wala/ML#828</a>).
+   *
+   * <p>Used to decline a parameter whose consumers are not fully accounted for. A binary operator
+   * always takes two; a call takes a second when it passes at least two positional arguments beside
+   * the callee, which is what separates {@code tf.matmul(x, W)} from a sink like {@code consume(x)}
+   * or a reduction over {@code x} alone.
+   *
+   * @param instruction The consuming instruction.
+   * @return {@code true} iff the instruction consumes a second operand.
+   */
+  private static boolean takesSecondOperand(SSAInstruction instruction) {
+    if (instruction instanceof SSABinaryOpInstruction) return true;
+    if (instruction instanceof PythonInvokeInstruction invoke)
+      return invoke.getNumberOfPositionalParameters() >= 3;
+    return false;
+  }
+
+  /**
    * True iff the given {@link SSAInstruction} constitutes individual elements.
    *
    * @param instruction The {@link SSAInstruction} in question.
@@ -2111,14 +2131,22 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // non-parameter operand's own dtype is a fact about the value the program holds, while a
       // parameter's is a question about the signature to write, and only the latter is decided by
       // what the body computes with.
+      //
       // Driven from the parameters rather than from the seeded sources. A consumer's own result is
       // a source only when something assigns from it, and an operand of a further operation is
       // assigned from by nothing: in `W * x + b` the product carries no assignment edge, so it is
       // absent from the dataflow graph while being exactly the consumer that coerces `x`. Walking
       // the parameter's uses reaches every direct consumer by construction, which is also the set
       // the rule is defined over.
+      //
+      // A consumer that takes a second operand but declares no coercion is unaccounted for, and
+      // declines the parameter rather than being ignored. The rule reads the WHOLE set of direct
+      // consumptions, so a family that does not yet declare (matmul, the tensordot/einsum shapes)
+      // could otherwise leave a lone `float32` unopposed beside a `float64` it cannot see, turning
+      // an incomplete collection into a wrong pin instead of a missing one. Declining costs only
+      // the improvement, since the parameter then keeps the dtype it is fed.
       Map<PointsToSetVariable, DType> dtypeCoercions = HashMapFactory.make();
-      Set<PointsToSetVariable> conflictingCoercions = HashSetFactory.make();
+      Set<PointsToSetVariable> declinedCoercions = HashSetFactory.make();
       for (PointsToSetVariable parameter : parameters) {
         LocalPointerKey lpk = (LocalPointerKey) parameter.getPointerKey();
         CGNode owner = lpk.getNode();
@@ -2139,23 +2167,26 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                 getGenerator(
                     builder.getPropagationSystem().findOrCreatePointsToSet(consumerKey), builder);
           } catch (IllegalArgumentException e) {
+            generator = null;
+          }
+          if (!(generator instanceof OperandDTypeCoercing coercing)) {
+            if (takesSecondOperand(use)) declinedCoercions.add(parameter);
             continue;
           }
-          if (!(generator instanceof OperandDTypeCoercing coercing)) continue;
           DType imposed = coercing.getOperandDTypeCoercions(builder).get(lpk);
           if (imposed == null) continue;
           DType previous = dtypeCoercions.putIfAbsent(parameter, imposed);
-          if (previous != null && previous != imposed) conflictingCoercions.add(parameter);
+          if (previous != null && previous != imposed) declinedCoercions.add(parameter);
         }
       }
-      dtypeCoercions.keySet().removeAll(conflictingCoercions);
+      dtypeCoercions.keySet().removeAll(declinedCoercions);
       LOGGER.fine(
           () ->
               "wala/ML#828 parameter dtype coercions: "
                   + dtypeCoercions.size()
                   + " ("
-                  + conflictingCoercions.size()
-                  + " declined for disagreeing consumers)");
+                  + declinedCoercions.size()
+                  + " declined for disagreeing or unaccounted consumers)");
       for (Map.Entry<PointsToSetVariable, DType> c : dtypeCoercions.entrySet())
         LOGGER.fine(
             () -> "  coerce: " + describe(c.getKey().getPointerKey()) + " -> " + c.getValue());

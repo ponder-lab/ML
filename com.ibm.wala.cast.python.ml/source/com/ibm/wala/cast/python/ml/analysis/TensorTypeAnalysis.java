@@ -463,7 +463,11 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
 
     @Override
     public int hashCode() {
-      return 0x828C0E4 + this.coerced.hashCode();
+      // The dtype's ordinal, not its identity hash: an enum's default hash varies between runs,
+      // and identity-hash iteration order is what carried the wala/ML#753 nondeterminism. The
+      // parameterized operators beside this one key on a `PointsToSetVariable`, which has no
+      // stable id to use instead; this one does, so it uses it.
+      return 0x828C0E4 + this.coerced.ordinal();
     }
 
     @Override
