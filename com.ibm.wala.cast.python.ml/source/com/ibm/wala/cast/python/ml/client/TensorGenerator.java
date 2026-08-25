@@ -8537,14 +8537,86 @@ public abstract class TensorGenerator {
     } else if (sanitized.equals(TensorFlowTypes.DIRECTORY_ITERATOR_IMAGES_TYPE)) {
       // A position of the `(x, y)` batch tuple `flow_from_directory`'s summary materializes; the
       // node-based dispatch below would resolve the whole-batch union instead (wala/ML#830).
-      return new DatasetTupleElementGenerator(
-          node, new FlowFromDirectoryGenerator(node), FlowFromDirectoryGenerator.IMAGES_INDEX);
+      return batchTupleElementGenerator(builder, node, FlowFromDirectoryGenerator.IMAGES_INDEX);
     } else if (sanitized.equals(TensorFlowTypes.DIRECTORY_ITERATOR_LABELS_TYPE)) {
-      return new DatasetTupleElementGenerator(
-          node, new FlowFromDirectoryGenerator(node), FlowFromDirectoryGenerator.LABELS_INDEX);
+      return batchTupleElementGenerator(builder, node, FlowFromDirectoryGenerator.LABELS_INDEX);
     }
 
     return createManualGenerator(node, builder);
+  }
+
+  /**
+   * Creates the generator for a position of the {@code (x, y)} batch tuple {@code
+   * flow_from_directory}'s summary materializes (wala/ML#830, wala/ML#834): a {@link
+   * DatasetTupleElementGenerator} projecting the given position out of a {@link
+   * FlowFromDirectoryGenerator} anchored per {@link #batchElementProviderAnchor}. This overload
+   * serves the manual (node-based) dispatch table.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the anchor.
+   * @param helperNode The element helper's {@code do()} node.
+   * @param index The tuple position to project.
+   * @return The composed generator.
+   */
+  static DatasetTupleElementGenerator batchTupleElementGenerator(
+      PropagationCallGraphBuilder builder, CGNode helperNode, int index) {
+    return new DatasetTupleElementGenerator(
+        helperNode,
+        new FlowFromDirectoryGenerator(batchElementProviderAnchor(builder, helperNode)),
+        index);
+  }
+
+  /**
+   * Creates the generator for a position of the {@code (x, y)} batch tuple {@code
+   * flow_from_directory}'s summary materializes (wala/ML#830, wala/ML#834), anchored on a source.
+   * This overload serves the source-based dispatch table; the provider still anchors through the
+   * marker allocation's helper node per {@link #batchElementProviderAnchor}.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the anchor.
+   * @param source The {@link PointsToSetVariable} holding the marker allocation.
+   * @param helperNode The element helper's {@code do()} node, recovered from the marker allocation.
+   * @param index The tuple position to project.
+   * @return The composed generator.
+   */
+  static DatasetTupleElementGenerator batchTupleElementGenerator(
+      PropagationCallGraphBuilder builder,
+      PointsToSetVariable source,
+      CGNode helperNode,
+      int index) {
+    return new DatasetTupleElementGenerator(
+        source,
+        new FlowFromDirectoryGenerator(batchElementProviderAnchor(builder, helperNode)),
+        index);
+  }
+
+  /**
+   * Resolves the anchor for a batch-element position's provider: the element helper's unique
+   * calling `flow_from_directory.do` node, whose frame holds the shape-bearing arguments
+   * (wala/ML#834). The helper's own synthetic parameters are unreliable for argument resolution
+   * (the empty-parameter-slot phenomenon the caller-walk fallbacks exist for), so a provider
+   * anchored there resolves the API defaults instead of the call's literals; the caller frame
+   * resolves them the same way the reader-route provider does. Callers are deduplicated by node and
+   * filtered to `flow_from_directory`'s class, since {@code getCallerInvokes} counts (caller, site)
+   * pairs and a context-collapsed helper node can be called from several places; the helper node
+   * itself is the fallback when no unique caller survives, and its frame stays positionally valid
+   * because the helper's parameter layout mirrors the parent's (the summary's layout-mirroring
+   * contract). A node that is not an element helper's is returned unchanged.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the caller.
+   * @param node The element helper's {@code do()} node.
+   * @return The provider anchor.
+   */
+  static CGNode batchElementProviderAnchor(PropagationCallGraphBuilder builder, CGNode node) {
+    TypeReference declaring = sanitize(node.getMethod().getDeclaringClass().getReference());
+    if (!declaring.equals(TensorFlowTypes.DIRECTORY_ITERATOR_IMAGES_TYPE)
+        && !declaring.equals(TensorFlowTypes.DIRECTORY_ITERATOR_LABELS_TYPE)) return node;
+
+    Set<CGNode> parents = HashSetFactory.make();
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> caller : getCallerInvokes(builder, node))
+      if (sanitize(caller.fst.getMethod().getDeclaringClass().getReference())
+          .equals(TensorFlowTypes.IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE))
+        parents.add(caller.fst);
+
+    return parents.size() == 1 ? parents.iterator().next() : node;
   }
 
   /**
