@@ -2,6 +2,7 @@ package com.ibm.wala.cast.python.ml.client;
 
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+import java.util.Locale;
 
 /**
  * Generator for {@code tf.gather} at its default axis. Output dtype is inherited from the {@code
@@ -34,5 +35,31 @@ public class Gather extends EmbeddingLookup {
 
   public Gather(CGNode node) {
     super(node);
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote {@code tf.gather}'s summary names the argument {@code indices}, not {@code
+   *     embedding_lookup}'s {@code ids}; a keyword-form call resolved under the wrong name finds no
+   *     value number (wala/ML#823's review).
+   */
+  @Override
+  protected String getIndicesParameterName() {
+    return Parameters.INDICES.getName();
+  }
+
+  /** {@code tf.gather}'s arguments, in summary order ({@code self} excluded). */
+  protected enum Parameters {
+    PARAMS,
+    INDICES;
+
+    public String getName() {
+      return name().toLowerCase(Locale.ROOT);
+    }
+
+    public int getIndex() {
+      return ordinal();
+    }
   }
 }

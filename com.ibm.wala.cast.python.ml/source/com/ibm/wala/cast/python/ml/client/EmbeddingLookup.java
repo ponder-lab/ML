@@ -7,6 +7,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -29,58 +30,122 @@ public class EmbeddingLookup extends PassThroughUnaryTensorGenerator {
     super(node);
   }
 
+  /** The modeled call's arguments, in summary order ({@code self} excluded). */
+  protected enum Parameters {
+    PARAMS,
+    IDS;
+
+    public String getName() {
+      return name().toLowerCase(Locale.ROOT);
+    }
+
+    public int getIndex() {
+      return ordinal();
+    }
+  }
+
   @Override
   protected int getInputParameterPosition() {
-    return 0;
+    return Parameters.PARAMS.getIndex();
   }
 
   @Override
   protected String getInputParameterName() {
-    return "params";
+    return Parameters.PARAMS.getName();
   }
 
   /**
-   * Derives the output shape as {@code ids.shape + params.shape[1:]}: each id selects a full row of
-   * the {@code params} embedding table, so the result is indexed by {@code ids.shape} with each
-   * entry being a {@code params.shape[1:]} row.
+   * Legacy view of {@link #getDefaultShapeResult(PropagationCallGraphBuilder)}: a partial's
+   * resolvable members stand, per the default mode's contract (wala/ML#716), and only a member-less
+   * result collapses to {@code null} (⊤).
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @return The set of possible output shapes, or {@code null} (⊤) when either input's shape is
-   *     unknown or every {@code params} candidate has rank below 1.
+   * @return The set of possible output shapes, or {@code null} (⊤) when either input resolves no
+   *     member or every {@code params} candidate has rank below 1.
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    // params is arg 0; ids is arg 1.
-    Set<List<Dimension<?>>> paramsShapes =
-        this.getShapes(builder, this.getArgumentValueNumber(builder, 0, "params", false));
-    Set<List<Dimension<?>>> idsShapes =
-        this.getShapes(builder, this.getArgumentValueNumber(builder, 1, "ids", false));
-    if (paramsShapes == null || idsShapes == null) return null;
+    ShapeResult result = this.getDefaultShapeResult(builder);
+    return result.isPartial() ? result.members() : result.toLegacy();
+  }
+
+  /**
+   * Member-wise record view (wala/ML#718; the upgrade the legacy route anticipated, wala/ML#823):
+   * the output composes per {@code ids}-member × {@code params}-member pair as {@code ids.shape +
+   * params.shape[1:]} — each id selects a full row of the embedding table — and either input's
+   * unknown remainder rides through as the result's remainder instead of poisoning the whole set,
+   * so a partially resolvable input no longer discards what the other input proves. A wholly
+   * unresolved input still yields ⊤: with the ids' rank unknown, no complete output member exists
+   * to enumerate, which is the case wala/ML#823's own probe found unpreservable.
+   *
+   * @param builder The propagation call graph builder.
+   * @return The composed result.
+   */
+  @Override
+  protected ShapeResult getDefaultShapeResult(PropagationCallGraphBuilder builder) {
+    // Exact-mode reads, so a partially-resolvable input's remainder marks rather than silently
+    // dropping (wala/ML#716, wala/ML#718).
+    ShapeResult paramsShapes =
+        this.shapeResultOfArgumentValue(
+            builder, this.getInputParameterPosition(), this.getInputParameterName());
+    ShapeResult idsShapes =
+        this.shapeResultOfArgumentValue(
+            builder, this.getIndicesParameterPosition(), this.getIndicesParameterName());
+    if (paramsShapes.members().isEmpty() || idsShapes.members().isEmpty())
+      return ShapeResult.unknown();
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
-    for (List<Dimension<?>> ids : idsShapes) {
-      for (List<Dimension<?>> params : paramsShapes) {
-        // The embedding table must have at least one axis (the row dimension to index into).
+    for (List<Dimension<?>> ids : idsShapes.members()) {
+      for (List<Dimension<?>> params : paramsShapes.members()) {
+        // A rank-0 table is a guaranteed run-time error for this op, so the skip is
+        // infeasible-path pruning (the wala/ML#746 arm-pruning sense), not an unmarked remainder.
         if (params.isEmpty()) continue;
         List<Dimension<?>> out = new ArrayList<>(ids);
         out.addAll(params.subList(1, params.size()));
         ret.add(out);
       }
     }
-    return ret.isEmpty() ? null : ret;
+    return ret.isEmpty()
+        ? ShapeResult.unknown()
+        : new ShapeResult(ret, paramsShapes.hasUnknown() || idsShapes.hasUnknown());
   }
 
   /**
-   * Collapse-safe record view (wala/ML#718): this generator transforms its input shapes in {@link
-   * #getDefaultShapes}, which the pass-through identity record path would bypass, so the record
-   * view routes through the legacy transform until a member-wise upgrade.
+   * The position of the indices argument ({@code ids} for {@code tf.nn.embedding_lookup}).
+   *
+   * @return The 0-based positional index of the indices argument.
+   */
+  protected int getIndicesParameterPosition() {
+    return Parameters.IDS.getIndex();
+  }
+
+  /**
+   * The keyword name of the indices argument: {@code "ids"} for {@code tf.nn.embedding_lookup};
+   * {@code Gather} overrides with {@code "indices"}, its summary's name — a keyword-form call
+   * resolved under the wrong name would otherwise find no value number.
+   *
+   * @return The keyword parameter name of the indices argument.
+   */
+  protected String getIndicesParameterName() {
+    return Parameters.IDS.getName();
+  }
+
+  /**
+   * Resolves one argument's shapes as a record through the value-number pipeline, in exact mode.
+   * The vn route is deliberate against the inherited PTS-first {@code shapeResultOfArg}: it alone
+   * reaches the φ-arm feasibility walk (wala/ML#746) and the subscript-before-points-to resolution
+   * (wala/ML#825), which this generator's indices commonly need.
    *
    * @param builder The propagation call graph builder.
-   * @return The transformed result, with any partial input collapsed by the legacy view.
+   * @param position The 0-based positional index of the argument.
+   * @param name The keyword parameter name.
+   * @return The resolution result; ⊤ when the argument's value number cannot be located.
    */
-  @Override
-  protected ShapeResult getDefaultShapeResult(PropagationCallGraphBuilder builder) {
-    return ShapeResult.fromLegacy(this.getDefaultShapes(builder));
+  private ShapeResult shapeResultOfArgumentValue(
+      PropagationCallGraphBuilder builder, int position, String name) {
+    int vn = this.getArgumentValueNumber(builder, position, name, true);
+    if (vn <= 0) return ShapeResult.unknown();
+    return this.getShapeResult(builder, this.getNode(), vn, true);
   }
 
   /**
