@@ -39,6 +39,7 @@ import com.ibm.wala.util.graph.Graph;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -421,58 +422,79 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * <p>The rewrite is unconditional on the incoming cell, unlike {@link ComputeDTypeCastOp}'s
    * floating-point-only cast: eager coercion applies to an integral NumPy argument just as it does
    * to a floating-point one, and the collected dtype is what the runtime computes with in either
-   * case. A parameter genuinely fed tensors is unaffected in substance, since a mismatch there
-   * raises eagerly and the coercion collected can only be the dtype it already carries.
+   * case. Under a singleton, a parameter genuinely fed tensors is unaffected in substance, since a
+   * mismatch there raises eagerly and the coercion collected can only be the dtype it already
+   * carries; under a disagreement union the collection is caller-blind, so a tensor-fed member is
+   * cast to every imposed dtype like any other — the union describes the body's ops, not any one
+   * caller's feed.
+   *
+   * <p>Where the consumers disagree, the rewrite is the union over the imposed dtypes rather than a
+   * decline to the fed dtype (wala/ML#829): the parameter genuinely is computed at more than one
+   * dtype, at different ops, and the fed dtype is not a claim the analysis believes there. Each
+   * incoming member is cast to every imposed dtype, which is notation the emission already produces
+   * and consumers already parse.
    *
    * <p>Origins are blocked exactly as {@link ParameterBarrierOp} blocks them, since this
    * destination is a parameter and this operator replaces rather than supplements that barrier.
    */
   static final class CoerceDTypeOp extends UnaryOperator<TensorVariable> {
 
-    /** The dtype eager execution imposes on this destination. */
-    private final DType coerced;
+    /**
+     * The dtypes eager execution imposes on this destination. A singleton pins; a larger set is the
+     * union over disagreeing consumers (wala/ML#829): the parameter genuinely is computed at more
+     * than one dtype, at different ops, and each incoming member is cast to every imposed dtype so
+     * the disagreement reaches a consumer of the analysis instead of being silently replaced by the
+     * fed dtype.
+     */
+    private final EnumSet<DType> coerced;
 
-    CoerceDTypeOp(DType coerced) {
-      this.coerced = coerced;
+    CoerceDTypeOp(EnumSet<DType> coerced) {
+      // A defensive copy: hashCode/equals derive from the contents, and the caller's set is the
+      // live map value — a later mutation of it would change this operator's hash in place inside
+      // WALA's hash-keyed fixpoint structures, the wala/ML#753 instability class.
+      this.coerced = EnumSet.copyOf(coerced);
     }
 
     @Override
     public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
       if (lhs == null || rhs == null || rhs.state == null) return NOT_CHANGED;
-      if (lhs.state == null) {
-        lhs.state = HashSetFactory.make();
-        for (TensorType t : rhs.state) lhs.state.add(this.cast(t));
-        return CHANGED;
-      }
-      boolean changed = false;
-      for (TensorType t : rhs.state) changed |= lhs.state.add(this.cast(t));
+      // Materializing a null state is itself a change, even from an empty rhs.
+      boolean changed = lhs.state == null;
+      if (changed) lhs.state = HashSetFactory.make();
+      for (TensorType t : rhs.state)
+        for (DType d : this.coerced) changed |= lhs.state.add(cast(t, d));
       return changed ? CHANGED : NOT_CHANGED;
     }
 
     /**
-     * The type as the body computes with it.
+     * The type as the body computes with it at one of its consumers.
      *
      * @param type The type the caller feeds.
-     * @return {@code type} with its cell replaced by the coerced dtype, or {@code type} itself when
+     * @param coerced The dtype one consumer imposes.
+     * @return {@code type} with its cell replaced by {@code coerced}, or {@code type} itself when
      *     it already carries that dtype.
      */
-    private TensorType cast(TensorType type) {
-      if (type.getDType() == this.coerced) return type;
-      return TensorType.of(this.coerced, type.getDims(), type.layout());
+    private static TensorType cast(TensorType type, DType coerced) {
+      if (type.getDType() == coerced) return type;
+      return TensorType.of(coerced, type.getDims(), type.layout());
     }
 
     @Override
     public int hashCode() {
-      // The dtype's ordinal, not its identity hash: an enum's default hash varies between runs,
-      // and identity-hash iteration order is what carried the wala/ML#753 nondeterminism. The
-      // parameterized operators beside this one key on a `PointsToSetVariable`, which has no
-      // stable id to use instead; this one does, so it uses it.
-      return 0x828C0E4 + this.coerced.ordinal();
+      // The dtypes' ordinals, not their identity hashes: an enum's default hash varies between
+      // runs, and identity-hash iteration order is what carried the wala/ML#753 nondeterminism
+      // (an EnumSet's own hashCode sums its elements' identity hashes, so it inherits the same
+      // instability). The parameterized operators beside this one key on a
+      // `PointsToSetVariable`, which has no stable id to use instead; this one does, so it uses
+      // it.
+      int bits = 0;
+      for (DType d : this.coerced) bits |= 1 << d.ordinal();
+      return 0x828C0E4 + bits;
     }
 
     @Override
     public boolean equals(Object o) {
-      return o instanceof CoerceDTypeOp && ((CoerceDTypeOp) o).coerced == this.coerced;
+      return o instanceof CoerceDTypeOp && ((CoerceDTypeOp) o).coerced.equals(this.coerced);
     }
 
     @Override
@@ -538,7 +560,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> drops,
       Set<PointsToSetVariable> parameters,
       Set<PointsToSetVariable> computeDTypeCasts,
-      Map<PointsToSetVariable, DType> dtypeCoercions,
+      Map<PointsToSetVariable, EnumSet<DType>> dtypeCoercions,
       Set<PointsToSetVariable> iterationProducts,
       AtomicReference<Function<PointsToSetVariable, TensorVariable>> outAccessor,
       Map<PointerKey, AnalysisError> errorLog) {
@@ -1200,8 +1222,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    *     (wala/ML#726).
    * @param computeDTypeCasts Keras {@code call} first-argument destinations, whose incoming
    *     floating-point types are rewritten to the layer's compute dtype (wala/ML#821).
-   * @param dtypeCoercions Parameter destinations whose consumers coerce them, keyed to the dtype
-   *     eager execution imposes there (wala/ML#828).
+   * @param dtypeCoercions Parameter destinations whose consumers coerce them, keyed to the dtypes
+   *     eager execution imposes there (wala/ML#828): a singleton where the consumers agree, the
+   *     union over the imposed dtypes where they disagree (wala/ML#829).
    * @param iterationProducts Iteration-product destinations, whose types flow normally but whose
    *     origin inflow drops {@link TensorOrigin#PARAMETER} (wala/ML#729).
    * @param errorLog The sink for shape-mismatch diagnostics.
@@ -1220,7 +1243,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> drops,
       Set<PointsToSetVariable> parameters,
       Set<PointsToSetVariable> computeDTypeCasts,
-      Map<PointsToSetVariable, DType> dtypeCoercions,
+      Map<PointsToSetVariable, EnumSet<DType>> dtypeCoercions,
       Set<PointsToSetVariable> iterationProducts,
       Map<PointerKey, AnalysisError> errorLog) {
     this(
@@ -1267,7 +1290,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Set<PointsToSetVariable> drops,
       Set<PointsToSetVariable> parameters,
       Set<PointsToSetVariable> computeDTypeCasts,
-      Map<PointsToSetVariable, DType> dtypeCoercions,
+      Map<PointsToSetVariable, EnumSet<DType>> dtypeCoercions,
       Set<PointsToSetVariable> iterationProducts,
       Map<PointerKey, AnalysisError> errorLog,
       AtomicReference<Function<PointsToSetVariable, TensorVariable>> outAccessor) {

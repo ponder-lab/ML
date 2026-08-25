@@ -1820,9 +1820,11 @@ public class TestElementwiseOps extends AbstractTensorTest {
   }
 
   /**
-   * The decline arm of {@link #testEagerCoercionDType()}: two consumers impose different dtypes on
-   * the same parameter, each succeeding on its own, so there is no single eager-effective dtype and
-   * the parameter keeps the one it is fed.
+   * The disagreement arm of {@link #testEagerCoercionDType()}: two consumers impose different
+   * dtypes on the same parameter, each succeeding on its own, so the parameter is reported as the
+   * union over the imposed dtypes — the body genuinely computes with {@code float32} at one op and
+   * {@code float64} at the other — rather than as the fed dtype, which is not a claim the analysis
+   * believes there (wala/ML#829).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -1830,9 +1832,81 @@ public class TestElementwiseOps extends AbstractTensorTest {
    * @throws IOException On I/O error reading the test file.
    */
   @Test
-  public void testEagerCoercionDTypeDeclined()
+  public void testEagerCoercionDTypeDisagreeing()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_eager_coercion_dtype.py", "declined", 1, 5, Map.of(2, Set.of(TENSOR_3_FLOAT64)));
+    test(
+        "tf2_test_eager_coercion_dtype.py",
+        "disagreeing",
+        1,
+        5,
+        Map.of(2, Set.of(TENSOR_3_FLOAT32, TENSOR_3_FLOAT64)));
+  }
+
+  /**
+   * The unaccounted arm of {@link #testEagerCoercionDType()}: one consumer imposes {@code float32},
+   * but the other ({@code tf.tensordot}) takes a second operand and declares no coercion, so the
+   * collection is incomplete and the parameter keeps the dtype it is fed — a union here would
+   * attach a confident-looking answer to ignorance (wala/ML#829).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testEagerCoercionDTypeUnaccounted()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_eager_coercion_dtype.py",
+        "unaccounted",
+        1,
+        5,
+        Map.of(2, Set.of(TENSOR_3_FLOAT64)));
+  }
+
+  /**
+   * The keyword form of {@link #testEagerCoercionDTypeUnaccounted()}: the undeclared consumer's
+   * second operand arrives by keyword ({@code tf.tensordot(x, b=V, axes=0)}), so a positional-only
+   * account of the call's arity would let it slip past the unaccounted decline and pin {@code
+   * float32} from the remaining consumer alone (wala/ML#829).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testEagerCoercionDTypeKeywordUnaccounted()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_eager_coercion_dtype.py",
+        "keyword_unaccounted",
+        1,
+        5,
+        Map.of(2, Set.of(TENSOR_3_FLOAT64)));
+  }
+
+  /**
+   * The declared-but-unresolved arm of {@link #testEagerCoercionDTypeUnaccounted()}: {@code x * y}
+   * is a declared consumer, but each operand's partner is itself a parameter, so no imposed dtype
+   * can be established there without circularity — the account is incomplete and both parameters
+   * keep the dtype they are fed, rather than {@code x} pinning to the {@code float32} its other
+   * consumer imposes (wala/ML#829).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testEagerCoercionDTypeCircular()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_eager_coercion_dtype.py",
+        "circular",
+        2,
+        5,
+        Map.of(2, Set.of(TENSOR_3_FLOAT64), 3, Set.of(TENSOR_3_FLOAT64)));
   }
 
   /**

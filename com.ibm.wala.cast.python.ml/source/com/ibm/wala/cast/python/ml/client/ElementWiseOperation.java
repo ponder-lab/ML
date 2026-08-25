@@ -26,8 +26,10 @@ import com.ibm.wala.ssa.SSAUnaryOpInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.intset.OrdinalSet;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -775,6 +777,59 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
     this.coerce(builder, yVn, xVn, ret);
     this.coerce(builder, xVn, yVn, ret);
     return ret;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * <p>A slot is unresolved when the slot beside it is a parameter (deciding one undecided dtype
+   * from another would be circular) or does not resolve to a single definite dtype. A
+   * scalar-literal partner is not reported: a Python number is weak and imposes nothing at run
+   * time, so the account there is complete by design rather than incomplete.
+   *
+   * @param builder The propagation call graph builder.
+   * @return The pointer keys of operands whose partner's imposed dtype could not be established.
+   */
+  @Override
+  public Set<PointerKey> getUnresolvedCoercionOperands(PropagationCallGraphBuilder builder) {
+    int xVn;
+    int yVn;
+    try {
+      xVn = this.getXArgumentValueNumber(builder);
+      yVn = this.getYArgumentValueNumber(builder);
+    } catch (IllegalStateException e) {
+      LOGGER.log(
+          Level.FINE, e, () -> "Operand value numbers unavailable for " + describe(source) + ".");
+      return Collections.emptySet();
+    }
+    if (xVn <= 0 || yVn <= 0) return Collections.emptySet();
+
+    Set<PointerKey> ret = new LinkedHashSet<>();
+    this.addUnresolvedTarget(builder, yVn, xVn, ret);
+    this.addUnresolvedTarget(builder, xVn, yVn, ret);
+    return ret;
+  }
+
+  /**
+   * Records the target slot as unresolved when the source slot cannot establish an imposed dtype
+   * for it.
+   *
+   * @param builder The propagation call graph builder.
+   * @param sourceVn The slot that would supply the dtype.
+   * @param targetVn The slot the dtype would be imposed on.
+   * @param ret The accumulating set of unresolved targets' {@link PointerKey}s.
+   */
+  private void addUnresolvedTarget(
+      PropagationCallGraphBuilder builder, int sourceVn, int targetVn, Set<PointerKey> ret) {
+    CGNode node = this.getNode();
+    if (node.getIR() == null || node.getDU() == null) return;
+    // Mirrors `coerce`: a scalar-literal slot on either side means the op imposes nothing at run
+    // time — complete by design, not unresolved.
+    if (this.isScalarLiteral(builder, sourceVn) || this.isScalarLiteral(builder, targetVn)) return;
+
+    if (isParameterVn(node, sourceVn)
+        || singleDefiniteDType(this.getOperandDTypes(builder, sourceVn)) == null)
+      ret.add(builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, targetVn));
   }
 
   /**
