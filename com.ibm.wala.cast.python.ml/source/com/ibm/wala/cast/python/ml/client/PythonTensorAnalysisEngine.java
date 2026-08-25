@@ -2188,14 +2188,19 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // the parameter's uses reaches every direct consumer by construction, which is also the set
       // the rule is defined over.
       //
-      // A consumer that takes a second operand but declares no coercion is unaccounted for, and
-      // declines the parameter rather than being ignored. The rule reads the WHOLE set of direct
-      // consumptions, so a family that does not yet declare (matmul, the tensordot/einsum shapes)
-      // could otherwise leave a lone `float32` unopposed beside a `float64` it cannot see, turning
-      // an incomplete collection into a wrong pin instead of a missing one. Declining costs only
-      // the improvement, since the parameter then keeps the dtype it is fed.
-      Map<PointsToSetVariable, DType> dtypeCoercions = HashMapFactory.make();
-      Set<PointsToSetVariable> declinedCoercions = HashSetFactory.make();
+      // The two ways a parameter's imposed set can be plural are not the same, and only one
+      // unions (wala/ML#829). DISAGREEMENT — consumers imposing different dtypes — unions: the
+      // analysis knows the parameter has several eager-effective dtypes, at different ops, and the
+      // union states exactly that, where declining to the fed dtype would report a dtype no op in
+      // the body computes with. An UNACCOUNTED consumer — one that takes a second operand but
+      // declares no coercion (matmul, the tensordot/einsum shapes) — declines the whole
+      // parameter: the collection is incomplete, a union would attach a confident-looking answer
+      // to ignorance, and the fed dtype is the right conservative keep. The rule reads the WHOLE
+      // set of direct consumptions, so an unaccounted consumer cannot simply be skipped: it could
+      // leave a lone `float32` unopposed beside a `float64` it cannot see, turning an incomplete
+      // collection into a wrong pin instead of a missing one.
+      Map<PointsToSetVariable, EnumSet<DType>> dtypeCoercions = HashMapFactory.make();
+      Set<PointsToSetVariable> unaccountedCoercions = HashSetFactory.make();
       for (PointsToSetVariable parameter : parameters) {
         LocalPointerKey lpk = (LocalPointerKey) parameter.getPointerKey();
         CGNode owner = lpk.getNode();
@@ -2219,24 +2224,30 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             generator = null;
           }
           if (!(generator instanceof OperandDTypeCoercing coercing)) {
-            if (takesSecondOperand(use)) declinedCoercions.add(parameter);
+            if (takesSecondOperand(use)) unaccountedCoercions.add(parameter);
             continue;
           }
           DType imposed = coercing.getOperandDTypeCoercions(builder).get(lpk);
           if (imposed == null) continue;
-          DType previous = dtypeCoercions.putIfAbsent(parameter, imposed);
-          if (previous != null && previous != imposed) declinedCoercions.add(parameter);
+          dtypeCoercions.computeIfAbsent(parameter, p -> EnumSet.noneOf(DType.class)).add(imposed);
         }
       }
-      dtypeCoercions.keySet().removeAll(declinedCoercions);
+      dtypeCoercions.keySet().removeAll(unaccountedCoercions);
+      // The two counts answer different questions and are reported apart (wala/ML#829): the
+      // disagreement count is the population the union affects — parameters otherwise reported
+      // with a dtype no op in their body computes with — while the unaccounted count is coverage
+      // debt against the operations that do not yet declare.
+      long disagreements = dtypeCoercions.values().stream().filter(s -> s.size() > 1).count();
       LOGGER.fine(
           () ->
               "wala/ML#828 parameter dtype coercions: "
                   + dtypeCoercions.size()
                   + " ("
-                  + declinedCoercions.size()
-                  + " declined for disagreeing or unaccounted consumers)");
-      for (Map.Entry<PointsToSetVariable, DType> c : dtypeCoercions.entrySet())
+                  + disagreements
+                  + " unioned over disagreeing consumers; "
+                  + unaccountedCoercions.size()
+                  + " declined for unaccounted consumers)");
+      for (Map.Entry<PointsToSetVariable, EnumSet<DType>> c : dtypeCoercions.entrySet())
         LOGGER.fine(
             () -> "  coerce: " + describe(c.getKey().getPointerKey()) + " -> " + c.getValue());
 
