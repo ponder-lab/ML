@@ -1572,4 +1572,33 @@ public class TestShapeOps extends AbstractTensorTest {
     test("tf2_test_np_transpose.py", "consume_reversed", 1, 1, Map.of(2, Set.of(reversed)));
     test("tf2_test_np_transpose.py", "consume_method", 1, 1, Map.of(2, Set.of(methodForm)));
   }
+
+  /**
+   * The {@code axes} edge forms of {@code np.transpose} (<a
+   * href="https://github.com/wala/ML/issues/835">wala/ML#835</a>): a negative entry counts from the
+   * end, an explicit {@code None} selects the reversal default, and a permutation the analysis
+   * cannot fold degrades to an unresolved size per axis while preserving the rank, since a
+   * permutation preserves it.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpTransposeAxesEdgeForms()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType negative =
+        new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(2), new NumericDim(3)));
+    TensorType noneAxes =
+        new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(3), new NumericDim(2)));
+    TensorType unresolved =
+        new TensorType(
+            FLOAT_32,
+            asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE));
+
+    test("tf2_test_np_transpose.py", "consume_negative", 1, 1, Map.of(2, Set.of(negative)));
+    test("tf2_test_np_transpose.py", "consume_none_axes", 1, 1, Map.of(2, Set.of(noneAxes)));
+    test("tf2_test_np_transpose.py", "consume_unresolved", 1, 1, Map.of(2, Set.of(unresolved)));
+  }
 }
