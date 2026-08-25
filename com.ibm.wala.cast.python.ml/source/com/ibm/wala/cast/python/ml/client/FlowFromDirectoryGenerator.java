@@ -72,7 +72,7 @@ public class FlowFromDirectoryGenerator extends DatasetGenerator implements Tupl
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     ret.addAll(imageShapes);
-    ret.addAll(this.getLabelsShapes(builder));
+    ret.addAll(getLabelsShapes());
     return ret;
   }
 
@@ -165,10 +165,9 @@ public class FlowFromDirectoryGenerator extends DatasetGenerator implements Tupl
    * unknown statically — {@link UnresolvedDim} (wala/ML#721; previously {@code DynamicDim},
    * wala/ML#545).
    *
-   * @param builder The propagation call graph builder used for the analysis.
    * @return The possible label-batch shapes.
    */
-  private Set<List<Dimension<?>>> getLabelsShapes(PropagationCallGraphBuilder builder) {
+  private static Set<List<Dimension<?>>> getLabelsShapes() {
     List<Dimension<?>> labelShape = new ArrayList<>();
     labelShape.add(DynamicDim.INSTANCE);
     labelShape.add(UnresolvedDim.INSTANCE);
@@ -214,7 +213,7 @@ public class FlowFromDirectoryGenerator extends DatasetGenerator implements Tupl
       case IMAGES_INDEX:
         return this.getImagesShapes(builder);
       case LABELS_INDEX:
-        return this.getLabelsShapes(builder);
+        return getLabelsShapes();
       default:
         return null;
     }
