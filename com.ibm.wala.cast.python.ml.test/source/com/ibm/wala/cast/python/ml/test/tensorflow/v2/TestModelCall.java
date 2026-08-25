@@ -70,6 +70,15 @@ public class TestModelCall extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
         "tf2_test_sequential.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+
+    // A downstream `tf.transpose` reading the call's result exercises the producer-delegation
+    // route — the manual half of the tandem registration for `Sequential/__call__`.
+    test(
+        "tf2_test_sequential.py",
+        "consume_transposed",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
   }
 
   /**

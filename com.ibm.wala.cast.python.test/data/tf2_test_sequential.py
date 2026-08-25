@@ -10,6 +10,18 @@ def consume(x):
     assert x.dtype == tf.float32
 
 
+def consume_transposed(x):
+    assert isinstance(x, tf.Tensor)
+    assert x.shape == (2, 3)
+    assert x.dtype == tf.float32
+
+
 model = tf.keras.Sequential([tf.keras.layers.Dense(2)])
 out = model(tf.ones((3, 5)))
 consume(out)
+
+# A downstream op reading the call's result exercises the producer-delegation route: the
+# transpose resolves its input through the allocation in `Sequential/__call__`, the manual half
+# of the tandem registration.
+transposed = tf.transpose(out)
+consume_transposed(transposed)
