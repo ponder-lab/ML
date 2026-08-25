@@ -8777,10 +8777,7 @@ public abstract class TensorGenerator {
       return new GlobalAveragePooling1DCall(node);
     } else if (type.equals(TensorFlowTypes.EMBEDDING_LAYER_CALL.getDeclaringClass())) {
       return new EmbeddingCall(node);
-    } else if (type.equals(TensorFlowTypes.MODEL_CALL.getDeclaringClass())
-        || type.equals(TensorFlowTypes.SEQUENTIAL_CALL.getDeclaringClass())) {
-      // A Sequential instance's call node is `Sequential/__call__`, not `Model/__call__`
-      // (wala/ML#817); both take the model-call treatment.
+    } else if (type.equals(TensorFlowTypes.MODEL_CALL.getDeclaringClass())) {
       return new ModelCall(node);
     } else if (type.equals(TensorFlowTypes.MODEL.getDeclaringClass())) {
       return new Model(node);

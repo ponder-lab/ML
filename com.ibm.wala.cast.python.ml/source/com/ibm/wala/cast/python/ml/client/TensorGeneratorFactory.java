@@ -232,6 +232,7 @@ import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.ScipyTypes;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
@@ -426,6 +427,15 @@ public class TensorGeneratorFactory {
    */
   static TensorGenerator dispatchShared(GeneratorAnchor anchor) {
     TypeReference type = anchor.declaredType();
+
+    // The Sequential registrations live here so one entry serves both dispatch routes
+    // (wala/ML#817): the constructor type takes the `Model` treatment (its weight resolution is
+    // empty until wala/ML#832's layers walk, which is sound), and the instance's call node —
+    // `Sequential/__call__`, not `Model/__call__` — takes the model-call treatment.
+    if (isType(type, TensorFlowTypes.SEQUENTIAL.getDeclaringClass()))
+      return anchor.makeGenerator(Model::new, Model::new);
+    if (isType(type, SEQUENTIAL_CALL.getDeclaringClass()))
+      return anchor.makeGenerator(ModelCall::new, ModelCall::new);
 
     if (isType(type, MULTIPLY.getDeclaringClass())
         || isType(type, ADD.getDeclaringClass())
@@ -1844,10 +1854,7 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, CONV2D_CALL.getDeclaringClass())) return new Conv2DCall(source);
     else if (isType(calledFunction, DENSE_CALL.getDeclaringClass())) return new DenseCall(source);
     else if (isType(calledFunction, ADD_WEIGHT.getDeclaringClass())) return new AddWeight(source);
-    else if (isType(calledFunction, MODEL_CALL.getDeclaringClass())
-        || isType(calledFunction, SEQUENTIAL_CALL.getDeclaringClass()))
-      // A Sequential instance's call node is `Sequential/__call__` (wala/ML#817).
-      return new ModelCall(source);
+    else if (isType(calledFunction, MODEL_CALL.getDeclaringClass())) return new ModelCall(source);
     else if (isType(calledFunction, FLATTEN_LAYER_CALL.getDeclaringClass()))
       return new FlattenCall(source);
     else if (isType(calledFunction, GLOBAL_AVERAGE_POOLING_1D_CALL.getDeclaringClass()))

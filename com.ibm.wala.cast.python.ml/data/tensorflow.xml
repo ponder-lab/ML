@@ -2511,15 +2511,11 @@
         </method>
       </class>
       <class name="Sequential" allocatable="true">
-        <method name="read_data" descriptor="()LRoot;" numArgs="1">
-          <new def="x" class="Ltensorflow/keras/Model/attribute"/>
-          <return value="x"/>
-        </method>
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Sequential. `tf.keras.Sequential([...])` previously allocated nothing framework-typed, so a receiver-typing client could not tell a Sequential model from a user object and tensor propagation had no modeled instance to hang off (wala/ML#817). Mirrors `Model.do`'s field wiring (weights list, distribution strategy), stores the constructor's layer list on `layers`, and allocates the distinct `Ltensorflow/keras/models/Sequential` instance type, whose `super` chains into the canonical `Model` hierarchy below. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Sequential. `tf.keras.Sequential([...])` previously allocated nothing framework-typed, so a receiver-typing client could not tell a Sequential model from a user object and tensor propagation had no modeled instance to hang off (wala/ML#817). Mirrors `Model.do`'s field wiring (weights list, distribution strategy), stores the constructor's layer list on `layers`, and allocates the distinct `Ltensorflow/keras/models/Sequential` instance type, whose `super` chains into the canonical `Model` hierarchy below. The weight-attribute allocation is inlined directly (the wala/ML#380 target form) rather than via a `read_data` helper: the legacy method-name marker would also register `Sequential` for the read-data fallback and seed the MODEL OBJECT itself as a tensor. Weight-shape resolution behind this wiring is empty until wala/ML#832's layers walk. -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self layers name">
           <new def="res" class="Ltensorflow/keras/models/Sequential"/>
           <new def="x" class="Llist"/>
-          <call class="LRoot" name="read_data" descriptor="()LRoot;" type="virtual" arg0="res" numArgs="1" def="xx"/>
+          <new def="xx" class="Ltensorflow/keras/Model/attribute"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="x" value="xx"/>
           <putfield class="LRoot" field="trainable_weights" fieldType="LRoot" ref="res" value="x"/>
           <putfield class="LRoot" field="weights" fieldType="LRoot" ref="res" value="x"/>
@@ -2575,28 +2571,9 @@
           <return value="out"/>
         </method>
       </class>
-      <!-- The distinct Sequential instance type (wala/ML#817). Declares the same `__init__`/`__call__`/`call` bodies as the canonical `Model` above rather than relying on superclass traversal: the instance-method trampoline resolves the called method on the receiver's own class, so a body-less shell left `model(x)` on a Sequential instance unresolved. The `super` still chains into `Model`, so a source subclass such as `class M(tf.keras.Sequential)` joins the same hierarchy a `Model` subclass does (wala/ML#118, wala/ML#662). -->
+      <!-- The distinct Sequential instance type (wala/ML#817). Declares only `__call__`, duplicated from `Model`: the instance-method trampoline resolves the callable's method on the exact receiver class with no superclass walk (wala/ML#833), so a body-less shell left `model(x)` unresolved. `__init__` and `call` are NOT duplicated — their resolution walks the hierarchy chain, so `Model`'s bodies serve — and `super` chains into the canonical `Model`, so a source subclass such as `class M(tf.keras.Sequential)` joins the same hierarchy a `Model` subclass does (wala/ML#118, wala/ML#662). -->
       <class name="Sequential" allocatable="true" super="Ltensorflow/keras/models/Model">
-        <method name="__init__" descriptor="()LRoot;" numArgs="2" paramNames="func self">
-          <new def="ds" class="Ltensorflow/distribute/MirroredStrategy"/>
-          <new def="x" class="Ltensorflow/distribute/run/run"/>
-          <putfield class="LRoot" field="run" fieldType="LRoot" ref="ds" value="x"/>
-          <putfield class="LRoot" field="experimental_run_v2" fieldType="LRoot" ref="ds" value="x"/>
-          <new def="ddff" class="Ltensorflow/distribute/run/distribute_datasets_from_function"/>
-          <putfield class="LRoot" field="distribute_datasets_from_function" fieldType="LRoot" ref="ds" value="ddff"/>
-          <putfield class="LRoot" field="experimental_distribute_datasets_from_function" fieldType="LRoot" ref="ds" value="ddff"/>
-          <new def="edd" class="Ltensorflow/distribute/run/experimental_distribute_dataset"/>
-          <putfield class="LRoot" field="experimental_distribute_dataset" fieldType="LRoot" ref="ds" value="edd"/>
-          <putfield class="LRoot" field="_distribution_strategy" fieldType="LRoot" ref="self" value="ds"/>
-          <putfield class="LRoot" field="distribute_strategy" fieldType="LRoot" ref="self" value="ds"/>
-          <return value="self"/>
-        </method>
         <method name="__call__" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs training mask">
-          <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Sequential#call -->
-          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
-          <return value="out"/>
-        </method>
-        <method name="call" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs training mask">
           <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Sequential#call -->
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>

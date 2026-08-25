@@ -56,9 +56,12 @@ public class TestModelCall extends AbstractTensorTest {
    * A {@code tf.keras.Sequential}-built model is framework-typed and its call yields a tensor (<a
    * href="https://github.com/wala/ML/issues/817">wala/ML#817</a>): the summary allocates the
    * distinct {@code Sequential} instance type, chained under the canonical {@code Model}, so the
-   * call resolves through the inherited {@code __call__} and the result reaches the sink as a
-   * tensor rather than nothing, with the input's {@code float32} recovered through the model-call
-   * treatment.
+   * call resolves and the result reaches the sink as a definite-dtype tensor rather than nothing.
+   * The unknown shape is a deliberate floor: composing the forward chain through the layer list is
+   * <a href="https://github.com/wala/ML/issues/832">wala/ML#832</a>, and the fixture's runtime
+   * asserts record the {@code (3, 2)} truth the floor stops short of. The dtype expectation does
+   * not distinguish input-dtype recovery from the model-call treatment's {@code float32} default;
+   * both produce it here.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.

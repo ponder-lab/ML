@@ -4,6 +4,9 @@
 import tensorflow as tf
 
 
+# Deliberate asymmetry with the JUnit expectation: the runtime shape is (3, 2), but the static
+# analysis floors the Sequential call's shape at unknown until wala/ML#832's layers walk composes
+# the forward chain; the JUnit side pins the definite dtype with the unknown-shape floor.
 def consume(x):
     assert isinstance(x, tf.Tensor)
     assert x.shape == (3, 2)
