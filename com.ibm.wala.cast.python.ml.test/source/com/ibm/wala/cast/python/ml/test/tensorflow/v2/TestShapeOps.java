@@ -1434,19 +1434,19 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
-   * The gather one hop past that slice still composes the receiver's rank, giving {@code (30, 2,
-   * 16)} where the run-time value is {@code (30, 16)}, even though the slice itself now resolves.
-   * The generator-side shape query walks the points-to set rather than the pinned dataflow state,
-   * and the points-to set still carries the receiver's allocation.
-   *
-   * <p>TODO: Blocked by <a href="https://github.com/wala/ML/issues/825">wala/ML#825</a>.
+   * The gather one hop past that slice composes the slice's rank-1 shape, giving {@code (30, 16)}
+   * (<a href="https://github.com/wala/ML/issues/825">wala/ML#825</a>). The generator-side shape
+   * query used to walk the points-to set, which still carries the receiver's allocation — the
+   * aliasing the wala/ML#405 pin neutralizes for dataflow state — and composed {@code (30, 2, 16)};
+   * a subscript-defined value (and a subscript-fed synthetic parameter, resolved through its
+   * callers' frames) now decides before the points-to stage.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testGatherOnSlicedIndicesOffParameter()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -1481,19 +1481,19 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
-   * The gather downstream of that untyped index, which falls to ⊤ and discards the table's known
-   * trailing axis. This is the shape of the loss reported in <a
-   * href="https://github.com/wala/ML/issues/823">wala/ML#823</a>; its cause is the untyped index
-   * above, so it clears when that does.
-   *
-   * <p>TODO: Blocked by <a href="https://github.com/wala/ML/issues/824">wala/ML#824</a>.
+   * The gather downstream of the enumerated slice composes {@code (30, 16)} like the direct form
+   * (<a href="https://github.com/wala/ML/issues/825">wala/ML#825</a>): the index resolves through
+   * the enumerated element (wala/ML#826), and the subscript-before-points-to resolution carries it
+   * into the gather. The ⊤ fall-through this test used to pin was the loss shape reported in <a
+   * href="https://github.com/wala/ML/issues/823">wala/ML#823</a>, whose genuinely-unknown-indices
+   * case remains open there.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
    * @throws IOException On I/O error reading the test file.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testGatherThroughEnumeratedSequence()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(

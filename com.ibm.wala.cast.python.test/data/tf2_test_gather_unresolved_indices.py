@@ -23,10 +23,12 @@ def consume_listed(g):
 def propagate_direct(node_embeddings, adjacency):
     edge_sources = adjacency[:, 0]
     assert edge_sources.shape == (30,)
+    assert edge_sources.dtype == tf.int32
     consume_direct_indices(edge_sources)
 
     edge_source_states = tf.gather(node_embeddings, edge_sources)
     assert edge_source_states.shape == (30, 16)
+    assert edge_source_states.dtype == tf.float32
     consume_direct(edge_source_states)
 
 
@@ -37,10 +39,12 @@ def propagate_listed(node_embeddings, adjacency_lists):
     for edge_type_idx, adjacency_list in enumerate(adjacency_lists):
         edge_sources = adjacency_list[:, 0]
         assert edge_sources.shape == (30,)
+        assert edge_sources.dtype == tf.int32
         consume_listed_indices(edge_sources)
 
         edge_source_states = tf.gather(node_embeddings, edge_sources)
         assert edge_source_states.shape == (30, 16)
+        assert edge_source_states.dtype == tf.float32
         consume_listed(edge_source_states)
 
 
