@@ -425,8 +425,9 @@
       <!-- Allocation-only marker class for `tolist` results; no method body (same pattern as `ndarray`). -->
       <class name="tolist_result" allocatable="true"></class>
       <!-- https://numpy.org/doc/stable/reference/generated/numpy.ndarray.transpose.html. The method form of `np.transpose` (wala/ML#835); the trampoline supplies the receiver as `a`, so `NpTranspose` serves both forms. -->
+      <!-- The method form binds only `axes` (position 0 after `self`): the input array is the RECEIVER, which the trampoline never passes as an argument — `NpTranspose`'s method form reads it off the property read that defined the invoke's function object (wala/ML#796). A `self a axes` layout here would bind a user's positional `axes` into the input slot. -->
       <class name="transpose" allocatable="true">
-        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self a axes">
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self axes">
           <new def="ret" class="Lnumpy/ndarray"/>
           <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
           <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>

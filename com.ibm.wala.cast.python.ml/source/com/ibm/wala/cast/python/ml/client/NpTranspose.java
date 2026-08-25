@@ -1,50 +1,96 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
+import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
 import com.ibm.wala.ipa.callgraph.CGNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
 /**
- * A generator for {@code np.transpose(a, axes)} and the {@code ndarray.transpose(...)} method form
+ * A generator for {@code np.transpose(a, axes)} and the {@code ndarray.transpose(axes)} method form
  * (wala/ML#835): the output permutes the input's dimensions by the constant {@code axes},
  * defaulting to full reversal when {@code axes} is absent or {@code None}; the dtype passes through
  * from the input. An unresolvable {@code axes} still knows the RANK, since a permutation preserves
  * it, so each member degrades to an unresolved-per-axis shape of its own rank rather than ⊤.
  *
- * <p>Both modeled forms place the input at position 0 after {@code self} (the function form's
- * {@code a}, the method form's trampoline-supplied receiver), so one generator serves both dispatch
- * registrations.
+ * <p>The two forms differ in argument geometry, so the form is fixed at construction: the function
+ * form binds the input at position 0 ({@code a}) and {@code axes} at position 1, while the method
+ * form binds {@code axes} at position 0 and takes its input from the RECEIVER, which the trampoline
+ * never passes as an argument — it sits behind the invoke's function value and is read off the
+ * property read that defined it (the {@code tolist} precedent, wala/ML#796), through the caller
+ * walk when this anchor's node is the summary itself.
  */
 public class NpTranspose extends PassThroughUnaryTensorGenerator {
 
-  /** The position of the {@code axes} argument, {@code self} excluded. */
-  private static final int AXES_POSITION = 1;
-
-  public NpTranspose(PointsToSetVariable source) {
-    super(source);
+  /** How the {@code axes} argument resolved. */
+  private enum AxesKind {
+    /** Absent, or every member is the {@code None} constant: the reversal default. */
+    ABSENT_OR_NONE,
+    /** Exactly one constant permutation. */
+    CONSTANT,
+    /** One constant permutation beside a live {@code None}: both outcomes join. */
+    MIXED_WITH_NONE,
+    /** Present but not resolvable to one constant permutation. */
+    UNRESOLVABLE
   }
 
-  public NpTranspose(CGNode node) {
+  /** An {@code axes} resolution: its kind, and the permutation for the constant-bearing kinds. */
+  private record AxesResolution(AxesKind kind, List<Integer> axes) {}
+
+  /** Whether this instance serves the {@code ndarray.transpose} method form. */
+  private final boolean methodForm;
+
+  public NpTranspose(PointsToSetVariable source, boolean methodForm) {
+    super(source);
+    this.methodForm = methodForm;
+  }
+
+  public NpTranspose(CGNode node, boolean methodForm) {
     super(node);
+    this.methodForm = methodForm;
   }
 
   @Override
   protected int getInputParameterPosition() {
-    return 0;
+    return this.methodForm ? RECEIVER_PARAMETER_POSITION : 0;
   }
 
   @Override
   protected String getInputParameterName() {
-    return "a";
+    return this.methodForm ? SELF : "a";
+  }
+
+  /** The position of the {@code axes} argument in this form's frame, {@code self} excluded. */
+  private int getAxesPosition() {
+    return this.methodForm ? 0 : 1;
+  }
+
+  /**
+   * This generator transforms its input's shape, so forwarding operand shapes would overclaim; the
+   * feed carries dtype only (wala/ML#682, the {@code Transpose} precedent).
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The dtype-only feed over the caller-side input keys, or {@code null} when none is
+   *     located.
+   */
+  @Override
+  protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
+    return this.getTypeFeed(builder, TypeFeedKind.DTYPE_ONLY);
   }
 
   @Override
@@ -65,78 +111,87 @@ public class NpTranspose extends PassThroughUnaryTensorGenerator {
     ShapeResult input = this.inputShapes(builder);
     if (input.members().isEmpty()) return ShapeResult.unknown();
 
-    List<Integer> axes = this.getConstantAxes(builder);
-    boolean axesUnresolvable = this.axesPresentButUnresolvable(builder);
+    AxesResolution axes = this.resolveAxes(builder);
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     for (List<Dimension<?>> shape : input.members()) {
-      if (axesUnresolvable) {
-        // The permutation is unknown, but a permutation preserves the rank: an
-        // unresolved-per-axis shape of the member's own rank, not ⊤.
-        List<Dimension<?>> out = new ArrayList<>();
-        for (int i = 0; i < shape.size(); i++) out.add(UnresolvedDim.INSTANCE);
-        ret.add(out);
-        continue;
-      }
-      if (axes == null) {
-        // Absent or `None`: full reversal, the API default.
-        List<Dimension<?>> out = new ArrayList<>(shape);
-        Collections.reverse(out);
-        ret.add(out);
-        continue;
-      }
-      // A constant permutation applies only to members of the matching rank; a member the
-      // permutation cannot apply to is a guaranteed run-time error for this call, so the skip is
-      // infeasible-path pruning, not an unmarked remainder.
-      if (axes.size() != shape.size()) continue;
-      List<Dimension<?>> out = new ArrayList<>();
-      boolean valid = true;
-      for (int axis : axes) {
-        if (axis < 0) axis += shape.size();
-        if (axis < 0 || axis >= shape.size()) {
-          valid = false;
-          break;
+      switch (axes.kind()) {
+        case UNRESOLVABLE -> {
+          // The permutation is unknown, but a permutation preserves the rank: an
+          // unresolved-per-axis shape of the member's own rank, not ⊤.
+          List<Dimension<?>> out = new ArrayList<>();
+          for (int i = 0; i < shape.size(); i++) out.add(UnresolvedDim.INSTANCE);
+          ret.add(out);
         }
-        out.add(shape.get(axis));
+        case ABSENT_OR_NONE -> ret.add(reversed(shape));
+        case CONSTANT -> {
+          List<Dimension<?>> out = this.permuted(shape, axes.axes());
+          if (out != null) ret.add(out);
+        }
+        case MIXED_WITH_NONE -> {
+          // Both branches are live in the points-to set, so both outcomes join (a mixed
+          // `axes = None if cond else (2, 0, 1)` must not drop the reversal member).
+          ret.add(reversed(shape));
+          List<Dimension<?>> out = this.permuted(shape, axes.axes());
+          if (out != null) ret.add(out);
+        }
       }
-      if (valid) ret.add(out);
     }
     return ret.isEmpty() ? ShapeResult.unknown() : new ShapeResult(ret, input.hasUnknown());
   }
 
   /**
+   * Reverses a shape: the {@code axes}-absent default.
+   *
+   * @param shape The input member.
+   * @return The reversed shape.
+   */
+  private static List<Dimension<?>> reversed(List<Dimension<?>> shape) {
+    List<Dimension<?>> out = new ArrayList<>(shape);
+    Collections.reverse(out);
+    return out;
+  }
+
+  /**
+   * Applies a constant permutation to one member, sharing {@link Transpose#permuteShape} for the
+   * bijectivity check ("anything else is unsound") after normalizing numpy's negative axes, which
+   * count from the end. A member the permutation cannot apply to — rank mismatch, out-of-range, or
+   * repeated axes — is a guaranteed run-time error for this call, so the {@code null} return is
+   * infeasible-path pruning, not an unmarked remainder.
+   *
+   * @param shape The input member.
+   * @param axes The constant permutation, possibly with negative entries.
+   * @return The permuted shape, or {@code null} when the permutation cannot apply.
+   */
+  private List<Dimension<?>> permuted(List<Dimension<?>> shape, List<Integer> axes) {
+    List<Integer> normalized = new ArrayList<>(axes.size());
+    for (int axis : axes) normalized.add(axis < 0 ? axis + shape.size() : axis);
+    return Transpose.permuteShape(shape, normalized);
+  }
+
+  /**
    * {@inheritDoc}
    *
-   * @implNote The dtype passes through from the input, resolved by the same value number the shape
-   *     path uses, so the method form's trampoline-supplied receiver serves both.
+   * @implNote The dtype passes through from the input: the function form's argument slot, or the
+   *     method form's receiver.
    */
   @Override
-  protected Set<com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType> getDefaultDTypes(
-      PropagationCallGraphBuilder builder) {
-    int inputVn = this.inputValueNumber(builder);
-    if (inputVn > 0) {
-      Set<com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType> dTypes =
-          getDTypesOrSSAChain(builder, this.getNode(), inputVn);
-      if (dTypes != null && !dTypes.isEmpty()) return dTypes;
+  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    if (!this.methodForm) {
+      int inputVn = this.inputValueNumber(builder);
+      if (inputVn > 0) {
+        Set<DType> dTypes = getDTypesOrSSAChain(builder, this.getNode(), inputVn);
+        if (dTypes != null && !dTypes.isEmpty()) return dTypes;
+      }
+      return super.getDefaultDTypes(builder);
     }
-    // The method form binds no argument slot: the receiver sits behind each caller's invoke
-    // function value, so it is read off the property read in the caller's frame (the `tolist`
-    // precedent, wala/ML#796, lifted through the caller walk since this anchor's node is the
-    // summary).
-    Set<com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType> viaReceiver =
-        java.util.EnumSet.noneOf(com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.class);
-    for (com.ibm.wala.util.collections.Pair<CGNode, com.ibm.wala.ssa.SSAAbstractInvokeInstruction>
-        callerInvoke : getCallerInvokes(builder, this.getNode())) {
-      CGNode caller = callerInvoke.fst;
-      if (caller.getDU() == null) continue;
-      com.ibm.wala.ssa.SSAInstruction funcDef = caller.getDU().getDef(callerInvoke.snd.getUse(0));
-      if (!(funcDef instanceof com.ibm.wala.cast.python.ssa.PythonPropertyRead read)) continue;
+    Set<DType> viaReceiver = EnumSet.noneOf(DType.class);
+    for (Pair<CGNode, Integer> receiver : this.receiverValueNumbers(builder)) {
       try {
-        Set<com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType> dTypes =
-            getDTypesOrSSAChain(builder, caller, read.getObjectRef());
+        Set<DType> dTypes = getDTypesOrSSAChain(builder, receiver.fst, receiver.snd);
         if (dTypes != null) viaReceiver.addAll(dTypes);
       } catch (IllegalArgumentException e) {
-        // This caller does not resolve; others may.
+        // This receiver candidate does not resolve; others may.
       }
     }
     if (!viaReceiver.isEmpty()) return viaReceiver;
@@ -144,42 +199,67 @@ public class NpTranspose extends PassThroughUnaryTensorGenerator {
   }
 
   /**
-   * Resolves the input's shapes: the argument route first, which the function form binds, then the
-   * receiver route for the method form, whose trampoline supplies the receiver behind the invoke's
-   * function value rather than in an argument slot (the `tolist` precedent, wala/ML#796).
+   * Resolves the input's shapes: the function form's argument slot, or the method form's receiver.
    *
    * @param builder The propagation call graph builder.
-   * @return The input's resolution; ⊥-shaped when neither route resolves.
+   * @return The input's resolution; unknown (⊤) when the route does not resolve — the input is not
+   *     thereby proven a non-tensor.
    */
   private ShapeResult inputShapes(PropagationCallGraphBuilder builder) {
-    int inputVn = this.inputValueNumber(builder);
-    if (inputVn > 0) {
-      ShapeResult viaArgument = this.getShapeResult(builder, this.getNode(), inputVn, true);
-      if (!viaArgument.members().isEmpty()) return viaArgument;
+    if (!this.methodForm) {
+      int inputVn = this.inputValueNumber(builder);
+      if (inputVn > 0) {
+        ShapeResult viaArgument = this.getShapeResult(builder, this.getNode(), inputVn, true);
+        if (!viaArgument.members().isEmpty()) return viaArgument;
+      }
+      return ShapeResult.unknown();
     }
     Set<List<Dimension<?>>> viaReceiver = HashSetFactory.make();
-    for (com.ibm.wala.util.collections.Pair<CGNode, com.ibm.wala.ssa.SSAAbstractInvokeInstruction>
-        callerInvoke : getCallerInvokes(builder, this.getNode())) {
-      CGNode caller = callerInvoke.fst;
-      if (caller.getDU() == null) continue;
-      com.ibm.wala.ssa.SSAInstruction funcDef = caller.getDU().getDef(callerInvoke.snd.getUse(0));
-      if (!(funcDef instanceof com.ibm.wala.cast.python.ssa.PythonPropertyRead read)) continue;
+    for (Pair<CGNode, Integer> receiver : this.receiverValueNumbers(builder)) {
       try {
-        Set<List<Dimension<?>>> shapes = getShapesOrSSAChain(builder, caller, read.getObjectRef());
+        Set<List<Dimension<?>>> shapes = getShapesOrSSAChain(builder, receiver.fst, receiver.snd);
         if (shapes != null) viaReceiver.addAll(shapes);
       } catch (IllegalArgumentException e) {
-        // This caller does not resolve; others may.
+        // This receiver candidate does not resolve; others may.
       }
     }
-    return viaReceiver.isEmpty() ? ShapeResult.bottom() : ShapeResult.of(viaReceiver);
+    return viaReceiver.isEmpty() ? ShapeResult.unknown() : ShapeResult.of(viaReceiver);
   }
 
   /**
-   * The input's value number in the anchoring frame. The function form supplies it as the first
-   * positional argument; the method form supplies the receiver through the trampoline, invisible at
-   * the user call site, so the fallback reads the {@code x} of {@code x.transpose(...)} off the
+   * The method form's receiver candidates: the {@code x} of {@code x.transpose(...)}, read off the
    * property read that defined the invoke's function object (the {@code tolist} precedent,
-   * wala/ML#796).
+   * wala/ML#796) — locally when this anchor carries the invoke, and through the caller walk when
+   * this anchor's node is the summary itself (a delegation anchor has no invoke in its own frame).
+   *
+   * @param builder The propagation call graph builder.
+   * @return Pairs of the frame holding the receiver and its value number there.
+   */
+  private List<Pair<CGNode, Integer>> receiverValueNumbers(PropagationCallGraphBuilder builder) {
+    List<Pair<CGNode, Integer>> ret = new ArrayList<>();
+    SSAAbstractInvokeInstruction localInvoke = this.getInvokeInstruction();
+    if (localInvoke != null) {
+      CGNode node = this.getNode();
+      if (node.getDU() != null) {
+        SSAInstruction funcDef = node.getDU().getDef(localInvoke.getUse(0));
+        if (funcDef instanceof PythonPropertyRead read)
+          ret.add(Pair.make(node, read.getObjectRef()));
+      }
+      return ret;
+    }
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, this.getNode())) {
+      CGNode caller = callerInvoke.fst;
+      if (caller.getDU() == null) continue;
+      SSAInstruction funcDef = caller.getDU().getDef(callerInvoke.snd.getUse(0));
+      if (funcDef instanceof PythonPropertyRead read)
+        ret.add(Pair.make(caller, read.getObjectRef()));
+    }
+    return ret;
+  }
+
+  /**
+   * The input's value number in the anchoring frame, for the function form's argument slot.
    *
    * @param builder The propagation call graph builder.
    * @return The input's value number, or {@code -1} when unavailable.
@@ -190,50 +270,59 @@ public class NpTranspose extends PassThroughUnaryTensorGenerator {
   }
 
   /**
-   * Resolves the constant {@code axes} permutation.
+   * Classifies the {@code axes} argument in one pass over its points-to set: the {@code None}
+   * members and the folded permutation candidates are read together, so a mixed set keeps both
+   * outcomes and the None-selects-reversal rule lives in exactly one place.
    *
    * @param builder The propagation call graph builder.
-   * @return The permutation's integer entries, or {@code null} when {@code axes} is absent or
-   *     {@code None} (the reversal default applies).
+   * @return The resolution.
    */
-  private List<Integer> getConstantAxes(PropagationCallGraphBuilder builder) {
-    OrdinalSet<InstanceKey> axesPts = this.getAxesPointsToSet(builder);
-    if (axesPts == null || axesPts.isEmpty()) return null;
+  private AxesResolution resolveAxes(PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> axesPts =
+        this.getArgumentPointsToSet(builder, this.getAxesPosition(), "axes");
+    if (axesPts == null || axesPts.isEmpty())
+      return new AxesResolution(AxesKind.ABSENT_OR_NONE, null);
 
-    Set<List<Dimension<?>>> axesShapes = this.getShapesFromShapeArgument(builder, axesPts);
-    if (axesShapes == null || axesShapes.size() != 1) return null;
+    boolean sawNone = false;
+    boolean sawUnresolvable = false;
+    Set<List<Integer>> candidates = HashSetFactory.make();
 
-    List<Integer> axes = new ArrayList<>();
-    for (Dimension<?> d : axesShapes.iterator().next()) {
-      if (!(d.value() instanceof Integer)) return null;
-      axes.add((Integer) d.value());
+    for (InstanceKey instanceKey : axesPts) {
+      if (instanceKey instanceof ConstantKey<?> constant && constant.getValue() == null) {
+        sawNone = true;
+        continue;
+      }
+      Set<List<Dimension<?>>> folded;
+      try {
+        folded = this.getShapesFromShapeArgument(builder, Collections.singleton(instanceKey));
+      } catch (IllegalStateException e) {
+        // An unrecognized axes form: present but unresolvable.
+        sawUnresolvable = true;
+        continue;
+      }
+      if (folded == null) {
+        sawUnresolvable = true;
+        continue;
+      }
+      for (List<Dimension<?>> fold : folded) {
+        List<Integer> candidate = new ArrayList<>(fold.size());
+        boolean numeric = true;
+        for (Dimension<?> d : fold) {
+          if (!(d instanceof NumericDim)) {
+            numeric = false;
+            break;
+          }
+          candidate.add(((NumericDim) d).value());
+        }
+        if (numeric) candidates.add(candidate);
+        else sawUnresolvable = true;
+      }
     }
-    return axes.isEmpty() ? null : axes;
-  }
 
-  /**
-   * Whether {@code axes} is supplied but does not resolve to one constant integer permutation.
-   *
-   * @param builder The propagation call graph builder.
-   * @return {@code true} iff the argument is present and unresolvable.
-   */
-  private boolean axesPresentButUnresolvable(PropagationCallGraphBuilder builder) {
-    OrdinalSet<InstanceKey> axesPts = this.getAxesPointsToSet(builder);
-    if (axesPts == null || axesPts.isEmpty()) return false;
-    // `None` explicitly selects the reversal default, which is resolvable.
-    Set<Object> constants = getConstantValues(axesPts, false);
-    if (constants != null && constants.size() == 1 && constants.iterator().next() == null)
-      return false;
-    return this.getConstantAxes(builder) == null;
-  }
-
-  /**
-   * The {@code axes} argument's points-to set.
-   *
-   * @param builder The propagation call graph builder.
-   * @return The points-to set, or {@code null} when the argument is absent.
-   */
-  private OrdinalSet<InstanceKey> getAxesPointsToSet(PropagationCallGraphBuilder builder) {
-    return this.getArgumentPointsToSet(builder, AXES_POSITION, "axes");
+    if (sawUnresolvable || candidates.size() > 1)
+      return new AxesResolution(AxesKind.UNRESOLVABLE, null);
+    if (candidates.isEmpty()) return new AxesResolution(AxesKind.ABSENT_OR_NONE, null);
+    return new AxesResolution(
+        sawNone ? AxesKind.MIXED_WITH_NONE : AxesKind.CONSTANT, candidates.iterator().next());
   }
 }

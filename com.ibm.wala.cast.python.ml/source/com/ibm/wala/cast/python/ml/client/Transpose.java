@@ -174,7 +174,7 @@ public class Transpose extends PassThroughUnaryTensorGenerator implements Operan
    * @return The permuted shape, or {@code null} (⊤) when {@code perm} is not a valid permutation of
    *     {@code input}'s axes.
    */
-  private static List<Dimension<?>> permuteShape(List<Dimension<?>> input, List<Integer> perm) {
+  static List<Dimension<?>> permuteShape(List<Dimension<?>> input, List<Integer> perm) {
     if (perm == null) {
       List<Dimension<?>> reversed = new ArrayList<>(input);
       Collections.reverse(reversed);

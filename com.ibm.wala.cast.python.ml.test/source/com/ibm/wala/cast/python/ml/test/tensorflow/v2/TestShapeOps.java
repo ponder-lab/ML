@@ -1601,4 +1601,46 @@ public class TestShapeOps extends AbstractTensorTest {
     test("tf2_test_np_transpose.py", "consume_none_axes", 1, 1, Map.of(2, Set.of(noneAxes)));
     test("tf2_test_np_transpose.py", "consume_unresolved", 1, 1, Map.of(2, Set.of(unresolved)));
   }
+
+  /**
+   * A mixed {@code axes} points-to set ({@code None} on one branch, a constant permutation on the
+   * other) keeps BOTH outcomes: the reversal member joins the permuted one rather than being
+   * dropped by the tuple's resolution (<a
+   * href="https://github.com/wala/ML/issues/835">wala/ML#835</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpTransposeMixedNoneAxes()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType permuted =
+        new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(2), new NumericDim(3)));
+    TensorType reversed =
+        new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(3), new NumericDim(2)));
+
+    test("tf2_test_np_transpose.py", "consume_mixed", 1, 1, Map.of(2, Set.of(permuted, reversed)));
+  }
+
+  /**
+   * The method form with a positional {@code axes} ({@code c.transpose((1, 0, 2))}): the argument
+   * binds to {@code axes} while the input is the RECEIVER, so the result is the receiver's shape
+   * permuted, not the axes tuple misread as the input (<a
+   * href="https://github.com/wala/ML/issues/835">wala/ML#835</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNdarrayTransposeAxes()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType permuted =
+        new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(2), new NumericDim(4)));
+
+    test("tf2_test_np_transpose.py", "consume_method_axes", 1, 1, Map.of(2, Set.of(permuted)));
+  }
 }
