@@ -29,10 +29,10 @@ def distributed_train_step(dataset_inputs):
     return strategy.experimental_run_v2(train_step, args=(dataset_inputs,))
 
 
-for epoch in range(1, 3):
+for _ in range(1, 3):
     batchs_per_epoch = len(generator)
     train_dataset = iter(generator)
 
     for _ in range(batchs_per_epoch):
         dataset_inputs = next(train_dataset)
-        batch_loss = distributed_train_step(dataset_inputs)
+        distributed_train_step(dataset_inputs)
