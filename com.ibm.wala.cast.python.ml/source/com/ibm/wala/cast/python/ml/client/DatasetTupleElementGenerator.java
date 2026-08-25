@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import java.util.EnumSet;
@@ -34,6 +35,21 @@ public class DatasetTupleElementGenerator extends TensorGenerator
   public DatasetTupleElementGenerator(
       PointsToSetVariable source, TupleElementProvider underlying, int index) {
     super(source);
+    this.underlying = underlying;
+    this.index = index;
+  }
+
+  /**
+   * Constructs a new {@code DatasetTupleElementGenerator} anchored on a call-graph node
+   * (manual-generator path, used when no points-to source is available — e.g., producer delegation
+   * for a tuple-element allocation inside a synthetic {@code do()} body; wala/ML#830).
+   *
+   * @param node the CG node the generator is anchored at
+   * @param underlying the generator representing the underlying dataset
+   * @param index the index of this element within the tuple
+   */
+  public DatasetTupleElementGenerator(CGNode node, TupleElementProvider underlying, int index) {
+    super(node);
     this.underlying = underlying;
     this.index = index;
   }

@@ -8302,6 +8302,14 @@ public abstract class TensorGenerator {
       return new Cifar10InputData(node, Cifar10InputData.X_TEST_SHAPE);
     } else if (sanitized.equals(TensorFlowTypes.CIFAR10_Y_TEST)) {
       return new Cifar10InputData(node, Cifar10InputData.Y_TEST_SHAPE);
+    } else if (sanitized.equals(TensorFlowTypes.DIRECTORY_ITERATOR_IMAGES_TYPE)) {
+      // A position of the `(x, y)` batch tuple `flow_from_directory`'s summary materializes; the
+      // node-based dispatch below would resolve the whole-batch union instead (wala/ML#830).
+      return new DatasetTupleElementGenerator(
+          node, new FlowFromDirectoryGenerator(node), FlowFromDirectoryGenerator.IMAGES_INDEX);
+    } else if (sanitized.equals(TensorFlowTypes.DIRECTORY_ITERATOR_LABELS_TYPE)) {
+      return new DatasetTupleElementGenerator(
+          node, new FlowFromDirectoryGenerator(node), FlowFromDirectoryGenerator.LABELS_INDEX);
     }
 
     return createManualGenerator(node, builder);
