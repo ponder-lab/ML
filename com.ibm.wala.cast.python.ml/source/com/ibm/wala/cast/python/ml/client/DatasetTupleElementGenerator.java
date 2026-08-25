@@ -3,6 +3,7 @@ package com.ibm.wala.cast.python.ml.client;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import java.util.EnumSet;
@@ -39,6 +40,21 @@ public class DatasetTupleElementGenerator extends TensorGenerator
   }
 
   /**
+   * Constructs a new {@code DatasetTupleElementGenerator} anchored on a call-graph node
+   * (manual-generator path, used when no points-to source is available — e.g., producer delegation
+   * for a tuple-element allocation inside a synthetic {@code do()} body; wala/ML#830).
+   *
+   * @param node the CG node the generator is anchored at
+   * @param underlying the generator representing the underlying dataset
+   * @param index the index of this element within the tuple
+   */
+  public DatasetTupleElementGenerator(CGNode node, TupleElementProvider underlying, int index) {
+    super(node);
+    this.underlying = underlying;
+    this.index = index;
+  }
+
+  /**
    * Retrieves the underlying generator.
    *
    * @return the generator representing the underlying dataset
@@ -46,6 +62,19 @@ public class DatasetTupleElementGenerator extends TensorGenerator
   @Override
   public TensorGenerator getUnderlying() {
     return (TensorGenerator) underlying;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The tuple index: two positions of one batch tuple share the allocating {@code do()}
+   *     node as their manual anchor, so class plus anchor alone would key both positions' memoized
+   *     results (and the same-operation guard) identically, replaying one position's shapes for the
+   *     other (wala/ML#830).
+   */
+  @Override
+  protected Object operationDiscriminator() {
+    return this.index;
   }
 
   @Override

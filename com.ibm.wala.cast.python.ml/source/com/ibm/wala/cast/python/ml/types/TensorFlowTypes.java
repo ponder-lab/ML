@@ -303,6 +303,24 @@ public class TensorFlowTypes extends PythonTypes {
       "tf.keras.preprocessing.image.ImageDataGenerator.flow_from_directory()";
 
   /**
+   * The image position (field 0) of the {@code (x, y)} batch tuple a {@code DirectoryIterator}
+   * yields. Allocated in {@code flow_from_directory}'s summary; see wala/ML#830.
+   */
+  public static final TypeReference DIRECTORY_ITERATOR_IMAGES_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader,
+          TypeName.findOrCreate("Ltensorflow/keras/preprocessing/image/directory_iterator_images"));
+
+  /**
+   * The label position (field 1) of the {@code (x, y)} batch tuple a {@code DirectoryIterator}
+   * yields. Allocated in {@code flow_from_directory}'s summary; see wala/ML#830.
+   */
+  public static final TypeReference DIRECTORY_ITERATOR_LABELS_TYPE =
+      TypeReference.findOrCreate(
+          pythonLoader,
+          TypeName.findOrCreate("Ltensorflow/keras/preprocessing/image/directory_iterator_labels"));
+
+  /**
    * The type of `tf.data.Dataset.from_generator`.
    *
    * @see <a
@@ -2144,6 +2162,8 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(DATASET_LIST_FILES_TYPE, DATASET_LIST_FILES_SIGNATURE),
           Map.entry(LIST_FILES_DATASET_TYPE, DATASET_LIST_FILES_SIGNATURE),
           Map.entry(IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE, FLOW_FROM_DIRECTORY_SIGNATURE),
+          Map.entry(DIRECTORY_ITERATOR_IMAGES_TYPE, FLOW_FROM_DIRECTORY_SIGNATURE),
+          Map.entry(DIRECTORY_ITERATOR_LABELS_TYPE, FLOW_FROM_DIRECTORY_SIGNATURE),
           Map.entry(DATASET_FROM_GENERATOR_TYPE, DATASET_FROM_GENERATOR_SIGNATURE),
           Map.entry(DATASET_FROM_TENSORS_TYPE, DATASET_FROM_TENSORS_SIGNATURE),
           Map.entry(DATASET_CHOOSE_FROM_DATASETS_TYPE, DATASET_CHOOSE_FROM_DATASETS_SIGNATURE),

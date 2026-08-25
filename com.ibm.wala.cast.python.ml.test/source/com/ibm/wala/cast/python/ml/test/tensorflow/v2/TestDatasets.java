@@ -277,16 +277,54 @@ public class TestDatasets extends AbstractTensorTest {
     test("tf2_test_dataset18.py", "g", 0, 2);
   }
 
-  /** Test a dataset that uses an iterator. */
+  /**
+   * Test a dataset that uses an iterator.
+   *
+   * <p>The parameter receives the whole {@code (images, labels)} batch, so its state is the union
+   * over both positions. The batch axis is {@code Dynamic}, not the {@code batch_size} literal: a
+   * {@code DirectoryIterator} yields a short final batch when the image count is not a multiple of
+   * {@code batch_size} (wala/ML#830).
+   */
   @Test
   public void testDataset19()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    TensorType images = TensorType.of(FLOAT_32, 512, 112, 112, 3);
+    TensorType images =
+        new TensorType(
+            FLOAT_32,
+            asList(
+                DynamicDim.INSTANCE, new NumericDim(112), new NumericDim(112), new NumericDim(3)));
     TensorType labels =
-        new TensorType(FLOAT_32, asList(new NumericDim(512), UnresolvedDim.INSTANCE));
+        new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, UnresolvedDim.INSTANCE));
 
     test(
         "tf2_test_dataset19.py", "distributed_train_step", 1, 1, Map.of(2, Set.of(images, labels)));
+  }
+
+  /**
+   * Test the {@code (images, labels)} batch tuple of {@code ImageDataGenerator.flow_from_directory}
+   * destructured <em>inside</em> the consuming function, the shape of {@code train_step} in the
+   * pipeline {@code tf2_test_dataset19.py} is vendored from: each position must carry its own type,
+   * not the whole-batch union (wala/ML#830).
+   */
+  @Test
+  public void testDataset73()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType images =
+        new TensorType(
+            FLOAT_32,
+            asList(
+                DynamicDim.INSTANCE, new NumericDim(112), new NumericDim(112), new NumericDim(3)));
+    TensorType labels =
+        new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, UnresolvedDim.INSTANCE));
+
+    test("tf2_test_dataset73.py", "consume_images", 1, 1, Map.of(2, Set.of(images)));
+    test("tf2_test_dataset73.py", "consume_labels", 1, 1, Map.of(2, Set.of(labels)));
+    test("tf2_test_dataset73.py", "train_step", 1, 3, Map.of(2, Set.of(images, labels)));
+
+    // Labels follow `class_mode` (wala/ML#830): "sparse" yields rank-1 `(batch,)` labels where the
+    // default "categorical" yields rank-2 `(batch, num_classes)`.
+    TensorType sparseLabels = new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE));
+    test("tf2_test_dataset73.py", "consume_sparse_labels", 1, 1, Map.of(2, Set.of(sparseLabels)));
   }
 
   @Test

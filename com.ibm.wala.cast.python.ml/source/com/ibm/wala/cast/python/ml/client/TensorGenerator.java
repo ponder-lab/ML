@@ -186,7 +186,24 @@ public abstract class TensorGenerator {
         generator.getSource() != null
             ? generator.getSource().getPointerKey()
             : generator.manualNode;
-    return Pair.make(generator.getClass(), anchorId);
+    // The discriminator separates same-class generators sharing an anchor (e.g., the two tuple
+    // positions of one `do()` node); without it, one position's memoized result replays for the
+    // other (wala/ML#830).
+    return Pair.make(generator.getClass(), Pair.make(anchorId, generator.operationDiscriminator()));
+  }
+
+  /**
+   * A per-instance discriminator for generators whose concrete class and anchor alone do not
+   * identify the modeled operation. The memoization key (wala/ML#365) and the same-operation guard
+   * include it, so two same-class generators anchored on the same node but modeling different
+   * values — e.g., the two positions of the batch tuple a single {@code do()} body materializes
+   * (wala/ML#830) — neither share memoized results nor cut each other as false self-recursion.
+   *
+   * @return The discriminator; {@code null} (the default) when class plus anchor already identify
+   *     the operation.
+   */
+  protected Object operationDiscriminator() {
+    return null;
   }
 
   /**
@@ -206,6 +223,11 @@ public abstract class TensorGenerator {
    */
   private boolean isSameOperation(TensorGenerator generator) {
     if (!generator.getClass().equals(this.getClass())) return false;
+    // Same-class generators with different discriminators model different values off the same
+    // anchor (wala/ML#830); cutting one during the other's resolution would be a false
+    // self-recursion break.
+    if (!Objects.equals(this.operationDiscriminator(), generator.operationDiscriminator()))
+      return false;
     CGNode thisNode;
     CGNode otherNode;
     try {
@@ -8302,6 +8324,14 @@ public abstract class TensorGenerator {
       return new Cifar10InputData(node, Cifar10InputData.X_TEST_SHAPE);
     } else if (sanitized.equals(TensorFlowTypes.CIFAR10_Y_TEST)) {
       return new Cifar10InputData(node, Cifar10InputData.Y_TEST_SHAPE);
+    } else if (sanitized.equals(TensorFlowTypes.DIRECTORY_ITERATOR_IMAGES_TYPE)) {
+      // A position of the `(x, y)` batch tuple `flow_from_directory`'s summary materializes; the
+      // node-based dispatch below would resolve the whole-batch union instead (wala/ML#830).
+      return new DatasetTupleElementGenerator(
+          node, new FlowFromDirectoryGenerator(node), FlowFromDirectoryGenerator.IMAGES_INDEX);
+    } else if (sanitized.equals(TensorFlowTypes.DIRECTORY_ITERATOR_LABELS_TYPE)) {
+      return new DatasetTupleElementGenerator(
+          node, new FlowFromDirectoryGenerator(node), FlowFromDirectoryGenerator.LABELS_INDEX);
     }
 
     return createManualGenerator(node, builder);

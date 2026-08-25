@@ -71,6 +71,8 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DATASET_ZIP_TYPE
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DENSE_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIAG;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIAG_PART;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIRECTORY_ITERATOR_IMAGES_TYPE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIRECTORY_ITERATOR_LABELS_TYPE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DIVIDE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.UNKNOWN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.EINSUM;
@@ -1630,7 +1632,10 @@ public class TensorGeneratorFactory {
           boolean isFirstElement = false;
           for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(memberRefKey)) {
             if (ik instanceof ConstantKey) {
-              if (((ConstantKey<?>) ik).getValue().equals(0)) {
+              // A `ConstantKey` can carry Python `None` as a null value (see the sibling loop
+              // above); guard it rather than dereferencing.
+              Object val = ((ConstantKey<?>) ik).getValue();
+              if (val != null && val.equals(0)) {
                 isFirstElement = true;
                 break;
               }
@@ -1762,7 +1767,32 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, DATASET_LIST_FILES_TYPE)
         || isType(calledFunction, LIST_FILES_DATASET_TYPE))
       return new ListFilesDatasetGenerator(source);
-    else if (isType(calledFunction, DATASET_RANDOM_TYPE)) return new DatasetRandomGenerator(source);
+    else if (isType(calledFunction, DIRECTORY_ITERATOR_IMAGES_TYPE)
+        || isType(calledFunction, DIRECTORY_ITERATOR_LABELS_TYPE)) {
+      // A batch-tuple position of `flow_from_directory` (wala/ML#830), reached through its own
+      // points-to membership when the container chase cannot resolve the tuple (a wrapper-plumbed
+      // or attribute-stored batch). The per-position provider anchors on the allocating `do()`
+      // node, recovered from the marker allocation itself. This is the source-based half of the
+      // tandem-registration rule; the manual half is `createManualGenerator`'s allocation-type
+      // prelude.
+      int index =
+          isType(calledFunction, DIRECTORY_ITERATOR_IMAGES_TYPE)
+              ? FlowFromDirectoryGenerator.IMAGES_INDEX
+              : FlowFromDirectoryGenerator.LABELS_INDEX;
+      for (InstanceKey ik : builder.getPointerAnalysis().getPointsToSet(source.getPointerKey())) {
+        AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+        if (asin != null) {
+          TypeReference alloc = sanitize(asin.concreteType().getReference());
+          if (alloc.equals(DIRECTORY_ITERATOR_IMAGES_TYPE)
+              || alloc.equals(DIRECTORY_ITERATOR_LABELS_TYPE))
+            return new DatasetTupleElementGenerator(
+                source, new FlowFromDirectoryGenerator(asin.getNode()), index);
+        }
+      }
+      throw new IllegalArgumentException(
+          "No batch-tuple marker allocation in the points-to set of: " + describe(source) + ".");
+    } else if (isType(calledFunction, DATASET_RANDOM_TYPE))
+      return new DatasetRandomGenerator(source);
     else if (isType(calledFunction, DATASET_FROM_GENERATOR_TYPE))
       return new DatasetFromGeneratorGenerator(source);
     else if (isType(calledFunction, DATASET_ZIP_TYPE)) return new DatasetZipGenerator(source);
