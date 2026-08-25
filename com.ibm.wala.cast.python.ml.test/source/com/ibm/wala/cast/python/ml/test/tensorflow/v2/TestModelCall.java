@@ -26,6 +26,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_8_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_784_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
 import static com.ibm.wala.cast.python.util.Util.addPytestEntrypoints;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
@@ -50,6 +51,38 @@ import org.junit.Test;
  * carved from the {@code TestTensorflow2Model} monolith (wala/ML#635); the assertions are verbatim.
  */
 public class TestModelCall extends AbstractTensorTest {
+
+  /**
+   * A {@code tf.keras.Sequential}-built model is framework-typed and its call yields a tensor (<a
+   * href="https://github.com/wala/ML/issues/817">wala/ML#817</a>): the summary allocates the
+   * distinct {@code Sequential} instance type, chained under the canonical {@code Model}, so the
+   * call resolves and the result reaches the sink as a definite-dtype tensor rather than nothing.
+   * The unknown shape is a deliberate floor: composing the forward chain through the layer list is
+   * <a href="https://github.com/wala/ML/issues/832">wala/ML#832</a>, and the fixture's runtime
+   * asserts record the {@code (3, 2)} truth the floor stops short of. The dtype expectation does
+   * not distinguish input-dtype recovery from the model-call treatment's {@code float32} default;
+   * both produce it here.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSequentialModelCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sequential.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+
+    // A downstream `tf.transpose` reading the call's result exercises the producer-delegation
+    // route — the manual half of the tandem registration for `Sequential/__call__`.
+    test(
+        "tf2_test_sequential.py",
+        "consume_transposed",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
 
   /**
    * Six tensor variables in {@code SequentialModel.__call__}: the {@code x} parameter (vn=3, shape

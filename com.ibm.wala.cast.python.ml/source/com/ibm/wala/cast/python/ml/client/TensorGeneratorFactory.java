@@ -173,6 +173,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ROUND;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RSQRT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SEQUENCE_MASK;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SEQUENTIAL_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIGMOID;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIGN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIN;
@@ -231,6 +232,7 @@ import com.ibm.wala.cast.ir.ssa.AstPropertyWrite;
 import com.ibm.wala.cast.ir.ssa.EachElementGetInstruction;
 import com.ibm.wala.cast.python.ml.types.NumpyTypes;
 import com.ibm.wala.cast.python.ml.types.ScipyTypes;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ssa.PythonPropertyRead;
@@ -425,6 +427,15 @@ public class TensorGeneratorFactory {
    */
   static TensorGenerator dispatchShared(GeneratorAnchor anchor) {
     TypeReference type = anchor.declaredType();
+
+    // The Sequential registrations live here so one entry serves both dispatch routes
+    // (wala/ML#817): the constructor type takes the `Model` treatment (its weight resolution is
+    // empty until wala/ML#832's layers walk, which is sound), and the instance's call node —
+    // `Sequential/__call__`, not `Model/__call__` — takes the model-call treatment.
+    if (isType(type, TensorFlowTypes.SEQUENTIAL.getDeclaringClass()))
+      return anchor.makeGenerator(Model::new, Model::new);
+    if (isType(type, SEQUENTIAL_CALL.getDeclaringClass()))
+      return anchor.makeGenerator(ModelCall::new, ModelCall::new);
 
     if (isType(type, MULTIPLY.getDeclaringClass())
         || isType(type, ADD.getDeclaringClass())

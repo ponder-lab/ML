@@ -450,6 +450,9 @@
         <new def="Model" class="Ltensorflow/keras/models/class/Model"/>
         <putfield class="LRoot" field="Model" fieldType="LRoot" ref="keras" value="Model"/>
         <putfield class="LRoot" field="Model" fieldType="LRoot" ref="models" value="Model"/>
+        <new def="Sequential" class="Ltensorflow/keras/models/class/Sequential"/>
+        <putfield class="LRoot" field="Sequential" fieldType="LRoot" ref="keras" value="Sequential"/>
+        <putfield class="LRoot" field="Sequential" fieldType="LRoot" ref="models" value="Sequential"/>
         <new def="ImageDataGenerator" class="Ltensorflow/keras/preprocessing/image/ImageDataGenerator"/>
         <putfield class="LRoot" field="ImageDataGenerator" fieldType="LRoot" ref="image" value="ImageDataGenerator"/>
         <new def="Variable" class="Ltensorflow/functions/Variable"/>
@@ -2507,6 +2510,32 @@
           <return value="res"/>
         </method>
       </class>
+      <class name="Sequential" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Sequential. `tf.keras.Sequential([...])` previously allocated nothing framework-typed, so a receiver-typing client could not tell a Sequential model from a user object and tensor propagation had no modeled instance to hang off (wala/ML#817). Mirrors `Model.do`'s field wiring (weights list, distribution strategy), stores the constructor's layer list on `layers`, and allocates the distinct `Ltensorflow/keras/models/Sequential` instance type, whose `super` chains into the canonical `Model` hierarchy below. The weight-attribute allocation is inlined directly (the wala/ML#380 target form) rather than via a `read_data` helper: the legacy method-name marker would also register `Sequential` for the read-data fallback and seed the MODEL OBJECT itself as a tensor. Weight-shape resolution behind this wiring is empty until wala/ML#832's layers walk. -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self layers name">
+          <new def="res" class="Ltensorflow/keras/models/Sequential"/>
+          <new def="x" class="Llist"/>
+          <new def="xx" class="Ltensorflow/keras/Model/attribute"/>
+          <putfield class="LRoot" field="0" fieldType="LRoot" ref="x" value="xx"/>
+          <putfield class="LRoot" field="trainable_weights" fieldType="LRoot" ref="res" value="x"/>
+          <putfield class="LRoot" field="weights" fieldType="LRoot" ref="res" value="x"/>
+          <putfield class="LRoot" field="non_trainable_weights" fieldType="LRoot" ref="res" value="x"/>
+          <putfield class="LRoot" field="layers" fieldType="LRoot" ref="res" value="layers"/>
+          <!-- Sequential models carry the same default distribution strategy as functional and subclassed ones (wala/ML#683); see `Model.do` above. -->
+          <new def="ds" class="Ltensorflow/distribute/MirroredStrategy"/>
+          <new def="runObj" class="Ltensorflow/distribute/run/run"/>
+          <putfield class="LRoot" field="run" fieldType="LRoot" ref="ds" value="runObj"/>
+          <putfield class="LRoot" field="experimental_run_v2" fieldType="LRoot" ref="ds" value="runObj"/>
+          <new def="ddffObj" class="Ltensorflow/distribute/run/distribute_datasets_from_function"/>
+          <putfield class="LRoot" field="distribute_datasets_from_function" fieldType="LRoot" ref="ds" value="ddffObj"/>
+          <putfield class="LRoot" field="experimental_distribute_datasets_from_function" fieldType="LRoot" ref="ds" value="ddffObj"/>
+          <new def="eddObj" class="Ltensorflow/distribute/run/experimental_distribute_dataset"/>
+          <putfield class="LRoot" field="experimental_distribute_dataset" fieldType="LRoot" ref="ds" value="eddObj"/>
+          <putfield class="LRoot" field="_distribution_strategy" fieldType="LRoot" ref="res" value="ds"/>
+          <putfield class="LRoot" field="distribute_strategy" fieldType="LRoot" ref="res" value="ds"/>
+          <return value="res"/>
+        </method>
+      </class>
     </package>
     <package name="tensorflow/keras/Model">
       <!-- Must be declared `allocatable="true"` so that `<new class="Ltensorflow/keras/Model/attribute"/>` in `tensorflow/keras/models/class/Model.read_data()` resolves to a concrete `InstanceKey` in the heap model. Without this declaration, `HeapModel.getInstanceKeyForAllocation` returns `null`, `getInvariantContents` returns empty, and `visitReturn` never adds the iKey to the caller-side `PointerKey`. Same pattern as the wala/WALA#1889 fix for `tensorflow/python/ops/variables/Variable`. The class has no body because it is only referenced as a `<new>` target, not invoked directly; avoiding `read_data` here prevents the class from being picked up by `TensorTypeAnalysis`'s syntactic seeding. -->
@@ -2542,14 +2571,26 @@
           <return value="out"/>
         </method>
       </class>
+      <!-- The distinct Sequential instance type (wala/ML#817). Declares only `__call__`, duplicated from `Model`: the instance-method trampoline resolves the callable's method on the exact receiver class with no superclass walk (wala/ML#833), so a body-less shell left `model(x)` unresolved. `__init__` and `call` are NOT duplicated — their resolution walks the hierarchy chain, so `Model`'s bodies serve — and `super` chains into the canonical `Model`, so a source subclass such as `class M(tf.keras.Sequential)` joins the same hierarchy a `Model` subclass does (wala/ML#118, wala/ML#662). -->
+      <class name="Sequential" allocatable="true" super="Ltensorflow/keras/models/Model">
+        <method name="__call__" descriptor="()LRoot;" numArgs="5" paramNames="func self inputs training mask">
+          <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/Sequential#call -->
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
     </package>
     <package name="tensorflow/keras">
       <!-- At runtime `tf.keras.Model` and `tf.keras.models.Model` are the same class under two attribute paths. Shell lookup is exact-match on the canonicalized base name (wala/ML#118), so this empty alias shell covers subclasses written against the `tf.keras.Model`/`from tensorflow.keras import Model` spelling; positioning it at the canonical `Ltensorflow/keras/models/Model` instance type keeps one hierarchy chain, so subtype queries against the canonical type also hold for subclasses reached through this alias (wala/ML#662). -->
       <class name="Model" super="Ltensorflow/keras/models/Model"></class>
+      <!-- The `tf.keras.Sequential` spelling of the class below, aliased like `Model` (wala/ML#817, wala/ML#662). -->
+      <class name="Sequential" super="Ltensorflow/keras/models/Sequential"></class>
     </package>
     <package name="tensorflow/python/keras">
       <!-- The private-module spelling `from tensorflow.python import keras; class M(keras.Model)` (e.g. MusicTransformer-tensorflow2.0) canonicalizes the base to `Ltensorflow/python/keras/Model`; alias it into the same hierarchy chain as the `tensorflow/keras` shell above so the class shell carries `Model.__init__`'s `_distribution_strategy` wiring (wala/ML#683). -->
       <class name="Model" super="Ltensorflow/keras/models/Model"></class>
+      <!-- The private-module `keras.Sequential` spelling, aliased like `Model` (wala/ML#817). -->
+      <class name="Sequential" super="Ltensorflow/keras/models/Sequential"></class>
     </package>
     <package name="tensorflow/keras/layers/class">
       <class name="Dense" allocatable="true">
