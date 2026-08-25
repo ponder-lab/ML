@@ -35,4 +35,4 @@ step_a(next(iter(generator_a)))
 step_b(next(iter(generator_b)))
 
 labels = np.array([3, 1, 3, 2], dtype=int)
-_, _, inverse = np.unique(labels, return_index=True, return_inverse=True)
+_, inverse = np.unique(labels, return_inverse=True)

@@ -2,9 +2,12 @@
 # direct half): the batch tuple reaches `train_step`'s unpack only through
 # `strategy.experimental_run_v2(train_step, args=(dataset_inputs,))`. The direct unpack carries
 # the tuple's instance in the parameter's points-to set (tf2_test_dataset74.py); the question
-# this fixture isolates is whether the indirect dispatch preserves it. Analysis-only as written:
-# executing it needs an `images/` directory with class subfolders, which is not shipped, and a
-# multi-device strategy; the runtime expectations mirror tf2_test_dataset19.py's asserts.
+# this fixture isolates is whether the indirect dispatch preserves it. Analysis-only, and NOT
+# executable even with an `images/` directory supplied: `experimental_run_v2` was removed from
+# TensorFlow around 2.5 in favor of `Strategy.run`, so 2.9.3 raises AttributeError at the first
+# dispatch. The legacy spelling is deliberate; it is what the vendored subject code uses and what
+# the `experimental_run_v2` summary in tensorflow.xml models. The shape expectations mirror
+# tf2_test_dataset19.py's asserts, which run against the same generator configuration.
 import tensorflow as tf
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 

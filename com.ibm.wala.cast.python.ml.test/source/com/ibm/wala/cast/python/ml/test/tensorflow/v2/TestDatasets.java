@@ -288,16 +288,12 @@ public class TestDatasets extends AbstractTensorTest {
   @Test
   public void testDataset19()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    TensorType images =
-        new TensorType(
-            FLOAT_32,
-            asList(
-                DynamicDim.INSTANCE, new NumericDim(112), new NumericDim(112), new NumericDim(3)));
-    TensorType labels =
-        new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, UnresolvedDim.INSTANCE));
-
     test(
-        "tf2_test_dataset19.py", "distributed_train_step", 1, 1, Map.of(2, Set.of(images, labels)));
+        "tf2_test_dataset19.py",
+        "distributed_train_step",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_112_112_3_FLOAT32, TENSOR_NONE_UNRESOLVED_FLOAT32)));
   }
 
   /**
@@ -309,17 +305,24 @@ public class TestDatasets extends AbstractTensorTest {
   @Test
   public void testDataset73()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    TensorType images =
-        new TensorType(
-            FLOAT_32,
-            asList(
-                DynamicDim.INSTANCE, new NumericDim(112), new NumericDim(112), new NumericDim(3)));
-    TensorType labels =
-        new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, UnresolvedDim.INSTANCE));
-
-    test("tf2_test_dataset73.py", "consume_images", 1, 1, Map.of(2, Set.of(images)));
-    test("tf2_test_dataset73.py", "consume_labels", 1, 1, Map.of(2, Set.of(labels)));
-    test("tf2_test_dataset73.py", "train_step", 1, 3, Map.of(2, Set.of(images, labels)));
+    test(
+        "tf2_test_dataset73.py",
+        "consume_images",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_112_112_3_FLOAT32)));
+    test(
+        "tf2_test_dataset73.py",
+        "consume_labels",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_NONE_UNRESOLVED_FLOAT32)));
+    test(
+        "tf2_test_dataset73.py",
+        "train_step",
+        1,
+        3,
+        Map.of(2, Set.of(TENSOR_NONE_112_112_3_FLOAT32, TENSOR_NONE_UNRESOLVED_FLOAT32)));
 
     // Labels follow `class_mode` (wala/ML#830): "sparse" yields rank-1 `(batch,)` labels where the
     // default "categorical" yields rank-2 `(batch, num_classes)`.
@@ -350,11 +353,18 @@ public class TestDatasets extends AbstractTensorTest {
         new TensorType(
             FLOAT_32,
             asList(DynamicDim.INSTANCE, new NumericDim(96), new NumericDim(96), new NumericDim(3)));
-    TensorType labels =
-        new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, UnresolvedDim.INSTANCE));
-
-    test("tf2_test_dataset76.py", "step_a", 1, 6, Map.of(2, Set.of(imagesA, labels)));
-    test("tf2_test_dataset76.py", "step_b", 1, 6, Map.of(2, Set.of(imagesB, labels)));
+    test(
+        "tf2_test_dataset76.py",
+        "step_a",
+        1,
+        6,
+        Map.of(2, Set.of(imagesA, TENSOR_NONE_UNRESOLVED_FLOAT32)));
+    test(
+        "tf2_test_dataset76.py",
+        "step_b",
+        1,
+        6,
+        Map.of(2, Set.of(imagesB, TENSOR_NONE_UNRESOLVED_FLOAT32)));
   }
 
   /**
@@ -362,8 +372,9 @@ public class TestDatasets extends AbstractTensorTest {
    * the direct half): the batch tuple reaches {@code train_step}'s unpack only through {@code
    * strategy.experimental_run_v2(train_step, args=(dataset_inputs,))}, and the indirect dispatch
    * must preserve both the element types and the tuple's instance in the parameter's points-to set
-   * (probed for the reopened batch-tuple case; the strategy summaries unpack {@code args} by field
-   * reads and forward positionally).
+   * (probed for the batch-tuple element evidence of <a
+   * href="https://github.com/wala/ML/issues/834">wala/ML#834</a>; the strategy summaries unpack
+   * {@code args} by field reads and forward positionally).
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -373,17 +384,18 @@ public class TestDatasets extends AbstractTensorTest {
   @Test
   public void testDataset75()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    TensorType images =
-        new TensorType(
-            FLOAT_32,
-            asList(
-                DynamicDim.INSTANCE, new NumericDim(112), new NumericDim(112), new NumericDim(3)));
-    TensorType labels =
-        new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, UnresolvedDim.INSTANCE));
-
-    test("tf2_test_dataset75.py", "train_step", 1, 6, Map.of(2, Set.of(images, labels)));
     test(
-        "tf2_test_dataset75.py", "distributed_train_step", 1, 2, Map.of(2, Set.of(images, labels)));
+        "tf2_test_dataset75.py",
+        "train_step",
+        1,
+        6,
+        Map.of(2, Set.of(TENSOR_NONE_112_112_3_FLOAT32, TENSOR_NONE_UNRESOLVED_FLOAT32)));
+    test(
+        "tf2_test_dataset75.py",
+        "distributed_train_step",
+        1,
+        2,
+        Map.of(2, Set.of(TENSOR_NONE_112_112_3_FLOAT32, TENSOR_NONE_UNRESOLVED_FLOAT32)));
   }
 
   @Test
