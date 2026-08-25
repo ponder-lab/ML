@@ -64,6 +64,19 @@ public class DatasetTupleElementGenerator extends TensorGenerator
     return (TensorGenerator) underlying;
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The tuple index: two positions of one batch tuple share the allocating {@code do()}
+   *     node as their manual anchor, so class plus anchor alone would key both positions' memoized
+   *     results (and the same-operation guard) identically, replaying one position's shapes for the
+   *     other (wala/ML#830).
+   */
+  @Override
+  protected Object operationDiscriminator() {
+    return this.index;
+  }
+
   @Override
   public String toString() {
     return "DatasetTupleElementGenerator(" + underlying + ", index=" + index + ")";

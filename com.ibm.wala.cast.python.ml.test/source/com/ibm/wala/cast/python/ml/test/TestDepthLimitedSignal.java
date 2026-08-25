@@ -31,10 +31,12 @@ import org.junit.Test;
  * produced the ⊤ and tune the depth to the subject's fixed point.
  *
  * <p>The fixture is {@code neural_network.py}, whose accuracy path threads the input through the
- * framework ops {@code cast}/{@code reduce_mean}/{@code argmax}/{@code equal}. At the default depth
- * their call strings are truncated before reaching a distinguishing caller context, so the signal
- * is non-empty; by the model-forward depth their call strings reach the call-graph root within the
- * budget (the signal is empty), which is the subject's fixed point.
+ * framework ops {@code cast}/{@code reduce_mean}/{@code argmax}/{@code equal}. Since the
+ * tuple-position discrimination of wala/ML#830 those ops resolve concretely at the default depth
+ * (their earlier saturated-⊤ state rested partly on cross-position resolutions being cut as false
+ * self-recursion), so this subject's fixed point sits at the default depth and the signal is empty
+ * at every guarded depth; the remaining ⊤ values are unsaturated. The firing arm currently has no
+ * positive guard — see wala/ML#831.
  */
 public class TestDepthLimitedSignal extends TestPythonMLCallGraphShape {
 
@@ -87,10 +89,17 @@ public class TestDepthLimitedSignal extends TestPythonMLCallGraphShape {
   }
 
   /**
-   * At the default depth the accuracy-path framework ops resolve to ⊤ at a saturated call string,
-   * so the signal is non-empty; every reported value carries a genuine ⊤ shape (not a concrete
-   * value sharing the saturated context), sits at a node routed through the targeted selector, and
-   * has a call string of exactly the configured depth.
+   * At the default depth the signal is empty on this subject. Its original firing premise — the
+   * accuracy-path framework ops resolving to ⊤ at saturated call strings — rested partly on two
+   * same-class tuple-position generators sharing a memoization identity, whose cross-position
+   * resolutions were cut as false self-recursion; with the positions discriminated (wala/ML#830),
+   * those values resolve concretely and the subject's fixed point sits at the default depth. The ⊤
+   * values that remain are unsaturated, which the paired assertion distinguishes from an absence of
+   * ⊤ — the same fixed-point shape {@link #testEmptyAtFixedPoint} pins at the model-forward depth.
+   *
+   * <p>TODO: this subject no longer exercises the signal's firing arm; a fixture whose fixed point
+   * genuinely sits above the default depth is needed to restore that positive guard. Tracked by
+   * wala/ML#831.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
@@ -98,28 +107,13 @@ public class TestDepthLimitedSignal extends TestPythonMLCallGraphShape {
    * @throws IOException if the input fixture cannot be read.
    */
   @Test
-  public void testFiresAtDefaultDepth()
+  public void testEmptyAtDefaultDepth()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     Signal signal = analyze(PythonTensorAnalysisEngine.DEFAULT_TARGETED_CFA_DEPTH);
+    assertEquals(List.of(), signal.results());
     assertTrue(
-        "Expected a depth-too-short signal at the default depth", signal.results().size() > 0);
-    for (DepthLimitedResult result : signal.results()) {
-      assertEquals(
-          PythonTensorAnalysisEngine.DEFAULT_TARGETED_CFA_DEPTH, result.callStringLength());
-      assertTrue(
-          "Every reported value should be a genuine ⊤ shape",
-          signal.topKeys().contains(result.pointerKey()));
-      assertEquals(result.pointerKey().getValueNumber(), result.valueNumber());
-      assertTrue(
-          "Every reported node should be in the framework subgraph",
-          result
-              .node()
-              .getMethod()
-              .getDeclaringClass()
-              .getName()
-              .toString()
-              .contains("tensorflow"));
-    }
+        "The default-depth analysis should still hold ⊤ values (now unsaturated)",
+        signal.topKeys().size() > 0);
   }
 
   /**

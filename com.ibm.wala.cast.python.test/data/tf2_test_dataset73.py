@@ -3,9 +3,12 @@
 # the `(images, labels)` batch tuple from `flow_from_directory` arrives as a parameter and is
 # destructured inside the consuming function, so each position must carry its own type rather than
 # the whole-batch union (wala/ML#830). Like `tf2_test_dataset19.py`, this cannot execute as shipped
-# (`./mnist/train` is not present); the asserts document the runtime truth of the pipeline.
+# (`./mnist/train` is not present). The asserts document what the iterator yields at the numpy
+# level: batches of numpy ndarrays whose batch extent varies (the final batch of an epoch is short
+# when the image count is not a multiple of `batch_size`) — the varying axis the analysis reports
+# as its dynamic batch dimension.
 
-import tensorflow as tf
+import numpy as np
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 IMG_SIZE = 112
@@ -13,17 +16,19 @@ BATCH_SIZE = 512
 
 
 def consume_images(images):
-    assert isinstance(images, tf.Tensor)
-    assert images.shape.as_list() == [None, 112, 112, 3] or images.shape.as_list()[
-        1:
-    ] == [112, 112, 3]
-    assert images.dtype == tf.float32
+    assert images.shape[1:] == (IMG_SIZE, IMG_SIZE, 3)
+    assert images.shape[0] <= BATCH_SIZE
+    assert images.dtype == np.float32
 
 
 def consume_labels(labels):
-    assert isinstance(labels, tf.Tensor)
-    assert len(labels.shape.as_list()) == 2
-    assert labels.dtype == tf.float32
+    assert labels.ndim == 2
+    assert labels.dtype == np.float32
+
+
+def consume_sparse_labels(labels):
+    assert labels.ndim == 1
+    assert labels.dtype == np.float32
 
 
 def train_step(inputs):
@@ -43,3 +48,13 @@ train_generator = train_datagen.flow_from_directory(
 
 train_dataset = iter(train_generator)
 train_step(next(train_dataset))
+
+sparse_generator = train_datagen.flow_from_directory(
+    "./mnist/train",
+    target_size=(IMG_SIZE, IMG_SIZE),
+    batch_size=BATCH_SIZE,
+    class_mode="sparse",
+)
+
+sparse_images, sparse_labels = next(iter(sparse_generator))
+consume_sparse_labels(sparse_labels)

@@ -317,9 +317,14 @@ public class TestDatasets extends AbstractTensorTest {
     TensorType labels =
         new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, UnresolvedDim.INSTANCE));
 
-    test("tf2_test_dataset73.py", "consume_images", 1, 2, Map.of(2, Set.of(images)));
+    test("tf2_test_dataset73.py", "consume_images", 1, 1, Map.of(2, Set.of(images)));
     test("tf2_test_dataset73.py", "consume_labels", 1, 1, Map.of(2, Set.of(labels)));
     test("tf2_test_dataset73.py", "train_step", 1, 3, Map.of(2, Set.of(images, labels)));
+
+    // Labels follow `class_mode` (wala/ML#830): "sparse" yields rank-1 `(batch,)` labels where the
+    // default "categorical" yields rank-2 `(batch, num_classes)`.
+    TensorType sparseLabels = new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE));
+    test("tf2_test_dataset73.py", "consume_sparse_labels", 1, 1, Map.of(2, Set.of(sparseLabels)));
   }
 
   @Test

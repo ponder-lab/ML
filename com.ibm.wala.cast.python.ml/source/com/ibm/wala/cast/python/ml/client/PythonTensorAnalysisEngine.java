@@ -826,8 +826,13 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             // check above cannot see it — the tuple is not a `tensorflow/data` allocation — but
             // the factory can: it resolves the read through the tuple's producer to the
             // per-position element generator. Seed only on that structured-element resolution, so
-            // an ordinary attribute read on an opaque object stays unseeded.
-            if (!added) {
+            // an ordinary attribute read on an opaque object stays unseeded. Gated to
+            // constant-integer member reads before dispatching: a tuple position is read by a
+            // numeric key, while the ubiquitous `self.attr` reads this branch also visits would
+            // otherwise each pay a full (uncached) creator walk whose common outcome is an
+            // exception.
+            if (!added
+                && readsConstantIntegerMember(propertyRead, localPointerKeyNode, pointerAnalysis)) {
               try {
                 TensorGenerator generator = getGenerator(src, builder);
 
@@ -838,7 +843,7 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                           "Added dataflow source from tuple-element read: " + describe(src) + ".");
                 }
               } catch (IllegalArgumentException e) {
-                LOGGER.log(Level.FINE, "Not a tuple-element read: " + propertyRead, e);
+                LOGGER.log(Level.FINE, e, () -> "Not a tuple-element read: " + propertyRead + ".");
               }
             }
           } else if (def instanceof EachElementGetInstruction
@@ -1249,6 +1254,28 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     if (instruction instanceof SSABinaryOpInstruction) return true;
     if (instruction instanceof PythonInvokeInstruction invoke)
       return invoke.getNumberOfPositionalParameters() >= 3;
+    return false;
+  }
+
+  /**
+   * True iff the given property read's member key resolves to a constant integer — the shape of a
+   * tuple-position read. Gates the tuple-element seeding fallback (wala/ML#830) so that ordinary
+   * attribute reads do not pay a factory dispatch.
+   *
+   * @param read The property read in question.
+   * @param node The {@link CGNode} containing the read.
+   * @param pointerAnalysis The {@link PointerAnalysis} to resolve the member key against.
+   * @return True iff some member-key constant is an integer.
+   */
+  private static boolean readsConstantIntegerMember(
+      PythonPropertyRead read, CGNode node, PointerAnalysis<InstanceKey> pointerAnalysis) {
+    PointerKey memberKey =
+        pointerAnalysis.getHeapModel().getPointerKeyForLocal(node, read.getMemberRef());
+
+    for (InstanceKey ik : pointerAnalysis.getPointsToSet(memberKey))
+      if (ik instanceof ConstantKey && ((ConstantKey<?>) ik).getValue() instanceof Number)
+        return true;
+
     return false;
   }
 
