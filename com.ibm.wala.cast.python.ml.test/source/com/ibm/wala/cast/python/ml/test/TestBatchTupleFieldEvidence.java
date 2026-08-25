@@ -9,6 +9,8 @@ import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuild
 import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
 import com.ibm.wala.cast.python.ml.analysis.TensorVariable;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
@@ -19,9 +21,11 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import com.ibm.wala.util.collections.HashMapFactory;
+import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.junit.Test;
@@ -70,19 +74,32 @@ public class TestBatchTupleFieldEvidence extends TestPythonMLCallGraphShape {
       if (!(fieldKey.getInstanceKey() instanceof AllocationSiteInNode)) continue;
       AllocationSiteInNode allocation = (AllocationSiteInNode) fieldKey.getInstanceKey();
       if (!allocation.concreteType().getReference().getName().toString().equals("Ltuple")) continue;
+      // Restrict to the batch tuple, the one allocated in `flow_from_directory`'s summary; the
+      // startsWith tolerates the synthetic suffix trampoline generation appends.
+      if (!allocation
+          .getNode()
+          .getMethod()
+          .getDeclaringClass()
+          .getReference()
+          .getName()
+          .toString()
+          .startsWith(
+              TensorFlowTypes.IMAGE_DATA_GENERATOR_FLOW_FROM_DIRECTORY_TYPE.getName().toString()))
+        continue;
       Set<TensorType> types = pair.snd.getTypes();
       if (types == null || types.isEmpty()) continue;
       fieldTypes
-          .computeIfAbsent(fieldKey.getField().getName().toString(), k -> new java.util.HashSet<>())
+          .computeIfAbsent(fieldKey.getField().getName().toString(), k -> HashSetFactory.make())
           .addAll(types);
     }
 
+    String float32 = DType.FLOAT32.name().toLowerCase(Locale.ROOT);
     TensorType images =
         new TensorType(
-            "float32",
+            float32,
             asList(DynamicDim.INSTANCE, new NumericDim(64), new NumericDim(64), new NumericDim(3)));
     TensorType labels =
-        new TensorType("float32", asList(DynamicDim.INSTANCE, UnresolvedDim.INSTANCE));
+        new TensorType(float32, asList(DynamicDim.INSTANCE, UnresolvedDim.INSTANCE));
 
     assertTrue("The tuple's field \"0\" must carry element evidence.", fieldTypes.containsKey("0"));
     assertTrue("The tuple's field \"1\" must carry element evidence.", fieldTypes.containsKey("1"));
