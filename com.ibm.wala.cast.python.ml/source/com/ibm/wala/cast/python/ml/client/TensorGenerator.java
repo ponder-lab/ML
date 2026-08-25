@@ -1615,12 +1615,7 @@ public abstract class TensorGenerator {
 
     if (def == null) {
       // A parameter: resolve through every caller invoke's argument; all must agree.
-      int paramPos = -1;
-      for (int i = 0; i < node.getIR().getNumberOfParameters(); i++)
-        if (node.getIR().getParameter(i) == vn) {
-          paramPos = node.getMethod().isStatic() ? i : i - 1;
-          break;
-        }
+      int paramPos = parameterPosition(node, vn);
       if (paramPos >= 0) {
         Integer agreed = null;
         boolean any = false;
@@ -1761,13 +1756,10 @@ public abstract class TensorGenerator {
     if (sameBody != null) return sameBody;
 
     // The object is a parameter: the write may live in the frame the object came from.
-    int paramPos = -1;
-    if (node.getDU().getDef(objectVn) == null)
-      for (int i = 0; i < node.getIR().getNumberOfParameters(); i++)
-        if (node.getIR().getParameter(i) == objectVn) {
-          paramPos = node.getMethod().isStatic() ? i : i - 1;
-          break;
-        }
+    int paramPos =
+        node.getDU().getDef(objectVn) == null
+            ? parameterPosition(node, objectVn)
+            : Integer.MIN_VALUE;
     if (paramPos < 0) return null;
     if (!visited.add(Pair.make(node, -objectVn))) return null; // Object-hop cycle break.
     Integer agreed = null;
@@ -2268,11 +2260,15 @@ public abstract class TensorGenerator {
    * {@link SliceBuiltinOperation} or {@link NdarraySubscriptOperation}. Cheap structural gates run
    * first so ordinary reads do not pay a dispatch: the def must be a non-attribute property read (a
    * string-constant member key is an attribute access, never a subscript the pin covers) or a call
-   * whose function value resolves to the {@code slice} builtin.
+   * dispatching to the {@code slice} builtin.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
    * @param node The {@link CGNode} whose IR defines {@code valueNumber}.
    * @param valueNumber The value number to resolve.
+   * @param exact Whether an unresolvable remainder is marked; the direct-def branch evaluates the
+   *     subscript generator through the default-mode memoized evaluation, like the factory-recovery
+   *     path below it (wala/ML#365), while the caller walk threads the flag through per-caller
+   *     resolutions.
    * @return The subscript generator's resolution, or {@code null} when the value is not a pinned
    *     subscript's result or its subscript resolution has no ranked members.
    */
@@ -2302,111 +2298,136 @@ public abstract class TensorGenerator {
     }
     if (!(generator instanceof SliceBuiltinOperation)
         && !(generator instanceof NdarraySubscriptOperation)) return null;
-    // The same-operation guard, as on the factory-recovery path below.
+    // The same-operation guard, as on the factory-recovery path below; the subscript generators'
+    // source-keyed discriminator keeps a chain's inner subscript from matching as false
+    // self-recursion.
     if (this.isSameOperation(generator)) return null;
 
     ShapeResult result = memoizedShapeResult(builder, generator);
+    // Per the pin's own rule (wala/ML#405), an unranked subscript resolution offers no
+    // replacement for what it would block, so it declines the bypass rather than asserting ⊤.
+    if (result.members().isEmpty()) return null;
     LOGGER.fine(
         () ->
-            "shapeResultOfSubscript: vn="
+            "Subscript bypass: vn="
                 + valueNumber
                 + " in "
                 + describe(node)
                 + " resolves via its subscript generator to "
                 + result
                 + " (wala/ML#825).");
-    // Per the pin's own rule (wala/ML#405), an unranked subscript resolution offers no
-    // replacement for what it would block, so it declines the bypass rather than asserting ⊤.
-    if (result.members().isEmpty()) return null;
     return result;
   }
 
   /**
    * Resolves a subscript-fed parameter through its callers' frames, where the subscript defs are
    * visible (wala/ML#825). Gated in two passes so parameters with no subscript feed pay only a
-   * cheap def inspection per caller: the resolutions run only when at least one caller's actual
-   * argument is subscript-shaped, and the bypass declines (falling back to the ordinary pipeline)
-   * whenever a caller's argument cannot be found or nothing resolves.
+   * cheap def inspection over the raw call-graph predecessors: the feasibility-filtered {@link
+   * #getCallerInvokes} walk and the per-caller resolutions run only when at least one caller's
+   * actual argument is subscript-shaped. The bypass declines (falling back to the ordinary
+   * pipeline) whenever a caller's argument mapping is ambiguous — a keyword-bearing call whose
+   * positional slots do not cover the parameter — or nothing resolves; a caller that simply omits
+   * the (defaulted) argument is skipped, since a default value is not a subscript feed.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
    * @param node The {@link CGNode} whose parameter {@code valueNumber} is.
    * @param valueNumber The parameter's value number.
-   * @param exact Whether an unresolvable caller marks the unknown remainder.
+   * @param exact Whether an unresolvable caller marks the unknown remainder (wala/ML#716); the
+   *     default mode keeps the resolvable subset, as on the sibling caller walk.
    * @return The callers' union, or {@code null} when the bypass does not apply.
    */
   private ShapeResult shapeResultOfSubscriptFedParameter(
       PropagationCallGraphBuilder builder, CGNode node, int valueNumber, boolean exact) {
-    int paramPos = Integer.MIN_VALUE;
-    for (int i = 0; i < node.getIR().getNumberOfParameters(); i++)
-      if (node.getIR().getParameter(i) == valueNumber) {
-        paramPos = node.getMethod().isStatic() ? i : i - 1;
-        break;
-      }
-    if (paramPos == Integer.MIN_VALUE) return null;
+    int paramPos = parameterPosition(node, valueNumber);
+    // `self` (-1) is never subscript-fed; a non-parameter has no callers to walk.
+    if (paramPos < 0) return null;
 
-    List<Pair<CGNode, SSAAbstractInvokeInstruction>> callers = getCallerInvokes(builder, node);
-    if (callers.isEmpty()) return null;
-
-    // Pass 1: the cheap gate. Find each caller's actual argument and check its def; a caller
-    // whose argument cannot be located declines the whole bypass.
-    List<Pair<CGNode, Integer>> args = new ArrayList<>();
+    // Pass 1: the cheap gate, over the raw call-graph predecessors — no feasibility filtering,
+    // no resolution — so the common no-subscript parameter pays only def inspections.
+    CallGraph callGraph = builder.getCallGraph();
     boolean anySubscript = false;
-    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke : callers) {
-      CGNode caller = callerInvoke.fst;
-      SSAAbstractInvokeInstruction call = callerInvoke.snd;
-      int argVn = -1;
-      if (paramPos == -1) { // self
-        argVn = call.getUse(0);
-      } else if (call instanceof PythonInvokeInstruction) {
-        if (paramPos + 1 < call.getNumberOfUses()) argVn = call.getUse(paramPos + 1);
-      } else if (paramPos < call.getNumberOfUses()) {
-        argVn = call.getUse(paramPos);
+    for (Iterator<CGNode> preds = callGraph.getPredNodes(node); preds.hasNext(); ) {
+      CGNode caller = preds.next();
+      if (caller.getIR() == null || caller.getDU() == null) continue;
+      for (Iterator<CallSiteReference> sites = callGraph.getPossibleSites(caller, node);
+          sites.hasNext(); ) {
+        for (SSAAbstractInvokeInstruction call : caller.getIR().getCalls(sites.next())) {
+          int argVn = callerArgumentValueNumber(call, paramPos);
+          if (argVn == AMBIGUOUS_ARGUMENT) return null;
+          if (argVn <= 0) continue;
+          SSAInstruction argDef = caller.getDU().getDef(argVn);
+          if (argDef != null && isSubscriptShaped(builder, caller, argDef)) anySubscript = true;
+        }
       }
-      if (argVn == -1 || caller.getDU() == null) return null;
-      SSAInstruction argDef = caller.getDU().getDef(argVn);
-      if (argDef != null && isSubscriptShaped(builder, caller, argDef)) anySubscript = true;
-      args.add(Pair.make(caller, argVn));
     }
     if (!anySubscript) return null;
 
-    // Pass 2: resolve every caller's argument in its own frame, where the subscript branch above
-    // applies. The per-context union replaces the receiver-aliased points-to union.
+    // Pass 2: resolve every feasible caller's argument in its own frame, where the direct-def
+    // branch above applies. The per-context union replaces the receiver-aliased points-to union.
     boolean unknown = false;
     Set<List<Dimension<?>>> members = HashSetFactory.make();
-    for (Pair<CGNode, Integer> arg : args) {
-      ShapeResult argShapes = this.getShapeResult(builder, arg.fst, arg.snd, exact);
-      if (argShapes.hasUnknown()) unknown = true;
+    for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
+        getCallerInvokes(builder, node)) {
+      CGNode caller = callerInvoke.fst;
+      int argVn = callerArgumentValueNumber(callerInvoke.snd, paramPos);
+      if (argVn == AMBIGUOUS_ARGUMENT) return null;
+      if (argVn <= 0) continue;
+      ShapeResult argShapes = this.getShapeResult(builder, caller, argVn, exact);
+      // In exact mode an unresolvable caller marks the union's unknown remainder; the default
+      // mode keeps the resolvable subset (wala/ML#716, wala/ML#718), as on the sibling walk.
+      if (argShapes.hasUnknown() && exact) unknown = true;
       members.addAll(argShapes.members());
     }
     if (members.isEmpty()) return null;
+    Set<List<Dimension<?>>> finalMembers = members;
     LOGGER.fine(
         () ->
-            "shapeResultOfSubscript: subscript-fed parameter vn="
+            "Subscript-fed parameter bypass: vn="
                 + valueNumber
                 + " of "
                 + describe(node)
                 + " resolves via its callers to "
-                + members
+                + finalMembers
                 + " (wala/ML#825).");
     return new ShapeResult(members, unknown);
   }
 
+  /** The caller-argument mapping is ambiguous: a keyword-bearing call the position cannot cover. */
+  private static final int AMBIGUOUS_ARGUMENT = -1;
+
   /**
-   * Whether an instruction is a subscript read the wala/ML#405 pin covers: a non-attribute property
-   * read (a string-constant member key is an attribute access, never a subscript) or a call
-   * resolving to the {@code slice} builtin.
+   * Maps a callee parameter position to the caller-side argument value number.
    *
-   * @param builder The {@link PropagationCallGraphBuilder} used for PA lookup.
-   * @param node The {@link CGNode} containing the instruction.
-   * @param def The instruction.
-   * @return {@code true} iff the instruction is subscript-shaped.
+   * @param call The caller's invoke.
+   * @param paramPos The 0-based position of the positional parameter, {@code self} excluded.
+   * @return The argument's value number; {@code 0} when the call does not supply the parameter
+   *     positionally (a defaulted argument); {@link #AMBIGUOUS_ARGUMENT} when the call carries
+   *     keyword arguments the positional slots do not cover, since a {@link
+   *     PythonInvokeInstruction} stores keywords in call-site order and a positional index into
+   *     them selects the wrong value.
    */
-  private static boolean isSubscriptShaped(
-      PropagationCallGraphBuilder builder, CGNode node, SSAInstruction def) {
-    if (def instanceof PythonPropertyRead read)
-      return !readsStringConstantMember(builder, node, read);
-    return def instanceof SSAAbstractInvokeInstruction invoke
-        && callsSliceBuiltin(builder, node, invoke);
+  private static int callerArgumentValueNumber(SSAAbstractInvokeInstruction call, int paramPos) {
+    if (call instanceof PythonInvokeInstruction pyCall) {
+      int positionals = pyCall.getNumberOfPositionalParameters() - 1;
+      if (paramPos < positionals) return pyCall.getUse(paramPos + 1);
+      return pyCall.getNumberOfKeywordParameters() > 0 ? AMBIGUOUS_ARGUMENT : 0;
+    }
+    return paramPos < call.getNumberOfUses() ? call.getUse(paramPos) : 0;
+  }
+
+  /**
+   * The 0-based position of a value number among a node's parameters, {@code self} excluded for
+   * instance methods ({@code -1} is {@code self}).
+   *
+   * @param node The {@link CGNode} whose parameters are searched.
+   * @param valueNumber The value number in question.
+   * @return The position, or {@link Integer#MIN_VALUE} when the value is not a parameter.
+   */
+  protected static int parameterPosition(CGNode node, int valueNumber) {
+    for (int i = 0; i < node.getIR().getNumberOfParameters(); i++)
+      if (node.getIR().getParameter(i) == valueNumber)
+        return node.getMethod().isStatic() ? i : i - 1;
+    return Integer.MIN_VALUE;
   }
 
   /**
@@ -2432,21 +2453,22 @@ public abstract class TensorGenerator {
   }
 
   /**
-   * Whether an invoke's function value resolves to the {@code slice} builtin.
+   * Whether an instruction is a subscript read the wala/ML#405 pin covers: a non-attribute property
+   * read (a string-constant member key is an attribute access, never a subscript) or a call
+   * dispatching to the {@code slice} builtin, sharing {@link #dispatchesToSliceBuiltin}'s
+   * classification rather than adding another copy of the predicate.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used for PA lookup.
-   * @param node The {@link CGNode} containing the invoke.
-   * @param invoke The invoke.
-   * @return {@code true} iff some function-value member is the {@code slice} builtin.
+   * @param node The {@link CGNode} containing the instruction.
+   * @param def The instruction.
+   * @return {@code true} iff the instruction is subscript-shaped.
    */
-  private static boolean callsSliceBuiltin(
-      PropagationCallGraphBuilder builder, CGNode node, SSAAbstractInvokeInstruction invoke) {
-    // The resolved call-graph targets, not the function value's points-to keys: the `slice`
-    // callable commonly arrives by lexical read (wala/ML#824), whose key shapes the PA varies.
-    for (CGNode target : builder.getCallGraph().getPossibleTargets(node, invoke.getCallSite()))
-      if (sanitize(target.getMethod().getDeclaringClass().getReference())
-          .equals(PythonTypes.SLICE_BUILTIN)) return true;
-    return false;
+  private static boolean isSubscriptShaped(
+      PropagationCallGraphBuilder builder, CGNode node, SSAInstruction def) {
+    if (def instanceof PythonPropertyRead read)
+      return !readsStringConstantMember(builder, node, read);
+    return def instanceof PythonInvokeInstruction invoke
+        && dispatchesToSliceBuiltin(builder, node, invoke);
   }
 
   private ShapeResult computeShapes(
@@ -6469,12 +6491,7 @@ public abstract class TensorGenerator {
     // or defaulted) or walked marks the unknown remainder while the resolvable callers' members
     // still stand (wala/ML#718).
     if (def == null && !st.isConstant(vn)) {
-      int paramPos = Integer.MIN_VALUE;
-      for (int i = 0; i < node.getIR().getNumberOfParameters(); i++)
-        if (node.getIR().getParameter(i) == vn) {
-          paramPos = node.getMethod().isStatic() ? i : i - 1;
-          break;
-        }
+      int paramPos = parameterPosition(node, vn);
       if (paramPos >= 0) {
         LOGGER.fine(
             () ->
@@ -7255,12 +7272,7 @@ public abstract class TensorGenerator {
     // resolve-side walk unions the callers and marks the unmappable ones as the unknown
     // remainder.
     if (def == null && !st.isConstant(vn)) {
-      int paramPos = Integer.MIN_VALUE;
-      for (int i = 0; i < node.getIR().getNumberOfParameters(); i++)
-        if (node.getIR().getParameter(i) == vn) {
-          paramPos = node.getMethod().isStatic() ? i : i - 1;
-          break;
-        }
+      int paramPos = parameterPosition(node, vn);
       if (paramPos >= 0)
         for (Pair<CGNode, SSAAbstractInvokeInstruction> callerInvoke :
             getCallerInvokes(builder, node)) {

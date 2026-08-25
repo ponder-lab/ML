@@ -55,6 +55,20 @@ public class SliceBuiltinOperation extends TensorGenerator {
 
   private static final Logger LOGGER = Logger.getLogger(SliceBuiltinOperation.class.getName());
 
+  /**
+   * {@inheritDoc}
+   *
+   * @implNote The anchoring source's pointer key: two different subscripts of the same kind in one
+   *     function are different operations, and the class-plus-method comparison alone would cut the
+   *     inner subscript of a chain (e.g., {@code a = x[:, 0]; b = a[:2]}) as false self-recursion,
+   *     dropping its resolution to the receiver-aliased points-to union — the wala/ML#825 symptom
+   *     one hop in. A genuine self-read still matches on its own key.
+   */
+  @Override
+  protected Object operationDiscriminator() {
+    return this.getSource() != null ? this.getSource().getPointerKey() : null;
+  }
+
   public SliceBuiltinOperation(PointsToSetVariable source) {
     super(source);
   }
