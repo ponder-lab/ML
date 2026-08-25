@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 
 
@@ -10,6 +11,10 @@ def consume_direct(g):
 
 
 def consume_listed_indices(i):
+    pass
+
+
+def consume_partial(g):
     pass
 
 
@@ -68,3 +73,21 @@ def propagate_variable_bounds(adjacency, lo, hi):
 
 
 propagate_variable_bounds(adjacency, 0, 10)
+
+
+# Tier 4: the table itself is only partially resolvable (one arm concrete, one arm an opaque
+# cast), while the indices resolve as in tier 1. The gather must keep what the resolvable table
+# member proves rather than letting the unresolvable arm poison the whole result (wala/ML#823).
+def propagate_partial_table(adjacency, raw):
+    if len(raw) % 8 == 0:
+        table = tf.ones((100, 16), dtype=tf.float32)
+    else:
+        table = tf.cast(np.frombuffer(raw, dtype=np.float32), tf.float32)
+    edge_sources = adjacency[:, 0]
+    out = tf.gather(table, edge_sources)
+    assert out.shape[0] == 30
+    assert out.dtype == tf.float32
+    consume_partial(out)
+
+
+propagate_partial_table(adjacency, b"\x00" * 120)
