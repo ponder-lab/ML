@@ -428,6 +428,15 @@ public class TensorGeneratorFactory {
   static TensorGenerator dispatchShared(GeneratorAnchor anchor) {
     TypeReference type = anchor.declaredType();
 
+    // `np.transpose` and `ndarray.transpose` share one generator with a form flag, since the two
+    // forms differ in argument geometry: the function form binds its input at position 0 and
+    // `axes` at 1, the method form binds `axes` at 0 and reads its input from the receiver.
+    // Registered here so one entry serves both dispatch routes (wala/ML#835).
+    if (isType(type, NumpyTypes.NP_TRANSPOSE.getDeclaringClass()))
+      return anchor.makeGenerator(s -> new NpTranspose(s, false), n -> new NpTranspose(n, false));
+    if (isType(type, NumpyTypes.NDARRAY_TRANSPOSE.getDeclaringClass()))
+      return anchor.makeGenerator(s -> new NpTranspose(s, true), n -> new NpTranspose(n, true));
+
     // The Sequential registrations live here so one entry serves both dispatch routes
     // (wala/ML#817): the constructor type takes the `Model` treatment (its weight resolution is
     // empty until wala/ML#832's layers walk, which is sound), and the instance's call node —

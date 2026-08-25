@@ -1548,4 +1548,121 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TENSOR_10_INT32)));
   }
+
+  /**
+   * {@code np.transpose} permutes the input's dimensions by the constant {@code axes} and reverses
+   * them when {@code axes} is absent; the method form rides the same generator through the
+   * ndarray-method field (<a href="https://github.com/wala/ML/issues/835">wala/ML#835</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpTranspose()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType permuted =
+        new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(2), new NumericDim(3)));
+    TensorType reversed =
+        new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(3), new NumericDim(2)));
+    TensorType methodForm = new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(2)));
+
+    test("tf2_test_np_transpose.py", "consume_permuted", 1, 1, Map.of(2, Set.of(permuted)));
+    test("tf2_test_np_transpose.py", "consume_reversed", 1, 1, Map.of(2, Set.of(reversed)));
+    test("tf2_test_np_transpose.py", "consume_method", 1, 1, Map.of(2, Set.of(methodForm)));
+  }
+
+  /**
+   * The {@code axes} edge forms of {@code np.transpose} (<a
+   * href="https://github.com/wala/ML/issues/835">wala/ML#835</a>): a negative entry counts from the
+   * end, an explicit {@code None} selects the reversal default, and a permutation the analysis
+   * cannot fold degrades to an unresolved size per axis while preserving the rank, since a
+   * permutation preserves it.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpTransposeAxesEdgeForms()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType negative =
+        new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(2), new NumericDim(3)));
+    TensorType noneAxes =
+        new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(3), new NumericDim(2)));
+    TensorType unresolved =
+        new TensorType(
+            FLOAT_32,
+            asList(UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE, UnresolvedDim.INSTANCE));
+
+    test("tf2_test_np_transpose.py", "consume_negative", 1, 1, Map.of(2, Set.of(negative)));
+    test("tf2_test_np_transpose.py", "consume_none_axes", 1, 1, Map.of(2, Set.of(noneAxes)));
+    test("tf2_test_np_transpose.py", "consume_unresolved", 1, 1, Map.of(2, Set.of(unresolved)));
+  }
+
+  /**
+   * A mixed {@code axes} points-to set ({@code None} on one branch, a constant permutation on the
+   * other) keeps BOTH outcomes: the reversal member joins the permuted one rather than being
+   * dropped by the tuple's resolution (<a
+   * href="https://github.com/wala/ML/issues/835">wala/ML#835</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpTransposeMixedNoneAxes()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType permuted =
+        new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(2), new NumericDim(3)));
+    TensorType reversed =
+        new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(3), new NumericDim(2)));
+
+    test("tf2_test_np_transpose.py", "consume_mixed", 1, 1, Map.of(2, Set.of(permuted, reversed)));
+  }
+
+  /**
+   * The method form with a positional {@code axes} ({@code c.transpose((1, 0, 2))}): the argument
+   * binds to {@code axes} while the input is the RECEIVER, so the result is the receiver's shape
+   * permuted, not the axes tuple misread as the input (<a
+   * href="https://github.com/wala/ML/issues/835">wala/ML#835</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNdarrayTransposeAxes()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType permuted =
+        new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(2), new NumericDim(4)));
+
+    test("tf2_test_np_transpose.py", "consume_method_axes", 1, 1, Map.of(2, Set.of(permuted)));
+  }
+
+  /**
+   * A transpose result consumed by an elementwise op: the op's operand resolution reaches the
+   * summary's fresh allocation through producer delegation, so both forms must serve the
+   * node-anchored dispatch route as well as the seeded one (the tandem-registration rule; <a
+   * href="https://github.com/wala/ML/issues/835">wala/ML#835</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpTransposeChained()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType permuted =
+        new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(2), new NumericDim(3)));
+    TensorType methodForm = new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(2)));
+
+    test("tf2_test_np_transpose.py", "consume_chained", 1, 1, Map.of(2, Set.of(permuted)));
+    test("tf2_test_np_transpose.py", "consume_method_chained", 1, 1, Map.of(2, Set.of(methodForm)));
+  }
 }
