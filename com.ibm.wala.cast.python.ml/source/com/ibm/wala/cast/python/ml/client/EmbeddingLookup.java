@@ -7,6 +7,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.util.collections.HashSetFactory;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -29,28 +30,43 @@ public class EmbeddingLookup extends PassThroughUnaryTensorGenerator {
     super(node);
   }
 
+  /** The modeled call's arguments, in summary order ({@code self} excluded). */
+  protected enum Parameters {
+    PARAMS,
+    IDS;
+
+    public String getName() {
+      return name().toLowerCase(Locale.ROOT);
+    }
+
+    public int getIndex() {
+      return ordinal();
+    }
+  }
+
   @Override
   protected int getInputParameterPosition() {
-    return 0;
+    return Parameters.PARAMS.getIndex();
   }
 
   @Override
   protected String getInputParameterName() {
-    return "params";
+    return Parameters.PARAMS.getName();
   }
 
   /**
-   * Legacy view of {@link #getDefaultShapeResult(PropagationCallGraphBuilder)}: the default mode's
-   * resolvable subset per wala/ML#716, with a wholly-unresolved result collapsing to {@code null}
-   * (⊤) as before.
+   * Legacy view of {@link #getDefaultShapeResult(PropagationCallGraphBuilder)}: a partial's
+   * resolvable members stand, per the default mode's contract (wala/ML#716), and only a member-less
+   * result collapses to {@code null} (⊤).
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @return The set of possible output shapes, or {@code null} (⊤) when neither input resolves any
+   * @return The set of possible output shapes, or {@code null} (⊤) when either input resolves no
    *     member or every {@code params} candidate has rank below 1.
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    return this.getDefaultShapeResult(builder).toLegacy();
+    ShapeResult result = this.getDefaultShapeResult(builder);
+    return result.isPartial() ? result.members() : result.toLegacy();
   }
 
   /**
@@ -67,17 +83,22 @@ public class EmbeddingLookup extends PassThroughUnaryTensorGenerator {
    */
   @Override
   protected ShapeResult getDefaultShapeResult(PropagationCallGraphBuilder builder) {
-    // params is arg 0; ids is arg 1. Exact-mode reads, so a partially-resolvable input's
-    // remainder marks rather than silently dropping (wala/ML#716, wala/ML#718).
-    ShapeResult paramsShapes = this.shapeResultOfArgument(builder, 0, "params");
-    ShapeResult idsShapes = this.shapeResultOfArgument(builder, 1, "ids");
+    // Exact-mode reads, so a partially-resolvable input's remainder marks rather than silently
+    // dropping (wala/ML#716, wala/ML#718).
+    ShapeResult paramsShapes =
+        this.shapeResultOfArgumentValue(
+            builder, this.getInputParameterPosition(), this.getInputParameterName());
+    ShapeResult idsShapes =
+        this.shapeResultOfArgumentValue(
+            builder, this.getIndicesParameterPosition(), this.getIndicesParameterName());
     if (paramsShapes.members().isEmpty() || idsShapes.members().isEmpty())
       return ShapeResult.unknown();
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     for (List<Dimension<?>> ids : idsShapes.members()) {
       for (List<Dimension<?>> params : paramsShapes.members()) {
-        // The embedding table must have at least one axis (the row dimension to index into).
+        // A rank-0 table is a guaranteed run-time error for this op, so the skip is
+        // infeasible-path pruning (the wala/ML#746 arm-pruning sense), not an unmarked remainder.
         if (params.isEmpty()) continue;
         List<Dimension<?>> out = new ArrayList<>(ids);
         out.addAll(params.subList(1, params.size()));
@@ -90,29 +111,39 @@ public class EmbeddingLookup extends PassThroughUnaryTensorGenerator {
   }
 
   /**
-   * Routes the output-shape resolution through {@link #getDefaultShapeResult} (this generator has
-   * no {@code shape} parameter), so partial results cross the generator boundary instead of
-   * collapsing at the base's {@code fromLegacy} lift (wala/ML#718; the MatMul precedent).
+   * The position of the indices argument ({@code ids} for {@code tf.nn.embedding_lookup}).
    *
-   * @param builder The propagation call graph builder.
-   * @return The resolution result.
+   * @return The 0-based positional index of the indices argument.
    */
-  @Override
-  protected ShapeResult getShapeResult(PropagationCallGraphBuilder builder) {
-    return this.getDefaultShapeResult(builder);
+  protected int getIndicesParameterPosition() {
+    return Parameters.IDS.getIndex();
   }
 
   /**
-   * Resolves one argument's shapes as a record, in exact mode.
+   * The keyword name of the indices argument: {@code "ids"} for {@code tf.nn.embedding_lookup};
+   * {@code Gather} overrides with {@code "indices"}, its summary's name — a keyword-form call
+   * resolved under the wrong name would otherwise find no value number.
+   *
+   * @return The keyword parameter name of the indices argument.
+   */
+  protected String getIndicesParameterName() {
+    return Parameters.IDS.getName();
+  }
+
+  /**
+   * Resolves one argument's shapes as a record through the value-number pipeline, in exact mode.
+   * The vn route is deliberate against the inherited PTS-first {@code shapeResultOfArg}: it alone
+   * reaches the φ-arm feasibility walk (wala/ML#746) and the subscript-before-points-to resolution
+   * (wala/ML#825), which this generator's indices commonly need.
    *
    * @param builder The propagation call graph builder.
    * @param position The 0-based positional index of the argument.
    * @param name The keyword parameter name.
    * @return The resolution result; ⊤ when the argument's value number cannot be located.
    */
-  private ShapeResult shapeResultOfArgument(
+  private ShapeResult shapeResultOfArgumentValue(
       PropagationCallGraphBuilder builder, int position, String name) {
-    int vn = this.getArgumentValueNumber(builder, position, name, false);
+    int vn = this.getArgumentValueNumber(builder, position, name, true);
     if (vn <= 0) return ShapeResult.unknown();
     return this.getShapeResult(builder, this.getNode(), vn, true);
   }

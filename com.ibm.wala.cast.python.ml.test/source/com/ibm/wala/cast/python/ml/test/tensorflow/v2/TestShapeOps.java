@@ -1505,6 +1505,29 @@ public class TestShapeOps extends AbstractTensorTest {
   }
 
   /**
+   * A gather whose table is only partially resolvable (one arm a concrete {@code tf.ones}, one an
+   * opaque cast) keeps what the resolvable member proves: the crossed {@code (30, 16)} stands as
+   * the resolvable subset instead of the unresolvable arm poisoning the whole result to ⊤ (<a
+   * href="https://github.com/wala/ML/issues/823">wala/ML#823</a>; the member-wise record upgrade's
+   * legacy view).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testGatherOverPartialTable()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_gather_unresolved_indices.py",
+        "consume_partial",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_30_16_FLOAT32)));
+  }
+
+  /**
    * A slice whose bounds are variables reduces its axis like any other. The discriminator
    * separating a slice construction from a two-dimensional application must not key on the bounds
    * being constants, or this form falls back to passing the receiver's shape through, which is the
