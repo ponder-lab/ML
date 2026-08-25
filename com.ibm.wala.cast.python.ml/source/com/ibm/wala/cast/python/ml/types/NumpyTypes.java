@@ -159,6 +159,24 @@ public class NumpyTypes extends PythonTypes {
 
   private static final String ASTYPE_SIGNATURE = "numpy.ndarray.astype()";
 
+  /** The `np.transpose` function form (wala/ML#835). */
+  public static final MethodReference NP_TRANSPOSE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/transpose")),
+          AstMethodReference.fnSelector);
+
+  private static final String NP_TRANSPOSE_SIGNATURE = "np.transpose()";
+
+  /** The `ndarray.transpose` method form (wala/ML#835). */
+  public static final MethodReference NDARRAY_TRANSPOSE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader, TypeName.string2TypeName("Lnumpy/ndarray/transpose")),
+          AstMethodReference.fnSelector);
+
+  private static final String NDARRAY_TRANSPOSE_SIGNATURE = "numpy.ndarray.transpose()";
+
   /** Method name used in {@code numpy.xml} for {@link #TOLIST}. */
   public static final String TOLIST_METHOD_NAME = "tolist";
 
@@ -320,6 +338,8 @@ public class NumpyTypes extends PythonTypes {
           Map.entry(RESHAPE.getDeclaringClass(), RESHAPE_SIGNATURE),
           Map.entry(RESHAPE_METHOD.getDeclaringClass(), RESHAPE_METHOD_SIGNATURE),
           Map.entry(ASTYPE.getDeclaringClass(), ASTYPE_SIGNATURE),
+          Map.entry(NP_TRANSPOSE.getDeclaringClass(), NP_TRANSPOSE_SIGNATURE),
+          Map.entry(NDARRAY_TRANSPOSE.getDeclaringClass(), NDARRAY_TRANSPOSE_SIGNATURE),
           Map.entry(TOLIST.getDeclaringClass(), TOLIST_SIGNATURE));
 
   public static final FieldReference FLOAT_32 =

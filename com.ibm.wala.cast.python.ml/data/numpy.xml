@@ -47,6 +47,8 @@
         <putfield class="LRoot" field="zeros" fieldType="LRoot" ref="x" value="zeros_fn"/>
         <new def="reshape_fn" class="Lnumpy/reshape"/>
         <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="x" value="reshape_fn"/>
+        <new def="np_transpose_fn" class="Lnumpy/transpose"/>
+        <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="x" value="np_transpose_fn"/>
         <new def="eye_fn" class="Lnumpy/eye"/>
         <putfield class="LRoot" field="eye" fieldType="LRoot" ref="x" value="eye_fn"/>
         <new def="unique_fn" class="Lnumpy/unique"/>
@@ -66,6 +68,8 @@
           <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
           <return value="ret"/>
         </method>
       </class>
@@ -78,6 +82,8 @@
           <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
           <return value="ret"/>
         </method>
       </class>
@@ -90,6 +96,8 @@
           <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
           <return value="ret"/>
         </method>
       </class>
@@ -102,6 +110,8 @@
           <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
           <return value="ret"/>
         </method>
       </class>
@@ -114,6 +124,8 @@
           <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
           <return value="ret"/>
         </method>
       </class>
@@ -126,6 +138,8 @@
           <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
           <return value="ret"/>
         </method>
       </class>
@@ -140,6 +154,8 @@
           <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
           <return value="ret"/>
         </method>
       </class>
@@ -154,6 +170,8 @@
           <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
           <return value="ret"/>
         </method>
       </class>
@@ -168,6 +186,8 @@
           <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
           <return value="ret"/>
         </method>
       </class>
@@ -182,6 +202,8 @@
           <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
           <return value="ret"/>
         </method>
       </class>
@@ -196,6 +218,8 @@
           <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
           <return value="ret"/>
         </method>
       </class>
@@ -231,6 +255,8 @@
           <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
           <return value="ret"/>
         </method>
       </class>
@@ -244,6 +270,8 @@
           <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
           <return value="ret"/>
         </method>
       </class>
@@ -258,6 +286,23 @@
           <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.transpose.html. `np.transpose(a, axes)` permutes `a`'s dimensions by the constant `axes`, defaulting to full reversal; `NpTranspose` computes the output shape and passes the dtype through (wala/ML#835). Result is a fresh ndarray with the method fields re-wired, like `reshape`. -->
+      <class name="transpose" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self a axes">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
           <return value="ret"/>
         </method>
       </class>
@@ -275,6 +320,8 @@
           <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
           <return value="ret"/>
         </method>
       </class>
@@ -289,6 +336,8 @@
           <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
           <return value="ret"/>
         </method>
       </class>
@@ -303,6 +352,8 @@
           <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
           <return value="ret"/>
         </method>
       </class>
@@ -317,6 +368,8 @@
           <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
           <return value="ret"/>
         </method>
       </class>
@@ -341,6 +394,8 @@
           <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
           <return value="ret"/>
         </method>
       </class>
@@ -354,6 +409,8 @@
           <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
           <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
           <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
           <return value="ret"/>
         </method>
       </class>
@@ -367,6 +424,21 @@
       </class>
       <!-- Allocation-only marker class for `tolist` results; no method body (same pattern as `ndarray`). -->
       <class name="tolist_result" allocatable="true"></class>
+      <!-- https://numpy.org/doc/stable/reference/generated/numpy.ndarray.transpose.html. The method form of `np.transpose` (wala/ML#835); the trampoline supplies the receiver as `a`, so `NpTranspose` serves both forms. -->
+      <class name="transpose" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self a axes">
+          <new def="ret" class="Lnumpy/ndarray"/>
+          <new def="astype_fn" class="Lnumpy/ndarray/astype"/>
+          <putfield class="LRoot" field="astype" fieldType="LRoot" ref="ret" value="astype_fn"/>
+          <new def="tolist_fn" class="Lnumpy/ndarray/tolist"/>
+          <putfield class="LRoot" field="tolist" fieldType="LRoot" ref="ret" value="tolist_fn"/>
+          <new def="reshape_fn" class="Lnumpy/ndarray/reshape"/>
+          <putfield class="LRoot" field="reshape" fieldType="LRoot" ref="ret" value="reshape_fn"/>
+          <new def="transpose_fn" class="Lnumpy/ndarray/transpose"/>
+          <putfield class="LRoot" field="transpose" fieldType="LRoot" ref="ret" value="transpose_fn"/>
+          <return value="ret"/>
+        </method>
+      </class>
     </package>
   </classloader>
 </summary-spec>

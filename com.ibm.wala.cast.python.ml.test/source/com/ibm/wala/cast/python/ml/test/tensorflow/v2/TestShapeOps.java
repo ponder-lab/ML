@@ -1548,4 +1548,28 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TENSOR_10_INT32)));
   }
+
+  /**
+   * {@code np.transpose} permutes the input's dimensions by the constant {@code axes} and reverses
+   * them when {@code axes} is absent; the method form rides the same generator through the
+   * ndarray-method field (<a href="https://github.com/wala/ML/issues/835">wala/ML#835</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpTranspose()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType permuted =
+        new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(2), new NumericDim(3)));
+    TensorType reversed =
+        new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(3), new NumericDim(2)));
+    TensorType methodForm = new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(2)));
+
+    test("tf2_test_np_transpose.py", "consume_permuted", 1, 1, Map.of(2, Set.of(permuted)));
+    test("tf2_test_np_transpose.py", "consume_reversed", 1, 1, Map.of(2, Set.of(reversed)));
+    test("tf2_test_np_transpose.py", "consume_method", 1, 1, Map.of(2, Set.of(methodForm)));
+  }
 }
