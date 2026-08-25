@@ -26,6 +26,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_4_8_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_784_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_5_FLOAT32;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
 import static com.ibm.wala.cast.python.util.Util.addPytestEntrypoints;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
@@ -50,6 +51,26 @@ import org.junit.Test;
  * carved from the {@code TestTensorflow2Model} monolith (wala/ML#635); the assertions are verbatim.
  */
 public class TestModelCall extends AbstractTensorTest {
+
+  /**
+   * A {@code tf.keras.Sequential}-built model is framework-typed and its call yields a tensor (<a
+   * href="https://github.com/wala/ML/issues/817">wala/ML#817</a>): the summary allocates the
+   * distinct {@code Sequential} instance type, chained under the canonical {@code Model}, so the
+   * call resolves through the inherited {@code __call__} and the result reaches the sink as a
+   * tensor rather than nothing, with the input's {@code float32} recovered through the model-call
+   * treatment.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSequentialModelCall()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_sequential.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_UNKNOWN_SHAPE_FLOAT32)));
+  }
 
   /**
    * Six tensor variables in {@code SequentialModel.__call__}: the {@code x} parameter (vn=3, shape

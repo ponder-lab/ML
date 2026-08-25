@@ -959,6 +959,28 @@ public class TensorFlowTypes extends PythonTypes {
   private static final String MODEL_CALL_SIGNATURE =
       "tf.keras.models.Model." + CALLABLE_METHOD_NAME + "()";
 
+  /** The {@code tf.keras.Sequential} constructor's synthetic class (wala/ML#817). */
+  public static final MethodReference SEQUENTIAL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/keras/models/Sequential")),
+          AstMethodReference.fnSelector);
+
+  private static final String SEQUENTIAL_SIGNATURE = "tf.keras.Sequential()";
+
+  /** A {@code Sequential} instance's call node (wala/ML#817), beside {@link #MODEL_CALL}. */
+  public static final MethodReference SEQUENTIAL_CALL =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName(
+                  "Ltensorflow/keras/models/Sequential/" + CALLABLE_METHOD_NAME)),
+          AstMethodReference.fnSelector);
+
+  private static final String SEQUENTIAL_CALL_SIGNATURE =
+      "tf.keras.models.Sequential." + CALLABLE_METHOD_NAME + "()";
+
   public static final MethodReference TENSOR =
       MethodReference.findOrCreate(
           TypeReference.findOrCreate(
@@ -2223,6 +2245,8 @@ public class TensorFlowTypes extends PythonTypes {
           Map.entry(REDUCE_ALL.getDeclaringClass(), REDUCE_ALL_SIGNATURE),
           Map.entry(MODEL.getDeclaringClass(), MODEL_SIGNATURE),
           Map.entry(MODEL_CALL.getDeclaringClass(), MODEL_CALL_SIGNATURE),
+          Map.entry(SEQUENTIAL.getDeclaringClass(), SEQUENTIAL_SIGNATURE),
+          Map.entry(SEQUENTIAL_CALL.getDeclaringClass(), SEQUENTIAL_CALL_SIGNATURE),
           Map.entry(TENSOR.getDeclaringClass(), TENSOR_SIGNATURE),
           Map.entry(NDARRAY.getDeclaringClass(), NDARRAY_SIGNATURE),
           Map.entry(READ_DATA_SETS.getDeclaringClass(), READ_DATA_SETS_SIGNATURE),

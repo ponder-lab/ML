@@ -173,6 +173,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.REUTERS_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ROUND;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.RSQRT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SEQUENCE_MASK;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SEQUENTIAL_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIGMOID;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIGN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.SIN;
@@ -1843,7 +1844,10 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, CONV2D_CALL.getDeclaringClass())) return new Conv2DCall(source);
     else if (isType(calledFunction, DENSE_CALL.getDeclaringClass())) return new DenseCall(source);
     else if (isType(calledFunction, ADD_WEIGHT.getDeclaringClass())) return new AddWeight(source);
-    else if (isType(calledFunction, MODEL_CALL.getDeclaringClass())) return new ModelCall(source);
+    else if (isType(calledFunction, MODEL_CALL.getDeclaringClass())
+        || isType(calledFunction, SEQUENTIAL_CALL.getDeclaringClass()))
+      // A Sequential instance's call node is `Sequential/__call__` (wala/ML#817).
+      return new ModelCall(source);
     else if (isType(calledFunction, FLATTEN_LAYER_CALL.getDeclaringClass()))
       return new FlattenCall(source);
     else if (isType(calledFunction, GLOBAL_AVERAGE_POOLING_1D_CALL.getDeclaringClass()))
