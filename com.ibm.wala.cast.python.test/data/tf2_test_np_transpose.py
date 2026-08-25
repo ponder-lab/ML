@@ -77,6 +77,19 @@ consume_unresolved(np.transpose(a, axes))
 mixed_axes = None if len(sys.argv) > 99 else (2, 0, 1)
 consume_mixed(np.transpose(a, mixed_axes))
 
+
+def consume_nonliteral_axes(x):
+    # An `axes` entry that is not a literal integer leaves the permutation unresolvable; the
+    # analysis reports an unresolved size per axis while preserving the rank. The `min` keeps
+    # `n == 1` for ANY argument count, so the fixture stays runnable from wrappers that pass
+    # arguments, while the value remains unfoldable statically.
+    assert x.shape == (3, 4, 2)
+    assert x.dtype == np.float32
+
+
+n = min(len(sys.argv), 1)
+consume_nonliteral_axes(np.transpose(a, (n, 2, 0)))
+
 b = np.ones((2, 3), dtype=np.float32)
 consume_method(b.transpose())
 

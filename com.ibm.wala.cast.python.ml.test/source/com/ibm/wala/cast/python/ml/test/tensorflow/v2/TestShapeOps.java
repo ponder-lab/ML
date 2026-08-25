@@ -1600,6 +1600,11 @@ public class TestShapeOps extends AbstractTensorTest {
     test("tf2_test_np_transpose.py", "consume_negative", 1, 1, Map.of(2, Set.of(negative)));
     test("tf2_test_np_transpose.py", "consume_none_axes", 1, 1, Map.of(2, Set.of(noneAxes)));
     test("tf2_test_np_transpose.py", "consume_unresolved", 1, 1, Map.of(2, Set.of(unresolved)));
+
+    // A non-literal entry inside the axes tuple is the OTHER unresolvable route: the tuple folds,
+    // but not to integers, where `consume_unresolved`'s two-tuple branch never folds to one.
+    test(
+        "tf2_test_np_transpose.py", "consume_nonliteral_axes", 1, 1, Map.of(2, Set.of(unresolved)));
   }
 
   /**

@@ -186,6 +186,16 @@ public abstract class AbstractTensorTest extends TestPythonMLCallGraphShape {
   protected static final TensorType TENSOR_NONE_4_FLOAT32 =
       new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(4)));
 
+  /** The `flow_from_directory` image batch at `target_size=(112, 112)` (wala/ML#830). */
+  protected static final TensorType TENSOR_NONE_112_112_3_FLOAT32 =
+      new TensorType(
+          FLOAT_32,
+          asList(DynamicDim.INSTANCE, new NumericDim(112), new NumericDim(112), new NumericDim(3)));
+
+  /** The `flow_from_directory` categorical labels batch: the class count is unresolved. */
+  protected static final TensorType TENSOR_NONE_UNRESOLVED_FLOAT32 =
+      new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, UnresolvedDim.INSTANCE));
+
   protected static final TensorType TENSOR_NONE_2_FLOAT32 =
       new TensorType(FLOAT_32, asList(DynamicDim.INSTANCE, new NumericDim(2)));
 
