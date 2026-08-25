@@ -1797,7 +1797,10 @@ public class TensorGeneratorFactory {
           if (alloc.equals(DIRECTORY_ITERATOR_IMAGES_TYPE)
               || alloc.equals(DIRECTORY_ITERATOR_LABELS_TYPE))
             return new DatasetTupleElementGenerator(
-                source, new FlowFromDirectoryGenerator(asin.getNode()), index);
+                source,
+                new FlowFromDirectoryGenerator(
+                    TensorGenerator.batchElementProviderAnchor(builder, asin.getNode())),
+                index);
         }
       }
       throw new IllegalArgumentException(

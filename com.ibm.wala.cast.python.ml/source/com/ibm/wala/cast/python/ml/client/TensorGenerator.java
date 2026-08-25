@@ -8538,13 +8538,35 @@ public abstract class TensorGenerator {
       // A position of the `(x, y)` batch tuple `flow_from_directory`'s summary materializes; the
       // node-based dispatch below would resolve the whole-batch union instead (wala/ML#830).
       return new DatasetTupleElementGenerator(
-          node, new FlowFromDirectoryGenerator(node), FlowFromDirectoryGenerator.IMAGES_INDEX);
+          node,
+          new FlowFromDirectoryGenerator(batchElementProviderAnchor(builder, node)),
+          FlowFromDirectoryGenerator.IMAGES_INDEX);
     } else if (sanitized.equals(TensorFlowTypes.DIRECTORY_ITERATOR_LABELS_TYPE)) {
       return new DatasetTupleElementGenerator(
-          node, new FlowFromDirectoryGenerator(node), FlowFromDirectoryGenerator.LABELS_INDEX);
+          node,
+          new FlowFromDirectoryGenerator(batchElementProviderAnchor(builder, node)),
+          FlowFromDirectoryGenerator.LABELS_INDEX);
     }
 
     return createManualGenerator(node, builder);
+  }
+
+  /**
+   * Resolves the anchor for a batch-element position's provider: the element helper's unique
+   * caller, which is the `flow_from_directory.do` node whose frame holds the shape-bearing
+   * arguments (wala/ML#834). The helper's own synthetic parameters are unreliable for argument
+   * resolution (the empty-parameter-slot phenomenon the caller-walk fallbacks exist for), so a
+   * provider anchored there resolves the API defaults instead of the call's literals; the caller
+   * frame resolves them the same way the reader-route provider does. The helper node itself is the
+   * fallback when no unique caller resolves.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose call graph resolves the caller.
+   * @param node The element helper's {@code do()} node.
+   * @return The provider anchor.
+   */
+  static CGNode batchElementProviderAnchor(PropagationCallGraphBuilder builder, CGNode node) {
+    List<Pair<CGNode, SSAAbstractInvokeInstruction>> callers = getCallerInvokes(builder, node);
+    return callers.size() == 1 ? callers.get(0).fst : node;
   }
 
   /**

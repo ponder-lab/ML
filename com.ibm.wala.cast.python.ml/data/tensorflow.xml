@@ -2464,8 +2464,11 @@
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/preprocessing/image/ImageDataGenerator#flow_from_directory. A `DirectoryIterator` is an iterable of `(x, y)` batch tuples: a rank-4 image batch and a label array. The batch tuple is materialized here (field 0 = images, field 1 = labels, distinct marker classes so per-position generator dispatch is unambiguous) and stored on the iterator's `__content__` field — the field the `iter`/`next` builtin summaries carry (wala/ML#696/#698) — so `next(iter(gen))` yields the tuple with its structure intact rather than an opaque iterator. See wala/ML#830; `FlowFromDirectoryGenerator` supplies the per-position shapes and dtypes. -->
         <method name="do" descriptor="()LRoot;" numArgs="16" paramNames="self directory target_size color_mode classes class_mode batch_size shuffle seed save_to_dir save_prefix save_format follow_links subset interpolation keep_aspect_ratio">
           <new def="x" class="Ltensorflow/keras/preprocessing/image/flow_from_directory"/>
-          <new def="images" class="Ltensorflow/keras/preprocessing/image/directory_iterator_images"/>
-          <new def="labels" class="Ltensorflow/keras/preprocessing/image/directory_iterator_labels"/>
+          <!-- The batch elements are HELPER-CALL results, not direct allocations (wala/ML#834): a summary-internal call whose target is named `do` is seeded, so the result's per-position type flows through the `putfield` edges below onto the tuple's instance-field keys, where structure-consuming clients read element evidence; a direct allocation is seeded nowhere and leaves the fields untyped. The keras dataset loaders established the pattern. The generator arguments ride into the helper frames so the per-position generators, anchored at the helper `do` nodes, resolve them there (the wala/ML#760 frame contract). -->
+          <new def="images_fn" class="Ltensorflow/keras/preprocessing/image/directory_iterator_images"/>
+          <call class="Ltensorflow/keras/preprocessing/image/directory_iterator_images" name="do" type="virtual" def="images" descriptor="()LRoot;" arg0="images_fn" arg1="target_size" arg2="color_mode" arg3="class_mode" numArgs="4"/>
+          <new def="labels_fn" class="Ltensorflow/keras/preprocessing/image/directory_iterator_labels"/>
+          <call class="Ltensorflow/keras/preprocessing/image/directory_iterator_labels" name="do" type="virtual" def="labels" descriptor="()LRoot;" arg0="labels_fn" arg1="target_size" arg2="color_mode" arg3="class_mode" numArgs="4"/>
           <new def="batch" class="Ltuple"/>
           <putfield class="LRoot" field="0" fieldType="LRoot" ref="batch" value="images"/>
           <putfield class="LRoot" field="1" fieldType="LRoot" ref="batch" value="labels"/>
@@ -2473,9 +2476,19 @@
           <return value="x"/>
         </method>
       </class>
-      <!-- The batch-tuple element allocation classes for `flow_from_directory` (wala/ML#830); deliberately body-less, `<new>` targets only, like `ListFilesDataset`. -->
-      <class name="directory_iterator_images" allocatable="true"></class>
-      <class name="directory_iterator_labels" allocatable="true"></class>
+      <!-- The batch-tuple element helper classes for `flow_from_directory` (wala/ML#830, wala/ML#834). Each `do` allocates its own class as the position's marker instance (the keras dataset-loader pattern), so both dispatch tables stay keyed by distinct classes, and receives the shape-bearing arguments so the per-position generators resolve them in this frame. -->
+      <class name="directory_iterator_images" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self target_size color_mode class_mode">
+          <new def="ret" class="Ltensorflow/keras/preprocessing/image/directory_iterator_images"/>
+          <return value="ret"/>
+        </method>
+      </class>
+      <class name="directory_iterator_labels" allocatable="true">
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self target_size color_mode class_mode">
+          <new def="ret" class="Ltensorflow/keras/preprocessing/image/directory_iterator_labels"/>
+          <return value="ret"/>
+        </method>
+      </class>
     </package>
     <package name="tensorflow/keras/models/class">
       <class name="Model" allocatable="true">
