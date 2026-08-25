@@ -40,26 +40,43 @@ public class EmbeddingLookup extends PassThroughUnaryTensorGenerator {
   }
 
   /**
-   * Derives the output shape as {@code ids.shape + params.shape[1:]}: each id selects a full row of
-   * the {@code params} embedding table, so the result is indexed by {@code ids.shape} with each
-   * entry being a {@code params.shape[1:]} row.
+   * Legacy view of {@link #getDefaultShapeResult(PropagationCallGraphBuilder)}: the default mode's
+   * resolvable subset per wala/ML#716, with a wholly-unresolved result collapsing to {@code null}
+   * (⊤) as before.
    *
    * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
-   * @return The set of possible output shapes, or {@code null} (⊤) when either input's shape is
-   *     unknown or every {@code params} candidate has rank below 1.
+   * @return The set of possible output shapes, or {@code null} (⊤) when neither input resolves any
+   *     member or every {@code params} candidate has rank below 1.
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    // params is arg 0; ids is arg 1.
-    Set<List<Dimension<?>>> paramsShapes =
-        this.getShapes(builder, this.getArgumentValueNumber(builder, 0, "params", false));
-    Set<List<Dimension<?>>> idsShapes =
-        this.getShapes(builder, this.getArgumentValueNumber(builder, 1, "ids", false));
-    if (paramsShapes == null || idsShapes == null) return null;
+    return this.getDefaultShapeResult(builder).toLegacy();
+  }
+
+  /**
+   * Member-wise record view (wala/ML#718; the upgrade the legacy route anticipated, wala/ML#823):
+   * the output composes per {@code ids}-member × {@code params}-member pair as {@code ids.shape +
+   * params.shape[1:]} — each id selects a full row of the embedding table — and either input's
+   * unknown remainder rides through as the result's remainder instead of poisoning the whole set,
+   * so a partially resolvable input no longer discards what the other input proves. A wholly
+   * unresolved input still yields ⊤: with the ids' rank unknown, no complete output member exists
+   * to enumerate, which is the case wala/ML#823's own probe found unpreservable.
+   *
+   * @param builder The propagation call graph builder.
+   * @return The composed result.
+   */
+  @Override
+  protected ShapeResult getDefaultShapeResult(PropagationCallGraphBuilder builder) {
+    // params is arg 0; ids is arg 1. Exact-mode reads, so a partially-resolvable input's
+    // remainder marks rather than silently dropping (wala/ML#716, wala/ML#718).
+    ShapeResult paramsShapes = this.shapeResultOfArgument(builder, 0, "params");
+    ShapeResult idsShapes = this.shapeResultOfArgument(builder, 1, "ids");
+    if (paramsShapes.members().isEmpty() || idsShapes.members().isEmpty())
+      return ShapeResult.unknown();
 
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
-    for (List<Dimension<?>> ids : idsShapes) {
-      for (List<Dimension<?>> params : paramsShapes) {
+    for (List<Dimension<?>> ids : idsShapes.members()) {
+      for (List<Dimension<?>> params : paramsShapes.members()) {
         // The embedding table must have at least one axis (the row dimension to index into).
         if (params.isEmpty()) continue;
         List<Dimension<?>> out = new ArrayList<>(ids);
@@ -67,20 +84,37 @@ public class EmbeddingLookup extends PassThroughUnaryTensorGenerator {
         ret.add(out);
       }
     }
-    return ret.isEmpty() ? null : ret;
+    return ret.isEmpty()
+        ? ShapeResult.unknown()
+        : new ShapeResult(ret, paramsShapes.hasUnknown() || idsShapes.hasUnknown());
   }
 
   /**
-   * Collapse-safe record view (wala/ML#718): this generator transforms its input shapes in {@link
-   * #getDefaultShapes}, which the pass-through identity record path would bypass, so the record
-   * view routes through the legacy transform until a member-wise upgrade.
+   * Routes the output-shape resolution through {@link #getDefaultShapeResult} (this generator has
+   * no {@code shape} parameter), so partial results cross the generator boundary instead of
+   * collapsing at the base's {@code fromLegacy} lift (wala/ML#718; the MatMul precedent).
    *
    * @param builder The propagation call graph builder.
-   * @return The transformed result, with any partial input collapsed by the legacy view.
+   * @return The resolution result.
    */
   @Override
-  protected ShapeResult getDefaultShapeResult(PropagationCallGraphBuilder builder) {
-    return ShapeResult.fromLegacy(this.getDefaultShapes(builder));
+  protected ShapeResult getShapeResult(PropagationCallGraphBuilder builder) {
+    return this.getDefaultShapeResult(builder);
+  }
+
+  /**
+   * Resolves one argument's shapes as a record, in exact mode.
+   *
+   * @param builder The propagation call graph builder.
+   * @param position The 0-based positional index of the argument.
+   * @param name The keyword parameter name.
+   * @return The resolution result; ⊤ when the argument's value number cannot be located.
+   */
+  private ShapeResult shapeResultOfArgument(
+      PropagationCallGraphBuilder builder, int position, String name) {
+    int vn = this.getArgumentValueNumber(builder, position, name, false);
+    if (vn <= 0) return ShapeResult.unknown();
+    return this.getShapeResult(builder, this.getNode(), vn, true);
   }
 
   /**
