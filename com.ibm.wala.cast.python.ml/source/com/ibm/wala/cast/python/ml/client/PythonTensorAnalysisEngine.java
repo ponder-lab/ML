@@ -1253,7 +1253,12 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
   private static boolean takesSecondOperand(SSAInstruction instruction) {
     if (instruction instanceof SSABinaryOpInstruction) return true;
     if (instruction instanceof PythonInvokeInstruction invoke)
-      return invoke.getNumberOfPositionalParameters() >= 3;
+      // Keyword parameters count: `tf.tensordot(x, b=V, axes=0)` supplies its second operand by
+      // keyword, and a positional-only count would let such a call slip past the
+      // unaccounted-consumer guard — the sole protection against pinning or unioning from an
+      // incomplete collection (wala/ML#829).
+      return invoke.getNumberOfPositionalParameters() >= 3
+          || invoke.getNumberOfKeywordParameters() > 0;
     return false;
   }
 
@@ -2170,11 +2175,14 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       // coercions the coercing operations declare over their own operands; the rewrite itself is
       // the transfer, which also does the parameter barrier's job.
       //
-      // Conflicting declarations drop the operand, which is the rule's own decline arm rather than
-      // caution: a parameter consumed by `W32 * x` beside `V64 * x` has no single eager-effective
-      // dtype, and both consumptions succeed alone. Only direct operands are declared, which is
-      // sound because a chain cannot widen the set — past the first consumer the value is a tensor,
-      // and a tensor-tensor mismatch raises eagerly.
+      // Conflicting declarations union (wala/ML#829): a parameter consumed by `W32 * x` beside
+      // `V64 * x` has no single eager-effective dtype — both consumptions succeed alone and the
+      // body computes with a different dtype at each — so the imposed set carries both. Only
+      // direct operands are declared, which is sound because a chain cannot widen the set — past
+      // the first consumer the value is a tensor, and a tensor-tensor mismatch raises eagerly. A
+      // consumption mediated by a container (the operand packed into a tuple and splatted into a
+      // call) is outside the direct-use walk below and so outside this account, the same scope
+      // the rule is defined over.
       //
       // Restricted to parameter destinations. The coercion is real wherever it happens, but a
       // non-parameter operand's own dtype is a fact about the value the program holds, while a
@@ -2227,16 +2235,27 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             if (takesSecondOperand(use)) unaccountedCoercions.add(parameter);
             continue;
           }
+          // A declared consumer that could not establish this operand's imposed dtype (the
+          // partner is itself a parameter, or does not resolve to a single definite dtype) is
+          // just as unaccounted as an undeclared one: skipping it would let the remaining
+          // consumers pin or union with false confidence (wala/ML#829).
+          if (coercing.getUnresolvedCoercionOperands(builder).contains(lpk)) {
+            unaccountedCoercions.add(parameter);
+            continue;
+          }
           DType imposed = coercing.getOperandDTypeCoercions(builder).get(lpk);
           if (imposed == null) continue;
           dtypeCoercions.computeIfAbsent(parameter, p -> EnumSet.noneOf(DType.class)).add(imposed);
         }
       }
-      dtypeCoercions.keySet().removeAll(unaccountedCoercions);
-      // The two counts answer different questions and are reported apart (wala/ML#829): the
+      // The counts answer different questions and are reported apart (wala/ML#829): the
       // disagreement count is the population the union affects — parameters otherwise reported
       // with a dtype no op in their body computes with — while the unaccounted count is coverage
-      // debt against the operations that do not yet declare.
+      // debt against the operations (or operand resolutions) that do not yet account. The removed
+      // figure counts only parameters that actually LOST a collected coercion; an unaccounted
+      // parameter with no collected coercion was never a candidate.
+      long removed = unaccountedCoercions.stream().filter(dtypeCoercions::containsKey).count();
+      dtypeCoercions.keySet().removeAll(unaccountedCoercions);
       long disagreements = dtypeCoercions.values().stream().filter(s -> s.size() > 1).count();
       LOGGER.fine(
           () ->
@@ -2246,7 +2265,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
                   + disagreements
                   + " unioned over disagreeing consumers; "
                   + unaccountedCoercions.size()
-                  + " declined for unaccounted consumers)");
+                  + " with unaccounted consumers, "
+                  + removed
+                  + " of them declined from a collected coercion)");
       for (Map.Entry<PointsToSetVariable, EnumSet<DType>> c : dtypeCoercions.entrySet())
         LOGGER.fine(
             () -> "  coerce: " + describe(c.getKey().getPointerKey()) + " -> " + c.getValue());

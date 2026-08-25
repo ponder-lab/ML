@@ -3,7 +3,9 @@ package com.ibm.wala.cast.python.ml.client;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A generator whose operation coerces an operand's dtype as eager execution evaluates it (<a
@@ -24,8 +26,9 @@ import java.util.Map;
  *       and only <em>direct</em> operands are constrained here.
  *   <li><b>Parallel direct consumptions really do disagree.</b> {@code W32 * x} and {@code V64 * x}
  *       each succeed alone, so a parameter consumed by both has no single eager-effective dtype.
- *       The engine's conflict rule drops such an operand, which is the absence of a correct answer
- *       rather than caution.
+ *       The engine reports the union over the imposed dtypes there (wala/ML#829): the parameter
+ *       genuinely is computed at more than one dtype, at different ops, and the union states
+ *       exactly that.
  * </ul>
  *
  * <p>The set is collected from the generators that implement this interface, so an operation family
@@ -44,4 +47,20 @@ public interface OperandDTypeCoercing {
    *     resolve to a single definite dtype.
    */
   Map<PointerKey, DType> getOperandDTypeCoercions(PropagationCallGraphBuilder builder);
+
+  /**
+   * Derives the operands this operation consumes beside a partner whose imposed dtype it could not
+   * establish: the partner is itself undecided (a parameter) or does not resolve to a single
+   * definite dtype. Such an operand's coercion account is incomplete rather than absent by design
+   * (a scalar-literal partner imposes nothing at run time and is not reported here), so the engine
+   * treats the consumer as unaccounted for that operand and declines it to the fed dtype
+   * (wala/ML#829) — without this, a declared-but-unresolved consumer would vanish from the account
+   * and the remaining consumers would pin or union with false confidence.
+   *
+   * @param builder The propagation call graph builder.
+   * @return The pointer keys of operands whose partner's imposed dtype could not be established.
+   */
+  default Set<PointerKey> getUnresolvedCoercionOperands(PropagationCallGraphBuilder builder) {
+    return Collections.emptySet();
+  }
 }

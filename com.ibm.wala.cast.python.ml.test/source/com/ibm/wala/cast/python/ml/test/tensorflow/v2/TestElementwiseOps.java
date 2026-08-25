@@ -1865,6 +1865,51 @@ public class TestElementwiseOps extends AbstractTensorTest {
   }
 
   /**
+   * The keyword form of {@link #testEagerCoercionDTypeUnaccounted()}: the undeclared consumer's
+   * second operand arrives by keyword ({@code tf.tensordot(x, b=V, axes=0)}), so a positional-only
+   * account of the call's arity would let it slip past the unaccounted decline and pin {@code
+   * float32} from the remaining consumer alone (wala/ML#829).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testEagerCoercionDTypeKeywordUnaccounted()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_eager_coercion_dtype.py",
+        "keyword_unaccounted",
+        1,
+        5,
+        Map.of(2, Set.of(TENSOR_3_FLOAT64)));
+  }
+
+  /**
+   * The declared-but-unresolved arm of {@link #testEagerCoercionDTypeUnaccounted()}: {@code x * y}
+   * is a declared consumer, but each operand's partner is itself a parameter, so no imposed dtype
+   * can be established there without circularity — the account is incomplete and both parameters
+   * keep the dtype they are fed, rather than {@code x} pinning to the {@code float32} its other
+   * consumer imposes (wala/ML#829).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testEagerCoercionDTypeCircular()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_eager_coercion_dtype.py",
+        "circular",
+        2,
+        5,
+        Map.of(2, Set.of(TENSOR_3_FLOAT64), 3, Set.of(TENSOR_3_FLOAT64)));
+  }
+
+  /**
    * The no-op arm of {@link #testEagerCoercionDType()}: the argument already carries the dtype its
    * consumer imposes, so the coercion is recorded but changes nothing.
    *

@@ -422,8 +422,11 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * <p>The rewrite is unconditional on the incoming cell, unlike {@link ComputeDTypeCastOp}'s
    * floating-point-only cast: eager coercion applies to an integral NumPy argument just as it does
    * to a floating-point one, and the collected dtype is what the runtime computes with in either
-   * case. A parameter genuinely fed tensors is unaffected in substance, since a mismatch there
-   * raises eagerly and the coercion collected can only be the dtype it already carries.
+   * case. Under a singleton, a parameter genuinely fed tensors is unaffected in substance, since a
+   * mismatch there raises eagerly and the coercion collected can only be the dtype it already
+   * carries; under a disagreement union the collection is caller-blind, so a tensor-fed member is
+   * cast to every imposed dtype like any other — the union describes the body's ops, not any one
+   * caller's feed.
    *
    * <p>Where the consumers disagree, the rewrite is the union over the imposed dtypes rather than a
    * decline to the fed dtype (wala/ML#829): the parameter genuinely is computed at more than one
@@ -446,18 +449,18 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
     private final EnumSet<DType> coerced;
 
     CoerceDTypeOp(EnumSet<DType> coerced) {
-      this.coerced = coerced;
+      // A defensive copy: hashCode/equals derive from the contents, and the caller's set is the
+      // live map value — a later mutation of it would change this operator's hash in place inside
+      // WALA's hash-keyed fixpoint structures, the wala/ML#753 instability class.
+      this.coerced = EnumSet.copyOf(coerced);
     }
 
     @Override
     public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
       if (lhs == null || rhs == null || rhs.state == null) return NOT_CHANGED;
-      if (lhs.state == null) {
-        lhs.state = HashSetFactory.make();
-        for (TensorType t : rhs.state) for (DType d : this.coerced) lhs.state.add(cast(t, d));
-        return CHANGED;
-      }
-      boolean changed = false;
+      // Materializing a null state is itself a change, even from an empty rhs.
+      boolean changed = lhs.state == null;
+      if (changed) lhs.state = HashSetFactory.make();
       for (TensorType t : rhs.state)
         for (DType d : this.coerced) changed |= lhs.state.add(cast(t, d));
       return changed ? CHANGED : NOT_CHANGED;
