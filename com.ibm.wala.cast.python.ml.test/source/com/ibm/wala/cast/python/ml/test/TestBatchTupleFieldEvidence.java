@@ -60,8 +60,81 @@ public class TestBatchTupleFieldEvidence extends TestPythonMLCallGraphShape {
   @Test
   public void testTupleFieldsCarryPositionalTypes()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    Map<String, Set<TensorType>> fieldTypes = batchTupleFieldTypes(FIXTURE);
+
+    String float32 = DType.FLOAT32.name().toLowerCase(Locale.ROOT);
+    TensorType images =
+        new TensorType(
+            float32,
+            asList(DynamicDim.INSTANCE, new NumericDim(64), new NumericDim(64), new NumericDim(3)));
+    TensorType labels =
+        new TensorType(float32, asList(DynamicDim.INSTANCE, UnresolvedDim.INSTANCE));
+
+    assertTrue("The tuple's field \"0\" must carry element evidence.", fieldTypes.containsKey("0"));
+    assertTrue("The tuple's field \"1\" must carry element evidence.", fieldTypes.containsKey("1"));
+    assertEquals(
+        "Field \"0\" carries exactly the images position's type.",
+        Set.of(images),
+        fieldTypes.get("0"));
+    assertEquals(
+        "Field \"1\" carries exactly the labels position's type.",
+        Set.of(labels),
+        fieldTypes.get("1"));
+  }
+
+  /**
+   * The multi-call-site form: both sites' batch tuples pass the allocating-summary filter and union
+   * per position, while the {@code np.unique} tuple in the same fixture — a non-batch tuple whose
+   * fields also carry tensor types — is excluded by that filter, so its {@code int64} slots must
+   * not appear.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testFilterExcludesForeignTuples()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    Map<String, Set<TensorType>> fieldTypes = batchTupleFieldTypes("tf2_test_dataset76.py");
+
+    String float32 = DType.FLOAT32.name().toLowerCase(Locale.ROOT);
+    TensorType imagesA =
+        new TensorType(
+            float32,
+            asList(DynamicDim.INSTANCE, new NumericDim(64), new NumericDim(64), new NumericDim(3)));
+    TensorType imagesB =
+        new TensorType(
+            float32,
+            asList(DynamicDim.INSTANCE, new NumericDim(96), new NumericDim(96), new NumericDim(3)));
+    TensorType labels =
+        new TensorType(float32, asList(DynamicDim.INSTANCE, UnresolvedDim.INSTANCE));
+
+    assertEquals(
+        "Field \"0\" carries both sites' image types and nothing foreign.",
+        Set.of(imagesA, imagesB),
+        fieldTypes.get("0"));
+    assertEquals(
+        "Field \"1\" carries the labels type and nothing foreign.",
+        Set.of(labels),
+        fieldTypes.get("1"));
+  }
+
+  /**
+   * Runs the analysis on a fixture and collects the tensor types on the batch tuple's
+   * instance-field keys, restricted to tuples allocated in {@code flow_from_directory}'s summary.
+   *
+   * @param fixture The Python fixture to analyze.
+   * @return The types keyed by field name.
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  private Map<String, Set<TensorType>> batchTupleFieldTypes(String fixture)
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     PythonTensorAnalysisEngine engine =
-        makeEngine(PythonTensorAnalysisEngine.DEFAULT_TARGETED_CFA_DEPTH, emptyList(), FIXTURE);
+        makeEngine(PythonTensorAnalysisEngine.DEFAULT_TARGETED_CFA_DEPTH, emptyList(), fixture);
     PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
     builder.makeCallGraph(builder.getOptions());
     TensorTypeAnalysis analysis = engine.performAnalysis(builder);
@@ -92,24 +165,6 @@ public class TestBatchTupleFieldEvidence extends TestPythonMLCallGraphShape {
           .computeIfAbsent(fieldKey.getField().getName().toString(), k -> HashSetFactory.make())
           .addAll(types);
     }
-
-    String float32 = DType.FLOAT32.name().toLowerCase(Locale.ROOT);
-    TensorType images =
-        new TensorType(
-            float32,
-            asList(DynamicDim.INSTANCE, new NumericDim(64), new NumericDim(64), new NumericDim(3)));
-    TensorType labels =
-        new TensorType(float32, asList(DynamicDim.INSTANCE, UnresolvedDim.INSTANCE));
-
-    assertTrue("The tuple's field \"0\" must carry element evidence.", fieldTypes.containsKey("0"));
-    assertTrue("The tuple's field \"1\" must carry element evidence.", fieldTypes.containsKey("1"));
-    assertEquals(
-        "Field \"0\" carries exactly the images position's type.",
-        Set.of(images),
-        fieldTypes.get("0"));
-    assertEquals(
-        "Field \"1\" carries exactly the labels position's type.",
-        Set.of(labels),
-        fieldTypes.get("1"));
+    return fieldTypes;
   }
 }
