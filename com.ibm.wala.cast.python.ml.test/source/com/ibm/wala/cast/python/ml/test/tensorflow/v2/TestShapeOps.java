@@ -1643,4 +1643,26 @@ public class TestShapeOps extends AbstractTensorTest {
 
     test("tf2_test_np_transpose.py", "consume_method_axes", 1, 1, Map.of(2, Set.of(permuted)));
   }
+
+  /**
+   * A transpose result consumed by an elementwise op: the op's operand resolution reaches the
+   * summary's fresh allocation through producer delegation, so both forms must serve the
+   * node-anchored dispatch route as well as the seeded one (the tandem-registration rule; <a
+   * href="https://github.com/wala/ML/issues/835">wala/ML#835</a>).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testNpTransposeChained()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType permuted =
+        new TensorType(FLOAT_32, asList(new NumericDim(4), new NumericDim(2), new NumericDim(3)));
+    TensorType methodForm = new TensorType(FLOAT_32, asList(new NumericDim(3), new NumericDim(2)));
+
+    test("tf2_test_np_transpose.py", "consume_chained", 1, 1, Map.of(2, Set.of(permuted)));
+    test("tf2_test_np_transpose.py", "consume_method_chained", 1, 1, Map.of(2, Set.of(methodForm)));
+  }
 }

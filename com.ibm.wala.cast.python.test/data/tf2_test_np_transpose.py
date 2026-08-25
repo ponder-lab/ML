@@ -53,6 +53,18 @@ def consume_mixed(x):
     assert x.dtype == np.float32
 
 
+def consume_chained(x):
+    # The transpose result consumed by an elementwise op: the op's operand resolution reaches
+    # the summary's allocation through producer delegation, the node-anchored dispatch route.
+    assert x.shape == (4, 2, 3)
+    assert x.dtype == np.float32
+
+
+def consume_method_chained(x):
+    assert x.shape == (3, 2)
+    assert x.dtype == np.float32
+
+
 a = np.zeros((2, 3, 4), dtype=np.float32)
 consume_permuted(np.transpose(a, (2, 0, 1)))
 consume_reversed(np.transpose(a))
@@ -70,3 +82,6 @@ consume_method(b.transpose())
 
 c = np.zeros((2, 3, 4), dtype=np.float32)
 consume_method_axes(c.transpose((1, 0, 2)))
+
+consume_chained(np.transpose(a, (2, 0, 1)) + 1.0)
+consume_method_chained(b.transpose() * 2.0)
