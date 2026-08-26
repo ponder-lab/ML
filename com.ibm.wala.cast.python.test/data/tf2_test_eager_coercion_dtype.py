@@ -90,7 +90,8 @@ assert a.dtype == tf.float32 and a.shape == (3,)
 ci, cin = chained(X)
 assert ci.dtype == tf.float32 and cin.dtype == tf.float32
 
-# The `set_shape` pin owns this parameter's inflow edges, so the coercion transfer observes no
-# feed at all; the record must read unresolved (wala/ML#838).
+# The `set_shape` pin owns this parameter's inflow edges inside the analysis, but the callers'
+# states are the runtime feed regardless: a resolved float32 tensor feed under an equal
+# imposition reads unchanged, and bare conversion is safe here (wala/ML#838).
 s = shaped(tf.constant([1.0, 2.0, 3.0]))
 assert s.dtype == tf.float32 and s.shape == (3,)

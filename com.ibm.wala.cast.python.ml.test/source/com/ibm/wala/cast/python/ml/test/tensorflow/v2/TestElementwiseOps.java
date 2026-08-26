@@ -50,9 +50,10 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.Test;
@@ -1928,13 +1929,17 @@ public class TestElementwiseOps extends AbstractTensorTest {
     builder.makeCallGraph(builder.getOptions());
     TensorTypeAnalysis analysis = engine.performAnalysis(builder);
 
-    Map<String, Set<AppliedDTypeCoercion>> byFunction = new HashMap<>();
+    Map<String, List<AppliedDTypeCoercion>> byFunction = new HashMap<>();
     for (Map.Entry<PointerKey, AppliedDTypeCoercion> entry :
         analysis.getAppliedDTypeCoercions().entrySet()) {
       if (!(entry.getKey() instanceof LocalPointerKey lpk)) continue;
+      // The declaring class NAME is the full per-file function identity for Python functions
+      // (Lscript <file>/<function>), so same-named functions in other files cannot merge; the
+      // List (rather than a set) keeps value-equal records from distinct parameters or contexts
+      // countable, so the cardinality guard below cannot pass vacuously.
       String function =
           lpk.getNode().getMethod().getDeclaringClass().getName().getClassName().toString();
-      byFunction.computeIfAbsent(function, k -> new HashSet<>()).add(entry.getValue());
+      byFunction.computeIfAbsent(function, k -> new ArrayList<>()).add(entry.getValue());
     }
 
     AppliedDTypeCoercion coerced = only(byFunction, "coerced");
@@ -1959,9 +1964,12 @@ public class TestElementwiseOps extends AbstractTensorTest {
     AppliedDTypeCoercion chainedInner = only(byFunction, "chained_inner");
     assertEquals(AppliedDTypeCoercion.Resolution.UNRESOLVED, chainedInner.resolution());
 
-    // The `set_shape` pin owns the inflow edges, so no feed is observed.
+    // The `set_shape` pin owns the inflow EDGES, but the predecessors' states are the runtime
+    // feed regardless of which transfer the analysis used: a resolved float32 tensor feed under
+    // an equal imposition is safe.
     AppliedDTypeCoercion shaped = only(byFunction, "shaped");
-    assertEquals(AppliedDTypeCoercion.Resolution.UNRESOLVED, shaped.resolution());
+    assertEquals(EnumSet.of(FLOAT32), shaped.fed());
+    assertEquals(AppliedDTypeCoercion.Resolution.UNCHANGED, shaped.resolution());
 
     assertTrue("A declined parameter carries no record.", !byFunction.containsKey("unaccounted"));
     assertTrue(
@@ -1990,11 +1998,11 @@ public class TestElementwiseOps extends AbstractTensorTest {
    * @return Its single record.
    */
   private static AppliedDTypeCoercion only(
-      Map<String, Set<AppliedDTypeCoercion>> byFunction, String function) {
-    Set<AppliedDTypeCoercion> records = byFunction.get(function);
+      Map<String, List<AppliedDTypeCoercion>> byFunction, String function) {
+    List<AppliedDTypeCoercion> records = byFunction.get(function);
     assertNotNull("The " + function + " arm must carry a record.", records);
     assertEquals("One record for " + function + ".", 1, records.size());
-    return records.iterator().next();
+    return records.get(0);
   }
 
   /**

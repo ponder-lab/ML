@@ -25,9 +25,9 @@ public record AppliedDTypeCoercion(
     EnumSet<DType> fed, EnumSet<DType> imposed, boolean fedComplete) {
 
   /**
-   * Defensive normalization: both sets are required and copied, so a client can neither mutate this
-   * record's classification in place (the wala/ML#753 hazard class) nor construct it around a live
-   * set.
+   * Defensive normalization on the WRITE side: both sets are required and copied, so the record
+   * cannot be constructed around a live set (the wala/ML#753 hazard class). The read side is
+   * guarded by the accessor overrides below.
    *
    * @param fed The fed dtypes.
    * @param imposed The imposed dtypes.
@@ -38,6 +38,27 @@ public record AppliedDTypeCoercion(
     Objects.requireNonNull(imposed);
     fed = EnumSet.copyOf(fed);
     imposed = EnumSet.copyOf(imposed);
+  }
+
+  /**
+   * The fed dtypes, as a copy: the implicit accessor would hand out the live internal set, and a
+   * client mutating it would flip {@link #resolution()} and this record's hash in place.
+   *
+   * @return A copy of the fed dtypes.
+   */
+  @Override
+  public EnumSet<DType> fed() {
+    return EnumSet.copyOf(this.fed);
+  }
+
+  /**
+   * The imposed dtypes, as a copy, for the same reason as {@link #fed()}.
+   *
+   * @return A copy of the imposed dtypes.
+   */
+  @Override
+  public EnumSet<DType> imposed() {
+    return EnumSet.copyOf(this.imposed);
   }
 
   /**
