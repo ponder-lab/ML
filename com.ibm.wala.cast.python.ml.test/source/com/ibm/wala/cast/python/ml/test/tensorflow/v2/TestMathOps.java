@@ -1301,6 +1301,28 @@ public class TestMathOps extends AbstractTensorTest {
   }
 
   /**
+   * {@code tf.cast(x, y.dtype)} with a bool input (<a
+   * href="https://github.com/wala/ML/issues/481">wala/ML#481</a>): the target is another value's
+   * {@code .dtype} attribute, whose points-to set is always empty, and the result must carry the
+   * ATTRIBUTE'S dtype — never the input's, or the downstream subtraction imposes bool onto its
+   * float partner and the wrong answer becomes self-consistent through the very attribute being
+   * read.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCastAttributeDType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    TensorType floats = TensorType.of(FLOAT_32, 4, 4);
+
+    test("tf2_test_cast_attribute_dtype.py", "consume_cast", 1, 1, Map.of(2, Set.of(floats)));
+    test("tf2_test_cast_attribute_dtype.py", "consume", 1, 1, Map.of(2, Set.of(floats)));
+  }
+
+  /**
    * Generator-dispatch test for {@code tf.clip_by_value(t, clip_value_min, clip_value_max)}. Pure
    * passthrough — output shape and dtype both inherit from {@code t}.
    *

@@ -11,13 +11,11 @@ import java.util.Locale;
  * argument when {@link #getDTypeParameterPosition} returns a defined position, so this generator
  * just declares position 1 ({@code dtype}, after {@code x} at 0).
  *
- * <p><b>Current limitation</b>: in the as-shipped state, this {@code getDTypes} override is
- * bypassed because the {@code tf.cast} {@code pass_through} alias in {@code tensorflow.xml} wins
- * dispatch (the alias is intentionally retained &mdash; removing it breaks downstream tensor flow
- * for chained consumers like {@code reshape(cast(...))}; see <a
- * href="https://github.com/wala/ML/issues/509">wala/ML#509</a>). The analyzer therefore reports the
- * input dtype rather than the cast target, and {@code testCast} asserts the input dtype. Tracked by
- * <a href="https://github.com/wala/ML/issues/481">wala/ML#481</a>.
+ * <p>The historical {@code pass_through} alias that once won dispatch over this generator (the
+ * wala/ML#509 discussion) is gone: {@code tf.cast} is wired to the dedicated summary class, this
+ * override is live, {@code testCast} asserts the cast TARGET dtype, and a {@code .dtype} attribute
+ * target resolves through the attribute route with an honest unknown terminal (<a
+ * href="https://github.com/wala/ML/issues/481">wala/ML#481</a>).
  *
  * @see <a href="https://www.tensorflow.org/api_docs/python/tf/cast">tf.cast</a>
  * @author <a href="mailto:khatchad@hunter.cuny.edu">Raffi Khatchadourian</a>
