@@ -33,6 +33,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.graph.Graph;
@@ -1201,6 +1202,13 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
   private final Map<PointsToSetVariable, Set<TensorOrigin>> initOrigins;
 
   /**
+   * The coerced parameter destinations and their imposed dtypes (wala/ML#828), retained past
+   * construction so {@link #getAppliedDTypeCoercions()} can pair them with the fed side after the
+   * fixpoint (wala/ML#838).
+   */
+  private final Map<PointsToSetVariable, EnumSet<DType>> dtypeCoercions;
+
+  /**
    * Constructs the tensor type dataflow analysis over the PA assignment graph.
    *
    * @param G The dataflow graph (the PA assignment graph including implicit constraints).
@@ -1314,6 +1322,44 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
     outAccessor.set(this::getOut);
     this.init = init;
     this.initOrigins = initOrigins;
+    this.dtypeCoercions = dtypeCoercions;
+  }
+
+  /**
+   * The applied parameter dtype coercions, exposed for clients that need the FED side back
+   * (wala/ML#838): the {@link CoerceDTypeOp} rewrite reports only the imposed dtypes, which is
+   * correct for declaration writing but removes the value a bare-conversion safety check compares
+   * against, since tracing materializes an argument at its fed dtype. The fed side is read off the
+   * parameter's dataflow predecessors after the fixpoint: the edge transfer coerces in transit and
+   * never mutates a predecessor's own state, so their solved states still carry what the callers
+   * feed.
+   *
+   * <p>Call after {@link #solve}; before it, every fed side reads empty.
+   *
+   * @return One record per coerced parameter destination, keyed by the destination's {@link
+   *     PointerKey}.
+   */
+  public Map<PointerKey, AppliedDTypeCoercion> getAppliedDTypeCoercions() {
+    Map<PointerKey, AppliedDTypeCoercion> ret = HashMapFactory.make();
+    Graph<PointsToSetVariable> flowGraph = getProblem().getFlowGraph();
+
+    for (Map.Entry<PointsToSetVariable, EnumSet<DType>> coercion : this.dtypeCoercions.entrySet()) {
+      PointsToSetVariable destination = coercion.getKey();
+      EnumSet<DType> fed = EnumSet.noneOf(DType.class);
+
+      if (flowGraph.containsNode(destination))
+        for (Iterator<PointsToSetVariable> predecessors = flowGraph.getPredNodes(destination);
+            predecessors.hasNext(); ) {
+          Set<TensorType> state = this.getOutState(predecessors.next());
+          if (state == null) continue;
+          for (TensorType type : state) if (type.getDType() != null) fed.add(type.getDType());
+        }
+
+      ret.put(
+          destination.getPointerKey(),
+          new AppliedDTypeCoercion(fed, EnumSet.copyOf(coercion.getValue())));
+    }
+    return ret;
   }
 
   /**

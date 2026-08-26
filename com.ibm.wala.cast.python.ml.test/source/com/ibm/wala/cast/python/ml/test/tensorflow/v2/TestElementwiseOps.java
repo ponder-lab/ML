@@ -33,6 +33,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_NONE_32_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.UINT_8;
 
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
@@ -1884,6 +1885,75 @@ public class TestElementwiseOps extends AbstractTensorTest {
         1,
         5,
         Map.of(2, Set.of(TENSOR_3_FLOAT64)));
+  }
+
+  /**
+   * The applied coercions are exposed with their FED side (<a
+   * href="https://github.com/wala/ML/issues/838">wala/ML#838</a>): a client converting a function
+   * without writing a declaration decides safety by whether the coercion CHANGED anything, which
+   * the imposed-only report cannot answer. The {@code coerced} arm changed (fed {@code float64},
+   * imposed {@code float32}); the {@code agreeing} arm did not (the imposition equals the fed
+   * dtype); the {@code disagreeing} arm reads changed whatever the fed side, since a union means
+   * some consumer computes at a dtype no single materialization satisfies; declined parameters
+   * carry no record at all.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAppliedDTypeCoercionExposure()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine engine =
+        makeEngine(
+            com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine
+                .DEFAULT_TARGETED_CFA_DEPTH,
+            java.util.Collections.emptyList(),
+            "tf2_test_eager_coercion_dtype.py");
+    com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder builder =
+        engine.defaultCallGraphBuilder();
+    builder.makeCallGraph(builder.getOptions());
+    com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis analysis =
+        engine.performAnalysis(builder);
+
+    Map<String, com.ibm.wala.cast.python.ml.analysis.AppliedDTypeCoercion> byFunction =
+        new java.util.HashMap<>();
+    for (Map.Entry<
+            com.ibm.wala.ipa.callgraph.propagation.PointerKey,
+            com.ibm.wala.cast.python.ml.analysis.AppliedDTypeCoercion>
+        entry : analysis.getAppliedDTypeCoercions().entrySet()) {
+      if (!(entry.getKey() instanceof com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey lpk))
+        continue;
+      String declaringClass = lpk.getNode().getMethod().getDeclaringClass().getName().toString();
+      byFunction.put(
+          declaringClass.substring(declaringClass.lastIndexOf('/') + 1), entry.getValue());
+    }
+
+    com.ibm.wala.cast.python.ml.analysis.AppliedDTypeCoercion coerced = byFunction.get("coerced");
+    org.junit.Assert.assertNotNull("The coerced arm must carry a record.", coerced);
+    org.junit.Assert.assertEquals(java.util.EnumSet.of(DType.FLOAT64), coerced.fed());
+    org.junit.Assert.assertEquals(java.util.EnumSet.of(DType.FLOAT32), coerced.imposed());
+    org.junit.Assert.assertTrue("A replaced fed dtype reads changed.", coerced.changed());
+
+    com.ibm.wala.cast.python.ml.analysis.AppliedDTypeCoercion agreeing = byFunction.get("agreeing");
+    org.junit.Assert.assertNotNull("The agreeing arm must carry a record.", agreeing);
+    org.junit.Assert.assertEquals(java.util.EnumSet.of(DType.FLOAT32), agreeing.fed());
+    org.junit.Assert.assertEquals(java.util.EnumSet.of(DType.FLOAT32), agreeing.imposed());
+    org.junit.Assert.assertFalse(
+        "An imposition equal to the fed dtype reads unchanged.", agreeing.changed());
+
+    com.ibm.wala.cast.python.ml.analysis.AppliedDTypeCoercion disagreeing =
+        byFunction.get("disagreeing");
+    org.junit.Assert.assertNotNull("The disagreeing arm must carry a record.", disagreeing);
+    org.junit.Assert.assertEquals(
+        java.util.EnumSet.of(DType.FLOAT32, DType.FLOAT64), disagreeing.imposed());
+    org.junit.Assert.assertTrue("A disagreement union reads changed.", disagreeing.changed());
+
+    org.junit.Assert.assertFalse(
+        "A declined parameter carries no record.", byFunction.containsKey("unaccounted"));
+    org.junit.Assert.assertFalse(
+        "A circularly declined parameter carries no record.", byFunction.containsKey("circular"));
   }
 
   /**
