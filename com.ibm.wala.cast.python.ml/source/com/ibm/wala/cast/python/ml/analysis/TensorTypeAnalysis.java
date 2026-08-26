@@ -793,23 +793,40 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                   break;
                 case SHAPE_FILL:
                   for (TensorType composed : this.composeOperandMembers(rhs))
-                    for (TensorType s : this.plan.seedMembers())
+                    for (TensorType s : this.plan.seedMembers()) {
+                      if (s.getDims() != null) {
+                        changed |= lhs.state.add(s);
+                        continue;
+                      }
+                      // The seed's own dtype wins; only a ⊤-dtype seed borrows, and NEVER under
+                      // SHAPE_ONLY, whose whole content is that the operand's dtype says nothing
+                      // about the result's (wala/ML#481). Borrowing there would refill exactly
+                      // the pass-through the declaration exists to refuse.
+                      DType dtype =
+                          s.getDType() != DType.UNKNOWN
+                              ? s.getDType()
+                              : this.plan.kind() == TensorGenerator.TypeFeedKind.SHAPE_ONLY
+                                  ? DType.UNKNOWN
+                                  : composed.getDType();
                       changed |=
                           lhs.state.add(
-                              s.getDims() != null
-                                  ? s
-                                  : TensorType.of(
-                                      s.getDType() != DType.UNKNOWN
-                                          ? s.getDType()
-                                          : composed.getDType(),
-                                      composed.getDims(),
-                                      composed.layout()));
+                              TensorType.of(dtype, composed.getDims(), composed.layout()));
+                    }
                   break;
                 case REPLACE:
                   switch (this.plan.kind()) {
                     case DTYPE_ONLY:
                       for (TensorType t : rhs.state)
                         changed |= lhs.state.add(new TensorType(t.getDType(), null));
+                      break;
+                    case SHAPE_ONLY:
+                      // The mirror: take the shape, never the dtype. This is how a cast whose
+                      // input is typed only by dataflow still recovers its SHAPE (the wala/ML#796
+                      // class), which is why the engine withholds only the dtype-BORROWING mode
+                      // from this kind rather than the whole channel.
+                      for (TensorType t : rhs.state)
+                        changed |=
+                            lhs.state.add(TensorType.of(DType.UNKNOWN, t.getDims(), t.layout()));
                       break;
                     case PASS_THROUGH:
                     case BROADCAST:
@@ -838,6 +855,12 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
              * {@code DTYPE_ONLY} composes no shape-bearing members (the engine never installs a
              * shape-consuming feed for it).
              *
+             * <p>{@code SHAPE_ONLY} shares the {@code PASS_THROUGH} arm because the SHAPE forwards
+             * identically, so the composed members carry the operand's dtype as a by-product: every
+             * mode consuming this method MUST discard that dtype for {@code SHAPE_ONLY}, whose
+             * declaration is precisely that the operand's dtype says nothing about the result's
+             * (wala/ML#481).
+             *
              * @param rhs The incoming operand's variable.
              * @return The composed members.
              */
@@ -845,6 +868,10 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               Set<TensorType> composed = HashSetFactory.make();
               switch (this.plan.kind()) {
                 case PASS_THROUGH:
+                case SHAPE_ONLY:
+                  // Both forward the operand's SHAPE; the dtype axis is settled by the caller
+                  // (SHAPE_FILL keeps a proven seed dtype, and no dtype-borrowing mode is ever
+                  // installed for SHAPE_ONLY).
                   composed.addAll(rhs.state);
                   break;
                 case BROADCAST:

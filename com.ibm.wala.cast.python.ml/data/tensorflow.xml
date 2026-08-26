@@ -2339,14 +2339,14 @@
         </method>
       </class>
       <class name="relu" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/relu. Direct `<new>+<return>` intended to be paired with the dedicated `Relu` generator (full-passthrough on shape and dtype). CURRENT LIMITATION: the dispatch is bypassed by the retained `tf.nn.relu` `pass_through` alias (kept because removing it risks breaking chained consumers; same integration shape as `cast`, see wala/ML#509). Tracked together with wala/ML#481. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/nn/relu. Direct `<new>+<return>` intended to be paired with the dedicated `Relu` generator (full-passthrough on shape and dtype). CURRENT LIMITATION: the dispatch is bypassed by the retained `tf.nn.relu` `pass_through` alias (kept because removing it risks breaking chained consumers; same integration shape the cast summary carried before wala/ML#481 fixed it, see wala/ML#509). Tracked by wala/ML#839. -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self features name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>
         </method>
       </class>
       <class name="cast" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/cast. Direct `<new>+<return>` paired with the dedicated `Cast` generator: shape inherits from `x`; dtype intended to be the explicit `dtype` argument. CURRENT LIMITATION: the dispatch is bypassed by the retained `tf.cast` `pass_through` alias (kept because removing it breaks chained consumers; see wala/ML#509), so the analyzer reports the input dtype today. Tracked by wala/ML#481. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/cast. Direct `<new>+<return>` paired with the dedicated `Cast` generator: shape inherits from `x`; dtype is the explicit `dtype` argument, including a `.dtype` attribute target resolved through the attribute route (wala/ML#481). The historical `pass_through` alias that once bypassed this dispatch (wala/ML#509) is gone. -->
         <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self x dtype name">
           <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="res"/>

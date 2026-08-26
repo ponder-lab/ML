@@ -36,6 +36,7 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_NONE_2_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_UNKNOWN_SHAPE_UNKNOWN_DTYPE;
+import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.UNKNOWN;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 
@@ -1298,6 +1299,76 @@ public class TestMathOps extends AbstractTensorTest {
   public void testCast()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_cast.py", "f", 1, 1, Map.of(2, Set.of(TENSOR_3_INT32)));
+  }
+
+  /**
+   * {@code tf.cast(x, y.dtype)} with a bool input (<a
+   * href="https://github.com/wala/ML/issues/481">wala/ML#481</a>): the target is another value's
+   * {@code .dtype} attribute, whose points-to set is always empty, and the result must carry the
+   * ATTRIBUTE'S dtype — never the input's, or the downstream subtraction imposes bool onto its
+   * float partner and the wrong answer becomes self-consistent through the very attribute being
+   * read.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCastAttributeDType()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_cast_attribute_dtype.py",
+        "consume_cast",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+    test(
+        "tf2_test_cast_attribute_dtype.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_4_4_FLOAT32)));
+  }
+
+  /**
+   * The unresolvable-target arm of {@link #testCastAttributeDType()}: when the cast target does not
+   * resolve, the result must read an UNKNOWN dtype, never the input's. The pass-through must be
+   * refused on BOTH routes, the generator's own default and the type-feed channel, which would
+   * otherwise write the input's dtype back over the unknown seed (<a
+   * href="https://github.com/wala/ML/issues/481">wala/ML#481</a>).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCastUnresolvedTargetIsNotTheInput()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_cast_attribute_dtype.py",
+        "consume_unresolved_target",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(UNKNOWN, asList(new NumericDim(4), new NumericDim(4))))));
+  }
+
+  /**
+   * Two {@code .dtype}-target casts with DIFFERENT source dtypes: each must recover its own target
+   * rather than the union of both, though both anchor on the same summary (<a
+   * href="https://github.com/wala/ML/issues/481">wala/ML#481</a>).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testCastAttributeTargetsDoNotUnion()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_cast_attribute_dtype.py",
+        "consume_int_target",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(INT_64, 4, 4))));
   }
 
   /**

@@ -2029,6 +2029,16 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
         if (feed == null) continue;
         if (mode == TensorTypeAnalysis.FeedMode.SHAPE_FILL
             && feed.kind() == TensorGenerator.TypeFeedKind.DTYPE_ONLY) continue;
+        // The mirror carve-out (wala/ML#481): a SHAPE_ONLY declaration has no operand-to-result
+        // dtype relation, so the mode that BORROWS a dtype from the operand must not fire for it.
+        // Without this, a shape-resolved seed whose dtype did not resolve takes DTYPE_FILL and is
+        // written back carrying the operand's dtype, reinstating the very pass-through the
+        // generator's default exists to refuse. REPLACE is deliberately still allowed, exactly as
+        // the DTYPE_ONLY guard above still allows it: under SHAPE_ONLY it writes the operand's
+        // shape with an unknown dtype, which is how a cast whose input is typed only by dataflow
+        // keeps recovering its shape.
+        if (mode == TensorTypeAnalysis.FeedMode.DTYPE_FILL
+            && feed.kind() == TensorGenerator.TypeFeedKind.SHAPE_ONLY) continue;
         List<PointsToSetVariable> feedSources = new ArrayList<>();
         for (PointerKey operandKey : feed.operands()) {
           if (builder.getPropagationSystem().isImplicit(operandKey)) continue;
