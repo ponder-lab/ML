@@ -33,6 +33,7 @@ import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ssa.DefUse;
 import com.ibm.wala.ssa.SSAInstruction;
+import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.graph.Graph;
@@ -1133,6 +1134,10 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
           @Override
           public UnaryOperator<TensorVariable> getEdgeTransferFunction(
               PointsToSetVariable src, PointsToSetVariable dst) {
+            // KEEP IN TANDEM with stateBlockedDestinations (wala/ML#838): the contamination
+            // reach's stop set re-encodes which arms of this chain discard incoming state, so a
+            // new state-rewriting arm here must be registered there (as a reach source if it
+            // diverges from the runtime value, as a blocker if it discards inflow).
             if (drops.contains(dst)) {
               return DropOp.INSTANCE;
             } else if (armSuppressions.containsKey(dst) && armSuppressions.get(dst).contains(src)) {
@@ -1199,6 +1204,26 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
   private final Map<PointsToSetVariable, Set<TensorType>> init;
 
   private final Map<PointsToSetVariable, Set<TensorOrigin>> initOrigins;
+
+  /**
+   * The coerced parameter destinations and their imposed dtypes (wala/ML#828), retained past
+   * construction so {@link #getAppliedDTypeCoercions()} can pair them with the fed side after the
+   * fixpoint (wala/ML#838).
+   */
+  private final Map<PointsToSetVariable, EnumSet<DType>> dtypeCoercions;
+
+  /**
+   * Destinations whose edge transfers discard incoming state ({@code drops} and {@code set_shapes}
+   * pins): a coercion destination BEHIND one of these cannot contaminate a fed side downstream, so
+   * the contamination reach stops at them (wala/ML#838).
+   */
+  private final Set<PointsToSetVariable> stateBlockedDestinations;
+
+  /** Whether {@link #solve} has completed at least once; gates the post-solve accessors. */
+  private boolean solved;
+
+  /** The memoized post-solve coercion report; inputs are frozen once {@link #solved} is set. */
+  private Map<PointerKey, AppliedDTypeCoercion> appliedDTypeCoercions;
 
   /**
    * Constructs the tensor type dataflow analysis over the PA assignment graph.
@@ -1314,6 +1339,127 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
     outAccessor.set(this::getOut);
     this.init = init;
     this.initOrigins = initOrigins;
+    // A defensive deep copy (the wala/ML#753 aliasing class). CAVEAT, deliberate and documented:
+    // the transfer-function closures capture the CALLER'S map (WALA builds equations lazily at
+    // the first solve), so a caller mutating it between construction and solve() desynchronizes
+    // the fixpoint from this report; the engine freezes the map before construction, and any
+    // other caller must do the same.
+    Map<PointsToSetVariable, EnumSet<DType>> retained = HashMapFactory.make();
+    for (Map.Entry<PointsToSetVariable, EnumSet<DType>> e : dtypeCoercions.entrySet())
+      retained.put(e.getKey(), EnumSet.copyOf(e.getValue()));
+    this.dtypeCoercions = retained;
+    // The stop set mirrors the EDGE DISPATCH ORDER below: drops always win their edges; a
+    // set_shapes pin blocks state only where no type feed outranks it (typeFeeds is checked
+    // first in getEdgeTransferFunction, and a TypeFeedOp edge passes operand state through).
+    // KEEP IN TANDEM with getEdgeTransferFunction's chain, or the contamination reach declares
+    // decontamination on a node that leaks.
+    this.stateBlockedDestinations = HashSetFactory.make(drops);
+    this.stateBlockedDestinations.addAll(set_shapes.keySet());
+    this.stateBlockedDestinations.removeAll(typeFeeds.keySet());
+  }
+
+  @Override
+  public boolean solve(com.ibm.wala.util.MonitorUtil.IProgressMonitor monitor)
+      throws com.ibm.wala.util.CancelException {
+    // A re-solve (the engine's own restore-seeds sequence re-solves) moves predecessor states,
+    // so the memoized report is invalidated with it.
+    this.appliedDTypeCoercions = null;
+    boolean result = super.solve(monitor);
+    this.solved = true;
+    return result;
+  }
+
+  /**
+   * The applied parameter dtype coercions, exposed for clients that need the FED side back
+   * (wala/ML#838): the {@link CoerceDTypeOp} rewrite reports only the imposed dtypes, which is
+   * correct for declaration writing but removes the value a bare-conversion safety check compares
+   * against, since tracing materializes an argument at its fed dtype. The fed side is read off the
+   * destination's flow-graph PREDECESSORS after the fixpoint: an edge statement reads a
+   * predecessor's OUT, which the rewrite never touches, so predecessor states are the callers'
+   * runtime feed — except where another coerced parameter sits upstream, whose analysis-side state
+   * forwards its IMPOSED dtype where the runtime forwards the original value; the contamination
+   * reach ({@link #coercionForwardReach}) degrades those records. A null or empty predecessor and a
+   * dtype-⊤ member degrade completeness likewise, so ignorance never launders into safety.
+   *
+   * @return One record per coerced parameter destination, keyed by the destination's {@link
+   *     PointerKey}.
+   * @throws IllegalStateException if called before {@link #solve} has completed.
+   */
+  public Map<PointerKey, AppliedDTypeCoercion> getAppliedDTypeCoercions() {
+    if (!this.solved)
+      throw new IllegalStateException(
+          "The applied coercions are a post-solve view; call solve() first (wala/ML#838).");
+    if (this.appliedDTypeCoercions != null) return this.appliedDTypeCoercions;
+
+    Graph<PointsToSetVariable> flowGraph = getProblem().getFlowGraph();
+    Set<PointsToSetVariable> contaminated = this.coercionForwardReach(flowGraph);
+
+    Map<PointerKey, AppliedDTypeCoercion> ret = HashMapFactory.make();
+    for (Map.Entry<PointsToSetVariable, EnumSet<DType>> coercion : this.dtypeCoercions.entrySet()) {
+      PointsToSetVariable destination = coercion.getKey();
+      EnumSet<DType> fed = EnumSet.noneOf(DType.class);
+      boolean incomplete = !flowGraph.containsNode(destination);
+
+      if (!incomplete)
+        for (Iterator<PointsToSetVariable> predecessors = flowGraph.getPredNodes(destination);
+            predecessors.hasNext(); ) {
+          Set<TensorType> state = this.getOutState(predecessors.next());
+          // A null (⊤) or empty predecessor is an unaccounted caller: it must DEGRADE the record
+          // rather than vanish, or an unknown feed reads as safety — an absence taken for
+          // evidence of absence.
+          if (state == null || state.isEmpty()) {
+            incomplete = true;
+            continue;
+          }
+          for (TensorType type : state) {
+            if (type.getDType() == DType.UNKNOWN) incomplete = true;
+            else fed.add(type.getDType());
+          }
+        }
+
+      // A coercion destination strictly upstream contaminates the fed side: the runtime forwards
+      // the caller's ORIGINAL value where the analysis forwards the rewritten state, so what the
+      // predecessors carry may be an imposed dtype wearing a fed disguise (wala/ML#838). The
+      // reach respects state-blocking edges, so a pin or drop between the two decontaminates.
+      if (contaminated.contains(destination)) incomplete = true;
+
+      ret.put(
+          destination.getPointerKey(),
+          new AppliedDTypeCoercion(fed, coercion.getValue(), !incomplete));
+    }
+    return this.appliedDTypeCoercions = Collections.unmodifiableMap(ret);
+  }
+
+  /**
+   * One forward pass from every coercion destination over the flow graph: the nodes a rewritten
+   * parameter state can reach through at least one edge. Propagation stops at state-blocking
+   * destinations ({@code drops} and {@code set_shapes} pins), whose transfers discard incoming
+   * state, so a coercion behind a pin does not contaminate what lies beyond it. A destination
+   * reached by ITSELF through a cycle counts as contaminated, deliberately: its own rewritten state
+   * re-feeding it is the same disguise.
+   *
+   * @param flowGraph The solved flow graph.
+   * @return The forward-reachable set, excluding zero-length paths.
+   */
+  private Set<PointsToSetVariable> coercionForwardReach(Graph<PointsToSetVariable> flowGraph) {
+    Set<PointsToSetVariable> reached = HashSetFactory.make();
+    List<PointsToSetVariable> worklist = new ArrayList<>();
+    for (PointsToSetVariable source : this.dtypeCoercions.keySet())
+      if (flowGraph.containsNode(source)) worklist.add(source);
+
+    while (!worklist.isEmpty()) {
+      PointsToSetVariable node = worklist.remove(worklist.size() - 1);
+      for (Iterator<PointsToSetVariable> successors = flowGraph.getSuccNodes(node);
+          successors.hasNext(); ) {
+        PointsToSetVariable successor = successors.next();
+        if (!reached.add(successor)) continue;
+        // A state-blocking destination absorbs the flow: it is marked reached (its own record, if
+        // coerced, degrades) but nothing propagates past it.
+        if (this.stateBlockedDestinations.contains(successor)) continue;
+        worklist.add(successor);
+      }
+    }
+    return reached;
   }
 
   /**

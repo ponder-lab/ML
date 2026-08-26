@@ -34,6 +34,19 @@ def agreeing(y):
     return W * y
 
 
+def chained_inner(y):
+    return W * y
+
+
+def chained(x):
+    return W * x, chained_inner(x)
+
+
+def shaped(x):
+    x.set_shape((3,))
+    return W * x
+
+
 X = np.array([1.0, 2.0, 3.0])
 assert X.dtype == np.float64
 
@@ -67,6 +80,19 @@ assert c32.dtype == tf.float32
 assert cy.dtype == np.float64
 
 # The argument already carries the dtype its consumer imposes, so the coercion changes nothing.
-Y = np.array([1.0, 2.0, 3.0], dtype=np.float32)
-a = agreeing(Y)
+Z = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+a = agreeing(Z)
 assert a.dtype == tf.float32 and a.shape == (3,)
+
+# The chained forwarding call: at run time `chained_inner` receives the ORIGINAL value, but the
+# analysis forwards the upstream parameter's coerced state, so the inner parameter's fed side is
+# contaminated by the imposed dtype and must read unresolved rather than unchanged (wala/ML#838).
+ci, cin = chained(X)
+assert ci.dtype == tf.float32 and ci.shape == (3,)
+assert cin.dtype == tf.float32 and cin.shape == (3,)
+
+# The `set_shape` pin owns this parameter's inflow edges inside the analysis, but the callers'
+# states are the runtime feed regardless: a resolved float32 tensor feed under an equal
+# imposition reads unchanged, and bare conversion is safe here (wala/ML#838).
+s = shaped(tf.constant([1.0, 2.0, 3.0]))
+assert s.dtype == tf.float32 and s.shape == (3,)

@@ -32,11 +32,29 @@ import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_INT32_UNKNOWN_SHAPE;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.TENSOR_NONE_32_FLOAT32;
 import static com.ibm.wala.cast.python.ml.test.tensorflow.v2.AbstractTensorTest.UINT_8;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT64;
+import static java.util.Collections.emptyList;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
+import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
+import com.ibm.wala.cast.python.ml.analysis.AppliedDTypeCoercion;
+import com.ibm.wala.cast.python.ml.analysis.TensorTypeAnalysis;
+import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.ipa.callgraph.propagation.LocalPointerKey;
+import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.Test;
@@ -1884,6 +1902,117 @@ public class TestElementwiseOps extends AbstractTensorTest {
         1,
         5,
         Map.of(2, Set.of(TENSOR_3_FLOAT64)));
+  }
+
+  /**
+   * The applied coercions are exposed with their FED side (<a
+   * href="https://github.com/wala/ML/issues/838">wala/ML#838</a>): a client converting a function
+   * without writing a declaration decides safety by whether the coercion CHANGED anything, which
+   * the imposed-only report cannot answer. The {@code coerced} arm changed (fed {@code float64},
+   * imposed {@code float32}); the {@code agreeing} arm did not (a complete fed side equal to the
+   * imposition); the {@code disagreeing} arm reads changed whatever the fed side, since a union
+   * means some consumer computes at a dtype no single materialization satisfies; the {@code
+   * chained} inner parameter reads UNRESOLVED, since its inflow carries the upstream parameter's
+   * IMPOSED dtype where the runtime forwards the original value; the {@code shaped} parameter reads
+   * UNRESOLVED, since the {@code set_shape} pin owns its inflow edges and the coercion transfer
+   * observes no feed; declined parameters carry no record at all.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testAppliedDTypeCoercionExposure()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    PythonTensorAnalysisEngine engine = makeEngine(emptyList(), "tf2_test_eager_coercion_dtype.py");
+    PythonSSAPropagationCallGraphBuilder builder = engine.defaultCallGraphBuilder();
+    builder.makeCallGraph(builder.getOptions());
+    TensorTypeAnalysis analysis = engine.performAnalysis(builder);
+
+    Map<String, List<AppliedDTypeCoercion>> byFunction = new HashMap<>();
+    for (Map.Entry<PointerKey, AppliedDTypeCoercion> entry :
+        analysis.getAppliedDTypeCoercions().entrySet()) {
+      if (!(entry.getKey() instanceof LocalPointerKey))
+        fail("Non-local coercion key: " + entry.getKey());
+      LocalPointerKey lpk = (LocalPointerKey) entry.getKey();
+      // The FULL TypeName is the per-file function identity (its package half carries the file),
+      // so same-named functions in other files cannot merge; lookups below match on the trailing
+      // function segment. The List (rather than a set) keeps value-equal records from distinct
+      // parameters or contexts countable, so the cardinality guard below cannot pass vacuously.
+      String identity = lpk.getNode().getMethod().getDeclaringClass().getName().toString();
+      byFunction.computeIfAbsent(identity, k -> new ArrayList<>()).add(entry.getValue());
+    }
+
+    AppliedDTypeCoercion coerced = only(byFunction, "coerced");
+    assertEquals(EnumSet.of(FLOAT64), coerced.fed());
+    assertEquals(EnumSet.of(FLOAT32), coerced.imposed());
+    assertEquals(AppliedDTypeCoercion.Resolution.CHANGED, coerced.resolution());
+    assertTrue("A replaced fed dtype reads changed.", coerced.changed());
+
+    AppliedDTypeCoercion agreeing = only(byFunction, "agreeing");
+    assertEquals(EnumSet.of(FLOAT32), agreeing.fed());
+    assertEquals(EnumSet.of(FLOAT32), agreeing.imposed());
+    assertEquals(AppliedDTypeCoercion.Resolution.UNCHANGED, agreeing.resolution());
+    assertTrue("A complete equal imposition reads unchanged.", !agreeing.changed());
+
+    AppliedDTypeCoercion disagreeing = only(byFunction, "disagreeing");
+    assertEquals(EnumSet.of(FLOAT64), disagreeing.fed());
+    assertEquals(EnumSet.of(FLOAT32, FLOAT64), disagreeing.imposed());
+    assertEquals(AppliedDTypeCoercion.Resolution.CHANGED, disagreeing.resolution());
+
+    // The chained inner parameter: the analysis-side inflow is the upstream parameter's coerced
+    // state, so the record must degrade rather than read a false unchanged.
+    AppliedDTypeCoercion chainedInner = only(byFunction, "chained_inner");
+    assertEquals(AppliedDTypeCoercion.Resolution.UNRESOLVED, chainedInner.resolution());
+
+    // The `set_shape` pin owns the inflow EDGES, but the predecessors' states are the runtime
+    // feed regardless of which transfer the analysis used: a resolved float32 tensor feed under
+    // an equal imposition is safe.
+    AppliedDTypeCoercion shaped = only(byFunction, "shaped");
+    assertEquals(EnumSet.of(FLOAT32), shaped.fed());
+    assertEquals(AppliedDTypeCoercion.Resolution.UNCHANGED, shaped.resolution());
+
+    assertTrue(
+        "A declined parameter carries no record.",
+        byFunction.keySet().stream().noneMatch(k -> k.endsWith("/unaccounted")));
+    assertTrue(
+        "A circularly declined parameter carries no record.",
+        byFunction.keySet().stream().noneMatch(k -> k.endsWith("/circular")));
+
+    // The record's classification, pinned directly: an empty fed side and an incomplete fed side
+    // are both UNRESOLVED, never vacuously unchanged (absence is not evidence of absence), and
+    // the two-valued convenience folds UNRESOLVED into `changed` (wrong-but-safe for a
+    // safety-deciding client).
+    assertEquals(
+        AppliedDTypeCoercion.Resolution.UNRESOLVED,
+        new AppliedDTypeCoercion(EnumSet.noneOf(DType.class), EnumSet.of(FLOAT32), true)
+            .resolution());
+    AppliedDTypeCoercion incomplete =
+        new AppliedDTypeCoercion(EnumSet.of(FLOAT32), EnumSet.of(FLOAT32), false);
+    assertEquals(AppliedDTypeCoercion.Resolution.UNRESOLVED, incomplete.resolution());
+    assertTrue("An unresolved record folds into changed.", incomplete.changed());
+  }
+
+  /**
+   * The single coercion record of one fixture function, asserting the cardinality so a second
+   * recorded parameter or context cannot silently make the assertions test an arbitrary survivor.
+   *
+   * @param byFunction The records grouped by function name.
+   * @param function The fixture function.
+   * @return Its single record.
+   */
+  private static AppliedDTypeCoercion only(
+      Map<String, List<AppliedDTypeCoercion>> byFunction, String function) {
+    List<AppliedDTypeCoercion> records = null;
+    for (Map.Entry<String, List<AppliedDTypeCoercion>> entry : byFunction.entrySet())
+      if (entry.getKey().endsWith("/" + function)) {
+        assertTrue("One function identity matches " + function + ".", records == null);
+        records = entry.getValue();
+      }
+    assertNotNull("The " + function + " arm must carry a record.", records);
+    assertEquals("One record for " + function + ".", 1, records.size());
+    return records.get(0);
   }
 
   /**
