@@ -88,7 +88,8 @@ assert a.dtype == tf.float32 and a.shape == (3,)
 # analysis forwards the upstream parameter's coerced state, so the inner parameter's fed side is
 # contaminated by the imposed dtype and must read unresolved rather than unchanged (wala/ML#838).
 ci, cin = chained(X)
-assert ci.dtype == tf.float32 and cin.dtype == tf.float32
+assert ci.dtype == tf.float32 and ci.shape == (3,)
+assert cin.dtype == tf.float32 and cin.shape == (3,)
 
 # The `set_shape` pin owns this parameter's inflow edges inside the analysis, but the callers'
 # states are the runtime feed regardless: a resolved float32 tensor feed under an equal

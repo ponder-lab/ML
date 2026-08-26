@@ -38,6 +38,7 @@ import static java.util.Collections.emptyList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.analysis.AppliedDTypeCoercion;
@@ -1932,14 +1933,15 @@ public class TestElementwiseOps extends AbstractTensorTest {
     Map<String, List<AppliedDTypeCoercion>> byFunction = new HashMap<>();
     for (Map.Entry<PointerKey, AppliedDTypeCoercion> entry :
         analysis.getAppliedDTypeCoercions().entrySet()) {
-      if (!(entry.getKey() instanceof LocalPointerKey lpk)) continue;
-      // The declaring class NAME is the full per-file function identity for Python functions
-      // (Lscript <file>/<function>), so same-named functions in other files cannot merge; the
-      // List (rather than a set) keeps value-equal records from distinct parameters or contexts
-      // countable, so the cardinality guard below cannot pass vacuously.
-      String function =
-          lpk.getNode().getMethod().getDeclaringClass().getName().getClassName().toString();
-      byFunction.computeIfAbsent(function, k -> new ArrayList<>()).add(entry.getValue());
+      if (!(entry.getKey() instanceof LocalPointerKey))
+        fail("Non-local coercion key: " + entry.getKey());
+      LocalPointerKey lpk = (LocalPointerKey) entry.getKey();
+      // The FULL TypeName is the per-file function identity (its package half carries the file),
+      // so same-named functions in other files cannot merge; lookups below match on the trailing
+      // function segment. The List (rather than a set) keeps value-equal records from distinct
+      // parameters or contexts countable, so the cardinality guard below cannot pass vacuously.
+      String identity = lpk.getNode().getMethod().getDeclaringClass().getName().toString();
+      byFunction.computeIfAbsent(identity, k -> new ArrayList<>()).add(entry.getValue());
     }
 
     AppliedDTypeCoercion coerced = only(byFunction, "coerced");
@@ -1971,9 +1973,12 @@ public class TestElementwiseOps extends AbstractTensorTest {
     assertEquals(EnumSet.of(FLOAT32), shaped.fed());
     assertEquals(AppliedDTypeCoercion.Resolution.UNCHANGED, shaped.resolution());
 
-    assertTrue("A declined parameter carries no record.", !byFunction.containsKey("unaccounted"));
     assertTrue(
-        "A circularly declined parameter carries no record.", !byFunction.containsKey("circular"));
+        "A declined parameter carries no record.",
+        byFunction.keySet().stream().noneMatch(k -> k.endsWith("/unaccounted")));
+    assertTrue(
+        "A circularly declined parameter carries no record.",
+        byFunction.keySet().stream().noneMatch(k -> k.endsWith("/circular")));
 
     // The record's classification, pinned directly: an empty fed side and an incomplete fed side
     // are both UNRESOLVED, never vacuously unchanged (absence is not evidence of absence), and
@@ -1999,7 +2004,12 @@ public class TestElementwiseOps extends AbstractTensorTest {
    */
   private static AppliedDTypeCoercion only(
       Map<String, List<AppliedDTypeCoercion>> byFunction, String function) {
-    List<AppliedDTypeCoercion> records = byFunction.get(function);
+    List<AppliedDTypeCoercion> records = null;
+    for (Map.Entry<String, List<AppliedDTypeCoercion>> entry : byFunction.entrySet())
+      if (entry.getKey().endsWith("/" + function)) {
+        assertTrue("One function identity matches " + function + ".", records == null);
+        records = entry.getValue();
+      }
     assertNotNull("The " + function + " arm must carry a record.", records);
     assertEquals("One record for " + function + ".", 1, records.size());
     return records.get(0);

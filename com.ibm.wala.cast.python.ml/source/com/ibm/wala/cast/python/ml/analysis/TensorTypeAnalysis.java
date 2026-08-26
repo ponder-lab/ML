@@ -1134,6 +1134,10 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
           @Override
           public UnaryOperator<TensorVariable> getEdgeTransferFunction(
               PointsToSetVariable src, PointsToSetVariable dst) {
+            // KEEP IN TANDEM with stateBlockedDestinations (wala/ML#838): the contamination
+            // reach's stop set re-encodes which arms of this chain discard incoming state, so a
+            // new state-rewriting arm here must be registered there (as a reach source if it
+            // diverges from the runtime value, as a blocker if it discards inflow).
             if (drops.contains(dst)) {
               return DropOp.INSTANCE;
             } else if (armSuppressions.containsKey(dst) && armSuppressions.get(dst).contains(src)) {
@@ -1344,13 +1348,22 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
     for (Map.Entry<PointsToSetVariable, EnumSet<DType>> e : dtypeCoercions.entrySet())
       retained.put(e.getKey(), EnumSet.copyOf(e.getValue()));
     this.dtypeCoercions = retained;
+    // The stop set mirrors the EDGE DISPATCH ORDER below: drops always win their edges; a
+    // set_shapes pin blocks state only where no type feed outranks it (typeFeeds is checked
+    // first in getEdgeTransferFunction, and a TypeFeedOp edge passes operand state through).
+    // KEEP IN TANDEM with getEdgeTransferFunction's chain, or the contamination reach declares
+    // decontamination on a node that leaks.
     this.stateBlockedDestinations = HashSetFactory.make(drops);
     this.stateBlockedDestinations.addAll(set_shapes.keySet());
+    this.stateBlockedDestinations.removeAll(typeFeeds.keySet());
   }
 
   @Override
   public boolean solve(com.ibm.wala.util.MonitorUtil.IProgressMonitor monitor)
       throws com.ibm.wala.util.CancelException {
+    // A re-solve (the engine's own restore-seeds sequence re-solves) moves predecessor states,
+    // so the memoized report is invalidated with it.
+    this.appliedDTypeCoercions = null;
     boolean result = super.solve(monitor);
     this.solved = true;
     return result;
@@ -1360,12 +1373,13 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * The applied parameter dtype coercions, exposed for clients that need the FED side back
    * (wala/ML#838): the {@link CoerceDTypeOp} rewrite reports only the imposed dtypes, which is
    * correct for declaration writing but removes the value a bare-conversion safety check compares
-   * against, since tracing materializes an argument at its fed dtype. The fed side is CAPTURED
-   * inside the coercion edge transfers, which alone see the pre-rewrite inflow; a post-hoc
-   * reconstruction from predecessor states would read post-rewrite values, miss what other edge
-   * dispatches never delivered, and mistake a chained coerced parameter's imposed dtype for a fed
-   * one. Each record's completeness accounts for unresolved inflow and for coercion destinations in
-   * the backward slice, degrading to unresolved rather than laundering ignorance into safety.
+   * against, since tracing materializes an argument at its fed dtype. The fed side is read off the
+   * destination's flow-graph PREDECESSORS after the fixpoint: an edge statement reads a
+   * predecessor's OUT, which the rewrite never touches, so predecessor states are the callers'
+   * runtime feed — except where another coerced parameter sits upstream, whose analysis-side state
+   * forwards its IMPOSED dtype where the runtime forwards the original value; the contamination
+   * reach ({@link #coercionForwardReach}) degrades those records. A null or empty predecessor and a
+   * dtype-⊤ member degrade completeness likewise, so ignorance never launders into safety.
    *
    * @return One record per coerced parameter destination, keyed by the destination's {@link
    *     PointerKey}.
@@ -1413,7 +1427,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
           destination.getPointerKey(),
           new AppliedDTypeCoercion(fed, coercion.getValue(), !incomplete));
     }
-    return this.appliedDTypeCoercions = ret;
+    return this.appliedDTypeCoercions = Collections.unmodifiableMap(ret);
   }
 
   /**
@@ -1442,7 +1456,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
         // A state-blocking destination absorbs the flow: it is marked reached (its own record, if
         // coerced, degrades) but nothing propagates past it.
         if (this.stateBlockedDestinations.contains(successor)) continue;
-        if (flowGraph.containsNode(successor)) worklist.add(successor);
+        worklist.add(successor);
       }
     }
     return reached;
