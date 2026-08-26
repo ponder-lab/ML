@@ -5208,71 +5208,11 @@ public abstract class TensorGenerator {
         this.getArgumentPointsToSet(
             builder, this.getDTypeParameterPosition(), this.getDTypeParameterName());
 
-    if (pointsToSet == null || pointsToSet.isEmpty()) {
-      // An empty points-to set covers two very different cases. When the argument's definition is
-      // a `.dtype` ATTRIBUTE READ (which allocates nothing, so its set is always empty), the
-      // dtype was explicitly supplied: resolve the read's source tensor, in this anchor's own
-      // frame first, then through the callers (the delegation form, wala/ML#686) — and when even
-      // that fails, the honest answer is a tensor of UNKNOWN dtype, never the generator's
-      // default, which for a cast is the INPUT dtype: the one thing the call exists to change
-      // (wala/ML#481). In every other case — the argument genuinely absent, or resolution
-      // delegated through the synthetic-`do` sentinel — the generator's default stands.
-      PythonPropertyRead localRead = this.getLocalDTypeAttributeRead(valNum);
-      if (localRead != null) {
-        Set<DType> viaAttribute = this.getDTypeFromLocalDTypeAttributeArgument(builder, localRead);
-        return viaAttribute != null && !viaAttribute.isEmpty()
-            ? viaAttribute
-            : EnumSet.of(DType.UNKNOWN);
-      }
-      Set<DType> viaCallers =
-          this.getDTypeFromDTypeAttributeArgument(
-              builder, this.getDTypeParameterPosition(), this.getDTypeParameterName());
-      if (viaCallers != null && !viaCallers.isEmpty()) return viaCallers;
-      return getDefaultDTypes(builder);
-    }
-    // The dtype points-to set is non-empty, meaning that the dtype was explicitly set.
-    return this.getDTypesFromDTypeArgument(builder, pointsToSet);
-  }
-
-  /**
-   * The {@code .dtype} attribute read defining this anchor's dtype argument, when there is one in
-   * this anchor's own frame (wala/ML#481).
-   *
-   * @param argumentValueNumber The dtype argument's value number, possibly a sentinel.
-   * @return The defining read, or {@code null} when the argument is not an in-frame {@code .dtype}
-   *     read.
-   */
-  private PythonPropertyRead getLocalDTypeAttributeRead(int argumentValueNumber) {
-    if (argumentValueNumber == Integer.MAX_VALUE) return null;
-    CGNode node = this.getNode();
-    if (node.getDU() == null || node.getIR() == null) return null;
-    SSAInstruction def = node.getDU().getDef(argumentValueNumber);
-    if (!(def instanceof PythonPropertyRead propRead)) return null;
-    SymbolTable symbolTable = node.getIR().getSymbolTable();
-    int memberVn = propRead.getMemberRef();
-    if (!symbolTable.isStringConstant(memberVn)
-        || !"dtype".equals(symbolTable.getStringValue(memberVn))) return null;
-    return propRead;
-  }
-
-  /**
-   * The in-frame arm of {@link #getDTypeFromDTypeAttributeArgument(PropagationCallGraphBuilder,
-   * int, String)}: when this anchor holds the invoke itself, the {@code .dtype} argument's defining
-   * {@link PythonPropertyRead} sits in this node's own IR, not a caller's (wala/ML#481).
-   *
-   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
-   * @param read The argument's defining {@code .dtype} read in this anchor's frame.
-   * @return The source tensor's dtypes, or {@code null} when the source does not resolve.
-   */
-  private Set<DType> getDTypeFromLocalDTypeAttributeArgument(
-      PropagationCallGraphBuilder builder, PythonPropertyRead read) {
-    try {
-      Set<DType> dtypes = this.getDTypes(builder, this.getNode(), read.getObjectRef());
-      return dtypes == null || dtypes.isEmpty() ? null : dtypes;
-    } catch (IllegalArgumentException e) {
-      // The source tensor does not resolve here.
-      return null;
-    }
+    // If the argument dtype is not specified.
+    if (pointsToSet == null || pointsToSet.isEmpty()) return getDefaultDTypes(builder);
+    else
+      // The dtype points-to set is non-empty, meaning that the dtype was explicitly set.
+      return this.getDTypesFromDTypeArgument(builder, pointsToSet);
   }
 
   /**

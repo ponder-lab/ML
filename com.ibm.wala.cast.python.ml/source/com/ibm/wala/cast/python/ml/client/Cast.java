@@ -1,8 +1,12 @@
 package com.ibm.wala.cast.python.ml.client;
 
+import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
+import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
+import java.util.EnumSet;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Generator for {@code tf.cast(x, dtype, name=None)}. Intended output shape inherits from {@code
@@ -82,5 +86,31 @@ public class Cast extends PassThroughUnaryTensorGenerator {
   @Override
   protected String getDTypeParameterName() {
     return Parameters.DTYPE.getName();
+  }
+
+  /**
+   * The cast's dtype when the {@code dtype} argument does not resolve through its points-to set.
+   * The superclass would pass the INPUT's dtype through, which for a cast asserts the one thing the
+   * call exists to change: a bool input then flows on as the result, and a downstream elementwise
+   * consumer imposes bool on its float partner (<a
+   * href="https://github.com/wala/ML/issues/481">wala/ML#481</a>).
+   *
+   * <p>The unresolved case is dominated by a {@code .dtype} ATTRIBUTE target ({@code tf.cast(x,
+   * y.dtype)}), whose points-to set is always empty because the read allocates nothing, so the
+   * target is recovered from the callers' frames first (the wala/ML#686 route, which is where the
+   * read lives: this generator anchors on the summary's return value). Failing that, the honest
+   * answer is a tensor of unknown dtype, which also breaks the corruption's self-consistency, since
+   * an unknown partner makes the downstream coercion decline rather than impose.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The recovered target dtype, or {@code unknown}.
+   */
+  @Override
+  protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
+    Set<DType> viaAttribute =
+        this.getDTypeFromDTypeAttributeArgument(
+            builder, this.getDTypeParameterPosition(), this.getDTypeParameterName());
+    if (viaAttribute != null && !viaAttribute.isEmpty()) return viaAttribute;
+    return EnumSet.of(DType.UNKNOWN);
   }
 }
