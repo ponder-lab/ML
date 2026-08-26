@@ -1954,6 +1954,27 @@ public class TestElementwiseOps extends AbstractTensorTest {
         "A declined parameter carries no record.", byFunction.containsKey("unaccounted"));
     org.junit.Assert.assertFalse(
         "A circularly declined parameter carries no record.", byFunction.containsKey("circular"));
+
+    // The record's three-valued classification, pinned directly: an empty fed side is
+    // UNRESOLVED, never vacuously unchanged (absence is not evidence of absence), and the
+    // two-valued convenience folds it into `changed` (wrong-but-safe for a safety-deciding
+    // client).
+    com.ibm.wala.cast.python.ml.analysis.AppliedDTypeCoercion unresolved =
+        new com.ibm.wala.cast.python.ml.analysis.AppliedDTypeCoercion(
+            java.util.EnumSet.noneOf(DType.class), java.util.EnumSet.of(DType.FLOAT32));
+    org.junit.Assert.assertEquals(
+        com.ibm.wala.cast.python.ml.analysis.AppliedDTypeCoercion.Resolution.UNRESOLVED,
+        unresolved.resolution());
+    org.junit.Assert.assertTrue("An unresolved fed side folds into changed.", unresolved.changed());
+    org.junit.Assert.assertEquals(
+        com.ibm.wala.cast.python.ml.analysis.AppliedDTypeCoercion.Resolution.UNCHANGED,
+        agreeing.resolution());
+    org.junit.Assert.assertEquals(
+        com.ibm.wala.cast.python.ml.analysis.AppliedDTypeCoercion.Resolution.CHANGED,
+        coerced.resolution());
+    org.junit.Assert.assertEquals(
+        com.ibm.wala.cast.python.ml.analysis.AppliedDTypeCoercion.Resolution.CHANGED,
+        disagreeing.resolution());
   }
 
   /**

@@ -19,18 +19,54 @@ import java.util.EnumSet;
 public record AppliedDTypeCoercion(EnumSet<DType> fed, EnumSet<DType> imposed) {
 
   /**
-   * Whether the applied coercion CHANGED the parameter's dtype at some consumer: {@code false}
-   * exactly when the imposition is a SINGLETON that contains every fed dtype. An imposition equal
-   * to the fed dtype is recorded for conflict detection but changes nothing, and a conversion
-   * without a declaration is safe there. A disagreement union (wala/ML#829) always reads changed,
-   * whatever the fed side: the parameter is computed at more than one dtype, so at least one
-   * consumer's imposition differs from any single materialization. Subset reasoning would be
-   * unsound there, since the union hides WHICH consumer imposes which dtype. An empty fed side
-   * under a singleton reads unchanged, since nothing observable was replaced.
+   * The three answers the fed-beside-imposed comparison can give. Ignorance is first-class: reading
+   * an empty fed side as "unchanged" would be an absence read as evidence of absence, exactly the
+   * failure a safety-deciding client must not inherit from its instrument.
+   */
+  public enum Resolution {
+    /** Some consumer computes with a dtype other than a fed one; bare conversion diverges. */
+    CHANGED,
+
+    /**
+     * The callers resolved and the imposition is a singleton equal to what they feed; the coercion
+     * changed nothing and bare conversion is safe.
+     */
+    UNCHANGED,
+
+    /**
+     * No caller-side dtype resolved, so whether the coercion changed anything is UNKNOWN: not a
+     * hazard signal, but never safety either.
+     */
+    UNRESOLVED
+  }
+
+  /**
+   * Classifies this coercion. {@link Resolution#UNCHANGED} exactly when the fed side is NON-EMPTY
+   * and the imposition is a singleton containing every fed dtype. A disagreement union
+   * (wala/ML#829) always reads {@link Resolution#CHANGED}, whatever the fed side: the parameter is
+   * computed at more than one dtype, so at least one consumer's imposition differs from any single
+   * materialization, and subset reasoning would be unsound since the union hides WHICH consumer
+   * imposes which dtype. An empty fed side reads {@link Resolution#UNRESOLVED}.
    *
-   * @return {@code true} iff some consumer computes with a dtype other than a fed one.
+   * @return The three-valued classification.
+   */
+  public Resolution resolution() {
+    if (this.fed.isEmpty()) return Resolution.UNRESOLVED;
+    return this.imposed.size() == 1 && this.imposed.containsAll(this.fed)
+        ? Resolution.UNCHANGED
+        : Resolution.CHANGED;
+  }
+
+  /**
+   * The two-valued convenience over {@link #resolution()}: {@code false} only for {@link
+   * Resolution#UNCHANGED}. {@link Resolution#UNRESOLVED} folds into {@code true} deliberately —
+   * wrong-but-safe for a safety-deciding client, which declines and loses an optimization rather
+   * than shipping a break; a client wanting the distinction reads {@link #resolution()} (or {@link
+   * #fed}'s emptiness) directly.
+   *
+   * @return {@code true} unless the callers resolved and the coercion changed nothing.
    */
   public boolean changed() {
-    return this.imposed.size() != 1 || !this.imposed.containsAll(this.fed);
+    return this.resolution() != Resolution.UNCHANGED;
   }
 }
