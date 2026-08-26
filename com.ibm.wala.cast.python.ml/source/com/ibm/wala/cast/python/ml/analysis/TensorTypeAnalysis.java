@@ -441,6 +441,23 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
   static final class CoerceDTypeOp extends UnaryOperator<TensorVariable> {
 
     /**
+     * What one destination's coercion edges observed arriving BEFORE the rewrite (wala/ML#838): the
+     * fed dtypes, and whether the observation is incomplete — a ⊤ inflow (a {@code null}
+     * predecessor state) or a dtype-⊤ member ({@link DType#UNKNOWN}) was seen, so the fed set does
+     * not account for every caller. Captured inside the transfer because only the transfer holds
+     * the pre-rewrite inflow; reconstructing it afterwards from predecessor states reads
+     * post-rewrite values and misses what the edge dispatch never delivered.
+     */
+    static final class FedCapture {
+
+      /** The resolved fed dtypes observed; never carries {@link DType#UNKNOWN}. */
+      final EnumSet<DType> fed = EnumSet.noneOf(DType.class);
+
+      /** Whether some inflow carried no resolvable dtype, making {@link #fed} a lower bound. */
+      boolean incomplete;
+    }
+
+    /**
      * The dtypes eager execution imposes on this destination. A singleton pins; a larger set is the
      * union over disagreeing consumers (wala/ML#829): the parameter genuinely is computed at more
      * than one dtype, at different ops, and each incoming member is cast to every imposed dtype so
@@ -449,16 +466,47 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
      */
     private final EnumSet<DType> coerced;
 
-    CoerceDTypeOp(EnumSet<DType> coerced) {
+    /**
+     * The destination this operator serves when it is an EDGE transfer, or {@code null} for the
+     * node transfer, whose input is the meet of already-coerced edges and must not be captured as
+     * fed (wala/ML#838).
+     */
+    private final PointsToSetVariable destination;
+
+    /** The shared per-destination capture sink; keyed by {@link #destination}. */
+    private final Map<PointsToSetVariable, FedCapture> fedSink;
+
+    CoerceDTypeOp(
+        EnumSet<DType> coerced,
+        PointsToSetVariable destination,
+        Map<PointsToSetVariable, FedCapture> fedSink) {
       // A defensive copy: hashCode/equals derive from the contents, and the caller's set is the
       // live map value — a later mutation of it would change this operator's hash in place inside
       // WALA's hash-keyed fixpoint structures, the wala/ML#753 instability class.
       this.coerced = EnumSet.copyOf(coerced);
+      this.destination = destination;
+      this.fedSink = fedSink;
     }
 
     @Override
     public byte evaluate(TensorVariable lhs, TensorVariable rhs) {
-      if (lhs == null || rhs == null || rhs.state == null) return NOT_CHANGED;
+      if (lhs == null || rhs == null) return NOT_CHANGED;
+      FedCapture capture =
+          this.destination == null
+              ? null
+              : this.fedSink.computeIfAbsent(this.destination, k -> new FedCapture());
+      if (rhs.state == null) {
+        // A ⊤ inflow: this caller's feed is unaccounted, which must degrade the record rather
+        // than vanish (wala/ML#838) — an absence read as evidence of absence is the failure the
+        // capture exists to prevent.
+        if (capture != null) capture.incomplete = true;
+        return NOT_CHANGED;
+      }
+      if (capture != null)
+        for (TensorType t : rhs.state) {
+          if (t.getDType() == DType.UNKNOWN) capture.incomplete = true;
+          else capture.fed.add(t.getDType());
+        }
       // Materializing a null state is itself a change, even from an empty rhs.
       boolean changed = lhs.state == null;
       if (changed) lhs.state = HashSetFactory.make();
@@ -495,7 +543,12 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
 
     @Override
     public boolean equals(Object o) {
-      return o instanceof CoerceDTypeOp && ((CoerceDTypeOp) o).coerced.equals(this.coerced);
+      // Destination identity distinguishes edge operators of different destinations that impose
+      // the same set; hashCode stays coerced-bits-only (equal objects still hash equal, and a
+      // destination has no stable id to mix in — the wala/ML#753 constraint).
+      return o instanceof CoerceDTypeOp
+          && ((CoerceDTypeOp) o).coerced.equals(this.coerced)
+          && ((CoerceDTypeOp) o).destination == this.destination;
     }
 
     @Override
@@ -564,7 +617,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Map<PointsToSetVariable, EnumSet<DType>> dtypeCoercions,
       Set<PointsToSetVariable> iterationProducts,
       AtomicReference<Function<PointsToSetVariable, TensorVariable>> outAccessor,
-      Map<PointerKey, AnalysisError> errorLog) {
+      Map<PointerKey, AnalysisError> errorLog,
+      Map<PointsToSetVariable, CoerceDTypeOp.FedCapture> fedSink) {
     return new IKilldallFramework<PointsToSetVariable, TensorVariable>() {
 
       @Override
@@ -1114,7 +1168,9 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
             } else if (conv3ds.contains(node)) {
               return new ConvOp(3, node);
             } else if (dtypeCoercions.containsKey(node)) {
-              return new CoerceDTypeOp(dtypeCoercions.get(node));
+              // The node transfer's input is the meet of already-coerced edges, so it captures
+              // no fed side (wala/ML#838).
+              return new CoerceDTypeOp(dtypeCoercions.get(node), null, fedSink);
             } else if (computeDTypeCasts.contains(node)) {
               return ComputeDTypeCastOp.INSTANCE;
             } else if (parameters.contains(node)) {
@@ -1145,7 +1201,7 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
             } else if (refinements.containsKey(dst)) {
               return new RefineShapeOp(refinements.get(dst), dst);
             } else if (dtypeCoercions.containsKey(dst)) {
-              return new CoerceDTypeOp(dtypeCoercions.get(dst));
+              return new CoerceDTypeOp(dtypeCoercions.get(dst), dst, fedSink);
             } else if (computeDTypeCasts.contains(dst)) {
               return ComputeDTypeCastOp.INSTANCE;
             } else if (parameters.contains(dst)) {
@@ -1207,6 +1263,12 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
    * fixpoint (wala/ML#838).
    */
   private final Map<PointsToSetVariable, EnumSet<DType>> dtypeCoercions;
+
+  /** The per-destination fed captures the coercion edge transfers record (wala/ML#838). */
+  private final Map<PointsToSetVariable, CoerceDTypeOp.FedCapture> fedSink;
+
+  /** Whether {@link #solve} has completed at least once; gates the post-solve accessors. */
+  private boolean solved;
 
   /**
    * Constructs the tensor type dataflow analysis over the PA assignment graph.
@@ -1271,7 +1333,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
         dtypeCoercions,
         iterationProducts,
         errorLog,
-        new AtomicReference<>());
+        new AtomicReference<>(),
+        HashMapFactory.make());
   }
 
   /**
@@ -1301,7 +1364,8 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
       Map<PointsToSetVariable, EnumSet<DType>> dtypeCoercions,
       Set<PointsToSetVariable> iterationProducts,
       Map<PointerKey, AnalysisError> errorLog,
-      AtomicReference<Function<PointsToSetVariable, TensorVariable>> outAccessor) {
+      AtomicReference<Function<PointsToSetVariable, TensorVariable>> outAccessor,
+      Map<PointsToSetVariable, CoerceDTypeOp.FedCapture> fedSink) {
     super(
         createProblem(
             G,
@@ -1318,48 +1382,95 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
             dtypeCoercions,
             iterationProducts,
             outAccessor,
-            errorLog));
+            errorLog,
+            fedSink));
     outAccessor.set(this::getOut);
     this.init = init;
     this.initOrigins = initOrigins;
-    this.dtypeCoercions = dtypeCoercions;
+    // A defensive deep copy (the wala/ML#753 aliasing class): the engine's map is live during
+    // collection, and the report must describe the impositions the fixpoint actually applied,
+    // not whatever the map holds when a client finally reads it.
+    Map<PointsToSetVariable, EnumSet<DType>> retained = HashMapFactory.make();
+    for (Map.Entry<PointsToSetVariable, EnumSet<DType>> e : dtypeCoercions.entrySet())
+      retained.put(e.getKey(), EnumSet.copyOf(e.getValue()));
+    this.dtypeCoercions = retained;
+    this.fedSink = fedSink;
+  }
+
+  @Override
+  public boolean solve(com.ibm.wala.util.MonitorUtil.IProgressMonitor monitor)
+      throws com.ibm.wala.util.CancelException {
+    boolean result = super.solve(monitor);
+    this.solved = true;
+    return result;
   }
 
   /**
    * The applied parameter dtype coercions, exposed for clients that need the FED side back
    * (wala/ML#838): the {@link CoerceDTypeOp} rewrite reports only the imposed dtypes, which is
    * correct for declaration writing but removes the value a bare-conversion safety check compares
-   * against, since tracing materializes an argument at its fed dtype. The fed side is read off the
-   * parameter's dataflow predecessors after the fixpoint: the edge transfer coerces in transit and
-   * never mutates a predecessor's own state, so their solved states still carry what the callers
-   * feed.
-   *
-   * <p>Call after {@link #solve}; before it, every fed side reads empty.
+   * against, since tracing materializes an argument at its fed dtype. The fed side is CAPTURED
+   * inside the coercion edge transfers, which alone see the pre-rewrite inflow; a post-hoc
+   * reconstruction from predecessor states would read post-rewrite values, miss what other edge
+   * dispatches never delivered, and mistake a chained coerced parameter's imposed dtype for a fed
+   * one. Each record's completeness accounts for unresolved inflow and for coercion destinations in
+   * the backward slice, degrading to unresolved rather than laundering ignorance into safety.
    *
    * @return One record per coerced parameter destination, keyed by the destination's {@link
    *     PointerKey}.
+   * @throws IllegalStateException if called before {@link #solve} has completed.
    */
   public Map<PointerKey, AppliedDTypeCoercion> getAppliedDTypeCoercions() {
-    Map<PointerKey, AppliedDTypeCoercion> ret = HashMapFactory.make();
-    Graph<PointsToSetVariable> flowGraph = getProblem().getFlowGraph();
+    if (!this.solved)
+      throw new IllegalStateException(
+          "The applied coercions are a post-solve view; call solve() first (wala/ML#838).");
 
+    Map<PointerKey, AppliedDTypeCoercion> ret = HashMapFactory.make();
     for (Map.Entry<PointsToSetVariable, EnumSet<DType>> coercion : this.dtypeCoercions.entrySet()) {
       PointsToSetVariable destination = coercion.getKey();
-      EnumSet<DType> fed = EnumSet.noneOf(DType.class);
-
-      if (flowGraph.containsNode(destination))
-        for (Iterator<PointsToSetVariable> predecessors = flowGraph.getPredNodes(destination);
-            predecessors.hasNext(); ) {
-          Set<TensorType> state = this.getOutState(predecessors.next());
-          if (state == null) continue;
-          for (TensorType type : state) if (type.getDType() != null) fed.add(type.getDType());
-        }
-
+      CoerceDTypeOp.FedCapture capture = this.fedSink.get(destination);
+      EnumSet<DType> fed =
+          capture == null ? EnumSet.noneOf(DType.class) : EnumSet.copyOf(capture.fed);
+      // The fed side is complete only when every coercion edge delivered a resolved dtype AND no
+      // upstream coerced parameter can have contaminated the inflow: a chained call forwards the
+      // caller's ORIGINAL value at run time, but the analysis forwards the upstream parameter's
+      // rewritten state, so a coercion destination anywhere in the backward slice means the
+      // captured fed may be an imposed dtype wearing a fed disguise (wala/ML#838).
+      boolean complete =
+          capture != null && !capture.incomplete && !this.fedThroughCoercedParameter(destination);
       ret.put(
           destination.getPointerKey(),
-          new AppliedDTypeCoercion(fed, EnumSet.copyOf(coercion.getValue())));
+          new AppliedDTypeCoercion(fed, coercion.getValue(), complete));
     }
     return ret;
+  }
+
+  /**
+   * Whether another coercion destination reaches this one backwards through the flow graph, in
+   * which case the captured fed side may carry the upstream parameter's IMPOSED dtype rather than
+   * what the runtime forwards (the chained-coercion contamination of wala/ML#838).
+   *
+   * @param destination The coerced destination whose inflow is examined.
+   * @return {@code true} iff some other coercion destination is a transitive predecessor.
+   */
+  private boolean fedThroughCoercedParameter(PointsToSetVariable destination) {
+    Graph<PointsToSetVariable> flowGraph = getProblem().getFlowGraph();
+    if (!flowGraph.containsNode(destination)) return false;
+
+    Set<PointsToSetVariable> visited = HashSetFactory.make();
+    List<PointsToSetVariable> worklist = new ArrayList<>();
+    worklist.add(destination);
+    while (!worklist.isEmpty()) {
+      PointsToSetVariable node = worklist.remove(worklist.size() - 1);
+      for (Iterator<PointsToSetVariable> predecessors = flowGraph.getPredNodes(node);
+          predecessors.hasNext(); ) {
+        PointsToSetVariable predecessor = predecessors.next();
+        if (!visited.add(predecessor)) continue;
+        if (this.dtypeCoercions.containsKey(predecessor)) return true;
+        if (flowGraph.containsNode(predecessor)) worklist.add(predecessor);
+      }
+    }
+    return false;
   }
 
   /**
