@@ -5891,8 +5891,20 @@ public abstract class TensorGenerator {
 
   /** How a type feed composes the fed members from its operand state (wala/ML#736, wala/ML#682). */
   public enum TypeFeedKind {
-    /** Each operand member's dtype is lifted as an unknown-shape member. */
+    /**
+     * Each operand member's dtype is lifted as an unknown-shape member: the operation preserves its
+     * input's dtype but TRANSFORMS its shape, so it declares no operand-to-result shape relation.
+     */
     DTYPE_ONLY,
+
+    /**
+     * Each operand member's shape is taken while the result's own dtype stands: the mirror of
+     * {@link #DTYPE_ONLY} for an operation that preserves its input's shape but TRANSFORMS its
+     * dtype, so it declares no operand-to-result DTYPE relation. Feeding one anyway would assert
+     * the input dtype as the result's, which for a cast is the one thing the call exists to change
+     * (wala/ML#481).
+     */
+    SHAPE_ONLY,
 
     /** Each operand member forwards unchanged (the operation preserves its input's type). */
     PASS_THROUGH,

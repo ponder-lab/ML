@@ -89,6 +89,21 @@ public class Cast extends PassThroughUnaryTensorGenerator {
   }
 
   /**
+   * A cast preserves its input's SHAPE and transforms its DTYPE, so it declares a {@link
+   * TypeFeedKind#SHAPE_ONLY} feed rather than the superclass's pass-through (<a
+   * href="https://github.com/wala/ML/issues/481">wala/ML#481</a>). Under a pass-through
+   * declaration, a result whose target dtype did not resolve would be written back carrying the
+   * INPUT's dtype through the feed channel, reinstating the corruption the default below refuses.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used to build the call graph.
+   * @return The shape-only feed over the input operand, or {@code null} when none is located.
+   */
+  @Override
+  protected TypeFeed getTypeFeed(PropagationCallGraphBuilder builder) {
+    return this.getTypeFeed(builder, TypeFeedKind.SHAPE_ONLY);
+  }
+
+  /**
    * The cast's dtype when the {@code dtype} argument does not resolve through its points-to set.
    * The superclass would pass the INPUT's dtype through, which for a cast asserts the one thing the
    * call exists to change: a bool input then flows on as the result, and a downstream elementwise

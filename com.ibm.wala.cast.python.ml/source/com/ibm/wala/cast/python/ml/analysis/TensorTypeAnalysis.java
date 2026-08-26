@@ -810,6 +810,14 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
                       for (TensorType t : rhs.state)
                         changed |= lhs.state.add(new TensorType(t.getDType(), null));
                       break;
+                    case SHAPE_ONLY:
+                      // The mirror: take the shape, never the dtype. Unreachable while the engine
+                      // withholds dtype-borrowing modes from this kind, and correct if it ever
+                      // does not.
+                      for (TensorType t : rhs.state)
+                        changed |=
+                            lhs.state.add(TensorType.of(DType.UNKNOWN, t.getDims(), t.layout()));
+                      break;
                     case PASS_THROUGH:
                     case BROADCAST:
                       for (TensorType composed : this.composeOperandMembers(rhs))
@@ -844,6 +852,10 @@ public class TensorTypeAnalysis extends DataflowSolver<PointsToSetVariable, Tens
               Set<TensorType> composed = HashSetFactory.make();
               switch (this.plan.kind()) {
                 case PASS_THROUGH:
+                case SHAPE_ONLY:
+                  // Both forward the operand's SHAPE; the dtype axis is settled by the caller
+                  // (SHAPE_FILL keeps a proven seed dtype, and no dtype-borrowing mode is ever
+                  // installed for SHAPE_ONLY).
                   composed.addAll(rhs.state);
                   break;
                 case BROADCAST:
