@@ -40,10 +40,16 @@ import java.util.logging.Logger;
  * such a subscript into a call {@code slice(x, start, stop, step)} where {@code start} and {@code
  * step} are {@code None} and {@code stop} is the constant bound.
  *
- * <p>Scope: computes the {@code [:k]} case exactly &mdash; constant {@code stop}, {@code start}
- * that is {@code None} or {@code 0}, {@code step} that is {@code None} or {@code 1}. The output
- * shape is {@code [NumericDim(k), receiver[1:]&hellip;]}; the receiver's trailing dimensions are
- * preserved unchanged.
+ * <p>Scope: computes the {@code [:k]} case &mdash; resolvable {@code stop}, {@code start} that is
+ * {@code None} or {@code 0}, {@code step} that is {@code None} or {@code 1}. The bound is an upper
+ * limit rather than the resulting extent, so it is clamped to the receiver's leading axis and a
+ * negative bound counts from the end; against an axis whose size is unknown the extent is unknown
+ * too, which is what the runtime reports. The receiver's trailing dimensions are preserved
+ * unchanged.
+ *
+ * <p>A bound need not be a literal. It resolves through the flow-sensitive chase, which folds
+ * arithmetic over configuration constants and sees through {@code int()} coercion, so a bound
+ * written as {@code i * int(total / parts)} computes rather than degrading (wala/ML#841).
  *
  * <p>For any other pattern ({@code [a:b]}, {@code [::s]}, non-constant bounds) the leading axis is
  * DEGRADED rather than passed through, because a slice that shortens its source does not have the
