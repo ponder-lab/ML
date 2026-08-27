@@ -1662,4 +1662,60 @@ public class TestShapeOps extends AbstractTensorTest {
     test("tf2_test_np_transpose.py", "consume_chained", 1, 1, Map.of(2, Set.of(permuted)));
     test("tf2_test_np_transpose.py", "consume_method_chained", 1, 1, Map.of(2, Set.of(methodForm)));
   }
+
+  /**
+   * A slice whose bounds are a constant expression rather than literals no longer reports the
+   * SOURCE's extent (wala/ML#841). It previously answered {@code (4096,)} where the slice yields
+   * {@code (1024,)}, and now answers an unresolved extent, which is the honest answer rather than
+   * the correct one.
+   *
+   * <p>The distinction matters more than the precision does. A single concrete extent, asserted
+   * confidently and wrong, gives a consumer nothing marking it uncertain to defend against, and a
+   * declaration written from it rejects the calls the function actually receives. An unresolved
+   * extent emits a {@code None} axis, which stays satisfiable.
+   *
+   * <p>{@link #testSliceLiteralBounds()} is the control and it computes {@code 1024} exactly,
+   * shortening the same source to the same length with literal bounds. So the path that computes a
+   * slice extent exists and works, and does not cover bounds that are a constant expression.
+   * Computing this case rather than degrading it is the remaining half of wala/ML#841; the
+   * degradation is the half that stops a program breaking.
+   *
+   * <p>The degradation target follows {@code sliceExtent}'s convention: slice bounds are Python
+   * scalars, so an uncomputable extent over a fixed axis is a fixed runtime size the analysis could
+   * not compute, hence {@code Unresolved} rather than {@code Dynamic} (wala/ML#721).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceComputedBounds()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_slice_computed_bounds.py",
+        "consume_computed",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(UINT_8, asList(UnresolvedDim.INSTANCE)))));
+  }
+
+  /**
+   * Control for {@link #testSliceComputedBounds()}: the same shortening written with literals.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceLiteralBounds()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_slice_computed_bounds.py",
+        "consume_literal",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 1024))));
+  }
 }

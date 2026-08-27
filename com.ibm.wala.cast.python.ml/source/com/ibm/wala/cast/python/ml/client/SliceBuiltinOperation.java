@@ -40,12 +40,19 @@ import java.util.logging.Logger;
  * such a subscript into a call {@code slice(x, start, stop, step)} where {@code start} and {@code
  * step} are {@code None} and {@code stop} is the constant bound.
  *
- * <p>Scope: handles only the {@code [:k]} case &mdash; constant {@code stop}, {@code start} that is
- * {@code None} or {@code 0}, {@code step} that is {@code None} or {@code 1}. The output shape is
- * {@code [NumericDim(k), receiver[1:]&hellip;]}; the receiver's trailing dimensions are preserved
- * unchanged. For all other slice patterns ({@code [a:b]}, {@code [::s]}, non-constant bounds, etc.)
- * the generator falls back to returning the receiver's shape unchanged, matching the existing
- * passthrough behavior of the underlying {@code slice} builtin summary.
+ * <p>Scope: computes the {@code [:k]} case exactly &mdash; constant {@code stop}, {@code start}
+ * that is {@code None} or {@code 0}, {@code step} that is {@code None} or {@code 1}. The output
+ * shape is {@code [NumericDim(k), receiver[1:]&hellip;]}; the receiver's trailing dimensions are
+ * preserved unchanged.
+ *
+ * <p>For any other pattern ({@code [a:b]}, {@code [::s]}, non-constant bounds) the leading axis is
+ * DEGRADED rather than passed through, because a slice that shortens its source does not have the
+ * source's extent and reporting one asserts a length the slice cannot produce (wala/ML#841). Only a
+ * subscript that leaves the leading axis whole ({@code [:]}, {@code [0:]}, {@code [::1]}) still
+ * carries the receiver's extent forward. The multi-dimensional path reaches the same answer through
+ * {@code sliceExtent}, and the degradation target follows its convention: {@code Unresolved} for an
+ * uncomputable extent over a fixed axis, {@code Dynamic} only where the receiver's axis already
+ * carries {@code None}-evidence (wala/ML#721).
  *
  * <p>Broader slice vocabulary is out of scope per wala/ML#405.
  *
@@ -185,23 +192,50 @@ public class SliceBuiltinOperation extends TensorGenerator {
       return ret;
     }
 
-    // The invoke didn't match the canonical `[:k]` pattern, so we don't know the exact output
-    // shape. If the compound subscript includes `tf.newaxis` tokens (e.g., `x[:n, ..., newaxis]`),
-    // each one inserts a size-1 dim. Append them to the receiver shape — better than dropping the
+    // The invoke didn't match the canonical `[:k]` pattern, so the leading axis's extent is not
+    // computable here. Whether the receiver's extent may be carried forward depends on whether the
+    // subscript constrains that axis at all: a full slice (`[:]`, `[0:]`, `[::1]`) preserves it,
+    // while any supplied bound or non-unit step shortens it by an amount we could not compute.
+    // Passing the receiver's extent through in the latter case asserts a length the slice does not
+    // produce, which is worse than admitting ignorance: a single concrete extent, asserted
+    // confidently and wrong, gives a consumer nothing to defend against (wala/ML#841).
+    boolean constrainsLeadingAxis =
+        !startOK || !stepOK || !isNone(builder, view.callerNode(), view.stopVn());
+
+    // If the compound subscript includes `tf.newaxis` tokens (e.g., `x[:n, ..., newaxis]`), each
+    // one inserts a size-1 dim. Append them to the receiver shape — better than dropping the
     // size-1 dim entirely, which otherwise leaks the pre-subscript shape downstream.
     int newaxisCount = countNewaxisArgs(builder, view.callerNode(), view.call());
-    if (newaxisCount == 0) {
-      LOGGER.fine(() -> "Non-[:k] pattern; passing receiver shape through");
+
+    if (!constrainsLeadingAxis && newaxisCount == 0) {
+      LOGGER.fine(
+          () -> "Non-[:k] pattern leaving the leading axis whole; passing receiver through");
       return receiverShapes;
     }
+
     Set<List<Dimension<?>>> ret = HashSetFactory.make();
     for (List<Dimension<?>> shape : receiverShapes) {
+      if (shape == null || shape.isEmpty()) return receiverShapes;
       List<Dimension<?>> out = new ArrayList<>(shape);
+      if (constrainsLeadingAxis) {
+        // Slice bounds are Python scalars, so an uncomputable extent over a fixed axis is a fixed
+        // runtime size the analysis could not compute; only slicing a `None` axis yields a `None`
+        // extent (wala/ML#721). Matches `sliceExtent`'s convention for the multi-dim path.
+        Dimension<?> recv = out.get(0);
+        out.set(0, recv instanceof DynamicDim ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE);
+      }
       for (int i = 0; i < newaxisCount; i++) out.add(new NumericDim(1));
       ret.add(out);
     }
     final int capturedCount = newaxisCount;
-    LOGGER.fine(() -> "Non-[:k] pattern; appended " + capturedCount + " newaxis dim(s) → " + ret);
+    LOGGER.fine(
+        () ->
+            "Non-[:k] pattern; leadingAxisConstrained="
+                + constrainsLeadingAxis
+                + " newaxis="
+                + capturedCount
+                + " → "
+                + ret);
     return ret;
   }
 
