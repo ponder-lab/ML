@@ -400,6 +400,18 @@ public class TensorGeneratorFactory {
   }
 
   /**
+   * Whether the called function is the {@code __call__} of a Keras layer whose output carries the
+   * input's shape and dtype unchanged (wala/ML#840).
+   *
+   * @param calledFunction The called function's type.
+   * @return {@code true} iff it is one of the shape-preserving layer calls.
+   */
+  private static boolean isShapePreservingLayerCall(TypeReference calledFunction) {
+    return TensorFlowTypes.SHAPE_PRESERVING_LAYER_CALLS.stream()
+        .anyMatch(m -> isType(calledFunction, m.getDeclaringClass()));
+  }
+
+  /**
    * Checks if the given type reference matches the expected type reference by name.
    *
    * @param tr the type reference to check
@@ -1866,6 +1878,8 @@ public class TensorGeneratorFactory {
     else if (isType(calledFunction, MODEL_CALL.getDeclaringClass())) return new ModelCall(source);
     else if (isType(calledFunction, FLATTEN_LAYER_CALL.getDeclaringClass()))
       return new FlattenCall(source);
+    else if (isShapePreservingLayerCall(calledFunction))
+      return new ShapePreservingLayerCall(source);
     else if (isType(calledFunction, GLOBAL_AVERAGE_POOLING_1D_CALL.getDeclaringClass()))
       return new GlobalAveragePooling1DCall(source);
     else if (isType(calledFunction, EMBEDDING_LAYER_CALL.getDeclaringClass()))

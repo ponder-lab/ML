@@ -16,6 +16,7 @@ import com.ibm.wala.types.FieldReference;
 import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeName;
 import com.ibm.wala.types.TypeReference;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -2070,6 +2071,34 @@ public class TensorFlowTypes extends PythonTypes {
               PythonTypes.pythonLoader,
               TypeName.string2TypeName("Ltensorflow/keras/layers/Flatten/" + CALLABLE_METHOD_NAME)),
           AstMethodReference.fnSelector);
+
+  /**
+   * The {@code __call__} synthetic methods on the Keras layer instances whose output has the same
+   * shape and dtype as their input (wala/ML#840). All dispatch to {@link
+   * com.ibm.wala.cast.python.ml.client.ShapePreservingLayerCall}.
+   */
+  public static final List<MethodReference> SHAPE_PRESERVING_LAYER_CALLS =
+      List.of(
+          shapePreservingLayerCall("BatchNormalization"),
+          shapePreservingLayerCall("ReLU"),
+          shapePreservingLayerCall("Softmax"),
+          shapePreservingLayerCall("Masking"),
+          shapePreservingLayerCall("Activation"));
+
+  /**
+   * Builds the {@code __call__} method reference for a Keras layer class by its simple name.
+   *
+   * @param simpleName The layer class's simple name, as {@code tf.keras.layers} spells it.
+   * @return The {@code __call__} synthetic method on that layer.
+   */
+  private static MethodReference shapePreservingLayerCall(String simpleName) {
+    return MethodReference.findOrCreate(
+        TypeReference.findOrCreate(
+            PythonTypes.pythonLoader,
+            TypeName.string2TypeName(
+                "Ltensorflow/keras/layers/" + simpleName + "/" + CALLABLE_METHOD_NAME)),
+        AstMethodReference.fnSelector);
+  }
 
   /**
    * The {@code __call__} synthetic method on a {@code tf.keras.layers.GlobalAveragePooling1D}

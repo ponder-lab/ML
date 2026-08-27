@@ -808,7 +808,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "TextCNN.call",
         "textcnn_proj",
         1,
-        3,
+        4,
         Map.of(3, Set.of(TENSOR_2_5_INT32)));
   }
 

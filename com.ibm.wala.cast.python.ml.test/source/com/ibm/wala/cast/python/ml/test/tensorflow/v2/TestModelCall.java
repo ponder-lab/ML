@@ -1435,4 +1435,178 @@ public class TestModelCall extends AbstractTensorTest {
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test("tf2_test_keras_autocast.py", "consume", 1, 1, Map.of(2, Set.of(TENSOR_20_28_FLOAT64)));
   }
+
+  /**
+   * A {@code BatchNormalization} layer call carries its input's shape and dtype through
+   * (wala/ML#840).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapePreservingBatchNorm()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_shape_preserving_layers.py",
+        "consume_batchnorm",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 32, 10))));
+  }
+
+  /**
+   * An activation applied as a layer likewise preserves the type (wala/ML#840).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapePreservingRelu()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_shape_preserving_layers.py",
+        "consume_relu",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 32, 10))));
+  }
+
+  /**
+   * The case the issue is actually about: a shape-preserving layer sitting between a {@code Dense}
+   * and its consumer. The declared width must survive the layers in between rather than the chain
+   * degrading to an unknown rank at the first unmodeled class (wala/ML#840).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testShapePreservingChain()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_shape_preserving_layers.py",
+        "consume_chain",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 32, 10))));
+  }
+
+  /**
+   * A model-call result consumed in a single calling context carries its shape (wala/ML#840). This
+   * is a control: it rules out the model-call result itself being the thing that loses the shape,
+   * which is what an unmodeled layer in the chain does instead.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testLayerCallResultDirect()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_layer_call_result_rank.py",
+        "consume_direct",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 32, 10))));
+  }
+
+  /**
+   * Two calling contexts differing in batch size resolve to the UNION rather than collapsing to one
+   * (wala/ML#840). A second control, ruling out the per-context allocation collapse that
+   * wala/ML#530 describes: that path works, so it is not what erases the shape here.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testLayerCallResultTwoContext()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_layer_call_result_rank.py",
+        "consume_two_context",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 32, 10), TensorType.of(FLOAT_32, 10000, 10))));
+  }
+
+  /**
+   * A {@code MaxPool2D} between a convolution and its flatten erases the shape for the rest of the
+   * chain, because the pooling layer class is unmodeled (wala/ML#840).
+   *
+   * <p>TODO: This documents the known failure tracked by <a
+   * href="https://github.com/wala/ML/issues/840">wala/ML#840</a>, whose pooling arm is not yet
+   * implemented. Flip to a plain {@code @Test} when it is. {@link #testLayerCallResultConvNoPool()}
+   * is the control that isolates the pooling layer as the cause.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test(expected = AssertionError.class)
+  public void testLayerCallResultConv()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_layer_call_result_rank.py",
+        "consume_conv",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 32, 10))));
+  }
+
+  /**
+   * A recurrent layer erases the shape for the rest of its chain, for the same reason and by the
+   * same mechanism as the pooling layer: the class is unmodeled (wala/ML#840). Its presence here is
+   * what makes this a layer-class family rather than a convolution-specific defect, so a fix scoped
+   * to pooling alone would leave the same defect reachable through this path.
+   *
+   * <p>TODO: This documents the known failure tracked by <a
+   * href="https://github.com/wala/ML/issues/840">wala/ML#840</a>, whose recurrent arm is not yet
+   * implemented. Flip to a plain {@code @Test} when it is.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test(expected = AssertionError.class)
+  public void testLayerCallResultLstm()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_layer_call_result_rank.py",
+        "consume_lstm",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 32, 10))));
+  }
+
+  /**
+   * A convolutional chain with NO pooling layer resolves (wala/ML#840). The third control, and the
+   * one that corrected the diagnosis: the convolution is modeled and works, so a chain that loses
+   * its shape loses it at the pooling layer beside the convolution rather than at the convolution.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testLayerCallResultConvNoPool()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_layer_call_result_rank.py",
+        "consume_conv_nopool",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 32, 10))));
+  }
 }
