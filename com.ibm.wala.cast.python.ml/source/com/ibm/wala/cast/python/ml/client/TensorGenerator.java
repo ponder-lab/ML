@@ -1595,6 +1595,21 @@ public abstract class TensorGenerator {
 
     SSAInstruction def = node.getDU().getDef(vn);
 
+    if (def instanceof SSABinaryOpInstruction) {
+      Integer folded = foldIntBinaryOp(builder, node, (SSABinaryOpInstruction) def, visited, depth);
+      if (folded != null) return folded;
+      // Fall through: an unfoldable arithmetic result may still be a points-to constant.
+    }
+
+    if (def instanceof PythonInvokeInstruction) {
+      // `int(x)` over an integral argument is the identity, and it is the ordinary way a Python
+      // program turns a `/` quotient back into an index. Chasing through it is what lets a bound
+      // like `int(total / parts)` resolve (wala/ML#841).
+      Integer viaCoercion =
+          resolveIntThroughIntBuiltin(builder, node, (PythonInvokeInstruction) def, visited, depth);
+      if (viaCoercion != null) return viaCoercion;
+    }
+
     if (def instanceof PythonPropertyRead) {
       PythonPropertyRead read = (PythonPropertyRead) def;
       int memberVn = read.getMemberRef();
@@ -1648,6 +1663,88 @@ public abstract class TensorGenerator {
       return null;
     return intProjectionOrNull((Number) ((ConstantKey<?>) only).getValue());
   }
+
+  /**
+   * The arithmetic arm of {@link #resolveIntFlowSensitively}: folds a binary operation whose
+   * operands both resolve to integer constants (wala/ML#841). A configuration size is routinely
+   * written as an expression over other configuration constants ({@code batch = per_device *
+   * devices}), and leaving the product unresolved makes every bound derived from it unresolved too.
+   *
+   * <p>Division folds only when it divides exactly. Python's {@code /} is true division and yields
+   * a float, so an inexact quotient is not the integer this returns; declining there keeps the
+   * chase from inventing a truncation the program may not perform. Remainder and the bitwise
+   * operators are not folded, having no bearing on the sizes this resolver serves.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR contains the operation.
+   * @param op The binary operation to fold.
+   * @param visited The {@code (node, vn)} pairs already on this chase, breaking cycles.
+   * @param depth The remaining recursion budget.
+   * @return The folded constant, or {@code null} when either operand declines, the operator is not
+   *     folded, or the result does not fit an {@code int}.
+   */
+  private static Integer foldIntBinaryOp(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      SSABinaryOpInstruction op,
+      Set<Pair<CGNode, Integer>> visited,
+      int depth) {
+    if (depth <= 1) return null;
+    Integer lhs = resolveIntFlowSensitively(builder, node, op.getUse(0), visited, depth - 1);
+    if (lhs == null) return null;
+    Integer rhs = resolveIntFlowSensitively(builder, node, op.getUse(1), visited, depth - 1);
+    if (rhs == null) return null;
+
+    long result;
+    if (op.getOperator() == IBinaryOpInstruction.Operator.ADD) result = (long) lhs + rhs;
+    else if (op.getOperator() == IBinaryOpInstruction.Operator.SUB) result = (long) lhs - rhs;
+    else if (op.getOperator() == IBinaryOpInstruction.Operator.MUL) result = (long) lhs * rhs;
+    else if (op.getOperator() == IBinaryOpInstruction.Operator.DIV) {
+      if (rhs == 0 || lhs % rhs != 0) return null; // Inexact or undefined: decline.
+      result = lhs / rhs;
+    } else return null;
+
+    return result == (int) result ? (int) result : null;
+  }
+
+  /**
+   * The {@code int(x)} arm of {@link #resolveIntFlowSensitively}: resolves through Python's integer
+   * coercion when its argument already resolves to an integer (wala/ML#841). Recognised by the
+   * callee's points-to set holding the {@code int} builtin, so a user function named {@code int} is
+   * not mistaken for it.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @param node The {@link CGNode} whose IR contains the call.
+   * @param call The invoke to inspect.
+   * @param visited The {@code (node, vn)} pairs already on this chase, breaking cycles.
+   * @param depth The remaining recursion budget.
+   * @return The argument's resolved constant, or {@code null} when the callee is not {@code int},
+   *     the call is not unary, or the argument declines.
+   */
+  private static Integer resolveIntThroughIntBuiltin(
+      PropagationCallGraphBuilder builder,
+      CGNode node,
+      PythonInvokeInstruction call,
+      Set<Pair<CGNode, Integer>> visited,
+      int depth) {
+    if (depth <= 1 || call.getNumberOfUses() != 2) return null; // callee plus exactly one argument.
+    Set<CGNode> targets = builder.getCallGraph().getPossibleTargets(node, call.getCallSite());
+    if (targets == null || targets.size() != 1) return null; // Ambiguous callee: decline.
+    String callee =
+        targets
+            .iterator()
+            .next()
+            .getMethod()
+            .getDeclaringClass()
+            .getReference()
+            .getName()
+            .toString();
+    if (!INT_BUILTIN_TYPE_NAME.equals(callee)) return null;
+    return resolveIntFlowSensitively(builder, node, call.getUse(1), visited, depth - 1);
+  }
+
+  /** The Python {@code int} builtin's declared type, as the front end names it. */
+  private static final String INT_BUILTIN_TYPE_NAME = "Lwala/builtin/int";
 
   /**
    * The {@code self}-attribute arm of {@link #resolveIntFlowSensitively}: chases the attribute's
