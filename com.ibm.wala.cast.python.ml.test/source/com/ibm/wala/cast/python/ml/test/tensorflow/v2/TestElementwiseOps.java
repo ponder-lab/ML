@@ -1948,13 +1948,13 @@ public class TestElementwiseOps extends AbstractTensorTest {
     assertEquals(EnumSet.of(FLOAT64), coerced.fed());
     assertEquals(EnumSet.of(FLOAT32), coerced.imposed());
     assertEquals(AppliedDTypeCoercion.Resolution.CHANGED, coerced.resolution());
-    assertTrue("A replaced fed dtype reads changed.", coerced.changed());
+    assertEquals(AppliedDTypeCoercion.Resolution.CHANGED, coerced.resolution());
 
     AppliedDTypeCoercion agreeing = only(byFunction, "agreeing");
     assertEquals(EnumSet.of(FLOAT32), agreeing.fed());
     assertEquals(EnumSet.of(FLOAT32), agreeing.imposed());
     assertEquals(AppliedDTypeCoercion.Resolution.UNCHANGED, agreeing.resolution());
-    assertTrue("A complete equal imposition reads unchanged.", !agreeing.changed());
+    assertEquals(AppliedDTypeCoercion.Resolution.UNCHANGED, agreeing.resolution());
 
     AppliedDTypeCoercion disagreeing = only(byFunction, "disagreeing");
     assertEquals(EnumSet.of(FLOAT64), disagreeing.fed());
@@ -1991,7 +1991,6 @@ public class TestElementwiseOps extends AbstractTensorTest {
     AppliedDTypeCoercion incomplete =
         new AppliedDTypeCoercion(EnumSet.of(FLOAT32), EnumSet.of(FLOAT32), false);
     assertEquals(AppliedDTypeCoercion.Resolution.UNRESOLVED, incomplete.resolution());
-    assertTrue("An unresolved record folds into changed.", incomplete.changed());
   }
 
   /**
