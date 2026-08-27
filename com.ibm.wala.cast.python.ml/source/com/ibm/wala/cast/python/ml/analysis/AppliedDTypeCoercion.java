@@ -65,6 +65,19 @@ public record AppliedDTypeCoercion(
    * The three answers the fed-beside-imposed comparison can give. Ignorance is first-class: reading
    * an empty or incomplete fed side as "unchanged" would be an absence read as evidence of absence,
    * exactly the failure a safety-deciding client must not inherit from its instrument.
+   *
+   * <p><b>There is deliberately no two-valued accessor</b>, and a future reader wanting one should
+   * read this before reinventing it. A {@code changed()} folding {@link #UNRESOLVED} into "changed"
+   * shipped briefly and was removed. {@link #UNRESOLVED} is not a marginal state: a parameter is
+   * unresolved whenever ANY caller fails to resolve or a coerced parameter sits upstream, which is
+   * an ordinary shape for a whole-program analysis of a dynamic language, so it is far more
+   * populous than {@link #CHANGED}, which requires positive divergence evidence. A client deciding
+   * safety through the fold therefore refuses far more than the condition warrants: the fold reads
+   * as a cautious default and is the expensive one. It is also not a convenience, since {@code
+   * resolution() != UNCHANGED} is itself a single call and names what it folds at the point where
+   * someone must justify it. And the interesting state is not a bit: the correct treatment of
+   * {@link #UNRESOLVED} is to RECORD it, neither trusting it as safe nor passing it silently, which
+   * no boolean can express.
    */
   public enum Resolution {
     /** Some consumer computes with a dtype other than a fed one; bare conversion diverges. */
@@ -99,17 +112,5 @@ public record AppliedDTypeCoercion(
     if (!this.imposed.containsAll(this.fed)) return Resolution.CHANGED;
     if (this.fed.isEmpty() || !this.fedComplete) return Resolution.UNRESOLVED;
     return Resolution.UNCHANGED;
-  }
-
-  /**
-   * The two-valued convenience over {@link #resolution()}: {@code false} only for {@link
-   * Resolution#UNCHANGED}. {@link Resolution#UNRESOLVED} folds into {@code true} deliberately —
-   * wrong-but-safe for a safety-deciding client, which declines and loses an optimization rather
-   * than shipping a break; a client wanting the distinction reads {@link #resolution()} directly.
-   *
-   * @return {@code true} unless every caller resolved and the coercion changed nothing.
-   */
-  public boolean changed() {
-    return this.resolution() != Resolution.UNCHANGED;
   }
 }
