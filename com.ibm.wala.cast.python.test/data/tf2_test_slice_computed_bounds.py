@@ -54,3 +54,35 @@ assert dyn.shape.as_list() == [None, 3], dyn.shape
 dyn_sliced = dyn[i * gpu_batch_size : (i + 1) * gpu_batch_size]
 assert dyn_sliced.shape.as_list() == [None, 3], dyn_sliced.shape
 consume_dynamic(dyn_sliced)
+
+
+def consume_negative(x):
+    pass
+
+
+def consume_added(x):
+    pass
+
+
+def consume_inexact(x):
+    pass
+
+
+# A negative bound counts from the end rather than clamping to zero.
+negative = y[:-1024]
+assert negative.shape == (3072,), negative.shape
+consume_negative(negative)
+
+# Bounds built by addition and subtraction over configuration constants.
+added = y[: 1000 + 24]
+assert added.shape == (1024,), added.shape
+consume_added(added)
+
+subbed = y[: 2048 - 1024]
+assert subbed.shape == (1024,), subbed.shape
+
+# An inexact quotient, which Python truncates. The front end folds arithmetic over literals, so
+# this resolves through the points-to read rather than through the fold.
+inexact = y[: int(4096 / 3)]
+assert inexact.shape == (1365,), inexact.shape
+consume_inexact(inexact)

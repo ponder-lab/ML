@@ -1760,4 +1760,70 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(new TensorType(UINT_8, asList(DynamicDim.INSTANCE, new NumericDim(3))))));
   }
+
+  /**
+   * A negative bound counts from the end of the receiver's axis rather than clamping to zero
+   * (wala/ML#841).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceNegativeBound()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_slice_computed_bounds.py",
+        "consume_negative",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 3072))));
+  }
+
+  /**
+   * A bound built by addition over configuration constants folds (wala/ML#841).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceAddedBound()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_slice_computed_bounds.py",
+        "consume_added",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 1024))));
+  }
+
+  /**
+   * A bound written as {@code int(4096 / 3)} resolves to the truncated 1365 that Python computes
+   * (wala/ML#841), which is worth pinning because it does NOT go through the arithmetic fold. The
+   * front end folds arithmetic over literals, so the points-to read answers first and the fold is
+   * never consulted.
+   *
+   * <p>That matters for reading the fold's own conservatism: it declines an inexact quotient, on
+   * the grounds that Python's {@code /} is true division and inventing a truncation would be
+   * guessing rather than computing. This test does not exercise that decline, and no fixture here
+   * does, because forcing it needs an inexact division whose operands the front end cannot fold.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceInexactQuotientDegrades()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_slice_computed_bounds.py",
+        "consume_inexact",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 1365))));
+  }
 }
