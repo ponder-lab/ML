@@ -1718,4 +1718,46 @@ public class TestShapeOps extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(UINT_8, 1024))));
   }
+
+  /**
+   * A full slice constrains nothing, so the source's extent is still the right answer and is
+   * carried through rather than degraded (wala/ML#841). This is the arm the degradation must NOT
+   * reach: if it does, every {@code x[:]} silently loses its extent.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceFullPreservesExtent()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_slice_computed_bounds.py",
+        "consume_full",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(UINT_8, 4096))));
+  }
+
+  /**
+   * Slicing an axis that already carries {@code None}-evidence degrades to {@code Dynamic} rather
+   * than {@code Unresolved}: the extent is genuinely {@code None} at run time, not a fixed size the
+   * analysis failed to compute (wala/ML#721, wala/ML#841).
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testSliceDynamicAxisStaysDynamic()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_slice_computed_bounds.py",
+        "consume_dynamic",
+        1,
+        1,
+        Map.of(2, Set.of(new TensorType(UINT_8, asList(DynamicDim.INSTANCE, new NumericDim(3))))));
+  }
 }

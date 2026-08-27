@@ -31,3 +31,26 @@ consume_computed(computed)
 literal = y[0:1024]
 assert literal.shape == (1024,), literal.shape
 consume_literal(literal)
+
+
+def consume_full(x):
+    pass
+
+
+def consume_dynamic(x):
+    pass
+
+
+# A full slice constrains nothing, so the source's extent is still the right answer and must be
+# carried through rather than degraded.
+full = y[:]
+assert full.shape == (4096,), full.shape
+consume_full(full)
+
+# Slicing an axis that is already None-evidenced: the degraded extent stays None-evidenced rather
+# than becoming a fixed-but-uncomputed size.
+dyn = tf.keras.Input(shape=(3,), dtype=tf.uint8)
+assert dyn.shape.as_list() == [None, 3], dyn.shape
+dyn_sliced = dyn[i * gpu_batch_size : (i + 1) * gpu_batch_size]
+assert dyn_sliced.shape.as_list() == [None, 3], dyn_sliced.shape
+consume_dynamic(dyn_sliced)
