@@ -2081,6 +2081,7 @@ public class TensorFlowTypes extends PythonTypes {
       List.of(
           shapePreservingLayerCall("BatchNormalization"),
           shapePreservingLayerCall("ReLU"),
+          shapePreservingLayerCall("LeakyReLU"),
           shapePreservingLayerCall("Softmax"),
           shapePreservingLayerCall("Masking"),
           shapePreservingLayerCall("Activation"));
