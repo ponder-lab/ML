@@ -2426,4 +2426,25 @@ public class TestDatasets extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TENSOR_4_3_FLOAT32)));
   }
+
+  /**
+   * A flag that does not resolve to a single value keeps the partial-batch sibling. Two call sites
+   * disagree on it, so it is not provably {@code True} and the partial batch stays reachable, which
+   * is the sound direction: the suppression may only remove a wildcard the flag disproves.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDatasetBatchDropRemainderUnresolved()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_drop_remainder.py",
+        "consume_unresolved",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_3_FLOAT32, TENSOR_2_3_FLOAT32)));
+  }
 }

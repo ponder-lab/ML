@@ -25,6 +25,14 @@ def consume_padded_positional(x):
     pass
 
 
+def consume_unresolved(x):
+    pass
+
+
+def batch_with(dataset, flag):
+    return dataset.batch(4, drop_remainder=flag)
+
+
 # Ten elements batched by four: two full batches and a final partial batch of two.
 ds = tf.data.Dataset.from_tensor_slices(tf.ones((10, 3)))
 
@@ -62,3 +70,16 @@ for positional in ds.batch(4, True):
 for padded_positional in ds.padded_batch(4, None, None, True):
     assert padded_positional.shape == (4, 3), padded_positional.shape
     consume_padded_positional(padded_positional)
+
+# Two call sites disagree on the flag, so it does not resolve to a single value and the partial
+# batch stays reachable. A flag that is not provably `True` must keep the partial-batch sibling.
+unresolved_shapes = []
+for dropping in batch_with(ds, True):
+    unresolved_shapes.append(tuple(dropping.shape))
+    consume_unresolved(dropping)
+
+for keeping in batch_with(ds, False):
+    unresolved_shapes.append(tuple(keeping.shape))
+    consume_unresolved(keeping)
+
+assert unresolved_shapes == [(4, 3), (4, 3), (4, 3), (4, 3), (2, 3)], unresolved_shapes

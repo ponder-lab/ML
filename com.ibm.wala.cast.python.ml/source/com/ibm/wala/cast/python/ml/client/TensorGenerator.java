@@ -8450,10 +8450,11 @@ public abstract class TensorGenerator {
   /**
    * Returns the possible boolean values for the given points-to set.
    *
-   * <p>A numeric constant resolves under Python's truthiness rule, so a caller writing {@code 1}
-   * decides the same way the interpreter would. Any other constant, {@code None} included, makes
-   * the value unresolvable rather than falsy: a caller reading this is deciding whether a flag is
-   * definitely set, and a guess in either direction is worse than an admission of ignorance.
+   * <p>Only a boolean constant resolves. Anything else, {@code None} and a truthy number included,
+   * makes the value unresolvable rather than falsy: a caller reading this is deciding whether a
+   * flag is definitely set, and a guess in either direction is worse than an admission of
+   * ignorance. Python's truthiness rule is deliberately not applied, since no caller needs it and
+   * an unexercised conversion is a liability rather than generality.
    *
    * @param pointsToSet The points-to set of the value.
    * @return The possible boolean values, or {@code null} when the value is not statically
@@ -8466,9 +8467,8 @@ public abstract class TensorGenerator {
     Set<Boolean> ret = HashSetFactory.make();
 
     for (Object val : constants) {
-      if (val instanceof Boolean) ret.add((Boolean) val);
-      else if (val instanceof Number) ret.add(((Number) val).doubleValue() != 0.0);
-      else return null;
+      if (!(val instanceof Boolean)) return null;
+      ret.add((Boolean) val);
     }
 
     return ret;
