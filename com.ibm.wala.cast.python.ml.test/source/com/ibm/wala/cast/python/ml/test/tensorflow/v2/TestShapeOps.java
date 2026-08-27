@@ -1697,7 +1697,7 @@ public class TestShapeOps extends AbstractTensorTest {
         "consume_computed",
         1,
         1,
-        Map.of(2, Set.of(new TensorType(UINT_8, asList(UnresolvedDim.INSTANCE)))));
+        Map.of(2, Set.of(TensorType.of(UINT_8, 1024))));
   }
 
   /**

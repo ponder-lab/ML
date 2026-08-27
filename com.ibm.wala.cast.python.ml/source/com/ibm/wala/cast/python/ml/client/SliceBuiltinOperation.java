@@ -183,7 +183,12 @@ public class SliceBuiltinOperation extends TensorGenerator {
           return receiverShapes;
         }
         List<Dimension<?>> out = new ArrayList<>(shape.size());
-        out.add(new NumericDim(stop));
+        // The bound is an upper limit, not the resulting extent: `x[:k]` yields `k` elements only
+        // when the axis has at least `k` of them, and against an axis whose size is unknown the
+        // result is unknown too, which is what the runtime reports. Claiming `k` there would
+        // assert a length the slice need not produce (wala/ML#841).
+        Dimension<?> recv = shape.get(0);
+        out.add(sliceExtentFromZero(recv, stop));
         for (int i = 1; i < shape.size(); i++) out.add(shape.get(i));
         ret.add(out);
       }
@@ -452,34 +457,74 @@ public class SliceBuiltinOperation extends TensorGenerator {
   }
 
   /**
-   * Resolves the points-to set of {@code vn} to a single constant integer value, accepting both
-   * {@link Integer} and {@link Long} {@link ConstantKey} payloads. Returns {@code null} when the
-   * set is empty, contains a non-constant, contains a non-integer constant, or contains multiple
-   * distinct integer constants (ambiguity is a {@code null}, not an arbitrary pick).
+   * The output extent of {@code recv[:stop]}, a slice from zero with unit step (wala/ML#841).
+   *
+   * <p>Against a numeric axis the extent is the bound clamped to the axis, since {@code x[:k]}
+   * yields {@code k} elements only when the axis has at least {@code k}, and a negative bound
+   * counts from the end. Against any other axis the result is unknown: the runtime reports {@code
+   * None} there, so claiming the bound would assert a length the slice need not produce. The
+   * degraded dimension follows the convention {@code sliceExtent} uses for the multi-dimensional
+   * path (wala/ML#721).
+   *
+   * @param recv The receiver's leading dimension.
+   * @param stop The resolved upper bound.
+   * @return The output dimension for the leading axis.
+   */
+  private static Dimension<?> sliceExtentFromZero(Dimension<?> recv, int stop) {
+    if (recv instanceof NumericDim) {
+      int n = ((NumericDim) recv).value();
+      int hi = stop < 0 ? Math.max(0, n + stop) : Math.min(stop, n);
+      return new NumericDim(Math.max(0, hi));
+    }
+    return recv instanceof DynamicDim ? DynamicDim.INSTANCE : UnresolvedDim.INSTANCE;
+  }
+
+  /**
+   * Resolves {@code vn} to a single constant integer value: first from its points-to set, accepting
+   * both {@link Integer} and {@link Long} {@link ConstantKey} payloads, and failing that through
+   * the flow-sensitive chase, which folds arithmetic over configuration constants (wala/ML#841).
+   * Returns {@code null} when neither resolves, when the set contains a non-constant or
+   * non-integer, or when it holds multiple distinct integers, since ambiguity is a {@code null}
+   * rather than an arbitrary pick.
    *
    * @param builder The {@link PropagationCallGraphBuilder} providing the pointer analysis.
    * @param node The {@link CGNode} whose IR contains {@code vn}.
    * @param vn The SSA value number to inspect.
-   * @return The resolved constant integer, or {@code null} if the set isn't a single-valued integer
-   *     constant.
+   * @return The resolved constant integer, or {@code null} if it does not resolve to one.
    */
   private static Integer constInt(PropagationCallGraphBuilder builder, CGNode node, int vn) {
     if (vn <= 0) return null;
     PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
     OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(pk);
-    if (pts == null || pts.isEmpty()) return null;
     Integer result = null;
-    for (InstanceKey ik : pts) {
-      if (!(ik instanceof ConstantKey)) return null;
-      Object v = ((ConstantKey<?>) ik).getValue();
-      int n;
-      if (v instanceof Integer) n = (Integer) v;
-      else if (v instanceof Long) n = ((Long) v).intValue();
-      else return null;
-      if (result == null) result = n;
-      else if (result != n) return null;
+    if (pts != null && !pts.isEmpty()) {
+      for (InstanceKey ik : pts) {
+        if (!(ik instanceof ConstantKey)) {
+          result = null;
+          break;
+        }
+        Object v = ((ConstantKey<?>) ik).getValue();
+        int n;
+        if (v instanceof Integer) n = (Integer) v;
+        else if (v instanceof Long) n = ((Long) v).intValue();
+        else {
+          result = null;
+          break;
+        }
+        if (result == null) result = n;
+        else if (result != n) {
+          result = null;
+          break;
+        }
+      }
     }
-    return result;
+    if (result != null) return result;
+    // A bound written as an expression over configuration constants (`i * per_device`, or an
+    // `int(total / parts)` quotient) has no folded constant in its points-to set, so the
+    // points-to read above declines on exactly the bounds a program most often computes. Fall
+    // back to the flow-sensitive chase, which folds the arithmetic (wala/ML#841).
+    return resolveIntFlowSensitively(
+        builder, node, vn, HashSetFactory.make(), FLOW_SENSITIVE_CONSTANT_DEPTH_CAP);
   }
 
   /**
