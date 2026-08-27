@@ -32,7 +32,11 @@ import java.util.Set;
 public class DatasetBatchGenerator extends DatasetGenerator {
 
   protected enum Parameters {
-    BATCH_SIZE;
+    /** The batch size. */
+    BATCH_SIZE,
+
+    /** Whether to discard the final partial batch. */
+    DROP_REMAINDER;
 
     public String getName() {
       return name().toLowerCase(Locale.ROOT);
@@ -41,6 +45,43 @@ public class DatasetBatchGenerator extends DatasetGenerator {
     public int getIndex() {
       return ordinal();
     }
+  }
+
+  /**
+   * Position of the {@code drop_remainder} argument in this operation's frame. {@code padded_batch}
+   * interposes its padding arguments, so the position is not shared across the family.
+   *
+   * @return The zero-based argument position, excluding the receiver.
+   */
+  protected int getDropRemainderParameterIndex() {
+    return Parameters.DROP_REMAINDER.getIndex();
+  }
+
+  /**
+   * Keyword name of the {@code drop_remainder} argument, for keyword-argument resolution.
+   *
+   * @return The keyword name.
+   */
+  protected String getDropRemainderParameterName() {
+    return Parameters.DROP_REMAINDER.getName();
+  }
+
+  /**
+   * Whether this call provably discards the final partial batch.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} used for call graph and PA lookup.
+   * @return {@code true} only when {@code drop_remainder} resolves to exactly {@code True}; an
+   *     unsupplied, unresolvable, or multi-valued argument yields {@code false}, which keeps the
+   *     partial-batch siblings.
+   */
+  protected boolean dropsRemainder(PropagationCallGraphBuilder builder) {
+    Set<Boolean> values =
+        getPossibleBooleanValues(
+            this.getArgumentPointsToSet(
+                builder,
+                this.getDropRemainderParameterIndex(),
+                this.getDropRemainderParameterName()));
+    return values != null && values.equals(Collections.singleton(Boolean.TRUE));
   }
 
   public DatasetBatchGenerator(PointsToSetVariable source) {
@@ -145,6 +186,11 @@ public class DatasetBatchGenerator extends DatasetGenerator {
     // and symbolic siblings below so the analyzer's output matches Python's actual behaviour.
     boolean upstreamInfinite = this.upstreamIsInfinite(builder);
 
+    // `drop_remainder=True` discards the final partial batch, so a short batch never reaches a
+    // consumer and every element the stream yields is full-width. Suppress the partial siblings
+    // for the same reason the infinite-upstream guard above does.
+    boolean dropsRemainder = this.dropsRemainder(builder);
+
     for (List<Dimension<?>> shape : inputShapes) {
       if (batchSizes.isEmpty()) {
         // Unknown batch size: single symbolic-dim shape. The upstream-infinite guard doesn't
@@ -189,7 +235,7 @@ public class DatasetBatchGenerator extends DatasetGenerator {
               ret.add(newShape);
             }
 
-            if (!upstreamInfinite) {
+            if (!upstreamInfinite && !dropsRemainder) {
               for (Long partialBatchSize : partialBatchSizes) {
                 List<Dimension<?>> newShape = new ArrayList<>();
                 newShape.add(new NumericDim(partialBatchSize.intValue()));

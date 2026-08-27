@@ -35,7 +35,7 @@ public class DatasetPaddedBatchGenerator extends DatasetBatchGenerator {
     /** The padding values; not consumed by this generator. */
     PADDING_VALUES,
 
-    /** Whether to drop the final partial batch; not consumed by this generator. */
+    /** Whether to drop the final partial batch. */
     DROP_REMAINDER;
 
     /**
@@ -66,6 +66,16 @@ public class DatasetPaddedBatchGenerator extends DatasetBatchGenerator {
    */
   public DatasetPaddedBatchGenerator(PointsToSetVariable source) {
     super(source);
+  }
+
+  @Override
+  protected int getDropRemainderParameterIndex() {
+    return PaddedParameters.DROP_REMAINDER.getIndex();
+  }
+
+  @Override
+  protected String getDropRemainderParameterName() {
+    return PaddedParameters.DROP_REMAINDER.getName();
   }
 
   /**
