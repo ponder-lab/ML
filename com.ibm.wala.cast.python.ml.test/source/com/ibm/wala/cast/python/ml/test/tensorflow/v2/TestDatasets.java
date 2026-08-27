@@ -46,7 +46,6 @@ import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
-import com.ibm.wala.cast.python.ml.types.TensorType.SymbolicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.cha.ClassHierarchyException;
 import com.ibm.wala.util.CancelException;
@@ -2028,9 +2027,11 @@ public class TestDatasets extends AbstractTensorTest {
    * {@code kyzhouhzau/NLPGNN} ({@code nlpgnn/datas/graphloader.py}); the driver, the tiny {@code
    * data/} triple files, and the {@code nlpgnn/gnn/utils.py} reachable slice are bespoke. The
    * {@code targets} parameter (a {@code padded_batch} dict-element field) types {@code (2, ?)}
-   * int32 — the declared {@code padded_shapes} dims under the batch dimension (<a
-   * href="https://github.com/wala/ML/issues/673">wala/ML#673</a>) — unioned with the standard
-   * partial-batch sibling {@code (?, ?)}.
+   * int32, the declared {@code padded_shapes} dims under the batch dimension (<a
+   * href="https://github.com/wala/ML/issues/673">wala/ML#673</a>). The loader passes {@code
+   * drop_remainder=True}, so there is no partial-batch sibling (<a
+   * href="https://github.com/wala/ML/issues/812">wala/ML#812</a>); the axes resolve independently,
+   * the batch axis pinned while the per-batch padded axis stays dynamic.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -2056,11 +2057,7 @@ public class TestDatasets extends AbstractTensorTest {
         "tucker_proj",
         1,
         6,
-        Map.of(
-            3,
-            Set.of(
-                new TensorType(INT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)),
-                new TensorType(INT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE)))));
+        Map.of(3, Set.of(new TensorType(INT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)))));
   }
 
   /**
@@ -2311,5 +2308,143 @@ public class TestDatasets extends AbstractTensorTest {
         2,
         2,
         Map.of(2, Set.of(TENSOR_8_207_INT32), 3, Set.of(TENSOR_8_207_INT32)));
+  }
+
+  /**
+   * Probe: {@code drop_remainder=True} discards the partial final batch.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDatasetBatchDropRemainder()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_drop_remainder.py",
+        "consume_dropped",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_3_FLOAT32)));
+  }
+
+  /**
+   * Probe: without {@code drop_remainder} the partial final batch reaches the consumer.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDatasetBatchKeepRemainder()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_drop_remainder.py",
+        "consume_kept",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_3_FLOAT32, TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
+   * Probe: {@code padded_batch} takes {@code drop_remainder} at a different argument position than
+   * {@code batch}, so the position must be resolved per operation rather than shared.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDatasetPaddedBatchDropRemainder()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_drop_remainder.py",
+        "consume_padded_dropped",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_3_FLOAT32)));
+  }
+
+  /**
+   * Probe: {@code padded_batch} without the flag keeps the partial final batch.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDatasetPaddedBatchKeepRemainder()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_drop_remainder.py",
+        "consume_padded_kept",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_3_FLOAT32, TENSOR_2_3_FLOAT32)));
+  }
+
+  /**
+   * Probe: {@code batch} takes the flag positionally, which resolves by argument position instead
+   * of by keyword.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDatasetBatchDropRemainderPositional()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_drop_remainder.py",
+        "consume_positional",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_3_FLOAT32)));
+  }
+
+  /**
+   * Probe: {@code padded_batch} takes the flag positionally two places later than {@code batch}
+   * does, so a shared position would read a padding argument instead.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDatasetPaddedBatchDropRemainderPositional()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_drop_remainder.py",
+        "consume_padded_positional",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_3_FLOAT32)));
+  }
+
+  /**
+   * A flag that does not resolve to a single value keeps the partial-batch sibling. Two call sites
+   * disagree on it, so it is not provably {@code True} and the partial batch stays reachable, which
+   * is the sound direction: the suppression may only remove a wildcard the flag disproves.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testDatasetBatchDropRemainderUnresolved()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_dataset_drop_remainder.py",
+        "consume_unresolved",
+        1,
+        1,
+        Map.of(2, Set.of(TENSOR_4_3_FLOAT32, TENSOR_2_3_FLOAT32)));
   }
 }

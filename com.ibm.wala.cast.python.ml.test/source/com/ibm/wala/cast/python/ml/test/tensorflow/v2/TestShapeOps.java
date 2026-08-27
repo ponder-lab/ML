@@ -383,10 +383,10 @@ public class TestShapeOps extends AbstractTensorTest {
   /**
    * Pins the shape of a dict-valued padded batch before any column is taken (wala/ML#813). The
    * value declared with {@code padded_shapes={"h_r": [None]}} is rank 2: the batch axis, and the
-   * padded axis that {@code None} leaves dynamic. The union carries the full batch alongside its
-   * partial-batch sibling, the same pairing as {@link TestCorpusFixtures#testGpt2GetLossVendored}.
-   * {@code drop_remainder=True} makes the partial batch unreachable here, which is the separate
-   * concern of wala/ML#812.
+   * padded axis that {@code None} leaves dynamic. The batch axis is the single full batch: {@code
+   * drop_remainder=True} discards the partial one, so it never reaches the consumer (wala/ML#812).
+   * {@link TestCorpusFixtures#testGpt2GetLossVendored} keeps the partial-batch sibling because its
+   * pipeline batches without the flag.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -401,11 +401,7 @@ public class TestShapeOps extends AbstractTensorTest {
         "consume_row",
         1,
         1,
-        Map.of(
-            2,
-            Set.of(
-                new TensorType(INT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)),
-                new TensorType(INT_32, asList(new SymbolicDim("?"), DynamicDim.INSTANCE)))));
+        Map.of(2, Set.of(new TensorType(INT_32, asList(new NumericDim(2), DynamicDim.INSTANCE)))));
   }
 
   /**
@@ -434,11 +430,7 @@ public class TestShapeOps extends AbstractTensorTest {
         "consume_col",
         1,
         1,
-        Map.of(
-            2,
-            Set.of(
-                new TensorType(INT_32, asList(new NumericDim(2))),
-                new TensorType(INT_32, asList(new SymbolicDim("?"))))));
+        Map.of(2, Set.of(new TensorType(INT_32, asList(new NumericDim(2))))));
   }
 
   /**

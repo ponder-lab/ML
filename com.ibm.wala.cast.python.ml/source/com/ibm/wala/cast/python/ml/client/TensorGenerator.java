@@ -8448,6 +8448,33 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Returns the possible boolean values for the given points-to set.
+   *
+   * <p>Only a boolean constant resolves. Anything else, {@code None} and a truthy number included,
+   * makes the value unresolvable rather than falsy: a caller reading this is deciding whether a
+   * flag is definitely set, and a guess in either direction is worse than an admission of
+   * ignorance. Python's truthiness rule is deliberately not applied, since no caller needs it and
+   * an unexercised conversion is a liability rather than generality.
+   *
+   * @param pointsToSet The points-to set of the value.
+   * @return The possible boolean values, or {@code null} when the value is not statically
+   *     resolvable. An unsupplied argument yields an empty set, not {@code null}.
+   */
+  protected static Set<Boolean> getPossibleBooleanValues(OrdinalSet<InstanceKey> pointsToSet) {
+    Set<Object> constants = getConstantValues(pointsToSet, true);
+    if (constants == null) return null;
+
+    Set<Boolean> ret = HashSetFactory.make();
+
+    for (Object val : constants) {
+      if (!(val instanceof Boolean)) return null;
+      ret.add((Boolean) val);
+    }
+
+    return ret;
+  }
+
+  /**
    * Returns the possible long values for the given points-to set. If the value is `None`, then a
    * null value will be contained within the returned set.
    *
