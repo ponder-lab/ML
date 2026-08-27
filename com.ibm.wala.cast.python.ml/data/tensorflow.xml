@@ -459,6 +459,26 @@
         <putfield class="LRoot" field="Masking" fieldType="LRoot" ref="layers" value="MaskingLayerCls"/>
         <new def="ActivationLayerCls" class="Ltensorflow/keras/layers/class/Activation"/>
         <putfield class="LRoot" field="Activation" fieldType="LRoot" ref="layers" value="ActivationLayerCls"/>
+        <new def="MaxPool2DLayerCls" class="Ltensorflow/keras/layers/class/MaxPool2D"/>
+        <putfield class="LRoot" field="MaxPool2D" fieldType="LRoot" ref="layers" value="MaxPool2DLayerCls"/>
+        <putfield class="LRoot" field="MaxPooling2D" fieldType="LRoot" ref="layers" value="MaxPool2DLayerCls"/>
+        <new def="AveragePooling2DLayerCls" class="Ltensorflow/keras/layers/class/AveragePooling2D"/>
+        <putfield class="LRoot" field="AveragePooling2D" fieldType="LRoot" ref="layers" value="AveragePooling2DLayerCls"/>
+        <putfield class="LRoot" field="AvgPool2D" fieldType="LRoot" ref="layers" value="AveragePooling2DLayerCls"/>
+        <new def="GlobalMaxPooling1DLayerCls" class="Ltensorflow/keras/layers/class/GlobalMaxPooling1D"/>
+        <putfield class="LRoot" field="GlobalMaxPooling1D" fieldType="LRoot" ref="layers" value="GlobalMaxPooling1DLayerCls"/>
+        <putfield class="LRoot" field="GlobalMaxPool1D" fieldType="LRoot" ref="layers" value="GlobalMaxPooling1DLayerCls"/>
+        <new def="GlobalMaxPooling2DLayerCls" class="Ltensorflow/keras/layers/class/GlobalMaxPooling2D"/>
+        <putfield class="LRoot" field="GlobalMaxPooling2D" fieldType="LRoot" ref="layers" value="GlobalMaxPooling2DLayerCls"/>
+        <putfield class="LRoot" field="GlobalMaxPool2D" fieldType="LRoot" ref="layers" value="GlobalMaxPooling2DLayerCls"/>
+        <new def="LSTMLayerCls" class="Ltensorflow/keras/layers/class/LSTM"/>
+        <putfield class="LRoot" field="LSTM" fieldType="LRoot" ref="layers" value="LSTMLayerCls"/>
+        <new def="GRULayerCls" class="Ltensorflow/keras/layers/class/GRU"/>
+        <putfield class="LRoot" field="GRU" fieldType="LRoot" ref="layers" value="GRULayerCls"/>
+        <new def="SimpleRNNLayerCls" class="Ltensorflow/keras/layers/class/SimpleRNN"/>
+        <putfield class="LRoot" field="SimpleRNN" fieldType="LRoot" ref="layers" value="SimpleRNNLayerCls"/>
+        <new def="BidirectionalLayerCls" class="Ltensorflow/keras/layers/class/Bidirectional"/>
+        <putfield class="LRoot" field="Bidirectional" fieldType="LRoot" ref="layers" value="BidirectionalLayerCls"/>
         <new def="Model" class="Ltensorflow/keras/models/class/Model"/>
         <putfield class="LRoot" field="Model" fieldType="LRoot" ref="keras" value="Model"/>
         <putfield class="LRoot" field="Model" fieldType="LRoot" ref="models" value="Model"/>
@@ -2690,6 +2710,76 @@
           <return value="res"/>
         </method>
       </class>
+      <class name="MaxPool2D" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/MaxPool2D. The pooling window is stored on the instance so `Pooling2DCall` can rewrite the spatial axes from it (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self pool_size strides padding data_format">
+          <new def="res" class="Ltensorflow/keras/layers/MaxPool2D"/>
+          <putfield class="LRoot" field="pool_size" fieldType="LRoot" ref="res" value="pool_size"/>
+          <putfield class="LRoot" field="strides" fieldType="LRoot" ref="res" value="strides"/>
+          <putfield class="LRoot" field="padding" fieldType="LRoot" ref="res" value="padding"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="AveragePooling2D" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/AveragePooling2D. The pooling window is stored on the instance so `Pooling2DCall` can rewrite the spatial axes from it (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self pool_size strides padding data_format">
+          <new def="res" class="Ltensorflow/keras/layers/AveragePooling2D"/>
+          <putfield class="LRoot" field="pool_size" fieldType="LRoot" ref="res" value="pool_size"/>
+          <putfield class="LRoot" field="strides" fieldType="LRoot" ref="res" value="strides"/>
+          <putfield class="LRoot" field="padding" fieldType="LRoot" ref="res" value="padding"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="GlobalMaxPooling1D" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GlobalMaxPool1D. Rank-reducing pooling: the `GlobalMaxPoolingCall` generator drops the temporal axis (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self data_format keepdims">
+          <new def="res" class="Ltensorflow/keras/layers/GlobalMaxPooling1D"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="GlobalMaxPooling2D" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GlobalMaxPool2D. Rank-reducing pooling: the `GlobalMaxPoolingCall` generator drops the two spatial axes (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self data_format keepdims">
+          <new def="res" class="Ltensorflow/keras/layers/GlobalMaxPooling2D"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="LSTM" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/LSTM. `units` and `return_sequences` are stored on the instance so `RecurrentLayerCall` can compute the output shape from them (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="24" paramNames="self units activation recurrent_activation use_bias kernel_initializer recurrent_initializer bias_initializer unit_forget_bias kernel_regularizer recurrent_regularizer bias_regularizer activity_regularizer kernel_constraint recurrent_constraint bias_constraint dropout recurrent_dropout return_sequences return_state go_backwards stateful time_major unroll">
+          <new def="res" class="Ltensorflow/keras/layers/LSTM"/>
+          <putfield class="LRoot" field="units" fieldType="LRoot" ref="res" value="units"/>
+          <putfield class="LRoot" field="return_sequences" fieldType="LRoot" ref="res" value="return_sequences"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="GRU" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GRU. `units` and `return_sequences` are stored on the instance so `RecurrentLayerCall` can compute the output shape from them (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="24" paramNames="self units activation recurrent_activation use_bias kernel_initializer recurrent_initializer bias_initializer kernel_regularizer recurrent_regularizer bias_regularizer activity_regularizer kernel_constraint recurrent_constraint bias_constraint dropout recurrent_dropout return_sequences return_state go_backwards stateful unroll time_major reset_after">
+          <new def="res" class="Ltensorflow/keras/layers/GRU"/>
+          <putfield class="LRoot" field="units" fieldType="LRoot" ref="res" value="units"/>
+          <putfield class="LRoot" field="return_sequences" fieldType="LRoot" ref="res" value="return_sequences"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="SimpleRNN" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/SimpleRNN. `units` and `return_sequences` are stored on the instance so `RecurrentLayerCall` can compute the output shape from them (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="21" paramNames="self units activation use_bias kernel_initializer recurrent_initializer bias_initializer kernel_regularizer recurrent_regularizer bias_regularizer activity_regularizer kernel_constraint recurrent_constraint bias_constraint dropout recurrent_dropout return_sequences return_state go_backwards stateful unroll">
+          <new def="res" class="Ltensorflow/keras/layers/SimpleRNN"/>
+          <putfield class="LRoot" field="units" fieldType="LRoot" ref="res" value="units"/>
+          <putfield class="LRoot" field="return_sequences" fieldType="LRoot" ref="res" value="return_sequences"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="Bidirectional" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Bidirectional. The wrapped layer and `merge_mode` are stored on the instance so `BidirectionalCall` can read the wrapped layer's parameters and the width factor back (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="5" paramNames="self layer merge_mode weights backward_layer">
+          <new def="res" class="Ltensorflow/keras/layers/Bidirectional"/>
+          <putfield class="LRoot" field="layer" fieldType="LRoot" ref="res" value="layer"/>
+          <putfield class="LRoot" field="merge_mode" fieldType="LRoot" ref="res" value="merge_mode"/>
+          <return value="res"/>
+        </method>
+      </class>
       <class name="Embedding" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Embedding. The `output_dim` argument is stored on the instance so `EmbeddingCall` can append it to the input shape (wala/ML#676). -->
         <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self input_dim output_dim embeddings_initializer embeddings_regularizer embeddings_constraint mask_zero input_length">
@@ -2832,6 +2922,94 @@
       </class>
       <class name="GlobalAveragePooling1D" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GlobalAveragePooling1D. The output type is computed by `GlobalAveragePooling1DCall` (wala/ML#670). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="MaxPool2D" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/MaxPool2D. The output type is computed by `Pooling2DCall` (wala/ML#840). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="AveragePooling2D" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/AveragePooling2D. The output type is computed by `Pooling2DCall` (wala/ML#840). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="GlobalMaxPooling1D" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GlobalMaxPool1D. The output type is computed by `GlobalMaxPoolingCall` (wala/ML#840). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="GlobalMaxPooling2D" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GlobalMaxPool2D. The output type is computed by `GlobalMaxPoolingCall` (wala/ML#840). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="LSTM" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/LSTM. The output type is computed by `RecurrentLayerCall` (wala/ML#840). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="GRU" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GRU. The output type is computed by `RecurrentLayerCall` (wala/ML#840). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="SimpleRNN" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/SimpleRNN. The output type is computed by `RecurrentLayerCall` (wala/ML#840). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="Bidirectional" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Bidirectional. The output type is computed by `BidirectionalCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>

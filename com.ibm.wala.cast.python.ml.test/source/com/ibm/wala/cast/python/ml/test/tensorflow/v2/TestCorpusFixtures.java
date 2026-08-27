@@ -45,7 +45,8 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * cases are unit-reproducible via the source pipeline (not the affected file, which carries no
    * call site or source) and that the cause was the source typing, not the {@code __call__}
    * forwarding the issue title hypothesized. Before the {@code FixedLenFeature} fix, {@code inputs}
-   * came back non-tensor.
+   * came back non-tensor. Modeling {@code Bidirectional} (wala/ML#840) types the {@code
+   * self.bilstm(embed, ...)} result as well, which is what moved the local count from two to three.
    */
   @Test
   public void testBilstmLoaderE2e()
@@ -54,7 +55,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "tf2_test_bilstm_loader_e2e.py",
         "BiLSTM.call",
         1,
-        2,
+        3,
         Map.of(3, Set.of(TensorType.of(INT_64, 128))));
   }
 
@@ -65,6 +66,15 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * inputs} parameter (an integer token-ID tensor feeding a Keras {@code Embedding}) recovers
    * {@code (2, 5)} int32 exactly, flowing from the driver's {@code layer(tokens, training=False)}
    * call site through {@code tf.keras.layers.Layer.__call__} dispatch.
+   *
+   * <p>Modeling {@code Bidirectional} (wala/ML#840) types the {@code self.bilstm(embed, ...)}
+   * result as well, which is what moved the local count from two to three. Its member currently
+   * lacks the temporal axis: the wrapped {@code LSTM} receives {@code return_sequences} from {@code
+   * BiLSTM.__init__}'s default parameter value, and the front end binds defaults one slot to the
+   * right for a {@code **kwargs}-declaring function (<a
+   * href="https://github.com/wala/ML/issues/843">wala/ML#843</a>), so the flag reads as its
+   * neighbor's {@code False} where the source says {@code True}. When that misbinding is fixed, the
+   * member gains the temporal axis; the count asserted here stays three.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -85,7 +95,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "BiLSTM.call",
         "bilstm_proj",
         1,
-        2,
+        3,
         Map.of(3, Set.of(TENSOR_2_5_INT32)));
   }
 

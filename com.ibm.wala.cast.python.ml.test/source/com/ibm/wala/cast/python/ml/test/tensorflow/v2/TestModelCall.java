@@ -1539,20 +1539,16 @@ public class TestModelCall extends AbstractTensorTest {
   }
 
   /**
-   * A {@code MaxPool2D} between a convolution and its flatten erases the shape for the rest of the
-   * chain, because the pooling layer class is unmodeled (wala/ML#840).
-   *
-   * <p>TODO: This documents the known failure tracked by <a
-   * href="https://github.com/wala/ML/issues/840">wala/ML#840</a>, whose pooling arm is not yet
-   * implemented. Flip to a plain {@code @Test} when it is. {@link #testLayerCallResultConvNoPool()}
-   * is the control that isolates the pooling layer as the cause.
+   * A {@code MaxPool2D} between a convolution and its flatten carries the shape through to the rest
+   * of the chain (wala/ML#840). {@link #testLayerCallResultConvNoPool()} is the control that
+   * isolated the pooling layer as what used to lose it.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
    * @throws CancelException if the analysis is cancelled.
    * @throws IOException if the input fixture cannot be read.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testLayerCallResultConv()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -1564,21 +1560,16 @@ public class TestModelCall extends AbstractTensorTest {
   }
 
   /**
-   * A recurrent layer erases the shape for the rest of its chain, for the same reason and by the
-   * same mechanism as the pooling layer: the class is unmodeled (wala/ML#840). Its presence here is
-   * what makes this a layer-class family rather than a convolution-specific defect, so a fix scoped
-   * to pooling alone would leave the same defect reachable through this path.
-   *
-   * <p>TODO: This documents the known failure tracked by <a
-   * href="https://github.com/wala/ML/issues/840">wala/ML#840</a>, whose recurrent arm is not yet
-   * implemented. Flip to a plain {@code @Test} when it is.
+   * A recurrent layer carries its declared width through to the rest of its chain (wala/ML#840).
+   * Its presence here is what made this a layer-class family rather than a convolution-specific
+   * defect: the same mechanism that lost the shape at the pooling layer lost it here.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.
    * @throws IllegalArgumentException if the input fixture is malformed.
    * @throws CancelException if the analysis is cancelled.
    * @throws IOException if the input fixture cannot be read.
    */
-  @Test(expected = AssertionError.class)
+  @Test
   public void testLayerCallResultLstm()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
     test(
@@ -1608,5 +1599,221 @@ public class TestModelCall extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 32, 10))));
+  }
+
+  /**
+   * A {@code MaxPool2D} applied directly folds its spatial extents from the pool size and strides
+   * stored on the layer (wala/ML#840): a pool of 2 at stride 2 over 28 gives 14 under the default
+   * {@code valid} padding.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testPooling2DMaxPool()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_pooling_layers.py",
+        "consume_maxpool",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 32, 14, 14, 1))));
+  }
+
+  /**
+   * Unsupplied strides follow the pool size, Keras's default (wala/ML#840).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testPooling2DDefaultStrides()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_pooling_layers.py",
+        "consume_maxpool_defaults",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 32, 14, 14, 1))));
+  }
+
+  /**
+   * The {@code MaxPooling2D} alias spelling resolves to the same class and the same generator
+   * (wala/ML#840).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testPooling2DAlias()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_pooling_layers.py",
+        "consume_maxpool_alias",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 32, 14, 14, 1))));
+  }
+
+  /**
+   * Average pooling under {@code same} padding: the spatial extent is ⌈size / stride⌉, where {@code
+   * valid} would give 13 for a pool of 3 over 28 at stride 2 — so this pins the padding mode
+   * actually being read (wala/ML#840).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testPooling2DAverageSamePadding()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_pooling_layers.py",
+        "consume_avgpool",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 32, 14, 14, 1))));
+  }
+
+  /**
+   * {@code GlobalMaxPooling1D} drops the temporal axis, keeping batch and features (wala/ML#840).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testGlobalMaxPooling1D()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_pooling_layers.py",
+        "consume_globalmax1d",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 32, 64))));
+  }
+
+  /**
+   * {@code GlobalMaxPooling2D} drops both spatial axes, keeping batch and channels (wala/ML#840).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testGlobalMaxPooling2D()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_pooling_layers.py",
+        "consume_globalmax2d",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 32, 3))));
+  }
+
+  /**
+   * An {@code LSTM} without {@code return_sequences} keeps the batch axis and replaces the rest
+   * with its declared width (wala/ML#840).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testRecurrentLstm()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_recurrent_layers.py",
+        "consume_lstm_last",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 32))));
+  }
+
+  /**
+   * {@code return_sequences=True} keeps the temporal axis (wala/ML#840).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testRecurrentLstmSequences()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_recurrent_layers.py",
+        "consume_lstm_seq",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 10, 32))));
+  }
+
+  /**
+   * {@code GRU} transforms the type exactly as {@code LSTM} does (wala/ML#840).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testRecurrentGru()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_recurrent_layers.py",
+        "consume_gru",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 16))));
+  }
+
+  /**
+   * {@code SimpleRNN} transforms the type exactly as {@code LSTM} does (wala/ML#840).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testRecurrentSimpleRnn()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_recurrent_layers.py",
+        "consume_rnn",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 8))));
+  }
+
+  /**
+   * {@code Bidirectional} under the default {@code concat} merge mode doubles the wrapped layer's
+   * width, read through the wrapper's {@code layer} field (wala/ML#840).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testRecurrentBidirectional()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_recurrent_layers.py",
+        "consume_bidi",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 64))));
   }
 }
