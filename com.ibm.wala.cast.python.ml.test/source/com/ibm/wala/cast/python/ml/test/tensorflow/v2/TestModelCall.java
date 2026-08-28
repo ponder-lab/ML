@@ -36,6 +36,7 @@ import static org.junit.Assert.assertTrue;
 import com.ibm.wala.cast.python.ipa.callgraph.PythonSSAPropagationCallGraphBuilder;
 import com.ibm.wala.cast.python.ml.client.PythonTensorAnalysisEngine;
 import com.ibm.wala.cast.python.ml.types.TensorType;
+import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.NumericDim;
 import com.ibm.wala.cast.python.ml.types.TensorType.UnresolvedDim;
 import com.ibm.wala.ipa.callgraph.CallGraph;
@@ -2070,5 +2071,65 @@ public class TestModelCall extends AbstractTensorTest {
                         UnresolvedDim.INSTANCE,
                         UnresolvedDim.INSTANCE,
                         new NumericDim(64))))));
+  }
+
+  /**
+   * A feed-dependent spatial extent stays feed-dependent through the transposed convolution
+   * (wala/ML#840). It must not degrade to {@link UnresolvedDim}: the runtime shape still reports
+   * {@code None} there, and the two carry different evidence. This is the input shape ordinary
+   * generator and discriminator code declares.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConv2DTransposeKeepsDynamicExtents()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_transpose_conv_degrade.py",
+        "consume_dynamic_upsample",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        DynamicDim.INSTANCE,
+                        DynamicDim.INSTANCE,
+                        DynamicDim.INSTANCE,
+                        new NumericDim(32))))));
+  }
+
+  /**
+   * The same for the padding layer: padding a feed-dependent axis yields a feed-dependent axis
+   * (wala/ML#840).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testZeroPadding2DKeepsDynamicExtents()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_transpose_conv_degrade.py",
+        "consume_dynamic_pad",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        DynamicDim.INSTANCE,
+                        DynamicDim.INSTANCE,
+                        DynamicDim.INSTANCE,
+                        new NumericDim(3))))));
   }
 }

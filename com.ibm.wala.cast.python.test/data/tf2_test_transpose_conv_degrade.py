@@ -39,3 +39,32 @@ output_padding = tf.keras.layers.Conv2DTranspose(
 )(seed)
 assert output_padding.shape == (2, 14, 14, 64), output_padding.shape
 consume_output_padding(output_padding)
+
+
+def consume_dynamic_upsample(d):
+    pass
+
+
+def consume_dynamic_pad(e):
+    pass
+
+
+# Feed-dependent spatial axes stay feed-dependent through both layers: the runtime shape still
+# reports None there, so they must not degrade to a fixed-but-uncomputed extent. This is the
+# shape ordinary generator and discriminator code actually declares.
+dynamic = tf.keras.Input(shape=(None, None, 3))
+
+dynamic_upsample = tf.keras.layers.Conv2DTranspose(32, 4, strides=2, padding="same")(
+    dynamic
+)
+assert dynamic_upsample.shape.as_list() == [
+    None,
+    None,
+    None,
+    32,
+], dynamic_upsample.shape
+consume_dynamic_upsample(dynamic_upsample)
+
+dynamic_pad = tf.keras.layers.ZeroPadding2D()(dynamic)
+assert dynamic_pad.shape.as_list() == [None, None, None, 3], dynamic_pad.shape
+consume_dynamic_pad(dynamic_pad)
