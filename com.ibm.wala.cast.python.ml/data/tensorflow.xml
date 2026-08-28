@@ -437,6 +437,8 @@
         <putfield class="LRoot" field="Dense" fieldType="LRoot" ref="layers" value="Dense"/>
         <new def="Conv2DCls" class="Ltensorflow/keras/layers/class/Conv2D"/>
         <putfield class="LRoot" field="Conv2D" fieldType="LRoot" ref="layers" value="Conv2DCls"/>
+        <new def="Conv1DCls" class="Ltensorflow/keras/layers/class/Conv1D"/>
+        <putfield class="LRoot" field="Conv1D" fieldType="LRoot" ref="layers" value="Conv1DCls"/>
         <new def="FlattenLayerCls" class="Ltensorflow/keras/layers/class/Flatten"/>
         <putfield class="LRoot" field="Flatten" fieldType="LRoot" ref="layers" value="FlattenLayerCls"/>
         <new def="GlobalAveragePooling1DCls" class="Ltensorflow/keras/layers/class/GlobalAveragePooling1D"/>
@@ -2663,10 +2665,26 @@
         </method>
       </class>
       <class name="Conv2D" allocatable="true">
-        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Conv2D. `filters` fixes the output channel count; the `Conv2DCall` generator reads it back off the instance. -->
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Conv2D. `filters` fixes the output channel count and the window fixes the spatial extents; the `Conv2DCall` generator reads both back off the instance (wala/ML#840). -->
         <method name="do" descriptor="()LRoot;" numArgs="17" paramNames="self filters kernel_size strides padding data_format dilation_rate groups activation use_bias kernel_initializer bias_initializer kernel_regularizer bias_regularizer activity_regularizer kernel_constraint bias_constraint">
           <new def="res" class="Ltensorflow/keras/layers/Conv2D"/>
           <putfield class="LRoot" field="filters" fieldType="LRoot" ref="res" value="filters"/>
+          <putfield class="LRoot" field="kernel_size" fieldType="LRoot" ref="res" value="kernel_size"/>
+          <putfield class="LRoot" field="strides" fieldType="LRoot" ref="res" value="strides"/>
+          <putfield class="LRoot" field="padding" fieldType="LRoot" ref="res" value="padding"/>
+          <putfield class="LRoot" field="dilation_rate" fieldType="LRoot" ref="res" value="dilation_rate"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="Conv1D" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Conv1D. The window and the filter count are stored on the instance so `Conv1DCall` can rewrite the temporal and channel axes from them (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="17" paramNames="self filters kernel_size strides padding data_format dilation_rate groups activation use_bias kernel_initializer bias_initializer kernel_regularizer bias_regularizer activity_regularizer kernel_constraint bias_constraint">
+          <new def="res" class="Ltensorflow/keras/layers/Conv1D"/>
+          <putfield class="LRoot" field="filters" fieldType="LRoot" ref="res" value="filters"/>
+          <putfield class="LRoot" field="kernel_size" fieldType="LRoot" ref="res" value="kernel_size"/>
+          <putfield class="LRoot" field="strides" fieldType="LRoot" ref="res" value="strides"/>
+          <putfield class="LRoot" field="padding" fieldType="LRoot" ref="res" value="padding"/>
+          <putfield class="LRoot" field="dilation_rate" fieldType="LRoot" ref="res" value="dilation_rate"/>
           <return value="res"/>
         </method>
       </class>
@@ -2871,6 +2889,17 @@
         <!-- FIXME: Workaround for https://github.com/wala/ML/issues/106. -->
         <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <!-- https://github.com/keras-team/keras/blob/07e13740fd181fc3ddec7d9a594d8a08666645f6/keras/layers/core/dense.py#L166-L240 -->
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="Conv1D" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Conv1D#__call__. The output type is computed by `Conv1DCall` (wala/ML#840). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>
         </method>
