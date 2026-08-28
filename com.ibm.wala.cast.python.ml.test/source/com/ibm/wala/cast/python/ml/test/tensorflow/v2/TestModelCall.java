@@ -1917,6 +1917,7 @@ public class TestModelCall extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 10))));
   }
+
   /**
    * A {@code Conv2DTranspose} under {@code same} padding scales each spatial extent by the stride
    * and takes its channel axis from the declared filter count (wala/ML#840): 7 at stride 2 gives
@@ -1978,5 +1979,96 @@ public class TestModelCall extends AbstractTensorTest {
         1,
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 32, 32, 64))));
+  }
+
+  /**
+   * A tuple {@code kernel_size} and {@code strides} name the two spatial axes separately and are
+   * not proven single-valued, so those extents degrade while the channel axis still resolves from
+   * {@code filters} (wala/ML#840). This is the spelling ordinary generator code uses, so it is the
+   * common case rather than an edge one, and it is why the two axes are resolved independently.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConv2DTransposeTupleWindowDegrades()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_transpose_conv_degrade.py",
+        "consume_tuple_window",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(2),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        new NumericDim(128))))));
+  }
+
+  /**
+   * A tuple {@code padding} names the two axes separately and does not resolve, so the spatial
+   * extents degrade while the batch and channel axes pass through untouched (wala/ML#840).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testZeroPadding2DTuplePaddingDegrades()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_transpose_conv_degrade.py",
+        "consume_tuple_padding",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(2),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        new NumericDim(256))))));
+  }
+
+  /**
+   * A supplied {@code output_padding} shifts the spatial extents by an amount the generator does
+   * not read, so they degrade rather than being reported from arithmetic that no longer describes
+   * them (wala/ML#840). Ignoring the argument would produce a confident wrong extent, which is
+   * worse than an unresolved one.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConv2DTransposeOutputPaddingDegrades()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_transpose_conv_degrade.py",
+        "consume_output_padding",
+        1,
+        1,
+        Map.of(
+            2,
+            Set.of(
+                new TensorType(
+                    FLOAT_32,
+                    asList(
+                        new NumericDim(2),
+                        UnresolvedDim.INSTANCE,
+                        UnresolvedDim.INSTANCE,
+                        new NumericDim(64))))));
   }
 }
