@@ -8559,6 +8559,53 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Whether the given type is the {@code __call__} of a 2-D window-pooling Keras layer
+   * (wala/ML#840).
+   *
+   * @param type The candidate declaring type.
+   * @return {@code true} iff it is one of the 2-D pooling layer calls.
+   */
+  private static boolean isPooling2DLayerCallType(TypeReference type) {
+    for (MethodReference call : TensorFlowTypes.POOLING_2D_LAYER_CALLS)
+      if (type.equals(call.getDeclaringClass())) return true;
+    return false;
+  }
+
+  /**
+   * Whether the given type is the {@code __call__} of a recurrent Keras layer (wala/ML#840). {@code
+   * Bidirectional} is not among them: it dispatches separately, since its parameters live on the
+   * wrapped layer.
+   *
+   * @param type The candidate declaring type.
+   * @return {@code true} iff it is one of the recurrent layer calls.
+   */
+  private static boolean isRecurrentLayerCallType(TypeReference type) {
+    for (MethodReference call : TensorFlowTypes.RECURRENT_LAYER_CALLS)
+      if (type.equals(call.getDeclaringClass())) return true;
+    return false;
+  }
+
+  /**
+   * Returns the points-to set of the given instance's field, named as the model file's constructor
+   * summaries store their arguments.
+   *
+   * @param builder The {@link PropagationCallGraphBuilder} whose pointer analysis is queried.
+   * @param instance The allocation site of the instance carrying the field.
+   * @param fieldName The field's name.
+   * @return The field's points-to set, or {@code null} when the field does not resolve.
+   */
+  protected static OrdinalSet<InstanceKey> getInstanceFieldPointsToSet(
+      PropagationCallGraphBuilder builder, AllocationSiteInNode instance, String fieldName) {
+    FieldReference fieldRef =
+        FieldReference.findOrCreate(
+            instance.concreteType().getReference(), findOrCreateAsciiAtom(fieldName), Root);
+    IField field = builder.getClassHierarchy().resolveField(fieldRef);
+    if (field == null) return null;
+    PointerKey fieldPK = builder.getPointerKeyForInstanceField(instance, field);
+    return builder.getPointerAnalysis().getPointsToSet(fieldPK);
+  }
+
+  /**
    * Returns the possible boolean values for the given points-to set.
    *
    * <p>Only a boolean constant resolves. Anything else, {@code None} and a truthy number included,
@@ -9001,6 +9048,18 @@ public abstract class TensorGenerator {
       // Registered in tandem with the factory's arm: an op present in one dispatch table but not
       // the other works at seeding time yet dead-ends producer delegation (wala/ML#840).
       return new ShapePreservingLayerCall(node);
+    } else if (isPooling2DLayerCallType(type)) {
+      // Registered in tandem with the factory's arm, like the shape-preserving group above
+      // (wala/ML#840).
+      return new Pooling2DCall(node);
+    } else if (type.equals(TensorFlowTypes.GLOBAL_MAX_POOLING_1D_CALL.getDeclaringClass())) {
+      return new GlobalMaxPoolingCall(node, GlobalMaxPoolingCall.INPUT_RANK_1D);
+    } else if (type.equals(TensorFlowTypes.GLOBAL_MAX_POOLING_2D_CALL.getDeclaringClass())) {
+      return new GlobalMaxPoolingCall(node, GlobalMaxPoolingCall.INPUT_RANK_2D);
+    } else if (isRecurrentLayerCallType(type)) {
+      return new RecurrentLayerCall(node);
+    } else if (type.equals(TensorFlowTypes.BIDIRECTIONAL_LAYER_CALL.getDeclaringClass())) {
+      return new BidirectionalCall(node);
     } else if (type.equals(TensorFlowTypes.EMBEDDING_LAYER_CALL.getDeclaringClass())) {
       return new EmbeddingCall(node);
     } else if (type.equals(TensorFlowTypes.MODEL_CALL.getDeclaringClass())) {

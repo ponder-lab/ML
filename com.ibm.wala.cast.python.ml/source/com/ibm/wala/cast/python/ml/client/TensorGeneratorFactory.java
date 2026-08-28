@@ -22,6 +22,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.AS_STRING;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ATAN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ATAN2;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ATANH;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BIDIRECTIONAL_LAYER_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOOLEAN_MASK;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOSTON_HOUSING_X_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.BOSTON_HOUSING_X_TRAIN;
@@ -108,6 +109,8 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GAMMA_OP;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GATHER;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GATHER_ND;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GLOBAL_AVERAGE_POOLING_1D_CALL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GLOBAL_MAX_POOLING_1D_CALL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GLOBAL_MAX_POOLING_2D_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GRADIENT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GREATER;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.GREATER_EQUAL;
@@ -408,6 +411,31 @@ public class TensorGeneratorFactory {
    */
   private static boolean isShapePreservingLayerCall(TypeReference calledFunction) {
     return TensorFlowTypes.SHAPE_PRESERVING_LAYER_CALLS.stream()
+        .anyMatch(m -> isType(calledFunction, m.getDeclaringClass()));
+  }
+
+  /**
+   * Whether the called function is the {@code __call__} of a 2-D window-pooling Keras layer
+   * (wala/ML#840).
+   *
+   * @param calledFunction The called function's type.
+   * @return {@code true} iff it is one of the 2-D pooling layer calls.
+   */
+  private static boolean isPooling2DLayerCall(TypeReference calledFunction) {
+    return TensorFlowTypes.POOLING_2D_LAYER_CALLS.stream()
+        .anyMatch(m -> isType(calledFunction, m.getDeclaringClass()));
+  }
+
+  /**
+   * Whether the called function is the {@code __call__} of a recurrent Keras layer (wala/ML#840).
+   * {@code Bidirectional} is not among them: it dispatches separately, since its parameters live on
+   * the wrapped layer.
+   *
+   * @param calledFunction The called function's type.
+   * @return {@code true} iff it is one of the recurrent layer calls.
+   */
+  private static boolean isRecurrentLayerCall(TypeReference calledFunction) {
+    return TensorFlowTypes.RECURRENT_LAYER_CALLS.stream()
         .anyMatch(m -> isType(calledFunction, m.getDeclaringClass()));
   }
 
@@ -1880,6 +1908,14 @@ public class TensorGeneratorFactory {
       return new FlattenCall(source);
     else if (isShapePreservingLayerCall(calledFunction))
       return new ShapePreservingLayerCall(source);
+    else if (isPooling2DLayerCall(calledFunction)) return new Pooling2DCall(source);
+    else if (isType(calledFunction, GLOBAL_MAX_POOLING_1D_CALL.getDeclaringClass()))
+      return new GlobalMaxPoolingCall(source, GlobalMaxPoolingCall.INPUT_RANK_1D);
+    else if (isType(calledFunction, GLOBAL_MAX_POOLING_2D_CALL.getDeclaringClass()))
+      return new GlobalMaxPoolingCall(source, GlobalMaxPoolingCall.INPUT_RANK_2D);
+    else if (isRecurrentLayerCall(calledFunction)) return new RecurrentLayerCall(source);
+    else if (isType(calledFunction, BIDIRECTIONAL_LAYER_CALL.getDeclaringClass()))
+      return new BidirectionalCall(source);
     else if (isType(calledFunction, GLOBAL_AVERAGE_POOLING_1D_CALL.getDeclaringClass()))
       return new GlobalAveragePooling1DCall(source);
     else if (isType(calledFunction, EMBEDDING_LAYER_CALL.getDeclaringClass()))

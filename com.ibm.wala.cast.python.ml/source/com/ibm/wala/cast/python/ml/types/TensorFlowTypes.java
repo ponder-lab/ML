@@ -2079,12 +2079,61 @@ public class TensorFlowTypes extends PythonTypes {
    */
   public static final List<MethodReference> SHAPE_PRESERVING_LAYER_CALLS =
       List.of(
-          shapePreservingLayerCall("BatchNormalization"),
-          shapePreservingLayerCall("ReLU"),
-          shapePreservingLayerCall("LeakyReLU"),
-          shapePreservingLayerCall("Softmax"),
-          shapePreservingLayerCall("Masking"),
-          shapePreservingLayerCall("Activation"));
+          kerasLayerCall("BatchNormalization"),
+          kerasLayerCall("ReLU"),
+          kerasLayerCall("LeakyReLU"),
+          kerasLayerCall("Softmax"),
+          kerasLayerCall("Masking"),
+          kerasLayerCall("Activation"));
+
+  /**
+   * The {@code __call__} synthetic methods on the 2-D window-pooling Keras layer instances
+   * (wala/ML#840): the output keeps the batch and channel axes and rewrites the two spatial axes
+   * from the pooling window stored on the instance. All dispatch to {@link
+   * com.ibm.wala.cast.python.ml.client.Pooling2DCall}.
+   */
+  public static final List<MethodReference> POOLING_2D_LAYER_CALLS =
+      List.of(kerasLayerCall("MaxPool2D"), kerasLayerCall("AveragePooling2D"));
+
+  /**
+   * The {@code __call__} synthetic method on a {@code tf.keras.layers.GlobalMaxPooling1D} instance
+   * (wala/ML#840).
+   *
+   * @see <a
+   *     href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GlobalMaxPool1D">tf.keras.layers.GlobalMaxPooling1D</a>
+   */
+  public static final MethodReference GLOBAL_MAX_POOLING_1D_CALL =
+      kerasLayerCall("GlobalMaxPooling1D");
+
+  /**
+   * The {@code __call__} synthetic method on a {@code tf.keras.layers.GlobalMaxPooling2D} instance
+   * (wala/ML#840).
+   *
+   * @see <a
+   *     href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GlobalMaxPool2D">tf.keras.layers.GlobalMaxPooling2D</a>
+   */
+  public static final MethodReference GLOBAL_MAX_POOLING_2D_CALL =
+      kerasLayerCall("GlobalMaxPooling2D");
+
+  /**
+   * The {@code __call__} synthetic methods on the recurrent Keras layer instances (wala/ML#840):
+   * the declared {@code units} becomes the output's last axis, and {@code return_sequences} decides
+   * whether the temporal axis survives. All dispatch to {@link
+   * com.ibm.wala.cast.python.ml.client.RecurrentLayerCall}. {@code Bidirectional} is deliberately
+   * not among them: its parameters live on the wrapped layer, so it dispatches to {@link
+   * com.ibm.wala.cast.python.ml.client.BidirectionalCall} via {@link #BIDIRECTIONAL_LAYER_CALL}.
+   */
+  public static final List<MethodReference> RECURRENT_LAYER_CALLS =
+      List.of(kerasLayerCall("LSTM"), kerasLayerCall("GRU"), kerasLayerCall("SimpleRNN"));
+
+  /**
+   * The {@code __call__} synthetic method on a {@code tf.keras.layers.Bidirectional} instance
+   * (wala/ML#840).
+   *
+   * @see <a
+   *     href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Bidirectional">tf.keras.layers.Bidirectional</a>
+   */
+  public static final MethodReference BIDIRECTIONAL_LAYER_CALL = kerasLayerCall("Bidirectional");
 
   /**
    * Builds the {@code __call__} method reference for a Keras layer class by its simple name.
@@ -2092,7 +2141,7 @@ public class TensorFlowTypes extends PythonTypes {
    * @param simpleName The layer class's simple name, as {@code tf.keras.layers} spells it.
    * @return The {@code __call__} synthetic method on that layer.
    */
-  private static MethodReference shapePreservingLayerCall(String simpleName) {
+  private static MethodReference kerasLayerCall(String simpleName) {
     return MethodReference.findOrCreate(
         TypeReference.findOrCreate(
             PythonTypes.pythonLoader,

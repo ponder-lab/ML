@@ -347,11 +347,11 @@ public class TestNetworkFixtures extends AbstractTensorTest {
    * float32}—flowing from the {@code lstm_net(x, is_training=True)} call site through {@code
    * tf.keras.Model.__call__} dispatch.
    *
-   * <p>The forward-pass locals ({@code lstm_layer} output, {@code out} output, {@code softmax}) are
-   * inferred as {@code float32} but with <em>unknown shape</em>: the built-in {@code LSTM}/{@code
-   * Dense} output shapes are not narrowed (the layer-chain shape gap tracked by <a
-   * href="https://github.com/wala/ML/issues/530">wala/ML#530</a>). The dtype axis—the load-bearing
-   * one—is exact; only shape is ⊤.
+   * <p>The forward-pass locals are inferred concretely on both axes: the {@code lstm_layer} output
+   * as {@code (256, 32) float32} from the layer's declared width (wala/ML#840), and the {@code
+   * out}/{@code softmax} chain as {@code (256, 10) float32}. Modeling the recurrent layer also
+   * types one value the chain previously dropped, which is what moved the local count from four to
+   * five.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -361,7 +361,7 @@ public class TestNetworkFixtures extends AbstractTensorTest {
   @Test
   public void testLstmCall()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_lstm_call.py", "LSTM.call", 1, 4, Map.of(3, Set.of(TENSOR_256_28_28_FLOAT32)));
+    test("tf2_test_lstm_call.py", "LSTM.call", 1, 5, Map.of(3, Set.of(TENSOR_256_28_28_FLOAT32)));
   }
 
   /**
