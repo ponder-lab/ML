@@ -885,9 +885,15 @@ public class TensorGeneratorFactory {
       if (pk instanceof LocalPointerKey) {
         LocalPointerKey lpk = (LocalPointerKey) pk;
         SSAInstruction def = lpk.getNode().getDU().getDef(lpk.getValueNumber());
+        // A binary-op-defined value is a creator too: the factory dispatches it to the elementwise
+        // generator, which resolves the operands itself. Without the stop, a walk arriving from a
+        // container field (a destructured `x, y = a / 255.0, ...` whose field feeds a subscript or
+        // a dataset argument) passes through the elementwise result, exhausts its predecessors,
+        // and falls back to the field key, which nothing can dispatch (wala/ML#396).
         if (def instanceof SSAAbstractInvokeInstruction
             || def instanceof EachElementGetInstruction
-            || def instanceof PythonPropertyRead) {
+            || def instanceof PythonPropertyRead
+            || def instanceof SSABinaryOpInstruction) {
           LOGGER.fine(() -> "findCreator found creator instruction: " + def);
           return current;
         }

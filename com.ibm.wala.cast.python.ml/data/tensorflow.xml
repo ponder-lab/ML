@@ -441,6 +441,7 @@
         <putfield class="LRoot" field="Flatten" fieldType="LRoot" ref="layers" value="FlattenLayerCls"/>
         <new def="GlobalAveragePooling1DCls" class="Ltensorflow/keras/layers/class/GlobalAveragePooling1D"/>
         <putfield class="LRoot" field="GlobalAveragePooling1D" fieldType="LRoot" ref="layers" value="GlobalAveragePooling1DCls"/>
+        <putfield class="LRoot" field="GlobalAvgPool1D" fieldType="LRoot" ref="layers" value="GlobalAveragePooling1DCls"/>
         <new def="EmbeddingCls" class="Ltensorflow/keras/layers/class/Embedding"/>
         <putfield class="LRoot" field="Embedding" fieldType="LRoot" ref="layers" value="EmbeddingCls"/>
         <new def="DropoutLayerCls" class="Ltensorflow/keras/layers/class/Dropout"/>

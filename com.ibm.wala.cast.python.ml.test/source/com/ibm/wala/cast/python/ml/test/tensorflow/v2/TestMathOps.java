@@ -71,11 +71,16 @@ public class TestMathOps extends AbstractTensorTest {
    * The caller's {@code tf.constant([[1.0, ..., 5.0]], dtype=tf.float32)} flows in cleanly, showing
    * that none of the body's {@code ReadDataFallback}-routed ops block caller-side propagation for
    * this function; the parameter type is fully resolved at the call site.
+   *
+   * <p>The local count rose from twelve to thirteen with the wala/ML#396 creator-walk work: one
+   * more intermediate of the nucleus-sampling arithmetic now registers as an unknown-typed tensor
+   * where it previously carried nothing at all, audited value by value against the pre-change dump
+   * (the other twelve entries are identical).
    */
   @Test
   public void testTopPLogits()
       throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
-    test("tf2_test_top_p_logits.py", "top_p_logits", 1, 12, Map.of(2, Set.of(TENSOR_1_5_FLOAT32)));
+    test("tf2_test_top_p_logits.py", "top_p_logits", 1, 13, Map.of(2, Set.of(TENSOR_1_5_FLOAT32)));
   }
 
   /**
