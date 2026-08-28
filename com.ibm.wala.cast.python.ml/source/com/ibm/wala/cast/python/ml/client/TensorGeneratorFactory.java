@@ -44,6 +44,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONCAT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONCATENATE_LAYER_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONV2D_CALL;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONV2D_TRANSPOSE_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.COS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.COSH;
@@ -226,6 +227,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.VAR_LEN_FEATURE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.WHERE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZEROS_LIKE;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.ZERO_PADDING_2D_CALL;
 import static com.ibm.wala.cast.python.types.PythonTypes.SLICE_BUILTIN;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
 import static com.ibm.wala.cast.python.util.Util.sanitize;
@@ -1917,6 +1919,10 @@ public class TensorGeneratorFactory {
     else if (isShapePreservingLayerCall(calledFunction))
       return new ShapePreservingLayerCall(source);
     else if (isPooling2DLayerCall(calledFunction)) return new Pooling2DCall(source);
+    else if (isType(calledFunction, CONV2D_TRANSPOSE_CALL.getDeclaringClass()))
+      return new Conv2DTransposeCall(source);
+    else if (isType(calledFunction, ZERO_PADDING_2D_CALL.getDeclaringClass()))
+      return new ZeroPadding2DCall(source);
     else if (isType(calledFunction, GLOBAL_MAX_POOLING_1D_CALL.getDeclaringClass()))
       return new GlobalMaxPoolingCall(source, GlobalMaxPoolingCall.INPUT_RANK_1D);
     else if (isType(calledFunction, GLOBAL_MAX_POOLING_2D_CALL.getDeclaringClass()))

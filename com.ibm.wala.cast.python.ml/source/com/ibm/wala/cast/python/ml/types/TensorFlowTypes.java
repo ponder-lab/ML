@@ -2096,6 +2096,22 @@ public class TensorFlowTypes extends PythonTypes {
       List.of(kerasLayerCall("MaxPool2D"), kerasLayerCall("AveragePooling2D"));
 
   /**
+   * The {@code __call__} synthetic method on a {@code tf.keras.layers.Conv2DTranspose} instance
+   * (wala/ML#840): the output keeps the batch axis, rewrites the two spatial axes upward from the
+   * upsampling window stored on the instance, and takes its channel axis from the declared filter
+   * count. Dispatches to {@link com.ibm.wala.cast.python.ml.client.Conv2DTransposeCall}.
+   */
+  public static final MethodReference CONV2D_TRANSPOSE_CALL = kerasLayerCall("Conv2DTranspose");
+
+  /**
+   * The {@code __call__} synthetic method on a {@code tf.keras.layers.ZeroPadding2D} instance
+   * (wala/ML#840): the output keeps the batch and channel axes and grows the two spatial axes by
+   * the padding stored on the instance. Dispatches to {@link
+   * com.ibm.wala.cast.python.ml.client.ZeroPadding2DCall}.
+   */
+  public static final MethodReference ZERO_PADDING_2D_CALL = kerasLayerCall("ZeroPadding2D");
+
+  /**
    * The {@code __call__} synthetic method on a {@code tf.keras.layers.GlobalMaxPooling1D} instance
    * (wala/ML#840).
    *

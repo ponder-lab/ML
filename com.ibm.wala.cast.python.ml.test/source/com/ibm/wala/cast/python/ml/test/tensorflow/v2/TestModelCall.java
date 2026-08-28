@@ -1917,4 +1917,66 @@ public class TestModelCall extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 10))));
   }
+  /**
+   * A {@code Conv2DTranspose} under {@code same} padding scales each spatial extent by the stride
+   * and takes its channel axis from the declared filter count (wala/ML#840): 7 at stride 2 gives
+   * 14, and 256 channels become the declared 128.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConv2DTransposeSamePadding()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_transpose_conv_layers.py",
+        "consume_upsampled",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 14, 14, 128))));
+  }
+
+  /**
+   * An unsupplied {@code padding} takes Keras's default of one, growing each spatial extent by two
+   * (wala/ML#840). The channel axis is untouched, which is what separates this layer from the
+   * transposed convolution above.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testZeroPadding2DDefaultPadding()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_transpose_conv_layers.py",
+        "consume_padded",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 9, 9, 256))));
+  }
+
+  /**
+   * The two layers chained (wala/ML#840). This is the witness that matters: before this modeling
+   * the first unmodeled layer dropped the shape for everything downstream of it, so a chain is what
+   * a per-layer test cannot show.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testTransposeConvChain()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_transpose_conv_layers.py",
+        "consume_chained",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 32, 32, 64))));
+  }
 }
