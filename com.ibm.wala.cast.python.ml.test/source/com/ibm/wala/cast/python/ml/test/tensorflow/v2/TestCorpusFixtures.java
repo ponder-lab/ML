@@ -800,10 +800,11 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * new findings, and are downstream of the (exact) input signature.
    *
    * <p>Modeling the functional {@code layers.concatenate} spelling (wala/ML#840) types the {@code
-   * concatenate(convs)} result as well, which is what moved the local count from four to five. It
-   * is a both-axes-⊤ tensor rather than a shaped one: its inputs ride the unmodeled {@code
-   * Conv1D}/{@code GlobalAvgPool1D} chain above, so there is nothing to sum yet, and the value is
-   * simply no longer dropped.
+   * concatenate(convs)} result as well, which moved the local count from four to five, and wiring
+   * the {@code GlobalAvgPool1D} alias to the modeled {@code GlobalAveragePooling1D} types the
+   * loop's pooled result too, moving it from five to six. Both are both-axes-⊤ tensors rather than
+   * shaped ones: their inputs ride the unmodeled {@code Conv1D} above, so there is nothing to
+   * compute from yet, and the values are simply no longer dropped.
    *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
@@ -824,7 +825,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "TextCNN.call",
         "textcnn_proj",
         1,
-        5,
+        6,
         Map.of(3, Set.of(TENSOR_2_5_INT32)));
   }
 

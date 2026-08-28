@@ -1702,6 +1702,27 @@ public class TestModelCall extends AbstractTensorTest {
   }
 
   /**
+   * The {@code GlobalAvgPool1D} alias spelling resolves to the modeled {@code
+   * GlobalAveragePooling1D} class (wala/ML#840): an unwired alias has the same symptom as a missing
+   * generator, a chain that stays at the top shape.
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testGlobalAvgPool1DAlias()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_pooling_layers.py",
+        "consume_globalavg1d_alias",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 32, 64))));
+  }
+
+  /**
    * {@code GlobalMaxPooling2D} drops both spatial axes, keeping batch and channels (wala/ML#840).
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.

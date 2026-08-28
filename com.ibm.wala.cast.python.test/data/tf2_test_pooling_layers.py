@@ -21,6 +21,10 @@ def consume_globalmax1d(x):
     pass
 
 
+def consume_globalavg1d_alias(x):
+    pass
+
+
 def consume_globalmax2d(x):
     pass
 
@@ -62,3 +66,9 @@ gmp2 = tf.keras.layers.GlobalMaxPooling2D()
 gmp2_out = gmp2(tf.ones((32, 28, 28, 3)))
 assert gmp2_out.shape == (32, 3), gmp2_out.shape
 consume_globalmax2d(gmp2_out)
+
+# The `GlobalAvgPool1D` alias spelling resolves to the modeled `GlobalAveragePooling1D` class.
+gap1 = tf.keras.layers.GlobalAvgPool1D()
+gap1_out = gap1(tf.ones((32, 10, 64)))
+assert gap1_out.shape == (32, 64), gap1_out.shape
+consume_globalavg1d_alias(gap1_out)
