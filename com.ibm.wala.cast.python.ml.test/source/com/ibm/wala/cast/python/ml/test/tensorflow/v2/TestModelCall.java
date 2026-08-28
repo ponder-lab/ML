@@ -1816,4 +1816,84 @@ public class TestModelCall extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 8, 64))));
   }
+
+  /**
+   * A {@code Concatenate} layer under its default axis of -1 sums the widths and keeps the batch
+   * axis (wala/ML#840).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConcatenateLayer()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_concatenate_layer.py",
+        "consume_layer",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 32, 16))));
+  }
+
+  /**
+   * An explicit axis stored at construction is read back at the call: axis 0 sums the batch extents
+   * and keeps the width (wala/ML#840).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConcatenateLayerAxis()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_concatenate_layer.py",
+        "consume_layer_axis",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 40, 10))));
+  }
+
+  /**
+   * The functional {@code layers.concatenate} spelling shares the computation but not the default:
+   * its unsupplied axis is -1 where {@code tf.concat}'s is 0, and this pins the -1 actually being
+   * used (wala/ML#840).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConcatenateFunctional()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_concatenate_layer.py",
+        "consume_functional",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 32, 16))));
+  }
+
+  /**
+   * More than two inputs sum every entry's axis extent (wala/ML#840).
+   *
+   * @throws ClassHierarchyException if the class hierarchy cannot be built.
+   * @throws IllegalArgumentException if the input fixture is malformed.
+   * @throws CancelException if the analysis is cancelled.
+   * @throws IOException if the input fixture cannot be read.
+   */
+  @Test
+  public void testConcatenateThreeInputs()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_concatenate_layer.py",
+        "consume_three",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 10))));
+  }
 }

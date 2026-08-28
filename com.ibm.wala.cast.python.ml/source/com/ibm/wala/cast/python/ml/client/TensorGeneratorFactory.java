@@ -41,6 +41,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_Y_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CIFAR10_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CLIP_BY_VALUE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONCAT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONCATENATE_LAYER_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONSTANT;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONV2D_CALL;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.CONVERT_TO_TENSOR;
@@ -121,6 +122,7 @@ import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_X_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_Y_TEST;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.IMDB_Y_TRAIN;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.INPUT;
+import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.KERAS_CONCATENATE;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LEAKY_RELU;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LESS;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.LESS_EQUAL;
@@ -1916,6 +1918,10 @@ public class TensorGeneratorFactory {
     else if (isRecurrentLayerCall(calledFunction)) return new RecurrentLayerCall(source);
     else if (isType(calledFunction, BIDIRECTIONAL_LAYER_CALL.getDeclaringClass()))
       return new BidirectionalCall(source);
+    else if (isType(calledFunction, CONCATENATE_LAYER_CALL.getDeclaringClass()))
+      return new ConcatenateCall(source);
+    else if (isType(calledFunction, KERAS_CONCATENATE.getDeclaringClass()))
+      return new KerasConcatenate(source);
     else if (isType(calledFunction, GLOBAL_AVERAGE_POOLING_1D_CALL.getDeclaringClass()))
       return new GlobalAveragePooling1DCall(source);
     else if (isType(calledFunction, EMBEDDING_LAYER_CALL.getDeclaringClass()))
