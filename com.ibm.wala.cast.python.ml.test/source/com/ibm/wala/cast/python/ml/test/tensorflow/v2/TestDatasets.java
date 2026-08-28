@@ -2311,6 +2311,53 @@ public class TestDatasets extends AbstractTensorTest {
   }
 
   /**
+   * A directly-called step function's parameters, fed by destructuring iteration over a chained
+   * {@code shuffle().batch()} dataset whose images gained their channel axis from an ellipsis
+   * subscript and their dtype from a division: the corpus's custom-training-loop shape in
+   * miniature. Train side: every batch is full, so the images are exactly {@code (32, 28, 28, 1)
+   * float64} and the labels {@code (32,) uint8}.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testStepFunctionParamsTrain()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_step_function_params.py",
+        "train_step",
+        2,
+        2,
+        Map.of(2, Set.of(TensorType.of(FLOAT_64, 32, 28, 28, 1)), 3, Set.of(TENSOR_32_UINT8)));
+  }
+
+  /**
+   * Companion to {@link #testStepFunctionParamsTrain()} for the test side, whose element count
+   * leaves a partial final batch, so each parameter is the union over the full and partial batch.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testStepFunctionParamsTest()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_step_function_params.py",
+        "test_step",
+        2,
+        2,
+        Map.of(
+            2,
+            Set.of(TensorType.of(FLOAT_64, 32, 28, 28, 1), TensorType.of(FLOAT_64, 16, 28, 28, 1)),
+            3,
+            Set.of(TENSOR_32_UINT8, TENSOR_16_UINT8)));
+  }
+
+  /**
    * Probe: {@code drop_remainder=True} discards the partial final batch.
    *
    * @throws ClassHierarchyException if the class hierarchy cannot be built.

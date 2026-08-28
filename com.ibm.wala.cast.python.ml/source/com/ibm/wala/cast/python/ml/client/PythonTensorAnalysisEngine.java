@@ -883,6 +883,27 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
             if (!added)
               processInstruction(
                   def, du, localPointerKeyNode, src, sources, callGraph, pointerAnalysis);
+          } else if (def instanceof SSABinaryOpInstruction) {
+            // The subscript's receiver is an elementwise result (`(x / 255.0)[..., tf.newaxis]`):
+            // it carries dataflow state but no allocation, so no points-to walk reaches this
+            // read. The factory dispatches the dim-adding subscript directly; seed only on that
+            // resolution, so an arbitrary subscript over a non-tensor binary result stays
+            // unseeded (wala/ML#396).
+            try {
+              TensorGenerator generator = getGenerator(src, builder);
+
+              if (generator instanceof NdarraySubscriptOperation) {
+                sources.add(src);
+                LOGGER.fine(
+                    () ->
+                        "Added dataflow source from a dim-adding subscript over an elementwise"
+                            + " result: "
+                            + describe(src)
+                            + ".");
+              }
+            } catch (IllegalArgumentException e) {
+              LOGGER.log(Level.FINE, e, () -> "Not a dim-adding subscript: " + propertyRead + ".");
+            }
           }
         }
       }

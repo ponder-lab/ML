@@ -25,6 +25,7 @@ import com.ibm.wala.ssa.SSAInstruction;
 import com.ibm.wala.ssa.SSAUnaryOpInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.util.collections.HashSetFactory;
+import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -192,6 +193,18 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
   }
 
   /**
+   * Per-thread set of the operands whose origins are currently being classified.
+   *
+   * <p>Breaks unbounded recursion on a loop-carried elementwise chain ({@code x = x * a} in a
+   * loop): the operand's creator walk stops at the loop body's own binary operator (see {@code
+   * findCreator}'s binary-op stop, wala/ML#396), whose origin classification revisits the operand.
+   * On re-entry the operand contributes no evidence, and the chain's other operand decides,
+   * mirroring the wala/ML#599 cycle break.
+   */
+  private static final ThreadLocal<Set<Pair<CGNode, Integer>>> OPERAND_ORIGINS_IN_PROGRESS =
+      ThreadLocal.withInitial(HashSetFactory::make);
+
+  /**
    * Classifies one binary-operator operand's origins. A parameter of the defining frame carries the
    * hybridization-frame origin (wala/ML#726): under tracing it is a symbolic tensor whatever its
    * eager feeds, so it classifies as {@link TensorOrigin#PARAMETER} rather than through the
@@ -203,7 +216,7 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
    * @param node The node whose IR defines the operand.
    * @param vn The operand's value number.
    * @return The operand's origins, or {@code null} when the operand contributes no origin evidence
-   *     (a scalar expression, or an unresolvable points-to chain).
+   *     (a scalar expression, an unresolvable points-to chain, or a cyclic revisit).
    */
   private Set<TensorOrigin> getOperandOrigins(
       PropagationCallGraphBuilder builder, CGNode node, int vn) {
@@ -211,22 +224,29 @@ public class ElementWiseOperation extends TensorGenerator implements OperandDTyp
 
     if (node.getIR().getSymbolTable().isParameter(vn)) return EnumSet.of(TensorOrigin.PARAMETER);
 
-    SSAInstruction def = node.getDU().getDef(vn);
-    if (def instanceof SSABinaryOpInstruction)
-      return this.getBinaryOperationOrigins(builder, node, (SSABinaryOpInstruction) def);
-
-    PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
-    if (builder.getPropagationSystem().isImplicit(pk)) return null;
-    PointsToSetVariable operand = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
-    if (operand == null) return null;
-
-    TensorGenerator generator;
+    Set<Pair<CGNode, Integer>> inProgress = OPERAND_ORIGINS_IN_PROGRESS.get();
+    Pair<CGNode, Integer> key = Pair.make(node, vn);
+    if (!inProgress.add(key)) return null; // cycle: the other operand decides.
     try {
-      generator = TensorGeneratorFactory.getGenerator(operand, builder);
-    } catch (IllegalArgumentException e) {
-      return null;
+      SSAInstruction def = node.getDU().getDef(vn);
+      if (def instanceof SSABinaryOpInstruction)
+        return this.getBinaryOperationOrigins(builder, node, (SSABinaryOpInstruction) def);
+
+      PointerKey pk = builder.getPointerAnalysis().getHeapModel().getPointerKeyForLocal(node, vn);
+      if (builder.getPropagationSystem().isImplicit(pk)) return null;
+      PointsToSetVariable operand = builder.getPropagationSystem().findOrCreatePointsToSet(pk);
+      if (operand == null) return null;
+
+      TensorGenerator generator;
+      try {
+        generator = TensorGeneratorFactory.getGenerator(operand, builder);
+      } catch (IllegalArgumentException e) {
+        return null;
+      }
+      return generator == null ? null : generator.getOrigins(builder);
+    } finally {
+      inProgress.remove(key);
     }
-    return generator == null ? null : generator.getOrigins(builder);
   }
 
   /**
