@@ -479,6 +479,10 @@
         <putfield class="LRoot" field="SimpleRNN" fieldType="LRoot" ref="layers" value="SimpleRNNLayerCls"/>
         <new def="BidirectionalLayerCls" class="Ltensorflow/keras/layers/class/Bidirectional"/>
         <putfield class="LRoot" field="Bidirectional" fieldType="LRoot" ref="layers" value="BidirectionalLayerCls"/>
+        <new def="ConcatenateLayerCls" class="Ltensorflow/keras/layers/class/Concatenate"/>
+        <putfield class="LRoot" field="Concatenate" fieldType="LRoot" ref="layers" value="ConcatenateLayerCls"/>
+        <new def="kerasConcatenateFn" class="Ltensorflow/functions/concatenate"/>
+        <putfield class="LRoot" field="concatenate" fieldType="LRoot" ref="layers" value="kerasConcatenateFn"/>
         <new def="Model" class="Ltensorflow/keras/models/class/Model"/>
         <putfield class="LRoot" field="Model" fieldType="LRoot" ref="keras" value="Model"/>
         <putfield class="LRoot" field="Model" fieldType="LRoot" ref="models" value="Model"/>
@@ -1851,6 +1855,13 @@
           <return value="res"/>
         </method>
       </class>
+      <class name="concatenate" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/concatenate. The functional Keras concatenation spelling: same computation as `concat`, but the list parameter is named `inputs` and the default axis is -1 rather than 0, so it pairs with the `KerasConcatenate` generator instead of sharing `concat`'s summary (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self inputs axis">
+          <new def="res" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="res"/>
+        </method>
+      </class>
       <class name="Variable" allocatable="true">
         <method name="do" descriptor="()LRoot;" numArgs="13" paramNames="self initial_value trainable validate_shape caching_device name variable_def dtype import_scope constraint synchronization aggregation shape">
           <new def="res" class="Ltensorflow/python/ops/variables/Variable"/>
@@ -2780,6 +2791,14 @@
           <return value="res"/>
         </method>
       </class>
+      <class name="Concatenate" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Concatenate. The `axis` argument is stored on the instance so `ConcatenateCall` can read it back at the call (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self axis">
+          <new def="res" class="Ltensorflow/keras/layers/Concatenate"/>
+          <putfield class="LRoot" field="axis" fieldType="LRoot" ref="res" value="axis"/>
+          <return value="res"/>
+        </method>
+      </class>
       <class name="Embedding" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Embedding. The `output_dim` argument is stored on the instance so `EmbeddingCall` can append it to the input shape (wala/ML#676). -->
         <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self input_dim output_dim embeddings_initializer embeddings_regularizer embeddings_constraint mask_zero input_length">
@@ -3010,6 +3029,17 @@
       </class>
       <class name="Bidirectional" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Bidirectional. The output type is computed by `BidirectionalCall` (wala/ML#840). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="Concatenate" allocatable="true">
+        <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Concatenate. The output type is computed by `ConcatenateCall`, which walks the `inputs` list and sums the extents along the stored axis (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>

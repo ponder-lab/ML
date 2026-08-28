@@ -2136,6 +2136,29 @@ public class TensorFlowTypes extends PythonTypes {
   public static final MethodReference BIDIRECTIONAL_LAYER_CALL = kerasLayerCall("Bidirectional");
 
   /**
+   * The {@code __call__} synthetic method on a {@code tf.keras.layers.Concatenate} instance
+   * (wala/ML#840).
+   *
+   * @see <a
+   *     href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/Concatenate">tf.keras.layers.Concatenate</a>
+   */
+  public static final MethodReference CONCATENATE_LAYER_CALL = kerasLayerCall("Concatenate");
+
+  /**
+   * The functional {@code tf.keras.layers.concatenate} spelling (wala/ML#840); its default axis is
+   * {@code -1} where {@code tf.concat}'s is {@code 0}, so it carries its own summary and generator.
+   *
+   * @see <a
+   *     href="https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/concatenate">tf.keras.layers.concatenate</a>
+   */
+  public static final MethodReference KERAS_CONCATENATE =
+      MethodReference.findOrCreate(
+          TypeReference.findOrCreate(
+              PythonTypes.pythonLoader,
+              TypeName.string2TypeName("Ltensorflow/functions/concatenate")),
+          AstMethodReference.fnSelector);
+
+  /**
    * Builds the {@code __call__} method reference for a Keras layer class by its simple name.
    *
    * @param simpleName The layer class's simple name, as {@code tf.keras.layers} spells it.

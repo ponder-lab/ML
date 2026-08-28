@@ -799,6 +799,12 @@ public class TestCorpusFixtures extends AbstractTensorTest {
    * list, which wala/ML#730 removed. These residual body locals are pre-existing modeling gaps, not
    * new findings, and are downstream of the (exact) input signature.
    *
+   * <p>Modeling the functional {@code layers.concatenate} spelling (wala/ML#840) types the {@code
+   * concatenate(convs)} result as well, which is what moved the local count from four to five. It
+   * is a both-axes-⊤ tensor rather than a shaped one: its inputs ride the unmodeled {@code
+   * Conv1D}/{@code GlobalAvgPool1D} chain above, so there is nothing to sum yet, and the value is
+   * simply no longer dropped.
+   *
    * @throws ClassHierarchyException On WALA class-hierarchy error.
    * @throws IllegalArgumentException On illegal argument.
    * @throws CancelException On analysis cancellation.
@@ -818,7 +824,7 @@ public class TestCorpusFixtures extends AbstractTensorTest {
         "TextCNN.call",
         "textcnn_proj",
         1,
-        4,
+        5,
         Map.of(3, Set.of(TENSOR_2_5_INT32)));
   }
 

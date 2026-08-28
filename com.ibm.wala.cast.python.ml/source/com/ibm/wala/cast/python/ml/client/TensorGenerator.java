@@ -9060,6 +9060,10 @@ public abstract class TensorGenerator {
       return new RecurrentLayerCall(node);
     } else if (type.equals(TensorFlowTypes.BIDIRECTIONAL_LAYER_CALL.getDeclaringClass())) {
       return new BidirectionalCall(node);
+    } else if (type.equals(TensorFlowTypes.CONCATENATE_LAYER_CALL.getDeclaringClass())) {
+      return new ConcatenateCall(node);
+    } else if (type.equals(TensorFlowTypes.KERAS_CONCATENATE.getDeclaringClass())) {
+      return new KerasConcatenate(node);
     } else if (type.equals(TensorFlowTypes.EMBEDDING_LAYER_CALL.getDeclaringClass())) {
       return new EmbeddingCall(node);
     } else if (type.equals(TensorFlowTypes.MODEL_CALL.getDeclaringClass())) {
