@@ -1739,6 +1739,45 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
     return false;
   }
 
+  /** The Keras model package, whose allocations are callables rather than tensors (wala/ML#842). */
+  private static final String KERAS_MODEL_PACKAGE_PREFIX = "Ltensorflow/keras/models/";
+
+  /**
+   * Whether every object this value may hold is a Keras model.
+   *
+   * <p>A model is a callable, never a tensor, so a value holding one carries no tensor type no
+   * matter what the assignment graph offers it. The graph does offer one: modeling a layer call
+   * lets the shape flow along the chain, which is intended, and the same edges also reach the slot
+   * holding the model the layer is called through, which is not. A model passed as a function
+   * argument then acquires a tensor type, and a declaration written from it would reject every call
+   * the function receives (wala/ML#842).
+   *
+   * <p>Requires EVERY member to be a model rather than any: a value that may hold a model or a
+   * tensor depending on the path is not one this can decide, and pinning it to empty would discard
+   * the tensor arm.
+   *
+   * @param v The dataflow variable to classify.
+   * @param builder The {@link PropagationCallGraphBuilder} whose PA is queried.
+   * @return {@code true} iff the value's points-to set is non-empty and holds only Keras models.
+   */
+  private static boolean isKerasModelObject(
+      PointsToSetVariable v, PropagationCallGraphBuilder builder) {
+    OrdinalSet<InstanceKey> pts = builder.getPointerAnalysis().getPointsToSet(v.getPointerKey());
+    if (pts == null || pts.isEmpty()) return false;
+    for (InstanceKey ik : pts) {
+      // Only an allocation names a class here. A points-to set carrying anything else (a constant,
+      // a concrete-type key for an exception) is not one this can prove holds only models.
+      if (!(ik instanceof AllocationSiteInNode)) return false;
+      if (!((AllocationSiteInNode) ik)
+          .concreteType()
+          .getReference()
+          .getName()
+          .toString()
+          .startsWith(KERAS_MODEL_PACKAGE_PREFIX)) return false;
+    }
+    return true;
+  }
+
   /**
    * Returns whether the given invoke resolves to the {@code enumerate} builtin. The declared target
    * is a generic trampoline ({@code LCodeBody}), so resolution goes through {@code
@@ -2102,6 +2141,9 @@ public class PythonTensorAnalysisEngine extends PythonAnalysisEngine<TensorTypeA
       Set<PointsToSetVariable> drops = HashSetFactory.make();
       for (PointsToSetVariable v : dataflow) {
         if (isEnumerateFirstFieldRead(v, builder)) drops.add(v);
+        // A value holding only Keras models is a callable rather than a tensor, and the assignment
+        // graph offers it a tensor type once a layer call in its chain is modeled (wala/ML#842).
+        else if (isKerasModelObject(v, builder)) drops.add(v);
       }
       // Semantically non-tensor iteration machinery pins to empty-and-fixed too (wala/ML#732):
       // a slice constructor over non-tensor bounds (all-constant `slice(None, None, None)` under

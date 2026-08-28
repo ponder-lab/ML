@@ -447,6 +447,18 @@
         <putfield class="LRoot" field="Dropout" fieldType="LRoot" ref="layers" value="DropoutLayerCls"/>
         <new def="LayerNormalizationLayerCls" class="Ltensorflow/keras/layers/class/LayerNormalization"/>
         <putfield class="LRoot" field="LayerNormalization" fieldType="LRoot" ref="layers" value="LayerNormalizationLayerCls"/>
+        <new def="BatchNormalizationLayerCls" class="Ltensorflow/keras/layers/class/BatchNormalization"/>
+        <putfield class="LRoot" field="BatchNormalization" fieldType="LRoot" ref="layers" value="BatchNormalizationLayerCls"/>
+        <new def="ReLULayerCls" class="Ltensorflow/keras/layers/class/ReLU"/>
+        <putfield class="LRoot" field="ReLU" fieldType="LRoot" ref="layers" value="ReLULayerCls"/>
+        <new def="LeakyReLULayerCls" class="Ltensorflow/keras/layers/class/LeakyReLU"/>
+        <putfield class="LRoot" field="LeakyReLU" fieldType="LRoot" ref="layers" value="LeakyReLULayerCls"/>
+        <new def="SoftmaxLayerCls" class="Ltensorflow/keras/layers/class/Softmax"/>
+        <putfield class="LRoot" field="Softmax" fieldType="LRoot" ref="layers" value="SoftmaxLayerCls"/>
+        <new def="MaskingLayerCls" class="Ltensorflow/keras/layers/class/Masking"/>
+        <putfield class="LRoot" field="Masking" fieldType="LRoot" ref="layers" value="MaskingLayerCls"/>
+        <new def="ActivationLayerCls" class="Ltensorflow/keras/layers/class/Activation"/>
+        <putfield class="LRoot" field="Activation" fieldType="LRoot" ref="layers" value="ActivationLayerCls"/>
         <new def="Model" class="Ltensorflow/keras/models/class/Model"/>
         <putfield class="LRoot" field="Model" fieldType="LRoot" ref="keras" value="Model"/>
         <putfield class="LRoot" field="Model" fieldType="LRoot" ref="models" value="Model"/>
@@ -2629,6 +2641,48 @@
           <return value="res"/>
         </method>
       </class>
+      <class name="BatchNormalization" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/BatchNormalization. Shape-preserving: the output type is the input's, computed by `ShapePreservingLayerCall` (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="8" paramNames="self axis momentum epsilon center scale beta_initializer gamma_initializer">
+          <new def="res" class="Ltensorflow/keras/layers/BatchNormalization"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="ReLU" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/ReLU. Shape-preserving: the output type is the input's, computed by `ShapePreservingLayerCall` (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="4" paramNames="self max_value negative_slope threshold">
+          <new def="res" class="Ltensorflow/keras/layers/ReLU"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="LeakyReLU" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/LeakyReLU. Shape-preserving: the output type is the input's, computed by `ShapePreservingLayerCall` (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self alpha">
+          <new def="res" class="Ltensorflow/keras/layers/LeakyReLU"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="Softmax" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/Softmax. Shape-preserving: the output type is the input's, computed by `ShapePreservingLayerCall` (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self axis">
+          <new def="res" class="Ltensorflow/keras/layers/Softmax"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="Masking" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/Masking. Shape-preserving: the output type is the input's, computed by `ShapePreservingLayerCall` (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self mask_value">
+          <new def="res" class="Ltensorflow/keras/layers/Masking"/>
+          <return value="res"/>
+        </method>
+      </class>
+      <class name="Activation" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/Activation. Shape-preserving: the output type is the input's, computed by `ShapePreservingLayerCall` (wala/ML#840). -->
+        <method name="do" descriptor="()LRoot;" numArgs="2" paramNames="self activation">
+          <new def="res" class="Ltensorflow/keras/layers/Activation"/>
+          <return value="res"/>
+        </method>
+      </class>
       <class name="GlobalAveragePooling1D" allocatable="true">
         <!-- https://www.tensorflow.org/versions/r2.9/api_docs/python/tf/keras/layers/GlobalAveragePooling1D. Rank-reducing pooling: the `GlobalAveragePooling1DCall` generator drops the temporal axis (wala/ML#670). -->
         <method name="do" descriptor="()LRoot;" numArgs="3" paramNames="self data_format keepdims">
@@ -2701,6 +2755,72 @@
       </class>
       <class name="Flatten" allocatable="true">
         <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/Flatten#__call__ -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="BatchNormalization" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/BatchNormalization#__call__. The output type is the input's, computed by `ShapePreservingLayerCall` (wala/ML#840). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="ReLU" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/ReLU#__call__. The output type is the input's, computed by `ShapePreservingLayerCall` (wala/ML#840). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="LeakyReLU" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/LeakyReLU#__call__. The output type is the input's, computed by `ShapePreservingLayerCall` (wala/ML#840). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="Softmax" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/Softmax#__call__. The output type is the input's, computed by `ShapePreservingLayerCall` (wala/ML#840). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="Masking" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/Masking#__call__. The output type is the input's, computed by `ShapePreservingLayerCall` (wala/ML#840). -->
+        <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+        <method name="call" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
+          <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
+          <return value="out"/>
+        </method>
+      </class>
+      <class name="Activation" allocatable="true">
+        <!-- https://www.tensorflow.org/api_docs/python/tf/keras/layers/Activation#__call__. The output type is the input's, computed by `ShapePreservingLayerCall` (wala/ML#840). -->
         <method name="__call__" descriptor="()LRoot;" numArgs="3" paramNames="func self inputs">
           <new def="out" class="Ltensorflow/python/framework/ops/Tensor"/>
           <return value="out"/>

@@ -88,6 +88,7 @@ import com.ibm.wala.ssa.SSAReturnInstruction;
 import com.ibm.wala.ssa.SSAUnaryOpInstruction;
 import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.FieldReference;
+import com.ibm.wala.types.MethodReference;
 import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashMapFactory;
 import com.ibm.wala.util.collections.HashSetFactory;
@@ -8545,6 +8546,19 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Whether the given type is the {@code __call__} of a Keras layer whose output carries the
+   * input's shape and dtype unchanged (wala/ML#840).
+   *
+   * @param type The candidate declaring type.
+   * @return {@code true} iff it is one of the shape-preserving layer calls.
+   */
+  private static boolean isShapePreservingLayerCallType(TypeReference type) {
+    for (MethodReference call : TensorFlowTypes.SHAPE_PRESERVING_LAYER_CALLS)
+      if (type.equals(call.getDeclaringClass())) return true;
+    return false;
+  }
+
+  /**
    * Returns the possible boolean values for the given points-to set.
    *
    * <p>Only a boolean constant resolves. Anything else, {@code None} and a truthy number included,
@@ -8983,6 +8997,10 @@ public abstract class TensorGenerator {
       return new DenseCall(node);
     } else if (type.equals(TensorFlowTypes.GLOBAL_AVERAGE_POOLING_1D_CALL.getDeclaringClass())) {
       return new GlobalAveragePooling1DCall(node);
+    } else if (isShapePreservingLayerCallType(type)) {
+      // Registered in tandem with the factory's arm: an op present in one dispatch table but not
+      // the other works at seeding time yet dead-ends producer delegation (wala/ML#840).
+      return new ShapePreservingLayerCall(node);
     } else if (type.equals(TensorFlowTypes.EMBEDDING_LAYER_CALL.getDeclaringClass())) {
       return new EmbeddingCall(node);
     } else if (type.equals(TensorFlowTypes.MODEL_CALL.getDeclaringClass())) {

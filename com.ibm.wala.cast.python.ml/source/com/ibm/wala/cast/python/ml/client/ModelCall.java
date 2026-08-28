@@ -116,7 +116,11 @@ public class ModelCall extends TensorGenerator {
     if (!outputShapes.isEmpty() && inputsPTS != null && !inputsPTS.isEmpty()) {
       Set<List<Dimension<?>>> inputShapes = this.getShapesOfValue(builder, inputsPTS);
 
-      if (!inputShapes.isEmpty()) {
+      // A `null` here is ⊤, an input that is a tensor of unknown shape, and it is reachable
+      // whenever a layer in the input's chain resolves to an unknown shape. There is no batch
+      // dimension to read off it, so the refinement is skipped exactly as it is for an input
+      // carrying no shapes at all, leaving the recovered output shape as it stands.
+      if (inputShapes != null && !inputShapes.isEmpty()) {
         Set<List<Dimension<?>>> refinedShapes = HashSetFactory.make();
         for (List<Dimension<?>> outShape : outputShapes) {
           for (List<Dimension<?>> inShape : inputShapes) {
