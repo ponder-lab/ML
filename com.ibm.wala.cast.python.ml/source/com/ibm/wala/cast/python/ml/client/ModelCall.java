@@ -3,20 +3,29 @@ package com.ibm.wala.cast.python.ml.client;
 import static com.ibm.wala.cast.python.ml.client.Loggables.describe;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType.FLOAT32;
 import static com.ibm.wala.cast.python.ml.types.TensorFlowTypes.MODEL;
+import static com.ibm.wala.cast.python.types.PythonTypes.Root;
+import static com.ibm.wala.cast.python.types.PythonTypes.list;
+import static com.ibm.wala.cast.python.types.PythonTypes.tuple;
 import static com.ibm.wala.cast.python.util.Util.getAllocationSiteInNode;
+import static com.ibm.wala.core.util.strings.Atom.findOrCreateAsciiAtom;
 
+import com.ibm.wala.cast.ipa.callgraph.AstPointerKeyFactory;
 import com.ibm.wala.cast.python.ml.types.TensorFlowTypes.DType;
 import com.ibm.wala.cast.python.ml.types.TensorType.Dimension;
 import com.ibm.wala.cast.python.ml.types.TensorType.DynamicDim;
 import com.ibm.wala.cast.python.ssa.PythonInvokeInstruction;
+import com.ibm.wala.classLoader.IField;
 import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.propagation.AllocationSiteInNode;
+import com.ibm.wala.ipa.callgraph.propagation.ConstantKey;
 import com.ibm.wala.ipa.callgraph.propagation.InstanceKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointerKey;
 import com.ibm.wala.ipa.callgraph.propagation.PointsToSetVariable;
 import com.ibm.wala.ipa.callgraph.propagation.PropagationCallGraphBuilder;
 import com.ibm.wala.ssa.IR;
 import com.ibm.wala.ssa.SSAAbstractInvokeInstruction;
+import com.ibm.wala.types.FieldReference;
+import com.ibm.wala.types.TypeReference;
 import com.ibm.wala.util.collections.HashSetFactory;
 import com.ibm.wala.util.collections.Pair;
 import com.ibm.wala.util.intset.OrdinalSet;
@@ -114,7 +123,7 @@ public class ModelCall extends TensorGenerator {
     // let the dtype axis (see getDefaultDTypes) carry the still-sound dtype. See <a
     // href="https://github.com/wala/ML/issues/537">wala/ML#537</a>.
     if (!outputShapes.isEmpty() && inputsPTS != null && !inputsPTS.isEmpty()) {
-      Set<List<Dimension<?>>> inputShapes = this.getShapesOfValue(builder, inputsPTS);
+      Set<List<Dimension<?>>> inputShapes = this.getBatchCarryingInputShapes(builder, inputsPTS);
 
       // A `null` here is ⊤, an input that is a tensor of unknown shape, and it is reachable
       // whenever a layer in the input's chain resolves to an unknown shape. There is no batch
@@ -144,6 +153,73 @@ public class ModelCall extends TensorGenerator {
     }
 
     return outputShapes.isEmpty() ? null : outputShapes;
+  }
+
+  /**
+   * Resolves the input shapes whose batch dimension the refinement above may borrow. A multi-input
+   * model is called with a LIST of tensors, and the whole-value walk over that list produces the
+   * container's arity as a leading axis, so borrowing {@code get(0)} from it pins the output's
+   * batch to the NUMBER OF INPUTS rather than to any input's batch: a wrong constant, not an
+   * unknown (wala/ML#854; the same fabricated-arity class as the mapped-tuple walk, wala/ML#847). A
+   * container member therefore contributes its ELEMENTS' shapes, each of which carries the real
+   * batch at index 0; a plain tensor member contributes its own.
+   *
+   * @param builder The propagation call graph builder.
+   * @param inputsPTS The points-to set of the {@code inputs} argument.
+   * @return The batch-carrying shapes; possibly empty when nothing resolves.
+   */
+  private Set<List<Dimension<?>>> getBatchCarryingInputShapes(
+      PropagationCallGraphBuilder builder, OrdinalSet<InstanceKey> inputsPTS) {
+    Set<List<Dimension<?>>> ret = HashSetFactory.make();
+    List<InstanceKey> plainMembers = new ArrayList<>();
+
+    for (InstanceKey ik : inputsPTS) {
+      AllocationSiteInNode asin = getAllocationSiteInNode(ik);
+      TypeReference reference = asin == null ? null : asin.concreteType().getReference();
+
+      if (reference != null && (reference.equals(tuple) || reference.equals(list))) {
+        OrdinalSet<InstanceKey> catalogPTS =
+            builder
+                .getPointerAnalysis()
+                .getPointsToSet(
+                    ((AstPointerKeyFactory) builder.getPointerKeyFactory())
+                        .getPointerKeyForObjectCatalog(asin));
+
+        for (InstanceKey catalogIK : catalogPTS) {
+          if (!(catalogIK instanceof ConstantKey)) continue;
+          Integer fieldIndex = getFieldIndex((ConstantKey<?>) catalogIK);
+          if (fieldIndex == null) continue;
+
+          IField field =
+              builder
+                  .getClassHierarchy()
+                  .resolveField(
+                      FieldReference.findOrCreate(
+                          Root, findOrCreateAsciiAtom(fieldIndex.toString()), Root));
+          if (field == null) continue;
+
+          OrdinalSet<InstanceKey> elementPTS =
+              builder
+                  .getPointerAnalysis()
+                  .getPointsToSet(builder.getPointerKeyForInstanceField(asin, field));
+          Set<List<Dimension<?>>> elementShapes = this.getShapesOfValue(builder, elementPTS);
+          if (elementShapes != null) ret.addAll(elementShapes);
+        }
+      } else {
+        plainMembers.add(ik);
+      }
+    }
+
+    if (!plainMembers.isEmpty()) {
+      Set<List<Dimension<?>>> plainShapes =
+          this.getShapesOfValue(
+              builder,
+              OrdinalSet.toOrdinalSet(
+                  plainMembers, builder.getPointerAnalysis().getInstanceKeyMapping()));
+      if (plainShapes != null) ret.addAll(plainShapes);
+    }
+
+    return ret;
   }
 
   /**
