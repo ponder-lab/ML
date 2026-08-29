@@ -2266,4 +2266,74 @@ public class TestModelCall extends AbstractTensorTest {
         1,
         Map.of(2, Set.of(TensorType.of(FLOAT_32, 4, 16, 12))));
   }
+
+  /**
+   * The head of the chained user-layer idiom: integer token IDs through an {@code Embedding},
+   * inside the producing layer's own body. Pins the first hop of the sequence the two guards below
+   * continue.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testEmbeddingOutputInProducingLayer()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_embedding_forward.py",
+        "consume_embed",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 5, 6))));
+  }
+
+  /**
+   * The recurrent hop, still inside the producing layer: the {@code Embedding} output through a
+   * {@code Bidirectional} wrapper, which doubles the feature axis and keeps the temporal one.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testRecurrentOutputInProducingLayer()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_embedding_forward.py",
+        "consume_rnn",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 5, 8))));
+  }
+
+  /**
+   * The hop this sequence exists for: the producing layer's result arriving at a DOWNSTREAM
+   * user-defined layer's {@code call} parameter, having crossed a layer-call boundary, a {@code
+   * Model} hop, a second positional argument, and a destructured tuple return.
+   *
+   * <p>A value produced by a user layer call is unseeded by design, so its type has to arrive over
+   * the analysis's own edges from the callee's return rather than from any generator. That
+   * machinery had no guard on this chain, and a subject exhibiting an absent shape at exactly this
+   * position (<a href="https://github.com/wala/ML/issues/845">wala/ML#845</a>) made it worth
+   * establishing whether the chain works at all. It does, on every hop, which is what rules the
+   * mechanism out as that subject's cause and is the reason these are guards rather than suppressed
+   * failures.
+   *
+   * @throws ClassHierarchyException On WALA class-hierarchy error.
+   * @throws IllegalArgumentException On illegal argument.
+   * @throws CancelException On analysis cancellation.
+   * @throws IOException On I/O error reading the test file.
+   */
+  @Test
+  public void testChainedUserLayerParameter()
+      throws ClassHierarchyException, IllegalArgumentException, CancelException, IOException {
+    test(
+        "tf2_test_embedding_forward.py",
+        "consume_downstream",
+        1,
+        1,
+        Map.of(2, Set.of(TensorType.of(FLOAT_32, 2, 5, 8))));
+  }
 }
