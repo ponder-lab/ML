@@ -111,9 +111,9 @@ public class Pooling2DCall extends TensorGenerator {
    */
   @Override
   protected Set<List<Dimension<?>>> getDefaultShapes(PropagationCallGraphBuilder builder) {
-    OrdinalSet<InstanceKey> inputPts = this.getArgumentPointsToSet(builder, 1, "inputs");
-    if (inputPts == null || inputPts.isEmpty()) return null;
-    Set<List<Dimension<?>>> inputShapes = this.getShapesOfValue(builder, inputPts);
+    // The SSA-chain fallback covers an input with dataflow state but no points-to evidence, e.g.
+    // a destructured tuple dataset element (wala/ML#855).
+    Set<List<Dimension<?>>> inputShapes = this.getArgumentShapesWithFallback(builder, 1, "inputs");
     if (inputShapes == null || inputShapes.isEmpty()) return null;
 
     Window window = this.resolveWindow(builder);
@@ -245,9 +245,8 @@ public class Pooling2DCall extends TensorGenerator {
    */
   @Override
   protected Set<DType> getDefaultDTypes(PropagationCallGraphBuilder builder) {
-    OrdinalSet<InstanceKey> inputPts = this.getArgumentPointsToSet(builder, 1, "inputs");
-    if (inputPts == null || inputPts.isEmpty()) return EnumSet.of(DType.UNKNOWN);
-    Set<DType> dtypes = this.getDTypesOfValue(builder, inputPts);
+    // The dtype twin of the shape fallback (wala/ML#855).
+    Set<DType> dtypes = this.getArgumentDTypesWithFallback(builder, 1, "inputs");
     return dtypes == null || dtypes.isEmpty() ? EnumSet.of(DType.UNKNOWN) : dtypes;
   }
 

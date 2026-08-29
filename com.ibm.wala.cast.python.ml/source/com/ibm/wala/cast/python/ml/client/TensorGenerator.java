@@ -3435,6 +3435,75 @@ public abstract class TensorGenerator {
   }
 
   /**
+   * Resolves an argument's shapes by the points-to walk, falling back through the SSA chain when
+   * the walk yields nothing. A value can reach a parameter with exact dataflow state and an empty
+   * points-to set (a destructured tuple dataset element's read has an implicit pointer key), and a
+   * generator whose input read stops at the bare walk floors its whole downstream chain at ⊤ there
+   * (wala/ML#845); the fallback re-dispatches on the caller-side value number, where the factory's
+   * trace-back reaches the value's producer (wala/ML#358, wala/ML#855).
+   *
+   * @param builder The propagation call graph builder.
+   * @param index The argument's positional index.
+   * @param name The argument's keyword name.
+   * @return The resolved shapes, or {@code null} when neither path resolves (⊤ for a tensor-valued
+   *     argument).
+   */
+  protected Set<List<Dimension<?>>> getArgumentShapesWithFallback(
+      PropagationCallGraphBuilder builder, int index, String name) {
+    OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, index, name);
+    if (pts != null && !pts.isEmpty()) {
+      Set<List<Dimension<?>>> shapes = this.getShapesOfValue(builder, pts);
+      if (shapes != null && !shapes.isEmpty()) return shapes;
+    }
+    int vn = this.getArgumentValueNumber(builder, index, name, true);
+    if (vn > 0) {
+      LOGGER.fine(
+          () ->
+              "PTS walk produced no shapes for argument "
+                  + name
+                  + "; attempting SSA-chain fallback on vn="
+                  + vn
+                  + ".");
+      try {
+        Set<List<Dimension<?>>> viaSsa = this.getShapesOrSSAChain(builder, this.getNode(), vn);
+        if (viaSsa != null && !viaSsa.isEmpty()) return viaSsa;
+      } catch (IllegalArgumentException e) {
+        LOGGER.fine(() -> "SSA-chain fallback IAE for vn=" + vn + ": " + e.getMessage() + ".");
+      }
+    }
+    return null;
+  }
+
+  /**
+   * The dtype counterpart of {@link #getArgumentShapesWithFallback(PropagationCallGraphBuilder,
+   * int, String)} (wala/ML#855).
+   *
+   * @param builder The propagation call graph builder.
+   * @param index The argument's positional index.
+   * @param name The argument's keyword name.
+   * @return The resolved dtypes, or {@code null} when neither path resolves.
+   */
+  protected Set<DType> getArgumentDTypesWithFallback(
+      PropagationCallGraphBuilder builder, int index, String name) {
+    OrdinalSet<InstanceKey> pts = this.getArgumentPointsToSet(builder, index, name);
+    if (pts != null && !pts.isEmpty()) {
+      Set<DType> dtypes = this.getDTypesOfValue(builder, pts);
+      if (dtypes != null && !dtypes.isEmpty()) return dtypes;
+    }
+    int vn = this.getArgumentValueNumber(builder, index, name, true);
+    if (vn > 0) {
+      try {
+        Set<DType> viaSsa = this.getDTypesOrSSAChain(builder, this.getNode(), vn);
+        if (viaSsa != null && !viaSsa.isEmpty()) return viaSsa;
+      } catch (IllegalArgumentException e) {
+        LOGGER.fine(
+            () -> "Dtype SSA-chain fallback IAE for vn=" + vn + ": " + e.getMessage() + ".");
+      }
+    }
+    return null;
+  }
+
+  /**
    * PTS-first wrapper: tries {@link #getShapes(PropagationCallGraphBuilder, CGNode, int)} and falls
    * back to the SSA-substrate DU walk in {@link #shapesFromSSAChain} if that throws {@link
    * IllegalArgumentException} (implicit PK with empty PTS).
